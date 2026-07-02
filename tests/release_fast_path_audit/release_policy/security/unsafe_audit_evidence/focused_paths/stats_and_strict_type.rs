@@ -91,11 +91,19 @@ pub(super) fn assert_stats_and_strict_type_focused_evidence(evidence: &str) {
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
         ),
         (
+            "stats-print-format-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
             "stats-print-export-boundary",
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
         ),
         (
             "stats-process-info-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "stats-json-buffer-boundary",
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
         ),
         (

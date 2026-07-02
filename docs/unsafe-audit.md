@@ -115,14 +115,20 @@ file:
   shims in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-unix-realloc-boundary]`: Unix reallocf forwarding in
   `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]`: Unix valloc/vfree and
+  pvalloc forwarding in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]`: Unix aligned,
-  page-aligned, cfree, and POSIX memalign forwarding in `src/raw/macros.rs`.
+  memalign, and POSIX memalign forwarding in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-unix-cfree-boundary]`: Unix cfree forwarding in
+  `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]`: Unix
   reallocarray/reallocarr forwarding in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-wasi-libc-boundary]`: WASI `__libc_*` allocation
   forwarding shims in `src/raw/macros.rs`.
-- `SAFETY[AUDIT:raw-macro-linux-libc-boundary]`: Linux `__libc_*` and
-  `__posix_memalign` forwarding shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-linux-libc-boundary]`: Linux `__libc_*`
+  malloc/calloc/realloc/free/cfree forwarding shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]`: Linux aligned
+  `__libc_*` and `__posix_memalign` forwarding shims in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-allocation-query-boundary]`: malloc size,
   usable-size, and good-size compatibility queries in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-cxx-delete-boundary]`: scalar C++ delete
@@ -266,8 +272,10 @@ file:
   paths in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-realloc-public-boundary]`: public realloc ABI
   entrypoints in `src/allocator/alloc.rs`.
-- `SAFETY[AUDIT:allocation-string-path-boundary]`: strdup, strndup, and
-  realpath allocation entry shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-string-dup-boundary]`: strdup and strndup
+  allocation entry shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-realpath-boundary]`: realpath allocation entry shims
+  in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-cxx-new-handler-boundary]`: C++ new-handler lookup
   and invocation in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-cxx-new-try-boundary]`: C++ new retry helpers in
@@ -302,9 +310,11 @@ file:
   and append operations in `src/allocator/page.rs`.
 - `SAFETY[AUDIT:page-huge-allocation-boundary]`: huge-page selection and
   allocation dispatch in `src/allocator/page.rs`.
-- `SAFETY[AUDIT:page-stats-public-boundary]`: page metadata accessors,
-  stats/bin helpers, public C-shaped page helpers, and generic allocation
-  entry shims in `src/allocator/page.rs`.
+- `SAFETY[AUDIT:page-metadata-accessor-boundary]`: page metadata accessors in
+  `src/allocator/page.rs`.
+- `SAFETY[AUDIT:page-stats-public-boundary]`: stats/bin helpers, public
+  C-shaped page helpers, and generic allocation entry shims in
+  `src/allocator/page.rs`.
 - `SAFETY[AUDIT:arena-slice-geometry-boundary]`,
   `SAFETY[AUDIT:arena-slice-containment-boundary]`, and
   `SAFETY[AUDIT:arena-slice-layout-boundary]`: arena slice geometry,
@@ -421,8 +431,10 @@ file:
   bookkeeping in `src/internal/bitmap.rs`.
 - `SAFETY[AUDIT:internal-bitmap-claim-boundary]`: regular bitmap first-fit
   claim traversal and typed claim callback handoff in `src/internal/bitmap.rs`.
-- `SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]`: regular bitmap
-  set/clear/test/popcount chunk-range operations in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-range-mutation-boundary]`: regular bitmap
+  set/clear chunk-range operations in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-range-query-boundary]`: regular bitmap
+  test/scan/popcount chunk-range operations in `src/internal/bitmap.rs`.
 - `SAFETY[AUDIT:internal-bitmap-traversal-boundary]`: set/range traversal
   callback shims in `src/internal/bitmap.rs`.
 - `SAFETY[AUDIT:internal-bitmap-binned-boundary]`: binned-bitmap
@@ -477,6 +489,9 @@ file:
   `SAFETY[AUDIT:windows-output-env-boundary]`,
   `SAFETY[AUDIT:windows-fls-api-boundary]`,
   `SAFETY[AUDIT:windows-dll-lifecycle-boundary]`,
+  `SAFETY[AUDIT:windows-thread-yield-boundary]`,
+  `SAFETY[AUDIT:windows-dll-entry-boundary]`,
+  `SAFETY[AUDIT:windows-allocator-lifecycle-boundary]`,
   `SAFETY[AUDIT:windows-fls-thread-boundary]`,
   `SAFETY[AUDIT:windows-teb-threadpool-boundary]`,
   `SAFETY[AUDIT:windows-large-page-boundary]`,
@@ -503,7 +518,8 @@ file:
 - `SAFETY[AUDIT:internal-atomic-volatile-delta-boundary]`,
   `SAFETY[AUDIT:internal-atomic-pointer-boundary]`,
   `SAFETY[AUDIT:internal-atomic-guard-once-boundary]`, and
-  `SAFETY[AUDIT:internal-atomic-platform-lock-boundary]`: internal atomic
+  `SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]`,
+  `SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]`: internal atomic
   raw-view, scalar operation, pointer, guard/once, and lock facade slices in
   `src/internal/atomic.rs`.
 - `SAFETY[AUDIT:unsafe-callback-guard-boundary]`: unsafe-adjacent callback guards.
@@ -513,11 +529,13 @@ file:
   panics before callback ABI return in `std` and test builds. Callers must
   prevent concurrent registration changes; no concurrent or reentrant entry may access the same
   borrowed callback.
-- `SAFETY[AUDIT:unsafe-callback-test-fixtures]`: callback tests serialize
-  process-global registration, use synchronous local thread-heap fixtures, and
-  copy callback function pointer options only for equality checks. Output
-  callbacks remain raw until output recursion and diagnostic allocation
-  semantics are designed.
+- `SAFETY[AUDIT:unsafe-error-callback-test-fixtures]`,
+  `SAFETY[AUDIT:unsafe-deferred-callback-test-fixtures]`, and
+  `SAFETY[AUDIT:unsafe-callback-address-test-fixtures]`: callback tests
+  serialize process-global registration, use synchronous local thread-heap
+  fixtures, and copy callback function pointer options only for equality
+  checks. Output callbacks remain raw until output recursion and diagnostic
+  allocation semantics are designed.
 - `SAFETY[AUDIT:panic-boundary]`: no-std panic/personality shims and aborting
   assertion paths. These paths must not allocate or unwind.
 - `SAFETY[AUDIT:safe-heap]`: safe heap wrappers. Owned heaps delete exactly

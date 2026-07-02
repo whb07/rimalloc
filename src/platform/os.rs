@@ -585,7 +585,7 @@ pub unsafe extern "C" fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
     unsafe {
         let mut csize = 0;
@@ -618,7 +618,7 @@ pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
     let mut csize = 0;
@@ -626,7 +626,7 @@ pub(crate) unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
     if csize == 0 {
         return;
     }
-    // SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let err = unsafe { _mi_prim_reuse(start, csize) };
     if err != 0 {
         _mi_warning_message_fmt(format_args!(
@@ -638,7 +638,7 @@ pub(crate) unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
 
 /// # Safety
 /// `p..p+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
     p: *mut c_void,
     size: usize,
@@ -647,7 +647,7 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
     commit_fun: Option<mi_commit_fun_t>,
     commit_fun_arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     unsafe {
         if mi_option_get(mi_option_t::mi_option_purge_delay) < 0 {
             return false;
@@ -677,13 +677,13 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
 
 /// # Safety
 /// `p..p+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_purge(p: *mut c_void, size: usize) -> bool {
     unsafe { _mi_os_purge_ex(p, size, true, size, None, core::ptr::null_mut()) }
 }
 
-// SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline]
 unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool {
     let mut csize = 0;
@@ -691,7 +691,7 @@ unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool 
     if csize == 0 {
         return false;
     }
-    // SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let err = unsafe { _mi_prim_protect(start, csize, protect) };
     if err != 0 {
         _mi_warning_message_fmt(format_args!(
@@ -708,7 +708,7 @@ unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool 
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_protect(addr: *mut c_void, size: usize) -> bool {
     unsafe { mi_os_protectx(addr, size, true) }
@@ -716,7 +716,7 @@ pub unsafe extern "C" fn _mi_os_protect(addr: *mut c_void, size: usize) -> bool 
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY[AUDIT:os-memory-commit-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-purge-protect-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_unprotect(addr: *mut c_void, size: usize) -> bool {
     unsafe { mi_os_protectx(addr, size, false) }

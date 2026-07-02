@@ -74,7 +74,8 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         ("allocation-realloc-free-on-failure-boundary", 6),
         ("allocation-realloc-zeroing-boundary", 12),
         ("allocation-realloc-public-boundary", 6),
-        ("allocation-string-path-boundary", 20),
+        ("allocation-string-dup-boundary", 11),
+        ("allocation-realpath-boundary", 9),
         ("allocation-cxx-new-handler-boundary", 4),
         ("allocation-cxx-new-try-boundary", 9),
         ("allocation-cxx-new-public-boundary", 4),
@@ -133,7 +134,8 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         ("page-queue-link-mutation-boundary", 12),
         ("page-queue-append-boundary", 7),
         ("page-huge-allocation-boundary", 4),
-        ("page-stats-public-boundary", 19),
+        ("page-metadata-accessor-boundary", 7),
+        ("page-stats-public-boundary", 12),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert!(

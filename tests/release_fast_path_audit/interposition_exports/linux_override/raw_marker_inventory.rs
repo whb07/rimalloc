@@ -38,13 +38,21 @@ pub(super) fn assert_raw_marker_inventory(unsafe_allowlist: &str, override_rs: &
                 .count()
                 >= 2
             && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]")
+                .count()
+                >= 6
+            && override_rs
                 .matches("SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]")
                 .count()
-                >= 20
+                >= 11
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-unix-cfree-boundary]")
+                .count()
+                >= 2
             && override_rs
                 .matches("SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]")
                 .count()
-                >= 4
+                >= 5
             && override_rs
                 .matches("SAFETY[AUDIT:raw-macro-wasi-libc-boundary]")
                 .count()
@@ -52,7 +60,11 @@ pub(super) fn assert_raw_marker_inventory(unsafe_allowlist: &str, override_rs: &
             && override_rs
                 .matches("SAFETY[AUDIT:raw-macro-linux-libc-boundary]")
                 .count()
-                >= 20
+                >= 10
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]")
+                .count()
+                >= 10
             && override_rs
                 .matches("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
                 .count()

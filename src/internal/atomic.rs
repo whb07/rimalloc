@@ -111,7 +111,7 @@ impl Default for pthread_mutex_t {
 
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 #[link(name = "pthread")]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: declares Linux pthread mutex imports
+// SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: declares Linux pthread mutex imports
 // used only by the release lock facade.
 unsafe extern "C" {
     fn pthread_mutex_trylock(mutex: *mut pthread_mutex_t) -> c_int;
@@ -929,10 +929,10 @@ pub unsafe extern "C" fn mi_atomic_subi(p: *mut isize, sub: isize) -> isize {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: Linux release lock acquisition delegates
+// SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: Linux release lock acquisition delegates
 // to pthread over the caller-provided lock object's mutex field.
 pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
-    // SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: caller-proven lock storage contains
+    // SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: caller-proven lock storage contains
     // an initialized pthread mutex field.
     unsafe { pthread_mutex_trylock(ptr::addr_of_mut!((*lock).mutex)) == 0 }
 }
@@ -941,11 +941,11 @@ pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: fallback lock acquisition uses the
+// SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]: fallback lock acquisition uses the
 // in-struct atomic mutex word with acquire/release semantics.
 pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
     let expected = 0;
-    // SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: caller-proven lock storage contains
+    // SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]: caller-proven lock storage contains
     // the fallback atomic mutex word.
     unsafe {
         (*lock)
@@ -960,10 +960,10 @@ pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: Linux release lock acquisition delegates
+// SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: Linux release lock acquisition delegates
 // to pthread and reports nonzero errors through the allocator error path.
 pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
-    // SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: caller-proven lock storage contains
+    // SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: caller-proven lock storage contains
     // an initialized pthread mutex field.
     let err = unsafe { pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex)) };
     if err != 0 {
@@ -978,10 +978,10 @@ pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: fallback lock acquisition spins over the
+// SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]: fallback lock acquisition spins over the
 // same in-struct atomic mutex word used by try-acquire.
 pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
-    // SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: caller-proven lock storage is
+    // SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]: caller-proven lock storage is
     // repeatedly passed to the fallback try-acquire helper.
     while unsafe { !mi_lock_try_acquire(lock) } {
         spin_loop();
@@ -992,10 +992,10 @@ pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to a valid acquired allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: Linux release lock release delegates to
+// SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: Linux release lock release delegates to
 // pthread over the caller-provided lock object's mutex field.
 pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
-    // SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: caller-proven lock storage contains
+    // SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: caller-proven lock storage contains
     // an initialized acquired pthread mutex field.
     unsafe { pthread_mutex_unlock(ptr::addr_of_mut!((*lock).mutex)) };
 }
@@ -1004,10 +1004,10 @@ pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to a valid acquired allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: fallback lock release publishes zero to
+// SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]: fallback lock release publishes zero to
 // the in-struct atomic mutex word with release ordering.
 pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
-    // SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: caller-proven lock storage contains
+    // SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]: caller-proven lock storage contains
     // the fallback atomic mutex word.
     unsafe { (*lock).mutex.mutex.store(0, Ordering::Release) };
 }
@@ -1016,11 +1016,11 @@ pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
 ///
 /// `lock`, when non-null, must point to writable allocator lock storage.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: Linux lock init overwrites only non-null
+// SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: Linux lock init overwrites only non-null
 // caller-provided lock storage with the pthread initializer layout.
 pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
     if !lock.is_null() {
-        // SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: non-null lock storage is writable
+        // SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: non-null lock storage is writable
         // for one pthread mutex initializer value.
         unsafe { (*lock).mutex = pthread_mutex_t::new() };
     }
@@ -1030,10 +1030,10 @@ pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to writable allocator lock storage.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: fallback lock init resets the in-struct
+// SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]: fallback lock init resets the in-struct
 // atomic mutex word through the release helper.
 pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
-    // SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: caller-proven lock storage is passed
+    // SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]: caller-proven lock storage is passed
     // to the fallback release helper for zero initialization.
     unsafe { mi_lock_release(lock) };
 }
@@ -1042,10 +1042,10 @@ pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to an initialized allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: Linux lock teardown delegates to pthread
+// SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: Linux lock teardown delegates to pthread
 // over the caller-provided initialized mutex field.
 pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
-    // SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: caller-proven lock storage contains
+    // SAFETY[AUDIT:internal-atomic-pthread-lock-boundary]: caller-proven lock storage contains
     // an initialized pthread mutex field.
     unsafe { pthread_mutex_destroy(ptr::addr_of_mut!((*lock).mutex)) };
 }
@@ -1054,7 +1054,7 @@ pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to an initialized allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY[AUDIT:internal-atomic-platform-lock-boundary]: fallback lock teardown is a compatibility
+// SAFETY[AUDIT:internal-atomic-fallback-lock-boundary]: fallback lock teardown is a compatibility
 // no-op because the atomic mutex word owns no external resources.
 pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
     let _ = lock;

@@ -1,31 +1,25 @@
 # TODO: Fresh-Eyes Audit Density, Module Cap, Strict-Type Hotspot, and Production Module Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`8f8cb27`. That backlog is implemented and pushed: source audit marker cap 20,
-release-audit module cap 240, and strict-type permanent reason groups capped at
-40 entries. The next mechanical-translation debt is concentrated in audit IDs
-that still sit at the cap, release-audit modules clustered just below the cap,
-strict-type hotspots that still hide too many raw/usize boundaries in a few
-files, and the largest translated production module.
+`8f8cb27`, then completing the source-audit density item in this backlog. The
+implemented source audit marker cap is now 18, release-audit module cap remains
+240, and strict-type permanent reason groups remain capped at 40 entries. The
+next mechanical-translation debt is concentrated in release-audit modules
+clustered just below the cap, strict-type hotspots that still hide too many
+raw/usize boundaries in a few files, and the largest translated production
+module.
 
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,899 unsafe
-  mentions, and 504 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 504 operation IDs with
-  1,076 automated evidence rows.
-- No source audit operation ID has more than 20 source markers. Six IDs sit at
-  the 20-marker cap: `stats-json-boundary`,
-  `raw-macro-unix-aligned-posix-boundary`, `raw-macro-linux-libc-boundary`,
-  `internal-atomic-platform-lock-boundary`, `emscripten-memory-boundary`, and
-  `allocation-string-path-boundary`.
-- Nine more source audit operation IDs sit at 19 markers:
-  `windows-dll-lifecycle-boundary`, `unsafe-callback-test-fixtures`,
-  `typed-page-state-test-fixtures`, `stats-print-export-boundary`,
-  `raw-posix-realloc-boundary`, `page-stats-public-boundary`,
-  `page-map-lookup-boundary`, `os-memory-commit-boundary`, and
-  `internal-bitmap-range-chunk-boundary`. The next useful source marker cap is
-  18 entries.
+  mentions, and 524 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 524 operation IDs with
+  1,119 automated evidence rows.
+- No source audit operation ID has more than 18 source markers. Three IDs sit at
+  the 18-marker cap: `typed-callback-invocation-test-fixtures`,
+  `os-memory-aligned-allocation-boundary`, and
+  `arena-public-reserve-boundary`. The next useful source marker cap is 17
+  entries.
 - `strict-type-allowlist.txt` has 634 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -67,13 +61,14 @@ Current review evidence:
   release-audit module-size guard discovers 145 module files recursively and
   enforces a 240-line cap. The largest release-audit modules are:
   `unsafe_performance/os_memory/platform_helpers.rs` at 240 lines,
-  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs` at 237 lines,
-  `unsafe_performance/platform_primitive_boundaries/windows.rs` at 233 lines,
+  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs` at 238 lines,
+  `unsafe_performance/platform_primitive_boundaries/windows.rs` at 236 lines,
   `unsafe_performance/page_arena_behavior/purge_clock_atomic.rs` at 232 lines,
   `datatype_acceptance/strict_type/atomic_provenance_guards.rs` at 231 lines,
-  and
-  `unsafe_performance/lifecycle_boundaries/process_lifecycle/subproc_fast_paths.rs` at 223 lines.
-  No release-audit module currently exceeds 240 lines, but six modules still
+  `allocation_contracts.rs` at 227 lines,
+  `unsafe_performance/lifecycle_boundaries/process_lifecycle/subproc_fast_paths.rs` at 223 lines,
+  and `release_policy/api_surface/raw_facade.rs` at 221 lines.
+  No release-audit module currently exceeds 240 lines, but eight modules still
   exceed the next useful 220-line cap.
 - Production source module size remains dominated by translated-C-shaped files:
   `src/allocator/arena.rs` at 4,255 lines, `src/allocator/page.rs` at 2,914,
@@ -83,18 +78,18 @@ Current review evidence:
 
 ## Issue 1: Lower the source audit marker cap to 18
 
-The source audit is mechanically complete, but too many operation IDs still
-cover broad families. Split the 20- and 19-marker groups by responsibility so
-reviewers can reason about narrower unsafe boundaries.
+The source audit was mechanically complete, but too many operation IDs still
+covered broad families. The broad 20- and 19-marker groups were split by
+responsibility so reviewers can reason about narrower unsafe boundaries.
 
-- [ ] Split the six 20-marker operation IDs into smaller source-audit families:
+- [x] Split the six 20-marker operation IDs into smaller source-audit families:
       `stats-json-boundary`, `raw-macro-unix-aligned-posix-boundary`,
       `raw-macro-linux-libc-boundary`,
       `internal-atomic-platform-lock-boundary`, `emscripten-memory-boundary`,
       and `allocation-string-path-boundary`.
-- [ ] Split the nine 19-marker operation IDs by platform, callback/test
+- [x] Split the nine 19-marker operation IDs by platform, callback/test
       fixture, stats, page-map, OS commit, and bitmap-range responsibilities.
-- [ ] Lower the source marker release-audit cap from 20 to 18 and refresh
+- [x] Lower the source marker release-audit cap from 20 to 18 and refresh
       `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, generated evidence, and TODO
       evidence.
 
@@ -103,7 +98,7 @@ full formatting, full clippy, and full tests.
 
 ## Issue 2: Split release-audit modules over 220 lines
 
-The release-audit modules are now split enough for a 240-line cap, but six
+The release-audit modules are now split enough for a 240-line cap, but eight
 modules are still close enough to the cap that future policy additions will
 push them back into large-file review.
 
@@ -113,6 +108,8 @@ push them back into large-file review.
       OS-specific assertions live in focused child modules.
 - [ ] Split page-arena purge-clock and strict-type atomic/provenance guards by
       invariant family.
+- [ ] Split allocation contracts and raw facade API-surface guards by contract
+      family.
 - [ ] Split process lifecycle subproc fast-path assertions away from init/done
       marker checks.
 - [ ] Lower the recursive release-audit module cap from 240 to 220 and refresh
@@ -170,14 +167,14 @@ strict-type checker, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Lower the source audit marker cap to 18.
+1. [x] Lower the source audit marker cap to 18.
 2. [ ] Split release-audit modules over 220 lines.
 3. [ ] Tighten strict-type hotspot caps.
 4. [ ] Split the largest production module under 3,500 lines.
 
 ## Definition of done for this backlog
 
-- [ ] No source audit operation ID has more than 18 source markers.
+- [x] No source audit operation ID has more than 18 source markers.
 - [ ] Release-audit modules are split enough to lower the recursive module cap
       to 220 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type file hotspots are capped at 50 active entries, kind/file

@@ -600,7 +600,7 @@ pub unsafe fn filetime_msecs(ftime: *const FILETIME) -> mi_msecs_t {
     ((((ftime.dwHighDateTime as u64) << 32) | (ftime.dwLowDateTime as u64)) / 10_000) as mi_msecs_t
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-thread-yield-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[inline]
 pub unsafe extern "system" fn _mi_prim_thread_yield() {
     unsafe {
@@ -608,13 +608,13 @@ pub unsafe extern "system" fn _mi_prim_thread_yield() {
     }
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[inline]
 unsafe extern "system" fn mi_win_main(module: PVOID, reason: DWORD, reserved: LPVOID) {
     let _ = module;
     let _ = reserved;
     match reason {
-        // SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+        // SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
         DLL_PROCESS_ATTACH => unsafe { crate::internal::_mi_auto_process_init() },
         DLL_PROCESS_DETACH => unsafe { crate::internal::_mi_auto_process_done() },
         DLL_THREAD_DETACH => {
@@ -842,7 +842,7 @@ unsafe fn mi_module_is_dll(mod_: PVOID) -> bool {
     ((*image_nt_headers).FileHeader.Characteristics & IMAGE_FILE_DLL) == IMAGE_FILE_DLL
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[inline]
 pub unsafe extern "system" fn mi_tls_attach(module: PVOID, reason: DWORD, reserved: LPVOID) {
     if reason == DLL_THREAD_ATTACH || reason == DLL_PROCESS_ATTACH {
@@ -850,7 +850,7 @@ pub unsafe extern "system" fn mi_tls_attach(module: PVOID, reason: DWORD, reserv
     }
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[inline]
 pub unsafe extern "system" fn mi_win_main_detach(module: PVOID, reason: DWORD, reserved: LPVOID) {
     if reason == DLL_PROCESS_DETACH || reason == DLL_THREAD_DETACH {
@@ -858,13 +858,13 @@ pub unsafe extern "system" fn mi_win_main_detach(module: PVOID, reason: DWORD, r
     }
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[inline]
 pub unsafe extern "system" fn mi_tls_detach(module: PVOID, reason: DWORD, reserved: LPVOID) {
     if reason == DLL_THREAD_DETACH
         || (reason == DLL_PROCESS_DETACH && !unsafe { mi_module_is_dll(module) })
     {
-        // SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+        // SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
         unsafe { mi_win_main(module, reason, reserved) };
     }
 }
@@ -918,7 +918,7 @@ pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_
     }
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[inline]
 pub unsafe extern "system" fn mi_win_main_attach(module: PVOID, reason: DWORD, reserved: LPVOID) {
     if reason == DLL_PROCESS_ATTACH || reason == DLL_THREAD_ATTACH {
@@ -926,19 +926,19 @@ pub unsafe extern "system" fn mi_win_main_attach(module: PVOID, reason: DWORD, r
     }
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[inline]
 pub unsafe extern "system" fn mi_dll_main_raw(
     module: PVOID,
     reason: DWORD,
     reserved: PVOID,
 ) -> BOOL {
-    // SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+    // SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
     unsafe { mi_win_main(module, reason, reserved) };
     TRUE as BOOL
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[allow(dead_code)]
 #[inline]
 unsafe extern "system" fn DllMain(inst: HINSTANCE, reason: DWORD, reserved: LPVOID) -> BOOL {
@@ -946,7 +946,7 @@ unsafe extern "system" fn DllMain(inst: HINSTANCE, reason: DWORD, reserved: LPVO
     TRUE as BOOL
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-dll-entry-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[allow(dead_code)]
 #[inline]
 unsafe extern "C" fn mi_process_attach() -> c_int {
@@ -957,7 +957,7 @@ unsafe extern "C" fn mi_process_attach() -> c_int {
     0
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-allocator-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[inline]
 pub(crate) unsafe extern "C" fn _mi_allocator_done() {}
 
@@ -966,7 +966,7 @@ pub unsafe extern "C" fn _mi_is_redirected() -> bool {
     false
 }
 
-// SAFETY[AUDIT:windows-dll-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
+// SAFETY[AUDIT:windows-allocator-lifecycle-boundary]: Windows TLS/FLS and DLL lifecycle shims preserve callback, thread-heap, and attach/detach contracts.
 #[inline]
 pub(crate) unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
     if !message.is_null() {

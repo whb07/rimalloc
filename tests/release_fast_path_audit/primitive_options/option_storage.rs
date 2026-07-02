@@ -58,7 +58,8 @@ fn options_state_uses_internal_locks_like_c() {
         ("internal-atomic-volatile-delta-boundary", 3),
         ("internal-atomic-pointer-boundary", 6),
         ("internal-atomic-guard-once-boundary", 12),
-        ("internal-atomic-platform-lock-boundary", 20),
+        ("internal-atomic-pthread-lock-boundary", 11),
+        ("internal-atomic-fallback-lock-boundary", 9),
     ] {
         let needle = format!("SAFETY[AUDIT:{marker}]");
         let count = atomic_rs.matches(needle.as_str()).count();

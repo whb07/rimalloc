@@ -63,7 +63,8 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
         ("page-map-range-unregister-boundary", 10),
         ("page-map-submap-publication-boundary", 9),
         ("page-map-range-primitive-boundary", 5),
-        ("page-map-lookup-boundary", 19),
+        ("page-map-lookup32-boundary", 9),
+        ("page-map-lookup64-boundary", 10),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert_eq!(

@@ -97,7 +97,7 @@ const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe { flags::mi_page_is_full(page) }
 }
 
@@ -107,7 +107,7 @@ pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
 pub(crate) unsafe fn mi_page_slice_committed(
     page: *const mi_page_t,
 ) -> crate::core_types::CommittedBytes {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe { crate::core_types::CommittedBytes::new((*page).slice_committed) }
 }
 
@@ -118,7 +118,7 @@ pub(crate) unsafe fn mi_page_set_slice_committed(
     page: *mut mi_page_t,
     committed: crate::core_types::CommittedBytes,
 ) {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         (*page).slice_committed = committed.get();
     }
@@ -130,7 +130,7 @@ pub(crate) unsafe fn mi_page_set_slice_committed(
 pub(crate) unsafe fn mi_page_retire_expire(
     page: *const mi_page_t,
 ) -> crate::core_types::RetireExpire {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe { crate::core_types::RetireExpire::new((*page).retire_expire) }
 }
 
@@ -141,7 +141,7 @@ pub(crate) unsafe fn mi_page_set_retire_expire(
     page: *mut mi_page_t,
     expire: crate::core_types::RetireExpire,
 ) {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         (*page).retire_expire = expire.get();
     }
@@ -151,7 +151,7 @@ pub(crate) unsafe fn mi_page_set_retire_expire(
 /// `page` must point to writable page metadata.
 #[inline(always)]
 pub(crate) unsafe fn mi_page_reset_retire_expire(page: *mut mi_page_t) {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         mi_page_set_retire_expire(page, crate::core_types::RetireExpire::zero());
     }
@@ -161,7 +161,7 @@ pub(crate) unsafe fn mi_page_reset_retire_expire(page: *mut mi_page_t) {
 /// `page` must point to writable page metadata with a nonzero retire countdown.
 #[inline(always)]
 unsafe fn mi_page_decrement_retire_expire(page: *mut mi_page_t) -> crate::core_types::RetireExpire {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         let expire = mi_page_retire_expire(page).decrement();
         mi_page_set_retire_expire(page, expire);

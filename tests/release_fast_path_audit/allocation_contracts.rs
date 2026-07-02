@@ -78,9 +78,17 @@ fn allocation_product_paths_use_typed_requests() {
                 .count()
                 >= 13
             && posix_rs
-                .matches("SAFETY[AUDIT:raw-posix-realloc-boundary]")
+                .matches("SAFETY[AUDIT:raw-posix-reallocarray-boundary]")
                 .count()
-                >= 19
+                >= 5
+            && posix_rs
+                .matches("SAFETY[AUDIT:raw-posix-reallocarr-boundary]")
+                .count()
+                >= 11
+            && posix_rs
+                .matches("SAFETY[AUDIT:raw-posix-expand-boundary]")
+                .count()
+                >= 3
             && posix_rs
                 .matches("SAFETY[AUDIT:raw-posix-string-dup-boundary]")
                 .count()

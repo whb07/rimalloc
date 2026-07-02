@@ -189,7 +189,7 @@ pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut
     p
 }
 
-// SAFETY[AUDIT:raw-posix-realloc-boundary]: exports reallocarray with the POSIX
+// SAFETY[AUDIT:raw-posix-reallocarray-boundary]: exports reallocarray with the POSIX
 // overflow-to-null and errno behavior.
 #[unsafe(no_mangle)]
 /// # Safety
@@ -197,48 +197,48 @@ pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut
 /// `p` may be null or must be a pointer previously returned by mimalloc or a
 /// compatible allocation entry point. The returned pointer, when non-null, must
 /// be released through mimalloc-compatible free APIs.
-// SAFETY[AUDIT:raw-posix-realloc-boundary]: validates the product through
+// SAFETY[AUDIT:raw-posix-reallocarray-boundary]: validates the product through
 // `CallocRequest` before forwarding to the raw realloc boundary.
 pub unsafe extern "C" fn mi_reallocarray(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
-        // SAFETY[AUDIT:raw-posix-realloc-boundary]: `p` follows the realloc input
+        // SAFETY[AUDIT:raw-posix-reallocarray-boundary]: `p` follows the realloc input
         // contract and the requested total was checked above.
         let newp = unsafe { mi_realloc(p, req.total().get()) };
         if newp.is_null() {
-            // SAFETY[AUDIT:raw-posix-realloc-boundary]: publishes POSIX allocation
+            // SAFETY[AUDIT:raw-posix-reallocarray-boundary]: publishes POSIX allocation
             // failure through the platform errno shim.
             unsafe { mi_set_errno(ENOMEM) };
         }
         newp
     } else {
-        // SAFETY[AUDIT:raw-posix-realloc-boundary]: publishes POSIX product overflow
+        // SAFETY[AUDIT:raw-posix-reallocarray-boundary]: publishes POSIX product overflow
         // through the platform errno shim.
         unsafe { mi_set_errno(EOVERFLOW) };
         ptr::null_mut()
     }
 }
 
-// SAFETY[AUDIT:raw-posix-realloc-boundary]: exports reallocarr with its in/out pointer
+// SAFETY[AUDIT:raw-posix-reallocarr-boundary]: exports reallocarr with its in/out pointer
 // slot contract and errno-style result.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `ptrp` must be valid for reading and writing one pointer. `*ptrp` may be
 /// null or must be a mimalloc-compatible allocation pointer.
-// SAFETY[AUDIT:raw-posix-realloc-boundary]: validates the pointer slot and product before
+// SAFETY[AUDIT:raw-posix-reallocarr-boundary]: validates the pointer slot and product before
 // reading or rewriting the caller's allocation pointer.
 pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, size: usize) -> c_int {
     crate::internal::mi_assert!(size != 0);
     crate::internal::mi_assert!(!ptrp.is_null());
     if ptrp.is_null() || size == 0 {
-        // SAFETY[AUDIT:raw-posix-realloc-boundary]: publishes POSIX invalid-argument
+        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: publishes POSIX invalid-argument
         // failure through the platform errno shim.
         unsafe { mi_set_errno(EINVAL) };
         return EINVAL;
     }
 
     let Ok(req) = crate::core_types::CallocRequest::new(count, size) else {
-        // SAFETY[AUDIT:raw-posix-realloc-boundary]: publishes POSIX product overflow
+        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: publishes POSIX product overflow
         // through the platform errno shim.
         unsafe { mi_set_errno(EOVERFLOW) };
         return EOVERFLOW;
@@ -246,49 +246,49 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
     let total = req.total().get();
 
     if total == 0 {
-        // SAFETY[AUDIT:raw-posix-realloc-boundary]: `ptrp` was checked non-null and is
+        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `ptrp` was checked non-null and is
         // valid for one pointer by the C ABI contract.
         let oldp = unsafe { *ptrp };
-        // SAFETY[AUDIT:raw-posix-realloc-boundary]: `oldp` is null or a
+        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `oldp` is null or a
         // mimalloc-compatible allocation pointer by the function contract.
         unsafe { mi_free(oldp) };
-        // SAFETY[AUDIT:raw-posix-realloc-boundary]: `ptrp` was checked non-null and is
+        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `ptrp` was checked non-null and is
         // valid for one pointer by the C ABI contract.
         unsafe { *ptrp = ptr::null_mut() };
         return 0;
     }
 
-    // SAFETY[AUDIT:raw-posix-realloc-boundary]: `ptrp` was checked non-null and is valid
+    // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `ptrp` was checked non-null and is valid
     // for one pointer by the C ABI contract.
     let oldp = unsafe { *ptrp };
-    // SAFETY[AUDIT:raw-posix-realloc-boundary]: `oldp` is null or a mimalloc-compatible
+    // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `oldp` is null or a mimalloc-compatible
     // allocation pointer and `total` was checked above.
     let newp = unsafe { mi_realloc(oldp, total) };
     if newp.is_null() {
-        // SAFETY[AUDIT:raw-posix-realloc-boundary]: publishes POSIX allocation failure
+        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: publishes POSIX allocation failure
         // through the platform errno shim.
         unsafe { mi_set_errno(ENOMEM) };
         return ENOMEM;
     }
-    // SAFETY[AUDIT:raw-posix-realloc-boundary]: `ptrp` is valid for one pointer and
+    // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `ptrp` is valid for one pointer and
     // receives the successful realloc result.
     unsafe { *ptrp = newp };
     0
 }
 
-// SAFETY[AUDIT:raw-posix-realloc-boundary]: exports the POSIX expand compatibility
+// SAFETY[AUDIT:raw-posix-expand-boundary]: exports the POSIX expand compatibility
 // symbol with the raw realloc-like pointer contract.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `p` may be null or must be a pointer previously returned by mimalloc or a
 /// compatible allocation entry point.
-// SAFETY[AUDIT:raw-posix-realloc-boundary]: forwards to mimalloc expand and publishes
+// SAFETY[AUDIT:raw-posix-expand-boundary]: forwards to mimalloc expand and publishes
 // allocation failure through errno.
 pub unsafe extern "C" fn mi__expand(p: *mut c_void, newsize: usize) -> *mut c_void {
     let res = unsafe { mi_expand(p, newsize) };
     if res.is_null() {
-        // SAFETY[AUDIT:raw-posix-realloc-boundary]: publishes POSIX allocation failure
+        // SAFETY[AUDIT:raw-posix-expand-boundary]: publishes POSIX allocation failure
         // through the platform errno shim.
         unsafe { mi_set_errno(ENOMEM) };
     }

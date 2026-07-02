@@ -1840,7 +1840,7 @@ pub unsafe extern "C" fn mi_unix_malloc_usable_size_export(p: *const c_void) -> 
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_valloc(size: usize) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_valloc(size) }
 }
 
@@ -1851,7 +1851,7 @@ pub unsafe fn mi_unix_valloc(size: usize) -> *mut c_void {
     any(not(feature = "c-abi"), feature = "interpose"),
     unsafe(export_name = "valloc")
 )]
-// SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_valloc_export(size: usize) -> *mut c_void {
     unsafe { mi_unix_valloc(size) }
 }
@@ -1860,7 +1860,7 @@ pub unsafe extern "C" fn mi_unix_valloc_export(size: usize) -> *mut c_void {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_vfree(p: *mut c_void) {
-    // SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { mi_unix_free(p) }
 }
 
@@ -1871,7 +1871,7 @@ pub unsafe fn mi_unix_vfree(p: *mut c_void) {
     any(not(feature = "c-abi"), feature = "interpose"),
     unsafe(export_name = "vfree")
 )]
-// SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_vfree_export(p: *mut c_void) {
     unsafe { mi_unix_vfree(p) }
 }
@@ -1929,7 +1929,7 @@ pub unsafe extern "C" fn mi_unix_aligned_alloc_export(
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_cfree(p: *mut c_void) {
-    // SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-unix-cfree-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { mi_unix_free(p) }
 }
 
@@ -1940,7 +1940,7 @@ pub unsafe fn mi_unix_cfree(p: *mut c_void) {
     any(not(feature = "c-abi"), feature = "interpose"),
     unsafe(export_name = "cfree")
 )]
-// SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-unix-cfree-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_cfree_export(p: *mut c_void) {
     unsafe { mi_unix_cfree(p) }
 }
@@ -1949,7 +1949,7 @@ pub unsafe extern "C" fn mi_unix_cfree_export(p: *mut c_void) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_pvalloc(size: usize) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_pvalloc(size) }
 }
 
@@ -1960,7 +1960,7 @@ pub unsafe fn mi_unix_pvalloc(size: usize) -> *mut c_void {
     any(not(feature = "c-abi"), feature = "interpose"),
     unsafe(export_name = "pvalloc")
 )]
-// SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_pvalloc_export(size: usize) -> *mut c_void {
     unsafe { mi_unix_pvalloc(size) }
 }
@@ -2013,7 +2013,7 @@ pub unsafe extern "C" fn mi_unix_aligned_malloc_export(
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_reallocarray(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe {
         match count.checked_mul(size) {
             Some(total) => mi_unix_realloc(p, total),
@@ -2273,7 +2273,7 @@ pub unsafe extern "C" fn mi_linux_libc_cfree_export(p: *mut c_void) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_valloc(size: usize) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_valloc(size) }
 }
 
@@ -2284,7 +2284,7 @@ pub unsafe fn mi_linux_libc_valloc(size: usize) -> *mut c_void {
     any(not(feature = "c-abi"), feature = "interpose"),
     unsafe(export_name = "__libc_valloc")
 )]
-// SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_valloc_export(size: usize) -> *mut c_void {
     unsafe { mi_linux_libc_valloc(size) }
 }
@@ -2293,7 +2293,7 @@ pub unsafe extern "C" fn mi_linux_libc_valloc_export(size: usize) -> *mut c_void
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_pvalloc(size: usize) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_pvalloc(size) }
 }
 
@@ -2304,7 +2304,7 @@ pub unsafe fn mi_linux_libc_pvalloc(size: usize) -> *mut c_void {
     any(not(feature = "c-abi"), feature = "interpose"),
     unsafe(export_name = "__libc_pvalloc")
 )]
-// SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_pvalloc_export(size: usize) -> *mut c_void {
     unsafe { mi_linux_libc_pvalloc(size) }
 }
@@ -2313,7 +2313,7 @@ pub unsafe extern "C" fn mi_linux_libc_pvalloc_export(size: usize) -> *mut c_voi
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_memalign(alignment: usize, size: usize) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_memalign(alignment, size) }
 }
 
@@ -2324,12 +2324,12 @@ pub unsafe fn mi_linux_libc_memalign(alignment: usize, size: usize) -> *mut c_vo
     any(not(feature = "c-abi"), feature = "interpose"),
     unsafe(export_name = "__libc_memalign")
 )]
-// SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_memalign_export(
     alignment: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { mi_linux_libc_memalign(alignment, size) }
 }
 
@@ -2337,7 +2337,7 @@ pub unsafe extern "C" fn mi_linux_libc_memalign_export(
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> c_int {
-    // SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_posix_memalign(p, alignment, size) }
 }
 
@@ -2348,13 +2348,13 @@ pub unsafe fn mi_linux_posix_memalign(p: *mut *mut c_void, alignment: usize, siz
     any(not(feature = "c-abi"), feature = "interpose"),
     unsafe(export_name = "__posix_memalign")
 )]
-// SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_posix_memalign_export(
     p: *mut *mut c_void,
     alignment: usize,
     size: usize,
 ) -> c_int {
-    // SAFETY[AUDIT:raw-macro-linux-libc-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { mi_linux_posix_memalign(p, alignment, size) }
 }
 

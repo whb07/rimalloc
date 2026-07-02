@@ -53,11 +53,11 @@ static mut _mi_heap_default_key: pthread_key_t = PTHREAD_KEY_INVALID;
 ///
 /// `config`, when non-null, must point to writable `mi_os_mem_config_t` storage
 /// owned by the primitive initialization caller.
-// SAFETY[AUDIT:emscripten-memory-boundary]: C callers may pass a nullable
+// SAFETY[AUDIT:emscripten-allocation-boundary]: C callers may pass a nullable
 // config out-pointer; non-null storage is initialized with primitive constants.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
-    // SAFETY[AUDIT:emscripten-memory-boundary]: the function contract
+    // SAFETY[AUDIT:emscripten-allocation-boundary]: the function contract
     // requires any non-null config pointer to be writable config storage.
     let Some(config) = (unsafe { config.as_mut() }) else {
         return;
@@ -73,7 +73,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
 ///
 /// `addr` must be either null/unused for `size == 0`, or a pointer previously
 /// returned by the Emscripten primitive allocator for a compatible allocation.
-// SAFETY[AUDIT:emscripten-memory-boundary]: this C ABI primitive free shim
+// SAFETY[AUDIT:emscripten-allocation-boundary]: this C ABI primitive free shim
 // delegates to emmalloc only for non-empty Emscripten allocations.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int 
     }
     #[cfg(target_os = "emscripten")]
     {
-        // SAFETY[AUDIT:emscripten-memory-boundary]: non-empty frees are for
+        // SAFETY[AUDIT:emscripten-allocation-boundary]: non-empty frees are for
         // pointers returned by the Emscripten primitive allocator.
         unsafe { emmalloc_free(addr) };
     }
@@ -97,7 +97,7 @@ pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int 
 ///
 /// `is_large`, `is_zero`, and `addr`, when non-null, must be valid writable
 /// out-pointers for the duration of the call.
-// SAFETY[AUDIT:emscripten-memory-boundary]: C callers provide nullable
+// SAFETY[AUDIT:emscripten-allocation-boundary]: C callers provide nullable
 // out-pointers and allocation parameters; the backend publishes only emmalloc or
 // fallback allocation results.
 #[inline]
@@ -114,12 +114,12 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     let _ = hint_addr;
     let _ = commit;
     let _ = allow_large;
-    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null out-pointers are
+    // SAFETY[AUDIT:emscripten-allocation-boundary]: non-null out-pointers are
     // caller-provided writable slots for primitive allocation result flags.
     if let Some(is_large) = unsafe { is_large.as_mut() } {
         *is_large = false;
     }
-    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null out-pointers are
+    // SAFETY[AUDIT:emscripten-allocation-boundary]: non-null out-pointers are
     // caller-provided writable slots for primitive allocation result flags.
     if let Some(is_zero) = unsafe { is_zero.as_mut() } {
         *is_zero = false;
@@ -129,10 +129,10 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     }
     #[cfg(target_os = "emscripten")]
     {
-        // SAFETY[AUDIT:emscripten-memory-boundary]: alignment is clamped to
+        // SAFETY[AUDIT:emscripten-allocation-boundary]: alignment is clamped to
         // emmalloc's minimum and the returned pointer is checked for null.
         let p = unsafe { emmalloc_memalign(try_alignment, size) };
-        // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `addr` is
+        // SAFETY[AUDIT:emscripten-allocation-boundary]: non-null `addr` is
         // caller-provided writable storage for the allocation result pointer.
         if let Some(addr) = unsafe { addr.as_mut() } {
             *addr = p;
@@ -143,7 +143,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     {
         let _ = size;
         let _ = try_alignment;
-        // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `addr` is
+        // SAFETY[AUDIT:emscripten-allocation-boundary]: non-null `addr` is
         // caller-provided writable storage for the fallback null pointer.
         if let Some(addr) = unsafe { addr.as_mut() } {
             *addr = core::ptr::null_mut();
@@ -157,7 +157,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer. `is_zero`, when non-null, must be a valid writable
 /// out-pointer.
-// SAFETY[AUDIT:emscripten-memory-boundary]: commit is a compatibility no-op
+// SAFETY[AUDIT:emscripten-memory-operation-boundary]: commit is a compatibility no-op
 // and writes only the nullable zero-fill out-pointer when supplied.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_commit(
@@ -167,7 +167,7 @@ pub unsafe extern "C" fn _mi_prim_commit(
 ) -> c_int {
     let _ = addr;
     let _ = size;
-    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `is_zero` is a
+    // SAFETY[AUDIT:emscripten-memory-operation-boundary]: non-null `is_zero` is a
     // caller-provided writable zero-fill result slot.
     if let Some(is_zero) = unsafe { is_zero.as_mut() } {
         *is_zero = false;
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn _mi_prim_commit(
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer. `needs_recommit`, when non-null, must be a valid writable
 /// out-pointer.
-// SAFETY[AUDIT:emscripten-memory-boundary]: decommit is a compatibility
+// SAFETY[AUDIT:emscripten-memory-operation-boundary]: decommit is a compatibility
 // no-op and writes only the nullable recommit out-pointer when supplied.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_decommit(
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn _mi_prim_decommit(
 ) -> c_int {
     let _ = addr;
     let _ = size;
-    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `needs_recommit` is
+    // SAFETY[AUDIT:emscripten-memory-operation-boundary]: non-null `needs_recommit` is
     // a caller-provided writable recommit result slot.
     if let Some(needs_recommit) = unsafe { needs_recommit.as_mut() } {
         *needs_recommit = false;
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn _mi_prim_decommit(
 ///
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer.
-// SAFETY[AUDIT:emscripten-memory-boundary]: reset is a C ABI compatibility
+// SAFETY[AUDIT:emscripten-memory-operation-boundary]: reset is a C ABI compatibility
 // no-op over a caller-supplied primitive allocation range.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> c_int {
@@ -215,7 +215,7 @@ pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> c_int
 ///
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer.
-// SAFETY[AUDIT:emscripten-memory-boundary]: reuse is a C ABI compatibility
+// SAFETY[AUDIT:emscripten-memory-operation-boundary]: reuse is a C ABI compatibility
 // no-op over a caller-supplied primitive allocation range.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> c_int {
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> c_int
 ///
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer.
-// SAFETY[AUDIT:emscripten-memory-boundary]: protect is a C ABI compatibility
+// SAFETY[AUDIT:emscripten-memory-operation-boundary]: protect is a C ABI compatibility
 // no-op over a caller-supplied primitive allocation range and protection flag.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protect: bool) -> c_int {
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protec
 ///
 /// `is_zero` and `addr`, when non-null, must be valid writable out-pointers for
 /// the duration of the call.
-// SAFETY[AUDIT:emscripten-memory-boundary]: huge OS pages are unsupported
+// SAFETY[AUDIT:emscripten-memory-operation-boundary]: huge OS pages are unsupported
 // here, so nullable result out-pointers are initialized to failure values.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
@@ -255,12 +255,12 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     let _ = hint_addr;
     let _ = size;
     let _ = numa_node;
-    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `is_zero` is a
+    // SAFETY[AUDIT:emscripten-memory-operation-boundary]: non-null `is_zero` is a
     // caller-provided writable huge-page result slot.
     if let Some(is_zero) = unsafe { is_zero.as_mut() } {
         *is_zero = true;
     }
-    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `addr` is
+    // SAFETY[AUDIT:emscripten-memory-operation-boundary]: non-null `addr` is
     // caller-provided writable storage for the unsupported result pointer.
     if let Some(addr) = unsafe { addr.as_mut() } {
         *addr = core::ptr::null_mut();

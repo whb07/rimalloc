@@ -39,6 +39,7 @@ pub(super) fn assert_platform_primitive_focused_evidence(evidence: &str) {
         ("os-memory-page-align-boundary", OS_MEMORY_FOCUSED_PATH),
         ("os-memory-guard-boundary", OS_MEMORY_FOCUSED_PATH),
         ("os-memory-commit-boundary", OS_MEMORY_FOCUSED_PATH),
+        ("os-memory-purge-protect-boundary", OS_MEMORY_FOCUSED_PATH),
         ("os-memory-free-boundary", OS_MEMORY_FOCUSED_PATH),
         (
             "os-memory-primitive-allocation-boundary",
@@ -88,6 +89,15 @@ pub(super) fn assert_platform_primitive_focused_evidence(evidence: &str) {
             WINDOWS_PRIMITIVE_FOCUSED_PATH,
         ),
         (
+            "windows-thread-yield-boundary",
+            WINDOWS_PRIMITIVE_FOCUSED_PATH,
+        ),
+        ("windows-dll-entry-boundary", WINDOWS_PRIMITIVE_FOCUSED_PATH),
+        (
+            "windows-allocator-lifecycle-boundary",
+            WINDOWS_PRIMITIVE_FOCUSED_PATH,
+        ),
+        (
             "windows-fls-thread-boundary",
             WINDOWS_PRIMITIVE_FOCUSED_PATH,
         ),
@@ -119,7 +129,11 @@ pub(super) fn assert_platform_primitive_focused_evidence(evidence: &str) {
             EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH,
         ),
         (
-            "emscripten-memory-boundary",
+            "emscripten-allocation-boundary",
+            EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH,
+        ),
+        (
+            "emscripten-memory-operation-boundary",
             EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH,
         ),
         (

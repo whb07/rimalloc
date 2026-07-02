@@ -27,9 +27,11 @@ pub(super) fn assert_stats_marker_inventory(
         ("stats-public-export-boundary", 14),
         ("stats-formatting-boundary", 6),
         ("stats-buffered-output-boundary", 3),
-        ("stats-print-export-boundary", 19),
+        ("stats-print-format-boundary", 3),
+        ("stats-print-export-boundary", 16),
         ("stats-process-info-boundary", 6),
-        ("stats-json-boundary", 18),
+        ("stats-json-buffer-boundary", 4),
+        ("stats-json-boundary", 16),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert!(

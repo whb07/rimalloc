@@ -20,7 +20,8 @@ fn emscripten_primitive_backend_stays_bounded_and_audited() {
     );
     for (audit_id, exact_count) in [
         ("emscripten-import-boundary", 2),
-        ("emscripten-memory-boundary", 20),
+        ("emscripten-allocation-boundary", 10),
+        ("emscripten-memory-operation-boundary", 10),
         ("emscripten-clock-io-boundary", 9),
         ("emscripten-pthread-key-boundary", 14),
         ("emscripten-thread-shim-boundary", 3),

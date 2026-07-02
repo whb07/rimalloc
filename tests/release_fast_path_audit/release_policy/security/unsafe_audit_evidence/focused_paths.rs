@@ -43,7 +43,8 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         "page-map-range-unregister-boundary",
         "page-map-submap-publication-boundary",
         "page-map-range-primitive-boundary",
-        "page-map-lookup-boundary",
+        "page-map-lookup32-boundary",
+        "page-map-lookup64-boundary",
     ] {
         assert_focused_evidence(audit_id, LOCAL_BOUNDARIES_FOCUSED_PATH);
         assert_focused_evidence(audit_id, PAGE_ARENA_FOCUSED_PATH);
@@ -60,10 +61,13 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         "raw-macro-unix-core-boundary",
         "raw-macro-unix-string-boundary",
         "raw-macro-unix-realloc-boundary",
+        "raw-macro-unix-page-aligned-boundary",
         "raw-macro-unix-aligned-posix-boundary",
+        "raw-macro-unix-cfree-boundary",
         "raw-macro-unix-product-realloc-boundary",
         "raw-macro-wasi-libc-boundary",
         "raw-macro-linux-libc-boundary",
+        "raw-macro-linux-libc-aligned-boundary",
         "raw-macro-allocation-query-boundary",
     ] {
         assert_focused_evidence(audit_id, RAW_FACADE_FOCUSED_PATH);

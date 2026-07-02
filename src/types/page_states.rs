@@ -502,39 +502,39 @@ pub(super) fn __lint_touch() {
     let _ = core::mem::size_of::<AbandonedMapped>();
     let _ = core::mem::size_of::<Destroyed>();
 
-    // SAFETY[AUDIT:typed-page-state-test-fixtures]: lint-touch uses
+    // SAFETY[AUDIT:typed-page-state-lint-fixtures]: lint-touch uses
     // non-dereferenced dangling pointers only to keep typestate accessors and
     // function items visible to dead-code analysis.
     let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
-    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic page pointer
+    // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic page pointer
     // is never dereferenced; the witness is consumed only by accessor coverage.
     let retired = unsafe { RetiredPage::new_unchecked(page) };
     let _ = retired.page();
     let _ = retired.expire();
-    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic abandoned
+    // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic abandoned
     // witness is used only to keep remote-free and function-item APIs live.
     let abandoned = unsafe { AbandonedPageType::new_unchecked(page) };
     let _ = AbandonedPageType::claim_ownership
         as unsafe fn(AbandonedPageType) -> Option<OwnedAbandonedPage>;
     let _ = abandoned.remote_free_page();
-    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic mapped
+    // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic mapped
     // abandoned witness is not dereferenced.
     let mapped = unsafe { AbandonedMappedPageType::new_unchecked(page) };
     let _ = mapped.remote_free_page();
-    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic owned
+    // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic owned
     // abandoned witness is used only for transition API reachability.
     let owned = unsafe { OwnedAbandonedPage::new_unchecked(page) };
     let _ = owned.reabandon_to_mapped();
 
     if let PageFreeOwner::Local(local) =
-        // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic page is
+        // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic page is
         // wrapped but not dereferenced while checking enum-field reachability.
         PageFreeOwner::Local(unsafe { LocalPage::new_unchecked(page) })
     {
         let _ = local.page();
     }
     if let PageFreeOwner::Foreign(foreign) =
-        // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic page is
+        // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic page is
         // wrapped but not dereferenced while checking enum-field reachability.
         PageFreeOwner::Foreign(unsafe { ForeignPage::new_unchecked(page) })
     {
@@ -544,17 +544,17 @@ pub(super) fn __lint_touch() {
         let _ = abandoned.page();
     }
     if let PageAbandonOutcome::Destroyed(destroyed) =
-        // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic
+        // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic
         // destroyed witness is used only for enum-field reachability.
         PageAbandonOutcome::Destroyed(unsafe { DestroyedPage::new_unchecked(page) })
     {
         let _ = destroyed.page();
     }
 
-    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the dangling thread-heap
+    // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the dangling thread-heap
     // pointer is used as identity only and is not dereferenced by this helper.
     let theap = unsafe { ThreadHeapPtr::new_unchecked(core::ptr::dangling_mut()) };
-    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic local
+    // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic local
     // thread-heap witness is used only for accessor/function-item reachability.
     let local = unsafe { ThreadHeapLocal::new_unchecked(theap) };
     let _ = local.borrowed();

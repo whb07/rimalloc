@@ -1076,7 +1076,7 @@ unsafe fn _mi_stats_print(
     out0: Option<mi_output_fun>,
     arg0: *mut c_void,
 ) {
-    // SAFETY[AUDIT:stats-print-export-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-print-format-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let Some(stats) = (unsafe { stats.as_ref() }) else {
         return;
     };
@@ -1178,12 +1178,12 @@ unsafe fn _mi_stats_print(
         _mi_fprintf(
             out,
             arg,
-            // SAFETY[AUDIT:stats-print-export-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+            // SAFETY[AUDIT:stats-print-format-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
             format_args!("  {:<10}: {:>5}\n", "numa nodes", unsafe {
                 _mi_os_numa_node_count()
             }),
         );
-        // SAFETY[AUDIT:stats-print-export-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-print-format-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { mi_process_info_print_out(out, arg) };
     }
     _mi_fprintf(out, arg, format_args!("\n"));
@@ -1763,7 +1763,7 @@ impl Default for mi_json_buf_s {
 fn mi_json_buf_expand(hbuf: &mut mi_json_buf_t) -> bool {
     if !hbuf.buf.is_null() && hbuf.size > 0 {
         // SAFETY: `buf` is valid for `size` bytes when non-null.
-        // SAFETY[AUDIT:stats-json-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-json-buffer-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { *hbuf.buf.add(hbuf.size - 1) = 0 };
     }
     if hbuf.size > usize::MAX / 2 || !hbuf.can_realloc {
@@ -1775,7 +1775,7 @@ fn mi_json_buf_expand(hbuf: &mut mi_json_buf_t) -> bool {
         2 * hbuf.size
     };
     // SAFETY: `mi_rezalloc` accepts null for fresh allocation and preserves the old contents.
-    // SAFETY[AUDIT:stats-json-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-json-buffer-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let newbuf = unsafe { mi_rezalloc(hbuf.buf.cast(), newsize).cast::<c_char>() };
     if newbuf.is_null() {
         return false;
@@ -1795,13 +1795,13 @@ fn mi_json_buf_print(hbuf: &mut mi_json_buf_t, msg: &str) {
         }
         crate::internal::mi_debug_assert!(hbuf.used < hbuf.size);
         // SAFETY: capacity is ensured just above and `used < size`.
-        // SAFETY[AUDIT:stats-json-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-json-buffer-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { *hbuf.buf.add(hbuf.used) = byte as c_char };
         hbuf.used += 1;
     }
     crate::internal::mi_debug_assert!(hbuf.used < hbuf.size);
     // SAFETY: capacity is ensured above and the trailing NUL fits.
-    // SAFETY[AUDIT:stats-json-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-json-buffer-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { *hbuf.buf.add(hbuf.used) = 0 };
 }
 

@@ -26,10 +26,13 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
         ("raw-macro-unix-core-boundary", 4),
         ("raw-macro-unix-string-boundary", 4),
         ("raw-macro-unix-realloc-boundary", 2),
-        ("raw-macro-unix-aligned-posix-boundary", 20),
-        ("raw-macro-unix-product-realloc-boundary", 4),
+        ("raw-macro-unix-page-aligned-boundary", 6),
+        ("raw-macro-unix-aligned-posix-boundary", 11),
+        ("raw-macro-unix-cfree-boundary", 2),
+        ("raw-macro-unix-product-realloc-boundary", 5),
         ("raw-macro-wasi-libc-boundary", 11),
-        ("raw-macro-linux-libc-boundary", 20),
+        ("raw-macro-linux-libc-boundary", 10),
+        ("raw-macro-linux-libc-aligned-boundary", 10),
         ("raw-macro-allocation-query-boundary", 10),
         ("raw-macro-cxx-delete-boundary", 3),
         ("raw-macro-cxx-array-delete-boundary", 3),
@@ -121,10 +124,13 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-core-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-string-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-realloc-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-cfree-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-wasi-libc-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-linux-libc-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-delete-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-array-delete-boundary]")

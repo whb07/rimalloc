@@ -12,10 +12,13 @@ pub(super) fn assert_libc_and_posix_boundaries(sources: &UnsafePerformanceSource
         ("raw-macro-unix-core-boundary", 4),
         ("raw-macro-unix-string-boundary", 4),
         ("raw-macro-unix-realloc-boundary", 2),
-        ("raw-macro-unix-aligned-posix-boundary", 20),
-        ("raw-macro-unix-product-realloc-boundary", 4),
+        ("raw-macro-unix-page-aligned-boundary", 6),
+        ("raw-macro-unix-aligned-posix-boundary", 11),
+        ("raw-macro-unix-cfree-boundary", 2),
+        ("raw-macro-unix-product-realloc-boundary", 5),
         ("raw-macro-wasi-libc-boundary", 11),
-        ("raw-macro-linux-libc-boundary", 20),
+        ("raw-macro-linux-libc-boundary", 10),
+        ("raw-macro-linux-libc-aligned-boundary", 10),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         let count = raw_macros_rs.matches(&marker).count();

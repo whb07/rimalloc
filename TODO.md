@@ -26,13 +26,13 @@ Current review evidence:
   `src/types/page_queues.rs` is 304 lines,
   `src/types/heap.rs` is 312 lines, and
   `src/allocator/arena_meta.rs` is 316 lines.
-- `strict-type-allowlist.txt` has 2 remaining `remove:` entries:
-  broad `bare-domain-usize` allowances for `alloc` and `aligned`.
-  `REMOVE_ENTRY_CAP` is 2.
+- `strict-type-allowlist.txt` has 1 remaining `remove:` entry:
+  the broad `bare-domain-usize` allowance for `aligned`.
+  `REMOVE_ENTRY_CAP` is 1.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 4,628 lines,
   `src/allocator/page.rs` is 2,801 lines,
-  `src/allocator/alloc.rs` is 2,545 lines,
+  `src/allocator/alloc.rs` is 2,559 lines,
   `src/internal/bitmap.rs` is 2,358 lines,
   `src/allocator/init.rs` is 2,339 lines,
   `src/raw/macros.rs` is 2,223 lines, and
@@ -108,23 +108,32 @@ Verify: unsafe audit scripts, `scripts/check-valgrind-tracking-parity.py`,
 `cargo test --test release_fast_path_audit --all-features`, full clippy, and
 full tests.
 
-## Issue: Broad strict-type usize allowances remain in alloc and aligned
+## Issue: Broad strict-type usize allowance remains in aligned after alloc narrowing
 
 > **Comment:** Bitmap is no longer covered by a broad removable allowance.
-> `alloc` and `aligned` still allow every `usize` parameter in the file, which
-> hides whether each size/count/alignment parameter is raw ABI, C-parity hot
-> path, or a migratable typed-domain boundary.
+> `alloc` has been narrowed to symbol-level parser entries, and `aligned` is
+> now the only remaining broad removable `usize` allowance. The completed alloc
+> pass classifies size/count/alignment parameters as raw ABI, typed request
+> constructors, product-size helpers, or migratable local helpers.
 
-- [ ] Temporarily remove
+- [x] Temporarily remove
       `bare-domain-usize|src/allocator/alloc.rs|*|usize` and run
       `scripts/check-strict-types.py` to collect the live hits.
-- [ ] Classify each hit as raw ABI, hot C-parity helper, typed request
+- [x] Classify each hit as raw ABI, hot C-parity helper, typed request
       constructor, product-size helper, or migratable local helper.
-- [ ] Replace the broad `alloc` entry with symbol-level entries and typed
+- [x] Replace the broad `alloc` entry with symbol-level entries and typed
       scalar wrappers where practical.
-- [ ] Keep `REMOVE_ENTRY_CAP` accurate if the broad removable entry is removed.
-- [ ] Preserve allocation hot-path shape and avoid adding heap allocation or
+- [x] Keep `REMOVE_ENTRY_CAP` accurate if the broad removable entry is removed.
+- [x] Preserve allocation hot-path shape and avoid adding heap allocation or
       trait-object dispatch to allocator fast paths.
+  - Evidence: the broad `src/allocator/alloc.rs` `bare-domain-usize`
+    allowance was replaced with symbol-level entries for
+    `maybe_alignment_or_report`, `alignment_or_report`,
+    `malloc_layout_or_report`, `calloc_request_or_report`, and
+    `alloc_product_or_report`. Internal lazy malloc, recalloc, product-size,
+    and C++ aligned-new helpers now carry `RequestedSize`, `ItemCount`,
+    `CallocRequest`, or `AllocProduct` where practical. Only the broad
+    `aligned` removable entry remains, and `REMOVE_ENTRY_CAP` is now 1.
 
 Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
 `scripts/check-api-inventory.py`, `scripts/check-public-abi.py`,
@@ -179,7 +188,7 @@ full tests.
 
 1. [x] Migrate `src/types/heap/tests.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/allocator/tracking.rs` off the unsafe migration allowlist.
-3. [ ] Narrow the broad `alloc` strict-type `usize` allowance.
+3. [x] Narrow the broad `alloc` strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
 5. [ ] Split one cohesive helper group out of `src/allocator/arena.rs`.
 
@@ -188,7 +197,7 @@ full tests.
 - [x] The unsafe migration allowlist is below 49 entries and the cap is lowered.
 - [x] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.
-- [ ] One remaining broad strict-type `remove:` allowance is narrowed or
+- [x] One remaining broad strict-type `remove:` allowance is narrowed or
       eliminated.
 - [ ] One release-audit module has more review margin.
 - [ ] `src/allocator/arena.rs` is smaller without API, ABI, or hot-path

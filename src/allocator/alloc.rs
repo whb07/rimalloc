@@ -496,7 +496,7 @@ unsafe fn mi_theap_malloc_small_zero(
                 usable,
             )
         } else if MI_THEAP_INITASNULL {
-            mi_theap_malloc_zero_nonnull_lazy(theap, size.get(), zeroed, no_alignment(), usable)
+            mi_theap_malloc_zero_nonnull_lazy(theap, size, zeroed, no_alignment(), usable)
         } else {
             let Some(theap) = _mi_theap_or_default_typed(theap) else {
                 return ptr::null_mut();
@@ -588,22 +588,22 @@ unsafe fn mi_heap_malloc_small_typed(
 
 unsafe fn mi_theap_malloc_zero_nonnull_lazy(
     theap: *mut mi_theap_t,
-    size: usize,
+    size: crate::core_types::RequestedSize,
     zeroed: crate::core_types::Zeroed,
     huge_alignment: crate::core_types::MaybeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
     unsafe {
         let layout = match zeroed {
-            crate::core_types::Zeroed::No => crate::core_types::LayoutRequest::malloc(size),
-            crate::core_types::Zeroed::Yes => crate::core_types::LayoutRequest::zalloc(size),
+            crate::core_types::Zeroed::No => crate::core_types::LayoutRequest::malloc(size.get()),
+            crate::core_types::Zeroed::Yes => crate::core_types::LayoutRequest::zalloc(size.get()),
         };
         if let Ok(layout) = layout {
             mi_theap_malloc_zero_req(theap, layout, huge_alignment, usable)
         } else {
             _mi_error_message_fmt(
                 Errno::EOVERFLOW,
-                format_args!("allocation request is too large ({size} bytes)\n"),
+                format_args!("allocation request is too large ({} bytes)\n", size.get()),
             );
             ptr::null_mut()
         }
@@ -954,29 +954,42 @@ unsafe fn mi_theap_calloc_req_lazy(
     unsafe { mi_theap_zalloc(theap, req.layout().requested().get()) }
 }
 
-fn product_size_or_report(count: usize, size: usize) -> Option<usize> {
+fn product_size_or_report(
+    count: crate::core_types::ItemCount,
+    size: crate::core_types::RequestedSize,
+) -> Option<crate::core_types::RequestedSize> {
     let mut total = 0;
-    if unsafe { crate::internal::mi_count_size_overflow(count, size, &mut total) } {
+    if unsafe { crate::internal::mi_count_size_overflow(count.get(), size.get(), &mut total) } {
         return None;
     }
-    Some(total)
+    Some(crate::core_types::RequestedSize::new(total))
 }
 
 pub(crate) fn calloc_request_or_report(
     count: usize,
     size: usize,
 ) -> Option<crate::core_types::CallocRequest> {
+    let count = crate::core_types::ItemCount::new(count);
+    let size = crate::core_types::RequestedSize::new(size);
     let total = product_size_or_report(count, size)?;
     // SAFETY: `product_size_or_report` returns only a non-overflowing
     // `count * size` total and reports the C-compatible overflow error.
-    unsafe { crate::core_types::CallocRequest::from_checked_total(count, size, total).ok() }
+    unsafe {
+        crate::core_types::CallocRequest::from_checked_total(count.get(), size.get(), total.get())
+            .ok()
+    }
 }
 
 fn alloc_product_or_report(count: usize, size: usize) -> Option<crate::core_types::AllocProduct> {
+    let count = crate::core_types::ItemCount::new(count);
+    let size = crate::core_types::RequestedSize::new(size);
     let total = product_size_or_report(count, size)?;
     // SAFETY: `product_size_or_report` returns only a non-overflowing
     // `count * size` total and reports the C-compatible overflow error.
-    unsafe { crate::core_types::AllocProduct::from_checked_total(count, size, total).ok() }
+    unsafe {
+        crate::core_types::AllocProduct::from_checked_total(count.get(), size.get(), total.get())
+            .ok()
+    }
 }
 
 /// # Safety
@@ -1612,13 +1625,9 @@ unsafe fn mi_theap_recalloc_req(
 unsafe fn mi_theap_recalloc_raw(
     theap: *mut mi_theap_t,
     p: *mut c_void,
-    count: usize,
-    size: usize,
+    req: crate::core_types::CallocRequest,
 ) -> *mut c_void {
     unsafe {
-        let Some(req) = calloc_request_or_report(count, size) else {
-            return ptr::null_mut();
-        };
         let Some(realloc_req) = mi_realloc_request_from_ptr(p, req.layout(), ptr::null_mut())
         else {
             return ptr::null_mut();
@@ -1719,7 +1728,12 @@ pub unsafe extern "C" fn mi_rezalloc(p: *mut c_void, newsize: usize) -> *mut c_v
 /// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
-    unsafe { mi_theap_recalloc_raw(_mi_theap_default(), p, count, size) }
+    unsafe {
+        let Some(req) = calloc_request_or_report(count, size) else {
+            return ptr::null_mut();
+        };
+        mi_theap_recalloc_raw(_mi_theap_default(), p, req)
+    }
 }
 
 /// # Safety
@@ -2313,18 +2327,18 @@ pub unsafe extern "C" fn mi_new_aligned(size: usize, alignment: usize) -> *mut c
         let Some(alignment) = alignment_or_report(size, alignment) else {
             return ptr::null_mut();
         };
-        mi_new_aligned_typed(size, alignment)
+        mi_new_aligned_typed(crate::core_types::RequestedSize::new(size), alignment)
     }
 }
 
 unsafe fn mi_new_aligned_typed(
-    size: usize,
+    size: crate::core_types::RequestedSize,
     alignment: crate::core_types::Alignment,
 ) -> *mut c_void {
     unsafe {
         let mut p: *mut c_void;
         loop {
-            p = mi_malloc_aligned(size, alignment.get());
+            p = mi_malloc_aligned(size.get(), alignment.get());
             if !p.is_null() || !mi_try_new_handler(false) {
                 return p;
             }
@@ -2341,18 +2355,18 @@ pub unsafe extern "C" fn mi_new_aligned_nothrow(size: usize, alignment: usize) -
         let Some(alignment) = alignment_or_report(size, alignment) else {
             return ptr::null_mut();
         };
-        mi_new_aligned_nothrow_typed(size, alignment)
+        mi_new_aligned_nothrow_typed(crate::core_types::RequestedSize::new(size), alignment)
     }
 }
 
 unsafe fn mi_new_aligned_nothrow_typed(
-    size: usize,
+    size: crate::core_types::RequestedSize,
     alignment: crate::core_types::Alignment,
 ) -> *mut c_void {
     unsafe {
         let mut p: *mut c_void;
         loop {
-            p = mi_malloc_aligned(size, alignment.get());
+            p = mi_malloc_aligned(size.get(), alignment.get());
             if !p.is_null() || !mi_try_new_handler(true) {
                 return p;
             }

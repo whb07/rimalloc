@@ -65,7 +65,7 @@ const _: usize = core::mem::size_of::<(
 )>();
 
 pub(crate) use layout::{
-    AllocProduct, CallocRequest, LayoutRequest, MallocGenericFlags, MaybeHugeAlignment,
+    AllocProduct, CallocRequest, ItemCount, LayoutRequest, MallocGenericFlags, MaybeHugeAlignment,
     OldAllocation, PreserveBytes, ReallocRequest, Zeroed,
 };
 

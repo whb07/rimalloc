@@ -928,16 +928,18 @@ fn allocation_product_paths_use_typed_requests() {
             && !aligned_rs.contains("mi_count_size_overflow")
             && !aligned_rs.contains("_mi_theap_realloc_zero(")
             && !posix_rs.contains("mi_count_size_overflow")
-            && alloc_rs.contains("fn product_size_or_report(count: usize, size: usize)")
+            && alloc_rs.contains(
+                "fn product_size_or_report(\n    count: crate::core_types::ItemCount,\n    size: crate::core_types::RequestedSize,"
+            )
             && alloc_rs.contains("pub(crate) fn calloc_request_or_report(")
             && alloc_rs.contains("fn alloc_product_or_report(")
             && alloc_rs
-                .contains("crate::internal::mi_count_size_overflow(count, size, &mut total)")
+                .contains("crate::internal::mi_count_size_overflow(count.get(), size.get(), &mut total)")
             && alloc_rs.contains(
-                "crate::core_types::CallocRequest::from_checked_total(count, size, total).ok()"
+                "crate::core_types::CallocRequest::from_checked_total(count.get(), size.get(), total.get())"
             )
             && alloc_rs.contains(
-                "crate::core_types::AllocProduct::from_checked_total(count, size, total).ok()"
+                "crate::core_types::AllocProduct::from_checked_total(count.get(), size.get(), total.get())"
             )
             && !alloc_rs.contains("CallocRequest::new(count, size).ok()")
             && !alloc_rs.contains("AllocProduct::new(count, size).ok()")

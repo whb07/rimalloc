@@ -1891,6 +1891,20 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         "pointer-to-atomic casts for allocator metadata should be centralized in typed atomic field wrappers and guarded by the strict checker"
     );
     assert!(
+        strict_check_rs.contains("REMOVE_ENTRY_CAP = 0")
+            && !allowlist_rs.contains("bare-domain-usize|src/allocator/aligned.rs|*|usize|")
+            && allowlist_rs.contains(
+                "bare-domain-usize|src/allocator/aligned.rs|aligned_layout_or_report|usize|"
+            )
+            && allowlist_rs.contains(
+                "bare-domain-usize|src/allocator/aligned.rs|mi_theap_malloc_zero_aligned_at|usize|"
+            )
+            && allowlist_rs.contains(
+                "bare-domain-usize|src/allocator/aligned.rs|mi_theap_recalloc_aligned|usize|"
+            ),
+        "aligned strict-type allowlist coverage should stay symbol-level with no removable broad entries"
+    );
+    assert!(
         internal_atomic_rs.contains("pub enum mi_memory_order_e {")
             && internal_atomic_rs.contains("pub type mi_memory_order = mi_memory_order_e;")
             && internal_atomic_rs.contains("fn load_order(order: mi_memory_order_e) -> Ordering")

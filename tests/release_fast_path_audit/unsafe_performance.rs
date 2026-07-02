@@ -962,8 +962,10 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()"
             )
             && alloc_rs.contains("mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()")
-            && alloc_aligned_rs
-                .contains("mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()")
+            && alloc_aligned_rs.contains(
+                "fn mi_malloc_is_naturally_aligned(\n    size: crate::core_types::RequestedSize,\n    alignment: crate::core_types::Alignment,"
+            )
+            && alloc_aligned_rs.contains("mi_good_size_typed(requested).get()")
             && stats_rs.contains("mi_good_size_typed(RequestedSize::new(12 * 1024)).get()")
             && !stats_rs.contains("use crate::mimalloc::{mi_good_size")
             && !alloc_rs.contains("use crate::page::{_mi_bin_typed, _mi_malloc_generic_typed, MI_MAX_ALLOC_SIZE, mi_good_size};")

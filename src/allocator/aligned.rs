@@ -62,14 +62,17 @@ unsafe fn mi_padding_shrink_call(
 }
 
 #[inline]
-/// # Safety
-/// `alignment` must be a non-zero power of two.
-pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> bool {
-    crate::internal::mi_assert_internal!(_mi_is_power_of_two(alignment) && alignment > 0);
+fn mi_malloc_is_naturally_aligned(
+    size: crate::core_types::RequestedSize,
+    alignment: crate::core_types::Alignment,
+) -> bool {
+    let requested = size;
+    let size = requested.get();
+    let alignment = alignment.get();
     if alignment > size {
         return false;
     }
-    let bsize = mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get();
+    let bsize = mi_good_size_typed(requested).get();
     let ok = (bsize <= MI_PAGE_MAX_START_BLOCK_ALIGN2 && _mi_is_power_of_two(bsize))
         || (alignment == MI_PAGE_OSPAGE_BLOCK_ALIGN2
             && bsize.is_multiple_of(MI_PAGE_OSPAGE_BLOCK_ALIGN2));
@@ -322,7 +325,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_generic(
 
     if let Some(local_theap) = theap
         && offset_raw == 0
-        && unsafe { mi_malloc_is_naturally_aligned(size, alignment_raw) }
+        && mi_malloc_is_naturally_aligned(layout.requested(), alignment)
     {
         let p = unsafe {
             mi_theap_malloc_zero_no_guarded(local_theap, layout, alignment, offset, usable)

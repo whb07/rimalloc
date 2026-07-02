@@ -32,9 +32,13 @@ Current review evidence:
   `src/types/page_queues.rs` is 304 lines,
   `src/types/heap.rs` is 312 lines, and
   `src/allocator/arena_meta.rs` is 316 lines.
-- `strict-type-allowlist.txt` has 1 remaining `remove:` entry:
-  the broad `bare-domain-usize` allowance for `src/allocator/aligned.rs`.
-  `REMOVE_ENTRY_CAP` is 1.
+- `strict-type-allowlist.txt` has 0 remaining `remove:` entries.
+  `REMOVE_ENTRY_CAP` is 0. The broad `bare-domain-usize` allowance for
+  `src/allocator/aligned.rs` is replaced by symbol-level parser/shim entries
+  such as `aligned_layout_or_report`,
+  `mi_theap_malloc_zero_aligned_at`, and `mi_theap_recalloc_aligned`.
+- `mi_malloc_is_naturally_aligned` now accepts typed `RequestedSize` and
+  `Alignment` values before calling `mi_good_size_typed`.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 4,520 lines,
   `src/allocator/page.rs` is 2,801 lines,
@@ -51,8 +55,8 @@ Current review evidence:
   `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 22 markers, and
   `SAFETY[AUDIT:page-count-accessors]` has 22 markers.
 - The release audit still has large review units:
-  `tests/release_fast_path_audit.rs` is 2,875 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,655 lines,
+  `tests/release_fast_path_audit.rs` is 2,889 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,657 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
   is 660 lines,
@@ -104,19 +108,19 @@ full tests.
 
 ## Issue: Aligned still has the last broad strict-type usize allowance
 
-> **Comment:** `src/allocator/aligned.rs` is now the only remaining broad
+> **Comment:** `src/allocator/aligned.rs` was the only remaining broad
 > removable `bare-domain-usize` allowance. The file mixes raw C ABI shims,
 > parser helpers, product-size paths, alignment arithmetic, and realloc helpers.
 
-- [ ] Temporarily remove
+- [x] Temporarily remove
       `bare-domain-usize|src/allocator/aligned.rs|*|usize` and run
       `scripts/check-strict-types.py` to collect the live hits.
-- [ ] Classify each hit as raw ABI, alignment parser, product-size helper,
+- [x] Classify each hit as raw ABI, alignment parser, product-size helper,
       pointer-provenance arithmetic, or migratable local helper.
-- [ ] Replace the broad `aligned` entry with symbol-level entries and typed
+- [x] Replace the broad `aligned` entry with symbol-level entries and typed
       scalar/layout wrappers where practical.
-- [ ] Lower `REMOVE_ENTRY_CAP` to 0 if the broad removable entry is eliminated.
-- [ ] Preserve allocation/reallocation hot-path shape and avoid heap allocation,
+- [x] Lower `REMOVE_ENTRY_CAP` to 0 if the broad removable entry is eliminated.
+- [x] Preserve allocation/reallocation hot-path shape and avoid heap allocation,
       trait-object dispatch, or public API drift.
 
 Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
@@ -126,7 +130,7 @@ full tests.
 
 ## Issue: Release audit unsafe_performance.rs remains oversized
 
-> **Comment:** `unsafe_performance.rs` is still 2,655 lines after the bitmap
+> **Comment:** `unsafe_performance.rs` is still 2,657 lines after the bitmap
 > and thread-local splits. Another cohesive assertion group should move into a
 > child module so future audit additions have room.
 
@@ -169,7 +173,7 @@ full tests.
 
 1. [x] Migrate `src/types/memid/tests.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/types/callbacks.rs` off the unsafe migration allowlist.
-3. [ ] Narrow or eliminate the broad `aligned` strict-type `usize` allowance.
+3. [x] Narrow or eliminate the broad `aligned` strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
 5. [ ] Split one more cohesive helper group out of `src/allocator/arena.rs`.
 
@@ -178,7 +182,7 @@ full tests.
 - [x] The unsafe migration allowlist is below 47 entries and the cap is lowered.
 - [x] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.
-- [ ] The final broad strict-type `remove:` allowance is narrowed or eliminated.
+- [x] The final broad strict-type `remove:` allowance is narrowed or eliminated.
 - [ ] One release-audit module has more review margin.
 - [ ] `src/allocator/arena.rs` is smaller again without API, ABI, or hot-path
       performance drift.

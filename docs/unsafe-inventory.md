@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5992 |
-| `unsafe_blocks` | 3569 |
-| `unsafe_fns` | 2000 |
+| `unsafe_mentions` | 5990 |
+| `unsafe_blocks` | 3568 |
+| `unsafe_fns` | 1999 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -37,7 +37,7 @@ verify the source inventory after each supported advisory build mode checks.
 
 | File | unsafe | blocks | fns | extern blocks | impls | attrs | global asm |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `src/allocator/aligned.rs` | 217 | 131 | 57 | 0 | 0 | 29 | 0 |
+| `src/allocator/aligned.rs` | 215 | 130 | 56 | 0 | 0 | 29 | 0 |
 | `src/allocator/alloc.rs` | 333 | 134 | 141 | 5 | 0 | 48 | 0 |
 | `src/allocator/arena/debug.rs` | 53 | 41 | 10 | 0 | 0 | 2 | 0 |
 | `src/allocator/arena/prefix.rs` | 11 | 6 | 5 | 0 | 0 | 0 | 0 |

@@ -173,9 +173,10 @@ fn callback_wrappers_invoke_local_callbacks() {
     unsafe extern "C" fn deferred(force: bool, heartbeat: u64, arg: *mut c_void) {
         // SAFETY[AUDIT:typed-callback-test-fixtures]: callers pass a
         // stack-local `DeferredInvocation` through the opaque callback arg.
-        let state = unsafe { &mut *arg.cast::<DeferredInvocation>() };
-        state.force = force;
-        state.heartbeat = heartbeat;
+        unsafe {
+            core::ptr::addr_of_mut!((*arg.cast::<DeferredInvocation>()).force).write(force);
+            core::ptr::addr_of_mut!((*arg.cast::<DeferredInvocation>()).heartbeat).write(heartbeat);
+        }
     }
 
     // SAFETY[AUDIT:typed-callback-test-fixtures]: this callback is a local
@@ -183,8 +184,9 @@ fn callback_wrappers_invoke_local_callbacks() {
     unsafe extern "C" fn output(msg: *const core::ffi::c_char, arg: *mut c_void) {
         // SAFETY[AUDIT:typed-callback-test-fixtures]: callers pass a
         // stack-local `OutputInvocation` through the opaque callback arg.
-        let state = unsafe { &mut *arg.cast::<OutputInvocation>() };
-        state.msg = msg;
+        unsafe {
+            core::ptr::addr_of_mut!((*arg.cast::<OutputInvocation>()).msg).write(msg);
+        }
     }
 
     // SAFETY[AUDIT:typed-callback-test-fixtures]: this callback is a local
@@ -192,8 +194,9 @@ fn callback_wrappers_invoke_local_callbacks() {
     unsafe extern "C" fn error(err: i32, arg: *mut c_void) {
         // SAFETY[AUDIT:typed-callback-test-fixtures]: callers pass a
         // stack-local `ErrorInvocation` through the opaque callback arg.
-        let state = unsafe { &mut *arg.cast::<ErrorInvocation>() };
-        state.err = err;
+        unsafe {
+            core::ptr::addr_of_mut!((*arg.cast::<ErrorInvocation>()).err).write(err);
+        }
     }
 
     // SAFETY[AUDIT:typed-callback-test-fixtures]: this callback is a local
@@ -201,8 +204,9 @@ fn callback_wrappers_invoke_local_callbacks() {
     unsafe extern "C" fn heap_visit(heap: *mut crate::types::mi_heap_t, arg: *mut c_void) -> bool {
         // SAFETY[AUDIT:typed-callback-test-fixtures]: callers pass a
         // stack-local `HeapVisitInvocation` through the opaque callback arg.
-        let state = unsafe { &mut *arg.cast::<HeapVisitInvocation>() };
-        state.heap = heap;
+        unsafe {
+            core::ptr::addr_of_mut!((*arg.cast::<HeapVisitInvocation>()).heap).write(heap);
+        }
         true
     }
 
@@ -217,11 +221,13 @@ fn callback_wrappers_invoke_local_callbacks() {
     ) -> bool {
         // SAFETY[AUDIT:typed-callback-test-fixtures]: callers pass a
         // stack-local `BlockVisitInvocation` through the opaque callback arg.
-        let state = unsafe { &mut *arg.cast::<BlockVisitInvocation>() };
-        state.heap = heap;
-        state.area = area;
-        state.block = block;
-        state.block_size = block_size;
+        unsafe {
+            core::ptr::addr_of_mut!((*arg.cast::<BlockVisitInvocation>()).heap).write(heap);
+            core::ptr::addr_of_mut!((*arg.cast::<BlockVisitInvocation>()).area).write(area);
+            core::ptr::addr_of_mut!((*arg.cast::<BlockVisitInvocation>()).block).write(block);
+            core::ptr::addr_of_mut!((*arg.cast::<BlockVisitInvocation>()).block_size)
+                .write(block_size);
+        }
         true
     }
 

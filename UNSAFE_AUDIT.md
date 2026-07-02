@@ -52,6 +52,9 @@ Per-file review:
 - `src/allocator/arena/ids.rs`: arena id and memid helpers own the raw
   arena-id shims, top-level arena validation, typed memid range extraction, and
   page-size classification used by arena allocation/free paths.
+- `src/allocator/arena/heap_pages.rs`: heap page visitors, public heap visit
+  callbacks, and heap page move/destroy helpers preserve C ABI traversal while
+  keeping page ownership transfer inside the arena module boundary.
 - `src/allocator/arena/prefix.rs`: arena, heap, and sub-process prefix layouts
   remain private to `allocator::arena`; accessors require typed heap/subproc
   witnesses or checked arena/bin indexes before returning typed atomic fields.
@@ -235,6 +238,12 @@ Operation IDs:
   `PagePtr` witnesses. Unsafe operations are limited to arena prefix reads,
   validated out-pointer writes, and page/base pointer offset checks for
   allocator-owned memid ranges.
+- `SAFETY[AUDIT:arena-heap-page-visitors]`:
+  `src/allocator/arena/heap_pages.rs` owns heap page visitation, public C
+  callback traversal, and heap page move/destroy helpers. Callers supply live
+  heap/page metadata, and the helpers wrap raw pointers in typed heap/page
+  witnesses before walking arena bitmaps, claiming page ownership, or moving
+  pages between heap arena-page tables.
 - `SAFETY[AUDIT:arena-prefix-accessors]`:
   `src/allocator/arena/prefix.rs` centralizes heap, arena, sub-process, and
   arena-page prefix accessors. Callers supply allocator-owned metadata plus

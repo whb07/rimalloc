@@ -26,6 +26,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/arena.rs");
     let arena_debug_rs = fs::read_to_string(root.join("src/allocator/arena/debug.rs"))
         .expect("read src/allocator/arena/debug.rs");
+    let arena_heap_pages_rs = fs::read_to_string(root.join("src/allocator/arena/heap_pages.rs"))
+        .expect("read src/allocator/arena/heap_pages.rs");
     let arena_ids_rs = fs::read_to_string(root.join("src/allocator/arena/ids.rs"))
         .expect("read src/allocator/arena/ids.rs");
     let arena_prefix_rs = fs::read_to_string(root.join("src/allocator/arena/prefix.rs"))
@@ -106,6 +108,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         alloc_rs: &alloc_rs,
         arena_rs: &arena_rs,
         arena_debug_rs: &arena_debug_rs,
+        arena_heap_pages_rs: &arena_heap_pages_rs,
         arena_meta_rs: &arena_meta_rs,
         deferred_rs: &deferred_rs,
         free_rs: &free_rs,
@@ -178,18 +181,18 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub unsafe extern \"C\" fn _mi_arenas_unsafe_destroy_all",
         ),
         (
-            "src/allocator/arena.rs",
-            &arena_rs,
+            "src/allocator/arena/heap_pages.rs",
+            &arena_heap_pages_rs,
             "pub unsafe extern \"C\" fn _mi_heap_visit_blocks",
         ),
         (
-            "src/allocator/arena.rs",
-            &arena_rs,
+            "src/allocator/arena/heap_pages.rs",
+            &arena_heap_pages_rs,
             "pub unsafe extern \"C\" fn _mi_heap_move_pages",
         ),
         (
-            "src/allocator/arena.rs",
-            &arena_rs,
+            "src/allocator/arena/heap_pages.rs",
+            &arena_heap_pages_rs,
             "pub unsafe extern \"C\" fn _mi_heap_destroy_pages",
         ),
         (
@@ -1069,6 +1072,10 @@ fn free_path_internals_are_not_dynamic_exports() {
         "random context helper unsafe operations should retain operation-level audit markers"
     );
     assert!(
+        arena_heap_pages_rs.contains("SAFETY[AUDIT:arena-heap-page-visitors]"),
+        "arena heap page visitor operations should retain operation-level audit markers"
+    );
+    assert!(
         !random_rs.contains("static MI_OS_RANDOM_WEAK_KEEP")
             && !random_rs.contains("static MI_RANDOM_SPLIT_KEEP")
             && !random_rs.contains("static MI_RANDOM_NEXT_KEEP")
@@ -1627,6 +1634,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     bitmap_boundaries::assert_bitmap_traversal_and_regular_boundaries(
         &bitmap_rs,
         &arena_rs,
+        &arena_heap_pages_rs,
         &callbacks_rs,
         &threadlocal_rs,
     );
@@ -1680,14 +1688,14 @@ fn free_path_internals_are_not_dynamic_exports() {
             "unsafe fn mi_arena_slice_start(\n    arena: ArenaPtr,\n    slice_index: crate::core_types::SliceIndex,"
         ) && arena_rs.contains(
             "unsafe fn mi_arena_page_at_slice(\n    arena: ArenaPtr,\n    slice_index: crate::core_types::SliceIndex,"
-        ) && arena_rs.contains("unsafe fn mi_heap_visit_page_at_index(\n    slice_index: SliceIndex,")
+        ) && arena_heap_pages_rs.contains("unsafe fn mi_heap_visit_page_at_index(\n    slice_index: SliceIndex,")
             && arena_rs.contains("unsafe fn mi_arena_try_claim_abandoned_at(\n    slice_index: SliceIndex,")
             && arena_debug_rs.contains("    slice_index: SliceIndex,\n    pbit_of_page:")
-            && arena_rs.contains("mi_heap_visit_page_at_index(SliceIndex::new(slice_index), arena, arg)")
+            && arena_heap_pages_rs.contains("mi_heap_visit_page_at_index(SliceIndex::new(slice_index), arena, arg)")
             && arena_rs.contains(
                 "mi_arena_try_claim_abandoned_at(SliceIndex::new(slice_index), arena, keep_abandoned)"
             )
-            && arena_rs
+            && arena_heap_pages_rs
                 .contains("mi_arena_page_at_slice(ArenaPtr::new_unchecked(arena), slice_index)")
             && arena_rs.contains("let page = mi_arena_page_at_slice(arena, slice_index);")
             && arena_rs.contains(
@@ -2114,10 +2122,10 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "pub(super) unsafe fn mi_heap_abandoned_count(\n    heap: *mut mi_heap_t,\n    bin: crate::core_types::Bin,"
             )
             && arena_prefix_rs.contains("abandoned_count[bin.as_usize()]")
-            && arena_rs.contains("let Some(typed_bin) = crate::core_types::Bin::new(bin as u16) else")
-            && arena_rs.contains("crate::internal::mi_assert_internal!(false);\n                                break;")
-            && arena_rs.contains("mi_heap_abandoned_count(heap, typed_bin).load_relaxed() > 0")
-            && arena_rs.contains("mi_heap_abandoned_count(heap, bin).load_relaxed() == 0")
+            && arena_heap_pages_rs.contains("let Some(typed_bin) = crate::core_types::Bin::new(bin as u16) else")
+            && arena_heap_pages_rs.contains("crate::internal::mi_assert_internal!(false);\n                                break;")
+            && arena_heap_pages_rs.contains("mi_heap_abandoned_count(heap, typed_bin).load_relaxed() > 0")
+            && arena_heap_pages_rs.contains("mi_heap_abandoned_count(heap, bin).load_relaxed() == 0")
             && arena_rs.contains("mi_heap_abandoned_count(heap, bin).fetch_add_relaxed(1)")
             && arena_rs.contains("mi_heap_abandoned_count(heap, bin).fetch_sub_relaxed(1)")
             && !arena_rs.contains(".abandoned_count[bin].load(Ordering::Relaxed)")
@@ -2154,7 +2162,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs
                 .matches("mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire()")
                 .count()
-                == 2
+                == 1
+            && arena_heap_pages_rs
+                .matches("mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire()")
+                .count()
+                == 1
             && arena_rs
                 .contains("mi_heap_arena_page_cell(heap, arena_idx).store_release(arena_pages.cast())")
             && !arena_rs.contains(".arena_pages[arena_idx].load(Ordering::Acquire)")
@@ -2310,9 +2322,9 @@ fn free_path_internals_are_not_dynamic_exports() {
         "heap internals should call crate-local theap helpers directly"
     );
     assert!(
-        arena_rs
+        arena_heap_pages_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_move_pages")
-            && arena_rs.contains(
+            && arena_heap_pages_rs.contains(
                 "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_destroy_pages"
             )
             && heap_rs.contains(

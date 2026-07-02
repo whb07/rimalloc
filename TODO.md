@@ -26,6 +26,10 @@ Current review evidence:
   `SAFETY[AUDIT:random-context-boundaries]` markers for random context raw
   pointer shims and primitive entropy/clock bridges. It is 282 lines with 12
   local audit markers.
+- `src/allocator/arena/heap_pages.rs` now owns heap visit/delete/move/destroy
+  helpers with `SAFETY[AUDIT:arena-heap-page-visitors]` markers. It is 543
+  lines with 56 local audit markers, and `src/allocator/arena.rs` is down to
+  3,915 lines after the split.
 - The smallest remaining allowlisted production files are narrow:
   `src/types/page.rs` is 258 lines,
   `src/types/arena.rs` is 260 lines,
@@ -37,8 +41,9 @@ Current review evidence:
   permanent raw-pointer and pointer/usize compatibility entries that should be
   revisited as cohesive child modules split out.
 - The largest production review units remain translated-style modules:
-  `src/allocator/arena.rs` is 4,337 lines after moving arena id/memid helpers
-  into `src/allocator/arena/ids.rs`, which is 244 lines,
+  `src/allocator/arena.rs` is 3,915 lines after moving arena id/memid helpers
+  into `src/allocator/arena/ids.rs`, which is 244 lines, and heap page visitors
+  into `src/allocator/arena/heap_pages.rs`, which is 543 lines,
   `src/allocator/page.rs` is 2,801 lines,
   `src/allocator/alloc.rs` is 2,559 lines,
   `src/internal/bitmap.rs` is 2,358 lines,
@@ -46,6 +51,7 @@ Current review evidence:
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
 - The largest unsafe audit marker clusters are broad enough to revisit:
+  `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
   `SAFETY[AUDIT:typed-heap-test-fixtures]` has 55 markers,
   `SAFETY[AUDIT:arena-debug-render]` has 34 markers,
   `SAFETY[AUDIT:owned-allocation]` has 31 markers,
@@ -54,23 +60,22 @@ Current review evidence:
   `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 22 markers, and
   `SAFETY[AUDIT:page-count-accessors]` has 22 markers.
 - The release audit still has large review units:
-  `tests/release_fast_path_audit.rs` is 2,889 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,567 lines,
+  `tests/release_fast_path_audit.rs` is 2,893 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,583 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
-  is 660 lines,
+  is 662 lines,
   `tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs` is
-  206 lines,
+  207 lines,
   `tests/release_fast_path_audit/release_policy/security.rs` is 181 lines,
   `tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is
-  160 lines, and
+  162 lines, and
   `tests/release_fast_path_audit/unsafe_performance/size_class_boundaries.rs`
   is 132 lines.
-- The next arena split candidate is the heap visit/delete/move/destroy cluster
-  near the top of `src/allocator/arena.rs`; it is already grouped around
-  `mi_heap_visit_info_t`, `mi_heap_delete_visit_info_t`,
-  `_mi_heap_visit_blocks`, `_mi_heap_move_pages`, and
-  `_mi_heap_destroy_pages`.
+- The heap visit/delete/move/destroy cluster now lives in
+  `src/allocator/arena/heap_pages.rs` around `mi_heap_visit_info_t`,
+  `mi_heap_delete_visit_info_t`, `_mi_heap_visit_blocks`,
+  `_mi_heap_move_pages`, and `_mi_heap_destroy_pages`.
 
 ## Issue: Atomic test fixtures still hide unsafe migration debt
 
@@ -117,21 +122,20 @@ full tests.
 
 ## Issue: Arena heap page visitors remain embedded in arena.rs
 
-> **Comment:** The heap visit/delete/move/destroy cluster is a cohesive review
-> unit at the top of `src/allocator/arena.rs`. Moving it to a child module
-> should reduce the largest translated file without touching purge scheduling or
-> page allocation hot paths.
+> **Comment:** The heap visit/delete/move/destroy cluster now lives in
+> `src/allocator/arena/heap_pages.rs`, reducing the largest translated arena
+> file without touching purge scheduling or page allocation hot paths.
 
-- [ ] Move `mi_heap_visit_info_t`, `mi_heap_delete_visit_info_t`, heap
+- [x] Move `mi_heap_visit_info_t`, `mi_heap_delete_visit_info_t`, heap
       visit/delete helpers, `_mi_heap_visit_blocks`, `mi_heap_visit_blocks`,
       `mi_heap_visit_abandoned_blocks`, `_mi_heap_move_pages`, and
       `_mi_heap_destroy_pages` into a new `src/allocator/arena/` child module.
-- [ ] Keep all current public C ABI symbols and internal call sites stable.
-- [ ] Keep callback wrappers and page ownership transitions explicit; avoid
+- [x] Keep all current public C ABI symbols and internal call sites stable.
+- [x] Keep callback wrappers and page ownership transitions explicit; avoid
       adding allocation, dynamic dispatch, or wider module visibility.
-- [ ] Update strict-type path aliases, release-audit source assertions, unsafe
+- [x] Update strict-type path aliases, release-audit source assertions, unsafe
       audit evidence, and generated unsafe inventory as needed.
-- [ ] Re-measure `src/allocator/arena.rs` and document the new line counts.
+- [x] Re-measure `src/allocator/arena.rs` and document the new line counts.
 
 Verify: focused heap/arena tests where applicable,
 `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
@@ -141,7 +145,7 @@ full tests.
 
 ## Issue: Release audit unsafe_performance.rs still carries broad source assertions
 
-> **Comment:** `unsafe_performance.rs` is still 2,567 lines. The next split
+> **Comment:** `unsafe_performance.rs` is still 2,583 lines. The next split
 > should move one cohesive arena, atomic, or OS assertion cluster into a child
 > module while keeping the root audit test readable.
 
@@ -183,7 +187,7 @@ full tests.
 
 1. [x] Migrate `src/types/atomic/tests.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/internal/random.rs` off the unsafe migration allowlist.
-3. [ ] Split the arena heap visit/delete/move/destroy cluster.
+3. [x] Split the arena heap visit/delete/move/destroy cluster.
 4. [ ] Split one more `unsafe_performance.rs` assertion cluster.
 5. [ ] Narrow broad arena strict-type entries after the arena split.
 
@@ -193,7 +197,7 @@ full tests.
       with each migrated file.
 - [x] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.
-- [ ] `src/allocator/arena.rs` is smaller again without API, ABI, or hot-path
+- [x] `src/allocator/arena.rs` is smaller again without API, ABI, or hot-path
       performance drift.
 - [ ] One release-audit module has more review margin.
 - [ ] Broad arena strict-type documentation is narrower where the code now has

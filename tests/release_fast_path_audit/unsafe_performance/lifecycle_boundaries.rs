@@ -7,6 +7,8 @@ fn lifecycle_and_local_boundary_helpers_stay_classified() {
         .expect("read src/allocator/alloc.rs");
     let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
         .expect("read src/allocator/arena.rs");
+    let arena_heap_pages_rs = fs::read_to_string(root.join("src/allocator/arena/heap_pages.rs"))
+        .expect("read src/allocator/arena/heap_pages.rs");
     let atomic_types =
         fs::read_to_string(root.join("src/types/atomic.rs")).expect("read core_types/atomic.rs");
     let callbacks_rs = fs::read_to_string(root.join("src/types/callbacks.rs"))
@@ -407,10 +409,10 @@ fn lifecycle_and_local_boundary_helpers_stay_classified() {
             && callbacks_rs.contains("fun(heap.as_ptr(), area, block, block_size, arg.as_ptr())")
             && init_rs.contains("ok = visitor.invoke(HeapPtr::new_unchecked(heap), arg);")
             && theap_rs.contains("mi_get_fast_divisor(bsize, &mut magic, &mut shift);")
-            && arena_rs.contains(
+            && arena_heap_pages_rs.contains(
                 "_mi_theap_area_visit_blocks(ptr::addr_of!(area), page, (*vinfo).visitor, (*vinfo).arg)"
             )
-            && !arena_rs.contains("unsafe fn mi_theap_area_visit_blocks("),
+            && !arena_heap_pages_rs.contains("unsafe fn mi_theap_area_visit_blocks("),
         "heap and arena block visitation should share C's theap area block visitor helper"
     );
     assert!(

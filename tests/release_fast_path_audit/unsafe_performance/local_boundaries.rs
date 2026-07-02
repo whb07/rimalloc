@@ -3,6 +3,7 @@ pub(super) struct BoundarySources<'a> {
     pub(super) alloc_rs: &'a str,
     pub(super) arena_rs: &'a str,
     pub(super) arena_debug_rs: &'a str,
+    pub(super) arena_heap_pages_rs: &'a str,
     pub(super) arena_meta_rs: &'a str,
     pub(super) deferred_rs: &'a str,
     pub(super) free_rs: &'a str,
@@ -19,6 +20,7 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
         alloc_rs,
         arena_rs,
         arena_debug_rs,
+        arena_heap_pages_rs,
         arena_meta_rs,
         deferred_rs,
         free_rs,
@@ -105,8 +107,8 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
             && theap_rs.contains("_mi_heap_area_init(ptr::addr_of_mut!(xarea.area), page);")
             && arena_rs.contains("use crate::theap::{")
             && arena_rs.contains("_mi_heap_area_init")
-            && arena_rs.contains("_mi_heap_area_init(ptr::addr_of_mut!(area), page)")
-            && !arena_rs.contains("unsafe fn mi_heap_area_init(")
+            && arena_heap_pages_rs.contains("_mi_heap_area_init(ptr::addr_of_mut!(area), page)")
+            && !arena_heap_pages_rs.contains("unsafe fn mi_heap_area_init(")
             && !internal.contains("pub fn _mi_heap_area_init("),
         "heap area visitation should keep C's shared _mi_heap_area_init local helper boundary"
     );
@@ -119,7 +121,7 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
             && heap_rs.contains("if let Some(heap) = MainHeap::new(heap)")
             && heap_rs.contains("} else if let Some(heap) = OwnedHeap::new(heap)")
             && page_rs.contains("(*page).heap = if _mi_is_heap_main(heap) {")
-            && arena_rs.contains("if unsafe { _mi_is_heap_main(heap_from) }")
+            && arena_heap_pages_rs.contains("if unsafe { _mi_is_heap_main(heap_from) }")
             && theap_rs.contains(
                 "crate::internal::mi_assert_internal!(_mi_is_heap_main(\n                    _mi_theap_heap(theap).cast_const()\n                ));"
             ),

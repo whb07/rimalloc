@@ -822,8 +822,8 @@ fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
         .expect("read src/allocator/options.rs");
     let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
         .expect("read src/allocator/page/deferred.rs");
-    let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
-        .expect("read src/allocator/arena.rs");
+    let arena_heap_pages_rs = fs::read_to_string(root.join("src/allocator/arena/heap_pages.rs"))
+        .expect("read src/allocator/arena/heap_pages.rs");
     let theap_rs = fs::read_to_string(root.join("src/allocator/thread_heap.rs"))
         .expect("read src/allocator/thread_heap.rs");
     let init_rs =
@@ -881,13 +881,13 @@ fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
             "pub unsafe extern \"C\" fn mi_register_deferred_free",
         ),
         (
-            "src/allocator/arena.rs",
-            arena_rs.as_str(),
+            "src/allocator/arena/heap_pages.rs",
+            arena_heap_pages_rs.as_str(),
             "pub unsafe extern \"C\" fn mi_heap_visit_blocks",
         ),
         (
-            "src/allocator/arena.rs",
-            arena_rs.as_str(),
+            "src/allocator/arena/heap_pages.rs",
+            arena_heap_pages_rs.as_str(),
             "pub unsafe extern \"C\" fn mi_heap_visit_abandoned_blocks",
         ),
         (

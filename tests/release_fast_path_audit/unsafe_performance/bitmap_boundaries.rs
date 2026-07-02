@@ -1,6 +1,7 @@
 pub(super) fn assert_bitmap_traversal_and_regular_boundaries(
     bitmap_rs: &str,
     arena_rs: &str,
+    arena_heap_pages_rs: &str,
     callbacks_rs: &str,
     threadlocal_rs: &str,
 ) {
@@ -23,8 +24,8 @@ pub(super) fn assert_bitmap_traversal_and_regular_boundaries(
         ) && bitmap_rs.contains("unsafe { mi_bitmap_forall_set_typed(bitmap, visit, ArenaPtr::new(arena), arg) }")
             && bitmap_rs.contains("let index = SliceIndex::new(base_idx + bidx);")
             && bitmap_rs.contains("visit(index.get(), one.get() as usize, arena, arg)")
-            && arena_rs.contains("ok = mi_bitmap_forall_set_typed(")
-            && arena_rs.contains("Some(arena),"),
+            && arena_heap_pages_rs.contains("ok = mi_bitmap_forall_set_typed(")
+            && arena_heap_pages_rs.contains("Some(arena),"),
         "_mi_bitmap_forall_set should keep its raw extern shim but use typed arena/index wrappers internally"
     );
     assert!(

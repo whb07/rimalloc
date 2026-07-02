@@ -17,6 +17,7 @@ EXPORT_FILE_CLASSIFICATION = {
     "src/raw/posix.rs": "c-abi",
     "src/allocator/arena.rs": "c-abi-internal-classified",
     "src/allocator/arena/debug.rs": "c-abi",
+    "src/allocator/arena/heap_pages.rs": "c-abi-internal-classified",
     "src/allocator/arena/ids.rs": "c-abi-internal-classified",
     "src/allocator/bench_diagnostics.rs": "benchmark-diagnostics",
     "src/allocator/free.rs": "c-abi",

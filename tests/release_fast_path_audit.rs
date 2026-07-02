@@ -2032,8 +2032,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         .expect("read src/allocator/options.rs");
     let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
         .expect("read src/allocator/page/deferred.rs");
-    let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
-        .expect("read src/allocator/arena.rs");
+    let arena_heap_pages_rs = fs::read_to_string(root.join("src/allocator/arena/heap_pages.rs"))
+        .expect("read src/allocator/arena/heap_pages.rs");
     let init_rs =
         fs::read_to_string(root.join("src/allocator/init.rs")).expect("read src/allocator/init.rs");
     let threadlocal_rs = fs::read_to_string(root.join("src/allocator/threadlocal.rs"))
@@ -2095,10 +2095,10 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && options_rs.contains(
                 "let arg = ErrorCallbackArg::from_raw(mi_error_arg.load(Ordering::Acquire));"
             )
-            && arena_rs.contains("visitor: BlockVisitCallback,")
-            && arena_rs.contains("arg: BlockVisitCallbackArg,")
-            && arena_rs.contains("BlockVisitCallback::new(Some(visitor))")
-            && arena_rs.contains("BlockVisitCallbackArg::from_raw(arg)")
+            && arena_heap_pages_rs.contains("visitor: BlockVisitCallback,")
+            && arena_heap_pages_rs.contains("arg: BlockVisitCallbackArg,")
+            && arena_heap_pages_rs.contains("BlockVisitCallback::new(Some(visitor))")
+            && arena_heap_pages_rs.contains("BlockVisitCallbackArg::from_raw(arg)")
             && init_rs.contains("let visitor = HeapVisitCallback::new(visitor);")
             && init_rs.contains("let arg = HeapVisitCallbackArg::from_raw(arg);")
             && threadlocal_rs.contains("ThreadLocalClaimCallback::new(mi_thread_local_claim_fun)"),
@@ -2722,9 +2722,13 @@ fn phase6_c_compat_allowances_stay_intentional() {
         (("src/raw/macros.rs", "non_camel_case_types"), 1),
         (("src/raw/macros.rs", "non_snake_case"), 1),
         (("src/raw/macros.rs", "non_upper_case_globals"), 1),
-        (("src/allocator/arena.rs", "non_camel_case_types"), 3),
+        (("src/allocator/arena.rs", "non_camel_case_types"), 1),
         (("src/allocator/arena.rs", "non_upper_case_globals"), 1),
         (("src/allocator/arena/debug.rs", "non_camel_case_types"), 2),
+        (
+            ("src/allocator/arena/heap_pages.rs", "non_camel_case_types"),
+            2,
+        ),
         (("src/allocator/arena/prefix.rs", "non_camel_case_types"), 1),
         (("src/allocator/arena_meta.rs", "non_camel_case_types"), 1),
         (("src/allocator/arena_meta.rs", "non_upper_case_globals"), 1),

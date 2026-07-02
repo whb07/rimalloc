@@ -60,13 +60,135 @@ pub const MI_CYAN: mi_ansi_color_t = mi_ansi_color_e::MI_CYAN;
 #[allow(dead_code)]
 pub const MI_WHITE: mi_ansi_color_t = mi_ansi_color_e::MI_WHITE;
 
-unsafe fn mi_arena_used_slices(arena: *mut mi_arena_t) -> usize {
+#[derive(Clone, Copy)]
+struct ArenaDebugView {
+    arena: ArenaPtr,
+}
+
+impl ArenaDebugView {
+    /// # Safety
+    /// `arena` must be non-null and point to live arena metadata for the
+    /// duration of the diagnostic render.
+    #[inline]
+    unsafe fn new_unchecked(arena: *mut mi_arena_t) -> Self {
+        Self {
+            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+            arena: unsafe { ArenaPtr::new_unchecked(arena) },
+        }
+    }
+
+    #[inline]
+    fn ptr(self) -> ArenaPtr {
+        self.arena
+    }
+
+    #[inline]
+    fn raw(self) -> *mut mi_arena_t {
+        self.arena.as_ptr()
+    }
+
+    #[inline]
+    fn prefix(&self) -> &MiArenaPrefix {
+        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+        unsafe { &*self.raw().cast::<MiArenaPrefix>() }
+    }
+
+    #[inline]
+    fn subproc_raw(self) -> *mut mi_subproc_t {
+        self.prefix().subproc
+    }
+
+    #[inline]
+    fn has_parent(self) -> bool {
+        !self.prefix().parent.is_null()
+    }
+
+    #[inline]
+    fn raw_slice_count(self) -> usize {
+        self.prefix().slice_count
+    }
+
+    #[inline]
+    fn slice_count(self) -> Option<SliceCount> {
+        SliceCount::from_usize(self.raw_slice_count())
+    }
+
+    #[inline]
+    fn memid_is_pinned(self) -> bool {
+        self.prefix().memid.is_pinned
+    }
+
+    #[inline]
+    fn is_exclusive(self) -> bool {
+        self.prefix().is_exclusive
+    }
+
+    #[inline]
+    fn numa_node(self) -> i32 {
+        self.prefix().numa_node
+    }
+
+    #[inline]
+    fn info_slices(self) -> usize {
+        self.prefix().info_slices
+    }
+
+    #[inline]
+    fn slices_free(self) -> *mut mi_bbitmap_t {
+        self.prefix().slices_free
+    }
+
+    #[inline]
+    fn slices_purge(self) -> *mut mi_bitmap_t {
+        self.prefix().slices_purge
+    }
+
+    #[inline]
+    fn slices_committed(self) -> *mut mi_bitmap_t {
+        self.prefix().slices_committed
+    }
+
+    #[inline]
+    fn slice_start(self, slice: SliceIndex) -> *mut c_void {
+        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+        unsafe {
+            mi_arena_slice_start(self.ptr(), slice)
+                .as_ptr()
+                .cast::<c_void>()
+        }
+    }
+
+    #[inline]
+    fn is_info_slice(self, slice: SliceIndex) -> bool {
+        slice.get() < self.info_slices()
+    }
+
+    #[inline]
+    fn is_free_slice(self, slice: SliceIndex) -> bool {
+        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+        unsafe { mi_bbitmap_is_setN(self.slices_free(), slice.get(), 1) }
+    }
+
+    #[inline]
+    fn is_purge_slice(self, slice: SliceIndex) -> bool {
+        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+        unsafe { mi_bitmap_is_set(self.slices_purge(), slice.get()) }
+    }
+
+    #[inline]
+    fn is_committed_slice(self, slice: SliceIndex) -> bool {
+        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+        unsafe { mi_bitmap_is_set(self.slices_committed(), slice.get()) }
+    }
+}
+
+fn mi_arena_used_slices(arena: ArenaDebugView) -> usize {
     let mut idx = 0usize;
     // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-    if unsafe { mi_bbitmap_bsr_inv((*arena.cast::<MiArenaPrefix>()).slices_free, &mut idx) } {
+    if unsafe { mi_bbitmap_bsr_inv(arena.slices_free(), &mut idx) } {
         idx + 1
     } else {
-        unsafe { mi_arena_info_slices(ArenaPtr::new_unchecked(arena)) }
+        unsafe { mi_arena_info_slices(arena.ptr()) }
     }
 }
 
@@ -113,10 +235,46 @@ unsafe fn mi_page_commit_usage(
     (used_size * 100 / committed_size) as c_int
 }
 
+fn mi_debug_page_state(page: PagePtr) -> (u8, mi_ansi_color_t, isize) {
+    let raw = page.as_ptr();
+    let mut c = b'p';
+    // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+    if unsafe { mi_page_is_singleton(raw) } {
+        c = b's';
+    } else if unsafe { mi_page_is_full(raw) } {
+        c = b'f';
+    }
+    // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+    if !unsafe { mi_page_is_abandoned(raw) } {
+        c = _mi_toupper(c as i8) as u8;
+    }
+    let commit_usage =
+        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+        unsafe { mi_page_commit_usage(page, mi_page_committed_typed(raw)) };
+    let color = if commit_usage < 25 {
+        MI_MAROON
+    } else if commit_usage < 50 {
+        MI_ORANGE
+    } else if commit_usage < 75 {
+        MI_TEAL
+    } else {
+        MI_DARKGREEN
+    };
+    // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+    let page_slice_count = match crate::core_types::MemId::view(unsafe { (*raw).memid }) {
+        crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize,
+        _ => {
+            crate::internal::mi_assert_internal!(false);
+            0
+        }
+    };
+    (c, color, page_slice_count)
+}
+
 unsafe fn mi_debug_show_page_bfield(
     buf: *mut u8,
     k: *mut usize,
-    arena: *mut mi_arena_t,
+    arena: ArenaDebugView,
     slice_index: SliceIndex,
     pbit_of_page: *mut isize,
     pcolor_of_page: *mut mi_ansi_color_t,
@@ -131,50 +289,17 @@ unsafe fn mi_debug_show_page_bfield(
             crate::internal::mi_assert_internal!(false);
             break;
         };
-        let slice_index_usize = slice.get();
-        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-        let start = unsafe {
-            mi_arena_slice_start(ArenaPtr::new_unchecked(arena), slice)
-                .as_ptr()
-                .cast::<c_void>()
-        };
+        let start = arena.slice_start(slice);
         // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
         let page = unsafe { _mi_safe_ptr_page(start) };
         if !page.is_null() && start == unsafe { mi_page_slice_start(page) }.cast::<c_void>() {
             crate::internal::mi_assert_internal!(bit_of_page <= 0);
             bit_set_count += 1;
-            let mut c = b'p';
             // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            if unsafe { mi_page_is_singleton(page) } {
-                c = b's';
-            } else if unsafe { mi_page_is_full(page) } {
-                c = b'f';
-            }
-            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            if !unsafe { mi_page_is_abandoned(page) } {
-                c = _mi_toupper(c as i8) as u8;
-            }
             let page_ptr = unsafe { PagePtr::new_unchecked(page) };
-            let commit_usage =
-                // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-                unsafe { mi_page_commit_usage(page_ptr, mi_page_committed_typed(page)) };
-            if commit_usage < 25 {
-                color = MI_MAROON;
-            } else if commit_usage < 50 {
-                color = MI_ORANGE;
-            } else if commit_usage < 75 {
-                color = MI_TEAL;
-            } else {
-                color = MI_DARKGREEN;
-            }
-            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            bit_of_page = match crate::core_types::MemId::view(unsafe { (*page).memid }) {
-                crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize,
-                _ => {
-                    crate::internal::mi_assert_internal!(false);
-                    0
-                }
-            };
+            let (c, next_color, page_slice_count) = mi_debug_page_state(page_ptr);
+            color = next_color;
+            bit_of_page = page_slice_count;
             if color != prev_color {
                 // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
                 unsafe { mi_debug_color(buf, k, color) };
@@ -192,33 +317,14 @@ unsafe fn mi_debug_show_page_bfield(
             } else if unsafe { _mi_meta_is_meta_page(start) } {
                 c = b'm';
                 color = MI_GRAY;
-            } else if slice_index_usize < unsafe { (*arena.cast::<MiArenaPrefix>()).info_slices } {
+            } else if arena.is_info_slice(slice) {
                 c = b'i';
                 color = MI_GRAY;
-            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            } else if unsafe {
-                mi_bbitmap_is_setN(
-                    (*arena.cast::<MiArenaPrefix>()).slices_free,
-                    slice_index_usize,
-                    1,
-                )
-            } {
-                // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-                if unsafe {
-                    mi_bitmap_is_set(
-                        (*arena.cast::<MiArenaPrefix>()).slices_purge,
-                        slice_index_usize,
-                    )
-                } {
+            } else if arena.is_free_slice(slice) {
+                if arena.is_purge_slice(slice) {
                     c = b'~';
                     color = MI_ORANGE;
-                // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-                } else if unsafe {
-                    mi_bitmap_is_set(
-                        (*arena.cast::<MiArenaPrefix>()).slices_committed,
-                        slice_index_usize,
-                    )
-                } {
+                } else if arena.is_committed_slice(slice) {
                     c = b'_';
                     color = MI_GRAY;
                 } else {
@@ -261,7 +367,7 @@ unsafe fn mi_debug_show_chunks(
     chunks: *mut mi_bchunk_t,
     chunk_bins: *mut mi_bchunkmap_t,
     invert: bool,
-    arena: *mut mi_arena_t,
+    arena: ArenaDebugView,
     narrow: bool,
 ) -> usize {
     crate::options::_mi_raw_message(format_args!(
@@ -270,8 +376,7 @@ unsafe fn mi_debug_show_chunks(
     ));
     let fields_per_line = if narrow { 2 } else { 4 };
     let slice_count = slice_count.get() as usize;
-    // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-    let used_slice_count = unsafe { mi_arena_used_slices(arena) };
+    let used_slice_count = mi_arena_used_slices(arena);
     let mut bit_count = 0usize;
     let mut bit_set_count = 0usize;
     let mut bit_of_page = 0isize;
@@ -403,44 +508,35 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
         if arena.is_null() {
             break;
         }
-        crate::internal::mi_assert!(unsafe { (*arena.cast::<MiArenaPrefix>()).subproc == subproc });
+        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+        let arena_view = unsafe { ArenaDebugView::new_unchecked(arena) };
+        crate::internal::mi_assert!(arena_view.subproc_raw() == subproc);
         crate::options::_mi_raw_message(format_args!(
             "{}arena {} at {:p}: {} slices ({} MiB){}{}, subproc: {:p}, numa: {}\n",
-            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            if unsafe { (*arena.cast::<MiArenaPrefix>()).parent.is_null() } {
-                ""
-            } else {
-                "(sub)"
-            },
+            if arena_view.has_parent() { "(sub)" } else { "" },
             i,
             arena,
-            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count },
-            mi_size_of_slices(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }) / MI_MiB,
-            if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
+            arena_view.raw_slice_count(),
+            mi_size_of_slices(arena_view.raw_slice_count()) / MI_MiB,
+            if arena_view.memid_is_pinned() {
                 ", pinned"
             } else {
                 ""
             },
-            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            if unsafe { (*arena.cast::<MiArenaPrefix>()).is_exclusive } {
+            if arena_view.is_exclusive() {
                 ", exclusive"
             } else {
                 ""
             },
-            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            unsafe { (*arena.cast::<MiArenaPrefix>()).subproc },
-            unsafe { (*arena.cast::<MiArenaPrefix>()).numa_node },
+            arena_view.subproc_raw(),
+            arena_view.numa_node(),
         ));
         if show_pages {
             let header1 = "chunks (p:page, f:full, s:singleton, P,F,S:not abandoned, i:arena-info, m:meta-data, ~:free-purgable, _:free-committed, .:free-reserved)";
             let header2 = if narrow { "\n       " } else { " " };
             let header3 = "(chunk bin: S:small, M : medium, L : large, X : other)";
-            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            let slices_free = unsafe { (*arena.cast::<MiArenaPrefix>()).slices_free };
-            let Some(slice_count) =
-                SliceCount::from_usize(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count })
-            else {
+            let slices_free = arena_view.slices_free();
+            let Some(slice_count) = arena_view.slice_count() else {
                 crate::internal::mi_assert_internal!(false);
                 continue;
             };
@@ -455,7 +551,7 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
                     ptr::null_mut(),
                     (*slices_free).chunkmap_bins.as_mut_ptr(),
                     false,
-                    arena,
+                    arena_view,
                     narrow,
                 )
             };
@@ -496,7 +592,7 @@ type MiDebugShowChunksFunT = unsafe fn(
     *mut mi_bchunk_t,
     *mut mi_bchunkmap_t,
     bool,
-    *mut mi_arena_t,
+    ArenaDebugView,
     bool,
 ) -> usize;
 

@@ -2088,7 +2088,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("crate::core_types::MemIdView::External(external)")
             && os_rs.contains("crate::core_types::MemIdView::External(external)")
             && arena_rs.contains("let os_size = external.size.get();")
-            && arena_debug_rs.contains("bit_of_page = match crate::core_types::MemId::view(unsafe { (*page).memid })")
+            && arena_debug_rs
+                .contains("let page_slice_count = match crate::core_types::MemId::view(unsafe { (*raw).memid })")
             && arena_debug_rs.contains("crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize")
             && os_rs.contains("external.size.get()")
             && os_rs.contains("let MemIdView::Os(memid) = MemId::view(memid) else")

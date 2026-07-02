@@ -94,18 +94,25 @@ Review evidence:
 > casts and close-range safety comments. A small diagnostic-only helper layer
 > would make the invariants easier to review without moving allocation logic.
 
-- [ ] Identify repeated arena/page metadata reads in
+- [x] Identify repeated arena/page metadata reads in
       `src/allocator/arena/debug.rs`, especially `MiArenaPrefix` field access,
       page classification, and slice bitmap reads.
-- [ ] Add tiny diagnostic helper functions or local wrapper types that name the
+- [x] Add tiny diagnostic helper functions or local wrapper types that name the
       invariant being read while keeping the module diagnostic-only.
-- [ ] Reduce repeated `SAFETY[AUDIT:arena-debug-render]` marker noise by moving
+- [x] Reduce repeated `SAFETY[AUDIT:arena-debug-render]` marker noise by moving
       proofs to the smallest helper boundaries that actually perform unsafe
       reads.
-- [ ] Keep `mi_debug_show_arenas` and `mi_arenas_print` ABI-compatible and
+- [x] Keep `mi_debug_show_arenas` and `mi_arenas_print` ABI-compatible and
       classified by `scripts/check-ffi-boundary.py`.
-- [ ] Keep the module out of allocation hot paths and free of Rust allocation
+- [x] Keep the module out of allocation hot paths and free of Rust allocation
       helpers.
+  - Evidence: `src/allocator/arena/debug.rs` now uses a local
+    `ArenaDebugView` for diagnostic arena prefix and slice bitmap reads, and
+    `mi_debug_page_state` owns page marker/color classification. Direct
+    `MiArenaPrefix` casts no longer sit in render call sites, the
+    `arena-debug-render` marker count in the module is down from 37 to 35, and
+    `mi_debug_show_arenas`/`mi_arenas_print` remain the same exported C ABI
+    entry points.
 - Verify: `scripts/check-ffi-boundary.py`,
   `scripts/check-unsafe-audit.py`,
   `scripts/check-unsafe-audit-evidence.py`, release audit, full clippy, and full
@@ -153,7 +160,7 @@ Review evidence:
 
 1. [x] Shrink the unsafe migration allowlist with small reviewable files.
 2. [x] Reduce one removable strict-type file-level allowance.
-3. [ ] Consolidate unsafe arena diagnostic metadata reads.
+3. [x] Consolidate unsafe arena diagnostic metadata reads.
 4. [ ] Split the uneven release-audit unsafe/performance module further.
 5. [ ] Split one low-risk page module cluster.
 
@@ -162,7 +169,7 @@ Review evidence:
 - [x] The unsafe migration allowlist is below 62 entries and the cap is lowered.
 - [x] The strict-type allowlist has fewer than 8 `remove:` entries and the
       removable-entry count is capped lower.
-- [ ] `src/allocator/arena/debug.rs` has clearer diagnostic helper boundaries
+- [x] `src/allocator/arena/debug.rs` has clearer diagnostic helper boundaries
       and fewer repeated local safety-marker comments.
 - [ ] Release fast-path audit modules are smaller and guarded against growing
       back into large review units.

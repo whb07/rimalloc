@@ -10,7 +10,7 @@ Current review evidence:
 - `docs/unsafe-migration-allowlist.tsv` has 0 translation entries and no
   production entries. `ALLOWLIST_ENTRY_CAP` is 0.
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe mentions,
-  and 86 operation IDs.
+  and 91 operation IDs.
 - `strict-type-allowlist.txt` has 413 entries: 242 raw-pointer-parameter
   entries, 123 bare-domain `usize` entries, 19 pointer/usize round-trip
   entries, 25 metadata-reference entries, 2 atomic-cast entries, and
@@ -30,20 +30,26 @@ Current review evidence:
   2 path-wide entries. The targeted platform, allocator, and internal files no
   longer have strict-type wildcard entries.
 - The largest source unsafe audit marker clusters are still too broad:
-  `SAFETY[AUDIT:init-lifecycle-boundary]` has 277 markers,
   `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers,
   `SAFETY[AUDIT:allocation-entry-boundary]` has 166 markers,
   `SAFETY[AUDIT:stats-reporting-boundary]` has 161 markers,
   `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
   `SAFETY[AUDIT:aligned-allocation-boundary]` has 158 markers,
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
-  `SAFETY[AUDIT:os-memory-boundary]` has 136 markers, and
+  `SAFETY[AUDIT:os-memory-boundary]` has 136 markers,
+  `SAFETY[AUDIT:init-thread-tls-boundary]` has 129 markers, and
   `SAFETY[AUDIT:windows-primitive-boundary]` has 114 markers.
 - The arena audit cluster is now split into `arena-page-lifecycle-boundary`
   with 107 markers, `arena-allocation-boundary` with 105 markers,
   `arena-purge-boundary` with 38 markers, `arena-registry-boundary` with
   37 markers, `arena-slice-boundary` with 31 markers, and
   `arena-abandoned-boundary` with 22 markers.
+- The initialization audit cluster is now split into
+  `init-thread-tls-boundary` with 129 markers, `init-subproc-boundary` with
+  102 markers, `init-process-boundary` with 16 markers,
+  `init-options-guarded-boundary` with 14 markers,
+  `init-random-cpu-boundary` with 13 markers, and
+  `init-platform-hooks-boundary` with 9 markers.
 - The release audit is split, but the largest review units are still heavy:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,544 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
@@ -52,7 +58,7 @@ Current review evidence:
   `tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs`
   is 895 lines, and
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
-  is 831 lines.
+  is 922 lines.
 
 ## Issue 1: Make strict-type line-pattern checks item-aware
 
@@ -151,20 +157,20 @@ clippy, and full tests.
 
 ## Issue 5: Split the initialization lifecycle audit cluster
 
-> **Comment:** `SAFETY[AUDIT:init-lifecycle-boundary]` has 277 source markers
+> **Comment:** `SAFETY[AUDIT:init-lifecycle-boundary]` had 277 source markers
 > across subproc identity, process init/done, thread init/done, TLS, guarded
 > setup, options/stat setup, random reinitialization, CPU feature detection, and
 > constructor/destructor hooks. Those are separate invariants.
 
-- [ ] Split init markers into narrower operation IDs for subproc identity and
+- [x] Split init markers into narrower operation IDs for subproc identity and
       main heap access, process lifecycle, thread/TLS lifecycle, guarded/options
       setup, random/CPU initialization, and platform constructor/destructor
       hooks.
-- [ ] Update audit docs and evidence rows with separate invariants for each
+- [x] Update audit docs and evidence rows with separate invariants for each
       lifecycle operation ID.
-- [ ] Split lifecycle release-audit assertions so process, thread/TLS, subproc,
+- [x] Split lifecycle release-audit assertions so process, thread/TLS, subproc,
       and CPU/random checks are reviewable independently.
-- [ ] Preserve idempotent initialization, preloading gates, default heap TLS,
+- [x] Preserve idempotent initialization, preloading gates, default heap TLS,
       subproc ID mapping, option/stat initialization order, random reseeding,
       no-unwind behavior, and no hidden allocator allocation before init is
       safe.
@@ -199,7 +205,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 2. [x] Narrow platform strict-type wildcard allowances.
 3. [x] Narrow allocator and internal strict-type wildcard allowances.
 4. [x] Split the arena audit operation cluster.
-5. [ ] Split the initialization lifecycle audit cluster.
+5. [x] Split the initialization lifecycle audit cluster.
 6. [ ] Shrink release-audit review units and lower line caps.
 
 ## Definition of done for this backlog
@@ -209,7 +215,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 - [x] The targeted platform, allocator, and internal strict-type wildcard
       entries are replaced by named symbol/domain allowances or are explicitly
       documented as true ABI/module boundaries.
-- [ ] The arena and initialization operation IDs are split into narrower audit
+- [x] The arena and initialization operation IDs are split into narrower audit
       IDs with separate docs, evidence, and release-audit guards.
 - [ ] The large release-audit modules are split enough to lower the line-count
       caps without weakening coverage.

@@ -60,10 +60,25 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   aliases, macOS interpose records, assembly overrides, and bootstrap
   allocation tracking preserve the raw C allocation ABI and do not add Rust
   ownership guarantees.
-- `SAFETY[AUDIT:init-lifecycle-boundary]`: process/thread initialization and
-  teardown in `src/allocator/init.rs`. The boundary covers subproc identity,
-  main heap and thread-heap TLS association, preloading gates, constructor and
-  destructor hooks, CPU/random initialization, and raw lifecycle exports.
+- `SAFETY[AUDIT:init-subproc-boundary]`: subproc identity, subproc list
+  mutation, subproc ID conversion, main-subproc address resolution, main-heap
+  lookup, and subproc heap visitation in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-process-boundary]`: process initialization and teardown in
+  `src/allocator/init.rs`, including one-time state, preloading gates,
+  allocator init/done callbacks, post-init option activation, and teardown
+  ordering.
+- `SAFETY[AUDIT:init-thread-tls-boundary]`: thread initialization/teardown,
+  TLD allocation/free, default/cached thread-heap association, process-main
+  thread-heap TLS, and platform TLS slot/key setup in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-options-guarded-boundary]`: thread-heap option and
+  guarded-allocation configuration in `src/allocator/init.rs`, including
+  clamped option reads and bounded local thread-heap writes.
+- `SAFETY[AUDIT:init-random-cpu-boundary]`: CPU feature detection, CPU
+  threshold publication, and random seeding/reseeding in
+  `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-platform-hooks-boundary]`: hidden init link-name assembly
+  in `src/allocator/init.rs` plus process attach/detach constructor and
+  destructor hook glue in `src/platform/mod.rs`.
 - `SAFETY[AUDIT:allocation-entry-boundary]`: allocation entry points in
   `src/allocator/alloc.rs`. The boundary covers malloc/calloc/realloc request
   construction, heap/thread-heap dispatch, zeroing, padding/provenance recovery,

@@ -792,12 +792,12 @@ pub(crate) unsafe fn _mi_page_associated_theap_peek(page: PagePtr) -> Option<Thr
 ///
 /// Must be called only by the process attach constructor or equivalent process
 /// initialization path.
-// SAFETY[AUDIT:platform-tls-primitives]: process attach is a C ABI lifecycle
-// shim that forwards directly to allocator process initialization.
+// SAFETY[AUDIT:init-platform-hooks-boundary]: process attach is a C ABI
+// lifecycle shim that forwards directly to allocator process initialization.
 #[inline(never)]
 pub unsafe extern "C" fn mi_process_attach() {
-    // SAFETY[AUDIT:platform-tls-primitives]: allocator process initialization
-    // owns global setup and tolerates constructor-style entry.
+    // SAFETY[AUDIT:init-platform-hooks-boundary]: allocator process
+    // initialization owns global setup and tolerates constructor-style entry.
     unsafe { crate::internal::_mi_auto_process_init() }
 }
 
@@ -805,26 +805,26 @@ pub unsafe extern "C" fn mi_process_attach() {
 ///
 /// Must be called only by the process detach destructor or equivalent process
 /// teardown path.
-// SAFETY[AUDIT:platform-tls-primitives]: process detach is a C ABI lifecycle
-// shim that forwards directly to allocator process teardown.
+// SAFETY[AUDIT:init-platform-hooks-boundary]: process detach is a C ABI
+// lifecycle shim that forwards directly to allocator process teardown.
 #[inline(never)]
 pub unsafe extern "C" fn mi_process_detach() {
-    // SAFETY[AUDIT:platform-tls-primitives]: allocator process teardown owns
-    // global cleanup and tolerates destructor-style entry.
+    // SAFETY[AUDIT:init-platform-hooks-boundary]: allocator process teardown
+    // owns global cleanup and tolerates destructor-style entry.
     unsafe { crate::internal::_mi_auto_process_done() }
 }
 
 #[cfg(all(target_family = "unix", not(target_vendor = "apple"), not(miri)))]
 #[used]
-// SAFETY[AUDIT:platform-tls-primitives]: ELF constructor section stores the
-// process-attach C ABI callback pointer.
+// SAFETY[AUDIT:init-platform-hooks-boundary]: ELF constructor section stores
+// the process-attach C ABI callback pointer.
 #[unsafe(link_section = ".init_array")]
 pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern "C" fn() = mi_process_attach;
 
 #[cfg(all(target_family = "unix", not(target_vendor = "apple"), not(miri)))]
 #[used]
-// SAFETY[AUDIT:platform-tls-primitives]: ELF destructor section stores the
-// process-detach C ABI callback pointer.
+// SAFETY[AUDIT:init-platform-hooks-boundary]: ELF destructor section stores
+// the process-detach C ABI callback pointer.
 #[unsafe(link_section = ".fini_array")]
 pub(crate) static _MI_PROCESS_DETACH_DTOR: unsafe extern "C" fn() = mi_process_detach;
 

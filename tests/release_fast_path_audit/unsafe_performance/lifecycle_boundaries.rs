@@ -1,5 +1,121 @@
 use super::*;
 
+fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist: &str) {
+    let marker_total = [
+        "SAFETY[AUDIT:init-subproc-boundary]",
+        "SAFETY[AUDIT:init-process-boundary]",
+        "SAFETY[AUDIT:init-thread-tls-boundary]",
+        "SAFETY[AUDIT:init-options-guarded-boundary]",
+        "SAFETY[AUDIT:init-random-cpu-boundary]",
+        "SAFETY[AUDIT:init-platform-hooks-boundary]",
+    ]
+    .into_iter()
+    .map(|marker| init_rs.matches(marker).count())
+    .sum::<usize>();
+
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/init.rs\t"))
+            && !init_rs.contains("SAFETY[AUDIT:init-lifecycle-boundary]")
+            && marker_total >= 277,
+        "init lifecycle unsafe boundaries should stay split into focused operation markers without a migration allowlist entry"
+    );
+    assert!(
+        init_rs
+            .matches("SAFETY[AUDIT:init-subproc-boundary]")
+            .count()
+            >= 102
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_main")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_current")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_new")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_destroy")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_visit_heaps")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_heap_main")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_is_heap_main")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_is_theap_main"),
+        "subproc identity and main-heap lookup markers should stay reviewable independently"
+    );
+    assert!(
+        init_rs
+            .matches("SAFETY[AUDIT:init-process-boundary]")
+            .count()
+            >= 16
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_process_init")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_process_done")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_auto_process_init")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_auto_process_done")
+            && init_rs.contains("OS_PRELOADING.store(false, Ordering::Relaxed);")
+            && init_rs.contains("OS_PRELOADING.store(true, Ordering::Relaxed);")
+            && init_rs.contains("_mi_allocator_init(ptr::addr_of_mut!(msg))")
+            && init_rs.contains("_mi_allocator_done();"),
+        "process init/teardown markers should preserve preloading gates and allocator lifecycle ordering"
+    );
+    assert!(
+        init_rs
+            .matches("SAFETY[AUDIT:init-thread-tls-boundary]")
+            .count()
+            >= 129
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_thread_init")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_thread_done")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_thread_done")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_theap_default_set")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_theap_cached_set")
+            && init_rs.contains("fn mi_tls_slots_init()")
+            && init_rs.contains("fn mi_tls_slots_done()")
+            && init_rs.contains("crate::prim::_mi_theap_default_raw()"),
+        "thread and TLS lifecycle markers should preserve default/cached heap association and teardown"
+    );
+    assert!(
+        init_rs
+            .matches("SAFETY[AUDIT:init-options-guarded-boundary]")
+            .count()
+            >= 14
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_theap_guarded_set_sample_rate")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_theap_guarded_set_size_bound")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_theap_options_init")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_theap_guarded_init")
+            && init_rs.contains("mi_option_get_clamp(")
+            && init_rs.contains("core::sync::atomic::compiler_fence"),
+        "guarded and option init markers should preserve bounded thread-heap configuration writes"
+    );
+    assert!(
+        init_rs
+            .matches("SAFETY[AUDIT:init-random-cpu-boundary]")
+            .count()
+            >= 13
+            && init_rs.contains("fn mi_detect_cpu_features()")
+            && init_rs.contains("fn mi_cpuid(")
+            && init_rs.contains("_mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0")
+            && init_rs.contains("if fsrm {\n            unsafe { _mi_cpu_movsb_max = 127 };")
+            && init_rs.contains(
+                "crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random))"
+            ),
+        "random reseeding and CPU feature markers should preserve process-local publication"
+    );
+    assert!(
+        init_rs
+            .matches("SAFETY[AUDIT:init-platform-hooks-boundary]")
+            .count()
+            >= 3
+            && prim_rs
+                .matches("SAFETY[AUDIT:init-platform-hooks-boundary]")
+                .count()
+                >= 6
+            && prim_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn mi_process_attach()")
+            && prim_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn mi_process_detach()")
+            && prim_rs.contains(
+                "pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern \"C\" fn() = mi_process_attach;"
+            )
+            && prim_rs.contains(
+                "pub(crate) static _MI_PROCESS_DETACH_DTOR: unsafe extern \"C\" fn() = mi_process_detach;"
+            )
+            && init_rs.contains("core::arch::global_asm!(\".hidden _mi_theap_empty\")")
+            && init_rs.contains("core::arch::global_asm!(\".hidden subproc_main\")"),
+        "platform hook markers should preserve constructor/destructor callbacks and hidden local init symbols"
+    );
+}
+
 #[test]
 fn lifecycle_and_local_boundary_helpers_stay_classified() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -43,35 +159,10 @@ fn lifecycle_and_local_boundary_helpers_stay_classified() {
             && prim_rs
                 .matches("SAFETY[AUDIT:platform-tls-primitives]")
                 .count()
-                >= 55,
+                >= 54,
         "platform TLS primitive boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
-    assert!(
-        !unsafe_allowlist
-            .lines()
-            .any(|line| line.starts_with("src/allocator/init.rs\t"))
-            && init_rs
-                .matches("SAFETY[AUDIT:init-lifecycle-boundary]")
-                .count()
-                >= 270
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_thread_init")
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_process_init")
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_process_done")
-            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_auto_process_init")
-            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_auto_process_done")
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_main")
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_current")
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_new")
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_destroy")
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_visit_heaps")
-            && init_rs.contains("fn mi_detect_cpu_features()")
-            && init_rs.contains("OS_PRELOADING.store(false, Ordering::Relaxed);")
-            && init_rs.contains("OS_PRELOADING.store(true, Ordering::Relaxed);")
-            && init_rs.contains(
-                "crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random))"
-            ),
-        "init lifecycle unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
-    );
+    assert_init_lifecycle_markers(&init_rs, &prim_rs, &unsafe_allowlist);
     assert!(
         prim_rs.contains("pub const MI_TLS_MODEL_THREAD_LOCAL")
             && prim_rs.contains("pub const MI_TLS_MODEL_FIXED_SLOT")

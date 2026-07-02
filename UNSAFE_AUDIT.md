@@ -233,14 +233,41 @@ Operation IDs:
   boundaries. Unsafe operations stay at C ABI shims, callback invocations,
   page/block traversal, fast-divisor out-pointers, and caller-proven
   heap/thread-heap/TLD metadata transitions routed through typed wrappers.
-- `SAFETY[AUDIT:init-lifecycle-boundary]`: `src/allocator/init.rs` owns process
-  and thread initialization/teardown, preloading state, subproc identity
-  conversion, main heap/TLS association, constructor/destructor hooks, random
-  and CPU feature setup, and raw lifecycle exports. Unsafe operations are
-  limited to C ABI shims, process-global metadata publication, TLS slot/key
-  setup, typed subproc/thread-heap witness construction, statically linked
-  assembly symbols, option/stat initialization ordering, and teardown paths
-  while preserving idempotent initialization and no-unwind lifecycle behavior.
+- `SAFETY[AUDIT:init-subproc-boundary]`: `src/allocator/init.rs` owns subproc
+  identity conversion, subproc list mutation, main subproc address resolution,
+  main-heap lookup, heap visitor dispatch, and subproc creation/destruction.
+  Unsafe operations are limited to caller-proven subproc IDs, typed
+  subproc/main-heap witness construction, lock-protected list updates, local
+  static subproc publication, and metadata cleanup while preserving subproc ID
+  mapping and main-heap association.
+- `SAFETY[AUDIT:init-process-boundary]`: `src/allocator/init.rs` owns
+  process-global initialization and teardown. Unsafe operations are limited to
+  one-time init state, preloading gates, allocator init/done callbacks,
+  process-global metadata publication, post-init option activation, stats/OS
+  setup ordering, and process teardown while preserving idempotent
+  initialization and no-unwind lifecycle behavior.
+- `SAFETY[AUDIT:init-thread-tls-boundary]`: `src/allocator/init.rs` owns thread
+  initialization/teardown, default and cached thread-heap association,
+  process-main thread heap TLS, platform TLS slot/key setup, and TLD
+  allocation/free. Unsafe operations are limited to current-thread witnesses,
+  typed thread-heap/TLD wrappers, TLS slot/key reads and writes, and local
+  teardown paths while preserving default heap TLS and no hidden allocator
+  allocation before init is safe.
+- `SAFETY[AUDIT:init-options-guarded-boundary]`: `src/allocator/init.rs` owns
+  thread-heap option and guarded-allocation configuration. Unsafe operations
+  are limited to validated local thread-heap writes, clamped option reads,
+  guarded sample/size configuration, and non-guarded compiler fences while
+  preserving option/stat initialization order.
+- `SAFETY[AUDIT:init-random-cpu-boundary]`: `src/allocator/init.rs` owns CPU
+  feature detection, CPU threshold publication, and process random
+  seeding/reseeding. Unsafe operations are limited to CPUID register writes,
+  hidden CPU threshold statics, popcount publication, and weak random
+  reinitialization while preserving random reseeding and CPU feature ordering.
+- `SAFETY[AUDIT:init-platform-hooks-boundary]`: `src/allocator/init.rs` and
+  `src/platform/mod.rs` own platform lifecycle hook glue. Unsafe operations
+  are limited to hidden local link-name assembly, process attach/detach C ABI
+  shims, and ELF constructor/destructor callback slots that forward into the
+  bounded process lifecycle.
 - `SAFETY[AUDIT:allocation-entry-boundary]`: `src/allocator/alloc.rs` owns
   malloc/calloc/realloc request construction, thread-heap and heap dispatch,
   small-page allocation, zeroing, padding/provenance recovery, product
@@ -408,8 +435,7 @@ Operation IDs:
   limited to platform TLS declarations, Linux x86_64 initial-exec assembly,
   Apple fixed-slot reads, dynamic TLS key lookups, raw default/cached
   thread-heap get/set helpers, empty-thread-heap fallbacks, page-associated
-  thread-heap lookup, process attach/detach callbacks, and allocator
-  init/done compatibility shims.
+  thread-heap lookup, and allocator init/done compatibility shims.
 - `SAFETY[AUDIT:internal-atomic-facade]`: `src/internal/atomic.rs` owns the
   C-compatible atomic, once, and lock facade. Unsafe operations are limited to
   Linux pthread mutex imports and calls, raw `Atomic*` views over

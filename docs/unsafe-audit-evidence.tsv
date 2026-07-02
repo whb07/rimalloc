@@ -44,10 +44,24 @@ heap-lifecycle-boundary	test	tests/release_fast_path_audit/datatype_acceptance.r
 thread-heap-lifecycle	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap visitation, collection, init/create/free/delete, refcount, random, cleanup, marker coverage, and migration allowlist removal.
 thread-heap-lifecycle	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching, routed heap thread-heap lookup, heap lifecycle, stats, and allocation smoke paths.
 thread-heap-lifecycle	script	scripts/check-unsafe-audit.py	Checks thread-heap lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks init lifecycle marker coverage, migration allowlist removal, helper shape, subproc identity, TLS association, preloading gates, and CPU/random initialization order.
-init-lifecycle-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks preloading state transitions, process init routing, and CPU feature setup order.
-init-lifecycle-boundary	test	src/allocator/init.rs	Exercises large-page process initialization and Linux main-theap TLS locality fixtures.
-init-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks init lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc marker coverage, subproc ID mapping, typed main-subproc helpers, main-heap lookup, and heap visitor shape.
+init-subproc-boundary	script	scripts/check-unsafe-audit.py	Checks subproc init unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-process-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks process marker coverage, process init/done helper shape, preloading gates, allocator init/done callbacks, and teardown ordering.
+init-process-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks preloading state transitions, process init routing, and CPU feature setup order.
+init-process-boundary	test	src/allocator/init.rs	Exercises large-page process initialization.
+init-process-boundary	script	scripts/check-unsafe-audit.py	Checks process init unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread/TLS marker coverage, default/cached thread-heap association, TLD allocation/free, TLS slot setup, and thread teardown shape.
+init-thread-tls-boundary	test	src/allocator/init.rs	Exercises Linux main-theap TLS locality fixtures.
+init-thread-tls-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching, routed heap thread-heap lookup, stats, and allocation smoke paths.
+init-thread-tls-boundary	script	scripts/check-unsafe-audit.py	Checks thread/TLS init unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-options-guarded-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks guarded/options marker coverage, helper shape, clamped option reads, compiler fences, and bounded thread-heap configuration writes.
+init-options-guarded-boundary	script	scripts/check-unsafe-audit.py	Checks guarded/options init unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-random-cpu-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks random/CPU marker coverage, CPUID helper shape, popcount publication, CPU copy thresholds, and random reseeding.
+init-random-cpu-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks CPU feature detection order during process initialization.
+init-random-cpu-boundary	script	scripts/check-unsafe-audit.py	Checks random/CPU init unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-platform-hooks-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks platform hook marker coverage, hidden init symbols, process attach/detach shims, and ELF constructor/destructor slots.
+init-platform-hooks-boundary	test	tests/release_fast_path_audit.rs	Checks process lifecycle hook shape with primitive platform audit coverage.
+init-platform-hooks-boundary	script	scripts/check-unsafe-audit.py	Checks platform init hook unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-entry-boundary	test	tests/allocation_boundary_cases.rs	Exercises zero-size allocations, product overflow, calloc overflow, realloc preservation, and null realloc behavior.
 allocation-entry-boundary	test	tests/property_alloc_sequences.rs	Exercises seeded allocation and realloc/free sequences through the raw allocation entry points.
 allocation-entry-boundary	test	tests/fuzz_alloc_sequences.rs	Exercises byte-stream allocation programs over malloc/calloc/realloc/free entry behavior.
@@ -130,7 +144,7 @@ os-memory-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation,
 os-memory-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory unsafe operations retain operation-level SAFETY markers and source audit coverage.
 macos-zone-override	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks macOS malloc-zone struct layout, interpose targets, forwarding branches, batch pointer clearing, fork hooks, and migration allowlist removal.
 macos-zone-override	script	scripts/check-unsafe-audit.py	Checks macOS malloc-zone operations retain operation-level SAFETY markers and source audit coverage.
-platform-tls-primitives	test	tests/release_fast_path_audit.rs	Checks Linux TLS fast-path assembly, C TLS shim shape, empty-thread-heap symbol loads, and process lifecycle hook shape.
+platform-tls-primitives	test	tests/release_fast_path_audit.rs	Checks Linux TLS fast-path assembly, C TLS shim shape, and empty-thread-heap symbol loads.
 platform-tls-primitives	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks primitive TLS model constants, default/cached thread-heap helpers, page-associated lookup, allocator init/done shims, and migration allowlist removal.
 platform-tls-primitives	script	scripts/check-unsafe-audit.py	Checks platform TLS primitive operations retain operation-level SAFETY markers and source audit coverage.
 internal-atomic-facade	test	tests/release_fast_path_audit.rs	Checks internal atomic facade marker coverage, migration allowlist removal, pthread/fallback lock shape, and process/option lock dependencies.

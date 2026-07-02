@@ -12,14 +12,13 @@ exceptions with typed Rust boundaries or operation-level audit evidence.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 48 entries: 41 production, 4 test,
-  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 48.
+- `docs/unsafe-migration-allowlist.tsv` has 47 entries: 40 production, 4 test,
+  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 47.
 - The smallest remaining allowlisted test fixtures are reviewable:
   `src/types/memid/tests.rs` is 243 lines,
   `src/types/atomic/tests.rs` is 287 lines, and
   `src/types/scalar/tests.rs` is 412 lines.
 - The smallest remaining allowlisted production files are narrow:
-  `src/allocator/tracking.rs` is 185 lines,
   `src/types/callbacks.rs` is 255 lines,
   `src/internal/random.rs` is 257 lines,
   `src/types/page.rs` is 258 lines,
@@ -90,14 +89,19 @@ full tests.
 > operation-level markers while preserving the feature-gated Valgrind and ASan
 > behavior.
 
-- [ ] Replace the file-level allowlist entry for `src/allocator/tracking.rs`
+- [x] Replace the file-level allowlist entry for `src/allocator/tracking.rs`
       with operation-level `SAFETY[AUDIT:tracking-hooks]` markers.
-- [ ] Keep the default no-tracking path allocation-free and keep shim calls
+- [x] Keep the default no-tracking path allocation-free and keep shim calls
       behind the existing `track-valgrind` and `track-asan` cfg gates.
-- [ ] Add audit evidence that points at tracking parity scripts and release
+- [x] Add audit evidence that points at tracking parity scripts and release
       audit coverage.
-- [ ] Remove the file from `docs/unsafe-migration-allowlist.tsv`, update
+- [x] Remove the file from `docs/unsafe-migration-allowlist.tsv`, update
       generated unsafe inventory, and lower `ALLOWLIST_ENTRY_CAP` again.
+  - Evidence: `src/allocator/tracking.rs` now uses
+    `SAFETY[AUDIT:tracking-hooks]` for the tracking shim declarations,
+    feature-gated backend calls, default no-backend reporting path, and
+    allocator usable-size queries. The file was removed from
+    `docs/unsafe-migration-allowlist.tsv`, and `ALLOWLIST_ENTRY_CAP` is now 47.
 
 Verify: unsafe audit scripts, `scripts/check-valgrind-tracking-parity.py`,
 `scripts/check-asan-tracking-parity.py`,
@@ -174,7 +178,7 @@ full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/types/heap/tests.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/allocator/tracking.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/allocator/tracking.rs` off the unsafe migration allowlist.
 3. [ ] Narrow the broad `alloc` strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
 5. [ ] Split one cohesive helper group out of `src/allocator/arena.rs`.
@@ -182,7 +186,7 @@ full tests.
 ## Definition of done for this backlog
 
 - [x] The unsafe migration allowlist is below 49 entries and the cap is lowered.
-- [ ] One additional production allowlisted file is covered by operation-level
+- [x] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.
 - [ ] One remaining broad strict-type `remove:` allowance is narrowed or
       eliminated.

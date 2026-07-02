@@ -33,6 +33,9 @@ safe-process-info	test	src/safe/tests.rs	Exercises ProcessInfo capture through t
 safe-process-info	test	tests/release_fast_path_audit.rs	Checks safe facade exposes process/stat APIs without widening unsafe raw surfaces.
 safe-stats	test	src/safe/tests.rs	Exercises StatsSnapshot capture, heap stats, JSON output, and buffer failure behavior.
 safe-stats	test	tests/stats_exports.rs	Exercises raw stats bin export bounds used by typed stats wrappers.
+tracking-hooks	script	scripts/check-valgrind-tracking-parity.py	Compares C and Rust Valgrind tracking reports for clean, leak, uninitialized, calloc-defined, and freed-memory cases.
+tracking-hooks	script	scripts/check-asan-tracking-parity.py	Compares C and Rust ASAN tracking reports for clean, calloc-defined, and freed-memory poison cases.
+tracking-hooks	test	src/types/track.rs	Checks compile-time tracking mode constants select the expected backend flags.
 typed-freelist	test	src/types/freelist/tests.rs	Exercises thread-free word owner/head packing and raw pointer reconstruction.
 provenance-miri-registry	test	tests/release_fast_path_audit.rs	Checks pointer/integer round trips stay behind typed provenance helpers and strict-type boundaries.
 typed-arena-test-fixtures	test	src/types/arena/tests.rs	Exercises stack-local arena metadata, slice-range bounds, and arena-role constructor fixtures.

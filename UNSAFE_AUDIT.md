@@ -258,6 +258,11 @@ Operation IDs:
 - `SAFETY[AUDIT:safe-stats]`: `src/safe/stats.rs` initializes stats buffers
   before use, passes valid writable output slices to JSON formatting, and
   exposes only typed totals/counts to callers.
+- `SAFETY[AUDIT:tracking-hooks]`: `src/allocator/tracking.rs` owns the
+  Valgrind/ASan tracking hook boundary. Default builds keep the hooks as
+  allocation-free no-ops or assertions, while tracking feature builds forward
+  caller-provided allocation ranges to the C-compatible shim signatures checked
+  by the tracking parity scripts.
 - `SAFETY[AUDIT:typed-freelist]`: `src/types/freelist.rs` reconstructs
   non-null block pointers from packed thread-free words after masking the
   ownership bit. Miri provenance helpers retain the original pointer identity,

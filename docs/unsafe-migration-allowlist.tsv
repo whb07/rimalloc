@@ -13,7 +13,6 @@ src/allocator/page_map.rs	production	release-readiness	2026-09-30	legacy transla
 src/allocator/stats.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
 src/allocator/thread_heap.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
 src/allocator/threadlocal.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
-src/allocator/tracking.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
 src/ffi/abi.rs	production	release-readiness	2026-09-30	legacy C ABI unsafe pending per-operation SAFETY marker migration
 src/ffi/libc.rs	production	release-readiness	2026-09-30	legacy C compatibility unsafe pending per-operation SAFETY marker migration
 src/internal/atomic.rs	production	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration

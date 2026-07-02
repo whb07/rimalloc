@@ -4,10 +4,10 @@ Fresh-eyes review after completing the previous TODO backlog on `master` at
 `7af25fa`. The previous backlog is implemented and pushed: source audit marker
 cap 24, release-audit module cap 280, and strict-type allowlist hotspot
 governance. The next mechanical-translation debt is concentrated in audit IDs
-now sitting at the 22-marker source cap, release-audit modules just below the
-current harness cap, and strict-type allowlist reason/domain hotspots that can
-still grow without focused review. Issue 1 of this backlog has been implemented
-and validated through the unsafe-audit inventory locally; Issues 2 and 3 remain.
+now sitting at the 22-marker source cap, release-audit modules at the tightened
+harness cap, and strict-type allowlist reason/domain hotspots that can still
+grow without focused review. Issues 1 and 2 of this backlog have been
+implemented and validated locally; Issue 3 remains.
 
 Current review evidence:
 
@@ -57,14 +57,13 @@ Current review evidence:
   `src/allocator/free.rs`/`mi_page_t` with 19, and
   `src/allocator/page.rs`/`mi_theap_t` with 19.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 125 module files recursively and
-  enforces a 280-line cap. The next useful cap is 260 lines. The largest
-  release-audit modules are:
-  `interposition_exports/linux_override.rs` at 279 lines,
-  `primitive_options.rs` at 279 lines, `strict_policy.rs` at 260 lines,
-  `release_policy/callbacks.rs` at 255 lines,
-  `datatype_acceptance/domain_wrappers.rs` at 253 lines, and
-  `unsafe_performance/allocation_free/marker_counts.rs` at 251 lines.
+  release-audit module-size guard discovers 131 module files recursively and
+  enforces a 260-line cap. The largest release-audit modules are:
+  `strict_policy.rs` at 260 lines, `release_policy/callbacks.rs` at 255 lines,
+  `datatype_acceptance/domain_wrappers.rs` at 253 lines,
+  `unsafe_performance/allocation_free/marker_counts.rs` at 251 lines,
+  `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view.rs` at 248 lines, and
+  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 247 lines.
 
 ## Issue 1: Lower the source audit marker cap to 22
 
@@ -89,16 +88,17 @@ full formatting, full clippy, and full tests.
 
 ## Issue 2: Split release-audit modules over 260 lines
 
-The release-audit cap is now 280 lines. Two modules are still 279 lines, and
-`strict_policy.rs` sits exactly at the next 260-line target.
+Completed in this pass. The release-audit cap is now 260 lines, and
+`strict_policy.rs` sits exactly at that target. The former 279-line audit
+modules are now split into focused assertion families.
 
-- [ ] Split `interposition_exports/linux_override.rs` into Linux TLS shim,
+- [x] Split `interposition_exports/linux_override.rs` into Linux TLS shim,
       override export, and C++/static-link compatibility assertion families.
-- [ ] Split `primitive_options.rs` into option storage, output/formatting, and
+- [x] Split `primitive_options.rs` into option storage, output/formatting, and
       libc string helper assertion families.
-- [ ] Keep `strict_policy.rs` at or below 260 lines while preserving the new
+- [x] Keep `strict_policy.rs` at or below 260 lines while preserving the new
       strict-type allowlist governance child module.
-- [ ] Lower the recursive release-audit module cap from 280 to 260 and refresh
+- [x] Lower the recursive release-audit module cap from 280 to 260 and refresh
       measured TODO evidence.
 
 Verify: release fast-path audit, TODO guard, unsafe audit scripts, strict-type
@@ -130,18 +130,18 @@ clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Lower the source audit marker cap to 22.
-2. [ ] Split release-audit modules over 260 lines.
+2. [x] Split release-audit modules over 260 lines.
 3. [ ] Guard strict-type permanent reason and file/domain hotspots.
 
 ## Definition of done for this backlog
 
 - [x] No source audit operation ID has more than 22 source markers.
-- [ ] Release-audit modules are split enough to lower the recursive module cap
+- [x] Release-audit modules are split enough to lower the recursive module cap
       to 260 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type permanent reason and file/domain hotspot governance is
       measured, documented, and tied to permanent-versus-rewriteable boundary
       classifications.
-- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
 - [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the

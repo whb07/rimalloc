@@ -29,6 +29,7 @@ safe-process-info	test	tests/release_fast_path_audit.rs	Checks safe facade expos
 safe-stats	test	src/safe/tests.rs	Exercises StatsSnapshot capture, heap stats, JSON output, and buffer failure behavior.
 safe-stats	test	tests/stats_exports.rs	Exercises raw stats bin export bounds used by typed stats wrappers.
 typed-freelist	test	src/types/freelist/tests.rs	Exercises thread-free word owner/head packing and raw pointer reconstruction.
+provenance-miri-registry	test	tests/release_fast_path_audit.rs	Checks pointer/integer round trips stay behind typed provenance helpers and strict-type boundaries.
 typed-arena-test-fixtures	test	src/types/arena/tests.rs	Exercises stack-local arena metadata, slice-range bounds, and arena-role constructor fixtures.
 typed-callback-test-fixtures	test	src/types/callbacks/tests.rs	Exercises callback wrapper layout, raw argument preservation, and storage pointer round-trip fixtures.
 typed-freelist-test-fixtures	test	src/types/freelist/tests.rs	Exercises stack-local block metadata and raw link helper fixtures.

@@ -236,6 +236,10 @@ Operation IDs:
   non-null block pointers from packed thread-free words after masking the
   ownership bit. Miri provenance helpers retain the original pointer identity,
   and `BlockPtr` adds only the non-null wrapper invariant.
+- `SAFETY[AUDIT:provenance-miri-registry]`: `src/internal/provenance.rs`
+  permits the Miri-only provenance registry wrapper to cross `RwLock`
+  synchronization boundaries. The stored raw pointer values are lookup tokens
+  for later reconstruction and do not grant aliasing or lifetime permissions.
 - `SAFETY[AUDIT:typed-arena-test-fixtures]`: `src/types/arena/tests.rs`
   builds stack-local arena metadata to exercise slice-range and arena-role
   constructors. The fixtures do not register with allocator globals and are

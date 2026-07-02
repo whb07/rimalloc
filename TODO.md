@@ -12,7 +12,7 @@ mechanical file-level exceptions.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 54 entries: 44 production, 7 test,
+- `docs/unsafe-migration-allowlist.tsv` has 53 entries: 43 production, 7 test,
   and 3 translation files.
 - The smallest remaining allowlisted test fixtures are reviewable:
   `src/types/page_states/tests.rs` is 151 lines, and
@@ -21,10 +21,10 @@ Current review evidence:
   `src/types/memid/tests.rs` is 243 lines.
 - The smallest remaining allowlisted production files are also narrow:
   `src/types/padding.rs` is 143 lines,
-  `src/internal/provenance.rs` is 169 lines,
   `src/allocator/tracking.rs` is 185 lines,
   `src/internal/guarded.rs` is 244 lines, and
-  `src/types/callbacks.rs` is 255 lines.
+  `src/types/callbacks.rs` is 255 lines, and
+  `src/types/page.rs` is 258 lines.
 - `strict-type-allowlist.txt` has 94 entries; 5 are still marked `remove:`.
   The remaining broad `bare-domain-usize` allowances are for `alloc`,
   `aligned`, `bitmap`, `internal`, and `page`.
@@ -89,16 +89,21 @@ full tests.
 > reduces real production exception surface without refactoring hot allocator
 > behavior.
 
-- [ ] Review the smallest production candidates:
+- [x] Review the smallest production candidates:
       `src/types/padding.rs`, `src/internal/provenance.rs`,
       `src/allocator/tracking.rs`, `src/internal/guarded.rs`, and
       `src/types/callbacks.rs`.
-- [ ] Pick at least one low-risk file and replace file-level allowlisting with
+- [x] Pick at least one low-risk file and replace file-level allowlisting with
       operation-level `SAFETY[AUDIT:*]` markers.
-- [ ] Keep typed wrapper invariants private and do not widen public APIs.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`,
+- [x] Keep typed wrapper invariants private and do not widen public APIs.
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`,
       `docs/unsafe-migration-allowlist.tsv`, and generated inventory.
-- [ ] Lower `ALLOWLIST_ENTRY_CAP` again.
+- [x] Lower `ALLOWLIST_ENTRY_CAP` again.
+  - Evidence: `src/internal/provenance.rs` now uses
+    `SAFETY[AUDIT:provenance-miri-registry]` for the Miri-only raw pointer
+    registry wrapper `Send`/`Sync` impls. The file was removed from
+    `docs/unsafe-migration-allowlist.tsv`, and `ALLOWLIST_ENTRY_CAP` is now
+    53.
 
 Verify: unsafe audit scripts, focused unit tests for the migrated module,
 release audit, full clippy, and full tests.
@@ -168,7 +173,7 @@ full tests.
 ## Suggested implementation order
 
 1. [x] Migrate two small test fixtures off the unsafe migration allowlist.
-2. [ ] Migrate one small production file off the unsafe migration allowlist.
+2. [x] Migrate one small production file off the unsafe migration allowlist.
 3. [ ] Narrow or remove the page strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
 5. [ ] Split one more production helper boundary.
@@ -176,7 +181,7 @@ full tests.
 ## Definition of done for this backlog
 
 - [x] The unsafe migration allowlist is below 56 entries and the cap is lowered.
-- [ ] At least one production allowlisted file is covered by operation-level
+- [x] At least one production allowlisted file is covered by operation-level
       audit markers.
 - [ ] One strict-type broad `remove:` allowance is narrowed or eliminated.
 - [ ] The largest release-audit child module has more guard margin.

@@ -147,6 +147,19 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("pub unsafe extern \"C\" fn mi_free_small("),
         "free-path unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/aligned.rs\t"))
+            && alloc_aligned_rs
+                .matches("SAFETY[AUDIT:aligned-allocation-boundary]")
+                .count()
+                >= 150
+            && alloc_aligned_rs.contains("pub unsafe extern \"C\" fn mi_malloc_aligned")
+            && alloc_aligned_rs.contains("unsafe fn mi_theap_realloc_zero_aligned_at_req(")
+            && alloc_aligned_rs.contains("fn mi_padding_shrink_call("),
+        "aligned allocation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
 
     local_boundaries::assert_page_map_and_deferred_boundaries(local_boundaries::BoundarySources {
         page_map: &page_map,

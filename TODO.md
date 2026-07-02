@@ -14,8 +14,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 10 entries: 8 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 10.
+- `docs/unsafe-migration-allowlist.tsv` has 9 entries: 7 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 9.
 - The completed pass moved `src/types/constants.rs` to 8
   `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers while retaining 2
   `SAFETY[AUDIT:raw-auto-trait]` markers for sentinel `Sync` impls, moved
@@ -37,13 +37,17 @@ Current review evidence:
   environment lookup, C string handling, output/error callback state, recursion
   guards, diagnostic output, option raw exports, and assert abort shims, and is
   off the unsafe migration allowlist.
+- This pass also moved `src/allocator/aligned.rs` to 158
+  `SAFETY[AUDIT:aligned-allocation-boundary]` markers for alignment-sensitive
+  allocation, offset-aware layout adjustment, guarded and over-allocated paths,
+  padding shrink, usable-size checks, tracking hooks, aligned realloc, heap
+  borrowing, and raw aligned exports, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits,
   `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits, and
-  `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits.
-- The next allowlisted production files after those are
+  `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits,
   `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits,
-  `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits,
+  and `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits.
+- The next allowlisted production files after those are
   `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits,
   `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits, and
   `src/allocator/arena.rs` at 3,915 lines with 607 `unsafe` hits.
@@ -60,6 +64,7 @@ Current review evidence:
   `src/platform/windows.rs`, each with 4 path-wide entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
   `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
+  `SAFETY[AUDIT:aligned-allocation-boundary]` has 158 markers,
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
   `SAFETY[AUDIT:os-memory-boundary]` has 136 markers,
   `SAFETY[AUDIT:internal-atomic-facade]` has 103 markers,
@@ -78,7 +83,7 @@ Current review evidence:
   `SAFETY[AUDIT:ffi-libc-helpers]` has 50 markers, and
   `SAFETY[AUDIT:threadlocal-key-manager]` has 50 markers.
 - The release audit is still split but has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,433 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,462 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,146 lines,
   `tests/release_fast_path_audit.rs` is 1,899 lines, and
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines.
@@ -148,19 +153,19 @@ and full tests.
 > hot path, so migration needs explicit marker proof plus existing
 > no-allocation/performance evidence before removing the file allowance.
 
-- [ ] Add local `SAFETY[AUDIT:aligned-allocation-boundary]` markers for aligned
+- [x] Add local `SAFETY[AUDIT:aligned-allocation-boundary]` markers for aligned
       allocation entry points, offset and alignment validation, allocation-size
       rounding, guard-page and OS fallback paths, aligned realloc movement,
       usable-size queries, original pointer recovery, and raw aligned exports.
-- [ ] Preserve alignment and offset contracts, overflow handling, zero-size and
+- [x] Preserve alignment and offset contracts, overflow handling, zero-size and
       huge-size behavior, in-place realloc behavior, allocation ownership
       transfer, layout metadata reads/writes, error paths, and no dynamic
       dispatch on aligned allocation hot paths.
-- [ ] Add or extend release-audit assertions and focused tests for marker
+- [x] Add or extend release-audit assertions and focused tests for marker
       coverage, no migration allowlist entry, alignment/offset edge cases,
       realloc preservation, usable-size behavior, original pointer recovery,
       and benchmark or no-allocation hot-path evidence.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/allocator/aligned.rs` from the unsafe migration allowlist,
       regenerate unsafe inventory, and lower the cap.
 
@@ -226,7 +231,7 @@ audit scripts, unsafe inventory regeneration/check, full clippy, and full tests.
 
 1. [x] Migrate `src/allocator/free.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/allocator/options.rs` off the unsafe migration allowlist.
-3. [ ] Migrate `src/allocator/aligned.rs` off the unsafe migration allowlist.
+3. [x] Migrate `src/allocator/aligned.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/stats.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/raw/macros.rs` off the unsafe migration allowlist.
 

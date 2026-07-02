@@ -49,6 +49,10 @@ free-path-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Chec
 free-path-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation/free boundary cases for zero-size, realloc, calloc/product overflow, and freeable pointers.
 free-path-boundary	test	tests/no_allocation_critical_paths.rs	Checks allocator critical paths avoid routing through Rust's global allocator.
 free-path-boundary	script	scripts/check-unsafe-audit.py	Checks free-path unsafe operations retain operation-level SAFETY markers and source audit coverage.
+aligned-allocation-boundary	test	tests/aligned_exports.rs	Exercises global, heap, realloc, zeroed, calloc, usable-size, and typed aligned allocation exports.
+aligned-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises zero-size aligned allocation, alignment offsets, realloc preservation, and product overflow edges.
+aligned-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks aligned marker coverage, migration allowlist removal, padding-shrink shape, typed padded-size helpers, and hot-path boundary shape.
+aligned-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks aligned allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 options-callback-boundary	test	tests/options_exports.rs	Exercises option and callback exports, callback mutation, and raw unknown option handling.
 options-callback-boundary	test	src/allocator/options.rs	Exercises assertion abort behavior and local option callback boundary fixtures.
 options-callback-boundary	test	tests/release_fast_path_audit.rs	Checks options state uses internal locks, primitive stderr routing, callback storage, and no migration allowlist entry.

@@ -240,6 +240,15 @@ Operation IDs:
   publication, abandoned-page collect/reclaim/reabandon decisions, usable-size
   shims, and raw C ABI free exports while preserving allocator ownership and
   no-allocation hot-path constraints.
+- `SAFETY[AUDIT:aligned-allocation-boundary]`:
+  `src/allocator/aligned.rs` owns alignment-sensitive allocation, aligned
+  realloc, offset-aware layout adjustment, usable-size preservation,
+  over-allocation trimming, and original-allocation pointer recovery. Unsafe
+  operations are limited to padding-shrink assembly shims, thread-heap local
+  witnesses, guarded and aligned allocation calls, page/free-list inspection,
+  padding metadata updates, tracking hooks, realloc old-allocation validation,
+  heap borrowing, and raw C ABI aligned exports while preserving alignment,
+  offset, zeroing, usable-size, and hot-path dispatch constraints.
 - `SAFETY[AUDIT:options-callback-boundary]`: `src/allocator/options.rs` owns
   option descriptors, output/error callback state, recursion guards,
   environment parsing, diagnostic output, option raw exports, and assert abort

@@ -14,6 +14,8 @@ arena-heap-page-visitors	script	scripts/check-unsafe-audit.py	Checks heap page v
 arena-prefix-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena prefix accessors stay in src/allocator/arena/prefix.rs and preserve typed Bin, ArenaIndex, AtomicAbandonedCount, AtomicArenaPage, and AtomicPtrField routing.
 arena-prefix-accessors	script	scripts/check-unsafe-audit.py	Checks arena prefix accessor unsafe operations retain operation-level SAFETY markers and source audit coverage.
 typed-arena-domain	test	src/types/arena/tests.rs	Exercises slice-range bounds and shared, exclusive, and parent arena-role witness construction.
+typed-atomic-domain	test	src/types/atomic/tests.rs	Exercises atomic field wrappers, page/thread-free typed words, once guards, lock guards, refcounts, abandoned counts, and arena page atomics.
+typed-atomic-domain	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks atomic wrappers centralize raw Atomic* field casts, preserve typed page/thread-free domains, and keep strict-type enforcement pointed at src/types/atomic.rs.
 callback-wrappers	test	src/types/callbacks/tests.rs	Exercises callback wrapper layout, storage round trips, and local C ABI invoke fixtures.
 callback-wrappers	test	tests/release_fast_path_audit.rs	Checks raw callback typedefs stay at ABI edges while internals use typed callback wrappers and audit markers.
 callback-wrappers	test	tests/release_fast_path_audit/release_policy.rs	Checks callback invocation wrappers remain no-allocation and no-unwind C ABI boundaries.

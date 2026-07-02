@@ -573,6 +573,11 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
             && atomic_rs.contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T")
             && atomic_rs
                 .contains("pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder)")
+            && atomic_rs.contains("SAFETY[AUDIT:typed-atomic-domain]")
+            && atomic_rs
+                .matches("SAFETY[AUDIT:typed-atomic-domain]")
+                .count()
+                >= 50
             && strict_check_rs.contains("ALLOWED_ATOMIC_CAST = {")
             && strict_check_rs.contains("\"src/types/atomic.rs\"")
             && strict_check_rs.contains("kind=\"atomic-cast\"")

@@ -343,6 +343,13 @@ Operation IDs:
   limited to reading initialized arena metadata, constructing non-zero
   `SliceCount` values after checked bounds, and packaging shared, exclusive, or
   parent arena role proofs into transparent wrappers.
+- `SAFETY[AUDIT:typed-atomic-domain]`: `src/types/atomic.rs` owns typed
+  atomic field wrappers for allocator metadata. Unsafe operations are limited
+  to temporary `AtomicUsize`/`AtomicI64`/`AtomicPtr` views over caller-proven raw
+  fields, typed page thread-id and thread-free word RMW/CAS protocols,
+  abandoned-count and thread-heap refcount atomics, arena page-table pointer
+  atomics, once/guard/lock RAII boundaries, and lint-only non-dereferenced
+  identity fixtures.
 - `SAFETY[AUDIT:typed-arena-test-fixtures]`: `src/types/arena/tests.rs`
   builds stack-local arena metadata to exercise slice-range and arena-role
   constructors. The fixtures do not register with allocator globals and are

@@ -13,8 +13,8 @@ ABI behavior.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 28 entries: 25 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 28.
+- `docs/unsafe-migration-allowlist.tsv` has 27 entries: 24 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 27.
 - The completed pass moved `src/types/memid.rs`, `src/types/layout.rs`,
   `src/types/page_states.rs`, and `src/allocator/bench_diagnostics.rs` to local
   `SAFETY[AUDIT:*]` operation markers with evidence rows and no migration
@@ -45,8 +45,11 @@ Current review evidence:
   `SAFETY[AUDIT:ffi-abi-declarations]` marker for its raw C declaration block,
   preserves the existing C-header macro markers, and is off the unsafe
   migration allowlist.
-- `src/types/atomic.rs` remains the next typed-wrapper domain at 755 lines with
-  101 `unsafe` hits and 0 local markers.
+- `src/types/atomic.rs` now uses 51
+  `SAFETY[AUDIT:typed-atomic-domain]` markers for atomic field wrappers,
+  page thread-id/thread-free RMW/CAS, abandoned-count/refcount/arena page-table
+  atomics, once/guard/lock RAII, and the non-dereferenced lint fixture, and is
+  off the unsafe migration allowlist.
 - `strict-type-allowlist.txt` still has 75 path-wide entries with `symbol = *`,
   including 29 path-wide raw-pointer entries. `REMOVE_ENTRY_CAP` remains 0.
 - The largest strict-type path clusters remain broad enough to revisit later:
@@ -169,17 +172,17 @@ inventory regeneration/check, release audit, full clippy, and full tests.
 > words. It is larger than the other targets, but it is a Rust domain boundary
 > and should not depend on a blanket migration exception indefinitely.
 
-- [ ] Add local `SAFETY[AUDIT:typed-atomic-domain]` markers for atomic pointer
+- [x] Add local `SAFETY[AUDIT:typed-atomic-domain]` markers for atomic pointer
       field projection, abandoned-count/page-thread-id wrappers, thread-free
       head/owner transitions, once/lock guard construction, and release/acquire
       ownership handoffs.
-- [ ] Preserve documented atomic orderings from `ATOMIC_ORDERING_AUDIT.md`,
+- [x] Preserve documented atomic orderings from `ATOMIC_ORDERING_AUDIT.md`,
       transparent wrapper layout, no allocation, and no broader synchronization
       primitives on allocator hot paths.
-- [ ] Keep or extend the existing `src/types/atomic/tests.rs` and concurrency
+- [x] Keep or extend the existing `src/types/atomic/tests.rs` and concurrency
       model coverage for racing remote pushes, ownership claims, and collect
       behavior.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -193,16 +196,16 @@ regeneration/check, release audit, full clippy, and full tests.
 2. [x] Migrate `src/allocator/arena_meta.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/platform/wasi.rs` off the unsafe migration allowlist.
 4. [x] Migrate `src/platform/emscripten.rs` off the unsafe migration allowlist.
-5. [ ] Migrate `src/types/atomic.rs` off the unsafe migration allowlist.
+5. [x] Migrate `src/types/atomic.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
-- [ ] `src/ffi/abi.rs`, `src/allocator/arena_meta.rs`,
+- [x] The unsafe migration allowlist cap is lowered after each migrated file.
+- [x] `src/ffi/abi.rs`, `src/allocator/arena_meta.rs`,
       `src/platform/wasi.rs`, `src/platform/emscripten.rs`, and
       `src/types/atomic.rs` are covered by operation-level audit markers and
       evidence instead of file-level migration exceptions.
-- [ ] C ABI declaration shape, platform fallback behavior, atomic ordering, and
+- [x] C ABI declaration shape, platform fallback behavior, atomic ordering, and
       allocator hot-path performance constraints remain unchanged.
-- [ ] Release-audit TODO guards track the active backlog and measurable
+- [x] Release-audit TODO guards track the active backlog and measurable
       evidence.

@@ -5,6 +5,7 @@ const RELEASE_AUDIT_MODULES: &[&str] = &[
     "runtime_gates.rs",
     "todo_backlog.rs",
     "unsafe_performance.rs",
+    "unsafe_performance/bitmap_boundaries.rs",
     "unsafe_performance/lifecycle_boundaries.rs",
     "unsafe_performance/local_boundaries.rs",
     "unsafe_performance/tail_guards.rs",
@@ -60,7 +61,8 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`SAFETY[AUDIT:page-count-accessors]` with 22\n  markers",
         "SAFETY[AUDIT:owned-allocation]` with 17 markers",
         "`tests/release_fast_path_audit.rs` is 2,864 lines",
-        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,828 lines",
+        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,756 lines",
+        "`tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs` is\n  77 lines",
         "`tests/release_fast_path_audit/release_policy.rs` is 2,291 lines",
         "`tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`\n  is 700 lines",
     ];

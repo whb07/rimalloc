@@ -47,7 +47,9 @@ Current review evidence:
   `src/safe/allocation.rs`.
 - The release audit remains close to the module guard:
   `tests/release_fast_path_audit.rs` is 2,864 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,828 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,756 lines,
+  `tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs` is
+  77 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,291 lines,
   and `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
   is 700 lines.
@@ -139,18 +141,24 @@ full clippy, and full tests.
 
 ## Issue: Release fast-path audit has one large assertion module left
 
-> **Comment:** `unsafe_performance.rs` is still 2,828 lines and close to the
+> **Comment:** `unsafe_performance.rs` is still 2,756 lines and close to the
 > 3,000-line guard. Another cohesive assertion group should move into a child
 > module so new guards do not immediately fight the limit.
 
-- [ ] Inventory assertion clusters in
+- [x] Inventory assertion clusters in
       `tests/release_fast_path_audit/unsafe_performance.rs`.
-- [ ] Move one cohesive cluster into
+- [x] Move one cohesive cluster into
       `tests/release_fast_path_audit/unsafe_performance/`.
-- [ ] Keep source reads shared or pass borrowed source strings; do not duplicate
+- [x] Keep source reads shared or pass borrowed source strings; do not duplicate
       large file-loading blocks.
-- [ ] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
-- [ ] Preserve the release audit test count and coverage intent.
+- [x] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
+- [x] Preserve the release audit test count and coverage intent.
+  - Evidence: the bbitmap/bchunk helper boundary assertions moved to
+    `tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs`.
+    The parent module now passes the borrowed `bitmap_rs` source string instead
+    of duplicating source reads. `unsafe_performance.rs` dropped from 2,828 to
+    2,756 lines, the child module is 77 lines, and the release audit still runs
+    67 tests.
 
 Verify: `cargo test --test release_fast_path_audit --all-features`,
 `git diff --check`, full clippy, and full tests.
@@ -182,7 +190,7 @@ full tests.
 1. [x] Migrate two small test fixtures off the unsafe migration allowlist.
 2. [x] Migrate one small production file off the unsafe migration allowlist.
 3. [x] Narrow or remove the page strict-type `usize` allowance.
-4. [ ] Split one more release-audit assertion cluster.
+4. [x] Split one more release-audit assertion cluster.
 5. [ ] Split one more production helper boundary.
 
 ## Definition of done for this backlog
@@ -191,6 +199,6 @@ full tests.
 - [x] At least one production allowlisted file is covered by operation-level
       audit markers.
 - [x] One strict-type broad `remove:` allowance is narrowed or eliminated.
-- [ ] The largest release-audit child module has more guard margin.
+- [x] The largest release-audit child module has more guard margin.
 - [ ] One large production translation unit is smaller without API, ABI, or
       hot-path performance drift.

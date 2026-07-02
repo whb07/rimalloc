@@ -66,6 +66,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/page/deferred.rs");
     let page_flags_rs = fs::read_to_string(root.join("src/allocator/page/flags.rs"))
         .expect("read src/allocator/page/flags.rs");
+    let page_validation_rs = fs::read_to_string(root.join("src/allocator/page/validation.rs"))
+        .expect("read src/allocator/page/validation.rs");
     let random_rs = fs::read_to_string(root.join("src/internal/random.rs"))
         .expect("read src/internal/random.rs");
     let stats_rs = fs::read_to_string(root.join("src/allocator/stats.rs"))
@@ -1628,7 +1630,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("_mi_page_stats_bin(page)")
             && theap_rs.contains("_mi_page_free_collect(page, true)")
             && page_rs.contains("mod counts;")
+            && page_rs.contains("mod validation;")
             && page_counts_rs.contains("SAFETY[AUDIT:page-count-accessors]")
+            && page_validation_rs.contains("SAFETY[AUDIT:page-validation-helpers]")
+            && page_validation_rs.contains("pub unsafe fn mi_page_block_at(")
+            && page_validation_rs.contains("pub unsafe fn _mi_page_is_valid(")
+            && page_validation_rs.contains("pub(crate) unsafe fn mi_page_is_valid_init(")
+            && page_validation_rs.contains("mi_page_queue_contains(pq, cpage)")
             && page_counts_rs.contains("pub(crate) unsafe fn mi_page_used_count(")
             && page_counts_rs.contains("pub(crate) unsafe fn mi_page_capacity_count(")
             && page_counts_rs.contains("pub(super) unsafe fn mi_page_queue_block_size_raw(")

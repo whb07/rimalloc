@@ -11,6 +11,8 @@ page-count-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Ch
 page-count-accessors	script	scripts/check-strict-types.py	Checks split page count accessors remain covered by the existing page strict-type raw metadata boundary.
 page-flag-owner-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page flag, huge-page, full-queue, abandoned-page, and owner helpers preserve typed routing after the split.
 page-flag-owner-accessors	script	scripts/check-strict-types.py	Checks split page flag and owner helpers remain covered by the existing page strict-type raw metadata boundary.
+page-validation-helpers	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page validation helpers remain split and keep typed page/block validation routing.
+page-validation-helpers	script	scripts/check-strict-types.py	Checks split page validation helpers remain covered by the existing page strict-type raw metadata boundary.
 page-bin-size-classes	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks split bin/good-size helpers preserve C ABI wrappers, empty-theap table dependency, typed internal routing, and page.rs re-exports.
 page-bin-size-classes	script	scripts/check-ffi-boundary.py	Checks the moved mi_good_size export remains in a classified C ABI boundary file.
 page-bin-size-classes	script	scripts/check-strict-types.py	Checks split page bin helpers remain covered by the existing page strict-type raw size boundary.

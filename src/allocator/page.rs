@@ -14,8 +14,8 @@ use crate::arena::{
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::core_types::{
-    AvailableFreeList, BlockPtr, Errno, LocalFreeList, LocalPage, OwnedAbandonedPage, PageConstPtr,
-    PageKeys, PagePtr, PageQueuePtr, RemoteFreeList,
+    AvailableFreeList, BlockPtr, Errno, LocalFreeList, LocalPage, OwnedAbandonedPage, PageKeys,
+    PagePtr, PageQueuePtr, RemoteFreeList,
 };
 use crate::init::{_mi_page_empty, _mi_theap_empty_wrong};
 use crate::internal::{
@@ -23,11 +23,11 @@ use crate::internal::{
     _mi_os_good_alloc_size, _mi_os_page_size_typed, _mi_page_malloc_zero_typed, _mi_ptr_page,
     _mi_theap_heap, _mi_theap_random_next, _mi_wsize_from_size, MI_DEBUG, MI_SECURE, mi_block_next,
     mi_block_set_next, mi_direct_bin_from_size, mi_mem_is_zero, mi_page_all_free, mi_page_area,
-    mi_page_block_size, mi_page_committed_typed, mi_page_contains_address,
-    mi_page_has_interior_pointers, mi_page_immediate_available, mi_page_is_expandable,
-    mi_page_is_mostly_used, mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers,
-    mi_page_set_keys, mi_page_slice_offset_of, mi_page_slice_start, mi_page_start,
-    mi_page_thread_free, mi_page_usable_block_size, mi_theap_is_initialized,
+    mi_page_block_size, mi_page_committed_typed, mi_page_has_interior_pointers,
+    mi_page_immediate_available, mi_page_is_expandable, mi_page_is_mostly_used,
+    mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers, mi_page_set_keys,
+    mi_page_slice_offset_of, mi_page_slice_start, mi_page_start, mi_page_usable_block_size,
+    mi_theap_is_initialized,
 };
 use crate::options::{
     _mi_error_message_fmt, _mi_option_get_fast, mi_option_get_clamp, mi_option_t,
@@ -47,6 +47,7 @@ mod bins;
 mod counts;
 mod deferred;
 mod flags;
+mod validation;
 pub use bins::_mi_bin_size;
 pub(crate) use bins::{mi_bin_from_block_size, mi_bin_from_usable, mi_good_size_typed};
 use counts::{
@@ -67,6 +68,8 @@ pub use flags::{
     mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full,
     mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
 };
+pub(crate) use validation::mi_page_is_valid_init;
+pub use validation::{_mi_page_is_valid, mi_page_block_at};
 
 pub const MI_OS_PAGE_SIZE: usize = 4096;
 pub const MI_SMALL_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
@@ -156,159 +159,6 @@ unsafe fn mi_page_decrement_retire_expire(page: *mut mi_page_t) -> crate::core_t
         let expire = mi_page_retire_expire(page).decrement();
         mi_page_set_retire_expire(page, expire);
         expire
-    }
-}
-
-/// # Safety
-/// `page` must be valid, `page_start` must be that page's block area, and `i * block_size` must
-/// stay within the reserved block range.
-#[inline]
-pub unsafe fn mi_page_block_at(
-    page: *const mi_page_t,
-    page_start: *mut c_void,
-    block_size: usize,
-    i: usize,
-) -> *mut mi_block_t {
-    unsafe {
-        crate::internal::MI_UNUSED(&page);
-        crate::internal::mi_assert_internal!(!page.is_null());
-        crate::internal::mi_assert_internal!(i <= mi_page_reserved_count(page).as_usize());
-        page_start
-            .cast::<u8>()
-            .add(i * block_size)
-            .cast::<mi_block_t>()
-    }
-}
-
-/// # Safety
-/// `page` must be valid, and `head` must be null or a block list belonging to `page`.
-#[inline]
-pub(crate) unsafe fn mi_page_list_count(page: PagePtr, mut head: *mut mi_block_t) -> usize {
-    unsafe {
-        let page = page.as_ptr();
-        crate::internal::mi_assert_internal!(_mi_ptr_page((*page).page_start.cast()) == page);
-        let slice_start = mi_page_slice_start(page);
-        crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
-            slice_start.cast(),
-            MI_PAGE_ALIGN
-        ));
-        let mut count = 0usize;
-        while !head.is_null() {
-            crate::internal::mi_assert_internal!(
-                crate::core_types::ptr_addr_diff(head, slice_start) > MI_LARGE_PAGE_SIZE
-                    || page == _mi_ptr_page(head.cast())
-            );
-            count += 1;
-            head = mi_block_next(page, head);
-        }
-        count
-    }
-}
-
-/// # Safety
-/// `page` must be valid, and `p` must be null or a block list belonging to `page`.
-#[inline]
-pub(crate) unsafe fn mi_page_list_is_valid(page: PagePtr, mut p: *mut mi_block_t) -> bool {
-    unsafe {
-        let page_ptr = page;
-        let page = page_ptr.as_ptr();
-        let psize = page_ptr.byte_size();
-        let page_area = page_ptr.start().as_ptr().cast::<mi_block_t>();
-        let end = page_area.cast::<u8>().add(psize).cast::<mi_block_t>();
-        while !p.is_null() {
-            if p < page_area || p >= end {
-                return false;
-            }
-            p = mi_block_next(page, p);
-        }
-        if MI_DEBUG > 3 && (*page).free_is_zero {
-            let ubsize = mi_page_usable_block_size(page);
-            let mut block = (*page).free;
-            while !block.is_null() {
-                crate::internal::mi_assert_expensive!(mi_mem_is_zero(
-                    block.add(1).cast(),
-                    ubsize.get() - size_of::<mi_block_t>()
-                ));
-                block = mi_block_next(page, block);
-            }
-        }
-        true
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata initialized or being initialized by this allocator.
-#[inline]
-pub(crate) unsafe fn mi_page_is_valid_init(page: PagePtr) -> bool {
-    unsafe {
-        let page_ptr = page;
-        let page = page.as_ptr();
-        crate::internal::mi_assert_internal!(mi_page_block_size(page) > 0);
-        let used = mi_page_used_count(page);
-        let capacity = mi_page_capacity_count(page);
-        let reserved = mi_page_reserved_count(page);
-        crate::internal::mi_assert_internal!(used.get() <= capacity.get());
-        crate::internal::mi_assert_internal!(capacity.get() <= reserved.get());
-        crate::internal::mi_assert_internal!(mi_page_list_is_valid(page_ptr, (*page).free));
-        crate::internal::mi_assert_internal!(mi_page_list_is_valid(page_ptr, (*page).local_free));
-
-        if MI_DEBUG > 3 && (*page).free_is_zero {
-            let ubsize = mi_page_usable_block_size(page);
-            let mut block = (*page).free;
-            while !block.is_null() {
-                crate::internal::mi_assert_expensive!(mi_mem_is_zero(
-                    block.add(1).cast(),
-                    ubsize.get() - size_of::<mi_block_t>()
-                ));
-                block = mi_block_next(page, block);
-            }
-        }
-
-        if MI_TRACK_ENABLED == 0 {
-            let tfree = mi_page_thread_free(page);
-            crate::internal::mi_assert_internal!(mi_page_list_is_valid(page_ptr, tfree));
-        }
-
-        let free_count = mi_page_list_count(page_ptr, (*page).free)
-            + mi_page_list_count(page_ptr, (*page).local_free);
-        crate::internal::mi_assert_internal!(
-            mi_page_used_count(page).as_usize() + free_count == capacity.as_usize()
-        );
-        true
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
-    unsafe {
-        let page_ptr = PagePtr::new_unchecked(page);
-        let page_const = PageConstPtr::new_unchecked(page);
-        let cpage = page_const.as_ptr();
-
-        crate::internal::mi_assert_internal!(mi_page_is_valid_init(page_ptr));
-        #[cfg(any(
-            feature = "secure",
-            debug_assertions,
-            feature = "track-valgrind",
-            feature = "track-asan"
-        ))]
-        if MI_SECURE != 0 {
-            let page = page_ptr.as_ptr();
-            crate::internal::mi_assert_internal!((*page).keys[0] != 0);
-        }
-        if !mi_page_is_abandoned(cpage) {
-            let pq = mi_page_queue_of(cpage);
-            crate::internal::mi_assert_internal!(mi_page_queue_contains(pq, cpage));
-            crate::internal::mi_assert_internal!(
-                mi_page_queue_block_size_raw(pq) == mi_page_block_size(cpage)
-                    || mi_page_is_huge(cpage)
-                    || mi_page_is_in_full(cpage)
-            );
-            crate::internal::mi_assert_internal!(mi_page_contains_address(cpage, cpage.cast()));
-        }
-        true
     }
 }
 

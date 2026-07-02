@@ -110,6 +110,9 @@ Per-file review:
 - `src/allocator/page/flags.rs`: page flag, full-queue, huge-page,
   abandoned-page, and thread-heap owner helpers route raw page metadata through
   typed page, flag, memid, and atomic owner wrappers.
+- `src/allocator/page/validation.rs`: page validation and block lookup helpers
+  route raw page/block metadata through typed page witnesses before checking
+  capacity, free-list, queue-membership, and ownership invariants.
 - `src/allocator/page/bins.rs`: size-class and good-size helpers preserve the
   C bin ABI wrappers while routing internal callers through typed `Bin` and
   `GoodSize` domains.
@@ -236,6 +239,12 @@ Operation IDs:
   page metadata, and the helpers route raw fields through `PagePtr`,
   `PageFlags`, `MemId`, `AtomicPageThreadId`, and typed owner witnesses before
   reading or publishing page owner state.
+- `SAFETY[AUDIT:page-validation-helpers]`:
+  `src/allocator/page/validation.rs` centralizes page block lookup,
+  free-list counting, free-list bounds checks, initialized-page validation, and
+  owner queue membership checks. Callers supply allocator-owned page metadata,
+  and the helpers wrap raw page pointers in typed witnesses before checking
+  page/block list invariants.
 - `SAFETY[AUDIT:page-bin-size-classes]`: `src/allocator/page/bins.rs`
   centralizes the bin/good-size table boundary, bounds unchecked `Bin`
   construction by `MI_BIN_COUNT`, and preserves the exported `mi_good_size`

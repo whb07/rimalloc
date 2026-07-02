@@ -33,7 +33,7 @@ Current review evidence:
   `REMOVE_ENTRY_CAP` is 2.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 4,628 lines,
-  `src/allocator/page.rs` is 2,951 lines,
+  `src/allocator/page.rs` is 2,801 lines,
   `src/allocator/alloc.rs` is 2,545 lines,
   `src/internal/bitmap.rs` is 2,358 lines,
   `src/allocator/init.rs` is 2,339 lines,
@@ -41,7 +41,8 @@ Current review evidence:
   `src/platform/windows.rs` is 2,191 lines.
 - Recent helper splits now have bounded review units:
   `src/internal/bitmap/bfield.rs` is 271 lines and
-  `src/allocator/page/flags.rs` is 181 lines.
+  `src/allocator/page/flags.rs` is 202 lines, and
+  `src/allocator/page/validation.rs` is 184 lines.
 - The largest unsafe audit marker clusters are still broad:
   `SAFETY[AUDIT:arena-debug-render]` has 35 markers,
   `SAFETY[AUDIT:owned-allocation]` has 32 markers,
@@ -176,17 +177,23 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 > The next split should move one cohesive helper cluster with narrow imports and
 > explicit re-exports only for current callers.
 
-- [ ] Re-scan `src/allocator/arena.rs`, `src/allocator/page.rs`,
+- [x] Re-scan `src/allocator/arena.rs`, `src/allocator/page.rs`,
       `src/allocator/alloc.rs`, `src/internal/bitmap.rs`, and
       `src/allocator/init.rs` for low-risk helper clusters.
-- [ ] Prefer non-hot, already-audited, or pure helper groups with narrow
+- [x] Prefer non-hot, already-audited, or pure helper groups with narrow
       imports.
-- [ ] Move the group into an existing or new submodule with explicit
+- [x] Move the group into an existing or new submodule with explicit
       re-exports only for current callers.
-- [ ] Update source-path assertions, strict-type aliases, no-allocation audit
+- [x] Update source-path assertions, strict-type aliases, no-allocation audit
       coverage, unsafe audit evidence, and generated unsafe inventory as needed.
-- [ ] Preserve C ABI symbols, public Rust facade shape, and benchmark-critical
+- [x] Preserve C ABI symbols, public Rust facade shape, and benchmark-critical
       inline behavior.
+  - Evidence: page validation helpers moved from `src/allocator/page.rs` into
+    `src/allocator/page/validation.rs`, including `mi_page_block_at`,
+    free-list validation, initialized-page validation, and `_mi_page_is_valid`.
+    `page.rs` re-exports the existing helper names, the strict-type path alias
+    now covers `src/allocator/page/validation.rs`, and release-audit coverage
+    checks `SAFETY[AUDIT:page-validation-helpers]`.
 
 Verify: focused module tests, `scripts/check-ffi-boundary.py`,
 `scripts/check-api-inventory.py`, `scripts/check-public-abi.py`,
@@ -199,7 +206,7 @@ full tests.
 2. [x] Migrate one small production file off the unsafe migration allowlist.
 3. [x] Narrow one remaining broad strict-type `usize` allowance.
 4. [x] Split one more release-audit assertion cluster.
-5. [ ] Split one more production helper boundary.
+5. [x] Split one more production helper boundary.
 
 ## Definition of done for this backlog
 
@@ -209,5 +216,5 @@ full tests.
 - [x] One remaining broad strict-type `remove:` allowance is narrowed or
       eliminated.
 - [x] One release-audit module has more guard margin.
-- [ ] One large production translation unit is smaller without API, ABI, or
+- [x] One large production translation unit is smaller without API, ABI, or
       hot-path performance drift.

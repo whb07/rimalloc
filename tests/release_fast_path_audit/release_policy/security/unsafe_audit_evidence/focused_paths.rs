@@ -1,6 +1,6 @@
 pub(super) fn assert_focused_evidence_paths(evidence: &str) {
     const ALLOCATION_FREE_FOCUSED_PATH: &str =
-        "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs";
+        "tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs";
     let assert_focused_evidence = |audit_id: &str, focused_path: &str| {
         let row_prefix = format!("{audit_id}\ttest\t{focused_path}\t");
         assert!(
@@ -31,6 +31,18 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         "allocation-calloc-dispatch-boundary",
         "allocation-layout-request-boundary",
         "allocation-page-refill-boundary",
+        "page-free-list-refill-boundary",
+        "page-queue-full-transition-boundary",
+        "page-queue-free-release-boundary",
+        "page-queue-retire-boundary",
+        "page-queue-abandon-boundary",
+        "page-queue-reclaim-boundary",
+        "page-queue-validation-boundary",
+        "page-queue-direct-cache-boundary",
+        "page-queue-link-mutation-boundary",
+        "page-queue-append-boundary",
+        "page-huge-allocation-boundary",
+        "page-stats-public-boundary",
         "free-raw-export-boundary",
         "free-validation-boundary",
         "free-padding-boundary",
@@ -60,7 +72,13 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
     const PAGE_ARENA_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs";
     const OS_MEMORY_FOCUSED_PATH: &str =
-        "tests/release_fast_path_audit/unsafe_performance/os_memory.rs";
+        "tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs";
+    const UNIX_PRIMITIVE_FOCUSED_PATH: &str =
+        "tests/release_fast_path_audit/unsafe_performance/os_memory/platform_helpers.rs";
+    const WINDOWS_PRIMITIVE_FOCUSED_PATH: &str =
+        "tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs";
+    const WASI_PRIMITIVE_FOCUSED_PATH: &str = "tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs";
+    const EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH: &str = "tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs";
     const RAW_CXX_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs";
     for audit_id in [
@@ -110,7 +128,7 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
     ] {
         assert_focused_evidence(
             audit_id,
-            "tests/release_fast_path_audit/interposition_exports.rs",
+            "tests/release_fast_path_audit/interposition_exports/linux_override.rs",
         );
     }
     for audit_id in [
@@ -158,6 +176,61 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         ("os-memory-public-export-boundary", OS_MEMORY_FOCUSED_PATH),
         ("os-memory-huge-page-boundary", OS_MEMORY_FOCUSED_PATH),
         ("os-memory-numa-boundary", OS_MEMORY_FOCUSED_PATH),
+        ("unix-ffi-import-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
+        ("unix-mmap-syscall-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
+        ("unix-process-info-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
+        ("unix-random-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
+        ("unix-thread-tls-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
+        ("unix-huge-page-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
+        ("unix-numa-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
+        (
+            "windows-virtual-memory-boundary",
+            WINDOWS_PRIMITIVE_FOCUSED_PATH,
+        ),
+        (
+            "windows-process-info-boundary",
+            WINDOWS_PRIMITIVE_FOCUSED_PATH,
+        ),
+        (
+            "windows-output-env-boundary",
+            WINDOWS_PRIMITIVE_FOCUSED_PATH,
+        ),
+        ("windows-tls-fls-boundary", WINDOWS_PRIMITIVE_FOCUSED_PATH),
+        (
+            "windows-large-page-boundary",
+            WINDOWS_PRIMITIVE_FOCUSED_PATH,
+        ),
+        ("windows-numa-boundary", WINDOWS_PRIMITIVE_FOCUSED_PATH),
+        ("windows-etw-boundary", WINDOWS_PRIMITIVE_FOCUSED_PATH),
+        ("windows-random-boundary", WINDOWS_PRIMITIVE_FOCUSED_PATH),
+        (
+            "windows-dynamic-import-boundary",
+            WINDOWS_PRIMITIVE_FOCUSED_PATH,
+        ),
+        ("wasi-memory-growth-boundary", WASI_PRIMITIVE_FOCUSED_PATH),
+        ("wasi-range-primitive-boundary", WASI_PRIMITIVE_FOCUSED_PATH),
+        ("wasi-io-query-boundary", WASI_PRIMITIVE_FOCUSED_PATH),
+        ("wasi-thread-shim-boundary", WASI_PRIMITIVE_FOCUSED_PATH),
+        (
+            "emscripten-import-boundary",
+            EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH,
+        ),
+        (
+            "emscripten-memory-boundary",
+            EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH,
+        ),
+        (
+            "emscripten-clock-io-boundary",
+            EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH,
+        ),
+        (
+            "emscripten-pthread-key-boundary",
+            EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH,
+        ),
+        (
+            "emscripten-thread-shim-boundary",
+            EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH,
+        ),
         (
             "stats-counter-boundary",
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",

@@ -1,7 +1,7 @@
 audit_id	type	path	detail
 c-header-macro-reentry	script	scripts/check-ffi-boundary.py	Checks C header macro boundary files retain the required audit tags.
 c-header-macro-reentry	test	tests/header_macro_expansion.rs	Exercises downstream C header macro expansion and feature gating.
-ffi-abi-declarations	test	tests/release_fast_path_audit/release_policy.rs	Checks src/ffi/abi.rs owns raw C header declarations and keeps upstream nullable raw pointer shape.
+ffi-abi-declarations	test	tests/release_fast_path_audit/release_policy/api_surface/abi_boundaries.rs	Checks src/ffi/abi.rs owns raw C header declarations and keeps upstream nullable raw pointer shape.
 ffi-libc-string-boundary	test	src/ffi/libc.rs	Exercises null, truncating, bounded scan, substring, and C-string copy/concat behavior for libc-like string helpers.
 ffi-libc-string-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks libc string helper markers stay split and off the unsafe migration allowlist.
 ffi-libc-env-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks environment lookup forwarding stays covered by focused libc helper markers.
@@ -23,10 +23,10 @@ arena-debug-chunk-render-boundary	script	scripts/check-unsafe-audit.py	Checks ar
 arena-debug-registry-walk-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior/arena_helpers.rs	Checks arena diagnostics walk subproc arena registries through typed index markers.
 arena-debug-registry-walk-boundary	script	scripts/check-ffi-boundary.py	Checks moved arena diagnostic C exports remain in a classified ABI boundary file.
 arena-debug-registry-walk-boundary	script	scripts/check-unsafe-audit.py	Checks arena debug registry-walk unsafe operations retain operation-level SAFETY markers and source audit coverage.
-arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena metadata allocation shims, typed MetaMem memid construction, and no raw meta memid field poking.
+arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs	Checks arena metadata allocation shims, typed MetaMem memid construction, and no raw meta memid field poking.
 arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks meta-page debug classification keeps the C-shaped helper boundary and published stack traversal.
 bench-diagnostics-ffi	test	src/allocator/bench_diagnostics.rs	Exercises reset, null snapshot rejection, snapshot copying, JSON size queries, zero-length buffers, truncation, and NUL termination.
-arena-id-memid-helpers	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena id and memid helpers stay in src/allocator/arena/ids.rs while preserving raw C ABI shims, typed MemIdView routing, and arena call sites.
+arena-id-memid-helpers	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs	Checks arena id and memid helpers stay in src/allocator/arena/ids.rs while preserving raw C ABI shims, typed MemIdView routing, and arena call sites.
 arena-id-memid-helpers	script	scripts/check-unsafe-audit.py	Checks arena id and memid unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-heap-visit-callback-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap page visit callback marker coverage, raw slice-index adaptation, and typed page lookup state.
 arena-heap-visit-callback-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap visit callback unsafe operations retain operation-level SAFETY markers and source audit coverage.
@@ -46,7 +46,7 @@ arena-heap-move-boundary	test	tests/release_fast_path_audit/unsafe_performance/h
 arena-heap-move-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap move unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-heap-destroy-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks non-main heap page destruction C ABI shims and owned heap destruction handoff.
 arena-heap-destroy-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap destroy unsafe operations retain operation-level SAFETY markers and source audit coverage.
-arena-prefix-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena prefix accessors stay in src/allocator/arena/prefix.rs and preserve typed Bin, ArenaIndex, AtomicAbandonedCount, AtomicArenaPage, and AtomicPtrField routing.
+arena-prefix-accessors	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior/purge_clock_atomic.rs	Checks arena prefix accessors stay in src/allocator/arena/prefix.rs and preserve typed Bin, ArenaIndex, AtomicAbandonedCount, AtomicArenaPage, and AtomicPtrField routing.
 arena-prefix-accessors	script	scripts/check-unsafe-audit.py	Checks arena prefix accessor unsafe operations retain operation-level SAFETY markers and source audit coverage.
 typed-arena-domain	test	src/types/arena/tests.rs	Exercises slice-range bounds and shared, exclusive, and parent arena-role witness construction.
 typed-atomic-usize-field	test	src/types/atomic/tests.rs	Exercises AtomicUsizeField load, store, arithmetic, bit, and CAS wrappers.
@@ -68,198 +68,198 @@ typed-atomic-arena-page	test	tests/release_fast_path_audit/datatype_acceptance/s
 typed-atomic-guard-once-lock	test	src/types/atomic/tests.rs	Exercises atomic guard, once guard, and mimalloc lock guard RAII wrappers.
 typed-atomic-guard-once-lock	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks guard, once, and lock markers stay split from scalar/pointer atomic field wrappers.
 callback-wrappers	test	src/types/callbacks/tests.rs	Exercises callback wrapper layout, storage round trips, and local C ABI invoke fixtures.
-callback-wrappers	test	tests/release_fast_path_audit.rs	Checks raw callback typedefs stay at ABI edges while internals use typed callback wrappers and audit markers.
-callback-wrappers	test	tests/release_fast_path_audit/release_policy.rs	Checks callback invocation wrappers remain no-allocation and no-unwind C ABI boundaries.
-deferred-free-callback-state	test	tests/release_fast_path_audit/release_policy.rs	Checks deferred-free callback registration and dispatch stay no-allocation/no-unwind C ABI boundaries.
-deferred-free-callback-state	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks deferred-free callback dispatch preserves acquire/release publication, heartbeat, and reentry guard structure.
+callback-wrappers	test	tests/release_fast_path_audit/datatype_acceptance/callbacks.rs	Checks raw callback typedefs stay at ABI edges while internals use typed callback wrappers and audit markers.
+callback-wrappers	test	tests/release_fast_path_audit/release_policy/callbacks.rs	Checks callback invocation wrappers remain no-allocation and no-unwind C ABI boundaries.
+deferred-free-callback-state	test	tests/release_fast_path_audit/release_policy/callbacks.rs	Checks deferred-free callback registration and dispatch stay no-allocation/no-unwind C ABI boundaries.
+deferred-free-callback-state	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks deferred-free callback dispatch preserves acquire/release publication, heartbeat, and reentry guard structure.
 deferred-free-callback-state	script	scripts/check-ffi-boundary.py	Checks deferred-free registration remains in a classified C ABI boundary file.
 guarded-config	test	src/internal/guarded/tests.rs	Exercises guarded configuration clamping, inverted bounds rejection, sampling decisions, and typed field accessors.
-page-count-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page queue/count helpers preserve typed counter routing and page queue boundary assertions after the split.
+page-count-accessors	test	tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs	Checks page queue/count helpers preserve typed counter routing and page queue boundary assertions after the split.
 page-count-accessors	script	scripts/check-strict-types.py	Checks split page count accessors remain covered by the existing page strict-type raw metadata boundary.
-page-flag-owner-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page flag, huge-page, full-queue, abandoned-page, and owner helpers preserve typed routing after the split.
+page-flag-owner-accessors	test	tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs	Checks page flag, huge-page, full-queue, abandoned-page, and owner helpers preserve typed routing after the split.
 page-flag-owner-accessors	script	scripts/check-strict-types.py	Checks split page flag and owner helpers remain covered by the existing page strict-type raw metadata boundary.
-page-validation-helpers	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page validation helpers remain split and keep typed page/block validation routing.
+page-validation-helpers	test	tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs	Checks page validation helpers remain split and keep typed page/block validation routing.
 page-validation-helpers	script	scripts/check-strict-types.py	Checks split page validation helpers remain covered by the existing page strict-type raw metadata boundary.
-page-bin-size-classes	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks split bin/good-size helpers preserve C ABI wrappers, empty-theap table dependency, typed internal routing, and page.rs re-exports.
+page-bin-size-classes	test	tests/release_fast_path_audit/unsafe_performance/size_class_boundaries.rs	Checks split bin/good-size helpers preserve C ABI wrappers, empty-theap table dependency, typed internal routing, and page.rs re-exports.
 page-bin-size-classes	script	scripts/check-ffi-boundary.py	Checks the moved mi_good_size export remains in a classified C ABI boundary file.
 page-bin-size-classes	script	scripts/check-strict-types.py	Checks split page bin helpers remain covered by the existing page strict-type raw size boundary.
 global-alloc	test	tests/mimalloc_global_alloc.rs	Exercises GlobalAlloc alignment, reallocation preservation, and facade traits.
 global-alloc	test	tests/mimalloc_global_allocator_std.rs	Exercises MiMalloc as the process global allocator under std.
 heap-thread-association-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching and routed heap thread-heap lookup paths.
-heap-thread-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks heap thread-association marker coverage and lazy per-heap thread-heap initialization shape.
-heap-configuration-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks heap NUMA configuration marker coverage and nullable heap routing shape.
+heap-thread-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks heap thread-association marker coverage and lazy per-heap thread-heap initialization shape.
+heap-configuration-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks heap NUMA configuration marker coverage and nullable heap routing shape.
 heap-stats-merge-boundary	test	tests/lifecycle_stats_exports.rs	Exercises heap stats merge into the main heap and lifecycle stats exports.
-heap-stats-merge-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks heap stats merge marker coverage and borrowed heap witness routing.
+heap-stats-merge-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks heap stats merge marker coverage and borrowed heap witness routing.
 heap-creation-boundary	test	tests/no_allocation_critical_paths.rs	Checks heap creation critical paths do not route through Rust's global allocator.
-heap-creation-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks heap creation marker coverage, subproc registration, and TLS slot creation.
-heap-nonmain-cleanup-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks non-main heap cleanup marker coverage, owned thread-heap cleanup, list unlink, and metadata free shape.
-heap-nonmain-lifecycle-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks heap delete/destroy helpers retain typed owned-heap witnesses and main-heap rejection.
-heap-nonmain-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks non-main heap delete/destroy marker coverage and page move/destroy handoff shape.
-heap-main-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks main heap force-destroy marker coverage and static main-heap ownership preservation.
+heap-creation-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks heap creation marker coverage, subproc registration, and TLS slot creation.
+heap-nonmain-cleanup-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks non-main heap cleanup marker coverage, owned thread-heap cleanup, list unlink, and metadata free shape.
+heap-nonmain-lifecycle-boundary	test	tests/release_fast_path_audit/datatype_acceptance/heap_lifecycle.rs	Checks heap delete/destroy helpers retain typed owned-heap witnesses and main-heap rejection.
+heap-nonmain-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks non-main heap delete/destroy marker coverage and page move/destroy handoff shape.
+heap-main-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks main heap force-destroy marker coverage and static main-heap ownership preservation.
 heap-ownership-query-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw heap ownership and contains/check-owned exports.
-heap-ownership-query-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks ownership query helpers retain typed borrowed/owned heap witnesses.
+heap-ownership-query-boundary	test	tests/release_fast_path_audit/datatype_acceptance/heap_lifecycle.rs	Checks ownership query helpers retain typed borrowed/owned heap witnesses.
 heap-underutilized-boundary	test	tests/lifecycle_stats_exports.rs	Exercises under-utilized page null handling and heap ownership filtering.
-heap-underutilized-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks under-utilized page inspection marker coverage and typed page counter reads.
-thread-heap-visit-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap visitation marker coverage, callback argument handling, and area/block visitor helper shape.
+heap-underutilized-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks under-utilized page inspection marker coverage and typed page counter reads.
+thread-heap-visit-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap visitation marker coverage, callback argument handling, and area/block visitor helper shape.
 thread-heap-collect-boundary	test	tests/lifecycle_stats_exports.rs	Exercises thread-heap collection and lifecycle stats export paths.
-thread-heap-collect-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap collection marker coverage, page collect routing, and stats merge handoff.
+thread-heap-collect-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap collection marker coverage, page collect routing, and stats merge handoff.
 thread-heap-default-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw default thread-heap switching.
-thread-heap-default-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks default thread-heap marker coverage and initialized TLS ownership shape.
-thread-heap-create-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap init/create marker coverage, metadata allocation, random initialization, and heap/TLD list linking.
-thread-heap-random-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap random marker coverage and typed local thread-heap access.
-thread-heap-refcount-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap refcount marker coverage, memid classification, and backing metadata release.
-thread-heap-delete-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap free/delete marker coverage, list unlink, page abandon, and final decref handoff.
+thread-heap-default-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks default thread-heap marker coverage and initialized TLS ownership shape.
+thread-heap-create-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap init/create marker coverage, metadata allocation, random initialization, and heap/TLD list linking.
+thread-heap-random-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap random marker coverage and typed local thread-heap access.
+thread-heap-refcount-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap refcount marker coverage, memid classification, and backing metadata release.
+thread-heap-delete-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap free/delete marker coverage, list unlink, page abandon, and final decref handoff.
 thread-heap-delete-boundary	script	scripts/check-unsafe-audit.py	Checks split thread-heap unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-identity-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc ID mapping, current/main subproc lookup, typed subproc wrappers, and raw default thread-heap inspection shape.
+init-subproc-identity-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks subproc ID mapping, current/main subproc lookup, typed subproc wrappers, and raw default thread-heap inspection shape.
 init-subproc-identity-boundary	script	scripts/check-unsafe-audit.py	Checks subproc identity unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-main-subproc-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks main subproc address resolution, hidden local subproc symbol use, static main heap/subproc publication, and one-time main init shape.
+init-main-subproc-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks main subproc address resolution, hidden local subproc symbol use, static main heap/subproc publication, and one-time main init shape.
 init-main-subproc-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks main subproc lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-registry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc creation, destruction, lock-protected list mutation, registry teardown, metadata cleanup, and arena/page-map handoff shape.
+init-subproc-registry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks subproc creation, destruction, lock-protected list mutation, registry teardown, metadata cleanup, and arena/page-map handoff shape.
 init-subproc-registry-boundary	script	scripts/check-unsafe-audit.py	Checks subproc registry unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-prefix-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc prefix projection stays behind typed subproc pointer witnesses.
+init-subproc-prefix-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks subproc prefix projection stays behind typed subproc pointer witnesses.
 init-subproc-prefix-boundary	script	scripts/check-unsafe-audit.py	Checks subproc prefix unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-main-heap-load-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc main-heap lookup and heap-to-subproc prefix loads.
+init-subproc-main-heap-load-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks subproc main-heap lookup and heap-to-subproc prefix loads.
 init-subproc-main-heap-load-boundary	script	scripts/check-unsafe-audit.py	Checks subproc main-heap load unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-main-heap-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks `_mi_subproc_heap_main` export shape, typed fallback, and lazy main heap initialization.
+init-subproc-main-heap-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks `_mi_subproc_heap_main` export shape, typed fallback, and lazy main heap initialization.
 init-subproc-main-heap-export-boundary	script	scripts/check-unsafe-audit.py	Checks subproc main-heap export unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-current-main-heap-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks current main-heap lookup, raw default-thread inspection, and subproc selection.
+init-subproc-current-main-heap-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks current main-heap lookup, raw default-thread inspection, and subproc selection.
 init-subproc-current-main-heap-boundary	script	scripts/check-unsafe-audit.py	Checks current main-heap lookup unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-main-heap-predicate-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks heap and thread-heap main predicates use inline subproc main-heap loads.
+init-subproc-main-heap-predicate-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks heap and thread-heap main predicates use inline subproc main-heap loads.
 init-subproc-main-heap-predicate-boundary	script	scripts/check-unsafe-audit.py	Checks subproc main-heap predicate unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-heap-visit-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc heap visitation locks heap lists and invokes typed callbacks.
+init-subproc-heap-visit-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks subproc heap visitation locks heap lists and invokes typed callbacks.
 init-subproc-heap-visit-boundary	script	scripts/check-unsafe-audit.py	Checks subproc heap visitor unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-stats-count-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc stats header initialization, thread sequence/count updates, and stats merge into the main subproc.
+init-subproc-stats-count-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks subproc stats header initialization, thread sequence/count updates, and stats merge into the main subproc.
 init-subproc-stats-count-boundary	script	scripts/check-unsafe-audit.py	Checks subproc stats/count unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-process-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks process marker coverage, process init/done helper shape, preloading gates, allocator init/done callbacks, and teardown ordering.
+init-process-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks process marker coverage, process init/done helper shape, preloading gates, allocator init/done callbacks, and teardown ordering.
 init-process-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks preloading state transitions, process init routing, and CPU feature setup order.
 init-process-boundary	test	src/allocator/init.rs	Exercises large-page process initialization.
 init-process-boundary	script	scripts/check-unsafe-audit.py	Checks process init unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-identity-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks current-thread identity marker coverage and main-thread lifecycle predicates.
+init-thread-identity-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks current-thread identity marker coverage and main-thread lifecycle predicates.
 init-thread-identity-boundary	script	scripts/check-unsafe-audit.py	Checks thread identity unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-done-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-done entry marker coverage and default thread-heap fallback resolution shape.
+init-thread-done-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks thread-done entry marker coverage and default thread-heap fallback resolution shape.
 init-thread-done-entry-boundary	script	scripts/check-unsafe-audit.py	Checks thread-done entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-done-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks typed thread-done dispatch, local thread ownership, stat update, and cleanup handoff shape.
+init-thread-done-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks typed thread-done dispatch, local thread ownership, stat update, and cleanup handoff shape.
 init-thread-done-dispatch-boundary	script	scripts/check-unsafe-audit.py	Checks thread-done dispatch unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-init-default-heap-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks default thread-heap initialization marker coverage for main and non-main thread entry.
+init-thread-init-default-heap-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks default thread-heap initialization marker coverage for main and non-main thread entry.
 init-thread-init-default-heap-boundary	script	scripts/check-unsafe-audit.py	Checks thread init default-heap unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-done-cleanup-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-local heap cleanup, abandon/free loops, cleanup wait, and TLS reset marker coverage.
+init-thread-done-cleanup-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks thread-local heap cleanup, abandon/free loops, cleanup wait, and TLS reset marker coverage.
 init-thread-done-cleanup-boundary	script	scripts/check-unsafe-audit.py	Checks thread-done cleanup unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-init-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks public thread init entry, process init dependency, initialized checks, and stat increase shape.
+init-thread-init-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks public thread init entry, process init dependency, initialized checks, and stat increase shape.
 init-thread-init-entry-boundary	script	scripts/check-unsafe-audit.py	Checks thread init entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-heap-empty-sentinel-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks empty thread-heap sentinel marker coverage and hidden local symbol exposure.
+init-thread-heap-empty-sentinel-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks empty thread-heap sentinel marker coverage and hidden local symbol exposure.
 init-thread-heap-empty-sentinel-boundary	script	scripts/check-unsafe-audit.py	Checks empty thread-heap sentinel unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-heap-main-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks main thread-heap TLS marker coverage, Linux initial-exec accessors, and C TLS shim routing.
+init-thread-heap-main-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks main thread-heap TLS marker coverage, Linux initial-exec accessors, and C TLS shim routing.
 init-thread-heap-main-tls-boundary	script	scripts/check-unsafe-audit.py	Checks main thread-heap TLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-heap-main-static-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks static main thread-heap metadata initialization marker coverage.
+init-thread-heap-main-static-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks static main thread-heap metadata initialization marker coverage.
 init-thread-heap-main-static-boundary	script	scripts/check-unsafe-audit.py	Checks static main thread-heap unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-default-heap-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks default thread-heap association, local ownership, TLD setup, and TLS synchronization shape.
+init-thread-default-heap-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks default thread-heap association, local ownership, TLD setup, and TLS synchronization shape.
 init-thread-default-heap-association-boundary	script	scripts/check-unsafe-audit.py	Checks default thread-heap association unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-cached-heap-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks cached thread-heap association and reset marker coverage.
+init-thread-cached-heap-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks cached thread-heap association and reset marker coverage.
 init-thread-cached-heap-association-boundary	script	scripts/check-unsafe-audit.py	Checks cached thread-heap association unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-heap-safe-access-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks exported safe-access marker coverage for current-thread default and cached heap TLS cells.
+init-thread-heap-safe-access-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks exported safe-access marker coverage for current-thread default and cached heap TLS cells.
 init-thread-heap-safe-access-boundary	script	scripts/check-unsafe-audit.py	Checks thread-heap safe-access unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-platform-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks Windows TLS slot, pthread key, slot set/free, and TLS one-time init/done shape.
+init-platform-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks Windows TLS slot, pthread key, slot set/free, and TLS one-time init/done shape.
 init-platform-tls-boundary	script	scripts/check-unsafe-audit.py	Checks platform TLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-tld-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks main/non-main TLD setup, TLD allocation/free, threadpool flag mutation, and subproc thread counter updates.
+init-tld-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks main/non-main TLD setup, TLD allocation/free, threadpool flag mutation, and subproc thread counter updates.
 init-tld-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks TLD lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-options-guarded-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks guarded/options marker coverage, helper shape, clamped option reads, compiler fences, and bounded thread-heap configuration writes.
+init-options-guarded-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/options_guarded.rs	Checks guarded/options marker coverage, helper shape, clamped option reads, compiler fences, and bounded thread-heap configuration writes.
 init-options-guarded-boundary	script	scripts/check-unsafe-audit.py	Checks guarded/options init unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-random-cpu-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks random/CPU marker coverage, CPUID helper shape, popcount publication, CPU copy thresholds, and random reseeding.
+init-random-cpu-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/random_cpu.rs	Checks random/CPU marker coverage, CPUID helper shape, popcount publication, CPU copy thresholds, and random reseeding.
 init-random-cpu-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks CPU feature detection order during process initialization.
 init-random-cpu-boundary	script	scripts/check-unsafe-audit.py	Checks random/CPU init unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-platform-hooks-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks platform hook marker coverage, hidden init symbols, process attach/detach shims, and ELF constructor/destructor slots.
-init-platform-hooks-boundary	test	tests/release_fast_path_audit.rs	Checks process lifecycle hook shape with primitive platform audit coverage.
+init-platform-hooks-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks platform hook marker coverage, hidden init symbols, process attach/detach shims, and ELF constructor/destructor slots.
+init-platform-hooks-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/platform_hooks.rs	Checks process lifecycle hook shape with primitive platform audit coverage.
 init-platform-hooks-boundary	script	scripts/check-unsafe-audit.py	Checks platform init hook unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-platform-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks allocation-local platform shims keep errno/pathconf/abort markers split from allocation entry behavior.
+allocation-platform-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks allocation-local platform shims keep errno/pathconf/abort markers split from allocation entry behavior.
 allocation-platform-shim-boundary	script	scripts/check-unsafe-audit.py	Checks allocation platform shim unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-product-entry-boundary	test	tests/allocation_boundary_cases.rs	Exercises calloc, mallocn, overflow, usable-size, and null/failure behavior through raw entry points.
 allocation-product-entry-boundary	test	tests/property_alloc_sequences.rs	Exercises seeded product allocation and realloc/free sequences through raw allocation entry points.
 allocation-product-entry-boundary	test	tests/fuzz_alloc_sequences.rs	Exercises byte-stream allocation programs over malloc/calloc/realloc/free entry behavior.
-allocation-product-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks product allocation marker coverage, raw export shape, typed request construction, and migration allowlist removal.
+allocation-product-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks product allocation marker coverage, raw export shape, typed request construction, and migration allowlist removal.
 allocation-product-entry-boundary	script	scripts/check-unsafe-audit.py	Checks allocation product entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-realloc-thread-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks thread-heap realloc marker coverage, typed request handoff, and migration allowlist removal.
+allocation-realloc-thread-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks thread-heap realloc marker coverage, typed request handoff, and migration allowlist removal.
 allocation-realloc-thread-entry-boundary	script	scripts/check-unsafe-audit.py	Checks allocation thread-heap realloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-realloc-product-boundary	test	tests/allocation_boundary_cases.rs	Exercises reallocn product overflow and null/failure behavior through raw entry points.
 allocation-realloc-product-boundary	test	tests/property_alloc_sequences.rs	Exercises seeded reallocn/free sequences through raw allocation entry points.
-allocation-realloc-product-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks realloc product marker coverage, checked products, and migration allowlist removal.
+allocation-realloc-product-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks realloc product marker coverage, checked products, and migration allowlist removal.
 allocation-realloc-product-boundary	script	scripts/check-unsafe-audit.py	Checks allocation realloc product unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-realloc-free-on-failure-boundary	test	tests/allocation_boundary_cases.rs	Exercises reallocf free-on-failure behavior through raw entry points.
-allocation-realloc-free-on-failure-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks reallocf marker coverage and migration allowlist removal.
+allocation-realloc-free-on-failure-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks reallocf marker coverage and migration allowlist removal.
 allocation-realloc-free-on-failure-boundary	script	scripts/check-unsafe-audit.py	Checks allocation reallocf unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-realloc-zeroing-boundary	test	tests/allocation_boundary_cases.rs	Exercises rezalloc and recalloc zeroing behavior through raw entry points.
 allocation-realloc-zeroing-boundary	test	tests/fuzz_alloc_sequences.rs	Exercises byte-stream allocation programs over realloc-family zeroing behavior.
-allocation-realloc-zeroing-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks realloc zeroing marker coverage and migration allowlist removal.
+allocation-realloc-zeroing-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks realloc zeroing marker coverage and migration allowlist removal.
 allocation-realloc-zeroing-boundary	script	scripts/check-unsafe-audit.py	Checks allocation realloc zeroing unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-realloc-public-boundary	test	tests/allocation_boundary_cases.rs	Exercises public realloc ABI nullable pointer and usable-size behavior.
-allocation-realloc-public-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks public realloc marker coverage, heap dispatch validation, and migration allowlist removal.
+allocation-realloc-public-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks public realloc marker coverage, heap dispatch validation, and migration allowlist removal.
 allocation-realloc-public-boundary	script	scripts/check-unsafe-audit.py	Checks public realloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-string-path-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks string/path marker coverage, raw export shape, realpath routing, and migration allowlist removal.
+allocation-string-path-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks string/path marker coverage, raw export shape, realpath routing, and migration allowlist removal.
 allocation-string-path-boundary	script	scripts/check-unsafe-audit.py	Checks allocation string/path unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-cxx-new-handler-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks C++ new-handler marker coverage, ABI lookup shape, and migration allowlist removal.
+allocation-cxx-new-handler-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks C++ new-handler marker coverage, ABI lookup shape, and migration allowlist removal.
 allocation-cxx-new-handler-boundary	script	scripts/check-unsafe-audit.py	Checks C++ new-handler unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-cxx-new-try-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks C++ new retry marker coverage, retained shim pointers, and migration allowlist removal.
+allocation-cxx-new-try-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks C++ new retry marker coverage, retained shim pointers, and migration allowlist removal.
 allocation-cxx-new-try-boundary	script	scripts/check-unsafe-audit.py	Checks C++ new retry unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-cxx-new-public-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks public C++ new marker coverage, heap/thread dispatch, and migration allowlist removal.
+allocation-cxx-new-public-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks public C++ new marker coverage, heap/thread dispatch, and migration allowlist removal.
 allocation-cxx-new-public-boundary	script	scripts/check-unsafe-audit.py	Checks public C++ new unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-cxx-new-product-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks C++ new_n product marker coverage, checked products, and migration allowlist removal.
+allocation-cxx-new-product-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks C++ new_n product marker coverage, checked products, and migration allowlist removal.
 allocation-cxx-new-product-boundary	script	scripts/check-unsafe-audit.py	Checks C++ new_n unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-cxx-new-aligned-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks C++ aligned/nothrow new marker coverage, alignment validation, and migration allowlist removal.
+allocation-cxx-new-aligned-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks C++ aligned/nothrow new marker coverage, alignment validation, and migration allowlist removal.
 allocation-cxx-new-aligned-boundary	script	scripts/check-unsafe-audit.py	Checks C++ aligned/nothrow new unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-cxx-new-realloc-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks C++ new realloc wrapper marker coverage and migration allowlist removal.
+allocation-cxx-new-realloc-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks C++ new realloc wrapper marker coverage and migration allowlist removal.
 allocation-cxx-new-realloc-boundary	script	scripts/check-unsafe-audit.py	Checks C++ new realloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-small-dispatch-boundary	test	tests/allocation_boundary_cases.rs	Exercises malloc zero-size and small allocation dispatch through raw entry points.
 allocation-small-dispatch-boundary	test	tests/no_allocation_critical_paths.rs	Checks small allocation dispatch critical paths do not route through Rust's global allocator.
-allocation-small-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks small dispatch marker coverage, typed thread-heap routing, and migration allowlist removal.
+allocation-small-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks small dispatch marker coverage, typed thread-heap routing, and migration allowlist removal.
 allocation-small-dispatch-boundary	script	scripts/check-no-allocation-audit.py	Checks small allocation dispatch hot paths avoid hidden Rust allocation and dynamic dispatch.
 allocation-small-dispatch-boundary	script	scripts/check-unsafe-audit.py	Checks small allocation dispatch unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-thread-heap-zero-boundary	test	tests/allocation_boundary_cases.rs	Exercises thread-heap allocation and zeroing edges through raw entry points.
-allocation-thread-heap-zero-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks thread-heap zero/allocation marker coverage, generic fallback routing, and migration allowlist removal.
+allocation-thread-heap-zero-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks thread-heap zero/allocation marker coverage, generic fallback routing, and migration allowlist removal.
 allocation-thread-heap-zero-boundary	script	scripts/check-no-allocation-audit.py	Checks thread-heap allocation dispatch hot paths avoid hidden Rust allocation and dynamic dispatch.
 allocation-thread-heap-zero-boundary	script	scripts/check-unsafe-audit.py	Checks thread-heap allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-public-malloc-boundary	test	tests/allocation_boundary_cases.rs	Exercises public malloc and heap malloc ABI behavior through raw entry points.
-allocation-public-malloc-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks public malloc marker coverage, heap handle validation, and migration allowlist removal.
+allocation-public-malloc-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks public malloc marker coverage, heap handle validation, and migration allowlist removal.
 allocation-public-malloc-boundary	script	scripts/check-unsafe-audit.py	Checks public malloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-zeroing-dispatch-boundary	test	tests/allocation_boundary_cases.rs	Exercises zeroing allocation dispatch through calloc and zalloc edges.
 allocation-zeroing-dispatch-boundary	test	tests/no_allocation_critical_paths.rs	Checks zeroing allocation dispatch critical paths do not route through Rust's global allocator.
-allocation-zeroing-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks zalloc marker coverage, typed request routing, and migration allowlist removal.
+allocation-zeroing-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks zalloc marker coverage, typed request routing, and migration allowlist removal.
 allocation-zeroing-dispatch-boundary	script	scripts/check-no-allocation-audit.py	Checks zeroing allocation dispatch hot paths avoid hidden Rust allocation and dynamic dispatch.
 allocation-zeroing-dispatch-boundary	script	scripts/check-unsafe-audit.py	Checks zalloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-calloc-dispatch-boundary	test	tests/allocation_boundary_cases.rs	Exercises calloc checked product and zeroing behavior through raw entry points.
-allocation-calloc-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks calloc dispatch marker coverage, checked products, and migration allowlist removal.
+allocation-calloc-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks calloc dispatch marker coverage, checked products, and migration allowlist removal.
 allocation-calloc-dispatch-boundary	script	scripts/check-unsafe-audit.py	Checks calloc dispatch unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-layout-request-boundary	test	tests/allocation_boundary_cases.rs	Exercises product overflow, calloc overflow, realloc preservation, and layout request edges.
 allocation-layout-request-boundary	test	tests/property_alloc_sequences.rs	Exercises seeded request construction and realloc/free sequences.
 allocation-layout-request-boundary	test	tests/fuzz_alloc_sequences.rs	Exercises byte-stream allocation programs over request construction and realloc behavior.
-allocation-layout-request-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks layout/product request marker coverage, typed layout routing, and realloc request validation.
+allocation-layout-request-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks layout/product request marker coverage, typed layout routing, and realloc request validation.
 allocation-layout-request-boundary	script	scripts/check-unsafe-audit.py	Checks allocation layout request unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-page-refill-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation and zeroing cases that route through page refill handoff.
 allocation-page-refill-boundary	test	tests/no_allocation_critical_paths.rs	Checks page refill critical paths do not route through Rust's global allocator.
-allocation-page-refill-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page refill marker coverage, generic fallback shape, zeroing, guarded allocation, and padding canary handoff.
+allocation-page-refill-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks page refill marker coverage, generic fallback shape, zeroing, guarded allocation, and padding canary handoff.
 allocation-page-refill-boundary	script	scripts/check-no-allocation-audit.py	Checks allocation page refill hot paths avoid hidden Rust allocation and dynamic dispatch.
 allocation-page-refill-boundary	script	scripts/check-unsafe-audit.py	Checks allocation page refill unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-free-list-refill-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page free-list collection, extension, search, refill marker coverage, and no-allocation hot-path shape.
+page-free-list-refill-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks page free-list collection, extension, search, refill marker coverage, and no-allocation hot-path shape.
 page-free-list-refill-boundary	script	scripts/check-unsafe-audit.py	Checks page free-list refill unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-full-transition-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks full/active page transition marker coverage and typed queue membership helpers.
+page-queue-full-transition-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks full/active page transition marker coverage and typed queue membership helpers.
 page-queue-full-transition-boundary	script	scripts/check-unsafe-audit.py	Checks page queue full transition unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-free-release-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks all-free page removal, arena release handoff, and page metadata clearing shape.
+page-queue-free-release-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks all-free page removal, arena release handoff, and page metadata clearing shape.
 page-queue-free-release-boundary	script	scripts/check-unsafe-audit.py	Checks page queue free release unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-retire-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page retire and retired-page collection marker coverage, expire counters, and direct queue front updates.
+page-queue-retire-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks page retire and retired-page collection marker coverage, expire counters, and direct queue front updates.
 page-queue-retire-boundary	script	scripts/check-unsafe-audit.py	Checks page queue retire unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-abandon-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks active/full page abandon marker coverage and arena abandon publication shape.
+page-queue-abandon-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks active/full page abandon marker coverage and arena abandon publication shape.
 page-queue-abandon-boundary	script	scripts/check-unsafe-audit.py	Checks page queue abandon unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-reclaim-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks abandoned-page reclaim marker coverage, remote-free collection, and target queue publication.
+page-queue-reclaim-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks abandoned-page reclaim marker coverage, remote-free collection, and target queue publication.
 page-queue-reclaim-boundary	script	scripts/check-unsafe-audit.py	Checks page queue reclaim unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-validation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page queue containment and validation marker coverage.
+page-queue-validation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks page queue containment and validation marker coverage.
 page-queue-validation-boundary	script	scripts/check-unsafe-audit.py	Checks page queue validation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-direct-cache-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks direct-page cache updates mirror normal queue fronts for small pages.
+page-queue-direct-cache-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks direct-page cache updates mirror normal queue fronts for small pages.
 page-queue-direct-cache-boundary	script	scripts/check-unsafe-audit.py	Checks page queue direct-cache unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-link-mutation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks queue link insertion, removal, enqueue, first/last pointers, counts, and in-full state updates.
+page-queue-link-mutation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks queue link insertion, removal, enqueue, first/last pointers, counts, and in-full state updates.
 page-queue-link-mutation-boundary	script	scripts/check-unsafe-audit.py	Checks page queue link mutation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-append-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page queue append marker coverage, linked list splicing, thread-heap retargeting, and count merge.
+page-queue-append-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks page queue append marker coverage, linked list splicing, thread-heap retargeting, and count merge.
 page-queue-append-boundary	script	scripts/check-unsafe-audit.py	Checks page queue append unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-huge-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks huge-page allocation marker coverage, huge queue selection, generic allocation routing, and stat accounting evidence.
+page-huge-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks huge-page allocation marker coverage, huge queue selection, generic allocation routing, and stat accounting evidence.
 page-huge-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks page huge allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-stats-public-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page stats/public marker coverage, page helper exports, generic allocation entrypoints, and typed bin/count helpers.
+page-stats-public-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks page stats/public marker coverage, page helper exports, generic allocation entrypoints, and typed bin/count helpers.
 page-stats-public-boundary	script	scripts/check-unsafe-audit.py	Checks page stats/public unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-slice-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks arena slice/range marker coverage, area/containment helpers, info-slice sizing, bitmap layout, and typed slice/index routing.
 arena-slice-boundary	script	scripts/check-unsafe-audit.py	Checks arena slice unsafe operations retain operation-level SAFETY markers and source audit coverage.
@@ -365,61 +365,61 @@ internal-page-location-boundary	test	tests/release_fast_path_audit/unsafe_perfor
 internal-page-location-boundary	script	scripts/check-strict-types.py	Checks internal page location strict-type coverage remains explicit.
 internal-page-flag-owner-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks page flag/owner marker coverage and typed atomic thread-id field updates.
 internal-page-flag-owner-boundary	script	scripts/check-strict-types.py	Checks internal page flag/owner strict-type coverage remains explicit.
-internal-thread-free-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-free ownership word helpers remain routed through typed atomic wrappers.
+internal-thread-free-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks thread-free ownership word helpers remain routed through typed atomic wrappers.
 internal-thread-free-boundary	script	scripts/check-strict-types.py	Checks internal thread-free strict-type allowlist coverage remains explicit.
-internal-block-link-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks packed-pointer round trips and encoded block-link wrapper source shape.
+internal-block-link-boundary	test	tests/release_fast_path_audit/datatype_acceptance/strict_type/pointer_freelist_wrappers.rs	Checks packed-pointer round trips and encoded block-link wrapper source shape.
 internal-block-link-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks encoded block-link marker coverage, page keys, tracking gates, and same-page checks.
 internal-block-link-boundary	script	scripts/check-unsafe-audit.py	Checks internal block-link unsafe operations retain operation-level SAFETY markers and source audit coverage.
-free-raw-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks raw free/export shim markers, C ABI symbol shape, fast assembly aliases, and no-allocation hot-path routing.
+free-raw-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks raw free/export shim markers, C ABI symbol shape, fast assembly aliases, and no-allocation hot-path routing.
 free-raw-export-boundary	script	scripts/check-unsafe-audit.py	Checks raw free/export unsafe operations retain operation-level SAFETY markers and source audit coverage.
 free-validation-boundary	test	src/allocator/free.rs	Exercises pointer validation, interior and guarded pointer lookup, double-free detection, and validation fixtures.
-free-validation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks free validation marker coverage, typed pointer lookup, guarded-block handling, and migration allowlist removal.
+free-validation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks free validation marker coverage, typed pointer lookup, guarded-block handling, and migration allowlist removal.
 free-validation-boundary	script	scripts/check-unsafe-audit.py	Checks free validation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-free-padding-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks free padding marker coverage, padding decode/shrink/check helpers, and tracking visibility handoff.
+free-padding-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks free padding marker coverage, padding decode/shrink/check helpers, and tracking visibility handoff.
 free-padding-boundary	script	scripts/check-unsafe-audit.py	Checks free padding unsafe operations retain operation-level SAFETY markers and source audit coverage.
-free-usable-size-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks usable-size marker coverage, aligned/interior size routing, guarded adjustment, and public query shims.
+free-usable-size-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks usable-size marker coverage, aligned/interior size routing, guarded adjustment, and public query shims.
 free-usable-size-boundary	script	scripts/check-unsafe-audit.py	Checks usable-size unsafe operations retain operation-level SAFETY markers and source audit coverage.
-free-stats-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks free statistic marker coverage and typed bin/page-size counter updates.
+free-stats-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks free statistic marker coverage and typed bin/page-size counter updates.
 free-stats-boundary	script	scripts/check-unsafe-audit.py	Checks free statistic unsafe operations retain operation-level SAFETY markers and source audit coverage.
-free-local-list-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks local free-list marker coverage, used-count updates, retirement, and full-queue transitions.
+free-local-list-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks local free-list marker coverage, used-count updates, retirement, and full-queue transitions.
 free-local-list-boundary	script	scripts/check-unsafe-audit.py	Checks local free-list unsafe operations retain operation-level SAFETY markers and source audit coverage.
-free-remote-list-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks remote free-list marker coverage, atomic thread-free publication, and abandoned-page handoff.
+free-remote-list-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks remote free-list marker coverage, atomic thread-free publication, and abandoned-page handoff.
 free-remote-list-boundary	script	scripts/check-unsafe-audit.py	Checks remote free-list unsafe operations retain operation-level SAFETY markers and source audit coverage.
-free-route-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks free route dispatch marker coverage, fast/local/remote/abandoned owner classification, and no-allocation routing.
+free-route-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks free route dispatch marker coverage, fast/local/remote/abandoned owner classification, and no-allocation routing.
 free-route-dispatch-boundary	test	tests/no_allocation_critical_paths.rs	Checks allocator critical paths avoid routing through Rust's global allocator.
 free-route-dispatch-boundary	script	scripts/check-unsafe-audit.py	Checks free route dispatch unsafe operations retain operation-level SAFETY markers and source audit coverage.
-free-abandoned-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks abandoned-page free marker coverage, collect/reclaim/reabandon decisions, and ownership release.
+free-abandoned-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks abandoned-page free marker coverage, collect/reclaim/reabandon decisions, and ownership release.
 free-abandoned-page-boundary	script	scripts/check-unsafe-audit.py	Checks abandoned-page free unsafe operations retain operation-level SAFETY markers and source audit coverage.
 aligned-padding-boundary	test	tests/aligned_exports.rs	Exercises aligned allocation exports that depend on padding shrink/grow and usable-size preservation.
 aligned-padding-boundary	test	tests/allocation_boundary_cases.rs	Exercises zero-size aligned allocation, alignment offsets, and product overflow edges.
-aligned-padding-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks aligned padding marker coverage, padding-shrink shape, tracking handoff, and adjusted pointer behavior.
+aligned-padding-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks aligned padding marker coverage, padding-shrink shape, tracking handoff, and adjusted pointer behavior.
 aligned-padding-boundary	script	scripts/check-unsafe-audit.py	Checks aligned padding unsafe operations retain operation-level SAFETY markers and source audit coverage.
-aligned-thread-heap-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks thread-heap aligned allocation marker coverage, checked layout normalization, and local heap witness construction.
+aligned-thread-heap-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks thread-heap aligned allocation marker coverage, checked layout normalization, and local heap witness construction.
 aligned-thread-heap-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks thread-heap aligned allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-aligned-page-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks aligned page allocation marker coverage, guarded allocation checks, small-page fast path, and tracking handoff.
+aligned-page-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks aligned page allocation marker coverage, guarded allocation checks, small-page fast path, and tracking handoff.
 aligned-page-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks aligned page allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 aligned-calloc-product-boundary	test	tests/allocation_boundary_cases.rs	Exercises aligned calloc/product overflow edges and offset-aware allocation behavior.
-aligned-calloc-product-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks aligned calloc marker coverage, checked product requests, and zeroed heap/thread-heap dispatch.
+aligned-calloc-product-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks aligned calloc marker coverage, checked product requests, and zeroed heap/thread-heap dispatch.
 aligned-calloc-product-boundary	script	scripts/check-unsafe-audit.py	Checks aligned calloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
 aligned-global-allocation-export-boundary	test	tests/aligned_exports.rs	Exercises global aligned malloc, zalloc, calloc, and usable-size exports.
-aligned-global-allocation-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks global aligned allocation export marker coverage and raw C ABI forwarding.
+aligned-global-allocation-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks global aligned allocation export marker coverage and raw C ABI forwarding.
 aligned-global-allocation-export-boundary	script	scripts/check-unsafe-audit.py	Checks global aligned allocation export unsafe operations retain operation-level SAFETY markers and source audit coverage.
 aligned-heap-allocation-export-boundary	test	tests/aligned_exports.rs	Exercises heap aligned allocation exports from requested heaps.
-aligned-heap-allocation-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks heap aligned allocation export marker coverage, heap borrowing, and thread-heap dispatch.
+aligned-heap-allocation-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks heap aligned allocation export marker coverage, heap borrowing, and thread-heap dispatch.
 aligned-heap-allocation-export-boundary	script	scripts/check-unsafe-audit.py	Checks heap aligned allocation export unsafe operations retain operation-level SAFETY markers and source audit coverage.
-aligned-realloc-request-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks aligned realloc request marker coverage, old-allocation validation, checked layouts, and null-pointer routing.
+aligned-realloc-request-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks aligned realloc request marker coverage, old-allocation validation, checked layouts, and null-pointer routing.
 aligned-realloc-request-boundary	script	scripts/check-unsafe-audit.py	Checks aligned realloc request unsafe operations retain operation-level SAFETY markers and source audit coverage.
 aligned-realloc-copy-boundary	test	tests/allocation_boundary_cases.rs	Exercises aligned realloc preservation and alignment offset edge cases.
-aligned-realloc-copy-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks aligned realloc copy marker coverage, preserve-byte bounds, zero-tail handling, and old-block free handoff.
+aligned-realloc-copy-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks aligned realloc copy marker coverage, preserve-byte bounds, zero-tail handling, and old-block free handoff.
 aligned-realloc-copy-boundary	script	scripts/check-unsafe-audit.py	Checks aligned realloc copy unsafe operations retain operation-level SAFETY markers and source audit coverage.
 aligned-recalloc-product-boundary	test	tests/aligned_exports.rs	Exercises aligned recalloc exports and zeroed growth behavior.
-aligned-recalloc-product-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks aligned recalloc marker coverage, checked product requests, and zeroed realloc handoff.
+aligned-recalloc-product-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks aligned recalloc marker coverage, checked product requests, and zeroed realloc handoff.
 aligned-recalloc-product-boundary	script	scripts/check-unsafe-audit.py	Checks aligned recalloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
 aligned-realloc-global-export-boundary	test	tests/aligned_exports.rs	Exercises global aligned realloc, rezalloc, and recalloc exports.
-aligned-realloc-global-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks global aligned realloc export marker coverage and raw C ABI forwarding.
+aligned-realloc-global-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks global aligned realloc export marker coverage and raw C ABI forwarding.
 aligned-realloc-global-export-boundary	script	scripts/check-unsafe-audit.py	Checks global aligned realloc export unsafe operations retain operation-level SAFETY markers and source audit coverage.
 aligned-realloc-heap-export-boundary	test	tests/aligned_exports.rs	Exercises heap aligned realloc exports from requested heaps.
-aligned-realloc-heap-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks heap aligned realloc export marker coverage, heap borrowing, old-pointer validation, and typed heap dispatch.
+aligned-realloc-heap-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs	Checks heap aligned realloc export marker coverage, heap borrowing, old-pointer validation, and typed heap dispatch.
 aligned-realloc-heap-export-boundary	script	scripts/check-unsafe-audit.py	Checks heap aligned realloc export unsafe operations retain operation-level SAFETY markers and source audit coverage.
 options-storage-lock-boundary	test	tests/options_exports.rs	Exercises option exports, callback mutation setup, and raw unknown option handling.
 options-storage-lock-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks option storage marker coverage, internal lock guards, bounded environment parsing, and no migration allowlist entry.
@@ -459,17 +459,17 @@ stats-process-info-boundary	test	tests/lifecycle_stats_exports.rs	Exercises proc
 stats-process-info-boundary	test	tests/release_fast_path_audit/unsafe_performance/thread_stats.rs	Checks process-info marker coverage and nullable out-pointer handling.
 stats-process-info-boundary	script	scripts/check-unsafe-audit.py	Checks stats process-info unsafe operations retain operation-level SAFETY markers and source audit coverage.
 stats-json-boundary	test	tests/release_fast_path_audit/unsafe_performance/thread_stats.rs	Checks stats JSON marker coverage, fixed stack formatting, buffer ownership, and callback routing.
-stats-json-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks retained JSON helper shape used by OS/process stats reporting.
+stats-json-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks retained JSON helper shape used by OS/process stats reporting.
 stats-json-boundary	script	scripts/check-unsafe-audit.py	Checks stats JSON unsafe operations retain operation-level SAFETY markers and source audit coverage.
 owned-allocation	test	src/safe/tests.rs	Exercises safe owned Allocation construction, resize, initialization, and drop paths.
 owned-allocation	test	tests/allocation_boundary_cases.rs	Covers allocation boundary cases that the owned wrapper forwards to.
 panic-boundary	test	tests/ffi_panic_audit.rs	Checks production panic-abort policy and callback panic containment documentation.
-panic-boundary	test	tests/release_fast_path_audit.rs	Checks callback and C ABI paths retain no-unwind/no-allocation boundary structure.
+panic-boundary	test	tests/release_fast_path_audit/public_facade.rs	Checks callback and C ABI paths retain no-unwind/no-allocation boundary structure.
 panic-boundary	script	scripts/check-no-unwind-artifact.py	Builds the release c-abi cdylib and verifies artifact-level no-unwind evidence from a C consumer.
 raw-auto-trait	test	src/types/constants.rs	Unit tests assert the intentionally retained sentinel Sync impls.
-raw-auto-trait	test	tests/release_fast_path_audit.rs	Structural audit keeps raw layout and callback types bounded to documented surfaces.
-raw-layout-abi-typedefs	test	tests/release_fast_path_audit/release_policy.rs	Checks raw callback typedefs retain C ABI signatures, local audit markers, typed-wrapper separation, sentinel Sync boundaries, and no migration allowlist entry.
-raw-layout-abi-typedefs	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks raw callback typedefs remain at the C ABI edge while allocator internals use typed callback wrappers.
+raw-auto-trait	test	tests/release_fast_path_audit/release_policy/callbacks.rs	Structural audit keeps raw layout and callback types bounded to documented surfaces.
+raw-layout-abi-typedefs	test	tests/release_fast_path_audit/release_policy/callbacks.rs	Checks raw callback typedefs retain C ABI signatures, local audit markers, typed-wrapper separation, sentinel Sync boundaries, and no migration allowlist entry.
+raw-layout-abi-typedefs	test	tests/release_fast_path_audit/datatype_acceptance/callbacks.rs	Checks raw callback typedefs remain at the C ABI edge while allocator internals use typed callback wrappers.
 raw-layout-abi-typedefs	script	scripts/check-unsafe-audit.py	Checks raw callback typedef unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-macro-boundary	script	scripts/check-ffi-boundary.py	Checks raw macro boundary files retain their required audit tags.
 raw-macro-boundary	test	tests/header_macro_expansion.rs	Exercises macro expansion through public raw paths and unsafe call sites.
@@ -477,10 +477,10 @@ raw-macro-bootstrap-boundary	test	src/raw/macros.rs	Exercises Unix bootstrap all
 raw-macro-bootstrap-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks bootstrap markers, preloading handoffs, and migration allowlist removal.
 raw-macro-bootstrap-boundary	script	scripts/check-unsafe-audit.py	Checks bootstrap unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-macro-fast-override-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks fast override assembly alias marker coverage and exported allocation shim shape.
-raw-macro-fast-override-boundary	test	tests/release_fast_path_audit/interposition_exports.rs	Checks interposition feature evidence keeps fast override markers split from platform-specific CRT exports.
+raw-macro-fast-override-boundary	test	tests/release_fast_path_audit/interposition_exports/linux_override.rs	Checks interposition feature evidence keeps fast override markers split from platform-specific CRT exports.
 raw-macro-fast-override-boundary	script	scripts/check-unsafe-audit.py	Checks fast override unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-macro-macos-interpose-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks macOS interpose marker coverage and replacement/target declaration shape.
-raw-macro-macos-interpose-boundary	test	tests/release_fast_path_audit/interposition_exports.rs	Checks interposition feature evidence keeps macOS interpose markers split from fast overrides.
+raw-macro-macos-interpose-boundary	test	tests/release_fast_path_audit/interposition_exports/linux_override.rs	Checks interposition feature evidence keeps macOS interpose markers split from fast overrides.
 raw-macro-macos-interpose-boundary	test	tests/release_fast_path_audit/release_policy/api_surface.rs	Checks raw macro macOS interpose policy documentation and source audit tags stay mirrored.
 raw-macro-macos-interpose-boundary	script	scripts/check-unsafe-audit.py	Checks macOS interpose unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-macro-windows-crt-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks Windows CRT allocation export marker coverage and forwarding shape.
@@ -540,70 +540,70 @@ raw-posix-environment-boundary	script	scripts/check-unsafe-audit.py	Checks POSIX
 raw-posix-aligned-recalloc-boundary	test	tests/compat_exports.rs	Exercises aligned recalloc compatibility exports.
 raw-posix-aligned-recalloc-boundary	test	tests/release_fast_path_audit/allocation_contracts.rs	Checks POSIX aligned recalloc forwarding marker coverage.
 raw-posix-aligned-recalloc-boundary	script	scripts/check-unsafe-audit.py	Checks POSIX aligned recalloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
-unix-ffi-import-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix primitive helper declarations stay present, allocation-free, and off the migration allowlist.
+unix-ffi-import-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/platform_helpers.rs	Checks Unix primitive helper declarations stay present, allocation-free, and off the migration allowlist.
 unix-ffi-import-boundary	script	scripts/check-unsafe-audit.py	Checks Unix FFI import unsafe operations retain operation-level SAFETY markers and source audit coverage.
-unix-mmap-syscall-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix mmap, commit, reset, protect, allocation, and retained memory primitive marker coverage.
+unix-mmap-syscall-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/platform_helpers.rs	Checks Unix mmap, commit, reset, protect, allocation, and retained memory primitive marker coverage.
 unix-mmap-syscall-boundary	script	scripts/check-unix-syscall-parity.py	Compares Unix memory primitive syscall classes against C mimalloc for representative allocation and purge paths.
 unix-mmap-syscall-boundary	script	scripts/check-unsafe-audit.py	Checks Unix mmap/syscall unsafe operations retain operation-level SAFETY markers and source audit coverage.
-unix-process-info-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix process, clock, page-size, and memory-info primitive marker coverage.
+unix-process-info-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/platform_helpers.rs	Checks Unix process, clock, page-size, and memory-info primitive marker coverage.
 unix-process-info-boundary	script	scripts/check-unsafe-audit.py	Checks Unix process-info unsafe operations retain operation-level SAFETY markers and source audit coverage.
 unix-output-env-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks Unix stderr/env primitive dependencies stay allocation-free and routed through platform helpers.
 unix-output-env-boundary	script	scripts/check-unsafe-audit.py	Checks Unix output/env unsafe operations retain operation-level SAFETY markers and source audit coverage.
-unix-random-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix random primitive marker coverage and retained helper shape.
+unix-random-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/platform_helpers.rs	Checks Unix random primitive marker coverage and retained helper shape.
 unix-random-boundary	script	scripts/check-unsafe-audit.py	Checks Unix random unsafe operations retain operation-level SAFETY markers and source audit coverage.
-unix-thread-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix pthread/TLS lifecycle primitive marker coverage and retained helper shape.
+unix-thread-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/platform_helpers.rs	Checks Unix pthread/TLS lifecycle primitive marker coverage and retained helper shape.
 unix-thread-tls-boundary	script	scripts/check-unsafe-audit.py	Checks Unix thread/TLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
-unix-huge-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix huge-page detection, THP, large-page allocation, and fallback marker coverage.
+unix-huge-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/platform_helpers.rs	Checks Unix huge-page detection, THP, large-page allocation, and fallback marker coverage.
 unix-huge-page-boundary	script	scripts/check-unsafe-audit.py	Checks Unix huge-page unsafe operations retain operation-level SAFETY markers and source audit coverage.
-unix-numa-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix NUMA syscall/sysfs helper marker coverage and fallback behavior.
+unix-numa-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/platform_helpers.rs	Checks Unix NUMA syscall/sysfs helper marker coverage and fallback behavior.
 unix-numa-boundary	script	scripts/check-unsafe-audit.py	Checks Unix NUMA unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-virtual-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows virtual memory imports, dynamic lookup, allocation, commit/free/reset/protect, marker coverage, and migration allowlist removal.
+windows-virtual-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs	Checks Windows virtual memory imports, dynamic lookup, allocation, commit/free/reset/protect, marker coverage, and migration allowlist removal.
 windows-virtual-memory-boundary	script	scripts/check-unsafe-audit.py	Checks Windows virtual-memory unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-process-info-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows process/time/system-info marker coverage, dynamic PSAPI lookup, and process counters.
+windows-process-info-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs	Checks Windows process/time/system-info marker coverage, dynamic PSAPI lookup, and process counters.
 windows-process-info-boundary	script	scripts/check-unsafe-audit.py	Checks Windows process-info unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-output-env-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows stderr/env marker coverage, handle probing, console/file writes, and bounded environment copying.
+windows-output-env-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs	Checks Windows stderr/env marker coverage, handle probing, console/file writes, and bounded environment copying.
 windows-output-env-boundary	script	scripts/check-unsafe-audit.py	Checks Windows output/env unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-tls-fls-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows TLS/FLS lifecycle marker coverage, DLL callbacks, thread heap association, and TEB probing.
+windows-tls-fls-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs	Checks Windows TLS/FLS lifecycle marker coverage, DLL callbacks, thread heap association, and TEB probing.
 windows-tls-fls-boundary	script	scripts/check-unsafe-audit.py	Checks Windows TLS/FLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-large-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows large/huge-page privilege, allocation, fallback, NUMA hint, and out-pointer marker coverage.
+windows-large-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs	Checks Windows large/huge-page privilege, allocation, fallback, NUMA hint, and out-pointer marker coverage.
 windows-large-page-boundary	script	scripts/check-unsafe-audit.py	Checks Windows large-page unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-numa-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows NUMA dynamic API marker coverage, node lookup, affinity masks, and huge-page hints.
+windows-numa-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs	Checks Windows NUMA dynamic API marker coverage, node lookup, affinity masks, and huge-page hints.
 windows-numa-boundary	script	scripts/check-unsafe-audit.py	Checks Windows NUMA unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-etw-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows ETW provider callback, enablement, descriptor, and event write marker coverage.
+windows-etw-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs	Checks Windows ETW provider callback, enablement, descriptor, and event write marker coverage.
 windows-etw-boundary	script	scripts/check-unsafe-audit.py	Checks Windows ETW unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-random-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows random import marker coverage alongside primitive backend imports.
+windows-random-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs	Checks Windows random import marker coverage alongside primitive backend imports.
 windows-random-boundary	script	scripts/check-unsafe-audit.py	Checks Windows random unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-dynamic-import-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows dynamic function lookup helper marker coverage and translated function-pointer copies.
+windows-dynamic-import-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/windows.rs	Checks Windows dynamic function lookup helper marker coverage and translated function-pointer copies.
 windows-dynamic-import-boundary	script	scripts/check-unsafe-audit.py	Checks Windows dynamic import unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-config-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS memory config, page sizing, aligned hints, subproc stats projection, marker coverage, and migration allowlist removal.
+os-memory-config-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks OS memory config, page sizing, aligned hints, subproc stats projection, marker coverage, and migration allowlist removal.
 os-memory-config-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory config unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-guard-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks guard-page helper shape, retained guard callbacks, marker coverage, and migration allowlist removal.
+os-memory-guard-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks guard-page helper shape, retained guard callbacks, marker coverage, and migration allowlist removal.
 os-memory-guard-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory guard unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-commit-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks commit/decommit/reset/reuse/purge/protect/unprotect marker coverage and memid state transitions.
+os-memory-commit-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks commit/decommit/reset/reuse/purge/protect/unprotect marker coverage and memid state transitions.
 os-memory-commit-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory commit unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-free-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS free helper marker coverage, primitive free handoff, huge-page free behavior, and migration allowlist removal.
+os-memory-free-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks OS free helper marker coverage, primitive free handoff, huge-page free behavior, and migration allowlist removal.
 os-memory-free-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation and free boundary cases routed through OS memory helpers.
 os-memory-free-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory free unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-primitive-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks primitive OS reserve/allocation marker coverage, primitive handoff shape, and stat accounting.
+os-memory-primitive-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks primitive OS reserve/allocation marker coverage, primitive handoff shape, and stat accounting.
 os-memory-primitive-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation cases routed through primitive OS memory helpers.
 os-memory-primitive-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks primitive OS allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-aligned-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks aligned OS allocation marker coverage, offset trimming, retained aligned helpers, and wrapper shape.
+os-memory-aligned-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks aligned OS allocation marker coverage, offset trimming, retained aligned helpers, and wrapper shape.
 os-memory-aligned-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises aligned allocation and realloc cases routed through OS memory helpers.
 os-memory-aligned-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks aligned OS allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-memid-provenance-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS memid publication, provenance projection, nullable out-pointers, and retained wrapper shape.
+os-memory-memid-provenance-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks OS memid publication, provenance projection, nullable out-pointers, and retained wrapper shape.
 os-memory-memid-provenance-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation, aligned allocation, and zero-size cases that publish OS memids.
 os-memory-memid-provenance-boundary	script	scripts/check-unsafe-audit.py	Checks OS memid/provenance unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-zeroing-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS zero-allocation marker coverage and memid zero/commit state transitions.
+os-memory-zeroing-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks OS zero-allocation marker coverage and memid zero/commit state transitions.
 os-memory-zeroing-boundary	test	tests/allocation_boundary_cases.rs	Exercises zero allocation and allocation/free cases routed through OS zeroing helpers.
 os-memory-zeroing-boundary	script	scripts/check-unsafe-audit.py	Checks OS zeroing unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-request-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks direct internal OS allocation entry markers, good-size normalization, and retained wrapper shape.
+os-memory-request-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks direct internal OS allocation entry markers, good-size normalization, and retained wrapper shape.
 os-memory-request-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises direct allocation boundary cases routed through OS memory helpers.
 os-memory-request-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks direct OS allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-public-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks public OS wrapper markers, retained local helper shims, nullable out-pointers, and exported wrapper shape.
+os-memory-public-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks public OS wrapper markers, retained local helper shims, nullable out-pointers, and exported wrapper shape.
 os-memory-public-export-boundary	script	scripts/check-unsafe-audit.py	Checks public OS wrapper unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-huge-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks huge-page claim/free marker coverage, arena claim callback handoff, NUMA placement, and rollback behavior.
+os-memory-huge-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks huge-page claim/free marker coverage, arena claim callback handoff, NUMA placement, and rollback behavior.
 os-memory-huge-page-boundary	script	scripts/check-unsafe-audit.py	Checks OS huge-page unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-numa-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks NUMA helper marker coverage, retained C ABI wrappers, and fallback behavior.
+os-memory-numa-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks NUMA helper marker coverage, retained C ABI wrappers, and fallback behavior.
 os-memory-numa-boundary	script	scripts/check-unsafe-audit.py	Checks OS NUMA unsafe operations retain operation-level SAFETY markers and source audit coverage.
 macos-zone-layout-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/macos.rs	Checks Darwin malloc-zone struct layout, callback slots, static zone metadata, imports, and migration allowlist removal.
 macos-zone-lookup-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/macos.rs	Checks macOS zone default/name/all-zones lookup shims, ownership queries, and usable-size forwarding.
@@ -620,14 +620,14 @@ platform-allocator-shim-boundary	test	tests/release_fast_path_audit/unsafe_perfo
 internal-atomic-raw-view-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks raw scalar atomic view marker coverage and migration allowlist removal.
 internal-atomic-raw-view-boundary	script	scripts/check-unsafe-audit.py	Checks raw scalar atomic view unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-atomic-load-store-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar load/store marker coverage and central memory-order mapping.
-internal-atomic-load-store-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
+internal-atomic-load-store-boundary	test	tests/release_fast_path_audit/datatype_acceptance/strict_type/atomic_provenance_guards.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
 internal-atomic-load-store-boundary	script	scripts/check-atomic-ordering-audit.py	Checks load/store mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
 internal-atomic-load-store-boundary	script	scripts/check-unsafe-audit.py	Checks scalar load/store unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-atomic-fetch-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar fetch arithmetic and bitwise marker coverage and memory-order mapping.
 internal-atomic-fetch-boundary	script	scripts/check-atomic-ordering-audit.py	Checks fetch mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
 internal-atomic-fetch-boundary	script	scripts/check-unsafe-audit.py	Checks scalar fetch unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-atomic-cas-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar compare-exchange marker coverage, expected-slot updates, and memory-order mapping.
-internal-atomic-cas-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
+internal-atomic-cas-boundary	test	tests/release_fast_path_audit/datatype_acceptance/strict_type/atomic_provenance_guards.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
 internal-atomic-cas-boundary	script	scripts/check-atomic-ordering-audit.py	Checks compare-exchange mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
 internal-atomic-cas-boundary	script	scripts/check-unsafe-audit.py	Checks scalar compare-exchange unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-atomic-exchange-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar exchange marker coverage and memory-order mapping.
@@ -692,12 +692,12 @@ page-map-lookup-boundary	test	tests/release_fast_path_audit/unsafe_performance/l
 page-map-lookup-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks page-map lookup helpers preserve typed index/sub-index/range witnesses.
 page-map-lookup-boundary	script	scripts/check-unsafe-audit.py	Checks page-map lookup unsafe operations retain operation-level SAFETY markers and source audit coverage.
 scalar-domain-wrappers	test	src/types/scalar/tests.rs	Exercises scalar constructor boundaries, layout/niche behavior, UsableOut writes, SliceCount overflow, and page-map/bin/arena domains.
-scalar-domain-wrappers	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks scalar marker coverage, migration allowlist removal, transparent layout, and strict type wrapper expectations.
+scalar-domain-wrappers	test	tests/release_fast_path_audit/datatype_acceptance/domain_wrappers.rs	Checks scalar marker coverage, migration allowlist removal, transparent layout, and strict type wrapper expectations.
 scalar-domain-wrappers	script	scripts/check-unsafe-audit.py	Checks scalar domain wrapper operations retain operation-level SAFETY markers and source audit coverage.
-random-context-boundaries	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks random context entry points stay no-retention direct-call C ABI shims with local audit markers.
+random-context-boundaries	test	tests/release_fast_path_audit/unsafe_performance/os_memory/platform_helpers.rs	Checks random context entry points stay no-retention direct-call C ABI shims with local audit markers.
 threadlocal-empty-sentinel-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks static empty dynamic TLS block marker coverage.
 threadlocal-empty-sentinel-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS empty sentinel unsafe operations retain operation-level SAFETY markers and source audit coverage.
-threadlocal-tls-shim-boundary	test	tests/release_fast_path_audit/interposition_exports.rs	Checks Linux TLS shim shape, x86_64 initial-exec assembly, and migration allowlist removal.
+threadlocal-tls-shim-boundary	test	tests/release_fast_path_audit/interposition_exports/linux_override.rs	Checks Linux TLS shim shape, x86_64 initial-exec assembly, and migration allowlist removal.
 threadlocal-tls-shim-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS shim unsafe operations retain operation-level SAFETY markers and source audit coverage.
 threadlocal-slot-block-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks current-thread slot block growth, copying, publication, and reset shape.
 threadlocal-slot-block-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS slot block unsafe operations retain operation-level SAFETY markers and source audit coverage.
@@ -718,26 +718,26 @@ threadlocal-key-create-boundary	test	tests/release_fast_path_audit/unsafe_perfor
 threadlocal-key-create-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS key creation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 threadlocal-key-free-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks dynamic key deletion and free-bitmap slot return marker coverage.
 threadlocal-key-free-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS key deletion unsafe operations retain operation-level SAFETY markers and source audit coverage.
-wasi-memory-growth-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks WASI sbrk import, checked memory growth, primitive init, allocation, nullable out-pointers, and no-op free.
-wasi-range-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks WASI commit/decommit/reset/reuse/protect, NUMA constants, and unsupported huge-page result publication.
-wasi-io-query-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks WASI process-info fallback, stderr output, getenv import, bounded uppercase fallback, and C-string copying.
-wasi-thread-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks WASI thread init/done, default thread-heap association, threadpool, yield, and compatibility allocation helpers.
-emscripten-import-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks Emscripten primitive imports and pthread destructor callback signature.
-emscripten-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks Emscripten mem init, emmalloc allocation/free, nullable out-pointers, range shims, and unsupported huge-page results.
-emscripten-clock-io-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks Emscripten NUMA constants, clock, process-info fallback, console/stderr output, and environment shim.
-emscripten-pthread-key-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks Emscripten pthread key lifecycle, destructor forwarding, static key mutation, teardown, and thread-local association.
-emscripten-thread-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks Emscripten threadpool and scheduler-yield compatibility shims.
+wasi-memory-growth-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs	Checks WASI sbrk import, checked memory growth, primitive init, allocation, nullable out-pointers, and no-op free.
+wasi-range-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs	Checks WASI commit/decommit/reset/reuse/protect, NUMA constants, and unsupported huge-page result publication.
+wasi-io-query-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs	Checks WASI process-info fallback, stderr output, getenv import, bounded uppercase fallback, and C-string copying.
+wasi-thread-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs	Checks WASI thread init/done, default thread-heap association, threadpool, yield, and compatibility allocation helpers.
+emscripten-import-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs	Checks Emscripten primitive imports and pthread destructor callback signature.
+emscripten-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs	Checks Emscripten mem init, emmalloc allocation/free, nullable out-pointers, range shims, and unsupported huge-page results.
+emscripten-clock-io-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs	Checks Emscripten NUMA constants, clock, process-info fallback, console/stderr output, and environment shim.
+emscripten-pthread-key-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs	Checks Emscripten pthread key lifecycle, destructor forwarding, static key mutation, teardown, and thread-local association.
+emscripten-thread-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs	Checks Emscripten threadpool and scheduler-yield compatibility shims.
 safe-heap	test	src/safe/tests.rs	Exercises safe heap creation, main heap handling, heap-tied allocation, resize, and stats paths.
 safe-heap	test	tests/lifecycle_stats_exports.rs	Exercises raw heap lifecycle and heap statistics behavior used by safe heap wrappers.
 safe-process-info	test	src/safe/tests.rs	Exercises ProcessInfo capture through typed safe output values.
-safe-process-info	test	tests/release_fast_path_audit.rs	Checks safe facade exposes process/stat APIs without widening unsafe raw surfaces.
+safe-process-info	test	tests/release_fast_path_audit/public_facade.rs	Checks safe facade exposes process/stat APIs without widening unsafe raw surfaces.
 safe-stats	test	src/safe/tests.rs	Exercises StatsSnapshot capture, heap stats, JSON output, and buffer failure behavior.
 safe-stats	test	tests/stats_exports.rs	Exercises raw stats bin export bounds used by typed stats wrappers.
 tracking-hooks	script	scripts/check-valgrind-tracking-parity.py	Compares C and Rust Valgrind tracking reports for clean, leak, uninitialized, calloc-defined, and freed-memory cases.
 tracking-hooks	script	scripts/check-asan-tracking-parity.py	Compares C and Rust ASAN tracking reports for clean, calloc-defined, and freed-memory poison cases.
 tracking-hooks	test	src/types/track.rs	Checks compile-time tracking mode constants select the expected backend flags.
 typed-freelist	test	src/types/freelist/tests.rs	Exercises thread-free word owner/head packing and raw pointer reconstruction.
-provenance-miri-registry	test	tests/release_fast_path_audit.rs	Checks pointer/integer round trips stay behind typed provenance helpers and strict-type boundaries.
+provenance-miri-registry	test	tests/release_fast_path_audit/datatype_acceptance/strict_type/atomic_provenance_guards.rs	Checks pointer/integer round trips stay behind typed provenance helpers and strict-type boundaries.
 typed-arena-test-fixtures	test	src/types/arena/tests.rs	Exercises stack-local arena metadata, slice-range bounds, and arena-role constructor fixtures.
 typed-atomic-test-fixtures	test	src/types/atomic/tests.rs	Exercises stack-local atomic words, pointer cells, page/free-list metadata, once state, and lock storage for typed atomic wrappers.
 typed-callback-test-fixtures	test	src/types/callbacks/tests.rs	Exercises callback wrapper layout, raw argument preservation, and storage pointer round-trip fixtures.
@@ -756,14 +756,14 @@ typed-thread-heap-state-test-fixtures	test	tests/release_fast_path_audit/datatyp
 typed-thread-local-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises thread-local heap promotion success and rejection using stack-local TLD metadata plus real non-main heap ownership.
 typed-thread-local-heap-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts thread-local promotion fixture audit markers and rejects the old aggregate typed heap fixture marker.
 typed-layout-domain	test	src/types/layout/tests.rs	Exercises layout normalization, checked product constructors, realloc witnesses, preserve-byte bounds, and generic flag packing.
-typed-layout-domain	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks allocation layout wrappers stay typed and preserve the documented TYPES_SPEC contract.
+typed-layout-domain	test	tests/release_fast_path_audit/datatype_acceptance/domain_wrappers.rs	Checks allocation layout wrappers stay typed and preserve the documented TYPES_SPEC contract.
 typed-layout-test-fixtures	test	src/types/layout/tests.rs	Exercises concrete valid unchecked scalar values and non-dereferenced pointer witnesses for layout/realloc request fixtures.
 typed-memid-view	test	src/types/memid/tests.rs	Exercises OS, external, meta, arena, heap-main, and invalid raw memid view classification.
-typed-memid-view	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks MemId::view owns union-arm reads and maps unknown or corrupt discriminants to Unknown.
+typed-memid-view	test	tests/release_fast_path_audit/datatype_acceptance/page_queues.rs	Checks MemId::view owns union-arm reads and maps unknown or corrupt discriminants to Unknown.
 typed-memid-test-fixtures	test	src/types/memid/tests.rs	Exercises stack-local OS, meta, arena, and raw memid fixtures through typed MemId constructors and view rejection cases.
-typed-memid-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks memid views keep raw layout private and retain unknown-view rejection cases.
+typed-memid-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/page_queues.rs	Checks memid views keep raw layout private and retain unknown-view rejection cases.
 typed-padding-metadata	test	src/types/padding/tests.rs	Exercises padding pointer construction, reads, writes, delta updates, and block-plus-usable-size pointer arithmetic.
-typed-padding-metadata	test	tests/release_fast_path_audit.rs	Checks production padding wrappers keep canary and delta fields private and route metadata access through PaddingPtr.
+typed-padding-metadata	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks production padding wrappers keep canary and delta fields private and route metadata access through PaddingPtr.
 typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-local padding metadata, canary witnesses, and padding pointer arithmetic fixtures.
 typed-page-domain	test	src/types/page/tests.rs	Exercises thread-id flag classification, free-path branch classification, and registered page-range witness construction.
 typed-pointer-constructor-boundary	test	src/types/ptr/tests.rs	Exercises transparent pointer constructors, user/interior pointers, page/slice starts, OS memory pointers, and exposed-address helpers.
@@ -806,38 +806,38 @@ typed-page-queue-pointer-test-fixtures	test	tests/release_fast_path_audit/dataty
 typed-provenance-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises checked page/slice/OS pointer offsets, non-dereferenced overflow/underflow fixtures, and exposed-address provenance helpers.
 typed-provenance-pointer-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts provenance pointer fixture audit markers and rejects the old aggregate typed pointer fixture marker.
 typed-scalar-test-fixtures	test	src/types/scalar/tests.rs	Exercises concrete unchecked scalar constructor fixtures, overflow assertions, and table-index boundary checks.
-typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
+typed-freelist	test	tests/release_fast_path_audit/datatype_acceptance/strict_type/pointer_freelist_wrappers.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
 typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page metadata and registered-range witness fixture construction.
-typed-page-test-fixtures	test	tests/release_fast_path_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.
+typed-page-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.
 typed-page-queue-domain	test	src/types/page_queues/tests.rs	Exercises normal, huge, full, linked, unlinked, transition, and arena-free page queue witnesses.
 typed-page-queue-test-fixtures	test	src/types/page_queues/tests.rs	Exercises stack-local page and queue metadata for normal, huge, full, linked, unlinked, and mismatched queue/page witnesses.
 typed-page-uninit-initialization-boundary	test	src/types/page_states/tests.rs	Exercises uninit page initialization into active page witnesses.
-typed-page-uninit-initialization-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks page-state witnesses keep private page pointers and explicit constructors/accessors.
+typed-page-uninit-initialization-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks page-state witnesses keep private page pointers and explicit constructors/accessors.
 typed-page-witness-constructor-boundary	test	src/types/page_states/tests.rs	Exercises transparent page witness constructors through typestate transitions.
-typed-page-witness-constructor-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks transparent page witnesses expose constructors only at audited boundaries.
+typed-page-witness-constructor-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks transparent page witnesses expose constructors only at audited boundaries.
 typed-page-all-free-witness-boundary	test	src/types/page_states/tests.rs	Exercises active, full, and abandoned all-free witness construction.
-typed-page-all-free-witness-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks all-free page witnesses remain private behind typestate constructors.
+typed-page-all-free-witness-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks all-free page witnesses remain private behind typestate constructors.
 typed-page-active-transition-boundary	test	src/types/page_states/tests.rs	Exercises active page availability, full-queue, and all-free transitions.
-typed-page-active-transition-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks active page transitions retain explicit constructors/accessors.
+typed-page-active-transition-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks active page transitions retain explicit constructors/accessors.
 typed-page-full-transition-boundary	test	src/types/page_states/tests.rs	Exercises full page all-free classification.
-typed-page-full-transition-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks full page transitions remain separate from active transitions.
+typed-page-full-transition-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks full page transitions remain separate from active transitions.
 typed-page-available-pop-boundary	test	src/types/page_states/tests.rs	Exercises available free-list pop state updates.
-typed-page-available-pop-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks available-page pop transitions remain typed and private.
+typed-page-available-pop-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks available-page pop transitions remain typed and private.
 typed-page-retire-destroy-boundary	test	src/types/page_states/tests.rs	Exercises all-free retire and retired expire/destroyed transitions.
-typed-page-retire-destroy-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks retire/destroy typestate transitions remain explicit.
+typed-page-retire-destroy-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks retire/destroy typestate transitions remain explicit.
 typed-page-abandoned-claim-boundary	test	src/types/page_states/tests.rs	Exercises abandoned page ownership claims.
-typed-page-abandoned-claim-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks abandoned page claim transitions stay separated from reclaim.
+typed-page-abandoned-claim-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks abandoned page claim transitions stay separated from reclaim.
 typed-page-remote-free-classification-boundary	test	src/types/page_states/tests.rs	Exercises abandoned and abandoned-mapped remote-free classification.
-typed-page-remote-free-classification-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks remote-free classification remains represented by typed page witnesses.
+typed-page-remote-free-classification-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks remote-free classification remains represented by typed page witnesses.
 typed-page-abandoned-reclaim-boundary	test	src/types/page_states/tests.rs	Exercises claimed abandoned page reclaim and reabandon-to-mapped transitions.
-typed-page-abandoned-reclaim-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks abandoned reclaim transitions stay separated from claim.
+typed-page-abandoned-reclaim-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks abandoned reclaim transitions stay separated from claim.
 typed-thread-heap-local-witness-boundary	test	src/types/page_states/tests.rs	Exercises local thread-heap witness construction, borrowing, and state forwarding.
-typed-thread-heap-local-witness-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks local thread-heap page-state witnesses remain private and non-allocating.
+typed-thread-heap-local-witness-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks local thread-heap page-state witnesses remain private and non-allocating.
 typed-page-free-owner-classification-boundary	test	src/types/page_states/tests.rs	Exercises local, foreign, abandoned, and abandoned-mapped free-path classification.
-typed-page-free-owner-classification-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks free-owner classification remains represented by typed page witnesses.
+typed-page-free-owner-classification-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks free-owner classification remains represented by typed page witnesses.
 typed-page-state-test-fixtures	test	src/types/page_states/tests.rs	Exercises stack-local page metadata and non-dereferenced thread-heap identity witnesses for typestate transition fixtures.
 typed-page-state-test-fixtures	test	src/types/page_states.rs	Exercises lint-touch reachability with non-dereferenced page and thread-heap identity witnesses.
 typed-free-validation	test	src/types/validation/tests.rs	Exercises pointer lookup conversion into validated free witnesses.
-typed-free-validation	test	tests/release_fast_path_audit.rs	Checks free-path validation uses typed pointer lookup boundaries.
+typed-free-validation	test	tests/release_fast_path_audit/unsafe_performance/allocation_free/typed_helpers.rs	Checks free-path validation uses typed pointer lookup boundaries.
 unsafe-callback	test	src/safe/tests.rs	Exercises unsafe callback guards, restoration, and panic containment.
-unsafe-callback	test	tests/release_fast_path_audit.rs	Checks callback guard docs, namespace, no-unwind, and registration boundaries.
+unsafe-callback	test	tests/release_fast_path_audit/release_policy/callbacks.rs	Checks callback guard docs, namespace, no-unwind, and registration boundaries.

@@ -20,12 +20,14 @@ Current review evidence:
   32 markers each; `arena-slice-boundary`, `owned-allocation`,
   `typed-subproc-accessors`, and `typed-scalar-test-fixtures` have 31 markers
   each.
-- `docs/unsafe-audit-evidence.tsv` still cites some aggregate or parent
-  release-audit modules after the module split: `allocation_free.rs` has 53
-  rows, `lifecycle_boundaries.rs` has 44, `datatype_acceptance.rs` has 22,
-  `os_memory.rs` has 20, the root `release_fast_path_audit.rs` has 11,
-  `unsafe_performance.rs` has 9, `platform_primitive_boundaries.rs` has 9,
-  and `platform_primitive_boundaries/unix_wasi_emscripten.rs` has 9.
+- Issue 1 retargeted 184 dispatcher evidence rows. `docs/unsafe-audit-evidence.tsv`
+  no longer cites the targeted aggregate or parent release-audit modules:
+  root `release_fast_path_audit.rs`, `release_policy.rs`,
+  `datatype_acceptance.rs`, `interposition_exports.rs`,
+  `unsafe_performance.rs`, `allocation_free.rs`, `lifecycle_boundaries.rs`,
+  `os_memory.rs`, `platform_primitive_boundaries.rs`, and
+  `platform_primitive_boundaries/unix_wasi_emscripten.rs` all have zero
+  evidence rows.
 - `strict-type-allowlist.txt` has 634 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -48,10 +50,10 @@ Current review evidence:
   enforces a 400-line cap. The largest release-audit modules are:
   `allowance_inventory.rs` at 398 lines,
   `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 390 lines,
+  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 385 lines,
   `interposition_exports/linux_override.rs` at 371 lines,
   `unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367 lines,
-  `primitive_options.rs` at 323 lines, and
-  `unsafe_performance/thread_stats.rs` at 319 lines.
+  and `primitive_options.rs` at 323 lines.
 - Full validation for the previous backlog passed after Issue 6: `cargo fmt
   --all`, `cargo clippy --workspace --all-targets --all-features`, `cargo test
   --workspace --all-targets --all-features`, `cargo test --test
@@ -66,16 +68,16 @@ evidence TSV still cites those parent paths for operation-specific evidence.
 That weakens the evidence ownership model the previous backlog was trying to
 make more precise.
 
-- [ ] Move evidence rows for split parent modules to the child module that owns
+- [x] Move evidence rows for split parent modules to the child module that owns
       the assertion: allocation/free marker groups, typed helper checks,
       OS/platform wrappers, Unix/WASI/Emscripten backends, and interposition
       export groups.
-- [ ] Split or retarget aggregate rows for `lifecycle_boundaries.rs`,
+- [x] Split or retarget aggregate rows for `lifecycle_boundaries.rs`,
       `datatype_acceptance.rs`, `unsafe_performance.rs`,
       `platform_primitive_boundaries.rs`, and the root
       `release_fast_path_audit.rs` where a focused module already owns the
       check.
-- [ ] Tighten the release-audit evidence guard so parent dispatcher paths are
+- [x] Tighten the release-audit evidence guard so parent dispatcher paths are
       accepted only for genuinely harness-wide policy checks, not
       operation-specific audit IDs.
 
@@ -137,14 +139,14 @@ checks, no-allocation audit, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Repoint unsafe audit evidence to focused modules.
+1. [x] Repoint unsafe audit evidence to focused modules.
 2. [ ] Split remaining source audit IDs over 32 markers.
 3. [ ] Lower the source audit marker cap to 28.
 4. [ ] Split release-audit modules over 320 lines.
 
 ## Definition of done for this backlog
 
-- [ ] Evidence rows for operation-specific audit IDs cite focused child modules
+- [x] Evidence rows for operation-specific audit IDs cite focused child modules
       instead of aggregate release-audit dispatchers.
 - [ ] No source audit operation ID has more than 28 source markers.
 - [ ] Release-audit modules are split enough to lower the recursive module cap

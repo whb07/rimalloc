@@ -2,6 +2,7 @@ use super::DatatypeAcceptanceSources;
 
 pub(super) fn assert_typed_fixture_audit_splits(audit_sources: &DatatypeAcceptanceSources<'_>) {
     let ptr_tests_rs = audit_sources.source("src/types/ptr/tests.rs");
+    let page_tests_rs = audit_sources.source("src/types/page/tests.rs");
     let heap_tests_rs = audit_sources.source("src/types/heap/tests.rs");
 
     for (source_name, source, audit_id, exact_count) in [
@@ -40,6 +41,12 @@ pub(super) fn assert_typed_fixture_audit_splits(audit_sources: &DatatypeAcceptan
             ptr_tests_rs,
             "typed-provenance-pointer-test-fixtures",
             7,
+        ),
+        (
+            "src/types/page/tests.rs",
+            page_tests_rs,
+            "typed-page-test-fixtures",
+            2,
         ),
         (
             "src/types/heap/tests.rs",

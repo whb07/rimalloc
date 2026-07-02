@@ -13,21 +13,25 @@ ABI behavior.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 31 entries: 28 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 31.
+- `docs/unsafe-migration-allowlist.tsv` has 30 entries: 27 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 30.
 - The completed pass moved `src/types/memid.rs`, `src/types/layout.rs`,
   `src/types/page_states.rs`, and `src/allocator/bench_diagnostics.rs` to local
   `SAFETY[AUDIT:*]` operation markers with evidence rows and no migration
   allowlist entries.
+- `src/allocator/arena_meta.rs` now uses 16
+  `SAFETY[AUDIT:arena-meta-allocator]` markers for meta memid construction,
+  page/block pointer arithmetic, meta-page stack traversal and publication,
+  bitmap allocation/free, arena fallback, and meta-page debug classification,
+  and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are
-  `src/allocator/arena_meta.rs` at 316 lines with 24 `unsafe` hits and 0 local
-  markers,
   `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers,
   `src/platform/wasi.rs` at 373 lines with 34 `unsafe` hits and 0 local
   markers,
   `src/lib.rs` at 398 lines with 23 `unsafe` hits and 8 local markers, and
   `src/platform/emscripten.rs` at 424 lines with 35 `unsafe` hits and 0 local
-  markers.
+  markers, and
+  `src/ffi/libc.rs` at 518 lines with 46 `unsafe` hits and 0 local markers.
 - `src/ffi/abi.rs` now uses 1
   `SAFETY[AUDIT:ffi-abi-declarations]` marker for its raw C declaration block,
   preserves the existing C-header macro markers, and is off the unsafe
@@ -89,15 +93,15 @@ audit, full clippy, and full tests.
 > localized to meta-page pointer arithmetic, bitmap allocation/free, atomic
 > stack publication, arena fallback, and debug classification.
 
-- [ ] Add local `SAFETY[AUDIT:arena-meta-allocator]` markers for meta memid
+- [x] Add local `SAFETY[AUDIT:arena-meta-allocator]` markers for meta memid
       construction, page/block pointer arithmetic, meta-page stack traversal and
       publication, bitmap allocation/free, arena fallback, and meta-page debug
       classification.
-- [ ] Preserve `Acquire`/`AcqRel` ordering, `NonZeroU32` block-count domains,
+- [x] Preserve `Acquire`/`AcqRel` ordering, `NonZeroU32` block-count domains,
       typed `MemId::<MetaMem>` construction, and allocation-free metadata paths.
-- [ ] Use existing release-audit coverage or add focused tests for meta memid
+- [x] Use existing release-audit coverage or add focused tests for meta memid
       construction, free/reuse invariants, and meta-page classification.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -177,7 +181,7 @@ regeneration/check, release audit, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/ffi/abi.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/allocator/arena_meta.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/allocator/arena_meta.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/platform/wasi.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/platform/emscripten.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/types/atomic.rs` off the unsafe migration allowlist.

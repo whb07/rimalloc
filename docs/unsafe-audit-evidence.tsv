@@ -4,6 +4,8 @@ c-header-macro-reentry	test	tests/header_macro_expansion.rs	Exercises downstream
 ffi-abi-declarations	test	tests/release_fast_path_audit/release_policy.rs	Checks src/ffi/abi.rs owns raw C header declarations and keeps upstream nullable raw pointer shape.
 arena-debug-render	test	tests/release_fast_path_audit.rs	Checks arena diagnostics stay in src/allocator/arena/debug.rs and retain typed arena/page/memid boundary markers.
 arena-debug-render	script	scripts/check-ffi-boundary.py	Checks moved arena diagnostic C exports remain in a classified ABI boundary file.
+arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena metadata allocation shims, typed MetaMem memid construction, and no raw meta memid field poking.
+arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks meta-page debug classification keeps the C-shaped helper boundary and published stack traversal.
 bench-diagnostics-ffi	test	src/allocator/bench_diagnostics.rs	Exercises reset, null snapshot rejection, snapshot copying, JSON size queries, zero-length buffers, truncation, and NUL termination.
 arena-id-memid-helpers	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena id and memid helpers stay in src/allocator/arena/ids.rs while preserving raw C ABI shims, typed MemIdView routing, and arena call sites.
 arena-id-memid-helpers	script	scripts/check-unsafe-audit.py	Checks arena id and memid unsafe operations retain operation-level SAFETY markers and source audit coverage.

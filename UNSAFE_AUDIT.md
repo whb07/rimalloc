@@ -58,8 +58,8 @@ Per-file review:
 - `src/allocator/arena/prefix.rs`: arena, heap, and sub-process prefix layouts
   remain private to `allocator::arena`; accessors require typed heap/subproc
   witnesses or checked arena/bin indexes before returning typed atomic fields.
-- `src/arena_meta.rs`: arena metadata page stack operations publish and reclaim
-  metadata pages through the audited atomic stack discipline.
+- `src/allocator/arena_meta.rs`: arena metadata page stack operations publish
+  and reclaim metadata pages through the audited atomic stack discipline.
 - `src/atomic.rs`: raw atomic pointer casts are centralized here and mapped to
   C mimalloc atomic operations. Ordering equivalence is covered by
   `ATOMIC_ORDERING_AUDIT.md`.
@@ -238,6 +238,12 @@ Operation IDs:
   current sub-process registry, page map lookup, and typed memid views. The
   helpers are diagnostic-only, keep output in stack-local byte buffers, and do
   not allocate, publish, or mutate allocator ownership state.
+- `SAFETY[AUDIT:arena-meta-allocator]`: `src/allocator/arena_meta.rs` owns
+  arena metadata block allocation and free. Unsafe operations are limited to
+  checked meta block-count construction, typed `MemId::<MetaMem>` packaging,
+  meta-page pointer arithmetic, bitmap allocation/free updates, acquire/release
+  meta-page stack publication and traversal, arena/OS fallback calls, and debug
+  meta-page classification.
 - `SAFETY[AUDIT:bench-diagnostics-ffi]`:
   `src/allocator/bench_diagnostics.rs` owns benchmark-only C ABI diagnostic
   counters and JSON export helpers. Unsafe operations are limited to exported

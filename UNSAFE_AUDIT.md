@@ -258,6 +258,12 @@ Operation IDs:
   thread-heap get/set helpers, empty-thread-heap fallbacks, page-associated
   thread-heap lookup, process attach/detach callbacks, and allocator
   init/done compatibility shims.
+- `SAFETY[AUDIT:internal-atomic-facade]`: `src/internal/atomic.rs` owns the
+  C-compatible atomic, once, and lock facade. Unsafe operations are limited to
+  Linux pthread mutex imports and calls, raw `Atomic*` views over
+  caller-proven storage, memory-order mapping helpers, load/store/RMW/CAS
+  wrappers, pointer-sized atomic helpers, volatile addend reads, guard/once
+  entry shims, fallback spin locks, and release Linux lock init/done behavior.
 - `SAFETY[AUDIT:random-context-boundaries]`: `src/internal/random.rs`
   confines random context raw pointers and primitive entropy/clock calls to
   the allocator's C-compatible random boundary. The shims convert live context

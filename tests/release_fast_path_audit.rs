@@ -296,6 +296,25 @@ fn options_state_uses_internal_locks_like_c() {
         "options/random state should not pull in std mutex/abort/stdio machinery"
     );
     assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/internal/atomic.rs\t"))
+            && atomic_rs
+                .matches("SAFETY[AUDIT:internal-atomic-facade]")
+                .count()
+                >= 90
+            && atomic_rs.contains("fn load_order(order: mi_memory_order_e) -> Ordering")
+            && atomic_rs.contains("fn store_order(order: mi_memory_order_e) -> Ordering")
+            && atomic_rs.contains("fn rmw_order(order: mi_memory_order_e) -> Ordering")
+            && atomic_rs.contains("fn cas_failure_order(order: mi_memory_order_e) -> Ordering")
+            && atomic_rs
+                .contains("fn pthread_mutex_trylock(mutex: *mut pthread_mutex_t) -> c_int;")
+            && atomic_rs.contains("pub unsafe extern \"C\" fn mi_lock_try_acquire")
+            && atomic_rs.contains("pub unsafe extern \"C\" fn _mi_atomic_once_enter")
+            && atomic_rs.contains("pub unsafe extern \"C\" fn _mi_atomic_once_release"),
+        "internal atomic facade should stay covered by local operation markers without a migration allowlist entry"
+    );
+    assert!(
         !init_rs.contains("std::sync::Once")
             && !init_rs.contains(".call_once(")
             && !random_rs.contains("OnceLock")
@@ -378,16 +397,23 @@ fn options_state_uses_internal_locks_like_c() {
     assert!(
         atomic_rs.contains(
             "#[cfg(all(target_os = \"linux\", not(debug_assertions)))]\n#[link(name = \"pthread\")]"
-        )
-            && atomic_rs.contains("fn pthread_mutex_trylock(mutex: *mut pthread_mutex_t)")
+        ) && atomic_rs.contains("fn pthread_mutex_trylock(mutex: *mut pthread_mutex_t)")
             && atomic_rs.contains("fn pthread_mutex_lock(mutex: *mut pthread_mutex_t)")
             && atomic_rs.contains("fn pthread_mutex_unlock(mutex: *mut pthread_mutex_t)")
             && atomic_rs.contains("fn pthread_mutex_destroy(mutex: *mut pthread_mutex_t)")
-            && atomic_rs.contains("pthread_mutex_trylock(ptr::addr_of_mut!((*lock).mutex)) == 0")
-            && atomic_rs.contains("pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex))")
-            && atomic_rs.contains("pthread_mutex_unlock(ptr::addr_of_mut!((*lock).mutex))")
-            && atomic_rs.contains("pthread_mutex_destroy(ptr::addr_of_mut!((*lock).mutex))")
-            && atomic_rs.contains("#[cfg(not(all(target_os = \"linux\", not(debug_assertions))))]\npub unsafe extern \"C\" fn mi_lock_acquire"),
+            && atomic_rs.contains(
+                "unsafe { pthread_mutex_trylock(ptr::addr_of_mut!((*lock).mutex)) == 0 }"
+            )
+            && atomic_rs.contains(
+                "let err = unsafe { pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex)) };"
+            )
+            && atomic_rs
+                .contains("unsafe { pthread_mutex_unlock(ptr::addr_of_mut!((*lock).mutex)) };")
+            && atomic_rs
+                .contains("unsafe { pthread_mutex_destroy(ptr::addr_of_mut!((*lock).mutex)) };")
+            && atomic_rs.contains("#[cfg(not(all(target_os = \"linux\", not(debug_assertions))))]")
+            && atomic_rs.contains("pub unsafe extern \"C\" fn mi_lock_acquire")
+            && atomic_rs.contains("while unsafe { !mi_lock_try_acquire(lock) }"),
         "optimized Linux locks should use the C MI_USE_PTHREADS pthread_mutex_t branch, with the atomic fallback kept for debug/test binaries"
     );
     assert!(

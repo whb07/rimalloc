@@ -23,6 +23,9 @@ supported default matrix:
 - `src/arena_meta.rs`: meta-page stack publication uses `Acquire` loads,
   `Release` next-pointer publication, and `AcqRel` CAS for the global head, as in
   `arena-meta.c`.
+- `src/allocator/arena/debug.rs`: diagnostic arena rendering reads committed
+  bitmap fields with relaxed ordering because it reports a transient snapshot
+  and does not publish or mutate allocator metadata.
 - `src/alloc.rs`: the cached `PATH_MAX` value follows `alloc.c`: acquire loads
   observe the published value and acq-rel compare-exchange publishes the first
   successful discovery.
@@ -32,6 +35,10 @@ supported default matrix:
 - `src/bitmap.rs`: bitmap bit updates mirror `bitmap.c`: set/clear transitions
   use acq-rel RMW/CAS, state queries that synchronize with those transitions use
   acquire loads, and scan-only/counting paths retain relaxed loads.
+- `src/internal/bitmap/bfield.rs`: split bitmap field helpers retain the same
+  `bitmap.c` discipline as `src/bitmap.rs`: bit set/clear transitions use
+  acq-rel RMW/CAS, waits and state queries use acquire loads, and retry
+  snapshots use relaxed loads where no metadata publication is required.
 - `src/core_types/atomic_wrappers.rs`: typed allocator-field wrappers centralize
   pointer-to-atomic reinterpretation and expose the fixed acquire/release/acq-rel
   helper operations used by page ownership, thread-free lists, arena state, and
@@ -68,6 +75,9 @@ supported default matrix:
   the audited mimalloc atomic helpers.
 - `src/safe.rs`: tests use atomics to count callback invocations and panic
   containment effects; they do not publish allocator metadata.
+- `src/safe/tests.rs`: safe-facade tests use `SeqCst` counters and flags only to
+  assert callback restoration, reentry, and panic containment effects across
+  test callbacks; these atomics do not publish allocator metadata.
 - `src/threadlocal.rs`: thread-local slot free-list publication uses release
   stores and acquire loads; version counters are relaxed because they are advisory
   freshness checks, matching their non-owning role.

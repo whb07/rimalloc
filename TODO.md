@@ -15,8 +15,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 20 entries: 17 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 20.
+- `docs/unsafe-migration-allowlist.tsv` has 19 entries: 16 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 19.
 - The completed pass moved `src/raw/posix.rs`, `src/lib.rs`,
   `src/ffi/libc.rs`, `src/allocator/threadlocal.rs`, and
   `src/allocator/heap.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -34,21 +34,27 @@ Current review evidence:
   page-associated thread-heap lookup, process attach/detach callbacks, and
   allocator init/done compatibility shims, and is off the unsafe migration
   allowlist.
+- The current pass also moved `src/internal/atomic.rs` to 103
+  `SAFETY[AUDIT:internal-atomic-facade]` markers for pthread mutex imports and
+  calls, raw `Atomic*` views, memory-order mapping, load/store/RMW/CAS
+  wrappers, pointer-sized atomic helpers, volatile addend reads, guard/once
+  entry shims, fallback spin locks, and Linux lock init/done behavior, and is
+  off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are
-  `src/internal/atomic.rs` at 914 lines with 135 `unsafe` hits and 0 local
-  markers,
   `src/allocator/page_map.rs` at 1,052 lines with 184 `unsafe` hits and
   0 local markers,
   `src/types/scalar.rs` at 1,097 lines with 33 `unsafe` hits and 0 local
   markers,
   `src/allocator/thread_heap.rs` at 1,267 lines with 120 `unsafe` hits and
-  0 local markers, and
+  0 local markers,
   `src/platform/unix.rs` at 1,371 lines with 143 `unsafe` hits and
+  0 local markers, and
+  `src/platform/os.rs` at 1,614 lines with 200 `unsafe` hits and
   0 local markers.
 - The next smallest allowlisted production files after those are
-  `src/platform/os.rs` at 1,614 lines with 200 `unsafe` hits,
   `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits,
   `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits,
+  `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits,
   `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits, and
   `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits.
 - `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
@@ -62,6 +68,7 @@ Current review evidence:
   `src/platform/unix.rs`, and `src/platform/windows.rs`, each with
   4 path-wide entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
+  `SAFETY[AUDIT:internal-atomic-facade]` has 103 markers,
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
   `SAFETY[AUDIT:macos-zone-override]` has 83 markers,
   `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
@@ -149,21 +156,21 @@ regeneration/check, full clippy, and full tests.
 > wrappers, volatile loads, guard/once entry shims, and Linux release-lock
 > behavior.
 
-- [ ] Add local `SAFETY[AUDIT:internal-atomic-facade]` markers for pthread
+- [x] Add local `SAFETY[AUDIT:internal-atomic-facade]` markers for pthread
       extern calls, raw `Atomic*` views, memory-order mapping helpers,
       load/store/RMW/CAS operations, pointer atomic helpers, volatile reads,
       atomic guard/once shims, lock acquire/release/done/init paths, and release
       Linux pthread lock behavior.
-- [ ] Preserve the public C-compatible `mi_memory_order_e` domain, ordering
+- [x] Preserve the public C-compatible `mi_memory_order_e` domain, ordering
       translations documented by `ATOMIC_ORDERING_AUDIT.md`, Linux optimized
       pthread mutex branch, debug/test atomic fallback, typed `AtomicGuard` and
       `OnceGuard` release-on-drop handoff, and no extra allocation or dynamic
       dispatch in atomic helpers.
-- [ ] Add or extend release-audit assertions and focused tests for
+- [x] Add or extend release-audit assertions and focused tests for
       `mi_memory_order_e` mapping, raw `Atomic*::from_ptr` helper boundaries,
       pointer CAS/load/store wrappers, guard/once scope construction, pthread
       lock calls, and marker coverage without a migration allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/internal/atomic.rs`
+- [x] Add matching unsafe audit/evidence entries, remove `src/internal/atomic.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower the cap.
 
@@ -237,7 +244,7 @@ clippy, and full tests.
 
 1. [x] Migrate `src/platform/macos.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/platform/mod.rs` off the unsafe migration allowlist.
-3. [ ] Migrate `src/internal/atomic.rs` off the unsafe migration allowlist.
+3. [x] Migrate `src/internal/atomic.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/page_map.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/types/scalar.rs` off the unsafe migration allowlist.
 

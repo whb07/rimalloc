@@ -17,6 +17,27 @@ mod size_class_boundaries;
 mod tail_guards;
 #[path = "unsafe_performance/threadlocal_boundaries.rs"]
 mod threadlocal_boundaries;
+
+fn source_has_inline_never_function(source: &str, signature: &str) -> bool {
+    let mut saw_inline_never = false;
+
+    for line in source.lines().map(str::trim_start) {
+        if line == "#[inline(never)]" {
+            saw_inline_never = true;
+            continue;
+        }
+        if saw_inline_never && line.starts_with("//") {
+            continue;
+        }
+        if saw_inline_never && line.starts_with(signature) {
+            return true;
+        }
+        saw_inline_never = false;
+    }
+
+    false
+}
+
 #[test]
 fn free_path_internals_are_not_dynamic_exports() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -1439,10 +1460,13 @@ fn free_path_internals_are_not_dynamic_exports() {
         "page and aligned allocation should use typed padded-size helpers internally"
     );
     assert!(
-        atomic_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_atomic_once_enter")
-            && atomic_rs
-                .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_atomic_once_release")
-            && atomic_types.contains("pub(crate) struct OnceGuard<'a>")
+        source_has_inline_never_function(
+            &atomic_rs,
+            "pub unsafe extern \"C\" fn _mi_atomic_once_enter",
+        ) && source_has_inline_never_function(
+            &atomic_rs,
+            "pub unsafe extern \"C\" fn _mi_atomic_once_release",
+        ) && atomic_types.contains("pub(crate) struct OnceGuard<'a>")
             && atomic_types
                 .contains("pub(crate) unsafe fn try_enter(once: OnceStatePtr) -> Option<Self>")
             && atomic_types.contains("impl Drop for OnceGuard<'_>")

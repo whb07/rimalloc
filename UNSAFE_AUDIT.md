@@ -247,6 +247,14 @@ Operation IDs:
   `src/types/freelist/tests.rs` builds stack-local block metadata and opaque
   pointer words to exercise `ThreadFreeWord`, encoded-link, and raw link helper
   behavior. The fixtures are not registered with allocator globals.
+- `SAFETY[AUDIT:typed-freelist-wrapper-test-fixtures]`:
+  `src/types/freelist_wrappers/tests.rs` builds stack-local page and block
+  metadata to exercise encoded pointers, block tags, available-list pop, and
+  local-list push witnesses. The fixtures are not registered with allocator
+  globals and are used only while the local records are live.
+- `SAFETY[AUDIT:typed-layout-test-fixtures]`: `src/types/layout/tests.rs`
+  uses concrete valid unchecked scalar values and non-dereferenced dangling
+  pointer witnesses to exercise layout, realloc, and flag packing invariants.
 - `SAFETY[AUDIT:typed-padding-test-fixtures]`: `src/types/padding/tests.rs`
   builds stack-local padding records and byte buffers, plus non-dereferenced
   dangling pointer witnesses for canary hashing, to exercise padding wrapper

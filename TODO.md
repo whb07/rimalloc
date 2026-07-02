@@ -12,13 +12,13 @@ mechanical file-level exceptions.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 56 entries: 44 production, 9 test,
+- `docs/unsafe-migration-allowlist.tsv` has 54 entries: 44 production, 7 test,
   and 3 translation files.
 - The smallest remaining allowlisted test fixtures are reviewable:
-  `src/types/freelist_wrappers/tests.rs` is 119 lines,
-  `src/types/layout/tests.rs` is 139 lines,
   `src/types/page_states/tests.rs` is 151 lines, and
-  `src/types/page_queues/tests.rs` is 160 lines.
+  `src/types/page_queues/tests.rs` is 160 lines,
+  `src/types/heap/tests.rs` is 212 lines, and
+  `src/types/memid/tests.rs` is 243 lines.
 - The smallest remaining allowlisted production files are also narrow:
   `src/types/padding.rs` is 143 lines,
   `src/internal/provenance.rs` is 169 lines,
@@ -58,15 +58,23 @@ Current review evidence:
 > not allocator runtime code. They should have operation-level proof markers so
 > test debt does not hide production unsafe migration progress.
 
-- [ ] Rank `src/types/freelist_wrappers/tests.rs`,
+- [x] Rank `src/types/freelist_wrappers/tests.rs`,
       `src/types/layout/tests.rs`, `src/types/page_states/tests.rs`, and
       `src/types/page_queues/tests.rs` by proof complexity.
-- [ ] Migrate at least two of those files to local
+- [x] Migrate at least two of those files to local
       `SAFETY[AUDIT:*]` markers.
-- [ ] Add matching `UNSAFE_AUDIT.md` and
+- [x] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [ ] Remove migrated files from `docs/unsafe-migration-allowlist.tsv`.
-- [ ] Lower `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
+- [x] Remove migrated files from `docs/unsafe-migration-allowlist.tsv`.
+- [x] Lower `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
+  - Evidence: `src/types/freelist_wrappers/tests.rs` now uses
+    `SAFETY[AUDIT:typed-freelist-wrapper-test-fixtures]` for stack-local
+    page/block encoded-link and free-list wrapper fixtures.
+    `src/types/layout/tests.rs` now uses
+    `SAFETY[AUDIT:typed-layout-test-fixtures]` for concrete unchecked scalar
+    values and non-dereferenced pointer witnesses. Both files were removed from
+    `docs/unsafe-migration-allowlist.tsv`, and `ALLOWLIST_ENTRY_CAP` is now
+    54.
 
 Verify: `scripts/check-unsafe-audit.py`,
 `scripts/check-unsafe-audit-evidence.py`,
@@ -159,7 +167,7 @@ full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate two small test fixtures off the unsafe migration allowlist.
+1. [x] Migrate two small test fixtures off the unsafe migration allowlist.
 2. [ ] Migrate one small production file off the unsafe migration allowlist.
 3. [ ] Narrow or remove the page strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
@@ -167,7 +175,7 @@ full tests.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is below 56 entries and the cap is lowered.
+- [x] The unsafe migration allowlist is below 56 entries and the cap is lowered.
 - [ ] At least one production allowlisted file is covered by operation-level
       audit markers.
 - [ ] One strict-type broad `remove:` allowance is narrowed or eliminated.

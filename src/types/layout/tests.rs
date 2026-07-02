@@ -27,6 +27,8 @@ fn malloc_layout_preserves_requested_and_normalizes_effective_size() {
 
 #[test]
 fn layout_request_from_parts_is_the_checked_padding_path() {
+    // SAFETY[AUDIT:typed-layout-test-fixtures]: the unchecked scalar values are
+    // concrete valid fixture values used to reach the constructor under test.
     let req = LayoutRequest::from_parts(
         RequestedSize::new(0),
         unsafe { EffectiveSize::new_unchecked(1) },
@@ -39,6 +41,9 @@ fn layout_request_from_parts_is_the_checked_padding_path() {
 
 #[test]
 fn from_effective_unchecked_keeps_normalized_size() {
+    // SAFETY[AUDIT:typed-layout-test-fixtures]: `32` is a valid nonzero
+    // effective size fixture and the test immediately checks the preserved
+    // normalized fields.
     let req = unsafe {
         LayoutRequest::from_effective_unchecked(EffectiveSize::new_unchecked(32), Zeroed::Yes)
     };
@@ -103,9 +108,14 @@ fn realloc_request_constructors_distinguish_null_from_existing() {
     assert!(null.ptr().is_none());
     assert!(null.old().is_none());
 
+    // SAFETY[AUDIT:typed-layout-test-fixtures]: the dangling pointers are never
+    // dereferenced; they are non-null identity witnesses for typed realloc
+    // request construction.
     let user = unsafe { UserPtr::new_unchecked(core::ptr::dangling_mut::<u8>().cast()) };
     let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
     let block = unsafe { BlockPtr::new_unchecked(core::ptr::dangling_mut()) };
+    // SAFETY[AUDIT:typed-layout-test-fixtures]: the typed parts above are
+    // non-null witnesses and a concrete usable size for request construction.
     let old =
         unsafe { OldAllocation::from_validated_parts(user, UsableSize::new(128), page, block) };
     let existing = ReallocRequest::from_existing(old, layout, Zeroed::No);
@@ -129,10 +139,14 @@ fn generic_flags_pack_zero_bit_and_huge_alignment() {
     assert_eq!(flags.huge_alignment().get(), 64);
     assert_eq!(flags.raw(), 65);
 
+    // SAFETY[AUDIT:typed-layout-test-fixtures]: these raw flag words are
+    // concrete valid encodings used to exercise bit packing and unpacking.
     let raw = unsafe { MallocGenericFlags::from_raw(128) };
     assert_eq!(raw.zeroed(), Zeroed::No);
     assert_eq!(raw.huge_alignment().get(), 128);
 
+    // SAFETY[AUDIT:typed-layout-test-fixtures]: `65` is the valid encoding for
+    // zeroed plus 64-byte huge alignment.
     let raw_zero_huge = unsafe { MallocGenericFlags::from_raw(65) };
     assert_eq!(raw_zero_huge.zeroed(), Zeroed::Yes);
     assert_eq!(raw_zero_huge.huge_alignment().get(), 64);

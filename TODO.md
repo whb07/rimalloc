@@ -207,16 +207,25 @@ Review evidence:
 > doctests mostly run with `std`. Feature/no-std validation should prove the
 > documented safe and raw surfaces stay honest across supported build modes.
 
-- [ ] Add focused checks for default `no_std` build behavior and documented
+- [x] Add focused checks for default `no_std` build behavior and documented
       `std`-only examples.
-- [ ] Ensure safe facade docs clearly mark any examples or APIs that require
+- [x] Ensure safe facade docs clearly mark any examples or APIs that require
       `std`, tests, or process-global runtime state.
-- [ ] Run the feature matrix after changing docs, examples, safe APIs, raw
+- [x] Run the feature matrix after changing docs, examples, safe APIs, raw
       macros, or callback guards.
-- [ ] Keep `c-header-macros`, tracking, secure, guarded, and interpose feature
+- [x] Keep `c-header-macros`, tracking, secure, guarded, and interpose feature
       behavior additive unless docs state otherwise.
-- [ ] Add release checklist entries for no-std doctest/build coverage if they
+- [x] Add release checklist entries for no-std doctest/build coverage if they
       are not already enforced.
+  - Evidence: every Rust example target in `Cargo.toml` now has
+    `required-features = ["std"]`, while `scripts/check-features.sh` explicitly
+    runs `cargo check --lib --no-default-features` and
+    `cargo check --examples --features std`. `scripts/check-docs.sh` runs
+    `cargo doc --no-deps --no-default-features`. `docs/features.md`,
+    `docs/safe-api.md`, and `docs/release.md` now describe the no-std library,
+    no-default rustdoc, std-only example, and process-global runtime-state
+    expectations. The `feature_no_std_validation_covers_std_examples` audit
+    test rejects drift across the manifest, scripts, and docs.
 - Verify: feature matrix scripts, doctests, full clippy, full tests, and docs
   generation.
 
@@ -229,7 +238,7 @@ Review evidence:
 4. [x] Centralize generated artifact hygiene.
 5. [x] Document or implement the safe object ownership decision.
 6. [x] Split the smallest high-value translated module cluster.
-7. [ ] Expand feature/no-std validation around safe-facing examples.
+7. [x] Expand feature/no-std validation around safe-facing examples.
 
 ## Definition of done for this backlog
 
@@ -245,4 +254,4 @@ Review evidence:
       release-scoped design decision.
 - [x] Generated artifact ownership is documented and unexpected local artifacts
       are detectable.
-- [ ] Feature/no-std docs and validation cover the safe-facing examples.
+- [x] Feature/no-std docs and validation cover the safe-facing examples.

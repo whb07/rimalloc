@@ -5,7 +5,7 @@ unless the `std` feature is enabled.
 
 ## Features
 
-- `std`: tooling/test/docs support. This is opt-in.
+- `std`: tooling, tests, docs, and examples support. This is opt-in.
 - `bench`: Criterion benchmarks; implies `std`.
 - `compare`: comparison benchmark/test code.
 - `bench-diagnostics`: benchmark-only hotspot counters for local profiling.
@@ -31,6 +31,7 @@ Run tracking features separately and in the aggregate all-features combination:
 
 ```sh
 cargo check
+cargo check --lib --no-default-features
 cargo check --features std
 cargo check --features secure
 cargo check --features guarded
@@ -41,6 +42,8 @@ cargo check --features "track-valgrind track-asan"
 cargo check --features "secure guarded std"
 cargo check --features "std c-header-macros"
 cargo check --features "std c-abi"
+cargo check --examples --features std
+cargo doc --no-deps --no-default-features
 cargo rustc --features interpose --lib --release -- --crate-type cdylib
 cargo check --benches --features bench
 cargo check --benches --features "bench compare"
@@ -51,3 +54,8 @@ The powerset check covers the library/runtime feature combinations. `bench` and
 `compare` stay in explicit benchmark-target checks because they exercise
 benchmark-only code paths, `interpose` is checked with the explicit cdylib build
 command, and `default` is intentionally empty.
+
+Repository examples are `std`-only executable targets and each Rust example in
+`Cargo.toml` uses `required-features = ["std"]`. The default no-std contract is
+checked through the library build and no-default rustdoc generation, while
+doctests and examples are checked explicitly under `std`.

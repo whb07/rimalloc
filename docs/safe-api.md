@@ -171,3 +171,17 @@ Safe API behavior should remain understandable under:
 Feature-specific hardening or tracking may affect diagnostics and allocator
 internals, but safe APIs should keep the same ownership and error contracts
 unless a feature explicitly documents otherwise.
+
+The safe facade must continue to compile in the default no-std library build.
+Executable repository examples, including safe facade examples, are std-only
+Cargo example targets and must remain gated with `required-features = ["std"]`.
+They are validated with `cargo check --examples --features std`; no-default
+rustdoc generation validates the documented library surface that is meant to
+remain available without `std`, while doctests run under the explicit `std`
+feature.
+
+APIs that touch process-global allocator state, such as global options,
+statistics, process information, and unsafe callback guards, need tests that
+serialize any process-global mutation or registration state. The callback
+guards remain Tier U because concurrent registration, restoration, or callback
+entry is still the caller's responsibility.

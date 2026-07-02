@@ -181,3 +181,53 @@ name = "mimalloc_bench"
 path = "benches/mimalloc_bench.rs"
 harness = false
 required-features = ["bench"]
+
+[[example]]
+name = "aligned"
+path = "examples/aligned.rs"
+required-features = ["std"]
+
+[[example]]
+name = "allocation"
+path = "examples/allocation.rs"
+required-features = ["std"]
+
+[[example]]
+name = "ffi"
+path = "examples/ffi.rs"
+required-features = ["std"]
+
+[[example]]
+name = "global_allocator"
+path = "examples/global_allocator.rs"
+required-features = ["std"]
+
+[[example]]
+name = "raw_heap"
+path = "examples/raw_heap.rs"
+required-features = ["std"]
+
+[[example]]
+name = "raw_options"
+path = "examples/raw_options.rs"
+required-features = ["std"]
+
+[[example]]
+name = "raw_stats"
+path = "examples/raw_stats.rs"
+required-features = ["std"]
+
+[[example]]
+name = "safe_heap"
+path = "examples/safe_heap.rs"
+required-features = ["std"]
+
+[[example]]
+name = "safe_options"
+path = "examples/safe_options.rs"
+required-features = ["std"]
+
+[[example]]
+name = "safe_stats"
+path = "examples/safe_stats.rs"
+required-features = ["std"]

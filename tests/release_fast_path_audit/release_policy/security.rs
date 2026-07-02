@@ -111,6 +111,100 @@ fn fuzz_corpus_and_reproducer_policy_maps_to_security_and_unsafe_audit() {
 }
 
 #[test]
+fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let evidence = fs::read_to_string(root.join("docs/unsafe-audit-evidence.tsv"))
+        .expect("read unsafe audit evidence");
+    let unsafe_audit = fs::read_to_string(root.join("UNSAFE_AUDIT.md")).expect("read unsafe audit");
+    let unsafe_audit_doc =
+        fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read unsafe audit doc");
+
+    for (audit_id, focused_path) in [
+        (
+            "allocation-entry-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "aligned-allocation-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "raw-macro-allocation-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-allocation-boundary",
+            "tests/release_fast_path_audit/release_policy/api_surface.rs",
+        ),
+        (
+            "os-memory-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/os_memory.rs",
+        ),
+        (
+            "page-map-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
+        ),
+        (
+            "page-map-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
+        ),
+        (
+            "stats-reporting-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "typed-pointer-accessors",
+            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+        ),
+    ] {
+        let row_prefix = format!("{audit_id}\ttest\t{focused_path}\t");
+        assert!(
+            evidence.lines().any(|line| line.starts_with(&row_prefix)),
+            "unsafe audit evidence should map {audit_id} to focused release-audit module {focused_path}"
+        );
+    }
+
+    let tracked_ids = [
+        "allocation-entry-boundary",
+        "aligned-allocation-boundary",
+        "raw-macro-allocation-boundary",
+        "os-memory-boundary",
+        "page-map-boundary",
+        "stats-reporting-boundary",
+        "typed-pointer-accessors",
+    ];
+    let stale_paths = [
+        "tests/release_fast_path_audit.rs",
+        "tests/release_fast_path_audit/unsafe_performance.rs",
+        "tests/release_fast_path_audit/release_policy.rs",
+        "tests/release_fast_path_audit/datatype_acceptance.rs",
+    ];
+
+    for line in evidence.lines().skip(1) {
+        let mut fields = line.split('\t');
+        let audit_id = fields.next().expect("evidence row audit id");
+        let _kind = fields.next().expect("evidence row kind");
+        let path = fields.next().expect("evidence row path");
+        let detail = fields.next().expect("evidence row detail");
+        assert!(
+            fields.next().is_none() && !detail.is_empty(),
+            "evidence row should stay four tab-separated fields: {line}"
+        );
+        assert!(
+            !tracked_ids.contains(&audit_id) || !stale_paths.contains(&path),
+            "{audit_id} evidence should cite a focused release-audit module instead of stale aggregate path {path}"
+        );
+    }
+
+    assert!(
+        unsafe_audit.contains("the evidence row should name that focused\nmodule")
+            && unsafe_audit_doc
+                .contains("Release-audit evidence rows should cite the focused module"),
+        "unsafe audit docs should describe focused release-audit evidence ownership"
+    );
+}
+
+#[test]
 fn hardening_threat_model_is_concrete_and_linked_from_security_policy() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let threat_model = fs::read_to_string(root.join("docs/hardening-threat-model.md"))

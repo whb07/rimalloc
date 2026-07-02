@@ -33,6 +33,10 @@ audit document, add or update the relevant `SAFETY[AUDIT:*]` tag when a boundary
 changes, and record the corpus file, regression test, sanitizer/Miri script, or
 release artifact script in `docs/unsafe-audit-evidence.tsv`.
 
+Release-audit evidence rows should cite the focused module that owns the
+assertion under `tests/release_fast_path_audit/` instead of an aggregate harness
+file when such a module exists.
+
 ## Boundary Audit Tags
 
 - `SAFETY[AUDIT:global-alloc]`: the `MiMalloc` `GlobalAlloc` facade. Callers

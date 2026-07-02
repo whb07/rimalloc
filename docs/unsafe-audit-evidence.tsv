@@ -66,7 +66,7 @@ allocation-entry-boundary	test	tests/allocation_boundary_cases.rs	Exercises zero
 allocation-entry-boundary	test	tests/property_alloc_sequences.rs	Exercises seeded allocation and realloc/free sequences through the raw allocation entry points.
 allocation-entry-boundary	test	tests/fuzz_alloc_sequences.rs	Exercises byte-stream allocation programs over malloc/calloc/realloc/free entry behavior.
 allocation-entry-boundary	test	tests/no_allocation_critical_paths.rs	Checks allocator critical paths do not route through Rust's global allocator.
-allocation-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks allocation marker coverage, migration allowlist removal, raw export shape, typed layout routing, and no-allocation hot-path evidence.
+allocation-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks allocation marker coverage, migration allowlist removal, raw export shape, typed layout routing, and no-allocation hot-path evidence.
 allocation-entry-boundary	script	scripts/check-no-allocation-audit.py	Checks allocation hot paths avoid hidden Rust allocation and dynamic dispatch.
 allocation-entry-boundary	script	scripts/check-unsafe-audit.py	Checks allocation entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
 page-allocation-boundary	test	src/allocator/page.rs	Exercises page bin classification characterization and page helper unit coverage in the page module.
@@ -103,7 +103,7 @@ free-path-boundary	test	tests/no_allocation_critical_paths.rs	Checks allocator c
 free-path-boundary	script	scripts/check-unsafe-audit.py	Checks free-path unsafe operations retain operation-level SAFETY markers and source audit coverage.
 aligned-allocation-boundary	test	tests/aligned_exports.rs	Exercises global, heap, realloc, zeroed, calloc, usable-size, and typed aligned allocation exports.
 aligned-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises zero-size aligned allocation, alignment offsets, realloc preservation, and product overflow edges.
-aligned-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks aligned marker coverage, migration allowlist removal, padding-shrink shape, typed padded-size helpers, and hot-path boundary shape.
+aligned-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks aligned marker coverage, migration allowlist removal, padding-shrink shape, typed padded-size helpers, and hot-path boundary shape.
 aligned-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks aligned allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 options-callback-boundary	test	tests/options_exports.rs	Exercises option and callback exports, callback mutation, and raw unknown option handling.
 options-callback-boundary	test	src/allocator/options.rs	Exercises assertion abort behavior and local option callback boundary fixtures.
@@ -112,7 +112,7 @@ options-callback-boundary	script	scripts/check-unsafe-audit.py	Checks option/cal
 stats-reporting-boundary	test	tests/stats_exports.rs	Exercises stats bin-size exports and out-of-range behavior.
 stats-reporting-boundary	test	tests/lifecycle_stats_exports.rs	Exercises stats get, heap stats get, merge-to-subproc, process info, and lifecycle stats exports.
 stats-reporting-boundary	test	tests/thread_stats_regression.rs	Exercises joined worker thread stats returning to the main process view.
-stats-reporting-boundary	test	tests/release_fast_path_audit.rs	Checks stats formatting, JSON buffers, marker coverage, and no migration allowlist entry.
+stats-reporting-boundary	test	tests/release_fast_path_audit/unsafe_performance/thread_stats.rs	Checks stats initialization, merge, counter helper boundaries, marker coverage, and no migration allowlist entry.
 stats-reporting-boundary	script	scripts/check-unsafe-audit.py	Checks stats reporting unsafe operations retain operation-level SAFETY markers and source audit coverage.
 owned-allocation	test	src/safe/tests.rs	Exercises safe owned Allocation construction, resize, initialization, and drop paths.
 owned-allocation	test	tests/allocation_boundary_cases.rs	Covers allocation boundary cases that the owned wrapper forwards to.
@@ -128,8 +128,8 @@ raw-macro-boundary	script	scripts/check-ffi-boundary.py	Checks raw macro boundar
 raw-macro-boundary	test	tests/header_macro_expansion.rs	Exercises macro expansion through public raw paths and unsafe call sites.
 raw-macro-allocation-boundary	test	src/raw/macros.rs	Exercises Unix bootstrap allocation tracking, usable-size, realloc, and free ownership fixtures.
 raw-macro-allocation-boundary	test	tests/header_macro_expansion.rs	Exercises downstream header macro expansion and raw allocation call boundaries.
-raw-macro-allocation-boundary	test	tests/release_fast_path_audit.rs	Checks raw macro facade marker coverage, migration allowlist removal, override assembly, and exported allocation shim shape.
-raw-macro-allocation-boundary	test	tests/release_fast_path_audit/release_policy.rs	Checks raw macro policy documentation and source audit tags stay mirrored.
+raw-macro-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks raw macro facade marker coverage, migration allowlist removal, override assembly, and exported allocation shim shape.
+raw-macro-allocation-boundary	test	tests/release_fast_path_audit/release_policy/api_surface.rs	Checks raw macro policy documentation and source audit tags stay mirrored.
 raw-macro-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks raw macro allocation facade unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-posix-compat	test	tests/compat_exports.rs	Exercises POSIX out-pointer and errno-style behavior for mi_posix_memalign, mi_reallocarray, mi_reallocarr, mbsdup, dupenv_s, and related compatibility exports.
 raw-posix-compat	test	tests/release_fast_path_audit.rs	Checks src/raw/posix.rs keeps product allocation typed, raw POSIX compatibility exports present, and operation-level audit markers local.
@@ -139,7 +139,7 @@ unix-primitive-backend	script	scripts/check-unix-syscall-parity.py	Compares Unix
 unix-primitive-backend	script	scripts/check-unsafe-audit.py	Checks Unix primitive unsafe operations retain operation-level SAFETY markers and source audit coverage.
 windows-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows primitive imports, dynamic function lookup, virtual memory paths, process info, stderr/env handling, TLS/FLS lifecycle, large/huge-page paths, ETW helpers, marker coverage, and migration allowlist removal.
 windows-primitive-boundary	script	scripts/check-unsafe-audit.py	Checks Windows primitive unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks OS memory config, page sizing, aligned hints, guard pages, commit/decommit/reset/reuse/purge/protect/free, huge-page/NUMA helpers, marker coverage, and migration allowlist removal.
+os-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS memory config, page sizing, aligned hints, guard pages, commit/decommit/reset/reuse/purge/protect/free, huge-page/NUMA helpers, marker coverage, and migration allowlist removal.
 os-memory-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation, aligned allocation, realloc, zero-size, and free boundary cases routed through OS memory helpers.
 os-memory-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory unsafe operations retain operation-level SAFETY markers and source audit coverage.
 macos-zone-override	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks macOS malloc-zone struct layout, interpose targets, forwarding branches, batch pointer clearing, fork hooks, and migration allowlist removal.
@@ -152,7 +152,7 @@ internal-atomic-facade	test	tests/release_fast_path_audit/datatype_acceptance.rs
 internal-atomic-facade	script	scripts/check-atomic-ordering-audit.py	Checks mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
 internal-atomic-facade	script	scripts/check-unsafe-audit.py	Checks internal atomic facade operations retain operation-level SAFETY markers and source audit coverage.
 page-map-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map local C ABI boundaries, safe pointer lookup, marker coverage, and migration allowlist removal.
-page-map-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page-map typed index/sub-index/range helpers, RegisteredPageRange witnesses, and AtomicPtrField submap publication.
+page-map-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks page-map typed index/sub-index/range helpers, RegisteredPageRange witnesses, and AtomicPtrField submap publication.
 page-map-boundary	script	scripts/check-unsafe-audit.py	Checks page-map operations retain operation-level SAFETY markers and source audit coverage.
 scalar-domain-wrappers	test	src/types/scalar/tests.rs	Exercises scalar constructor boundaries, layout/niche behavior, UsableOut writes, SliceCount overflow, and page-map/bin/arena domains.
 scalar-domain-wrappers	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks scalar marker coverage, migration allowlist removal, transparent layout, and strict type wrapper expectations.
@@ -195,7 +195,7 @@ typed-padding-metadata	test	tests/release_fast_path_audit.rs	Checks production p
 typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-local padding metadata, canary witnesses, and padding pointer arithmetic fixtures.
 typed-page-domain	test	src/types/page/tests.rs	Exercises thread-id flag classification, free-path branch classification, and registered page-range witness construction.
 typed-pointer-accessors	test	src/types/ptr/tests.rs	Exercises page, block, heap, thread-heap, TLD, arena, subproc, page-queue, encoded-link, and exposed-address pointer accessor fixtures.
-typed-pointer-accessors	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks pointer wrappers stay transparent, niche-sized, inlineable, locally audited, and off the migration allowlist.
+typed-pointer-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks pointer wrappers stay transparent, niche-sized, inlineable, locally audited, and off the migration allowlist.
 typed-pointer-accessors	script	scripts/check-unsafe-audit.py	Checks typed pointer accessor unsafe operations retain operation-level SAFETY markers and source audit coverage.
 typed-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises stack-local allocator metadata pointer wrappers, raw field accessors, and exposed-address pointer arithmetic fixtures.
 typed-scalar-test-fixtures	test	src/types/scalar/tests.rs	Exercises concrete unchecked scalar constructor fixtures, overflow assertions, and table-index boundary checks.

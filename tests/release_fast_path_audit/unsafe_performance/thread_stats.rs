@@ -1,6 +1,7 @@
 use super::*;
 
 pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanceSources) {
+    let unsafe_allowlist = sources.unsafe_allowlist.as_str();
     let internal = sources.internal.as_str();
     let arena_rs = sources.arena_rs.as_str();
     let atomic_rs = sources.atomic_rs.as_str();
@@ -20,6 +21,16 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_stats_init(")
             && stats_rs.contains("static MI_STATS_INIT_KEEP: extern \"C\" fn() = _mi_stats_init;"),
         "_mi_stats_init should keep C's local process statistics initialization boundary"
+    );
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/stats.rs\t"))
+            && stats_rs
+                .matches("SAFETY[AUDIT:stats-reporting-boundary]")
+                .count()
+                >= 150,
+        "stats reporting unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
     assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_auto_process_init()")

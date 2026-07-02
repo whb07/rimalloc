@@ -17,6 +17,7 @@ pub(super) fn assert_raw_facade_boundaries(sources: &UnsafePerformanceSources) {
     let page_rs = sources.page_rs.as_str();
     let deferred_rs = sources.deferred_rs.as_str();
     let random_rs = sources.random_rs.as_str();
+    let raw_macros_rs = sources.raw_macros_rs.as_str();
     let stats_rs = sources.stats_rs.as_str();
     let theap_rs = sources.theap_rs.as_str();
     let init_rs = sources.init_rs.as_str();
@@ -58,6 +59,22 @@ pub(super) fn assert_raw_facade_boundaries(sources: &UnsafePerformanceSources) {
             && internal.contains("unsafe fn mi_cpu_stosb_max() -> usize")
             && internal.contains("core::arch::asm!("),
         "internal translation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/raw/macros.rs\t"))
+            && raw_macros_rs
+                .matches("SAFETY[AUDIT:raw-macro-allocation-boundary]")
+                .count()
+                >= 170
+            && raw_macros_rs.contains("core::arch::global_asm!(")
+            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
+            && raw_macros_rs.contains("pub unsafe fn mi_unix_malloc(")
+            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_unix_malloc_export")
+            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_wasi_libc_malloc_export")
+            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_linux_libc_malloc_export"),
+        "raw macro allocation facade unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
 
     local_boundaries::assert_page_map_and_deferred_boundaries(local_boundaries::BoundarySources {

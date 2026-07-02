@@ -28,16 +28,14 @@ Current review evidence:
   `os-memory-boundary` with 136 markers,
   `init-thread-tls-boundary` with 129 markers, and
   `windows-primitive-boundary` with 114 markers.
-- Some unsafe audit evidence rows still point at old release-audit harness
-  files such as `tests/release_fast_path_audit/unsafe_performance.rs`,
-  `tests/release_fast_path_audit/release_policy.rs`, and
-  `tests/release_fast_path_audit.rs` even though the checks now live in focused
-  submodules.
+- Audit evidence rows for allocation, aligned allocation, raw macro allocation,
+  OS memory, page-map, stats, and typed pointer checks now point at focused
+  release-audit modules instead of the old aggregate harness paths.
 - The release-audit module cap is 1,000 lines, but the root harness is still
   1,935 lines. The largest split modules are
   `unsafe_performance/lifecycle_boundaries.rs` at 922 lines,
   `unsafe_performance/platform_primitive_boundaries.rs` at 895 lines,
-  `unsafe_performance/raw_facade.rs` at 809 lines, and
+  `unsafe_performance/raw_facade.rs` at 826 lines, and
   `unsafe_performance/page_arena_behavior.rs` at 724 lines.
 
 ## Issue 1: Refresh audit evidence paths after the release-audit split
@@ -46,14 +44,14 @@ Current review evidence:
 > some evidence rows still cite the old harness files. That weakens review
 > precision and makes future evidence updates harder to trace.
 
-- [ ] Update `docs/unsafe-audit-evidence.tsv` rows for allocation, aligned
+- [x] Update `docs/unsafe-audit-evidence.tsv` rows for allocation, aligned
       allocation, raw macro allocation, OS memory, page-map, stats, and typed
       pointer checks to name the focused release-audit modules that now own the
       assertions.
-- [ ] Update `UNSAFE_AUDIT.md` and `docs/unsafe-audit.md` wording where it still
+- [x] Update `UNSAFE_AUDIT.md` and `docs/unsafe-audit.md` wording where it still
       describes broad release-audit harness ownership instead of focused
       modules.
-- [ ] Add or update release-audit assertions so evidence rows cannot drift back
+- [x] Add or update release-audit assertions so evidence rows cannot drift back
       to stale root harness paths when a focused module exists.
 
 Verify: unsafe audit scripts, unsafe evidence scripts, release fast-path audit,
@@ -150,7 +148,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Refresh audit evidence paths after the release-audit split.
+1. [x] Refresh audit evidence paths after the release-audit split.
 2. [ ] Narrow the remaining allocator/init strict-type wildcards.
 3. [ ] Split the raw macro allocation audit cluster.
 4. [ ] Split allocation, aligned allocation, stats, page-map, and OS audit
@@ -160,7 +158,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 ## Definition of done for this backlog
 
-- [ ] Unsafe audit evidence rows point at the focused tests that actually guard
+- [x] Unsafe audit evidence rows point at the focused tests that actually guard
       each operation ID.
 - [ ] Remaining strict-type wildcard entries are either narrowed to named items
       or documented as true ABI, public API, fixture, or typed-constructor

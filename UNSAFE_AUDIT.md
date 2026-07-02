@@ -25,6 +25,11 @@ shared invariants:
   initialization and reentrancy constraints as C mimalloc, with documented
   intentional divergences in `PARITY.md`.
 
+Automated evidence is tracked in `docs/unsafe-audit-evidence.tsv`. When a
+release-audit assertion lives in a focused module under
+`tests/release_fast_path_audit/`, the evidence row should name that focused
+module instead of the root harness or aggregate module shim.
+
 Per-file review:
 
 - `src/abi.rs`: raw declarations expose the C ABI surface without adding

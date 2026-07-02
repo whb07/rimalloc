@@ -30,13 +30,14 @@ Current review evidence:
   the broad `bare-domain-usize` allowance for `aligned`.
   `REMOVE_ENTRY_CAP` is 1.
 - The largest production review units remain translated-style modules:
-  `src/allocator/arena.rs` is 4,628 lines,
+  `src/allocator/arena.rs` is 4,520 lines,
   `src/allocator/page.rs` is 2,801 lines,
   `src/allocator/alloc.rs` is 2,559 lines,
   `src/internal/bitmap.rs` is 2,358 lines,
   `src/allocator/init.rs` is 2,339 lines,
   `src/raw/macros.rs` is 2,223 lines, and
-  `src/platform/windows.rs` is 2,191 lines.
+  `src/platform/windows.rs` is 2,191 lines. The new private
+  `src/allocator/arena/prefix.rs` module is 141 lines.
 - The largest unsafe audit marker clusters are still broad:
   `SAFETY[AUDIT:arena-debug-render]` has 35 markers,
   `SAFETY[AUDIT:owned-allocation]` has 32 markers,
@@ -44,8 +45,8 @@ Current review evidence:
   `SAFETY[AUDIT:page-count-accessors]` has 24 markers, and
   `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 23 markers.
 - The release audit still has large review units:
-  `tests/release_fast_path_audit.rs` is 2,866 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,653 lines,
+  `tests/release_fast_path_audit.rs` is 2,867 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,655 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,115 lines,
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
   is 660 lines,
@@ -169,23 +170,33 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 
 ## Issue: Arena remains the largest translated production review unit
 
-> **Comment:** `src/allocator/arena.rs` is 4,628 lines after prior page and
-> bitmap splits elsewhere. The fresh scan shows several cohesive helper groups,
+> **Comment:** `src/allocator/arena.rs` was 4,628 lines after prior page and
+> bitmap splits elsewhere. The fresh scan showed several cohesive helper groups,
 > including heap-visit/delete helpers near the top of the file and arena prefix
-> accessors. The next split should reduce review size without touching ABI or
-> benchmark-critical allocation behavior.
+> accessors. The prefix accessor split reduces review size without touching ABI
+> or benchmark-critical allocation behavior.
 
-- [ ] Re-scan `src/allocator/arena.rs` for a low-risk cohesive helper group,
+- [x] Re-scan `src/allocator/arena.rs` for a low-risk cohesive helper group,
       preferring heap-visit/delete helpers or prefix accessor helpers if their
       imports stay narrow.
-- [ ] Move the group into an `src/allocator/arena/` child module with explicit
-      `pub(crate)` re-exports only for current callers.
-- [ ] Keep data layout private and avoid exposing translated prefix structs
+- [x] Move the group into an `src/allocator/arena/` child module with explicit
+      `pub(super)` visibility only for current arena-module callers.
+- [x] Keep data layout private and avoid exposing translated prefix structs
       outside the allocator arena module boundary.
-- [ ] Update strict-type path aliases, unsafe audit evidence, release-audit
+- [x] Update strict-type path aliases, unsafe audit evidence, release-audit
       source assertions, and generated unsafe inventory as needed.
-- [ ] Preserve public C ABI symbols, public Rust facade shape, and hot-path
+- [x] Preserve public C ABI symbols, public Rust facade shape, and hot-path
       inline behavior.
+  - Evidence: heap, subproc, arena, and arena-pages prefix layouts plus
+    `mi_heap_abandoned_count`, `mi_arena_index`,
+    `mi_heap_arena_page_cell`, `mi_subproc_arena_cell`, and
+    `mi_arena_from_index_typed` moved into
+    `src/allocator/arena/prefix.rs`. The child module uses
+    `SAFETY[AUDIT:arena-prefix-accessors]`, is covered by
+    `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, and
+    `docs/unsafe-inventory.md`, and remains private to `allocator::arena` with
+    `pub(super)` fields/functions. `src/allocator/arena.rs` dropped from 4,628
+    to 4,520 lines and the new prefix module is 141 lines.
 
 Verify: focused arena/page tests where applicable,
 `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
@@ -199,7 +210,7 @@ full tests.
 2. [x] Migrate `src/allocator/tracking.rs` off the unsafe migration allowlist.
 3. [x] Narrow the broad `alloc` strict-type `usize` allowance.
 4. [x] Split one more release-audit assertion cluster.
-5. [ ] Split one cohesive helper group out of `src/allocator/arena.rs`.
+5. [x] Split one cohesive helper group out of `src/allocator/arena.rs`.
 
 ## Definition of done for this backlog
 
@@ -209,5 +220,5 @@ full tests.
 - [x] One remaining broad strict-type `remove:` allowance is narrowed or
       eliminated.
 - [x] One release-audit module has more review margin.
-- [ ] `src/allocator/arena.rs` is smaller without API, ABI, or hot-path
+- [x] `src/allocator/arena.rs` is smaller without API, ABI, or hot-path
       performance drift.

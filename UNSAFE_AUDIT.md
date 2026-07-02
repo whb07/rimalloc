@@ -49,6 +49,9 @@ Per-file review:
   page, bitmap, and memid metadata selected from the current sub-process arena
   registry and write only stack-local render buffers before sending text to the
   raw diagnostic output path.
+- `src/allocator/arena/prefix.rs`: arena, heap, and sub-process prefix layouts
+  remain private to `allocator::arena`; accessors require typed heap/subproc
+  witnesses or checked arena/bin indexes before returning typed atomic fields.
 - `src/arena_meta.rs`: arena metadata page stack operations publish and reclaim
   metadata pages through the audited atomic stack discipline.
 - `src/atomic.rs`: raw atomic pointer casts are centralized here and mapped to
@@ -218,6 +221,11 @@ Operation IDs:
   current sub-process registry, page map lookup, and typed memid views. The
   helpers are diagnostic-only, keep output in stack-local byte buffers, and do
   not allocate, publish, or mutate allocator ownership state.
+- `SAFETY[AUDIT:arena-prefix-accessors]`:
+  `src/allocator/arena/prefix.rs` centralizes heap, arena, sub-process, and
+  arena-page prefix accessors. Callers supply allocator-owned metadata plus
+  typed `BorrowedHeap`, `SubprocPtr`, `ArenaIndex`, or `Bin` witnesses before
+  the helpers return typed atomic field wrappers or registered arena pointers.
 - `SAFETY[AUDIT:deferred-free-callback-state]`:
   `src/allocator/page/deferred.rs` owns the C-compatible deferred-free callback
   globals, publishes callback and argument with release stores, reads them with

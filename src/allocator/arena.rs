@@ -112,121 +112,13 @@ const MI_LARGE_PAGE_SLICE_COUNT: crate::core_types::SliceCount = {
 const ENOMEM: c_int = 12;
 
 mod debug;
+mod prefix;
 
-#[repr(C)]
-struct MiHeapPrefix {
-    subproc: *mut mi_subproc_t,
-    heap_seq: usize,
-    next: *mut mi_heap_t,
-    prev: *mut mi_heap_t,
-    theap: mi_thread_local_t,
-    exclusive_arena: *mut mi_arena_t,
-    numa_node: i32,
-    _padding: u32,
-    theaps: *mut mi_theap_t,
-    theaps_lock: crate::atomic::mi_lock_t,
-    abandoned_count: [AtomicUsize; MI_BIN_COUNT],
-    os_abandoned_pages: *mut mi_page_t,
-    os_abandoned_pages_lock: crate::atomic::mi_lock_t,
-    arena_pages: [AtomicPtr<c_void>; MI_MAX_ARENAS],
-    arena_pages_lock: crate::atomic::mi_lock_t,
-}
-
-unsafe fn mi_heap_abandoned_count(
-    heap: *mut mi_heap_t,
-    bin: crate::core_types::Bin,
-) -> crate::core_types::AtomicAbandonedCount {
-    unsafe {
-        crate::core_types::AtomicAbandonedCount(ptr::addr_of!(
-            (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin.as_usize()]
-        ))
-    }
-}
-
-unsafe fn mi_arena_index(arena: *mut mi_arena_t) -> crate::core_types::ArenaIndex {
-    let arena_idx = unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx };
-    crate::internal::mi_assert!(arena_idx < MI_MAX_ARENAS);
-    unsafe { crate::core_types::ArenaIndex::new_unchecked(arena_idx as u16) }
-}
-
-unsafe fn mi_heap_arena_page_cell(
-    heap: BorrowedHeap,
-    arena_idx: crate::core_types::ArenaIndex,
-) -> crate::core_types::AtomicArenaPage {
-    let heap = heap.ptr().as_ptr();
-    unsafe {
-        crate::core_types::AtomicArenaPage(ptr::addr_of!(
-            (*heap.cast::<MiHeapPrefix>()).arena_pages[arena_idx.get() as usize]
-        ))
-    }
-}
-
-#[repr(C)]
-struct MiSubprocPrefix {
-    subproc_seq: usize,
-    next: *mut mi_subproc_t,
-    prev: *mut mi_subproc_t,
-    arena_count: AtomicUsize,
-    arenas: [*mut mi_arena_t; MI_MAX_ARENAS],
-    arena_reserve_lock: crate::atomic::mi_lock_t,
-    purge_expire: AtomicI64,
-    heap_main: *mut mi_heap_t,
-    heaps: *mut mi_heap_t,
-    heaps_lock: crate::atomic::mi_lock_t,
-    thread_count: AtomicUsize,
-    thread_total_count: AtomicUsize,
-    heap_count: AtomicUsize,
-}
-
-unsafe fn mi_subproc_arena_cell(
-    subproc: *mut mi_subproc_t,
-    arena_idx: ArenaIndex,
-) -> crate::core_types::AtomicPtrField<mi_arena_t> {
-    unsafe {
-        crate::core_types::AtomicPtrField(ptr::addr_of_mut!(
-            (*subproc.cast::<MiSubprocPrefix>()).arenas[arena_idx.get() as usize]
-        ))
-    }
-}
-
-unsafe fn mi_arena_from_index_typed(subproc: SubprocPtr, arena_idx: ArenaIndex) -> *mut mi_arena_t {
-    unsafe {
-        mi_subproc_arena_cell(subproc.as_ptr(), arena_idx)
-            .load(crate::core_types::MemoryOrder::Acquire)
-    }
-}
-
-#[repr(C)]
-struct MiArenaPrefix {
-    memid: crate::internal::mi_memid_t,
-    subproc: *mut mi_subproc_t,
-    arena_idx: usize,
-    slice_count: usize,
-    info_slices: usize,
-    numa_node: i32,
-    is_exclusive: bool,
-    _padding: [u8; 7],
-    purge_expire: AtomicI64,
-    commit_fun: Option<mi_commit_fun_t>,
-    commit_fun_arg: *mut c_void,
-    total_size: usize,
-    parent: *mut mi_arena_t,
-    slices_free: *mut crate::bitmap::mi_bbitmap_t,
-    slices_committed: *mut crate::bitmap::mi_bitmap_t,
-    slices_dirty: *mut crate::bitmap::mi_bitmap_t,
-    slices_purge: *mut crate::bitmap::mi_bitmap_t,
-    pages_meta: *mut mi_page_t,
-    pages_main: MiArenaPagesPrefix,
-}
-
-#[repr(C)]
-struct MiArenaPagesPrefix {
-    pages: *mut mi_bitmap_t,
-    pages_abandoned: [*mut mi_bitmap_t; MI_ARENA_BIN_COUNT],
-}
-
-#[allow(non_camel_case_types)]
-type mi_arena_pages_t = MiArenaPagesPrefix;
+use prefix::{
+    MiArenaPagesPrefix, MiArenaPrefix, MiHeapPrefix, MiSubprocPrefix, mi_arena_from_index_typed,
+    mi_arena_index, mi_arena_pages_t, mi_heap_abandoned_count, mi_heap_arena_page_cell,
+    mi_subproc_arena_cell,
+};
 
 #[allow(non_camel_case_types)]
 #[repr(C)]

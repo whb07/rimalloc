@@ -24,6 +24,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/arena.rs");
     let arena_debug_rs = fs::read_to_string(root.join("src/allocator/arena/debug.rs"))
         .expect("read src/allocator/arena/debug.rs");
+    let arena_prefix_rs = fs::read_to_string(root.join("src/allocator/arena/prefix.rs"))
+        .expect("read src/allocator/arena/prefix.rs");
     let arena_meta_rs = fs::read_to_string(root.join("src/allocator/arena_meta.rs"))
         .expect("read src/allocator/arena_meta.rs");
     let atomic_rs = fs::read_to_string(root.join("src/internal/atomic.rs"))
@@ -2191,10 +2193,10 @@ fn free_path_internals_are_not_dynamic_exports() {
                 .contains("pub(crate) unsafe fn fetch_add_relaxed(self, value: usize) -> usize")
             && atomic_types
                 .contains("pub(crate) unsafe fn fetch_sub_relaxed(self, value: usize) -> usize")
-            && arena_rs.contains(
-                "unsafe fn mi_heap_abandoned_count(\n    heap: *mut mi_heap_t,\n    bin: crate::core_types::Bin,"
+            && arena_prefix_rs.contains(
+                "pub(super) unsafe fn mi_heap_abandoned_count(\n    heap: *mut mi_heap_t,\n    bin: crate::core_types::Bin,"
             )
-            && arena_rs.contains("abandoned_count[bin.as_usize()]")
+            && arena_prefix_rs.contains("abandoned_count[bin.as_usize()]")
             && arena_rs.contains("let Some(typed_bin) = crate::core_types::Bin::new(bin as u16) else")
             && arena_rs.contains("crate::internal::mi_assert_internal!(false);\n                                break;")
             && arena_rs.contains("mi_heap_abandoned_count(heap, typed_bin).load_relaxed() > 0")
@@ -2217,19 +2219,19 @@ fn free_path_internals_are_not_dynamic_exports() {
             && atomic_types.contains(
                 "pub(crate) unsafe fn store_release(self, value: *mut crate::types::mi_arena_pages_t)"
             )
-            && arena_rs.contains(
-                "unsafe fn mi_arena_index(arena: *mut mi_arena_t) -> crate::core_types::ArenaIndex"
+            && arena_prefix_rs.contains(
+                "pub(super) unsafe fn mi_arena_index(arena: *mut mi_arena_t) -> crate::core_types::ArenaIndex"
             )
             && !arena_rs.contains(
                 "unsafe fn mi_heap_arena_page_cell(\n    heap: *mut mi_heap_t,\n    arena_idx: crate::core_types::ArenaIndex,"
             )
-            && arena_rs.contains(
-                "unsafe fn mi_heap_arena_page_cell(\n    heap: BorrowedHeap,\n    arena_idx: crate::core_types::ArenaIndex,"
+            && arena_prefix_rs.contains(
+                "pub(super) unsafe fn mi_heap_arena_page_cell(\n    heap: BorrowedHeap,\n    arena_idx: crate::core_types::ArenaIndex,"
             )
             && arena_rs.contains(
                 "unsafe fn mi_heap_ensure_arena_pages(\n    heap: BorrowedHeap,\n    arena: ArenaPtr,\n    arena_idx: ArenaIndex,"
             )
-            && arena_rs.contains("arena_pages[arena_idx.get() as usize]")
+            && arena_prefix_rs.contains("arena_pages[arena_idx.get() as usize]")
             && arena_rs.matches("mi_heap_arena_page_cell(heap, arena_idx).load_acquire()").count()
                 == 1
             && arena_rs
@@ -2247,17 +2249,17 @@ fn free_path_internals_are_not_dynamic_exports() {
         atomic_types
             .contains("pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder)")
             && atomic_types.contains("pub(crate) unsafe fn compare_exchange_release(")
-            && arena_rs
+            && arena_prefix_rs
                 .matches("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(")
                 .count()
                 == 1
-            && arena_rs.contains(
-                "unsafe fn mi_subproc_arena_cell(\n    subproc: *mut mi_subproc_t,\n    arena_idx: ArenaIndex,"
+            && arena_prefix_rs.contains(
+                "pub(super) unsafe fn mi_subproc_arena_cell(\n    subproc: *mut mi_subproc_t,\n    arena_idx: ArenaIndex,"
             )
-            && arena_rs.contains(
-                "unsafe fn mi_arena_from_index_typed(subproc: SubprocPtr, arena_idx: ArenaIndex)"
+            && arena_prefix_rs.contains(
+                "pub(super) unsafe fn mi_arena_from_index_typed(\n    subproc: SubprocPtr,\n    arena_idx: ArenaIndex,"
             )
-            && arena_rs
+            && arena_prefix_rs
                 .matches("(*subproc.cast::<MiSubprocPrefix>()).arenas[")
                 .count()
                 == 1

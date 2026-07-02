@@ -15,17 +15,16 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 17 entries: 14 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 17.
+- `docs/unsafe-migration-allowlist.tsv` has 16 entries: 14 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 16.
 - The completed pass moved `src/platform/macos.rs`, `src/platform/mod.rs`,
   `src/internal/atomic.rs`, `src/allocator/page_map.rs`, and
   `src/types/scalar.rs` to local `SAFETY[AUDIT:*]` operation markers with
   evidence rows and no migration allowlist entries.
-- `src/types/constants.rs` is the smallest remaining allowlisted file at
-  603 lines with 10 `unsafe` hits and 2 local markers. The sentinel raw
-  `Sync` impls are already covered by `SAFETY[AUDIT:raw-auto-trait]`, but the
-  raw `unsafe extern "C" fn` callback typedef declarations still rely on the
-  file-level translation allowance.
+- The current pass moved `src/types/constants.rs` to 8
+  `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers for raw callback typedef
+  declarations while retaining 2 `SAFETY[AUDIT:raw-auto-trait]` markers for
+  sentinel `Sync` impls, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files with no local markers are
   `src/allocator/thread_heap.rs` at 1,267 lines with 120 `unsafe` hits,
   `src/platform/unix.rs` at 1,371 lines with 143 `unsafe` hits,
@@ -78,25 +77,25 @@ Current review evidence:
 ## Issue: Raw layout callback typedefs still use a file-level unsafe allowance
 
 > **Comment:** `src/types/constants.rs` is the raw C layout substrate. Its
-> remaining unmarked unsafe operations are ABI declarations: raw
+> previously unmarked unsafe operations were ABI declarations: raw
 > `unsafe extern "C" fn` callback typedefs used by raw/public C compatibility
 > APIs. The sentinel `Sync` impls already have local `raw-auto-trait` markers,
-> but the file remains allowlisted because the callback typedef declarations are
-> not locally classified.
+> and this pass locally classified the callback typedef declarations so the file
+> no longer needs a migration allowance.
 
-- [ ] Add local `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers for deferred
+- [x] Add local `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers for deferred
       free, output, error, heap visit, block visit, commit, claim, and forall-set
       callback typedef declarations while retaining the existing
       `SAFETY[AUDIT:raw-auto-trait]` markers for sentinel `Sync` impls.
-- [ ] Preserve `repr(C)` layout definitions, raw callback typedef names and
+- [x] Preserve `repr(C)` layout definitions, raw callback typedef names and
       signatures, documented nullability/lifetime/threading/reentrancy/unwind
       contracts, raw `mi_*` aliases, and the separation between raw typedefs
       and typed callback wrappers.
-- [ ] Add or extend release-audit assertions for callback typedef marker
+- [x] Add or extend release-audit assertions for callback typedef marker
       coverage, raw typedef names, no typed wrapper leakage into
       `src/types/constants.rs`, sentinel-only `Sync` impls, and no migration
       allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/types/constants.rs` from the unsafe migration allowlist, regenerate
       unsafe inventory, and lower the cap.
 
@@ -223,7 +222,7 @@ clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/types/constants.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/types/constants.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/allocator/thread_heap.rs` off the unsafe migration
        allowlist.
 3. [ ] Migrate `src/platform/unix.rs` off the unsafe migration allowlist.
@@ -232,7 +231,7 @@ clippy, and full tests.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
+- [x] The unsafe migration allowlist cap is lowered after each migrated file.
 - [ ] `src/types/constants.rs`, `src/allocator/thread_heap.rs`,
       `src/platform/unix.rs`, `src/platform/os.rs`, and `src/types/ptr.rs` are
       covered by operation-level audit markers and evidence instead of

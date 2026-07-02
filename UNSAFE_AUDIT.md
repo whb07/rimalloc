@@ -236,6 +236,12 @@ Operation IDs:
 - `SAFETY[AUDIT:raw-auto-trait]`: `src/types/constants.rs` implements raw
   auto-traits only for immutable sentinel metadata values whose mutation remains
   protected by allocator ownership, atomics, or locks.
+- `SAFETY[AUDIT:raw-layout-abi-typedefs]`: `src/types/constants.rs` owns raw
+  C ABI callback typedef declarations for deferred-free, output, error, heap
+  visit, block visit, managed-memory commit, arena claim, and forall-set
+  callbacks. These declarations publish raw `unsafe extern "C" fn` signatures
+  and contracts only; typed callback wrappers classify invocation and storage
+  inside allocator internals.
 - `SAFETY[AUDIT:raw-macro-boundary]`: `src/ffi/abi.rs` and
   `src/ffi/headers.rs` expose raw C-header macro compatibility without adding
   Rust ownership guarantees; callers inherit the documented raw ABI contract.

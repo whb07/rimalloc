@@ -715,6 +715,8 @@ fn public_callback_abi_inventory_stays_documented() {
     let types_rs = fs::read_to_string(root.join("src/types/constants.rs"))
         .expect("read src/types/constants.rs");
     let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
+    let unsafe_allowlist = fs::read_to_string(root.join("docs/unsafe-migration-allowlist.tsv"))
+        .expect("read unsafe migration allowlist");
     let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
         .expect("read src/allocator/options.rs");
     let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
@@ -779,6 +781,17 @@ fn public_callback_abi_inventory_stays_documented() {
             && abi_rs.contains("visitor: Option<mi_heap_visit_fun>")
             && abi_rs.contains("commit_fun: Option<mi_commit_fun_t>"),
         "src/ffi/abi.rs should expose callback-accepting C declarations with nullable Option callbacks"
+    );
+
+    assert!(
+        !unsafe_allowlist.contains("src/types/constants.rs")
+            && types_rs
+                .matches("SAFETY[AUDIT:raw-layout-abi-typedefs]")
+                .count()
+                >= 8
+            && types_rs.matches("SAFETY[AUDIT:raw-auto-trait]").count() == 2
+            && types_rs.matches("unsafe impl Sync").count() == 2,
+        "raw layout callback typedefs and sentinel Sync impls should stay locally audited without a migration allowlist entry"
     );
 
     for forbidden in [
@@ -925,6 +938,13 @@ fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
             && types_rs.contains("pub type mi_commit_fun_t = unsafe extern \"C\" fn")
             && types_rs.contains("pub type mi_claim_fun_t =\n    unsafe extern \"C\" fn"),
         "src/types/constants.rs should keep public and unstable callback typedefs raw C ABI function pointers"
+    );
+    assert!(
+        types_rs
+            .matches("SAFETY[AUDIT:raw-layout-abi-typedefs]")
+            .count()
+            >= 8,
+        "raw callback typedef declarations should retain operation-level audit markers"
     );
     assert!(
         abi_rs.contains("out: Option<mi_output_fun>")

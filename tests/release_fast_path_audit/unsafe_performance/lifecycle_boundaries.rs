@@ -47,6 +47,32 @@ fn lifecycle_and_local_boundary_helpers_stay_classified() {
         "platform TLS primitive boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
     assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/init.rs\t"))
+            && init_rs
+                .matches("SAFETY[AUDIT:init-lifecycle-boundary]")
+                .count()
+                >= 270
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_thread_init")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_process_init")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_process_done")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_auto_process_init")
+            && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_auto_process_done")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_main")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_current")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_new")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_destroy")
+            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_visit_heaps")
+            && init_rs.contains("fn mi_detect_cpu_features()")
+            && init_rs.contains("OS_PRELOADING.store(false, Ordering::Relaxed);")
+            && init_rs.contains("OS_PRELOADING.store(true, Ordering::Relaxed);")
+            && init_rs.contains(
+                "crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random))"
+            ),
+        "init lifecycle unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
+    assert!(
         prim_rs.contains("pub const MI_TLS_MODEL_THREAD_LOCAL")
             && prim_rs.contains("pub const MI_TLS_MODEL_FIXED_SLOT")
             && prim_rs.contains("pub const MI_TLS_MODEL_DYNAMIC_WIN32")

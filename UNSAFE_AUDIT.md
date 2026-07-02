@@ -233,6 +233,14 @@ Operation IDs:
   boundaries. Unsafe operations stay at C ABI shims, callback invocations,
   page/block traversal, fast-divisor out-pointers, and caller-proven
   heap/thread-heap/TLD metadata transitions routed through typed wrappers.
+- `SAFETY[AUDIT:init-lifecycle-boundary]`: `src/allocator/init.rs` owns process
+  and thread initialization/teardown, preloading state, subproc identity
+  conversion, main heap/TLS association, constructor/destructor hooks, random
+  and CPU feature setup, and raw lifecycle exports. Unsafe operations are
+  limited to C ABI shims, process-global metadata publication, TLS slot/key
+  setup, typed subproc/thread-heap witness construction, statically linked
+  assembly symbols, option/stat initialization ordering, and teardown paths
+  while preserving idempotent initialization and no-unwind lifecycle behavior.
 - `SAFETY[AUDIT:free-path-boundary]`: `src/allocator/free.rs` owns free and
   usable-size routing. Unsafe operations are limited to free fast-path assembly
   aliases, validated page/block/user-pointer lookup, padding and guarded-block

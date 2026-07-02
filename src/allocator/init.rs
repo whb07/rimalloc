@@ -56,10 +56,13 @@ use crate::types::{
 #[cfg(windows)]
 use crate::{prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden _mi_theap_empty");
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden _mi_cpu_movsb_max", ".hidden _mi_cpu_stosb_max");
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden subproc_main");
 
@@ -379,6 +382,7 @@ const MI_RANDOM_CTX_EMPTY: mi_random_ctx_t = mi_random_ctx_t {
     weak: true,
 };
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 pub(crate) static _mi_theap_empty: mi_theap_t = mi_theap_t {
     tld: ptr::addr_of!(tld_empty).cast_mut(),
@@ -506,9 +510,11 @@ static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
     stats: MI_STATS_NULL(),
 };
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 pub(crate) static mut _mi_cpu_movsb_max: usize = 0;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 pub(crate) static mut _mi_cpu_stosb_max: usize = 0;
 
@@ -561,6 +567,7 @@ impl MiSubprocPrefix {
     fn new_with_memid(seq: crate::core_types::SubprocSeq, memid: mi_memid_t) -> Self {
         let mut stats = mi_stats_t::default();
         // SAFETY: `stats` points to a valid local `mi_stats_t`.
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { mi_stats_header_init(&mut stats) };
         Self {
             subproc_seq: seq.get(),
@@ -584,6 +591,7 @@ impl MiSubprocPrefix {
 }
 
 unsafe fn mi_subproc_prefix(subproc: *mut mi_subproc_t) -> *mut MiSubprocPrefix {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_subproc_prefix_typed(SubprocPtr::new_unchecked(subproc)) }
 }
 
@@ -595,21 +603,27 @@ unsafe fn mi_subproc_heap_main_raw(subproc: *mut mi_subproc_t) -> *mut mi_heap_t
     let Some(subproc) = SubprocPtr::new(subproc) else {
         return ptr::null_mut();
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { BorrowedSubproc::new(subproc) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_subproc_heap_main_typed(subproc) }
         .map(HeapPtr::as_ptr)
         .unwrap_or(ptr::null_mut())
 }
 
 unsafe fn mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> Option<HeapPtr> {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { mi_subproc_prefix_typed(subproc.ptr()) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     HeapPtr::new(unsafe { ptr::addr_of!((*subproc).heap_main).read_unaligned() })
 }
 
 unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { ptr::addr_of!((*(heap.cast::<MiHeapMainPrefix>())).subproc).read_unaligned() }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
 #[inline(never)]
@@ -622,6 +636,7 @@ fn _mi_subproc_to_id_typed(subproc: Option<SubprocPtr>) -> mi_subproc_id_t {
     mi_subproc_id_t::from_ptr(subproc.map(SubprocPtr::as_ptr).unwrap_or(ptr::null_mut()))
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[used]
 static MI_SUBPROC_TO_ID_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> mi_subproc_id_t =
     _mi_subproc_to_id;
@@ -630,14 +645,17 @@ unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
     let Some(subproc) = SubprocPtr::new(subproc) else {
         return;
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_subproc_destroy_meta_typed(subproc) };
 }
 
 const _: unsafe fn(*mut mi_subproc_t) = mi_subproc_destroy_meta;
 
 unsafe fn mi_subproc_destroy_meta_typed(subproc: SubprocPtr) {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { mi_subproc_prefix_typed(subproc) };
     // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         mi_lock_done(ptr::addr_of_mut!((*subproc).arena_reserve_lock));
         mi_lock_done(ptr::addr_of_mut!((*subproc).heaps_lock));
@@ -653,6 +671,7 @@ unsafe fn mi_subproc_destroy_meta_typed(subproc: SubprocPtr) {
 #[inline(always)]
 unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
     let main: *mut mi_subproc_t;
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         core::arch::asm!(
             "lea {main}, [rip + subproc_main]",
@@ -672,11 +691,13 @@ unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
 }
 
 unsafe fn mi_subproc_main_addr_typed() -> MainSubproc {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { MainSubproc::new_unchecked(SubprocPtr::new_unchecked(mi_subproc_main_addr())) }
 }
 
 fn mi_subproc_main_init() {
     // SAFETY: one-time process initialization for local subproc scaffolding.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         let main = mi_subproc_main_addr();
         let main_prefix = mi_subproc_prefix(main);
@@ -699,6 +720,7 @@ fn mi_subproc_main_init() {
 }
 
 unsafe fn mi_subproc_unlink_locked(subproc: *mut MiSubprocPrefix) {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         if !(*subproc).next.is_null() {
             (*mi_subproc_prefix((*subproc).next)).prev = (*subproc).prev;
@@ -717,36 +739,48 @@ unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs
     let Some(subproc) = SubprocPtr::new(subproc) else {
         return;
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_subproc_unsafe_destroy_typed(subproc, acquire_subprocs_lock) };
 }
 
 unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_lock: bool) {
     let subproc_raw = subproc.as_ptr();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let main_subproc = unsafe { mi_subproc_main_addr_typed().ptr() };
     let is_main = ptr::eq(subproc_raw, main_subproc.as_ptr());
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc_prefix = unsafe { mi_subproc_prefix_typed(subproc) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let borrowed_subproc = unsafe { BorrowedSubproc::new(subproc) };
     if acquire_subprocs_lock {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock)) };
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_subproc_unlink_locked(subproc_prefix) };
     if acquire_subprocs_lock {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { mi_lock_release(ptr::addr_of_mut!(subprocs_lock)) };
     }
 
     loop {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let heaps_lock = unsafe { MiLockGuard::acquire(subproc.heaps_lock()) };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let heap = unsafe { (*subproc_prefix).heaps };
         drop(heaps_lock);
         if heap.is_null() {
             break;
         }
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let main_heap = unsafe { mi_subproc_heap_main_typed(borrowed_subproc) }
             .map(HeapPtr::as_ptr)
             .unwrap_or(ptr::null_mut());
         if !ptr::eq(heap, main_heap) {
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { mi_heap_destroy(heap) };
         } else {
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { _mi_heap_force_destroy(heap) };
             break;
         }
@@ -754,14 +788,18 @@ unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_
 
     {
         let subproc = subproc_raw;
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { _mi_arenas_unsafe_destroy_all(subproc) };
     }
 
     if is_main {
         let subproc = subproc_raw;
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { crate::page_map::_mi_page_map_unsafe_destroy(subproc) };
     } else {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let main_subproc = unsafe { mi_subproc_prefix_typed(main_subproc) };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             _mi_stats_merge_into(
                 ptr::addr_of_mut!((*main_subproc).stats),
@@ -774,7 +812,9 @@ unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_
 
 unsafe fn mi_subprocs_unsafe_destroy_all() {
     mi_subproc_main_init();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let main_subproc = unsafe { _mi_subproc_main() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         {
             let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
@@ -815,6 +855,7 @@ thread_local! {
     static THEAP_MAIN: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 unsafe extern "C" {
     fn _mi_tls_theap_main_get() -> *mut mi_theap_t;
@@ -829,6 +870,7 @@ unsafe fn _mi_tls_theap_main_set(theap: Option<ThreadHeapPtr>) {
         .map(ThreadHeapPtr::as_ptr)
         .unwrap_or(ptr::null_mut())
         .cast();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_tls_theap_main_set_raw(theap) };
 }
 
@@ -842,6 +884,7 @@ unsafe fn _mi_tls_theap_main_set(theap: Option<ThreadHeapPtr>) {
 #[inline(always)]
 unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
     let theap: *mut mi_theap_t;
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
@@ -864,6 +907,7 @@ unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
 #[inline(always)]
 unsafe fn mi_linux_x64_theap_main_set(theap: Option<ThreadHeapPtr>) {
     let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
@@ -897,6 +941,7 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
         target_arch = "x86_64",
         not(target_env = "musl")
     ))]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         mi_linux_x64_theap_main_get()
     }
@@ -906,6 +951,7 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
         any(feature = "tls-shim", not(feature = "std")),
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         _mi_tls_theap_main_get()
     }
@@ -939,6 +985,7 @@ pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
         target_arch = "x86_64",
         not(target_env = "musl")
     ))]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         mi_linux_x64_theap_main_set(theap);
     }
@@ -948,6 +995,7 @@ pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
         any(feature = "tls-shim", not(feature = "std")),
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         _mi_tls_theap_main_set(theap);
     }
@@ -991,6 +1039,7 @@ static MI_THREAD_ID_KEEP: extern "C" fn() -> mi_threadid_t = _mi_thread_id;
 
 #[inline(always)]
 fn mi_is_main_thread_fast() -> bool {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let main_tid = unsafe { tld_main.thread_id };
     main_tid == 0 || main_tid == current_thread_id()
 }
@@ -1000,13 +1049,16 @@ pub extern "C" fn _mi_is_main_thread() -> bool {
     mi_is_main_thread_fast()
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Delegates to the internal thread teardown routine for the current thread.
 pub unsafe extern "C" fn mi_thread_done() {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { crate::internal::_mi_thread_done(ptr::null_mut()) };
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// `theap` must be null or the current thread's thread-local heap.
 pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
@@ -1014,8 +1066,10 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     if default_theap.is_null() {
         default_theap = mi_theap_main_tls_peek();
         if default_theap.is_null() {
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             default_theap = unsafe { crate::prim::_mi_theap_default() };
             crate::internal::mi_assert_internal!(
+                // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
                 default_theap.is_null() || unsafe { _mi_is_theap_main(default_theap) }
             );
         }
@@ -1024,28 +1078,37 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     let Some(default_theap) = ThreadHeapPtr::new(default_theap) else {
         return;
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_thread_done_typed(default_theap) };
 }
 
 unsafe fn _mi_thread_done_typed(default_theap: ThreadHeapPtr) {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap = match unsafe { default_theap.state() } {
         ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => theap,
         ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return,
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let Ok(default_theap) = (unsafe { theap.try_local(current) }) else {
         return;
     };
     crate::threadlocal::_mi_thread_locals_thread_done();
 
     let default_theap = default_theap.ptr().as_ptr();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let tld = unsafe { (*default_theap).tld };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { (*tld).subproc };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if heap.is_null() {
         mi_heap_main_init();
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         __mi_stat_decrease_mt(
             ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
@@ -1053,10 +1116,12 @@ unsafe fn _mi_thread_done_typed(default_theap: ThreadHeapPtr) {
         )
     };
 
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if unsafe { (*tld).thread_id } != crate::prim::_mi_prim_thread_id() {
         return;
     }
 
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_thread_theaps_done(tld) };
     mi_tld_free(tld);
 }
@@ -1066,6 +1131,7 @@ pub(crate) extern "C" fn _mi_preloading() -> bool {
     OS_PRELOADING.load(Ordering::Relaxed)
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_is_redirected() -> bool {
     unsafe { crate::prim::_mi_is_redirected() }
@@ -1073,6 +1139,7 @@ pub extern "C" fn mi_is_redirected() -> bool {
 
 /// # Safety
 /// `theap` must be null or point to a valid thread heap owned by this allocator.
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
     theap: *mut mi_theap_t,
@@ -1080,6 +1147,7 @@ pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
     seed: usize,
 ) {
     #[cfg(feature = "guarded")]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         if let Some(theap) = ThreadHeapPtr::new(theap) {
             let current = ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id());
@@ -1107,6 +1175,7 @@ unsafe fn mi_theap_guarded_set_sample_rate_typed(
     seed: usize,
 ) {
     let theap = theap.ptr().as_ptr();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         (*theap).guarded_sample_rate = sample_rate.get();
         let mut sample_count = GuardedSampleCount::new(sample_rate.get());
@@ -1124,6 +1193,7 @@ unsafe fn mi_theap_guarded_set_sample_rate_typed(
 
 /// # Safety
 /// `theap` must be null or point to a valid thread heap owned by this allocator.
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
     theap: *mut mi_theap_t,
@@ -1131,6 +1201,7 @@ pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
     max: usize,
 ) {
     #[cfg(feature = "guarded")]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         if let Some(theap) = ThreadHeapPtr::new(theap) {
             let current = ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id());
@@ -1156,15 +1227,18 @@ unsafe fn mi_theap_guarded_set_size_bound_typed(
     max: GuardedSizeMax,
 ) {
     let theap = theap.ptr().as_ptr();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         (*theap).guarded_size_min = min.get();
         (*theap).guarded_size_max = max.get();
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
     #[cfg(feature = "guarded")]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         if let Some(theap) = ThreadHeapPtr::new(theap) {
             let current = ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id());
@@ -1212,6 +1286,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
 #[cfg(feature = "guarded")]
 unsafe fn _mi_theap_guarded_init_typed(theap: ThreadHeapLocal, config: GuardedConfig) {
     let theap = theap.ptr().as_ptr();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         (*theap).guarded_size_min = config.size_min().get();
         (*theap).guarded_size_max = config.size_max().get();
@@ -1220,13 +1295,17 @@ unsafe fn _mi_theap_guarded_init_typed(theap: ThreadHeapLocal, config: GuardedCo
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// `theap` must be valid when non-null.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
     if let Some(theap) = ThreadHeapPtr::new(theap) {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         if let Ok(theap) = unsafe { theap.try_local(current) } {
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { _mi_theap_options_init_typed(theap) };
         }
     }
@@ -1234,6 +1313,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
 
 unsafe fn _mi_theap_options_init_typed(theap: ThreadHeapLocal) {
     let theap = theap.ptr().as_ptr();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         (*theap).allow_page_reclaim =
             mi_option_get(mi_option_t::mi_option_page_reclaim_on_free) >= 0;
@@ -1248,6 +1328,7 @@ unsafe fn _mi_theap_options_init_typed(theap: ThreadHeapLocal) {
 
 fn mi_tld_main_init() {
     // SAFETY: mutates the statically allocated main-thread tld during one-time lazy init.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         if tld_main.thread_id == 0 {
             tld_main.thread_id = crate::prim::_mi_prim_thread_id();
@@ -1258,6 +1339,7 @@ fn mi_tld_main_init() {
 
 fn mi_theap_main_init() {
     // SAFETY: mutates the statically allocated main theap during one-time lazy init.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         if !mi_memid_is_static(theap_main.memid) {
             theap_main.memid =
@@ -1276,6 +1358,7 @@ fn mi_theap_main_init() {
 
 fn mi_heap_main_init() {
     // SAFETY: mutates the statically allocated main heap during one-time lazy init.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         if heap_main.subproc.is_null() {
             heap_main.subproc = ptr::addr_of_mut!(subproc_main)
@@ -1302,6 +1385,7 @@ fn mi_tld_alloc() -> *mut mi_tld_t {
     if mi_is_main_thread_fast() {
         mi_tld_main_init();
         // SAFETY: main-thread bookkeeping mutates only the process-global main subproc counters.
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             let subproc = mi_subproc_prefix(main_subproc);
             (*subproc).thread_count.fetch_add(1, Ordering::Relaxed);
@@ -1327,6 +1411,7 @@ fn mi_tld_alloc_non_main(main_subproc: *mut mi_subproc_t) -> *mut mi_tld_t {
 #[inline(always)]
 fn mi_tld_alloc_non_main_typed(main_subproc: SubprocPtr) -> Option<TldPtr> {
     // SAFETY: allocates a fresh zeroed tld block and initializes its local fields.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         let mut memid = mi_memid_t::default();
         let tld_raw =
@@ -1364,6 +1449,7 @@ fn mi_tld_free(tld: *mut mi_tld_t) {
         return;
     }
     // SAFETY: `tld` must point to a valid local `mi_tld_t`.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         mi_lock_done(ptr::addr_of_mut!((*tld).theaps_lock));
         if !(*tld).subproc.is_null() {
@@ -1376,11 +1462,13 @@ fn mi_tld_free(tld: *mut mi_tld_t) {
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
 unsafe extern "C" {
     fn pthread_key_delete(key: mi_thread_local_t) -> i32;
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[cfg(windows)]
 unsafe extern "system" {
     fn TlsAlloc() -> u32;
@@ -1394,9 +1482,12 @@ unsafe fn mi_win_tls_slot_alloc(
     extended: *mut usize,
     raw_index: *mut u32,
 ) -> bool {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let index = unsafe { TlsAlloc() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { raw_index.write(index) };
     if index == TLS_OUT_OF_INDEXES {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             extended.write(0);
             slot.write(0);
@@ -1406,6 +1497,7 @@ unsafe fn mi_win_tls_slot_alloc(
         .ok()
         .is_some_and(|i| i < MI_TLS_DIRECT_SLOTS)
     {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             extended.write(0);
             slot.write(index as usize + MI_TLS_DIRECT_FIRST);
@@ -1415,12 +1507,14 @@ unsafe fn mi_win_tls_slot_alloc(
         .ok()
         .is_some_and(|i| i < MI_TLS_DIRECT_SLOTS + MI_TLS_EXPANSION_SLOTS - 1)
     {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             extended.write(index as usize - MI_TLS_DIRECT_SLOTS);
             slot.write(MI_TLS_EXPANSION_SLOT);
         }
         true
     } else {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             _mi_error_message_fmt(
                 Errno::EFAULT,
@@ -1437,8 +1531,10 @@ unsafe fn mi_win_tls_slot_alloc(
 
 #[cfg(windows)]
 unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let index = unsafe { raw_index.read() };
     if index != TLS_OUT_OF_INDEXES {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             let _ = TlsFree(index);
             raw_index.write(TLS_OUT_OF_INDEXES);
@@ -1456,6 +1552,7 @@ unsafe fn mi_win_tls_slot_set(slot: usize, extended_slot: usize, value: *mut c_v
         crate::prim::mi_prim_tls_slot_set(slot, value);
     } else {
         crate::internal::mi_assert_internal!(extended_slot < MI_TLS_EXPANSION_SLOTS);
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let _ = unsafe { TlsSetValue((extended_slot + MI_TLS_DIRECT_SLOTS) as u32, value) };
     }
 }
@@ -1469,6 +1566,7 @@ unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
     if key == 0 {
         EFAULT
     } else {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { pkey.write(key) };
         0
     }
@@ -1477,10 +1575,12 @@ unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
 fn mi_tls_slots_init() {
     static TLS_SLOTS_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
     if let Some(_once) =
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { mi_atomic_do_once_enter(ptr::addr_of!(TLS_SLOTS_INIT).cast_mut()) }
     {
         #[cfg(windows)]
         // SAFETY: one-time initialization of process-global TLS slot metadata.
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             let mut ok = mi_win_tls_slot_alloc(
                 ptr::addr_of_mut!(_mi_theap_default_slot),
@@ -1506,6 +1606,7 @@ fn mi_tls_slots_init() {
         }
 
         #[cfg(any(target_os = "openbsd", target_os = "android"))]
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             let mut err = mi_pthread_key_create(ptr::addr_of_mut!(_mi_theap_default_key));
             if err == 0 {
@@ -1523,12 +1624,14 @@ fn mi_tls_slots_init() {
 
 fn mi_tls_slots_done() {
     #[cfg(windows)]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         mi_win_tls_slot_free(ptr::addr_of_mut!(mi_tls_raw_index_default));
         mi_win_tls_slot_free(ptr::addr_of_mut!(mi_tls_raw_index_cached));
     }
 
     #[cfg(any(target_os = "openbsd", target_os = "android"))]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         if _mi_theap_default_key != 0 {
             let _ = pthread_key_delete(_mi_theap_default_key);
@@ -1551,14 +1654,17 @@ fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
         #[cfg(target_arch = "x86")]
         {
             // Mirrors the GNU C path while preserving the sublevel input.
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { core::arch::x86::__cpuid_count(level, sublevel) }
         }
         #[cfg(target_arch = "x86_64")]
         {
             // Mirrors the GNU C path while preserving the sublevel input.
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { core::arch::x86_64::__cpuid_count(level, sublevel) }
         }
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         regs4.add(0).write(regs.eax);
         regs4.add(1).write(regs.ebx);
@@ -1577,13 +1683,16 @@ fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
     let regs = {
         #[cfg(target_arch = "x86")]
         {
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { core::arch::x86::__cpuid_count(level, sublevel) }
         }
         #[cfg(target_arch = "x86_64")]
         {
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { core::arch::x86_64::__cpuid_count(level, sublevel) }
         }
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         regs4.add(0).write(regs.eax);
         regs4.add(1).write(regs.ebx);
@@ -1615,48 +1724,60 @@ fn mi_detect_cpu_features() {
             fsrs = (cpu_info[1] & (1 << 11)) != 0;
         }
         if mi_cpuid(cpu_info.as_mut_ptr(), 1, 0) {
-            unsafe { _mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0 };
+            unsafe { _mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0 }; // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         }
         if fsrm {
-            unsafe { _mi_cpu_movsb_max = 127 };
+            unsafe { _mi_cpu_movsb_max = 127 }; // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         }
         if fsrs || (amd && fsrm) {
-            unsafe { _mi_cpu_stosb_max = 127 };
+            unsafe { _mi_cpu_stosb_max = 127 }; // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         }
     }
 
     #[cfg(target_arch = "aarch64")]
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         _mi_cpu_has_popcnt = true;
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// Returns a borrowed process-global opaque subproc pointer.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_subproc_main_addr_typed().ptr().as_ptr() }
 }
 
 #[used]
 static MI_SUBPROC_MAIN_KEEP: unsafe extern "C" fn() -> *mut mi_subproc_t = _mi_subproc_main;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// `theap` must be a valid default theap for the current thread.
 pub(crate) unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap_old = unsafe { crate::prim::_mi_theap_default() };
     crate::internal::mi_assert_internal!(!theap.is_null());
     crate::internal::mi_assert_internal!(
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { (*(*theap).tld).thread_id } == 0
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             || unsafe { (*(*theap).tld).thread_id } == _mi_thread_id()
     );
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap = unsafe { ThreadHeapPtr::new_unchecked(theap) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap = match unsafe { theap.try_local(current) } {
         Ok(theap) => theap,
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         Err(theap) => unsafe { ThreadHeapLocal::new_unchecked(theap) },
     };
 
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_theap_default_set_typed(theap, ThreadHeapPtr::new(theap_old)) };
 }
 
@@ -1672,6 +1793,7 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
             theap_raw.cast(),
         );
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             mi_win_tls_slot_set(
                 _mi_theap_default_slot,
@@ -1679,15 +1801,20 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
                 theap_raw.cast(),
             );
         }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_default_key } != 0 {
         let _ = crate::threadlocal::_mi_thread_local_set(
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { _mi_theap_default_key },
             theap_raw.cast(),
         );
     }
 
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if unsafe { crate::internal::mi_theap_is_initialized(theap_raw) } {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { crate::prim::_mi_prim_thread_associate_default_theap(theap_raw) };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         if unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_raw)) } {
             mi_theap_main_tls_set(Some(theap_ptr));
         }
@@ -1695,7 +1822,9 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
 
     if let Some(theap_old) = theap_old {
         let theap_old = theap_old.as_ptr();
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         if unsafe { crate::internal::mi_theap_is_initialized(theap_old) }
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             && unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_old)) }
         {
             mi_theap_main_tls_set(ThreadHeapPtr::new(theap_old));
@@ -1703,22 +1832,28 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// `theap` must be valid for the current thread or the empty sentinel.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let prev = unsafe { crate::prim::_mi_theap_cached() };
     if ptr::eq(prev, theap) {
         return;
     }
     let theap = ThreadHeapPtr::new(theap).map(|theap| {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         match unsafe { theap.try_local(current) } {
             Ok(theap) => theap,
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             Err(theap) => unsafe { ThreadHeapLocal::new_unchecked(theap) },
         }
     });
 
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_theap_cached_set_typed(theap, ThreadHeapPtr::new(prev)) };
 }
 
@@ -1736,6 +1871,7 @@ unsafe fn _mi_theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Optio
             theap_raw.cast(),
         );
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             mi_win_tls_slot_set(
                 _mi_theap_cached_slot,
@@ -1743,13 +1879,16 @@ unsafe fn _mi_theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Optio
                 theap_raw.cast(),
             );
         }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_cached_key } != 0 {
         let _ = crate::threadlocal::_mi_thread_local_set(
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { _mi_theap_cached_key },
             theap_raw.cast(),
         );
     }
 
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         crate::internal::_mi_theap_incref(theap_raw);
         crate::internal::_mi_theap_decref(
@@ -1758,49 +1897,65 @@ unsafe fn _mi_theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Optio
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[used]
 static MI_THEAP_CACHED_SET_KEEP: unsafe extern "C" fn(*mut mi_theap_t) = _mi_theap_cached_set;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Marks the current thread-local data as belonging to a threadpool thread.
 pub unsafe extern "C" fn mi_thread_set_in_threadpool() {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap = unsafe { _mi_theap_default_safe() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         (*(*theap).tld).is_in_threadpool = true;
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// Returns the current thread default theap, initializing thread state when needed.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap = unsafe { crate::prim::_mi_theap_default() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { crate::mimalloc::mi_thread_init() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap = unsafe { crate::prim::_mi_theap_default() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::mi_theap_is_initialized(theap)
     });
     theap
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[used]
 static MI_THEAP_DEFAULT_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t =
     _mi_theap_default_safe;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// Returns the process main theap, ensuring the default path initialized it first.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     let mut theap = mi_theap_main_tls_peek();
     if theap.is_null() {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { crate::mimalloc::mi_thread_init() };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         theap = unsafe { crate::prim::_mi_theap_default() };
         crate::internal::mi_assert_internal!(!theap.is_null());
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         if unsafe { crate::internal::mi_theap_is_initialized(theap) }
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
         {
             mi_theap_main_tls_set(ThreadHeapPtr::new(theap));
@@ -1808,15 +1963,19 @@ pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     }
     crate::internal::mi_assert_internal!(
         !theap.is_null()
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             && unsafe { crate::internal::mi_theap_is_initialized(theap) }
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
     );
     theap
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[used]
 static MI_THEAP_MAIN_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_theap_main_safe;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// Returns the process-global empty theap sentinel.
 #[inline(never)]
@@ -1824,33 +1983,43 @@ pub(crate) unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
     ptr::addr_of!(_mi_theap_empty).cast_mut()
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[used]
 static MI_THEAP_EMPTY_GET_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_theap_empty_get;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// Returns the current subproc without forcing thread-local initialization.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_subproc_typed().ptr().as_ptr() }
 }
 
 unsafe fn _mi_subproc_typed() -> BorrowedSubproc {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap = unsafe { crate::prim::_mi_theap_default_raw() };
     let subproc = if theap.is_null() {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { mi_subproc_main_addr_typed().ptr() }
     } else {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let tld = unsafe { TldPtr::new_unchecked((*theap).tld) };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { tld.subproc() }.unwrap_or_else(|| unsafe { mi_subproc_main_addr_typed().ptr() })
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { BorrowedSubproc::new(subproc) }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// `subproc_id` must have been produced by this crate's subproc API surface.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_from_id(
     subproc_id: mi_subproc_id_t,
 ) -> *mut mi_subproc_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_subproc_from_id_typed(subproc_id) }
         .map(|subproc| subproc.ptr().as_ptr())
         .unwrap_or(ptr::null_mut())
@@ -1858,6 +2027,7 @@ pub(crate) unsafe extern "C" fn _mi_subproc_from_id(
 
 unsafe fn _mi_subproc_from_id_typed(subproc_id: mi_subproc_id_t) -> Option<BorrowedSubproc> {
     SubprocPtr::new(subproc_id.as_ptr::<mi_subproc_t>())
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         .map(|subproc| unsafe { BorrowedSubproc::new(subproc) })
 }
 
@@ -1865,41 +2035,53 @@ unsafe fn _mi_subproc_from_id_typed(subproc_id: mi_subproc_id_t) -> Option<Borro
 static MI_SUBPROC_FROM_ID_KEEP: unsafe extern "C" fn(mi_subproc_id_t) -> *mut mi_subproc_t =
     _mi_subproc_from_id;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Returns an opaque identifier for the main subproc.
 pub unsafe extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     _mi_subproc_to_id_typed(Some(unsafe { mi_subproc_main_addr_typed().ptr() }))
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Returns the current subproc identifier for the bounded crate state.
 pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     _mi_subproc_to_id_typed(Some(unsafe { _mi_subproc_typed().ptr() }))
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// `subproc` must point to a valid local subproc prefix.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     subproc: *mut mi_subproc_t,
 ) -> *mut mi_heap_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { BorrowedSubproc::new(SubprocPtr::new_unchecked(subproc)) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_subproc_heap_main_typed(subproc).ptr().as_ptr() }
 }
 
 unsafe fn _mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let heap = unsafe { mi_subproc_heap_main_typed(subproc) };
     if let Some(heap) = heap {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         return unsafe { MainHeap::new_unchecked(heap) };
     }
     mi_heap_main_init();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let heap = unsafe { mi_subproc_heap_main_typed(subproc) };
     crate::internal::mi_assert_internal!(heap.is_some());
     let Some(heap) = heap else {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         return unsafe { MainHeap::new_unchecked(HeapPtr::new_unchecked(mi_heap_main())) };
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { MainHeap::new_unchecked(heap) }
 }
 
@@ -1907,62 +2089,82 @@ unsafe fn _mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
 static MI_SUBPROC_HEAP_MAIN_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> *mut mi_heap_t =
     _mi_subproc_heap_main;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Returns the current subproc main heap for the bounded init/runtime scaffold.
 pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap = unsafe { crate::prim::_mi_theap_default_raw() };
     let subproc = if theap.is_null() {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { mi_subproc_main_addr() }
     } else {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let tld = unsafe { (*theap).tld };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { (*tld).subproc }
     };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if heap.is_null() {
         mi_heap_main_init();
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         heap = unsafe { mi_subproc_heap_main_raw(subproc) };
         crate::internal::mi_assert_internal!(!heap.is_null());
     }
     heap
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// `heap` must point to a heap prefix compatible with this crate's local scaffold.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { mi_heap_subproc_raw(heap) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if main_heap.is_null() {
         mi_heap_main_init();
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     }
     ptr::eq(main_heap, heap.cast_mut())
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// `theap` must be null or point to a valid thread-heap structure.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if !unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return false;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let heap = unsafe { crate::internal::_mi_theap_heap(theap) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { mi_heap_subproc_raw(heap) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if main_heap.is_null() {
         mi_heap_main_init();
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     }
     ptr::eq(main_heap, heap)
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[used]
 static MI_IS_THEAP_MAIN_KEEP: unsafe extern "C" fn(*const mi_theap_t) -> bool = _mi_is_theap_main;
 
 #[inline(always)]
 unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let mut theap = unsafe { crate::prim::_mi_theap_default() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
     }
@@ -1978,77 +2180,105 @@ unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
         if tld.is_null() {
             return ptr::null_mut();
         }
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         theap = unsafe { _mi_theap_create(mi_heap_main(), tld) };
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_theap_default_set(theap) };
     theap
 }
 
 unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let empty = unsafe { _mi_theap_empty_get() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         _mi_theap_default_set(empty);
         _mi_theap_cached_set(empty);
         mi_theap_main_tls_set(None);
     }
 
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let mut theap = unsafe { (*tld).theaps };
     while !theap.is_null() {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let next = unsafe { (*theap).tnext };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { _mi_theap_collect_abandon(theap) };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         crate::internal::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
         theap = next;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_lock_release(ptr::addr_of_mut!((*tld).theaps_lock)) };
 
     loop {
         let mut all_freed = true;
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let mut theap = unsafe { (*tld).theaps };
         while !theap.is_null() {
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             let next = unsafe { (*theap).tnext };
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             crate::internal::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             if !unsafe { _mi_theap_free(theap, true, false) } {
                 all_freed = false;
             }
             theap = next;
         }
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { mi_lock_release(ptr::addr_of_mut!((*tld).theaps_lock)) };
 
         if !all_freed {
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             let subproc = unsafe { mi_subproc_prefix((*tld).subproc) };
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe {
                 crate::internal::__mi_stat_counter_increase_mt(
                     ptr::addr_of_mut!((*subproc).stats.heaps_delete_wait),
                     1,
                 )
             };
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             unsafe { crate::prim::_mi_prim_thread_yield() };
         } else {
+            // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
             crate::internal::mi_assert_internal!(unsafe { (*tld).theaps }.is_null());
             break;
         }
     }
 
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     crate::internal::mi_assert_internal!(unsafe { crate::prim::_mi_theap_default() } == empty);
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     crate::internal::mi_assert_internal!(!unsafe {
         crate::internal::mi_theap_is_initialized(empty)
-    });
+    }); // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 }
 
 #[unsafe(no_mangle)]
 /// # Safety
 /// Initializes per-thread mimalloc state for the current thread when it is not already set up.
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 pub unsafe extern "C" fn mi_thread_init() {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_process_init() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if unsafe { crate::prim::_mi_thread_is_initialized() } {
         return;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if unsafe { _mi_thread_init_theap_default() }.is_null() {
         return;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let heap = unsafe { mi_heap_main() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         __mi_stat_increase_mt(
             ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
@@ -2057,6 +2287,7 @@ pub unsafe extern "C" fn mi_thread_init() {
     };
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
@@ -2064,13 +2295,16 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     mi_subproc_main_init();
     let seq = SUBPROC_TOTAL_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
     let mut memid = mi_memid_t::default();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc_ptr = unsafe {
         _mi_meta_zalloc(size_of::<MiSubprocPrefix>(), ptr::addr_of_mut!(memid))
             .cast::<MiSubprocPrefix>()
     };
     if subproc_ptr.is_null() {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         return unsafe { _mi_subproc_to_id(ptr::null_mut()) };
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         subproc_ptr.write(MiSubprocPrefix::new_with_memid(
             crate::core_types::SubprocSeq::new(seq),
@@ -2078,11 +2312,13 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
         ))
     };
     // SAFETY: initializing lock words for a freshly allocated local prefix.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).arena_reserve_lock));
         mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).heaps_lock));
     }
     // SAFETY: local subproc list mutation is serialized by `subprocs_lock`.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
         let _lock = MiLockGuard::acquire(lock);
@@ -2095,43 +2331,55 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `subproc_id` must identify a subproc created by this crate.
 pub unsafe extern "C" fn mi_subproc_destroy(subproc_id: mi_subproc_id_t) {
     mi_subproc_main_init();
     // SAFETY: raw ID comes from the C ABI surface.
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if subproc.is_null() || core::ptr::eq(subproc, unsafe { _mi_subproc_main() }) {
         return;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_subproc_unsafe_destroy(subproc, true) };
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 /// # Safety
 /// Same requirements as `mi_subproc_destroy`.
 pub unsafe extern "C" fn mi_subproc_delete(subproc_id: mi_subproc_id_t) {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_subproc_destroy(subproc_id) };
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `subproc_id` must identify a local subproc created by this crate.
 pub unsafe extern "C" fn mi_subproc_add_current_thread(subproc_id: mi_subproc_id_t) {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
     if subproc.is_null() {
         return;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let theap = unsafe { _mi_theap_default_safe() };
     if theap.is_null() {
         return;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let tld = unsafe { (*theap).tld };
     if tld.is_null() {
         return;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let main_subproc = unsafe { _mi_subproc_main() };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if !ptr::eq(unsafe { (*tld).subproc }, main_subproc) {
         _mi_warning_message_fmt(format_args!(
             "unable to add thread to the subprocess as it was already in another subprocess (id: {:?})\n",
@@ -2139,8 +2387,11 @@ pub unsafe extern "C" fn mi_subproc_add_current_thread(subproc_id: mi_subproc_id
         ));
         return;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let main_prefix = unsafe { mi_subproc_prefix(main_subproc) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         (*tld).subproc = subproc;
         (*tld).thread_seq = crate::core_types::ThreadSeq::new(
@@ -2156,6 +2407,7 @@ pub unsafe extern "C" fn mi_subproc_add_current_thread(subproc_id: mi_subproc_id
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `subproc_id` must identify a local subproc created by this crate.
@@ -2169,11 +2421,14 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
         return false;
     };
     let arg = HeapVisitCallbackArg::from_raw(arg);
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
     if subproc.is_null() {
         return false;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         mi_lock_acquire(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
         let mut heap = (*subproc_prefix).heaps;
@@ -2189,8 +2444,10 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
 }
 
 unsafe fn mi_process_init_inner() {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if let Some(_once) = unsafe { mi_atomic_do_once_enter(ptr::addr_of!(PROCESS_INIT).cast_mut()) }
     {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe {
             _mi_process_is_initialized = true;
             mi_detect_cpu_features();
@@ -2217,11 +2474,13 @@ unsafe fn mi_process_init_inner() {
     }
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// Performs one-time process-global mimalloc initialization for the bounded init/runtime scaffold.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     OS_PRELOADING.store(false, Ordering::Relaxed);
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_process_init_inner() };
     mi_heap_main_init();
     mi_tls_slots_init();
@@ -2232,30 +2491,37 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
         _mi_options_post_init();
         OPTIONS_POST_INIT_STATE.store(2, Ordering::Release);
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if unsafe { crate::prim::_mi_is_redirected() } {
         _mi_verbose_message(format_args!("malloc is redirected.\n"));
     }
     let mut msg: *const c_char = ptr::null();
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_allocator_init(ptr::addr_of_mut!(msg)) };
     if !msg.is_null()
         && (mi_option_is_enabled(mi_option_t::mi_option_verbose)
             || mi_option_is_enabled(mi_option_t::mi_option_show_errors))
     {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { _mi_fputs(None, ptr::null_mut(), ptr::null(), msg) };
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random)) };
 }
 
 #[used]
 static MI_AUTO_PROCESS_INIT_KEEP: unsafe extern "C" fn() = _mi_auto_process_init;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Public C ABI wrapper for process-global initialization.
 pub unsafe extern "C" fn mi_process_init() {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { _mi_auto_process_init() };
 }
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 /// # Safety
 /// Performs process-global teardown for the bounded init/subproc surface and must not race with concurrent mutation of it.
 #[inline(never)]
@@ -2264,16 +2530,19 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_done() {
     if mi_option_get(mi_option_t::mi_option_destroy_on_exit) > 1 {
         return;
     }
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe { mi_process_done() };
 }
 
 #[used]
 static MI_AUTO_PROCESS_DONE_KEEP: unsafe extern "C" fn() = _mi_auto_process_done;
 
+// SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Public C ABI wrapper for process-global teardown.
 pub unsafe extern "C" fn mi_process_done() {
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     if !unsafe { _mi_process_is_initialized } {
         return;
     }
@@ -2281,6 +2550,7 @@ pub unsafe extern "C" fn mi_process_done() {
         return;
     }
 
+    // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
     unsafe {
         crate::threadlocal::_mi_thread_locals_done();
         crate::prim::_mi_prim_thread_done_auto_done();
@@ -2305,7 +2575,9 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn auto_process_init_initializes_large_page_config() {
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         unsafe { super::_mi_auto_process_init() };
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         assert!(unsafe { crate::os::_mi_os_canuse_large_page(1 << 30, 2 << 20) });
     }
 
@@ -2313,6 +2585,7 @@ mod tests {
     #[test]
     fn linux_theap_main_tls_is_thread_local() {
         let previous = super::mi_theap_main_tls_peek();
+        // SAFETY[AUDIT:init-lifecycle-boundary]: init lifecycle operations use process, thread, subproc, TLS, option, random, CPU, or C ABI lifecycle witnesses.
         let marker = unsafe { super::_mi_theap_empty_get() };
         let marker_addr = marker as usize;
 

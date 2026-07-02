@@ -60,6 +60,10 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   aliases, macOS interpose records, assembly overrides, and bootstrap
   allocation tracking preserve the raw C allocation ABI and do not add Rust
   ownership guarantees.
+- `SAFETY[AUDIT:init-lifecycle-boundary]`: process/thread initialization and
+  teardown in `src/allocator/init.rs`. The boundary covers subproc identity,
+  main heap and thread-heap TLS association, preloading gates, constructor and
+  destructor hooks, CPU/random initialization, and raw lifecycle exports.
 - `SAFETY[AUDIT:unsafe-callback]`: unsafe-adjacent callback guards. Unsafe guard construction
   registers a trampoline with a borrowed callback context, stores the previous
   registration, restores that previous registration on drop, and catches Rust

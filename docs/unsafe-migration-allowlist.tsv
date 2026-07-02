@@ -1,7 +1,6 @@
 path	category	owner	remove_by	reason
 src/allocator/alloc.rs	production	release-readiness	2026-09-30	hot allocation parity path kept allowlisted until per-operation SAFETY marker migration has assembly and benchmark evidence
 src/allocator/arena.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
-src/allocator/init.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
 src/allocator/page.rs	production	release-readiness	2026-09-30	hot page-allocation parity path kept allowlisted until per-operation SAFETY marker migration has assembly and benchmark evidence
 src/internal/bitmap.rs	production	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
 src/internal/mod.rs	translation	release-readiness	2026-09-30	legacy translated internal macros and layout helpers pending per-operation SAFETY marker migration

@@ -7,6 +7,10 @@ at `da44c1a`. That pass moved `src/allocator/free.rs`,
 allowlist with local operation markers, audit evidence, release-audit guards,
 and full validation.
 
+This follow-up pass has now also moved `src/allocator/init.rs` off the unsafe
+migration allowlist with local init lifecycle markers, audit evidence, and
+release-audit guards.
+
 The next pass should finish the same class of work: retire every remaining
 file-level unsafe migration allowance, one file at a time, while preserving raw
 ABI shape, allocator ownership, synchronization, platform behavior, and hot-path
@@ -15,8 +19,8 @@ test exposes a concrete bug.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 7 entries: 5 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 7.
+- `docs/unsafe-migration-allowlist.tsv` has 6 entries: 4 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 6.
 - The just-completed pass moved `src/allocator/free.rs` to 69
   `SAFETY[AUDIT:free-path-boundary]` markers, `src/allocator/options.rs` to 76
   `SAFETY[AUDIT:options-callback-boundary]` markers,
@@ -26,8 +30,9 @@ Current review evidence:
   `SAFETY[AUDIT:stats-reporting-boundary]` markers, and
   `src/raw/macros.rs` to 178
   `SAFETY[AUDIT:raw-macro-allocation-boundary]` markers.
+- The current pass moved `src/allocator/init.rs` to 277
+  `SAFETY[AUDIT:init-lifecycle-boundary]` markers.
 - Remaining production allowlist entries with no local markers are
-  `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits,
   `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits,
   `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits,
   `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits, and
@@ -43,8 +48,10 @@ Current review evidence:
   `src/internal/mod.rs`, `src/platform/unix.rs`, `src/platform/windows.rs`,
   `src/allocator/stats.rs`, and `src/allocator/thread_heap.rs`, each with
   4 path-wide entries. `src/allocator/alloc.rs` and
-  `src/allocator/init.rs` each still have 3 path-wide entries.
+  `src/allocator/init.rs` each still have 3 path-wide entries; init is no
+  longer on the unsafe migration allowlist.
 - The largest unsafe audit marker clusters remain broad enough to split later:
+  `SAFETY[AUDIT:init-lifecycle-boundary]` has 277 markers,
   `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers,
   `SAFETY[AUDIT:stats-reporting-boundary]` has 161 markers,
   `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
@@ -66,29 +73,30 @@ Current review evidence:
   `tests/release_fast_path_audit.rs` is 1,935 lines,
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines, and
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
-  is 805 lines.
+  is 831 lines.
 
-## Issue: Process initialization boundary still uses a file-level unsafe allowance
+## Completed: Process initialization boundary moved off the file-level unsafe allowance
 
 > **Comment:** `src/allocator/init.rs` owns process and thread initialization,
 > teardown, preloading state, subproc identity, default heap association,
 > at-exit/constructor hooks, random reinitialization, CPU feature setup, and
-> option/stat lifecycle entry points. It is the smallest remaining allocator
-> file with a broad unsafe allowance and already has targeted lifecycle guards.
+> option/stat lifecycle entry points. It now has local operation markers,
+> evidence rows, and lifecycle release-audit guards instead of a file-level
+> migration allowance.
 
-- [ ] Add local `SAFETY[AUDIT:init-lifecycle-boundary]` markers for process
+- [x] Add local `SAFETY[AUDIT:init-lifecycle-boundary]` markers for process
       init/done, thread init/done, subproc main/current/id conversion, preloading
       state, default thread-heap association, allocator constructor/destructor
       hooks, random and CPU feature initialization, and raw lifecycle exports.
-- [ ] Preserve idempotent process initialization, thread-local main-heap TLS,
+- [x] Preserve idempotent process initialization, thread-local main-heap TLS,
       subproc identity mapping, weak random reinitialization, preloading gates,
       option/stat init order, abort/no-unwind behavior, and no allocator
       allocation before initialization is safe.
-- [ ] Add or extend release-audit assertions and focused tests for marker
+- [x] Add or extend release-audit assertions and focused tests for marker
       coverage, no migration allowlist entry, lifecycle helper shape,
       preloading behavior, default heap TLS behavior, constructor/destructor
       cfg shape, and random/CPU initialization order.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/allocator/init.rs` from the unsafe migration allowlist, regenerate
       unsafe inventory, and lower the cap.
 
@@ -259,7 +267,7 @@ and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/allocator/init.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/allocator/init.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/internal/bitmap.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/allocator/alloc.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/page.rs` off the unsafe migration allowlist.
@@ -271,7 +279,8 @@ and full tests.
 
 - [ ] The unsafe migration allowlist cap is lowered after each migrated file and
       reaches zero when the final entry is removed.
-- [ ] All 7 remaining allowlisted files are covered by operation-level audit
+- [ ] The completed init migration and all 6 remaining allowlisted files are
+      covered by operation-level audit
       markers, source audit entries, evidence rows, release-audit guards, and
       focused behavior tests instead of file-level migration exceptions.
 - [ ] Allocator initialization, bitmap traversal, allocation hot paths, page

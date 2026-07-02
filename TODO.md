@@ -29,7 +29,7 @@ Review evidence:
   `src/platform/windows.rs` is 2,191 lines.
 - `tests/release_fast_path_audit.rs` is split, but the largest child modules are
   still review-heavy: root is 2,862 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,983 lines, and
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,870 lines, and
   `tests/release_fast_path_audit/release_policy.rs` is 2,291 lines.
 - `src/allocator/arena/debug.rs` is 625 lines and still has 34
   `SAFETY[AUDIT:arena-debug-render]` markers. It no longer needs a
@@ -99,9 +99,8 @@ Review evidence:
 ## Issue: Arena diagnostics still expose too many raw metadata reads
 
 > **Comment:** `ArenaDebugView` improved the render path, but the module still
-> has 35 repeated safety markers and a strict-type metadata-reference allowance
-> for `prefix()`. A small refinement should make the diagnostic view own that
-> proof without returning broad raw metadata references to callers.
+> has repeated safety markers. The diagnostic view now owns the prefix proof
+> without returning broad raw metadata references to callers.
 
 - [x] Inventory `ArenaDebugView::prefix` callers and the remaining
       `SAFETY[AUDIT:arena-debug-render]` marker clusters.
@@ -130,15 +129,22 @@ Review evidence:
 > `unsafe_performance.rs` is still nearly 3,000 lines. More of its structural
 > assertions can move into domain modules without weakening the coverage.
 
-- [ ] Inventory large assertion clusters in
+- [x] Inventory large assertion clusters in
       `tests/release_fast_path_audit/unsafe_performance.rs`, especially callback
       boundaries, strict-type migration guards, and allocation-layout checks.
-- [ ] Move one cohesive cluster into a new child module under
+- [x] Move one cohesive cluster into a new child module under
       `tests/release_fast_path_audit/unsafe_performance/`.
-- [ ] Keep shared source-reading helpers in the parent and avoid duplicating
+- [x] Keep shared source-reading helpers in the parent and avoid duplicating
       slicing utilities.
-- [ ] Tighten the release-audit size guard if the split gives enough margin.
-- [ ] Preserve the 67-test release audit count and all existing assertions.
+- [x] Tighten the release-audit size guard if the split gives enough margin.
+- [x] Preserve the 67-test release audit count and all existing assertions.
+  - Evidence: the page-map, safe pointer lookup, heap area, main heap predicate,
+    meta-page classification, and deferred-free callback boundary assertions now
+    live in
+    `tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs`.
+    `unsafe_performance.rs` dropped to 2,870 lines, the new child module is 160
+    lines, the shared source reads stay in the parent, the module size guard is
+    tightened to 3,000 lines, and the release audit still runs 67 tests.
 - Verify: `cargo test --test release_fast_path_audit --all-features`,
   `git diff --check`, full clippy, and full tests.
 
@@ -166,7 +172,7 @@ Review evidence:
 1. [x] Shrink the unsafe migration allowlist using small test fixtures.
 2. [x] Reduce one broad removable strict-type entry.
 3. [x] Tighten arena diagnostic metadata access.
-4. [ ] Split one more release-audit unsafe/performance cluster.
+4. [x] Split one more release-audit unsafe/performance cluster.
 5. [ ] Split one page queue/count helper cluster.
 
 ## Definition of done for this backlog
@@ -175,7 +181,7 @@ Review evidence:
 - [x] The strict-type removable-entry count is below 7 and capped lower.
 - [x] Arena diagnostics no longer need a broad metadata-reference allowance for
       `ArenaDebugView::prefix`.
-- [ ] Release fast-path audit modules are smaller and guarded against growing
+- [x] Release fast-path audit modules are smaller and guarded against growing
       back into large review units.
 - [ ] A second page submodule owns a clear page queue/count boundary without API,
       ABI, or hot-path performance drift.

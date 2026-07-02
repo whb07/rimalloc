@@ -6,6 +6,7 @@ const RELEASE_AUDIT_MODULES: &[&str] = &[
     "todo_backlog.rs",
     "unsafe_performance.rs",
     "unsafe_performance/lifecycle_boundaries.rs",
+    "unsafe_performance/local_boundaries.rs",
 ];
 
 #[test]
@@ -38,7 +39,7 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`src/allocator/page.rs` is 3,442",
         "`src/allocator/arena/debug.rs`",
         "`tests/release_fast_path_audit.rs` is split",
-        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,983 lines",
+        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,870 lines",
     ];
 
     for evidence in required_evidence {
@@ -72,7 +73,7 @@ fn release_audit_harness_stays_split() {
             .count();
 
         assert!(
-            line_count <= 3_200,
+            line_count <= 3_000,
             "release fast-path audit module {} should stay reviewable; found {line_count} lines",
             path.display()
         );

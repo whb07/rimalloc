@@ -2,10 +2,9 @@
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
 `8ade753` and lowering the source audit marker cap to 24. The previous backlog
-and Issue 1 below are implemented. The remaining mechanical-translation debt is
-concentrated in release-audit modules still clustered around 300 lines and
-strict-type allowlist hotspots that need sharper governance before deeper typed
-rewrites.
+and Issues 1 and 2 below are implemented. The remaining mechanical-translation
+debt is concentrated in strict-type allowlist hotspots that need sharper
+governance before deeper typed rewrites.
 
 Current review evidence:
 
@@ -38,19 +37,17 @@ Current review evidence:
 - The largest raw-pointer domains are `mi_theap_t` with 111 entries,
   `mi_page_t` with 110, and `mi_heap_t` with 67.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 119 module files recursively and
-  enforces a 320-line cap. The next useful cap is 280 lines. Five modules still
-  exceed that target. The largest release-audit modules are:
-  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 314 lines,
-  `unsafe_performance/platform_primitive_boundaries/windows.rs` at 306 lines,
-  `release_policy/callbacks.rs` at 304 lines,
-  `release_policy/api_surface/raw_facade.rs` at 302 lines, and
-  `unsafe_performance/thread_stats.rs` at 284 lines, and
-  `interposition_exports/linux_override.rs` at 279 lines.
-- Review sampling found the largest release-audit modules still mix independent
-  assertion families: thread/TLS lifecycle, callback ABI versus safe guard policy,
-  raw facade versus nullability policy, Windows TLS/FLS versus virtual memory policy,
-  stats output versus marker inventory, and Linux override export policy.
+  release-audit module-size guard discovers 124 module files recursively and
+  enforces a 280-line cap. No release-audit module exceeds that cap. The largest
+  release-audit modules are:
+  `interposition_exports/linux_override.rs` at 279 lines,
+  `primitive_options.rs` at 279 lines, `strict_policy.rs` at 257 lines,
+  `release_policy/callbacks.rs` at 255 lines,
+  `unsafe_performance/allocation_free/marker_counts.rs` at 248 lines, and
+  `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view.rs` at 248 lines.
+- Issue 2 split release-audit assertion families into focused child modules for
+  thread/TLS platform primitives, safe callback guards, raw pointer nullability,
+  Windows virtual memory, and stats merge policy.
 - Validation for commit `8ade753` passed: `cargo fmt --all`, `cargo clippy
   --workspace --all-targets --all-features`, `cargo test --workspace
   --all-targets --all-features`, `cargo test --test release_fast_path_audit
@@ -85,23 +82,22 @@ full formatting, full clippy, and full tests.
 
 ## Issue 2: Split release-audit modules over 280 lines
 
-The release-audit cap is now 320 lines. Five modules still exceed the next
-280-line target and mix assertion families that should be independently
-reviewable.
+Completed in this pass. The release-audit cap is now 280 lines, and the largest
+module is 279 lines.
 
-- [ ] Split `unsafe_performance/lifecycle_boundaries/thread_tls.rs` by thread
+- [x] Split `unsafe_performance/lifecycle_boundaries/thread_tls.rs` by thread
       lifecycle, TLS/default-heap checks, visitation checks, and reclaim helpers.
 - [x] Split `release_policy/security/unsafe_audit_evidence/focused_paths.rs`
       below 280 lines by moving platform primitive evidence checks into a
       focused child module.
-- [ ] Split `release_policy/callbacks.rs` into callback ABI inventory,
+- [x] Split `release_policy/callbacks.rs` into callback ABI inventory,
       no-alloc/no-unwind trampoline policy, and safe callback guard policy.
-- [ ] Split `release_policy/api_surface/raw_facade.rs` into raw facade shape,
+- [x] Split `release_policy/api_surface/raw_facade.rs` into raw facade shape,
       raw macro policy, repository import policy, and raw pointer nullability
       checks.
-- [ ] Split `unsafe_performance/platform_primitive_boundaries/windows.rs` and
+- [x] Split `unsafe_performance/platform_primitive_boundaries/windows.rs` and
       `unsafe_performance/thread_stats.rs` enough to lower the recursive module
-      cap from 320 to 280 while preserving measured TODO checks.
+      cap to 280 while preserving measured TODO checks.
 
 Verify: release fast-path audit, TODO guard, unsafe audit scripts, strict-type
 checks, no-allocation audit, full formatting, full clippy, and full tests.
@@ -128,13 +124,13 @@ clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Lower the source audit marker cap to 24.
-2. [ ] Split release-audit modules over 280 lines.
+2. [x] Split release-audit modules over 280 lines.
 3. [ ] Tighten strict-type allowlist hotspot governance.
 
 ## Definition of done for this backlog
 
 - [x] No source audit operation ID has more than 24 source markers.
-- [ ] Release-audit modules are split enough to lower the recursive module cap
+- [x] Release-audit modules are split enough to lower the recursive module cap
       to 280 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type allowlist hotspot governance is split, measured, and tied to
       permanent-versus-rewriteable boundary documentation.

@@ -325,14 +325,29 @@ Operation IDs:
   Unsafe operations are limited to page/block metadata reached through
   allocator ownership, active-page witnesses, refill helpers, and guarded block
   state while preserving page ownership and zeroing guarantees.
-- `SAFETY[AUDIT:page-allocation-boundary]`: `src/allocator/page.rs` owns
-  page-local allocation, free-list collection and extension, generic refill,
-  page queue movement, retire/free/abandon transitions, page stat updates,
-  huge-page allocation, and raw page helper exports. Unsafe operations are
-  limited to caller-proven page, heap, queue, and block pointers; typed page
-  state witnesses; arena page allocation/free handoff; and C ABI helper shims
-  while preserving queue ownership, used/capacity counters, stats gates, and
-  no-allocation hot-path constraints.
+- `SAFETY[AUDIT:page-free-list-refill-boundary]`:
+  `src/allocator/page.rs` owns page-local free-list collection, extension,
+  search, and refill. Unsafe operations are limited to caller-proven page and
+  block pointers, typed free-list witnesses, capacity counters, commit growth,
+  and refill helpers while preserving block ownership and no-allocation
+  hot-path constraints.
+- `SAFETY[AUDIT:page-queue-transition-boundary]`:
+  `src/allocator/page.rs` owns page queue movement, full/unfull transitions,
+  retire/free handoff, abandon/reclaim, queue validation, and queue append
+  operations. Unsafe operations are limited to typed page-state witnesses,
+  caller-proven heap/queue/page pointers, and arena page free/abandon handoff
+  while preserving queue links, heap ownership, and page counters.
+- `SAFETY[AUDIT:page-huge-allocation-boundary]`:
+  `src/allocator/page.rs` owns huge-page selection and allocation dispatch.
+  Unsafe operations are limited to caller-proven heap and huge-queue pointers,
+  typed layout/alignment witnesses, and arena page allocation handoff while
+  preserving singleton page layout, alignment, and huge allocation stats.
+- `SAFETY[AUDIT:page-stats-public-boundary]`:
+  `src/allocator/page.rs` owns page metadata accessors, stats/bin helpers,
+  public C-shaped page helpers, and generic allocation entry shims. Unsafe
+  operations are limited to caller-proven page/heap pointers, typed count/bin
+  witnesses, usable-size out-pointers, and ABI flag decoding while preserving
+  public null/failure semantics and typed metadata invariants.
 - `SAFETY[AUDIT:arena-slice-boundary]`: `src/allocator/arena.rs` owns arena
   slice/range projection, arena area queries, containment checks, info-slice
   sizing, and arena bitmap layout. Unsafe operations are limited to
@@ -345,24 +360,88 @@ Operation IDs:
   limited to typed arena/subproc/heap pointers, `ArenaIndex` construction,
   atomic arena table cells, and C ABI registry shims while preserving subproc
   synchronization and arena ownership.
-- `SAFETY[AUDIT:arena-allocation-boundary]`: `src/allocator/arena.rs` owns
-  arena slice allocation, arena initialization, arena reserve growth,
-  OS-memory fallback, public reserve/manage APIs, and huge-page reservation.
-  Unsafe operations are limited to typed allocation layout/memid witnesses,
-  arena slice bitmaps, OS commit/allocation primitives, and raw C ABI shims
-  while preserving commit accounting, zeroing, NUMA, and fallback semantics.
+- `SAFETY[AUDIT:arena-slice-allocation-boundary]`:
+  `src/allocator/arena.rs` owns arena slice allocation, arena commit/reuse,
+  slice bitmap mutation, memid creation, and allocation metadata publication.
+  Unsafe operations are limited to typed arena/range/layout witnesses,
+  free/dirty/committed bitmaps, OS commit primitives, and stat adjustments
+  while preserving zeroing and commit accounting.
+- `SAFETY[AUDIT:arena-initialization-boundary]`:
+  `src/allocator/arena.rs` owns arena metadata initialization, guard-page
+  setup, bitmap layout, page metadata table setup, and initial registry
+  insertion. Unsafe operations are limited to reserved arena memory, typed
+  slice counts, bitmap initialization, and arena header writes while preserving
+  reserved-range bounds and arena alignment.
+- `SAFETY[AUDIT:arena-reserve-growth-boundary]`:
+  `src/allocator/arena.rs` owns arena reserve growth and retry sizing.
+  Unsafe operations are limited to subproc arena counts, reserve-lock guarded
+  growth, virtual reserve feature checks, and stat adjustment balancing while
+  preserving bounded reserve sizes and retry accounting.
+- `SAFETY[AUDIT:arena-os-fallback-boundary]`:
+  `src/allocator/arena.rs` owns OS allocation fallback for arena allocation
+  requests and internal C-shaped arena allocation shims. Unsafe operations are
+  limited to typed layout/alignment witnesses, errno slots, OS allocation
+  primitives, and memid out-pointers while preserving disallow-options behavior
+  and fallback semantics.
+- `SAFETY[AUDIT:arena-public-reserve-boundary]`:
+  `src/allocator/arena.rs` owns public reserve/manage arena APIs and internal
+  OS-memory registration. Unsafe operations are limited to C ABI pointers,
+  typed OS-memory and memid witnesses, arena initialization handoff, and OS
+  release on registration failure while preserving alignment and caller-owned
+  memory contracts.
+- `SAFETY[AUDIT:arena-huge-reservation-boundary]`:
+  `src/allocator/arena.rs` owns huge OS page reservation APIs. Unsafe
+  operations are limited to NUMA normalization, huge-page OS allocation,
+  memid publication, arena registration, and OS release on failure while
+  preserving timeout, interleave, and reserved-page reporting semantics.
 - `SAFETY[AUDIT:arena-abandoned-boundary]`: `src/allocator/arena.rs` owns
   abandoned-page ownership claim/release, heap arena-page bitmap lookup, and
   thread-local abandoned-page claim callbacks. Unsafe operations are limited to
   typed abandoned-page witnesses, remote-free collection, callback ABI
   arguments, and heap arena-page bitmap cells while preserving page ownership
   transfer and abandoned-count semantics.
-- `SAFETY[AUDIT:arena-page-lifecycle-boundary]`: `src/allocator/arena.rs`
-  owns arena-backed page allocation, fresh/regular/singleton page setup,
-  page free/abandon/reabandon/unabandon shims, and heap arena-page publication.
-  Unsafe operations are limited to typed page-state witnesses, arena memid
-  projection, page queue/lifecycle handoff, and C ABI helper shims while
-  preserving page ownership, queue membership, and abandoned-count updates.
+- `SAFETY[AUDIT:arena-page-fresh-boundary]`:
+  `src/allocator/arena.rs` owns fresh arena-backed page memory reservation,
+  initial commit, page metadata placement, and page layout setup. Unsafe
+  operations are limited to typed page/block/slice witnesses, arena memid
+  projection, OS fallback handoff, and metadata initialization while preserving
+  page alignment and reserved-block invariants.
+- `SAFETY[AUDIT:arena-page-regular-boundary]`:
+  `src/allocator/arena.rs` owns regular size-class page allocation and
+  abandoned-page reuse during allocation. Unsafe operations are limited to
+  typed slice-count/block-size witnesses, fresh-page initialization handoff,
+  and page initialization failure cleanup while preserving size-class slice
+  counts and page availability.
+- `SAFETY[AUDIT:arena-page-singleton-boundary]`:
+  `src/allocator/arena.rs` owns singleton page setup for over-aligned and
+  large-object allocations. Unsafe operations are limited to block alignment,
+  one-block reserved count checks, fresh-page setup, and failure cleanup while
+  preserving singleton page invariants.
+- `SAFETY[AUDIT:arena-page-free-boundary]`:
+  `src/allocator/arena.rs` owns arena page free shims and internal free
+  cleanup. Unsafe operations are limited to all-free page witnesses, arena
+  memid projection, page-map unregister, bitmap clearing, stat adjustment, and
+  backing-slice release while preserving ownership and abandoned-state checks.
+- `SAFETY[AUDIT:arena-page-abandon-boundary]`:
+  `src/allocator/arena.rs` owns arena page abandon shims and abandoned-state
+  publication. Unsafe operations are limited to page-for-abandon witnesses,
+  arena/heap abandoned bitmaps, owner-id words, heap lists, and stat updates
+  while preserving mapped-abandoned visibility and thread ownership release.
+- `SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]`:
+  `src/allocator/arena.rs` owns reabandon and unabandon shims. Unsafe
+  operations are limited to owned-abandoned page witnesses, mapped-abandoned
+  bitmap transitions, heap abandoned lists, and stat updates while preserving
+  same-thread ownership and count reconciliation.
+- `SAFETY[AUDIT:arena-heap-page-publication-boundary]`:
+  `src/allocator/arena.rs` owns heap arena-page bitmap publication during
+  page allocation. Unsafe operations are limited to per-heap arena page tables,
+  arena memid projection, bitmap set/rollback, and allocation cleanup while
+  preserving visibility only after arena page metadata exists.
+- `SAFETY[AUDIT:arena-page-ownership-transition-boundary]`:
+  `src/allocator/arena.rs` owns arena page owner-word and page-map visibility
+  transitions. Unsafe operations are limited to page metadata owner fields,
+  thread-free ownership words, and page-map registration while preserving page
+  metadata invariants before ownership becomes visible.
 - `SAFETY[AUDIT:arena-purge-boundary]`: `src/allocator/arena.rs` owns arena
   purge scheduling, purge traversal callbacks, arena collection, arena free,
   and OS decommit/reset handoff. Unsafe operations are limited to purge bitmap

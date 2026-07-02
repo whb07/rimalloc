@@ -121,11 +121,16 @@ file when such a module exists.
 - `SAFETY[AUDIT:allocation-page-refill-boundary]`: page refill handoff,
   generic fallback allocation, guarded allocation, zeroing, and padding canary
   publication in `src/allocator/alloc.rs`.
-- `SAFETY[AUDIT:page-allocation-boundary]`: page-local allocation in
-  `src/allocator/page.rs`. The boundary covers free-list collection and
-  extension, generic refill, page queue movement, retire/free/abandon
-  transitions, stat gates, huge-page allocation, raw page helper exports, and
-  no-allocation hot paths.
+- `SAFETY[AUDIT:page-free-list-refill-boundary]`: page-local free-list
+  collection, extension, search, and refill in `src/allocator/page.rs`.
+- `SAFETY[AUDIT:page-queue-transition-boundary]`: page queue movement,
+  full/unfull transitions, retire/free handoff, abandon/reclaim, validation,
+  and append operations in `src/allocator/page.rs`.
+- `SAFETY[AUDIT:page-huge-allocation-boundary]`: huge-page selection and
+  allocation dispatch in `src/allocator/page.rs`.
+- `SAFETY[AUDIT:page-stats-public-boundary]`: page metadata accessors,
+  stats/bin helpers, public C-shaped page helpers, and generic allocation
+  entry shims in `src/allocator/page.rs`.
 - `SAFETY[AUDIT:arena-slice-boundary]`: arena slice/range projection in
   `src/allocator/arena.rs`. The boundary covers slice indexes, range
   projection, area/containment queries, info-slice sizing, and arena bitmap
@@ -134,18 +139,46 @@ file when such a module exists.
   access in `src/allocator/arena.rs`. The boundary covers arena indexes,
   subproc arena cells, heap arena-page tables, NUMA suitability, arena
   iteration, and unsafe arena teardown.
-- `SAFETY[AUDIT:arena-allocation-boundary]`: arena allocation and OS
-  reservation in `src/allocator/arena.rs`. The boundary covers slice bitmap
-  allocation, arena initialization, reserve growth, OS-memory fallback, public
-  reserve/manage APIs, and huge-page reservation.
+- `SAFETY[AUDIT:arena-slice-allocation-boundary]`: arena slice allocation,
+  commit/reuse, slice bitmap mutation, memid creation, and allocation metadata
+  publication in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-initialization-boundary]`: arena metadata
+  initialization, guard-page setup, bitmap layout, page metadata table setup,
+  and registry insertion in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-reserve-growth-boundary]`: reserve growth, retry
+  sizing, reserve-lock discipline, and commit accounting balance in
+  `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-os-fallback-boundary]`: OS allocation fallback for
+  internal arena allocation shims in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-public-reserve-boundary]`: public reserve/manage APIs
+  and OS-memory arena registration in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-huge-reservation-boundary]`: huge OS page reservation
+  APIs, NUMA normalization, registration, and release-on-failure handling in
+  `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-abandoned-boundary]`: abandoned-page claim/reclaim in
   `src/allocator/arena.rs`. The boundary covers abandoned ownership transfer,
   heap arena-page bitmap lookup, remote-free collection, and thread-local claim
   callbacks.
-- `SAFETY[AUDIT:arena-page-lifecycle-boundary]`: arena-backed page lifecycle in
-  `src/allocator/arena.rs`. The boundary covers fresh/regular/singleton page
-  allocation, page free/abandon/reabandon/unabandon shims, page memid
-  ownership, and heap arena-page publication.
+- `SAFETY[AUDIT:arena-page-fresh-boundary]`: fresh arena-backed page
+  reservation, commit, metadata placement, and layout setup in
+  `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-regular-boundary]`: regular size-class page
+  allocation and abandoned-page reuse in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-singleton-boundary]`: singleton page setup for
+  over-aligned and large-object allocations in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-free-boundary]`: arena page free shims, bitmap
+  cleanup, page-map unregister, stat adjustment, and slice release in
+  `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-abandon-boundary]`: arena page abandon shims,
+  abandoned bitmap publication, owner-id updates, heap-list updates, and stat
+  accounting in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]`: reabandon and
+  unabandon shims, mapped-abandoned bitmap transitions, heap list cleanup, and
+  stat reconciliation in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-heap-page-publication-boundary]`: heap arena-page bitmap
+  publication and rollback during page allocation in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-ownership-transition-boundary]`: owner-word and
+  page-map visibility transitions in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-purge-boundary]`: arena purge and collection in
   `src/allocator/arena.rs`. The boundary covers purge scheduling, purge bitmap
   traversal, arena collection/free, OS purge/decommit handoff, and purge stats.

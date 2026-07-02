@@ -8,9 +8,9 @@ operation IDs and release-audit modules that are still close to the module cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 130 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 130 operation IDs with
-  321 automated evidence rows.
+  mentions, and 145 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 145 operation IDs with
+  348 automated evidence rows.
 - `strict-type-allowlist.txt` still has 26 wildcard entries left: 4
   raw-pointer-parameter entries, 13 bare-domain `usize` entries, 4
   pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
@@ -22,13 +22,14 @@ Current review evidence:
   `src/safe/allocation.rs`, and `src/types/atomic.rs`.
 - The largest remaining unsafe audit marker clusters are
   `windows-primitive-boundary` with 114 markers,
-  `arena-page-lifecycle-boundary` with 107 markers,
-  `arena-allocation-boundary` with 105 markers,
   `allocation-abi-entry-boundary` with 104 markers,
   `internal-atomic-facade` with 103 markers,
-  `page-allocation-boundary` with 102 markers,
   `unix-primitive-backend` with 90 markers, and
-  `typed-pointer-test-fixtures` with 87 markers.
+  `typed-pointer-test-fixtures` with 87 markers,
+  `macos-zone-override` with 83 markers,
+  `heap-lifecycle-boundary` with 80 markers, and
+  `options-callback-boundary` and `internal-translation-boundary` with 76
+  markers each.
 - The previous `init-thread-tls-boundary` aggregate is split into
   `init-thread-heap-tls-boundary` with 56 markers,
   `init-thread-lifecycle-boundary` with 48 markers,
@@ -40,6 +41,26 @@ Current review evidence:
   `init-subproc-identity-boundary` with 16 markers,
   `init-subproc-stats-count-boundary` with 12 markers, and
   `init-main-subproc-lifecycle-boundary` with 6 markers.
+- The previous `page-allocation-boundary` aggregate is split into
+  `page-queue-transition-boundary` with 49 markers,
+  `page-free-list-refill-boundary` with 30 markers,
+  `page-stats-public-boundary` with 19 markers, and
+  `page-huge-allocation-boundary` with 4 markers.
+- The previous `arena-allocation-boundary` aggregate is split into
+  `arena-slice-allocation-boundary` with 30 markers,
+  `arena-public-reserve-boundary` with 18 markers,
+  `arena-initialization-boundary` with 17 markers,
+  `arena-os-fallback-boundary` with 15 markers,
+  `arena-huge-reservation-boundary` with 14 markers, and
+  `arena-reserve-growth-boundary` with 11 markers.
+- The previous `arena-page-lifecycle-boundary` aggregate is split into
+  `arena-page-reabandon-unabandon-boundary` and `arena-page-free-boundary`
+  with 23 markers each, `arena-page-fresh-boundary` with 22 markers,
+  `arena-page-abandon-boundary` with 17 markers,
+  `arena-page-regular-boundary` with 11 markers,
+  `arena-page-ownership-transition-boundary` with 6 markers,
+  `arena-heap-page-publication-boundary` with 3 markers, and
+  `arena-page-singleton-boundary` with 2 markers.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   module cap is still 1,000 lines; the largest modules are
   `unsafe_performance/lifecycle_boundaries.rs` at 922 lines,
@@ -79,12 +100,12 @@ unsafe audit scripts, unsafe evidence scripts, full clippy, and full tests.
 > has 102 markers. They cover distinct allocation, page queue, arena reserve,
 > huge-page, free/abandon, and stats invariants.
 
-- [ ] Split page allocation markers by free-list refill/search, queue
+- [x] Split page allocation markers by free-list refill/search, queue
       transition, huge-page allocation, and stats/public helper responsibility.
-- [ ] Split arena allocation markers by slice allocation, arena initialization,
+- [x] Split arena allocation markers by slice allocation, arena initialization,
       reserve growth, OS fallback, public reserve/manage API, and huge-page
       reservation responsibility.
-- [ ] Split arena page lifecycle markers by fresh/regular/singleton page setup,
+- [x] Split arena page lifecycle markers by fresh/regular/singleton page setup,
       free/abandon/reabandon/unabandon shims, heap arena-page publication, and
       page ownership transitions.
 
@@ -132,7 +153,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Split init thread/TLS and subproc audit clusters.
-2. [ ] Split page and arena allocation lifecycle clusters.
+2. [x] Split page and arena allocation lifecycle clusters.
 3. [ ] Split platform and atomic facade audit clusters.
 4. [ ] Split remaining large release-audit modules and lower the module cap.
 

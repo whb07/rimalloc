@@ -92,14 +92,23 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             && alloc_rs.contains("crate::core_types::PaddingCanary::from_page_block_keys("),
         "allocation unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
+    for (audit_id, min_count) in [
+        ("page-free-list-refill-boundary", 30),
+        ("page-queue-transition-boundary", 49),
+        ("page-huge-allocation-boundary", 4),
+        ("page-stats-public-boundary", 19),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            page_rs.matches(&marker).count() >= min_count,
+            "page unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     assert!(
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/page.rs\t"))
-            && page_rs
-                .matches("SAFETY[AUDIT:page-allocation-boundary]")
-                .count()
-                >= 100
+            && !page_rs.contains("SAFETY[AUDIT:page-allocation-boundary]")
             && page_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_malloc_generic(")
             && page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(")
             && page_rs.contains("unsafe fn mi_page_queue_find_free_ex(")

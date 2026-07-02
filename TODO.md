@@ -7,7 +7,7 @@ units.
 
 Review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` still has 64 entries: 46 production,
+- `docs/unsafe-migration-allowlist.tsv` still has 62 entries: 44 production,
   15 test, and 3 translation files.
 - `strict-type-allowlist.txt` has 96 entries; 9 are still marked `remove:`.
   Those removable entries are broad `bare-domain-usize` file allowances.
@@ -34,16 +34,22 @@ Review evidence:
 > where safety invariants are local and reviewable, not hot allocator paths that
 > need assembly evidence.
 
-- [ ] Pick the smallest production typed-wrapper files still on
+- [x] Pick the smallest production typed-wrapper files still on
       `docs/unsafe-migration-allowlist.tsv`.
-- [ ] Add specific `SAFETY[AUDIT:*]` tags and `UNSAFE_AUDIT.md` entries for
+- [x] Add specific `SAFETY[AUDIT:*]` tags and `UNSAFE_AUDIT.md` entries for
       each remaining unsafe operation in those files.
-- [ ] Remove the migrated files from the unsafe migration allowlist and lower
+- [x] Remove the migrated files from the unsafe migration allowlist and lower
       `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
-- [ ] Keep test allowlist entries separate from production entries so test
+- [x] Keep test allowlist entries separate from production entries so test
       fixture unsafe does not hide production debt.
-- [ ] Avoid hot allocator files until the change has behavior, assembly, and
+- [x] Avoid hot allocator files until the change has behavior, assembly, and
       benchmark evidence.
+  - Evidence: `src/types/freelist.rs` and `src/types/validation.rs` now carry
+    operation-level `SAFETY[AUDIT:typed-freelist]` and
+    `SAFETY[AUDIT:typed-free-validation]` tags with matching
+    `UNSAFE_AUDIT.md` and `docs/unsafe-audit-evidence.tsv` entries. Both files
+    were removed from `docs/unsafe-migration-allowlist.tsv`, and the unsafe
+    migration cap is now 62 entries. No hot allocator file was touched.
 - Verify: `scripts/check-unsafe-audit.py`,
   `scripts/check-unsafe-audit-evidence.py`,
   `scripts/check-unsafe-inventory.py`, focused release audit, full clippy, and
@@ -165,7 +171,7 @@ Review evidence:
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is below 64 entries and the cap is lowered.
+- [x] The unsafe migration allowlist is below 64 entries and the cap is lowered.
 - [ ] The strict-type allowlist has fewer than 9 `remove:` entries and the
       removable-entry count is capped.
 - [ ] Small production module-level allowances are localized or documented as

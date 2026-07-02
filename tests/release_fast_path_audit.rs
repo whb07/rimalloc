@@ -2955,7 +2955,7 @@ fn rust_idiom_backlog_tracks_current_work() {
 
     assert!(
         todo.contains("# TODO: Fresh Rust Idiom Follow-up Backlog")
-            && todo.contains("64 entries: 46 production,\n  15 test, and 3 translation files")
+            && todo.contains("62 entries: 44 production,\n  15 test, and 3 translation files")
             && todo.contains("96 entries; 9 are still marked `remove:`")
             && todo.contains("`tests/release_fast_path_audit.rs` is 8,845 lines")
             && todo.contains("## Issue: Unsafe migration allowlist should keep shrinking")

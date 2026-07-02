@@ -55,7 +55,10 @@ impl ThreadFreeWord {
         if ptr.is_null() {
             None
         } else {
-            // SAFETY: The block pointer is non-null if not 0.
+            // SAFETY[AUDIT:typed-freelist]: the packed thread-free word stores
+            // a block pointer with only the ownership bit masked into bit 0.
+            // A nonzero head has been reconstructed through the provenance
+            // helper above, and `BlockPtr` only adds the non-null invariant.
             Some(unsafe { BlockPtr::new_unchecked(ptr) })
         }
     }

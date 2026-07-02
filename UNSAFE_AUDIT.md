@@ -196,6 +196,15 @@ Operation IDs:
 - `SAFETY[AUDIT:safe-stats]`: `src/safe/stats.rs` initializes stats buffers
   before use, passes valid writable output slices to JSON formatting, and
   exposes only typed totals/counts to callers.
+- `SAFETY[AUDIT:typed-freelist]`: `src/types/freelist.rs` reconstructs
+  non-null block pointers from packed thread-free words after masking the
+  ownership bit. Miri provenance helpers retain the original pointer identity,
+  and `BlockPtr` adds only the non-null wrapper invariant.
+- `SAFETY[AUDIT:typed-free-validation]`: `src/types/validation.rs` converts
+  validated pointer-lookup results into free-list witnesses. The conversion is
+  reachable only after pointer lookup has associated the user pointer, page,
+  and block, or through the explicitly unsafe fast path that requires the same
+  proof from its caller.
 - `SAFETY[AUDIT:unsafe-callback]`: `src/ffi/callbacks.rs` owns the unsafe
   callback registration/trampoline boundary. The registered argument pointer is
   created from the borrowed closure held by the guard, remains valid until

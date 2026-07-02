@@ -39,7 +39,6 @@ src/types/atomic/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper
 src/types/callbacks.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/callbacks/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
 src/types/constants.rs	translation	release-readiness	2026-09-30	legacy translated C layout unsafe pending per-operation SAFETY marker migration
-src/types/freelist.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/freelist/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
 src/types/freelist_wrappers.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/freelist_wrappers/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
@@ -61,5 +60,4 @@ src/types/ptr.rs	production	release-readiness	2026-09-30	legacy typed wrapper un
 src/types/ptr/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
 src/types/scalar.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/scalar/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
-src/types/validation.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/validation/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration

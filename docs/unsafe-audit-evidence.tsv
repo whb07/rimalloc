@@ -18,5 +18,9 @@ safe-process-info	test	src/safe/mod.rs	Exercises ProcessInfo capture through typ
 safe-process-info	test	tests/release_fast_path_audit.rs	Checks safe facade exposes process/stat APIs without widening unsafe raw surfaces.
 safe-stats	test	src/safe/mod.rs	Exercises StatsSnapshot capture, heap stats, JSON output, and buffer failure behavior.
 safe-stats	test	tests/stats_exports.rs	Exercises raw stats bin export bounds used by typed stats wrappers.
+typed-freelist	test	src/types/freelist/tests.rs	Exercises thread-free word owner/head packing and raw pointer reconstruction.
+typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
+typed-free-validation	test	src/types/validation/tests.rs	Exercises pointer lookup conversion into validated free witnesses.
+typed-free-validation	test	tests/release_fast_path_audit.rs	Checks free-path validation uses typed pointer lookup boundaries.
 unsafe-callback	test	src/safe/mod.rs	Exercises unsafe callback guards, restoration, and panic containment.
 unsafe-callback	test	tests/release_fast_path_audit.rs	Checks callback guard docs, namespace, no-unwind, and registration boundaries.

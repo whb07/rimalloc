@@ -244,6 +244,13 @@ Operation IDs:
   errno slot publication, environment lookup, raw allocation forwarding,
   POSIX-compatible out-pointer and pointer-slot writes, wide-string scanning and
   copying, environment duplication, and aligned/product allocation shims.
+- `SAFETY[AUDIT:macos-zone-override]`: `src/platform/macos.rs` owns the
+  source-present macOS malloc-zone override boundary. Unsafe operations are
+  limited to Darwin malloc-zone callback signatures and imports, mutable
+  process-global zone metadata, nullable out-pointer writes, default-zone
+  ordering during process initialization, non-mimalloc zone forwarding, mimalloc
+  ownership queries, batch pointer-array reads/writes, fork-hook exports, and
+  no-op compatibility shims.
 - `SAFETY[AUDIT:random-context-boundaries]`: `src/internal/random.rs`
   confines random context raw pointers and primitive entropy/clock calls to
   the allocator's C-compatible random boundary. The shims convert live context

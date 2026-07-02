@@ -15,29 +15,35 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 22 entries: 19 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 22.
+- `docs/unsafe-migration-allowlist.tsv` has 21 entries: 18 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 21.
 - The completed pass moved `src/raw/posix.rs`, `src/lib.rs`,
   `src/ffi/libc.rs`, `src/allocator/threadlocal.rs`, and
   `src/allocator/heap.rs` to local `SAFETY[AUDIT:*]` operation markers with
   evidence rows and no migration allowlist entries.
+- The current pass moved `src/platform/macos.rs` to 83
+  `SAFETY[AUDIT:macos-zone-override]` markers for malloc-zone callback
+  signatures and imports, process-global zone metadata, nullable out-pointer
+  writes, default-zone ordering, non-mimalloc zone forwarding, mimalloc
+  ownership queries, batch pointer-array reads/writes, fork-hook exports, and
+  no-op compatibility shims, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are
-  `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits and 0 local
-  markers,
   `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits and 0 local
   markers,
   `src/internal/atomic.rs` at 914 lines with 135 `unsafe` hits and 0 local
   markers,
   `src/allocator/page_map.rs` at 1,052 lines with 184 `unsafe` hits and
-  0 local markers, and
+  0 local markers,
   `src/types/scalar.rs` at 1,097 lines with 33 `unsafe` hits and 0 local
-  markers.
+  markers, and
+  `src/allocator/thread_heap.rs` at 1,267 lines with 120 `unsafe` hits and
+  0 local markers.
 - The next smallest allowlisted production files after those are
-  `src/allocator/thread_heap.rs` at 1,267 lines with 120 `unsafe` hits,
   `src/platform/unix.rs` at 1,371 lines with 143 `unsafe` hits,
   `src/platform/os.rs` at 1,614 lines with 200 `unsafe` hits,
   `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits, and
-  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits.
+  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits, and
+  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits.
 - `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
   `symbol = *` entries. The largest categories are 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
@@ -50,6 +56,7 @@ Current review evidence:
   4 path-wide entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
+  `SAFETY[AUDIT:macos-zone-override]` has 83 markers,
   `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers,
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
@@ -79,19 +86,19 @@ Current review evidence:
 > zones, ownership checks through `mi_any_heap_contains`, batch allocation/free
 > pointer arrays, fork hook exports, and no-op compatibility shims.
 
-- [ ] Add local `SAFETY[AUDIT:macos-zone-override]` markers for zone metadata
+- [x] Add local `SAFETY[AUDIT:macos-zone-override]` markers for zone metadata
       access, macOS extern declarations, default-zone shims, out-pointer writes,
       forwarded zone function calls, mimalloc ownership checks, batch
       pointer-array reads/writes, fork hooks, and no-op compatibility shims.
-- [ ] Preserve source-present macOS ABI shape, `mi_malloc_zone` layout and name,
+- [x] Preserve source-present macOS ABI shape, `mi_malloc_zone` layout and name,
       non-mimalloc zone forwarding behavior, null-zone handling, batch free
       pointer clearing, fork hook symbol names, and no new heap allocation in
       zone callbacks.
-- [ ] Add or extend release-audit assertions for malloc-zone struct layout,
+- [x] Add or extend release-audit assertions for malloc-zone struct layout,
       interpose macro targets, default-zone return paths, forwarding branches,
       batch pointer clearing, fork hooks, and marker coverage without a
       migration allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/platform/macos.rs` from the unsafe migration allowlist, regenerate
       unsafe inventory, and lower the cap.
 
@@ -220,7 +227,7 @@ clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/platform/macos.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/platform/macos.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/platform/mod.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/internal/atomic.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/page_map.rs` off the unsafe migration allowlist.

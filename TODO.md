@@ -15,8 +15,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 19 entries: 16 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 19.
+- `docs/unsafe-migration-allowlist.tsv` has 18 entries: 15 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 18.
 - The completed pass moved `src/raw/posix.rs`, `src/lib.rs`,
   `src/ffi/libc.rs`, `src/allocator/threadlocal.rs`, and
   `src/allocator/heap.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -40,23 +40,30 @@ Current review evidence:
   wrappers, pointer-sized atomic helpers, volatile addend reads, guard/once
   entry shims, fallback spin locks, and Linux lock init/done behavior, and is
   off the unsafe migration allowlist.
+- The current pass also moved `src/allocator/page_map.rs` to 153
+  `SAFETY[AUDIT:page-map-boundary]` markers for page-map globals, OS
+  reserve/commit/free paths, 32-bit bitmap commit tracking, typed page
+  span/index conversion, lock-protected submap growth, acquire/release submap
+  publication, range set/clear/register/unregister, `RegisteredPageRange`
+  witnesses, safe arbitrary-pointer lookup, and heap-region forwarding, and is
+  off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are
-  `src/allocator/page_map.rs` at 1,052 lines with 184 `unsafe` hits and
-  0 local markers,
   `src/types/scalar.rs` at 1,097 lines with 33 `unsafe` hits and 0 local
   markers,
   `src/allocator/thread_heap.rs` at 1,267 lines with 120 `unsafe` hits and
   0 local markers,
   `src/platform/unix.rs` at 1,371 lines with 143 `unsafe` hits and
-  0 local markers, and
+  0 local markers,
   `src/platform/os.rs` at 1,614 lines with 200 `unsafe` hits and
+  0 local markers, and
+  `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits and
   0 local markers.
 - The next smallest allowlisted production files after those are
-  `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits,
   `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits,
-  `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits,
-  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits, and
-  `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits.
+  `src/allocator/options.rs` at 1,715 lines with 78 `unsafe` hits,
+  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits,
+  `src/allocator/stats.rs` at 2,021 lines with 196 `unsafe` hits, and
+  `src/raw/macros.rs` at 2,223 lines with 381 `unsafe` hits.
 - `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
   `symbol = *` entries. The largest categories are 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
@@ -68,6 +75,7 @@ Current review evidence:
   `src/platform/unix.rs`, and `src/platform/windows.rs`, each with
   4 path-wide entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
+  `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
   `SAFETY[AUDIT:internal-atomic-facade]` has 103 markers,
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
   `SAFETY[AUDIT:macos-zone-override]` has 83 markers,
@@ -88,9 +96,9 @@ Current review evidence:
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
 - The release audit is still split but has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,386 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,416 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
-  `tests/release_fast_path_audit.rs` is 1,869 lines, and
+  `tests/release_fast_path_audit.rs` is 1,895 lines, and
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,108 lines.
 
 ## Issue: macOS malloc-zone override still uses a file-level unsafe allowance
@@ -187,21 +195,21 @@ full tests.
 > registration/unregistration, `RegisteredPageRange` witnesses, and
 > safe-pointer lookup.
 
-- [ ] Add local `SAFETY[AUDIT:page-map-boundary]` markers for page-map globals,
+- [x] Add local `SAFETY[AUDIT:page-map-boundary]` markers for page-map globals,
       base pointer accessors, memid interpretation, page span/index helpers,
       commit tracking, OS reserve/commit/free paths, submap atomic publication,
       lock-protected submap growth, range set/clear/register/unregister, safe
       pointer lookup, and `mi_is_in_heap_region`.
-- [ ] Preserve 32-bit and non-32-bit behavior, page-map max-address checks,
+- [x] Preserve 32-bit and non-32-bit behavior, page-map max-address checks,
       acquire/release publication of committed submaps, lock scope,
       `RegisteredPageRange` construction, `PageMapIndex`/`PageMapSubIndex` and
       `SliceCount` domains, null/invalid pointer handling, and no allocation in
       safe lookup paths.
-- [ ] Add or extend release-audit assertions and focused tests for page-map init,
+- [x] Add or extend release-audit assertions and focused tests for page-map init,
       unsafe destroy, register/unregister/range-unregister, safe pointer lookup,
       submap publication atomics, 32-bit bitmap commit behavior, and marker
       coverage without a migration allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/allocator/page_map.rs` from the unsafe migration allowlist,
       regenerate unsafe inventory, and lower the cap.
 
@@ -245,7 +253,7 @@ clippy, and full tests.
 1. [x] Migrate `src/platform/macos.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/platform/mod.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/internal/atomic.rs` off the unsafe migration allowlist.
-4. [ ] Migrate `src/allocator/page_map.rs` off the unsafe migration allowlist.
+4. [x] Migrate `src/allocator/page_map.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/types/scalar.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog

@@ -264,6 +264,13 @@ Operation IDs:
   caller-proven storage, memory-order mapping helpers, load/store/RMW/CAS
   wrappers, pointer-sized atomic helpers, volatile addend reads, guard/once
   entry shims, fallback spin locks, and release Linux lock init/done behavior.
+- `SAFETY[AUDIT:page-map-boundary]`: `src/allocator/page_map.rs` owns allocator
+  page registration, lookup, and teardown. Unsafe operations are limited to
+  process-global page-map metadata, OS reserve/commit/free calls, 32-bit commit
+  bitmap access, typed page span/index conversion, lock-protected submap
+  allocation and acquire/release publication, page range set/clear/register/
+  unregister operations, `RegisteredPageRange` witness construction, safe
+  arbitrary-pointer lookup, and heap-region query forwarding.
 - `SAFETY[AUDIT:random-context-boundaries]`: `src/internal/random.rs`
   confines random context raw pointers and primitive entropy/clock calls to
   the allocator's C-compatible random boundary. The shims convert live context

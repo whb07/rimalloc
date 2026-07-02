@@ -61,6 +61,9 @@ internal-atomic-facade	test	tests/release_fast_path_audit.rs	Checks internal ato
 internal-atomic-facade	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
 internal-atomic-facade	script	scripts/check-atomic-ordering-audit.py	Checks mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
 internal-atomic-facade	script	scripts/check-unsafe-audit.py	Checks internal atomic facade operations retain operation-level SAFETY markers and source audit coverage.
+page-map-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map local C ABI boundaries, safe pointer lookup, marker coverage, and migration allowlist removal.
+page-map-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page-map typed index/sub-index/range helpers, RegisteredPageRange witnesses, and AtomicPtrField submap publication.
+page-map-boundary	script	scripts/check-unsafe-audit.py	Checks page-map operations retain operation-level SAFETY markers and source audit coverage.
 random-context-boundaries	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks random context entry points stay no-retention direct-call C ABI shims with local audit markers.
 threadlocal-key-manager	test	src/allocator/threadlocal.rs	Exercises versioned key helper splitting and callback keep-set witness clearing.
 threadlocal-key-manager	test	tests/release_fast_path_audit.rs	Checks Linux TLS shim shape, dynamic thread-local marker coverage, and migration allowlist removal.

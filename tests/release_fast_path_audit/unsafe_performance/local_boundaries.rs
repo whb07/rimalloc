@@ -1,5 +1,6 @@
 pub(super) struct BoundarySources<'a> {
     pub(super) page_map: &'a str,
+    pub(super) unsafe_allowlist: &'a str,
     pub(super) alloc_rs: &'a str,
     pub(super) arena_rs: &'a str,
     pub(super) arena_debug_rs: &'a str,
@@ -17,6 +18,7 @@ pub(super) struct BoundarySources<'a> {
 pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'_>) {
     let BoundarySources {
         page_map,
+        unsafe_allowlist,
         alloc_rs,
         arena_rs,
         arena_debug_rs,
@@ -45,6 +47,21 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
             "{internal_name} should stay crate-internal instead of a dynamic export"
         );
     }
+    assert!(
+        !unsafe_allowlist.contains("src/allocator/page_map.rs")
+            && page_map.matches("SAFETY[AUDIT:page-map-boundary]").count() >= 130
+            && page_map.contains("pub(crate) static mut _mi_page_map")
+            && page_map.contains("static mut mi_page_map_max_address")
+            && page_map.contains("static mut mi_page_map_memid")
+            && page_map.contains("static mut mi_page_map_lock")
+            && page_map.contains(
+                "crate::core_types::AtomicPtrField(unsafe { _mi_page_map.add(idx.get()) });"
+            )
+            && page_map
+                .contains("RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count)")
+            && page_map.contains("pub unsafe extern \"C\" fn mi_is_in_heap_region"),
+        "page-map unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
     assert!(
         page_map
             .matches("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_map_init(")

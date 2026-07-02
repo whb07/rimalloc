@@ -41,6 +41,8 @@ fn source_has_inline_never_function(source: &str, signature: &str) -> bool {
 #[test]
 fn free_path_internals_are_not_dynamic_exports() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let unsafe_allowlist = fs::read_to_string(root.join("docs/unsafe-migration-allowlist.tsv"))
+        .expect("read unsafe migration allowlist");
     let page_map = fs::read_to_string(root.join("src/allocator/page_map.rs"))
         .expect("read src/allocator/page_map.rs");
     let internal =
@@ -132,6 +134,7 @@ fn free_path_internals_are_not_dynamic_exports() {
 
     local_boundaries::assert_page_map_and_deferred_boundaries(local_boundaries::BoundarySources {
         page_map: &page_map,
+        unsafe_allowlist: &unsafe_allowlist,
         alloc_rs: &alloc_rs,
         arena_rs: &arena_rs,
         arena_debug_rs: &arena_debug_rs,

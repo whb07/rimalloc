@@ -153,13 +153,13 @@ unsafe fn mi_reserve_os_memory_ex2(
     let allow_large = allow_large.get();
     let exclusive = exclusive.get();
     if !arena_id.is_null() {
-        // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+        // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
         unsafe { *arena_id = _mi_arena_id_none() };
     }
 
     let size = _mi_align_up(size.get(), MI_ARENA_SLICE_SIZE);
     let mut memid = unsafe { _mi_memid_none() };
-    // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
     let start = unsafe {
         _mi_os_alloc_aligned(size, MI_ARENA_SLICE_ALIGN, commit, allow_large, &mut memid)
     };
@@ -167,7 +167,7 @@ unsafe fn mi_reserve_os_memory_ex2(
         return ENOMEM;
     }
 
-    // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
     if unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(subproc),
@@ -192,7 +192,7 @@ unsafe fn mi_reserve_os_memory_ex2(
         ));
         0
     } else {
-        // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+        // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
         unsafe { _mi_os_free_ex(start, size, commit, memid, ptr::null_mut()) };
         crate::options::_mi_verbose_message(format_args!(
             "failed to reserve {} KiB memory\n",
@@ -204,7 +204,7 @@ unsafe fn mi_reserve_os_memory_ex2(
 
 /// # Safety
 /// Matches the C API and may mutate global arena state through the active sub-process.
-// SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+// SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     size: usize,
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     exclusive: bool,
     arena_id: *mut mi_arena_id_t,
 ) -> c_int {
-    // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
     unsafe {
         mi_reserve_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -229,20 +229,20 @@ pub unsafe extern "C" fn mi_reserve_os_memory_ex(
 
 /// # Safety
 /// Matches the C API and may mutate global arena state through the active sub-process.
-// SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+// SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_os_memory(
     size: usize,
     commit: bool,
     allow_large: bool,
 ) -> c_int {
-    // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
     unsafe { mi_reserve_os_memory_ex(size, commit, allow_large, false, ptr::null_mut()) }
 }
 
 /// # Safety
 /// Matches the C API and forwards to the current arena-management entrypoint.
-// SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+// SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_manage_os_memory(
     start: *mut c_void,
@@ -252,7 +252,7 @@ pub unsafe extern "C" fn mi_manage_os_memory(
     is_zero: bool,
     numa_node: c_int,
 ) -> bool {
-    // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
     unsafe {
         mi_manage_os_memory_ex(
             start,
@@ -284,7 +284,7 @@ unsafe fn mi_manage_os_memory_ex2(
     let mut size = size.get();
     let exclusive = exclusive.get();
     if !arena_id.is_null() {
-        // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+        // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
         unsafe { *arena_id = _mi_arena_id_none() };
     }
     if !(start as usize).is_multiple_of(MI_ARENA_SLICE_SIZE) {
@@ -323,7 +323,7 @@ unsafe fn mi_manage_os_memory_ex2(
             return false;
         };
 
-        // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+        // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
         let arena = unsafe {
             mi_arena_initialize(
                 SubprocPtr::new_unchecked(subproc),
@@ -353,7 +353,7 @@ unsafe fn mi_manage_os_memory_ex2(
             }
             crate::internal::mi_assert!(
                 mi_size_of_slices(total_slice_count)
-                    // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+                    // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
                     <= unsafe { (*parent.cast::<MiArenaPrefix>()).total_size }
             );
             unsafe {
@@ -369,7 +369,7 @@ unsafe fn mi_manage_os_memory_ex2(
         }
         crate::internal::mi_assert!(slice_count <= total_slice_count);
         total_slice_count -= slice_count;
-        // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+        // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
         start = unsafe {
             start
                 .cast::<u8>()
@@ -383,7 +383,7 @@ unsafe fn mi_manage_os_memory_ex2(
 
 /// # Safety
 /// Matches the C API and may mutate arena state for externally managed memory.
-// SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+// SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_manage_os_memory_ex(
     start: *mut c_void,
@@ -406,7 +406,7 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     let Some(start_ptr) = crate::core_types::OsMemPtr::new(start) else {
         return false;
     };
-    // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
     unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -422,7 +422,7 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     }
 }
 
-// SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+// SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `start..start+size` must describe caller-owned memory suitable for arena management.
@@ -450,7 +450,7 @@ pub unsafe extern "C" fn mi_manage_memory(
     let Some(start_ptr) = crate::core_types::OsMemPtr::new(start) else {
         return false;
     };
-    // SAFETY[AUDIT:arena-public-reserve-boundary]: public reserve/manage entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
     unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),

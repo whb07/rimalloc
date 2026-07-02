@@ -168,10 +168,10 @@ fn callback_wrappers_preserve_raw_values() {
 
 #[test]
 fn callback_wrappers_invoke_local_callbacks() {
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: this callback is a local
+    // SAFETY[AUDIT:typed-callback-heap-visit-invocation-test-fixtures]: this callback is a local
     // test fixture with the C ABI shape required by `DeferredFreeCallback`.
     unsafe extern "C" fn deferred(force: bool, heartbeat: u64, arg: *mut c_void) {
-        // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: callers pass a
+        // SAFETY[AUDIT:typed-callback-heap-visit-invocation-test-fixtures]: callers pass a
         // stack-local `DeferredInvocation` through the opaque callback arg.
         unsafe {
             core::ptr::addr_of_mut!((*arg.cast::<DeferredInvocation>()).force).write(force);
@@ -179,30 +179,30 @@ fn callback_wrappers_invoke_local_callbacks() {
         }
     }
 
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: this callback is a local
+    // SAFETY[AUDIT:typed-callback-heap-visit-invocation-test-fixtures]: this callback is a local
     // test fixture with the C ABI shape required by `OutputCallback`.
     unsafe extern "C" fn output(msg: *const core::ffi::c_char, arg: *mut c_void) {
-        // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: callers pass a
+        // SAFETY[AUDIT:typed-callback-heap-visit-invocation-test-fixtures]: callers pass a
         // stack-local `OutputInvocation` through the opaque callback arg.
         unsafe {
             core::ptr::addr_of_mut!((*arg.cast::<OutputInvocation>()).msg).write(msg);
         }
     }
 
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: this callback is a local
+    // SAFETY[AUDIT:typed-callback-thread-local-invocation-test-fixtures]: this callback is a local
     // test fixture with the C ABI shape required by `ErrorCallback`.
     unsafe extern "C" fn error(err: i32, arg: *mut c_void) {
-        // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: callers pass a
+        // SAFETY[AUDIT:typed-callback-thread-local-invocation-test-fixtures]: callers pass a
         // stack-local `ErrorInvocation` through the opaque callback arg.
         unsafe {
             core::ptr::addr_of_mut!((*arg.cast::<ErrorInvocation>()).err).write(err);
         }
     }
 
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: this callback is a local
+    // SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]: this callback is a local
     // test fixture with the C ABI shape required by `HeapVisitCallback`.
     unsafe extern "C" fn heap_visit(heap: *mut crate::types::mi_heap_t, arg: *mut c_void) -> bool {
-        // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: callers pass a
+        // SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]: callers pass a
         // stack-local `HeapVisitInvocation` through the opaque callback arg.
         unsafe {
             core::ptr::addr_of_mut!((*arg.cast::<HeapVisitInvocation>()).heap).write(heap);
@@ -210,7 +210,7 @@ fn callback_wrappers_invoke_local_callbacks() {
         true
     }
 
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: this callback is a local
+    // SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]: this callback is a local
     // test fixture with the C ABI shape required by `BlockVisitCallback`.
     unsafe extern "C" fn block_visit(
         heap: *const crate::types::mi_heap_t,
@@ -219,7 +219,7 @@ fn callback_wrappers_invoke_local_callbacks() {
         block_size: usize,
         arg: *mut c_void,
     ) -> bool {
-        // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: callers pass a
+        // SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]: callers pass a
         // stack-local `BlockVisitInvocation` through the opaque callback arg.
         unsafe {
             core::ptr::addr_of_mut!((*arg.cast::<BlockVisitInvocation>()).heap).write(heap);
@@ -231,14 +231,14 @@ fn callback_wrappers_invoke_local_callbacks() {
         true
     }
 
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: this callback is a local
+    // SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]: this callback is a local
     // test fixture with the C ABI shape required by `ThreadLocalClaimCallback`.
     unsafe extern "C" fn claim(
         slice_index: usize,
         arena: *mut crate::types::mi_arena_t,
         keep_set: *mut bool,
     ) -> bool {
-        // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: callers pass a
+        // SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]: callers pass a
         // stack-local `bool` keep-set cell for this callback invocation.
         unsafe { *keep_set = true };
         slice_index == 99 && !arena.is_null()
@@ -248,7 +248,7 @@ fn callback_wrappers_invoke_local_callbacks() {
         force: false,
         heartbeat: 0,
     };
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: the callback and opaque
+    // SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]: the callback and opaque
     // argument are local fixtures valid for the duration of this invocation.
     unsafe {
         DeferredFreeCallback::new(Some(deferred)).invoke(
@@ -264,7 +264,7 @@ fn callback_wrappers_invoke_local_callbacks() {
     let mut output_state = OutputInvocation {
         msg: core::ptr::null(),
     };
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: the message and opaque
+    // SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]: the message and opaque
     // argument are local fixtures valid for the duration of this invocation.
     unsafe {
         OutputCallback::new(Some(output)).invoke(
@@ -275,7 +275,7 @@ fn callback_wrappers_invoke_local_callbacks() {
     assert_eq!(output_state.msg, msg);
 
     let mut error_state = ErrorInvocation { err: 0 };
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: the callback and opaque
+    // SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]: the callback and opaque
     // argument are local fixtures valid for the duration of this invocation.
     unsafe {
         ErrorCallback::new(Some(error)).invoke(
@@ -290,7 +290,7 @@ fn callback_wrappers_invoke_local_callbacks() {
     let mut heap_state = HeapVisitInvocation {
         heap: core::ptr::null_mut(),
     };
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: `heap` and the opaque
+    // SAFETY[AUDIT:typed-callback-heap-visit-invocation-test-fixtures]: `heap` and the opaque
     // argument are stack-local fixtures valid for this callback invocation.
     let heap_result = unsafe {
         HeapVisitCallback::new(Some(heap_visit)).invoke(
@@ -309,7 +309,7 @@ fn callback_wrappers_invoke_local_callbacks() {
         block: core::ptr::null_mut(),
         block_size: 0,
     };
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: `heap`, `area`, `block`, and
+    // SAFETY[AUDIT:typed-callback-heap-visit-invocation-test-fixtures]: `heap`, `area`, `block`, and
     // the opaque argument are stack-local fixtures valid for this invocation.
     let block_result = unsafe {
         BlockVisitCallback::new(Some(block_visit)).invoke(
@@ -329,7 +329,7 @@ fn callback_wrappers_invoke_local_callbacks() {
     let mut arena = MaybeUninit::<crate::types::mi_arena_t>::zeroed();
     let arena = ArenaPtr::new(arena.as_mut_ptr()).unwrap();
     let mut keep_set = false;
-    // SAFETY[AUDIT:typed-callback-invocation-test-fixtures]: `arena` and `keep_set` are
+    // SAFETY[AUDIT:typed-callback-thread-local-invocation-test-fixtures]: `arena` and `keep_set` are
     // stack-local fixtures valid for this callback invocation.
     let claim_result = unsafe {
         ThreadLocalClaimCallback::new(claim).invoke(

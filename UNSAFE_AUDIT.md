@@ -703,12 +703,18 @@ Operation IDs:
   limited to typed layout/alignment witnesses, errno slots, OS allocation
   primitives, and memid out-pointers while preserving disallow-options behavior
   and fallback semantics.
-- `SAFETY[AUDIT:arena-public-reserve-boundary]`:
-  `src/allocator/arena/os_memory.rs` owns public reserve/manage arena APIs and
-  internal OS-memory registration. Unsafe operations are limited to C ABI
-  pointers, typed OS-memory and memid witnesses, arena initialization handoff,
-  and OS release on registration failure while preserving alignment and
-  caller-owned memory contracts.
+- `SAFETY[AUDIT:arena-public-reserve-entry-boundary]`:
+  `src/allocator/arena/os_memory.rs` owns public reserve arena APIs and
+  reserve-on-OS-memory handoff. Unsafe operations are limited to C ABI
+  pointers, aligned OS allocation, typed memid witnesses, arena registration
+  dispatch, and OS release on registration failure while preserving alignment
+  and reserved-memory ownership contracts.
+- `SAFETY[AUDIT:arena-managed-os-memory-boundary]`:
+  `src/allocator/arena/os_memory.rs` owns public manage-memory APIs and
+  internal OS-memory arena registration. Unsafe operations are limited to C ABI
+  pointers, typed OS-memory witnesses, memid publication, arena initialization
+  handoff, parent arena accounting, and slice-range pointer advancement while
+  preserving caller-owned memory contracts.
 - `SAFETY[AUDIT:arena-huge-reservation-boundary]`:
   `src/allocator/arena/os_memory.rs` owns huge OS page reservation APIs. Unsafe
   operations are limited to NUMA normalization, huge-page OS allocation,
@@ -1455,11 +1461,21 @@ Operation IDs:
   reserved/committed stat accounting. Unsafe operations are limited to
   primitive allocation calls, caller-provided large/zero out-pointers, and
   subproc stat projection while preserving page-size alignment.
-- `SAFETY[AUDIT:os-memory-aligned-allocation-boundary]`:
-  `src/platform/os.rs` owns aligned OS allocation request shaping, over-reserve
-  alignment, partial-free trimming, and offset adjustment. Unsafe operations are
-  limited to typed size/page witnesses, aligned pointer arithmetic, direct
-  primitive allocation dispatch, and aligned wrapper calls.
+- `SAFETY[AUDIT:os-memory-aligned-request-boundary]`:
+  `src/platform/os.rs` owns aligned OS allocation request shaping and direct
+  primitive allocation dispatch. Unsafe operations are limited to typed
+  size/page witnesses, memory configuration reads, direct primitive allocation,
+  memid wrapper calls, and exported aligned-allocation forwarding.
+- `SAFETY[AUDIT:os-memory-aligned-fallback-boundary]`:
+  `src/platform/os.rs` owns over-reserve aligned allocation fallback paths.
+  Unsafe operations are limited to partial-free capability reads, over-sized
+  primitive allocation, page-rounded middle-range sizing, and post-range pointer
+  trimming while preserving committed and freed range boundaries.
+- `SAFETY[AUDIT:os-memory-offset-allocation-boundary]`:
+  `src/platform/os.rs` owns offset-aligned OS allocation adjustment. Unsafe
+  operations are limited to page-size witnesses, aligned allocation forwarding,
+  checked offset oversizing, pointer adjustment, and alignment assertions while
+  preserving the caller's requested offset contract.
 - `SAFETY[AUDIT:os-memory-memid-provenance-boundary]`: `src/platform/os.rs`
   owns raw memory-id initialization, OS/external memid projection, and memid
   publication to caller out-pointers. Unsafe operations are limited to writable
@@ -1935,9 +1951,17 @@ Operation IDs:
 - `SAFETY[AUDIT:typed-callback-test-fixtures]`: `src/types/callbacks/tests.rs`
   verifies callback wrapper layout, raw argument preservation, and storage
   pointer round trips using local callback function items and stack values.
-- `SAFETY[AUDIT:typed-callback-invocation-test-fixtures]`:
-  `src/types/callbacks/tests.rs` verifies local C ABI callback invocation
-  fixtures and stack-local opaque argument writes for callback wrappers.
+- `SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]`:
+  `src/types/callbacks/tests.rs` verifies deferred-free, output, and error
+  local C ABI callback invocation fixtures and stack-local opaque argument
+  writes.
+- `SAFETY[AUDIT:typed-callback-heap-visit-invocation-test-fixtures]`:
+  `src/types/callbacks/tests.rs` verifies heap and block visit local C ABI
+  callback invocation fixtures, including stack-local heap, area, block, and
+  opaque argument writes.
+- `SAFETY[AUDIT:typed-callback-thread-local-invocation-test-fixtures]`:
+  `src/types/callbacks/tests.rs` verifies thread-local claim callback
+  invocation fixtures and stack-local keep-set writes.
 - `SAFETY[AUDIT:typed-freelist-test-fixtures]`:
   `src/types/freelist/tests.rs` builds stack-local block metadata and opaque
   pointer words to exercise `ThreadFreeWord`, encoded-link, and raw link helper

@@ -1,7 +1,7 @@
 # TODO: Fresh-Eyes Audit Density, Release Module, Strict-Type, and Page Module Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`eff9713`. The implemented source audit marker cap is 18, release-audit module
+`eff9713`. The implemented source audit marker cap is 17, release-audit module
 cap is 220, strict-type permanent reason groups remain capped at 40 entries,
 and `src/allocator/arena.rs` is split below the 3,500-line production module
 cap. The next mechanical-translation debt is concentrated in audit-density
@@ -10,14 +10,18 @@ ceilings and the largest remaining translated production modules.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 90 source files, 5,898 unsafe
-  mentions, and 524 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 524 operation IDs with
-  1,119 automated evidence rows.
-- No source audit operation ID has more than 18 source markers. Three IDs sit at
-  the 18-marker cap: `arena-public-reserve-boundary`,
-  `os-memory-aligned-allocation-boundary`, and
-  `typed-callback-invocation-test-fixtures`. The next useful source marker cap is 17
-  entries.
+  mentions, and 529 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 529 operation IDs with
+  1,129 automated evidence rows.
+- No source audit operation ID has more than 17 source markers. Eleven IDs sit
+  at the 17-marker cap: `aligned-global-allocation-export-boundary`,
+  `arena-initialization-boundary`, `arena-page-abandon-boundary`,
+  `init-platform-tls-boundary`, `init-process-boundary`,
+  `init-thread-default-heap-association-boundary`,
+  `init-thread-heap-main-tls-boundary`, `internal-atomic-cas-boundary`,
+  `macos-zone-allocation-boundary`, `safe-heap`, and
+  `typed-arena-subproc-pointer-test-fixtures`. The next useful source marker
+  cap is 16 entries.
 - `strict-type-allowlist.txt` has 632 active entries: 330
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -62,7 +66,7 @@ Current review evidence:
   release-audit module-size guard discovers 164 module files recursively and
   enforces a 220-line cap. The largest release-audit modules are:
   `unsafe_performance/allocation_free/marker_counts.rs` at 219 lines,
-  `unsafe_performance/arena_boundaries.rs` at 217 lines,
+  `unsafe_performance/arena_boundaries.rs` at 219 lines,
   `unsafe_performance/thread_stats.rs` at 216 lines,
   `release_policy/benchmarking.rs` at 209 lines,
   `unsafe_performance/allocation_free/typed_helpers.rs` at 209 lines,
@@ -81,18 +85,21 @@ Current review evidence:
 
 ## Issue 1: Lower the source audit marker cap to 17
 
-The remaining 18-marker operation IDs are still broad enough to hide unrelated
-unsafe responsibilities. Split them by responsibility so each audit ID maps to a
-narrower local invariant family.
+The remaining 18-marker operation IDs were broad enough to hide unrelated
+unsafe responsibilities. They are now split by responsibility so each audit ID
+maps to a narrower local invariant family.
 
-- [ ] Split `arena-public-reserve-boundary` into narrower reserve/manage and
-      huge-page registration operation families where the moved child modules
-      already expose separate responsibilities.
-- [ ] Split `os-memory-aligned-allocation-boundary` by allocation, alignment,
-      and fallback responsibility without weakening OS memid evidence.
-- [ ] Split `typed-callback-invocation-test-fixtures` by callback family so test
-      fixtures stay reviewable.
-- [ ] Lower the source marker release-audit cap from 18 to 17 and refresh
+- [x] Split the old arena public reserve/manage boundary into
+      `arena-public-reserve-entry-boundary` and
+      `arena-managed-os-memory-boundary`; huge-page registration remains under
+      the existing `arena-huge-reservation-boundary`.
+- [x] Split the old aligned OS allocation boundary into
+      `os-memory-aligned-request-boundary`,
+      `os-memory-aligned-fallback-boundary`, and
+      `os-memory-offset-allocation-boundary`.
+- [x] Split the old callback invocation test fixture boundary into basic,
+      heap/block visit, and thread-local claim callback families.
+- [x] Lower the source marker release-audit cap from 18 to 17 and refresh
       `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, generated evidence, and TODO
       evidence.
 
@@ -154,14 +161,14 @@ strict-type checker, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Lower the source audit marker cap to 17.
+1. [x] Lower the source audit marker cap to 17.
 2. [ ] Split release-audit modules over 200 lines.
 3. [ ] Tighten strict-type hotspot caps again.
 4. [ ] Split the next largest production module under 2,800 lines.
 
 ## Definition of done for this backlog
 
-- [ ] No source audit operation ID has more than 17 source markers.
+- [x] No source audit operation ID has more than 17 source markers.
 - [ ] Release-audit modules are split enough to lower the recursive module cap
       to 200 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type file hotspots are capped at 45 active entries, kind/file

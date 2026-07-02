@@ -342,8 +342,10 @@ arena-reserve-growth-boundary	test	tests/release_fast_path_audit/unsafe_performa
 arena-reserve-growth-boundary	script	scripts/check-unsafe-audit.py	Checks arena reserve growth unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-os-fallback-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks arena OS fallback marker coverage, aligned OS allocation routing, errno handling, memid out-pointers, and disallow-options behavior.
 arena-os-fallback-boundary	script	scripts/check-unsafe-audit.py	Checks arena OS fallback unsafe operations retain operation-level SAFETY markers and source audit coverage.
-arena-public-reserve-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks public reserve/manage marker coverage, OS memory registration, C ABI shims, and release-on-failure behavior.
-arena-public-reserve-boundary	script	scripts/check-unsafe-audit.py	Checks arena public reserve/manage unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-public-reserve-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks public reserve marker coverage, aligned OS memory handoff, C ABI shims, and release-on-failure behavior.
+arena-public-reserve-entry-boundary	script	scripts/check-unsafe-audit.py	Checks arena public reserve entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-managed-os-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks managed OS-memory marker coverage, external memory registration, C ABI shims, parent accounting, and slice advancement.
+arena-managed-os-memory-boundary	script	scripts/check-unsafe-audit.py	Checks arena managed OS-memory unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-huge-reservation-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks huge reservation marker coverage, NUMA normalization, huge OS page allocation, registration, interleave, and failure cleanup.
 arena-huge-reservation-boundary	script	scripts/check-unsafe-audit.py	Checks arena huge reservation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-abandoned-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks abandoned-page marker coverage, claim callbacks, heap arena-page bitmap lookup, remote-free collection, and ownership transfer.
@@ -773,9 +775,15 @@ os-memory-free-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory fr
 os-memory-primitive-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks primitive OS reserve/allocation marker coverage, primitive handoff shape, and stat accounting.
 os-memory-primitive-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation cases routed through primitive OS memory helpers.
 os-memory-primitive-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks primitive OS allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-aligned-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks aligned OS allocation marker coverage, offset trimming, retained aligned helpers, and wrapper shape.
-os-memory-aligned-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises aligned allocation and realloc cases routed through OS memory helpers.
-os-memory-aligned-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks aligned OS allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-aligned-request-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks aligned OS allocation request marker coverage, direct primitive allocation, retained aligned helpers, and wrapper shape.
+os-memory-aligned-request-boundary	test	tests/allocation_boundary_cases.rs	Exercises aligned allocation and realloc cases routed through OS memory helpers.
+os-memory-aligned-request-boundary	script	scripts/check-unsafe-audit.py	Checks aligned OS request unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-aligned-fallback-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks over-reserve aligned allocation fallback marker coverage, partial-free trimming, and committed range cleanup.
+os-memory-aligned-fallback-boundary	test	tests/allocation_boundary_cases.rs	Exercises aligned allocation fallback cases routed through OS memory helpers.
+os-memory-aligned-fallback-boundary	script	scripts/check-unsafe-audit.py	Checks aligned OS fallback unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-offset-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks offset-aligned OS allocation marker coverage, offset adjustment, retained aligned helpers, and alignment assertions.
+os-memory-offset-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises aligned-at-offset allocation and realloc cases routed through OS memory helpers.
+os-memory-offset-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks offset-aligned OS allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 os-memory-memid-provenance-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory/os_wrappers.rs	Checks OS memid publication, provenance projection, nullable out-pointers, and retained wrapper shape.
 os-memory-memid-provenance-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation, aligned allocation, and zero-size cases that publish OS memids.
 os-memory-memid-provenance-boundary	script	scripts/check-unsafe-audit.py	Checks OS memid/provenance unsafe operations retain operation-level SAFETY markers and source audit coverage.
@@ -959,7 +967,9 @@ provenance-miri-registry	test	tests/release_fast_path_audit/datatype_acceptance/
 typed-arena-test-fixtures	test	src/types/arena/tests.rs	Exercises stack-local arena metadata, slice-range bounds, and arena-role constructor fixtures.
 typed-atomic-test-fixtures	test	src/types/atomic/tests.rs	Exercises stack-local atomic words, pointer cells, page/free-list metadata, once state, and lock storage for typed atomic wrappers.
 typed-callback-test-fixtures	test	src/types/callbacks/tests.rs	Exercises callback wrapper layout, raw argument preservation, and storage pointer round-trip fixtures.
-typed-callback-invocation-test-fixtures	test	src/types/callbacks/tests.rs	Exercises callback wrapper local C ABI invocation fixtures and stack-local opaque argument writes.
+typed-callback-basic-invocation-test-fixtures	test	src/types/callbacks/tests.rs	Exercises deferred-free, output, and error callback local C ABI invocation fixtures and stack-local opaque argument writes.
+typed-callback-heap-visit-invocation-test-fixtures	test	src/types/callbacks/tests.rs	Exercises heap and block visit callback local C ABI invocation fixtures and stack-local metadata writes.
+typed-callback-thread-local-invocation-test-fixtures	test	src/types/callbacks/tests.rs	Exercises thread-local claim callback invocation fixtures and stack-local keep-set writes.
 typed-freelist-test-fixtures	test	src/types/freelist/tests.rs	Exercises stack-local block metadata and raw link helper fixtures.
 typed-freelist-encoded-link-wrappers	test	src/types/freelist_wrappers/tests.rs	Exercises encoded pointer link wrappers.
 typed-freelist-block-tag-wrappers	test	src/types/freelist_wrappers/tests.rs	Exercises block tag wrappers.

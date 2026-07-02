@@ -62,10 +62,13 @@ file:
   `SAFETY[AUDIT:typed-thread-local-heap-test-fixtures]` cover
   `src/types/heap/tests.rs` main, owned, borrowed, thread-heap state, and
   thread-local promotion witnesses independently.
-- `SAFETY[AUDIT:typed-callback-test-fixtures]` and
-  `SAFETY[AUDIT:typed-callback-invocation-test-fixtures]` cover callback
-  wrapper layout/storage fixtures separately from local C ABI invocation
-  fixtures in `src/types/callbacks/tests.rs`.
+- `SAFETY[AUDIT:typed-callback-test-fixtures]`,
+  `SAFETY[AUDIT:typed-callback-basic-invocation-test-fixtures]`,
+  `SAFETY[AUDIT:typed-callback-heap-visit-invocation-test-fixtures]`, and
+  `SAFETY[AUDIT:typed-callback-thread-local-invocation-test-fixtures]` cover
+  callback wrapper layout/storage fixtures separately from basic, heap/block
+  visit, and thread-local claim local C ABI invocation fixtures in
+  `src/types/callbacks/tests.rs`.
 - `SAFETY[AUDIT:typed-page-queue-test-fixtures]` and
   `SAFETY[AUDIT:typed-page-queue-membership-test-fixtures]` cover page-queue
   classification fixtures separately from linked/unlinked membership fixtures
@@ -348,8 +351,12 @@ file:
   `src/allocator/arena.rs` and `src/allocator/arena/os_memory.rs`.
 - `SAFETY[AUDIT:arena-os-fallback-boundary]`: OS allocation fallback for
   internal arena allocation shims in `src/allocator/arena.rs`.
-- `SAFETY[AUDIT:arena-public-reserve-boundary]`: public reserve/manage APIs
-  and OS-memory arena registration in `src/allocator/arena/os_memory.rs`.
+- `SAFETY[AUDIT:arena-public-reserve-entry-boundary]`: public reserve APIs,
+  aligned OS allocation handoff, registration dispatch, and release-on-failure
+  handling in `src/allocator/arena/os_memory.rs`.
+- `SAFETY[AUDIT:arena-managed-os-memory-boundary]`: public manage-memory APIs,
+  external memory memid projection, arena registration, parent accounting, and
+  slice-range advancement in `src/allocator/arena/os_memory.rs`.
 - `SAFETY[AUDIT:arena-huge-reservation-boundary]`: huge OS page reservation
   APIs, NUMA normalization, registration, and release-on-failure handling in
   `src/allocator/arena/os_memory.rs`.

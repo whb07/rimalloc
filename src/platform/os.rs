@@ -942,7 +942,7 @@ unsafe fn mi_os_prim_alloc(
     }
 }
 
-// SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-offset-allocation-boundary]: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
 unsafe fn mi_os_alloc_aligned_memid(
     size: usize,
     alignment: usize,
@@ -955,16 +955,16 @@ unsafe fn mi_os_alloc_aligned_memid(
         return (core::ptr::null_mut(), memid);
     }
 
-    // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-offset-allocation-boundary]: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
     let size = unsafe { _mi_os_good_alloc_size(size) };
-    // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-aligned-request-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let os_page_size = unsafe { _mi_os_page_size_typed() };
     let alignment = _mi_align_up(alignment, os_page_size.get());
     if alignment < os_page_size.get() || (alignment & (alignment - 1)) != 0 {
         return (core::ptr::null_mut(), memid);
     }
 
-    // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-aligned-request-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let try_direct_alloc = unsafe {
         alignment <= (*mi_os_mem_config_ptr()).alloc_granularity || alignment <= size / 4
     };
@@ -976,7 +976,7 @@ unsafe fn mi_os_alloc_aligned_memid(
     let mut p: *mut c_void = core::ptr::null_mut();
 
     if try_direct_alloc {
-        // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+        // SAFETY[AUDIT:os-memory-aligned-request-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
         p = unsafe {
             mi_os_prim_alloc(
                 size,
@@ -1001,7 +1001,7 @@ unsafe fn mi_os_alloc_aligned_memid(
         }
 
         let over_size = size + alignment;
-        // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+        // SAFETY[AUDIT:os-memory-aligned-fallback-boundary]: over-reserve fallback preserves partial-free, commit, and trimmed range contracts.
         if unsafe { !(*mi_os_mem_config_ptr()).has_partial_free } {
             p = unsafe {
                 mi_os_prim_alloc(
@@ -1027,7 +1027,7 @@ unsafe fn mi_os_alloc_aligned_memid(
                 return (core::ptr::null_mut(), memid);
             }
         } else {
-            // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+            // SAFETY[AUDIT:os-memory-aligned-fallback-boundary]: over-reserve fallback preserves partial-free, commit, and trimmed range contracts.
             p = unsafe {
                 mi_os_prim_alloc(
                     over_size,
@@ -1044,7 +1044,7 @@ unsafe fn mi_os_alloc_aligned_memid(
 
             let aligned_p = _mi_align_up_ptr(p, alignment);
             let pre_size = aligned_p as usize - p as usize;
-            // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+            // SAFETY[AUDIT:os-memory-aligned-fallback-boundary]: over-reserve fallback preserves partial-free, commit, and trimmed range contracts.
             let mid_size = unsafe { _mi_align_up(size, _mi_os_page_size_typed().get()) };
             let post_size = over_size - pre_size - mid_size;
 
@@ -1052,7 +1052,7 @@ unsafe fn mi_os_alloc_aligned_memid(
                 let _ = unsafe { _mi_prim_free(p, pre_size) };
             }
             if post_size > 0 {
-                // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+                // SAFETY[AUDIT:os-memory-aligned-fallback-boundary]: over-reserve fallback preserves partial-free, commit, and trimmed range contracts.
                 let post = unsafe { aligned_p.cast::<u8>().add(mid_size) }.cast::<c_void>();
                 let _ = unsafe { _mi_prim_free(post, post_size) };
             }
@@ -1149,7 +1149,7 @@ pub(crate) unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_
 
 /// # Safety
 /// `memid` must point to writable memory-id storage.
-// SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-aligned-request-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_alloc_aligned(
     size: usize,
@@ -1168,7 +1168,7 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned(
         return core::ptr::null_mut();
     }
 
-    // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-aligned-request-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let (p, new_memid) = unsafe { mi_os_alloc_aligned_memid(size, alignment, commit, allow_large) };
     if p.is_null() {
         return core::ptr::null_mut();
@@ -1228,7 +1228,7 @@ static MI_OS_SECURE_GUARD_PAGE_RESET_BEFORE_KEEP: unsafe extern "C" fn(
 
 /// # Safety
 /// `memid` must point to writable memory-id storage. `offset` must be within `size`.
-// SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-aligned-request-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     size: usize,
     alignment: usize,
@@ -1243,13 +1243,13 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
             *memid = _mi_memid_none();
         }
     }
-    // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-aligned-request-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let os_page_size = unsafe { _mi_os_page_size_typed().get() };
     if memid.is_null() || offset > size || !alignment.is_multiple_of(os_page_size) {
         return core::ptr::null_mut();
     }
     if offset == 0 {
-        // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+        // SAFETY[AUDIT:os-memory-offset-allocation-boundary]: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
         return unsafe { _mi_os_alloc_aligned(size, alignment, commit, allow_large, memid) };
     }
 
@@ -1258,15 +1258,15 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
         return core::ptr::null_mut();
     }
     let oversize = size + extra;
-    // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-offset-allocation-boundary]: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
     let start = unsafe { _mi_os_alloc_aligned(oversize, alignment, commit, allow_large, memid) };
     if start.is_null() {
         return core::ptr::null_mut();
     }
 
-    // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-offset-allocation-boundary]: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
     let p = unsafe { start.cast::<u8>().add(extra) }.cast::<c_void>();
-    // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-offset-allocation-boundary]: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
     crate::internal::mi_assert!(unsafe {
         crate::internal::_mi_is_aligned(p.cast::<u8>().add(offset).cast(), alignment)
     });
@@ -1593,7 +1593,7 @@ unsafe fn mi_os_alloc_aligned_ex(
     base: *mut *mut c_void,
     full_size: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:os-memory-aligned-allocation-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-aligned-request-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let (p, memid) = unsafe { mi_os_alloc_aligned_memid(size, alignment, commit, allow_large) };
     if p.is_null() {
         return p;

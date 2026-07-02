@@ -45,8 +45,13 @@ pub(super) fn assert_platform_primitive_focused_evidence(evidence: &str) {
             "os-memory-primitive-allocation-boundary",
             OS_MEMORY_FOCUSED_PATH,
         ),
+        ("os-memory-aligned-request-boundary", OS_MEMORY_FOCUSED_PATH),
         (
-            "os-memory-aligned-allocation-boundary",
+            "os-memory-aligned-fallback-boundary",
+            OS_MEMORY_FOCUSED_PATH,
+        ),
+        (
+            "os-memory-offset-allocation-boundary",
             OS_MEMORY_FOCUSED_PATH,
         ),
         (

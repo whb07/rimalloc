@@ -178,6 +178,28 @@ fn free_path_internals_are_not_dynamic_exports() {
             && alloc_rs.contains("crate::core_types::PaddingCanary::from_page_block_keys("),
         "allocation entry unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/page.rs\t"))
+            && page_rs
+                .matches("SAFETY[AUDIT:page-allocation-boundary]")
+                .count()
+                >= 100
+            && page_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_malloc_generic(")
+            && page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(")
+            && page_rs.contains("unsafe fn mi_page_queue_find_free_ex(")
+            && page_rs.contains("unsafe fn mi_page_queue_find_free_ex_typed(")
+            && page_rs.contains("unsafe fn mi_find_free_page_typed(")
+            && page_rs.contains("unsafe fn mi_page_extend_free_typed(")
+            && page_rs.contains("pub unsafe extern \"C\" fn mi_page_fresh_alloc(")
+            && page_rs.contains("unsafe fn mi_huge_page_alloc_typed(")
+            && page_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_page_retire(")
+            && page_rs.contains("pub unsafe extern \"C\" fn _mi_page_stats_bin(")
+            && page_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_max_candidates)")
+            && page_rs.contains("__mi_stat_counter_increase("),
+        "page allocation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
 
     local_boundaries::assert_page_map_and_deferred_boundaries(local_boundaries::BoundarySources {
         page_map: &page_map,

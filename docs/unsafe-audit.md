@@ -68,6 +68,11 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   `src/allocator/alloc.rs`. The boundary covers malloc/calloc/realloc request
   construction, heap/thread-heap dispatch, zeroing, padding/provenance recovery,
   product overflow checks, raw allocation exports, and no-allocation hot paths.
+- `SAFETY[AUDIT:page-allocation-boundary]`: page-local allocation in
+  `src/allocator/page.rs`. The boundary covers free-list collection and
+  extension, generic refill, page queue movement, retire/free/abandon
+  transitions, stat gates, huge-page allocation, raw page helper exports, and
+  no-allocation hot paths.
 - `SAFETY[AUDIT:internal-bitmap-boundary]`: internal bitmap and binned-bitmap
   operations in `src/internal/bitmap.rs`. The boundary covers chunk/field
   projection, bit set/clear/search loops, arena traversal callbacks, typed

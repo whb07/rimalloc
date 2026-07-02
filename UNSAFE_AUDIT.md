@@ -249,6 +249,14 @@ Operation IDs:
   witnesses, page/block metadata reached through allocator ownership, C ABI
   entry points, and local test fixtures while preserving failure/null
   semantics, realloc copy bounds, and no-allocation hot-path constraints.
+- `SAFETY[AUDIT:page-allocation-boundary]`: `src/allocator/page.rs` owns
+  page-local allocation, free-list collection and extension, generic refill,
+  page queue movement, retire/free/abandon transitions, page stat updates,
+  huge-page allocation, and raw page helper exports. Unsafe operations are
+  limited to caller-proven page, heap, queue, and block pointers; typed page
+  state witnesses; arena page allocation/free handoff; and C ABI helper shims
+  while preserving queue ownership, used/capacity counters, stats gates, and
+  no-allocation hot-path constraints.
 - `SAFETY[AUDIT:internal-bitmap-boundary]`: `src/internal/bitmap.rs` owns
   bitmap and binned-bitmap chunk maps, bit scanning, set/clear mutation,
   first-fit claim loops, arena traversal callbacks, and AVX2 bitmap helper

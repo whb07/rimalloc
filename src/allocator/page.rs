@@ -97,6 +97,7 @@ const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { flags::mi_page_is_full(page) }
 }
 
@@ -106,6 +107,7 @@ pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
 pub(crate) unsafe fn mi_page_slice_committed(
     page: *const mi_page_t,
 ) -> crate::core_types::CommittedBytes {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { crate::core_types::CommittedBytes::new((*page).slice_committed) }
 }
 
@@ -116,6 +118,7 @@ pub(crate) unsafe fn mi_page_set_slice_committed(
     page: *mut mi_page_t,
     committed: crate::core_types::CommittedBytes,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         (*page).slice_committed = committed.get();
     }
@@ -127,6 +130,7 @@ pub(crate) unsafe fn mi_page_set_slice_committed(
 pub(crate) unsafe fn mi_page_retire_expire(
     page: *const mi_page_t,
 ) -> crate::core_types::RetireExpire {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { crate::core_types::RetireExpire::new((*page).retire_expire) }
 }
 
@@ -137,6 +141,7 @@ pub(crate) unsafe fn mi_page_set_retire_expire(
     page: *mut mi_page_t,
     expire: crate::core_types::RetireExpire,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         (*page).retire_expire = expire.get();
     }
@@ -146,6 +151,7 @@ pub(crate) unsafe fn mi_page_set_retire_expire(
 /// `page` must point to writable page metadata.
 #[inline(always)]
 pub(crate) unsafe fn mi_page_reset_retire_expire(page: *mut mi_page_t) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         mi_page_set_retire_expire(page, crate::core_types::RetireExpire::zero());
     }
@@ -155,6 +161,7 @@ pub(crate) unsafe fn mi_page_reset_retire_expire(page: *mut mi_page_t) {
 /// `page` must point to writable page metadata with a nonzero retire countdown.
 #[inline(always)]
 unsafe fn mi_page_decrement_retire_expire(page: *mut mi_page_t) -> crate::core_types::RetireExpire {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let expire = mi_page_retire_expire(page).decrement();
         mi_page_set_retire_expire(page, expire);
@@ -166,6 +173,7 @@ unsafe fn mi_page_decrement_retire_expire(page: *mut mi_page_t) -> crate::core_t
 /// `page` must be valid, and `head` must be a detached thread-free list for that page.
 #[inline]
 pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut mi_block_t) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         if head.is_null() {
             return;
@@ -187,6 +195,7 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
     remote: RemoteFreeList,
     local: LocalFreeList,
 ) -> LocalFreeList {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page_ptr = page.page();
         let page = page_ptr.as_ptr();
@@ -236,6 +245,7 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
 /// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = LocalPage::new_unchecked(page_ptr);
@@ -257,6 +267,7 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
     page: LocalPage,
     remote: RemoteFreeList,
 ) -> LocalFreeList {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page_ptr = page.page();
         let page = page_ptr.as_ptr();
@@ -270,6 +281,7 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
 /// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = LocalPage::new_unchecked(page_ptr);
@@ -287,6 +299,7 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
     available: AvailableFreeList,
     local: LocalFreeList,
 ) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         if available.0.is_some() {
             return true;
@@ -306,6 +319,7 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
     unsafe {
@@ -352,6 +366,7 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
 
 /// # Safety
 /// `page` must be valid, and `head` must be null or a detached block list belonging to `page`.
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
     unsafe {
@@ -374,6 +389,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
     local_page: LocalPage,
     remote_head: RemoteFreeList,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page_ptr = local_page.page();
         let page = page_ptr.as_ptr();
@@ -411,6 +427,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
 
 /// # Safety
 /// `page` must point to a page currently owned by a full queue.
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
     unsafe {
@@ -424,6 +441,7 @@ pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
 pub(crate) unsafe fn _mi_page_unfull_internal(
     page_wrapper: crate::core_types::FullPage,
 ) -> crate::core_types::ActivePage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -457,6 +475,7 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
 
 #[inline]
 unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         crate::internal::mi_assert_internal!(pq == mi_page_queue_of(page));
         crate::internal::mi_assert_internal!(!mi_page_immediate_available(page));
@@ -495,6 +514,7 @@ unsafe fn mi_page_move_to_full_typed(
     from: crate::core_types::NormalPageQueue,
     to: crate::core_types::FullPageQueue,
 ) -> crate::core_types::FullPage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { page.to_full(from, to) }
 }
 
@@ -503,11 +523,13 @@ unsafe fn mi_page_unfull_typed(
     page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,
     to: crate::core_types::NormalPageQueue,
 ) -> crate::core_types::ActivePage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { mi_page_queue_enqueue_from_full(to, page) }
 }
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         if mi_page_queue_is_full(pq) {
             if !mi_page_is_in_full(page) {
@@ -551,6 +573,7 @@ pub(crate) unsafe fn _mi_page_free_active_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
     queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
 ) -> crate::core_types::DestroyedPage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -569,6 +592,7 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Full>,
     queue: crate::core_types::FullPageQueue,
 ) -> crate::core_types::DestroyedPage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -595,6 +619,7 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
 unsafe fn _mi_page_free_after_remove<S>(
     page_wrapper: crate::core_types::AllFreePage<S>,
 ) -> crate::core_types::DestroyedPage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let theap = mi_page_theap(page);
@@ -611,6 +636,7 @@ unsafe fn _mi_page_free_after_remove<S>(
 
 const MI_RETIRE_CYCLES: u8 = 16;
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     unsafe {
         let active = crate::core_types::ActivePage::new_unchecked(
@@ -627,6 +653,7 @@ pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
 pub(crate) unsafe fn _mi_page_retire_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -692,6 +719,7 @@ pub(crate) unsafe fn _mi_page_retire_internal(
     }
 }
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool) {
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
@@ -703,6 +731,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t
 
 #[inline]
 unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLocal, force: bool) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let mut min = MI_BIN_FULL;
@@ -763,6 +792,7 @@ unsafe fn mi_page_free_list_extend_secure(
     bsize: usize,
     extend: usize,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         mi_page_free_list_extend_secure_typed(
             theap,
@@ -780,6 +810,7 @@ unsafe fn mi_page_free_list_extend_secure_typed(
     bsize: crate::core_types::BlockSize,
     extend: usize,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
@@ -849,6 +880,7 @@ unsafe fn mi_page_free_list_extend_secure_typed(
     }
 }
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 unsafe extern "C" fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: usize) {
     unsafe {
@@ -866,6 +898,7 @@ unsafe fn mi_page_free_list_extend_typed(
     bsize: crate::core_types::BlockSize,
     extend: usize,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
@@ -895,10 +928,12 @@ unsafe fn mi_page_free_list_extend_typed(
     }
 }
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[used]
 static MI_PAGE_FREE_LIST_EXTEND_KEEP: unsafe extern "C" fn(*mut mi_page_t, usize, usize) =
     mi_page_free_list_extend;
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
     unsafe { mi_page_extend_free_typed(theap, PagePtr::new_unchecked(page)) }
@@ -906,6 +941,7 @@ unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_p
 
 #[inline]
 unsafe fn mi_page_extend_free_typed(theap: *mut mi_theap_t, page_ptr: PagePtr) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page = page_ptr.as_ptr();
         crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_ptr));
@@ -1000,10 +1036,12 @@ unsafe fn mi_page_extend_free_typed(theap: *mut mi_theap_t, page_ptr: PagePtr) -
     }
 }
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[used]
 static MI_PAGE_EXTEND_FREE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) -> bool =
     mi_page_extend_free;
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     unsafe {
@@ -1018,6 +1056,7 @@ unsafe fn _mi_page_abandon_typed(
     page_ptr: crate::core_types::PagePtr,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::PageAbandonOutcome {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page_wrapper = if mi_page_is_in_full(page_ptr.as_ptr()) {
             crate::core_types::FullPage::new_unchecked(page_ptr).for_abandon()
@@ -1032,6 +1071,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
     page_wrapper: crate::core_types::PageForAbandon,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::PageAbandonOutcome {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page_ptr = match page_wrapper {
             crate::core_types::PageForAbandon::Active(page) => page.page(),
@@ -1125,6 +1165,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
 
 /// # Safety
 /// `theap` must be valid. If non-null, `pq` must be a page queue belonging to `theap`.
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 pub unsafe extern "C" fn mi_page_fresh_alloc(
     theap: *mut mi_theap_t,
@@ -1132,6 +1173,7 @@ pub unsafe extern "C" fn mi_page_fresh_alloc(
     block_size: usize,
     page_alignment: usize,
 ) -> *mut mi_page_t {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         crate::internal::mi_assert_internal!(pq.is_null() || mi_theap_contains_queue(theap, pq));
         crate::internal::mi_assert_internal!(
@@ -1165,6 +1207,7 @@ unsafe fn mi_page_fresh_alloc_typed(
     layout: crate::core_types::LayoutRequest,
     page_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<crate::core_types::ActivePage> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let block_size = layout.padded().get();
@@ -1219,6 +1262,7 @@ unsafe fn mi_page_fresh_alloc_typed(
     }
 }
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[used]
 static MI_PAGE_FRESH_ALLOC_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,
@@ -1227,11 +1271,13 @@ static MI_PAGE_FRESH_ALLOC_KEEP: unsafe extern "C" fn(
     usize,
 ) -> *mut mi_page_t = mi_page_fresh_alloc;
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_init(
     theap: *mut mi_theap_t,
     page: *mut mi_page_t,
 ) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         crate::internal::mi_assert!(!page.is_null());
         crate::internal::mi_assert!(!theap.is_null());
@@ -1251,6 +1297,7 @@ unsafe fn _mi_page_init_typed(
     owner: crate::core_types::ThreadHeapLocal,
     page_uninit: crate::core_types::Page<crate::core_types::Uninit>,
 ) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let page = page_uninit.ptr().as_ptr();
@@ -1328,6 +1375,7 @@ unsafe fn _mi_page_init_typed(
 /// `theap` must be valid, and `pq` must be a page queue belonging to `theap`.
 #[inline]
 pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
         let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
@@ -1358,6 +1406,7 @@ unsafe fn mi_page_fresh_typed(
     block_size_typed: crate::core_types::BlockSize,
     slice_count: crate::core_types::SliceCount,
 ) -> Option<crate::core_types::ActivePage> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -1380,6 +1429,7 @@ pub(crate) unsafe fn try_reclaim_abandoned(
     page_wrapper: crate::core_types::OwnedAbandonedPage,
     target: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::ActivePage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let theap = target.ptr().as_ptr();
@@ -1421,12 +1471,14 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
     page: crate::core_types::OwnedAbandonedPage,
     target: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::ActivePage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { try_reclaim_abandoned(page, target) }
 }
 
 /// # Safety
 /// C-ABI-shaped keep boundary for page reclaim. The caller must ensure `theap`
 /// and `page` are valid, and that `page` is an owned abandoned page.
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mut mi_page_t) {
     unsafe {
@@ -1438,6 +1490,7 @@ unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mu
     }
 }
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[used]
 static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) =
     mi_theap_page_reclaim_raw;
@@ -1446,6 +1499,7 @@ static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi
 /// `queue` must be valid, and `page` must be null or page metadata compatible with that queue.
 #[inline]
 pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const mi_page_t) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         let queue_ptr = page_queue_ptr(queue);
@@ -1477,6 +1531,7 @@ pub unsafe fn mi_theap_contains_queue(
     theap: *const mi_theap_t,
     pq: *const mi_page_queue_t,
 ) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let start = crate::core_types::ptr_exposed_addr(ptr::addr_of!((*theap).pages[0]));
         let end = crate::core_types::ptr_exposed_addr(ptr::addr_of!((*theap).pages[MI_BIN_FULL]));
@@ -1487,11 +1542,13 @@ pub unsafe fn mi_theap_contains_queue(
 
 /// # Safety
 /// `theap` must be valid, and `pq` must point to a page queue belonging to that heap.
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_queue_is_valid(
     theap: *mut mi_theap_t,
     pq: *const mi_page_queue_t,
 ) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         if pq.is_null() {
             return false;
@@ -1517,6 +1574,7 @@ pub(crate) unsafe fn mi_normal_page_queue_is_valid(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
 ) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
 }
 
@@ -1525,6 +1583,7 @@ pub(crate) unsafe fn mi_huge_page_queue_is_valid(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::HugePageQueue,
 ) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
 }
 
@@ -1533,6 +1592,7 @@ pub(crate) unsafe fn mi_full_page_queue_is_valid(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::FullPageQueue,
 ) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
 }
 
@@ -1541,6 +1601,7 @@ unsafe fn mi_page_queue_is_valid_typed(
     theap: crate::core_types::ThreadHeapLocal,
     pq: crate::core_types::PageQueuePtr,
 ) -> bool {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let pq = pq.as_ptr();
@@ -1587,6 +1648,7 @@ unsafe fn mi_page_queue_is_valid_typed(
     }
 }
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[used]
 static MI_PAGE_QUEUE_IS_VALID_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,
@@ -1595,6 +1657,7 @@ static MI_PAGE_QUEUE_IS_VALID_KEEP: unsafe extern "C" fn(
 
 #[inline]
 pub(crate) unsafe fn mi_page_bin_typed(page: *const mi_page_t) -> crate::core_types::Bin {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let bin = if mi_page_is_in_full(page) {
             MI_BIN_FULL
@@ -1618,6 +1681,7 @@ pub(crate) unsafe fn mi_page_bin_typed(page: *const mi_page_t) -> crate::core_ty
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { mi_page_bin_typed(page).as_usize() }
 }
 
@@ -1625,6 +1689,7 @@ pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
 pub(crate) unsafe fn _mi_page_stats_bin_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::StatsBin {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let bin = if mi_page_is_huge(page) {
             MI_BIN_HUGE
@@ -1643,6 +1708,7 @@ pub(crate) unsafe fn _mi_page_stats_bin_typed(
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_stats_bin(page: *const mi_page_t) -> usize {
     unsafe {
@@ -1659,6 +1725,7 @@ pub(crate) unsafe fn mi_theap_page_queue_of_typed(
     theap: crate::core_types::ThreadHeapLocal,
     block_size: crate::core_types::BlockSize,
 ) -> crate::core_types::PageQueuePtr {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let bin = mi_bin_from_block_size(block_size);
         crate::internal::mi_assert_internal!(bin.as_usize() <= MI_BIN_HUGE);
@@ -1673,6 +1740,7 @@ pub unsafe fn mi_theap_page_queue_of(
     theap: *mut mi_theap_t,
     page: *const mi_page_t,
 ) -> *mut mi_page_queue_t {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         crate::internal::mi_assert_internal!(!theap.is_null());
         let bin = mi_page_bin_typed(page).as_usize();
@@ -1701,6 +1769,7 @@ pub unsafe fn mi_theap_page_queue_of(
 /// `page` must point to non-abandoned page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = mi_page_theap(page);
         let pq = mi_theap_page_queue_of(theap, page);
@@ -1712,6 +1781,7 @@ pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
 /// # Safety
 /// `theap` must be valid, and `pq` must point to one of its page queues.
 pub unsafe fn mi_theap_queue_first_update(theap: *mut mi_theap_t, pq: *const mi_page_queue_t) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
         let queue = page_queue_ptr(pq);
@@ -1729,6 +1799,7 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let pq = queue.ptr().as_ptr();
         let Some(block_size) = queue.ptr().block_size() else {
@@ -1792,6 +1863,7 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
 /// # Safety
 /// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
 pub(crate) unsafe fn mi_page_queue_remove_raw(queue: *mut mi_page_queue_t, page: *mut mi_page_t) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let queue = PageQueuePtr::new_unchecked(queue);
         let page = PagePtr::new_unchecked(page);
@@ -1803,6 +1875,7 @@ pub(crate) unsafe fn mi_page_queue_remove_raw(queue: *mut mi_page_queue_t, page:
 /// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
 #[inline]
 pub(crate) unsafe fn mi_page_queue_remove_typed(queue: PageQueuePtr, page: PagePtr) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let queue_ptr = queue;
         let queue = queue.as_ptr();
@@ -1852,6 +1925,7 @@ unsafe fn mi_page_queue_push_raw(
     queue: *mut mi_page_queue_t,
     page: *mut mi_page_t,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -1873,6 +1947,7 @@ unsafe fn mi_page_queue_push_internal(
     queue: PageQueuePtr,
     page: PagePtr,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap_raw = theap.ptr().as_ptr();
         let queue_raw = queue.as_ptr();
@@ -1914,6 +1989,7 @@ unsafe fn mi_page_queue_push_at_end_raw(
     queue: *mut mi_page_queue_t,
     page: *mut mi_page_t,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -1935,6 +2011,7 @@ unsafe fn mi_page_queue_push_at_end_internal(
     queue: PageQueuePtr,
     page: PagePtr,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap_raw = theap.ptr().as_ptr();
         let queue_raw = queue.as_ptr();
@@ -1977,6 +2054,7 @@ unsafe fn mi_page_queue_push_at_end_typed(
     queue: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         mi_page_queue_push_at_end_internal(theap, queue.ptr(), page.page());
         crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(page, queue)
@@ -1989,6 +2067,7 @@ unsafe fn mi_page_queue_push_typed(
     queue: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         mi_page_queue_push_internal(theap, queue.ptr(), page.page());
         crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(page, queue)
@@ -2001,6 +2080,7 @@ unsafe fn mi_page_queue_move_to_front_typed(
     queue: crate::core_types::NormalPageQueue,
     queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page = queued.page().as_ptr();
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.ptr().as_ptr());
@@ -2028,6 +2108,7 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_raw(
     enqueue_at_end: bool,
     page: crate::core_types::PagePtr,
 ) {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let to_ptr = to;
         let from_ptr = from;
@@ -2114,6 +2195,7 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from(
     to: crate::core_types::FullPageQueue,
     page: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
 ) -> crate::core_types::FullPage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { page.into_full(to) }
 }
 
@@ -2122,17 +2204,20 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_full(
     to: crate::core_types::NormalPageQueue,
     page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,
 ) -> crate::core_types::ActivePage {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { page.unfull(to) }
 }
 
 /// # Safety
 /// `theap`, `pq`, and `append` must be valid page-queue structures with compatible block sizes.
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_queue_append(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
     append: *mut mi_page_queue_t,
 ) -> usize {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let queue = page_queue_ptr(pq);
         let append_queue = page_queue_ptr(append);
@@ -2172,6 +2257,7 @@ unsafe fn mi_page_queue_append_normal_typed(
     queue: crate::core_types::NormalPageQueue,
     append: crate::core_types::NormalPageQueue,
 ) -> usize {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { mi_page_queue_append_typed(theap, queue.ptr(), append.ptr(), Some(queue)) }
 }
 
@@ -2181,6 +2267,7 @@ unsafe fn mi_page_queue_append_huge_typed(
     queue: crate::core_types::HugePageQueue,
     append: crate::core_types::HugePageQueue,
 ) -> usize {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { mi_page_queue_append_typed(theap, queue.ptr(), append.ptr(), None) }
 }
 
@@ -2190,6 +2277,7 @@ unsafe fn mi_page_queue_append_full_typed(
     queue: crate::core_types::FullPageQueue,
     append: crate::core_types::FullPageQueue,
 ) -> usize {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe { mi_page_queue_append_typed(theap, queue.ptr(), append.ptr(), None) }
 }
 
@@ -2200,6 +2288,7 @@ unsafe fn mi_page_queue_append_typed(
     append_queue: crate::core_types::PageQueuePtr,
     first_update_queue: Option<crate::core_types::NormalPageQueue>,
 ) -> usize {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         if append_queue.first().is_none() {
             return 0;
@@ -2244,6 +2333,7 @@ unsafe fn mi_page_queue_append_typed(
     }
 }
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 #[used]
 static MI_PAGE_QUEUE_APPEND_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,
@@ -2257,6 +2347,7 @@ unsafe fn mi_page_queue_find_free_ex(
     pq: *mut mi_page_queue_t,
     first_try: bool,
 ) -> *mut mi_page_t {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let queue = page_queue_ptr(pq);
         let Some(queue) = crate::core_types::NormalPageQueue::new(queue) else {
@@ -2283,6 +2374,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
     block_size: crate::core_types::BlockSize,
     first_try: bool,
 ) -> Option<crate::core_types::ActivePage> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap_raw = theap.ptr().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -2423,6 +2515,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
 
 #[inline]
 unsafe fn mi_find_free_page(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let queue = page_queue_ptr(pq);
         let Some(queue) = crate::core_types::NormalPageQueue::new(queue) else {
@@ -2449,6 +2542,7 @@ unsafe fn mi_find_free_page_typed(
     queue: crate::core_types::NormalPageQueue,
     block_size: crate::core_types::BlockSize,
 ) -> Option<crate::core_types::ActivePage> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let page = queue.ptr().first();
         if let Some(page) = page.filter(|page| mi_page_free_quick_collect(page.as_ptr())) {
@@ -2475,6 +2569,7 @@ unsafe fn mi_huge_page_alloc(
     page_alignment: usize,
     pq: *mut mi_page_queue_t,
 ) -> *mut mi_page_t {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let block_size = _mi_os_good_alloc_size(size);
         crate::internal::mi_assert_internal!(mi_page_queue_is_huge(pq));
@@ -2508,6 +2603,7 @@ unsafe fn mi_huge_page_alloc_typed(
     page_alignment: crate::core_types::MaybeAlignment,
     queue: crate::core_types::HugePageQueue,
 ) -> Option<crate::core_types::ActivePage> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -2538,6 +2634,7 @@ unsafe fn mi_find_page(
     size: usize,
     huge_alignment: usize,
 ) -> *mut mi_page_t {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -2576,6 +2673,7 @@ unsafe fn mi_find_page_typed(
     size: crate::core_types::PaddedSize,
     huge_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<crate::core_types::ActivePage> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let req_size = size.get().wrapping_sub(MI_PADDING_SIZE);
         if req_size > MI_MAX_ALLOC_SIZE {
@@ -2624,12 +2722,14 @@ unsafe fn mi_find_page_typed(
     }
 }
 
+// SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
 pub(crate) unsafe extern "C" fn _mi_malloc_generic(
     theap: *mut mi_theap_t,
     size: usize,
     zero_huge_alignment: usize,
     usable: *mut usize,
 ) -> *mut c_void {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         // SAFETY: `zero_huge_alignment` is the C-compatible packed flag word:
         // bit 0 is zeroing and the remaining bits are the huge-alignment payload.
@@ -2653,6 +2753,7 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
 pub(crate) unsafe fn _mi_theap_or_default_typed(
     mut theap: *mut mi_theap_t,
 ) -> Option<crate::core_types::ThreadHeapPtr> {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         if !mi_theap_is_initialized(theap) {
             if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
@@ -2677,6 +2778,7 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
     flags: crate::core_types::MallocGenericFlags,
     usable: *mut usize,
 ) -> *mut c_void {
+    // SAFETY[AUDIT:page-allocation-boundary]: page-local raw pointers, queues, free lists, counters, stats, and C ABI helpers preserve allocator ownership and hot-path invariants.
     unsafe {
         let local_theap = crate::core_types::ThreadHeapLocal::new_unchecked(theap);
         let theap = local_theap.ptr().as_ptr();

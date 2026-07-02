@@ -112,6 +112,8 @@ unix-primitive-backend	test	tests/release_fast_path_audit/unsafe_performance.rs	
 unix-primitive-backend	test	tests/release_fast_path_audit.rs	Checks Unix stderr/env/random primitive dependencies stay allocation-free and routed through platform helpers.
 unix-primitive-backend	script	scripts/check-unix-syscall-parity.py	Compares Unix memory primitive syscall classes against C mimalloc for representative allocation and purge paths.
 unix-primitive-backend	script	scripts/check-unsafe-audit.py	Checks Unix primitive unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows primitive imports, dynamic function lookup, virtual memory paths, process info, stderr/env handling, TLS/FLS lifecycle, large/huge-page paths, ETW helpers, marker coverage, and migration allowlist removal.
+windows-primitive-boundary	script	scripts/check-unsafe-audit.py	Checks Windows primitive unsafe operations retain operation-level SAFETY markers and source audit coverage.
 os-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks OS memory config, page sizing, aligned hints, guard pages, commit/decommit/reset/reuse/purge/protect/free, huge-page/NUMA helpers, marker coverage, and migration allowlist removal.
 os-memory-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation, aligned allocation, realloc, zero-size, and free boundary cases routed through OS memory helpers.
 os-memory-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory unsafe operations retain operation-level SAFETY markers and source audit coverage.

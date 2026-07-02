@@ -365,6 +365,7 @@ pub static mut win_minor_version: DWORD = 0;
 static mut win_allocation_granularity: usize = 64 * MI_KiB;
 
 pub type PVirtualAlloc2 = Option<
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe extern "system" fn(
         HANDLE,
         PVOID,
@@ -377,6 +378,7 @@ pub type PVirtualAlloc2 = Option<
 >;
 
 pub type PNtAllocateVirtualMemoryEx = Option<
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe extern "system" fn(
         HANDLE,
         *mut PVOID,
@@ -391,11 +393,13 @@ pub type PNtAllocateVirtualMemoryEx = Option<
 pub static mut pVirtualAlloc2: PVirtualAlloc2 = None;
 pub static mut pNtAllocateVirtualMemoryEx: PNtAllocateVirtualMemoryEx = None;
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 pub type PGetCurrentProcessorNumberEx = Option<unsafe extern "system" fn(*mut MI_PROCESSOR_NUMBER)>;
 pub type PGetNumaProcessorNodeEx =
     Option<unsafe extern "system" fn(*mut MI_PROCESSOR_NUMBER, PUSHORT) -> BOOL>;
 pub type PGetNumaNodeProcessorMaskEx =
     Option<unsafe extern "system" fn(USHORT, PGROUP_AFFINITY) -> BOOL>;
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 pub type PGetNumaProcessorNode = Option<unsafe extern "system" fn(UCHAR, PUCHAR) -> BOOL>;
 pub type PGetNumaNodeProcessorMask = Option<unsafe extern "system" fn(UCHAR, PULONGLONG) -> BOOL>;
 pub type PGetNumaHighestNodeNumber = Option<unsafe extern "system" fn(PULONG) -> BOOL>;
@@ -407,6 +411,7 @@ pub static mut pGetNumaProcessorNode: PGetNumaProcessorNode = None;
 pub static mut pGetNumaNodeProcessorMask: PGetNumaNodeProcessorMask = None;
 pub static mut pGetNumaHighestNodeNumber: PGetNumaHighestNodeNumber = None;
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 pub type PGetLargePageMinimum = Option<unsafe extern "system" fn() -> SIZE_T>;
 pub type PGetPhysicallyInstalledSystemMemory =
     Option<unsafe extern "system" fn(*mut ULONGLONG) -> BOOL>;
@@ -418,10 +423,12 @@ pub const RtlGenRandom_SystemFunction036: &str = "SystemFunction036";
 pub const RtlGenRandom: &str = RtlGenRandom_SystemFunction036;
 pub const BCRYPT_USE_SYSTEM_PREFERRED_RNG: ULONG = 0x0000_0002;
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 unsafe extern "system" {
     pub fn SystemFunction036(RandomBuffer: PVOID, RandomBufferLength: ULONG) -> BOOLEAN;
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 pub type PGetProcessMemoryInfo =
     Option<unsafe extern "system" fn(HANDLE, PPROCESS_MEMORY_COUNTERS, DWORD) -> BOOL>;
 pub type PBCryptGenRandom = Option<unsafe extern "system" fn(HANDLE, PUCHAR, ULONG, ULONG) -> LONG>;
@@ -429,6 +436,7 @@ pub type PBCryptGenRandom = Option<unsafe extern "system" fn(HANDLE, PUCHAR, ULO
 pub static mut pGetProcessMemoryInfo: PGetProcessMemoryInfo = None;
 pub static mut pBCryptGenRandom: PBCryptGenRandom = None;
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 pub type PFLS_CALLBACK_FUNCTION = Option<unsafe extern "system" fn(PVOID)>;
 
 unsafe extern "system" {
@@ -509,6 +517,7 @@ unsafe extern "system" {
     pub fn Sleep(dwMilliseconds: DWORD);
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 unsafe extern "C" {
     fn atexit(func: Option<unsafe extern "C" fn()>) -> c_int;
 }
@@ -569,6 +578,7 @@ pub fn mi_to_msecs(t: LARGE_INTEGER) -> mi_msecs_t {
     let mut freq = MI_MSECS_FREQ.load(Ordering::Acquire);
     if freq == 0 {
         let mut raw_freq = LARGE_INTEGER::default();
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         let measured = unsafe {
             if QueryPerformanceFrequency(&mut raw_freq) != FALSE as BOOL {
                 raw_freq.QuadPart / 1000
@@ -585,10 +595,12 @@ pub fn mi_to_msecs(t: LARGE_INTEGER) -> mi_msecs_t {
 #[inline]
 pub unsafe fn filetime_msecs(ftime: *const FILETIME) -> mi_msecs_t {
     crate::internal::mi_assert_internal!(!ftime.is_null());
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     let ftime = unsafe { &*ftime };
     ((((ftime.dwHighDateTime as u64) << 32) | (ftime.dwLowDateTime as u64)) / 10_000) as mi_msecs_t
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "system" fn _mi_prim_thread_yield() {
     unsafe {
@@ -596,11 +608,13 @@ pub unsafe extern "system" fn _mi_prim_thread_yield() {
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 unsafe extern "system" fn mi_win_main(module: PVOID, reason: DWORD, reserved: LPVOID) {
     let _ = module;
     let _ = reserved;
     match reason {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         DLL_PROCESS_ATTACH => unsafe { crate::internal::_mi_auto_process_init() },
         DLL_PROCESS_DETACH => unsafe { crate::internal::_mi_auto_process_done() },
         DLL_THREAD_DETACH => {
@@ -616,6 +630,7 @@ unsafe extern "system" fn mi_win_main(module: PVOID, reason: DWORD, reserved: LP
 unsafe fn win_enable_large_os_pages(large_page_size: *mut usize) -> bool {
     WIN_LARGE_OS_PAGES_INIT.call_once(|| {
         let mut size = 0usize;
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         let ok = unsafe { win_enable_large_os_pages_once(&mut size) };
         unsafe {
             win_large_os_pages_enabled = ok;
@@ -625,6 +640,7 @@ unsafe fn win_enable_large_os_pages(large_page_size: *mut usize) -> bool {
         }
     });
     if !large_page_size.is_null() {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe {
             *large_page_size = win_large_os_page_size;
         }
@@ -637,6 +653,7 @@ unsafe fn mi_get_proc<T>(module: HMODULE, name: LPCSTR) -> Option<T>
 where
     T: Copy,
 {
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     let proc = unsafe { GetProcAddress(module, name) };
     if proc.is_null() {
         None
@@ -645,6 +662,7 @@ where
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 unsafe extern "C" fn mi_current_module_is_dll() -> bool {
     let mut module: HMODULE = null_mut();
@@ -655,16 +673,19 @@ unsafe extern "C" fn mi_current_module_is_dll() -> bool {
             &mut module,
         )
     } != FALSE as BOOL;
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     ok && unsafe { mi_module_is_dll(module.cast::<c_void>()) }
 }
 
 #[inline]
 unsafe extern "C" fn mi_crt_done() {
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe {
         mi_win_main(null_mut(), DLL_PROCESS_DETACH, null_mut());
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 unsafe extern "C" fn mi_crt_init() -> c_int {
     if unsafe { mi_current_module_is_dll() } {
@@ -675,6 +696,7 @@ unsafe extern "C" fn mi_crt_init() -> c_int {
     0
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_getenv(
     name: *const c_char,
@@ -684,6 +706,7 @@ pub unsafe extern "C" fn _mi_prim_getenv(
     if result.is_null() || result_size == 0 {
         return false;
     }
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe { *result = 0 };
     if name.is_null() {
         return false;
@@ -696,6 +719,7 @@ pub unsafe extern "C" fn _mi_prim_getenv(
     if bytes.len() >= result_size {
         return false;
     }
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe {
         copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), result, bytes.len());
         *result.add(bytes.len()) = 0;
@@ -703,6 +727,7 @@ pub unsafe extern "C" fn _mi_prim_getenv(
     true
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     if config.is_null() {
@@ -714,6 +739,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     (*config).has_virtual_reserve = true;
 
     let mut si = SYSTEM_INFO::default();
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe {
         GetSystemInfo(&mut si);
     }
@@ -722,6 +748,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     }
     if si.dwAllocationGranularity > 0 {
         (*config).alloc_granularity = si.dwAllocationGranularity as usize;
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe {
             win_allocation_granularity = si.dwAllocationGranularity as usize;
         }
@@ -731,6 +758,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
         (*config).virtual_address_bits = vbits;
     }
 
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     let mut h_dll = unsafe { LoadLibraryA(c"kernelbase.dll".as_ptr()) };
     if !h_dll.is_null() {
         unsafe {
@@ -743,6 +771,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
         }
     }
 
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     h_dll = unsafe { LoadLibraryA(c"ntdll.dll".as_ptr()) };
     if !h_dll.is_null() {
         unsafe {
@@ -751,6 +780,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
         }
     }
 
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     h_dll = unsafe { LoadLibraryA(c"kernel32.dll".as_ptr()) };
     if !h_dll.is_null() {
         unsafe {
@@ -794,6 +824,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     if mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)
         || mi_option_is_enabled(mi_option_t::mi_option_reserve_huge_os_pages)
     {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe {
             win_enable_large_os_pages(&mut (*config).large_page_size);
         }
@@ -811,6 +842,7 @@ unsafe fn mi_module_is_dll(mod_: PVOID) -> bool {
     ((*image_nt_headers).FileHeader.Characteristics & IMAGE_FILE_DLL) == IMAGE_FILE_DLL
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "system" fn mi_tls_attach(module: PVOID, reason: DWORD, reserved: LPVOID) {
     if reason == DLL_THREAD_ATTACH || reason == DLL_PROCESS_ATTACH {
@@ -818,6 +850,7 @@ pub unsafe extern "system" fn mi_tls_attach(module: PVOID, reason: DWORD, reserv
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "system" fn mi_win_main_detach(module: PVOID, reason: DWORD, reserved: LPVOID) {
     if reason == DLL_PROCESS_DETACH || reason == DLL_THREAD_DETACH {
@@ -825,20 +858,24 @@ pub unsafe extern "system" fn mi_win_main_detach(module: PVOID, reason: DWORD, r
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "system" fn mi_tls_detach(module: PVOID, reason: DWORD, reserved: LPVOID) {
     if reason == DLL_THREAD_DETACH
         || (reason == DLL_PROCESS_DETACH && !unsafe { mi_module_is_dll(module) })
     {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe { mi_win_main(module, reason, reserved) };
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "system" fn mi_fls_done(value: PVOID) {
     let theap = value.cast::<mi_theap_t>();
     if !theap.is_null() {
         unsafe { crate::internal::_mi_thread_done(theap) };
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         if unsafe { mi_fls_key } != FLS_OUT_OF_INDEXES {
             unsafe {
                 FlsSetValue(mi_fls_key, null_mut());
@@ -847,6 +884,7 @@ pub unsafe extern "system" fn mi_fls_done(value: PVOID) {
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     if MI_WIN_INIT_USE_FLS != 0 {
@@ -856,6 +894,7 @@ pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
     if MI_WIN_INIT_USE_FLS != 0 && unsafe { mi_fls_key } != FLS_OUT_OF_INDEXES {
@@ -866,6 +905,7 @@ pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
     if MI_WIN_INIT_USE_FLS != 0 {
@@ -878,6 +918,7 @@ pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "system" fn mi_win_main_attach(module: PVOID, reason: DWORD, reserved: LPVOID) {
     if reason == DLL_PROCESS_ATTACH || reason == DLL_THREAD_ATTACH {
@@ -885,16 +926,19 @@ pub unsafe extern "system" fn mi_win_main_attach(module: PVOID, reason: DWORD, r
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "system" fn mi_dll_main_raw(
     module: PVOID,
     reason: DWORD,
     reserved: PVOID,
 ) -> BOOL {
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe { mi_win_main(module, reason, reserved) };
     TRUE as BOOL
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[allow(dead_code)]
 #[inline]
 unsafe extern "system" fn DllMain(inst: HINSTANCE, reason: DWORD, reserved: LPVOID) -> BOOL {
@@ -902,6 +946,7 @@ unsafe extern "system" fn DllMain(inst: HINSTANCE, reason: DWORD, reserved: LPVO
     TRUE as BOOL
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[allow(dead_code)]
 #[inline]
 unsafe extern "C" fn mi_process_attach() -> c_int {
@@ -912,6 +957,7 @@ unsafe extern "C" fn mi_process_attach() -> c_int {
     0
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub(crate) unsafe extern "C" fn _mi_allocator_done() {}
 
@@ -920,6 +966,7 @@ pub unsafe extern "C" fn _mi_is_redirected() -> bool {
     false
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub(crate) unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
     if !message.is_null() {
@@ -930,6 +977,7 @@ pub(crate) unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) 
     true
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_commit(
     addr: *mut c_void,
@@ -939,6 +987,7 @@ pub unsafe extern "C" fn _mi_prim_commit(
     if !is_zero.is_null() {
         *is_zero = false;
     }
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     let p = unsafe { VirtualAlloc(addr, size, MEM_COMMIT, PAGE_READWRITE) };
     if p.is_null() {
         unsafe { GetLastError() as i32 }
@@ -947,12 +996,14 @@ pub unsafe extern "C" fn _mi_prim_commit(
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_decommit(
     addr: *mut c_void,
     size: usize,
     needs_recommit: *mut bool,
 ) -> i32 {
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     let ok = unsafe { VirtualFree(addr, size, MEM_DECOMMIT) };
     if !needs_recommit.is_null() {
         *needs_recommit = true;
@@ -960,15 +1011,18 @@ pub unsafe extern "C" fn _mi_prim_decommit(
     if ok != FALSE as BOOL {
         0
     } else {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe { GetLastError() as i32 }
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, _size: usize) -> i32 {
     let mut errcode: DWORD = 0;
     let mut err = unsafe { VirtualFree(addr, 0, MEM_RELEASE) == FALSE as BOOL };
     if err {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         errcode = unsafe { GetLastError() };
     }
     if errcode == ERROR_INVALID_ADDRESS {
@@ -984,6 +1038,7 @@ pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, _size: usize) -> i32 {
             && (addr as usize).saturating_sub(info.AllocationBase as usize) < 4 * MI_MiB
         {
             errcode = 0;
+            // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
             err = unsafe { VirtualFree(info.AllocationBase, 0, MEM_RELEASE) == FALSE as BOOL };
             if err {
                 errcode = unsafe { GetLastError() };
@@ -993,6 +1048,7 @@ pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, _size: usize) -> i32 {
     errcode as i32
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> i32 {
     let p = unsafe { VirtualAlloc(addr, size, MEM_RESET, PAGE_READWRITE) };
@@ -1000,10 +1056,12 @@ pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> i32 {
     if !p.is_null() {
         0
     } else {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe { GetLastError() as i32 }
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> i32 {
     let _ = addr;
@@ -1011,6 +1069,7 @@ pub unsafe extern "C" fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> i32 {
     0
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
     if pinfo.is_null() {
@@ -1021,6 +1080,7 @@ pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
     let mut ut = FILETIME::default();
     let mut st = FILETIME::default();
     let mut et = FILETIME::default();
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe {
         GetProcessTimes(GetCurrentProcess(), &mut ct, &mut et, &mut st, &mut ut);
     }
@@ -1029,6 +1089,7 @@ pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
         (*pinfo).stime = filetime_msecs(&st);
     }
 
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     PROCESS_INFO_INIT.call_once(|| unsafe {
         let h_dll = LoadLibraryA(c"psapi.dll".as_ptr());
         if !h_dll.is_null() {
@@ -1040,11 +1101,13 @@ pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
         cb: core::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as DWORD,
         ..PROCESS_MEMORY_COUNTERS::default()
     };
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     if let Some(get_process_memory_info) = unsafe { pGetProcessMemoryInfo } {
         unsafe {
             get_process_memory_info(GetCurrentProcess(), &mut info, info.cb);
         }
     }
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe {
         (*pinfo).current_rss = info.WorkingSetSize;
         (*pinfo).peak_rss = info.PeakWorkingSetSize;
@@ -1054,11 +1117,13 @@ pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
     if msg.is_null() || _mi_preloading() {
         return;
     }
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     let bytes = unsafe { CStr::from_ptr(msg) }.to_bytes();
     let Ok(len) = DWORD::try_from(bytes.len()) else {
         return;
@@ -1067,6 +1132,7 @@ pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
         return;
     }
 
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     STDERR_HANDLE_INIT.call_once(|| unsafe {
         mi_stderr_handle = GetStdHandle(STD_ERROR_HANDLE);
         if mi_stderr_handle != INVALID_HANDLE_VALUE {
@@ -1077,6 +1143,7 @@ pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
     });
 
     let mut written: DWORD = 0;
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe {
         if mi_stderr_is_console {
             let _ = WriteConsoleA(
@@ -1100,6 +1167,7 @@ pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protect: bool) -> i32 {
     let mut oldprotect: DWORD = 0;
@@ -1118,17 +1186,20 @@ pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protec
     if ok != FALSE as BOOL {
         0
     } else {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe { GetLastError() as i32 }
     }
 }
 
 #[inline]
 unsafe fn win_enable_large_os_pages_once(large_page_size: *mut usize) -> bool {
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     if unsafe { pGetLargePageMinimum }.is_none() {
         return false;
     }
     let mut err: DWORD = 0;
     let mut token: HANDLE = null_mut();
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     let ok = unsafe {
         OpenProcessToken(
             GetCurrentProcess(),
@@ -1138,6 +1209,7 @@ unsafe fn win_enable_large_os_pages_once(large_page_size: *mut usize) -> bool {
     } != FALSE as BOOL;
     if ok {
         let mut tp = TOKEN_PRIVILEGES::default();
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         let looked_up = unsafe {
             LookupPrivilegeValueA(
                 null(),
@@ -1148,6 +1220,7 @@ unsafe fn win_enable_large_os_pages_once(large_page_size: *mut usize) -> bool {
         if looked_up {
             tp.PrivilegeCount = 1;
             tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+            // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
             let adjusted = unsafe {
                 AdjustTokenPrivileges(token, FALSE as BOOL, &tp, 0, null_mut(), null_mut())
             } != FALSE as BOOL;
@@ -1155,12 +1228,14 @@ unsafe fn win_enable_large_os_pages_once(large_page_size: *mut usize) -> bool {
                 err = unsafe { GetLastError() };
                 if err == ERROR_SUCCESS {
                     if !large_page_size.is_null()
+                        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
                         && let Some(get_large_page_minimum) = unsafe { pGetLargePageMinimum }
                     {
                         unsafe {
                             *large_page_size = get_large_page_minimum();
                         }
                     }
+                    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
                     unsafe {
                         CloseHandle(token);
                     }
@@ -1168,11 +1243,13 @@ unsafe fn win_enable_large_os_pages_once(large_page_size: *mut usize) -> bool {
                 }
             }
         }
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe {
             CloseHandle(token);
         }
     }
     if err == 0 {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         err = unsafe { GetLastError() };
     }
     _mi_warning_message_fmt(format_args!(
@@ -1190,6 +1267,7 @@ unsafe fn win_virtual_alloc_prim_once(
     flags: DWORD,
 ) -> *mut c_void {
     if MI_SIZE_BITS >= 64 && addr.is_null() {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         let hint = unsafe { _mi_os_get_aligned_hint(try_alignment, size) };
         if !hint.is_null() {
             let p = unsafe { VirtualAlloc(hint, size, flags, PAGE_READWRITE) };
@@ -1199,6 +1277,7 @@ unsafe fn win_virtual_alloc_prim_once(
             _mi_verbose_message(format_args!(
                 "warning: unable to allocate hinted aligned OS memory ({} bytes, error code: 0x{:x}, address: {:p}, alignment: {}, flags: 0x{:x})\n",
                 size,
+                // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
                 unsafe { GetLastError() },
                 hint,
                 try_alignment,
@@ -1208,6 +1287,7 @@ unsafe fn win_virtual_alloc_prim_once(
     }
 
     if addr.is_null()
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         && try_alignment > unsafe { win_allocation_granularity }
         && try_alignment.is_multiple_of(unsafe { _mi_os_page_size_typed().get() })
         && let Some(virtual_alloc2) = unsafe { pVirtualAlloc2 }
@@ -1220,6 +1300,7 @@ unsafe fn win_virtual_alloc_prim_once(
         param.Type.bits =
             MI_MEM_EXTENDED_PARAMETER_TYPE_E::MiMemExtendedParameterAddressRequirements as DWORD64;
         param.Arg.Pointer = (&mut reqs as *mut MI_MEM_ADDRESS_REQUIREMENTS).cast::<c_void>();
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         let p = unsafe {
             virtual_alloc2(
                 GetCurrentProcess(),
@@ -1237,6 +1318,7 @@ unsafe fn win_virtual_alloc_prim_once(
         _mi_warning_message_fmt(format_args!(
             "unable to allocate aligned OS memory (0x{:x} bytes, error code: 0x{:x}, address: {:p}, alignment: 0x{:x}, flags: 0x{:x})\n",
             size,
+            // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
             unsafe { GetLastError() },
             addr,
             try_alignment,
@@ -1244,6 +1326,7 @@ unsafe fn win_virtual_alloc_prim_once(
         ));
     }
 
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe { VirtualAlloc(addr, size, flags, PAGE_READWRITE) }
 }
 
@@ -1260,6 +1343,7 @@ unsafe fn win_virtual_alloc_prim(
     }
     let mut tries = 1u32;
     loop {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         let p = unsafe { win_virtual_alloc_prim_once(addr, size, try_alignment, flags) };
         if !p.is_null() {
             return p;
@@ -1281,6 +1365,7 @@ unsafe fn win_virtual_alloc_prim(
                 sleep_msecs = max_retry_msecs;
             }
             max_retry_msecs -= sleep_msecs;
+            // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
             unsafe {
                 Sleep(sleep_msecs as DWORD);
             }
@@ -1306,6 +1391,7 @@ unsafe fn win_virtual_alloc(
 
     let mut p = null_mut();
     if (large_only
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         || (unsafe { _mi_os_canuse_large_page(size, try_alignment) }
             && mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)))
         && allow_large
@@ -1322,6 +1408,7 @@ unsafe fn win_virtual_alloc(
             );
         } else {
             if !is_large.is_null() {
+                // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
                 unsafe {
                     *is_large = true;
                 }
@@ -1340,6 +1427,7 @@ unsafe fn win_virtual_alloc(
 
     if p.is_null() {
         if !is_large.is_null() {
+            // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
             unsafe {
                 *is_large = (flags & MEM_LARGE_PAGES) != 0;
             }
@@ -1357,11 +1445,13 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
     numa_node: i32,
 ) -> *mut c_void {
     let flags = MEM_LARGE_PAGES | MEM_COMMIT | MEM_RESERVE;
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe {
         win_enable_large_os_pages(null_mut());
     }
 
     let mut params = [MI_MEM_EXTENDED_PARAMETER::default(); 3];
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     if let Some(nt_allocate_virtual_memory_ex) = unsafe { pNtAllocateVirtualMemoryEx }
         && MI_HUGE_PAGES_AVAILABLE.load(Ordering::Acquire) != 0
     {
@@ -1377,6 +1467,7 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
         }
         let mut psize = size;
         let mut base = hint_addr;
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         let err = unsafe {
             nt_allocate_virtual_memory_ex(
                 GetCurrentProcess(),
@@ -1398,11 +1489,13 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
         ));
     }
     if numa_node >= 0
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         && let Some(virtual_alloc2) = unsafe { pVirtualAlloc2 }
     {
         params[0].Type.bits =
             MI_MEM_EXTENDED_PARAMETER_TYPE_E::MiMemExtendedParameterNumaNode as DWORD64;
         params[0].Arg.ULong = numa_node as DWORD;
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         return unsafe {
             virtual_alloc2(
                 GetCurrentProcess(),
@@ -1415,6 +1508,7 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
             )
         };
     }
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe { VirtualAlloc(hint_addr, size, flags, PAGE_READWRITE) }
 }
 
@@ -1427,11 +1521,13 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     addr: *mut *mut c_void,
 ) -> i32 {
     if !is_zero.is_null() {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe {
             *is_zero = true;
         }
     }
     if addr.is_null() {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         return unsafe { GetLastError() as i32 };
     }
     unsafe {
@@ -1444,6 +1540,7 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_alloc(
     hint_addr: *mut c_void,
@@ -1456,11 +1553,13 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     addr: *mut *mut c_void,
 ) -> i32 {
     crate::internal::mi_assert_internal!(
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         size > 0 && size.is_multiple_of(unsafe { _mi_os_page_size_typed().get() })
     );
     crate::internal::mi_assert_internal!(commit || !allow_large);
     crate::internal::mi_assert_internal!(try_alignment > 0);
     if !is_zero.is_null() {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe {
             *is_zero = true;
         }
@@ -1469,6 +1568,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     if commit {
         flags |= MEM_COMMIT;
     }
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     let p = unsafe {
         win_virtual_alloc(
             hint_addr,
@@ -1481,6 +1581,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
         )
     };
     if !addr.is_null() {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe {
             *addr = p;
         }
@@ -1488,10 +1589,12 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     if !p.is_null() {
         0
     } else {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe { GetLastError() as i32 }
     }
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
     let mut numa_node: USHORT = 0;
@@ -1501,6 +1604,7 @@ pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
         })
     {
         let mut pnum = MI_PROCESSOR_NUMBER::default();
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe {
             get_current_processor_number_ex(&mut pnum);
         }
@@ -1508,6 +1612,7 @@ pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
         if unsafe { get_numa_processor_node_ex(&mut pnum, &mut nnode) } != FALSE as BOOL {
             numa_node = nnode;
         }
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     } else if let Some(get_numa_processor_node) = unsafe { pGetNumaProcessorNode } {
         let pnum = unsafe { GetCurrentProcessorNumber() };
         let mut nnode: UCHAR = 0;
@@ -1518,6 +1623,7 @@ pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
     numa_node as usize
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     let mut numa_max: ULONG = 0;
@@ -1527,6 +1633,7 @@ pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
         }
     }
     while numa_max > 0 {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         if let Some(get_numa_node_processor_mask_ex) = unsafe { pGetNumaNodeProcessorMaskEx } {
             let mut affinity = GROUP_AFFINITY::default();
             if unsafe { get_numa_node_processor_mask_ex(numa_max as USHORT, &mut affinity) }
@@ -1535,6 +1642,7 @@ pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
             {
                 break;
             }
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         } else if let Some(get_numa_node_processor_mask) = unsafe { pGetNumaNodeProcessorMask } {
             let mut mask: ULONGLONG = 0;
             if unsafe { get_numa_node_processor_mask(numa_max as UCHAR, &mut mask) }
@@ -1549,11 +1657,13 @@ pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     (numa_max as usize) + 1
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
     #[cfg(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64"))]
     {
         if unsafe { win_major_version } >= 6 {
+            // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
             let teb = unsafe { NtCurrentTeb() } as *mut u8;
             if !teb.is_null() {
                 let pool_data = unsafe {
@@ -1629,6 +1739,7 @@ pub struct MCGEN_TRACE_CONTEXT {
 }
 
 pub type PENABLECALLBACK = Option<
+    // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
     unsafe extern "system" fn(
         source_id: *const GUID,
         is_enabled: u32,
@@ -1693,6 +1804,7 @@ pub type MCGEN_EVENTSETINFORMATION_must_not_be_a_functionLike_macro_MCGEN_EVENTS
 pub type MCGEN_EVENTWRITETRANSFER_must_not_be_a_functionLike_macro_MCGEN_EVENTWRITETRANSFER =
     c_void;
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 unsafe extern "system" {
     pub fn EventWriteTransfer(
         RegHandle: REGHANDLE,
@@ -1748,6 +1860,7 @@ pub unsafe fn McGenEventEnabled(
     )
 }
 
+// SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
 #[inline]
 pub unsafe extern "system" fn McGenControlCallbackV2(
     _source_id: LPCGUID,
@@ -1877,6 +1990,7 @@ macro_rules! McGenEventUnregister {
 
 macro_rules! MCGEN_EVENT_ENABLED {
     ($event_name:ident) => {
+        // SAFETY[AUDIT:windows-primitive-boundary]: Windows ABI calls, dynamic imports, TLS/FLS callbacks, virtual memory, large-page, ETW, and process/output shims preserve translated platform contracts.
         unsafe {
             $crate::prim::windows::McGenEventEnabled(
                 core::ptr::addr_of!($crate::prim::windows::ETW_MI_Provider_Context),

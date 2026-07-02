@@ -87,6 +87,11 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   page/block metadata accessors, thread-free ownership words, packed pointer
   encode/decode, tracking gates, CPU copy/fill shims, and raw C-compatible
   helper declarations.
+- `SAFETY[AUDIT:windows-primitive-boundary]`: Windows primitive backend and
+  translated ETW helper surface in `src/platform/windows.rs`. The boundary
+  covers Windows ABI imports, dynamic primitive lookup, TLS/FLS and DLL
+  lifecycle callbacks, virtual memory, process information, stderr output,
+  environment copying, large/huge pages, TEB probing, and ETW provider helpers.
 - `SAFETY[AUDIT:unsafe-callback]`: unsafe-adjacent callback guards. Unsafe guard construction
   registers a trampoline with a borrowed callback context, stores the previous
   registration, restores that previous registration on drop, and catches Rust

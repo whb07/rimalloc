@@ -10,19 +10,19 @@ and full validation.
 This follow-up pass has now also moved `src/allocator/init.rs`,
 `src/internal/bitmap.rs`, `src/allocator/alloc.rs`, and
 `src/allocator/page.rs`, `src/allocator/arena.rs`, and
-`src/internal/mod.rs` off the unsafe migration allowlist with local operation
-markers, audit evidence, release-audit guards, and focused behavior tests.
+`src/internal/mod.rs`, and `src/platform/windows.rs` off the unsafe migration
+allowlist with local operation markers, audit evidence, release-audit guards,
+and focused behavior tests.
 
-The next pass should finish the same class of work: retire every remaining
-file-level unsafe migration allowance, one file at a time, while preserving raw
-ABI shape, allocator ownership, synchronization, platform behavior, and hot-path
-code shape. Avoid broad refactors. Prefer marker-only migrations unless a local
-test exposes a concrete bug.
+This pass has retired every file-level unsafe migration allowance while
+preserving raw ABI shape, allocator ownership, synchronization, platform
+behavior, and hot-path code shape. Before closing the loop, rescan the codebase
+with fresh eyes and rewrite this backlog with the next concrete issues.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 1 translation entry and no
-  production entries. `ALLOWLIST_ENTRY_CAP` is 1.
+- `docs/unsafe-migration-allowlist.tsv` has 0 translation entries and no
+  production entries. `ALLOWLIST_ENTRY_CAP` is 0.
 - The just-completed pass moved `src/allocator/free.rs` to 69
   `SAFETY[AUDIT:free-path-boundary]` markers, `src/allocator/options.rs` to 76
   `SAFETY[AUDIT:options-callback-boundary]` markers,
@@ -43,10 +43,10 @@ Current review evidence:
   `src/allocator/arena.rs` to 340
   `SAFETY[AUDIT:arena-region-boundary]` markers and
   `src/internal/mod.rs` to 76
-  `SAFETY[AUDIT:internal-translation-boundary]` markers.
-- No production allowlist entries remain without local markers.
-- The remaining translation allowlist entry with no local markers is
-  `src/platform/windows.rs` at 2,191 lines with 214 `unsafe` hits.
+  `SAFETY[AUDIT:internal-translation-boundary]` markers. It also moved
+  `src/platform/windows.rs` to 114
+  `SAFETY[AUDIT:windows-primitive-boundary]` markers.
+- No unsafe migration allowlist entries remain.
 - `strict-type-allowlist.txt` still has 280 entries: 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
   entries, 8 metadata-reference entries, 2 atomic-cast entries, and
@@ -67,6 +67,7 @@ Current review evidence:
   `SAFETY[AUDIT:aligned-allocation-boundary]` has 158 markers,
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
   `SAFETY[AUDIT:os-memory-boundary]` has 136 markers,
+  `SAFETY[AUDIT:windows-primitive-boundary]` has 114 markers,
   `SAFETY[AUDIT:internal-atomic-facade]` has 103 markers,
   `SAFETY[AUDIT:page-allocation-boundary]` has 102 markers,
   `SAFETY[AUDIT:unix-primitive-backend]` has 90 markers,
@@ -80,10 +81,12 @@ Current review evidence:
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers, and
   `SAFETY[AUDIT:free-path-boundary]` has 69 markers.
 - The release audit is split but still has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,563 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,567 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
   `tests/release_fast_path_audit.rs` is 1,935 lines,
-  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines, and
+  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines,
+  `tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs`
+  is 895 lines, and
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
   is 831 lines.
 
@@ -255,26 +258,27 @@ Verify: runtime-gate tests, datatype acceptance tests, strict-type checker,
 unsafe audit scripts, unsafe inventory regeneration/check, full clippy, and full
 tests.
 
-## Issue: Windows primitive translation boundary still uses a file-level unsafe allowance
+## Completed: Windows primitive translation boundary moved off the file-level unsafe allowance
 
 > **Comment:** `src/platform/windows.rs` is the last platform translation
 > allowance. It owns Windows virtual memory, process information, timing,
 > randomness, environment, dynamic library, huge-page, and thread/TLS primitive
-> bindings. It should be migrated last because validation is more cfg-sensitive
-> on non-Windows hosts.
+> bindings. It was migrated last because validation is more cfg-sensitive on
+> non-Windows hosts. It now has local operation markers, evidence rows, and
+> release-audit guards instead of a file-level migration allowance.
 
-- [ ] Add local `SAFETY[AUDIT:windows-primitive-boundary]` markers for Windows
+- [x] Add local `SAFETY[AUDIT:windows-primitive-boundary]` markers for Windows
       API declarations, virtual memory allocation/free/protect, commit/reset,
       process info, timing, randomness, environment lookup, dynamic library
       probes, huge pages, console/stderr output, and thread/TLS primitives.
-- [ ] Preserve Windows ABI signatures, null/error conventions, page-size and
+- [x] Preserve Windows ABI signatures, null/error conventions, page-size and
       allocation granularity semantics, overcommit/virtual-reserve behavior,
       huge-page feature gates, dynamic symbol lookup behavior, and non-Windows
       cfg isolation.
-- [ ] Add or extend release-audit assertions and cfg-focused tests for marker
+- [x] Add or extend release-audit assertions and cfg-focused tests for marker
       coverage, no migration allowlist entry, Windows primitive symbol shape,
       platform documentation, and non-Windows build stability.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/platform/windows.rs` from the unsafe migration allowlist, regenerate
       unsafe inventory, and lower the cap to zero.
 
@@ -290,18 +294,17 @@ and full tests.
 4. [x] Migrate `src/allocator/page.rs` off the unsafe migration allowlist.
 5. [x] Migrate `src/allocator/arena.rs` off the unsafe migration allowlist.
 6. [x] Migrate `src/internal/mod.rs` off the unsafe migration allowlist.
-7. [ ] Migrate `src/platform/windows.rs` off the unsafe migration allowlist.
+7. [x] Migrate `src/platform/windows.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist cap is lowered after each migrated file and
+- [x] The unsafe migration allowlist cap is lowered after each migrated file and
       reaches zero when the final entry is removed.
-- [ ] The completed init, bitmap, allocation, page, arena, and internal
-      migrations plus the final remaining allowlisted file are covered by
-      operation-level audit
-      markers, source audit entries, evidence rows, release-audit guards, and
-      focused behavior tests instead of file-level migration exceptions.
-- [ ] Allocator initialization, bitmap traversal, allocation hot paths, page
+- [x] The completed init, bitmap, allocation, page, arena, internal, and Windows
+      migrations are covered by operation-level audit markers, source audit
+      entries, evidence rows, release-audit guards, and focused behavior tests
+      instead of file-level migration exceptions.
+- [x] Allocator initialization, bitmap traversal, allocation hot paths, page
       allocation, arena ownership, internal translation helpers, and Windows
       platform primitives preserve their raw ABI contracts and performance
       constraints.

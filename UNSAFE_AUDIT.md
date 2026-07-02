@@ -351,6 +351,15 @@ Operation IDs:
   and NUMA syscalls, process-info writes, stderr writes, environment lookup,
   entropy fallbacks, pthread destructor keys, and scheduler yield while keeping
   primitive helpers allocation-free and C ABI compatible.
+- `SAFETY[AUDIT:windows-primitive-boundary]`: `src/platform/windows.rs` owns
+  the Windows primitive backend and translated ETW helper surface. Unsafe
+  operations are limited to Windows ABI imports, dynamically resolved
+  `VirtualAlloc2`/NUMA/process-info/large-page functions, TLS/FLS and DLL
+  lifecycle callbacks, `VirtualAlloc`/`VirtualFree`/`VirtualProtect`/query
+  calls, process time and memory counters, stderr output, environment copying,
+  large/huge-page privilege and allocation paths, TEB thread-pool probing, and
+  ETW provider callbacks while preserving nullable C out-pointer conventions,
+  Windows error handling, and source-present platform isolation.
 - `SAFETY[AUDIT:os-memory-boundary]`: `src/platform/os.rs` owns the typed OS
   memory boundary above the primitive backends. Unsafe operations are limited
   to memory-config reads and writes, sub-process stats projection, page-size

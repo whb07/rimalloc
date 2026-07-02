@@ -15,8 +15,11 @@ smaller audit modules, or symbol-level compatibility entries.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` now has 41 entries: 38 production,
-  0 test, and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 41.
+- `docs/unsafe-migration-allowlist.tsv` now has 40 entries: 37 production,
+  0 test, and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 40.
+- `src/types/page.rs` now uses `SAFETY[AUDIT:typed-page-domain]` markers for
+  thread-id construction, page-owner classification, and registered page-range
+  witness construction, and is off the unsafe migration allowlist.
 - `src/types/scalar/tests.rs` now uses
   `SAFETY[AUDIT:typed-scalar-test-fixtures]` markers for 31 unchecked scalar
   constructor fixtures and is off the unsafe migration allowlist.
@@ -25,12 +28,7 @@ Current review evidence:
   stack-local metadata and pointer arithmetic fixture blocks and is off the
   unsafe migration allowlist.
 - No test files remain in `docs/unsafe-migration-allowlist.tsv`.
-- The smallest remaining allowlisted production file is
-  `src/types/page.rs`, which is 258 lines with 5 `unsafe` hits and 0 local
-  `SAFETY[AUDIT:*]` markers. Its existing tests in `src/types/page/tests.rs`
-  already use `SAFETY[AUDIT:typed-page-test-fixtures]` for stack-local page
-  metadata and registered-range witness construction.
-- The next smallest allowlisted production files are
+- The smallest remaining allowlisted production files are
   `src/types/arena.rs` at 260 lines,
   `src/types/page_queues.rs` at 304 lines,
   `src/types/heap.rs` at 312 lines,
@@ -123,15 +121,15 @@ clippy, and full tests.
 > thread-id classification, and registered page ranges; the remaining unsafe
 > operations should be documented at the constructor/classification boundary.
 
-- [ ] Add local `SAFETY[AUDIT:typed-page-domain]` markers for
+- [x] Add local `SAFETY[AUDIT:typed-page-domain]` markers for
       `ThreadId::new_unchecked`, `PageThreadId::owner`, and
       `RegisteredPageRange::new_unchecked`.
-- [ ] Preserve the current `#[repr(transparent)]`, `Copy`, and `#[inline]`
+- [x] Preserve the current `#[repr(transparent)]`, `Copy`, and `#[inline]`
       shape of hot value wrappers.
-- [ ] Keep registered-range construction as a witness boundary; do not make it
+- [x] Keep registered-range construction as a witness boundary; do not make it
       validate global page-map state.
-- [ ] Add matching unsafe audit and evidence entries.
-- [ ] Remove `src/types/page.rs` from
+- [x] Add matching unsafe audit and evidence entries.
+- [x] Remove `src/types/page.rs` from
       `docs/unsafe-migration-allowlist.tsv`, regenerate unsafe inventory, and
       lower `ALLOWLIST_ENTRY_CAP`.
 
@@ -186,7 +184,7 @@ full tests.
 
 1. [x] Migrate `src/types/scalar/tests.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/types/ptr/tests.rs` off the unsafe migration allowlist.
-3. [ ] Migrate `src/types/page.rs` off the unsafe migration allowlist.
+3. [x] Migrate `src/types/page.rs` off the unsafe migration allowlist.
 4. [ ] Split the page lifecycle/page-queue release-audit assertion cluster.
 5. [ ] Narrow broad page strict-type entries after the existing child splits.
 
@@ -194,7 +192,7 @@ full tests.
 
 - [ ] The unsafe migration allowlist cap is lowered after each migrated file.
 - [x] No test files remain in `docs/unsafe-migration-allowlist.tsv`.
-- [ ] `src/types/page.rs` is covered by operation-level audit markers and
+- [x] `src/types/page.rs` is covered by operation-level audit markers and
       evidence instead of a file-level migration exception.
 - [ ] One more release-audit assertion cluster has a dedicated module.
 - [ ] Page strict-type documentation is narrower where existing child modules

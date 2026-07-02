@@ -349,6 +349,11 @@ Operation IDs:
   builds stack-local padding records and byte buffers, plus non-dereferenced
   dangling pointer witnesses for canary hashing, to exercise padding wrapper
   reads, writes, and pointer arithmetic.
+- `SAFETY[AUDIT:typed-page-domain]`: `src/types/page.rs` owns page flag,
+  tagged thread-id, free-path classification, and registered page-range witness
+  construction. Unsafe operations are limited to unchecked constructors whose
+  callers prove non-zero/thread-flag or page-map registration invariants before
+  packaging those raw domains into transparent typed wrappers.
 - `SAFETY[AUDIT:typed-pointer-test-fixtures]`: `src/types/ptr/tests.rs`
   builds stack-local page, block, heap, thread-heap, TLD, arena, subproc, and
   page-queue metadata to exercise pointer wrapper field accessors and exposed

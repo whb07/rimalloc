@@ -977,6 +977,12 @@ fn allocation_product_paths_use_typed_requests() {
             && aligned_rs.contains("calloc_request_or_report(count, size)")
             && aligned_rs.contains("calloc_request_or_report(newcount, size)")
             && posix_rs.contains("crate::core_types::CallocRequest::new(count, size)")
+            && posix_rs.contains("SAFETY[AUDIT:raw-posix-compat]")
+            && posix_rs.matches("SAFETY[AUDIT:raw-posix-compat]").count() >= 60
+            && posix_rs.contains("pub unsafe extern \"C\" fn mi_posix_memalign")
+            && posix_rs.contains("pub unsafe extern \"C\" fn mi_reallocarray")
+            && posix_rs.contains("pub unsafe extern \"C\" fn mi_reallocarr")
+            && posix_rs.contains("pub unsafe extern \"C\" fn mi_dupenv_s")
             && layout_rs.contains("pub(crate) fn layout(self) -> LayoutRequest")
             && layout_rs.contains("let total_size = count.checked_mul(size)"),
         "calloc product-size paths should use CallocRequest, non-calloc product paths should use AllocProduct, and both should share one C-compatible overflow reporting adapter"

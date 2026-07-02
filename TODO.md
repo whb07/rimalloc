@@ -14,22 +14,28 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 27 entries: 24 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 27.
+- `docs/unsafe-migration-allowlist.tsv` has 26 entries: 23 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 26.
 - The completed pass moved `src/ffi/abi.rs`, `src/allocator/arena_meta.rs`,
   `src/platform/wasi.rs`, `src/platform/emscripten.rs`, and
   `src/types/atomic.rs` to local `SAFETY[AUDIT:*]` operation markers with
   evidence rows and no migration allowlist entries.
+- `src/raw/posix.rs` now uses 70 `SAFETY[AUDIT:raw-posix-compat]` markers for
+  errno publication, allocation facade forwarding, POSIX out-pointer writes,
+  `reallocarr` pointer-slot updates, wide-string duplication, environment
+  duplication, and aligned/product allocation shims, and is off the unsafe
+  migration allowlist.
 - The smallest remaining allowlisted production files are
-  `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers,
   `src/lib.rs` at 398 lines with 21 `unsafe` hits and 8 local markers,
   `src/ffi/libc.rs` at 518 lines with 46 `unsafe` hits and 0 local markers,
   `src/allocator/threadlocal.rs` at 579 lines with 42 `unsafe` hits and 0 local
   markers, and
   `src/allocator/heap.rs` at 604 lines with 93 `unsafe` hits and 0 local
+  markers, and
+  `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits and 0 local
   markers.
-- The next smallest remaining allowlisted production files after this tranche
-  are `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits,
+- After the current remaining TODO items, the next smallest remaining
+  allowlisted production files are
   `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits,
   `src/internal/atomic.rs` at 914 lines with 135 `unsafe` hits,
   `src/allocator/page_map.rs` at 1,052 lines with 184 `unsafe` hits, and
@@ -73,18 +79,18 @@ Current review evidence:
 > allocation-family forwarding, POSIX out-pointer writes, `reallocarr` pointer
 > slot updates, wide-string scans/copies, and environment duplication.
 
-- [ ] Add local `SAFETY[AUDIT:raw-posix-compat]` markers for errno access,
+- [x] Add local `SAFETY[AUDIT:raw-posix-compat]` markers for errno access,
       allocation facade forwarding, POSIX out-pointer writes, `reallocarr`
       pointer-slot updates, wide-string duplication, and environment string
       duplication.
-- [ ] Preserve `EINVAL`/`ENOMEM`/`EOVERFLOW` behavior, null-pointer handling,
+- [x] Preserve `EINVAL`/`ENOMEM`/`EOVERFLOW` behavior, null-pointer handling,
       alignment checks, overflow checks, exported symbol shape, and existing
       allocation/free ownership contracts.
-- [ ] Add or extend release-audit assertions and focused tests for invalid
+- [x] Add or extend release-audit assertions and focused tests for invalid
       `mi_posix_memalign`, overflowed `mi_reallocarray`, zero-product
       `mi_reallocarr`, wide-string duplication, and `mi_dupenv_s` out-pointer
       behavior.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/raw/posix.rs`
+- [x] Add matching unsafe audit/evidence entries, remove `src/raw/posix.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower `ALLOWLIST_ENTRY_CAP`.
 
@@ -195,7 +201,7 @@ clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/raw/posix.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/raw/posix.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/lib.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/ffi/libc.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/threadlocal.rs` off the unsafe migration

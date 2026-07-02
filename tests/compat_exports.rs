@@ -81,6 +81,33 @@ fn aligned_recalloc_compat_exports_preserve_and_zero_extend() {
 }
 
 #[test]
+fn posix_exports_preserve_error_and_out_pointer_contracts() {
+    unsafe {
+        let mut p = ptr::null_mut();
+        assert_eq!(
+            mi_posix_memalign(ptr::null_mut::<*mut c_void>(), 16, 16),
+            libc::EINVAL
+        );
+        assert_eq!(mi_posix_memalign(&mut p, 3, 16), libc::EINVAL);
+        assert_eq!(mi_posix_memalign(&mut p, 16, 64), 0);
+        assert_aligned_at(p, 16, 0);
+        mi_free(p);
+
+        let _quiet_expected_errors = ShowErrorsGuard::disabled();
+        assert!(mi_reallocarray(ptr::null_mut(), usize::MAX, 2).is_null());
+
+        let mut env_buf = ptr::null_mut();
+        let mut env_size = usize::MAX;
+        assert_eq!(
+            mi_dupenv_s(&mut env_buf, &mut env_size, ptr::null()),
+            libc::EINVAL
+        );
+        assert!(env_buf.is_null());
+        assert_eq!(env_size, 0);
+    }
+}
+
+#[test]
 fn new_and_heap_alloc_new_n_exports_allocate_from_expected_heap() {
     unsafe {
         let p = mi_new(32);

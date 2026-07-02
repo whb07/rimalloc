@@ -228,6 +228,11 @@ Operation IDs:
 - `SAFETY[AUDIT:raw-macro-boundary]`: `src/ffi/abi.rs` and
   `src/ffi/headers.rs` expose raw C-header macro compatibility without adding
   Rust ownership guarantees; callers inherit the documented raw ABI contract.
+- `SAFETY[AUDIT:raw-posix-compat]`: `src/raw/posix.rs` owns POSIX and
+  libc-adjacent raw compatibility helpers. Unsafe operations are limited to
+  errno slot publication, environment lookup, raw allocation forwarding,
+  POSIX-compatible out-pointer and pointer-slot writes, wide-string scanning and
+  copying, environment duplication, and aligned/product allocation shims.
 - `SAFETY[AUDIT:random-context-boundaries]`: `src/internal/random.rs`
   confines random context raw pointers and primitive entropy/clock calls to
   the allocator's C-compatible random boundary. The shims convert live context

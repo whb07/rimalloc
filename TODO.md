@@ -13,15 +13,14 @@ mechanical file-level exceptions.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 50 entries: 42 production, 5 test,
-  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 50.
+- `docs/unsafe-migration-allowlist.tsv` has 49 entries: 41 production, 5 test,
+  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 49.
 - The smallest remaining allowlisted test fixtures are reviewable:
   `src/types/heap/tests.rs` is 212 lines,
   `src/types/memid/tests.rs` is 243 lines,
   `src/types/atomic/tests.rs` is 287 lines, and
   `src/types/scalar/tests.rs` is 412 lines.
 - The smallest remaining allowlisted production files are narrow:
-  `src/types/padding.rs` is 143 lines,
   `src/allocator/tracking.rs` is 185 lines,
   `src/types/callbacks.rs` is 255 lines,
   `src/internal/random.rs` is 257 lines,
@@ -93,15 +92,20 @@ full tests.
 > operation-level proof markers without widening public APIs or changing hot
 > allocator behavior.
 
-- [ ] Review `src/types/padding.rs`, `src/allocator/tracking.rs`,
+- [x] Review `src/types/padding.rs`, `src/allocator/tracking.rs`,
       `src/types/callbacks.rs`, and `src/internal/random.rs`.
-- [ ] Pick one low-risk production file and replace file-level allowlisting
+- [x] Pick one low-risk production file and replace file-level allowlisting
       with operation-level `SAFETY[AUDIT:*]` markers.
-- [ ] Keep wrapper representation private and preserve existing constructor or
+- [x] Keep wrapper representation private and preserve existing constructor or
       callback validation behavior.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`,
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`,
       `docs/unsafe-migration-allowlist.tsv`, and generated unsafe inventory.
-- [ ] Lower `ALLOWLIST_ENTRY_CAP` again.
+- [x] Lower `ALLOWLIST_ENTRY_CAP` again.
+  - Evidence: `src/types/padding.rs` now uses
+    `SAFETY[AUDIT:typed-padding-metadata]` for padding pointer construction,
+    block-plus-usable-size pointer derivation, raw canary/delta reads, and
+    typed metadata writes. The file was removed from
+    `docs/unsafe-migration-allowlist.tsv`, and `ALLOWLIST_ENTRY_CAP` is now 49.
 
 Verify: unsafe audit scripts, focused unit tests for the migrated module,
 release audit, full clippy, and full tests.
@@ -175,7 +179,7 @@ full tests.
 ## Suggested implementation order
 
 1. [x] Migrate one small test fixture off the unsafe migration allowlist.
-2. [ ] Migrate one small production file off the unsafe migration allowlist.
+2. [x] Migrate one small production file off the unsafe migration allowlist.
 3. [ ] Narrow one remaining broad strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
 5. [ ] Split one more production helper boundary.
@@ -183,7 +187,7 @@ full tests.
 ## Definition of done for this backlog
 
 - [x] The unsafe migration allowlist is below 51 entries and the cap is lowered.
-- [ ] At least one additional production allowlisted file is covered by
+- [x] At least one additional production allowlisted file is covered by
       operation-level audit markers.
 - [ ] One remaining broad strict-type `remove:` allowance is narrowed or
       eliminated.

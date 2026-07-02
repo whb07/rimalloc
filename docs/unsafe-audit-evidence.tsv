@@ -38,6 +38,8 @@ typed-callback-test-fixtures	test	src/types/callbacks/tests.rs	Exercises callbac
 typed-freelist-test-fixtures	test	src/types/freelist/tests.rs	Exercises stack-local block metadata and raw link helper fixtures.
 typed-freelist-wrapper-test-fixtures	test	src/types/freelist_wrappers/tests.rs	Exercises stack-local page/block metadata for encoded pointer, block tag, available-list, and local-list wrapper fixtures.
 typed-layout-test-fixtures	test	src/types/layout/tests.rs	Exercises concrete valid unchecked scalar values and non-dereferenced pointer witnesses for layout/realloc request fixtures.
+typed-padding-metadata	test	src/types/padding/tests.rs	Exercises padding pointer construction, reads, writes, delta updates, and block-plus-usable-size pointer arithmetic.
+typed-padding-metadata	test	tests/release_fast_path_audit.rs	Checks production padding wrappers keep canary and delta fields private and route metadata access through PaddingPtr.
 typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-local padding metadata, canary witnesses, and padding pointer arithmetic fixtures.
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
 typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page metadata and registered-range witness fixture construction.

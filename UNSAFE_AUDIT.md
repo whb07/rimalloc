@@ -70,6 +70,9 @@ Per-file review:
   `src/core_types/validation_extra.rs`: typed newtypes and validation helpers
   confine raw metadata, page, heap, callback, freelist, and scalar invariants to
   small wrappers used by the translated allocator paths.
+- `src/types/padding.rs`: padding metadata pointer arithmetic and field access
+  are confined to `PaddingPtr`, `PaddingCanary`, and `PaddingDelta`; callers
+  supply allocator-owned block padding boundaries and receive typed values.
 - `src/free.rs`: free paths recover page metadata from owned block pointers,
   validate page ownership where C does, and route remote frees through delayed
   free queues instead of mutating foreign-thread page state directly.
@@ -273,6 +276,11 @@ Operation IDs:
 - `SAFETY[AUDIT:typed-layout-test-fixtures]`: `src/types/layout/tests.rs`
   uses concrete valid unchecked scalar values and non-dereferenced dangling
   pointer witnesses to exercise layout, realloc, and flag packing invariants.
+- `SAFETY[AUDIT:typed-padding-metadata]`: `src/types/padding.rs` confines raw
+  padding metadata pointer construction, reads, and writes to `PaddingPtr`.
+  Callers supply block pointers whose usable-size boundary is followed by live
+  padding metadata, and raw canary/delta fields are converted through typed
+  scalar wrappers.
 - `SAFETY[AUDIT:typed-padding-test-fixtures]`: `src/types/padding/tests.rs`
   builds stack-local padding records and byte buffers, plus non-dereferenced
   dangling pointer witnesses for canary hashing, to exercise padding wrapper

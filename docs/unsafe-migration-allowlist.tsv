@@ -41,7 +41,6 @@ src/types/heap/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper t
 src/types/layout.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/memid.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/memid/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
-src/types/padding.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/page.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/page_queues.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/page_states.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration

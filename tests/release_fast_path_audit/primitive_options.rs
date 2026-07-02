@@ -180,7 +180,9 @@ fn options_state_uses_internal_locks_like_c() {
         "stats JSON formatting should use fixed stack buffers like C"
     );
     for (audit_id, min_count) in [
-        ("stats-counter-boundary", 25),
+        ("stats-init-bin-boundary", 4),
+        ("stats-counter-update-boundary", 23),
+        ("stats-counter-accumulate-boundary", 3),
         ("stats-counter-merge-boundary", 14),
         ("stats-clock-boundary", 1),
         ("stats-heap-merge-boundary", 14),
@@ -201,7 +203,8 @@ fn options_state_uses_internal_locks_like_c() {
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/stats.rs\t"))
-            && !stats_rs.contains("SAFETY[AUDIT:stats-reporting-boundary]"),
+            && !stats_rs.contains("SAFETY[AUDIT:stats-reporting-boundary]")
+            && !stats_rs.contains("SAFETY[AUDIT:stats-counter-boundary]"),
         "stats unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
     assert!(

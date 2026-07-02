@@ -9,15 +9,14 @@ operation IDs, and release-audit modules that now block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,899 unsafe
-  mentions, and 413 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 413 operation IDs with
-  881 automated evidence rows.
-- No source audit operation ID remains over 32 source markers. Eight IDs remain
-  over 28 markers: `arena-slice-boundary`, `owned-allocation`,
-  `typed-subproc-accessors`, and `typed-scalar-test-fixtures` have 31 markers
-  each; `arena-slice-allocation-boundary`, `page-free-list-refill-boundary`, and
-  `stats-counter-boundary` have 30 markers each; and
-  `raw-macro-cxx-aligned-boundary` has 29 markers.
+  mentions, and 437 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 437 operation IDs with
+  927 automated evidence rows.
+- No source audit operation ID remains over 28 source markers. The largest
+  source audit IDs are `thread-heap-visit-boundary`,
+  `stats-output-boundary`, and `free-validation-boundary` at 28 markers each,
+  followed by `windows-tls-fls-boundary`, `typed-arena-accessors`, and
+  `ffi-libc-string-boundary` at 27 markers each.
 - Issue 1 retargeted 184 dispatcher evidence rows. `docs/unsafe-audit-evidence.tsv`
   no longer cites the targeted aggregate or parent release-audit modules:
   root `release_fast_path_audit.rs`, `release_policy.rs`,
@@ -30,6 +29,12 @@ Current review evidence:
   typed heap/thread-heap/TLD/address fixtures, platform default/cached
   thread-heap load/store and fallback paths, Windows virtual-memory operations,
   and subproc create/destroy/teardown operations.
+- Issue 3 split eight broad 29-31 marker IDs into 32 operation-specific IDs:
+  arena slice geometry/containment/layout and allocation commit/bitmap/dispatch
+  paths, page free-list collection/extension/fresh allocation/search-refill
+  paths, stats init/update/accumulate paths, aligned C++ raw facade variants,
+  owned allocation production/test boundaries, and typed subproc/scalar fixture
+  groups.
 - `strict-type-allowlist.txt` has 634 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -52,10 +57,10 @@ Current review evidence:
   enforces a 400-line cap. The largest release-audit modules are:
   `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 399 lines,
   `allowance_inventory.rs` at 398 lines,
-  `interposition_exports/linux_override.rs` at 371 lines,
-  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 371 lines,
+  `interposition_exports/linux_override.rs` at 384 lines,
+  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 380 lines,
   `unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367 lines,
-  and `primitive_options.rs` at 323 lines.
+  and `primitive_options.rs` at 326 lines.
 - Full validation for the previous backlog passed after Issue 6: `cargo fmt
   --all`, `cargo clippy --workspace --all-targets --all-features`, `cargo test
   --workspace --all-targets --all-features`, `cargo test --test
@@ -111,12 +116,12 @@ After Issue 2, the next useful source-audit cap is 28 markers. The remaining
 typed pointer accessors, scalar tests, page free-list refill, stats counters,
 and C++ aligned raw overrides.
 
-- [ ] Split `arena-slice-boundary`, `arena-slice-allocation-boundary`,
+- [x] Split `arena-slice-boundary`, `arena-slice-allocation-boundary`,
       `page-free-list-refill-boundary`, `stats-counter-boundary`, and
       `raw-macro-cxx-aligned-boundary` into narrower operation IDs.
-- [ ] Split test-only broad IDs: `owned-allocation`,
+- [x] Split test-only broad IDs: `owned-allocation`,
       `typed-subproc-accessors`, and `typed-scalar-test-fixtures`.
-- [ ] Update docs, evidence rows, and release-audit guards so no source audit
+- [x] Update docs, evidence rows, and release-audit guards so no source audit
       operation ID exceeds 28 source markers.
 
 Verify: unsafe audit scripts, unsafe evidence scripts, release fast-path audit,
@@ -143,14 +148,14 @@ checks, no-allocation audit, full formatting, full clippy, and full tests.
 
 1. [x] Repoint unsafe audit evidence to focused modules.
 2. [x] Split remaining source audit IDs over 32 markers.
-3. [ ] Lower the source audit marker cap to 28.
+3. [x] Lower the source audit marker cap to 28.
 4. [ ] Split release-audit modules over 320 lines.
 
 ## Definition of done for this backlog
 
 - [x] Evidence rows for operation-specific audit IDs cite focused child modules
       instead of aggregate release-audit dispatchers.
-- [ ] No source audit operation ID has more than 28 source markers.
+- [x] No source audit operation ID has more than 28 source markers.
 - [ ] Release-audit modules are split enough to lower the recursive module cap
       to 320 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type wildcard coverage remains at zero retained wildcards.

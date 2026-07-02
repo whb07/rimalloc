@@ -70,10 +70,14 @@ file:
   to Rust's allocator contract. The callee dispatches to normal or aligned
   mimalloc paths, returns null on failure, preserves reallocation contents on
   success, and does not unwind intentionally.
-- `SAFETY[AUDIT:owned-allocation]`: the safe `Allocation` wrapper. The wrapper
-  owns one allocation, frees it exactly once on drop, treats zero-sized
-  allocations as aligned sentinels, exposes raw pointers without transferring
-  free rights, and never exposes safe references to uninitialized bytes.
+- `SAFETY[AUDIT:owned-allocation-traits-boundary]`,
+  `SAFETY[AUDIT:owned-allocation-slice-boundary]`,
+  `SAFETY[AUDIT:owned-allocation-resize-boundary]`,
+  `SAFETY[AUDIT:owned-initialized-allocation-boundary]`, and
+  `SAFETY[AUDIT:owned-allocation-test-fixtures]`: the safe allocation wrappers
+  own allocations through move-only handles, split raw slice views, resize/drop
+  ownership transfer, initialized-byte views, and local fixtures into separate
+  audit surfaces.
 - `SAFETY[AUDIT:ffi-export]`: exported C ABI functions and aliases. Callers
   must uphold the C API pointer, layout, ownership, callback, and threading
   rules. Exported functions must not unwind across the C boundary and must stay
@@ -117,9 +121,12 @@ file:
   compatibility symbols and sized helper shims in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-cxx-array-delete-boundary]`: array C++ delete
   compatibility symbols and sized array helper shims in `src/raw/macros.rs`.
-- `SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]`: aligned C++ new/delete
-  compatibility symbols, including aligned nothrow and operator helper variants
-  in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-cxx-aligned-delete-boundary]`,
+  `SAFETY[AUDIT:raw-macro-cxx-aligned-new64-boundary]`,
+  `SAFETY[AUDIT:raw-macro-cxx-aligned-new32-boundary]`, and
+  `SAFETY[AUDIT:raw-macro-cxx-aligned-operator-boundary]`: aligned C++ delete,
+  pointer-width-specific new, and inline operator compatibility symbols in
+  `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]`: non-aligned nothrow C++
   compatibility shims in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-cxx-new-boundary]`: scalar and array C++ new
@@ -265,8 +272,12 @@ file:
 - `SAFETY[AUDIT:allocation-page-refill-boundary]`: page refill handoff,
   generic fallback allocation, guarded allocation, zeroing, and padding canary
   publication in `src/allocator/alloc.rs`.
-- `SAFETY[AUDIT:page-free-list-refill-boundary]`: page-local free-list
-  collection, extension, search, and refill in `src/allocator/page.rs`.
+- `SAFETY[AUDIT:page-free-list-collect-boundary]`,
+  `SAFETY[AUDIT:page-free-list-extend-boundary]`,
+  `SAFETY[AUDIT:page-fresh-allocation-boundary]`, and
+  `SAFETY[AUDIT:page-queue-search-refill-boundary]`: page-local free-list
+  collection, extension, fresh-page publication, and queue search/refill in
+  `src/allocator/page.rs`.
 - `SAFETY[AUDIT:page-queue-full-transition-boundary]`,
   `SAFETY[AUDIT:page-queue-free-release-boundary]`,
   `SAFETY[AUDIT:page-queue-retire-boundary]`,
@@ -283,10 +294,11 @@ file:
 - `SAFETY[AUDIT:page-stats-public-boundary]`: page metadata accessors,
   stats/bin helpers, public C-shaped page helpers, and generic allocation
   entry shims in `src/allocator/page.rs`.
-- `SAFETY[AUDIT:arena-slice-boundary]`: arena slice/range projection in
-  `src/allocator/arena.rs`. The boundary covers slice indexes, range
-  projection, area/containment queries, info-slice sizing, and arena bitmap
-  layout.
+- `SAFETY[AUDIT:arena-slice-geometry-boundary]`,
+  `SAFETY[AUDIT:arena-slice-containment-boundary]`, and
+  `SAFETY[AUDIT:arena-slice-layout-boundary]`: arena slice geometry,
+  containment queries, info-slice sizing, and bitmap layout in
+  `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-registry-count-index-boundary]`: arena count/index lookup
   and C ABI registry shims in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-heap-page-table-boundary]`: heap arena-page table lookup
@@ -301,9 +313,11 @@ file:
   subproc table clearing in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-registry-add-boundary]`: arena registration and atomic
   subproc table publication in `src/allocator/arena.rs`.
-- `SAFETY[AUDIT:arena-slice-allocation-boundary]`: arena slice allocation,
-  commit/reuse, slice bitmap mutation, memid creation, and allocation metadata
-  publication in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-slice-commit-boundary]`,
+  `SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]`, and
+  `SAFETY[AUDIT:arena-slice-allocation-dispatch-boundary]`: arena slice commit,
+  bitmap mutation, memid publication, and allocation search/dispatch in
+  `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-initialization-boundary]`: arena metadata
   initialization, guard-page setup, bitmap layout, page metadata table setup,
   and registry insertion in `src/allocator/arena.rs`.

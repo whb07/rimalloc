@@ -39,7 +39,12 @@ pub(super) fn assert_pointer_and_freelist_wrappers(audit_sources: &DatatypeAccep
         ("typed-thread-heap-accessors", 10),
         ("typed-tld-accessors", 20),
         ("typed-arena-accessors", 22),
-        ("typed-subproc-accessors", 25),
+        ("typed-subproc-identity-accessors", 2),
+        ("typed-subproc-arena-accessors", 7),
+        ("typed-subproc-heap-link-accessors", 5),
+        ("typed-subproc-count-accessors", 12),
+        ("typed-subproc-metadata-accessors", 2),
+        ("typed-subproc-fixture-touch-accessors", 3),
         ("typed-page-queue-accessors", 8),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
@@ -49,7 +54,8 @@ pub(super) fn assert_pointer_and_freelist_wrappers(audit_sources: &DatatypeAccep
         );
     }
     assert!(
-        !ptr_core_rs.contains("SAFETY[AUDIT:typed-pointer-accessors]"),
+        !ptr_core_rs.contains("SAFETY[AUDIT:typed-pointer-accessors]")
+            && !ptr_core_rs.contains("SAFETY[AUDIT:typed-subproc-accessors]"),
         "typed pointer unsafe markers should stay split by pointer family"
     );
     let from_raw_allowlist_entry =

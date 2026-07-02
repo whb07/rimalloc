@@ -146,7 +146,10 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         "allocation unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
     for (audit_id, min_count) in [
-        ("page-free-list-refill-boundary", 30),
+        ("page-free-list-collect-boundary", 9),
+        ("page-free-list-extend-boundary", 8),
+        ("page-fresh-allocation-boundary", 9),
+        ("page-queue-search-refill-boundary", 4),
         ("page-queue-full-transition-boundary", 5),
         ("page-queue-free-release-boundary", 4),
         ("page-queue-retire-boundary", 4),
@@ -166,8 +169,9 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         );
     }
     assert!(
-        !page_rs.contains("SAFETY[AUDIT:page-queue-transition-boundary]"),
-        "page queue transitions should stay split into focused operation markers"
+        !page_rs.contains("SAFETY[AUDIT:page-free-list-refill-boundary]")
+            && !page_rs.contains("SAFETY[AUDIT:page-queue-transition-boundary]"),
+        "page free-list and queue transitions should stay split into focused operation markers"
     );
     assert!(
         !unsafe_allowlist

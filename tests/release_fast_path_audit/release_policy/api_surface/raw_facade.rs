@@ -115,7 +115,10 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
         "raw-macro-allocation-query-boundary",
         "raw-macro-cxx-delete-boundary",
         "raw-macro-cxx-array-delete-boundary",
-        "raw-macro-cxx-aligned-boundary",
+        "raw-macro-cxx-aligned-delete-boundary",
+        "raw-macro-cxx-aligned-new64-boundary",
+        "raw-macro-cxx-aligned-new32-boundary",
+        "raw-macro-cxx-aligned-operator-boundary",
         "raw-macro-cxx-nothrow-boundary",
         "raw-macro-cxx-new-boundary",
         "raw-macro-header-forwarding-boundary",
@@ -134,6 +137,7 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
             && headers_rs.contains("SAFETY[AUDIT:raw-macro-boundary]")
             && unsafe_doc.contains("SAFETY[AUDIT:raw-macro-boundary]")
             && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
+            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]")
             && abi_doc.contains("## Raw Macro Unsafe Boundary"),
         "raw macro unsafe-boundary audit tags should be mirrored in source and docs"
     );

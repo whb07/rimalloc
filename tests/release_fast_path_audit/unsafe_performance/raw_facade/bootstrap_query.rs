@@ -33,7 +33,10 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
         ("raw-macro-allocation-query-boundary", 10),
         ("raw-macro-cxx-delete-boundary", 3),
         ("raw-macro-cxx-array-delete-boundary", 3),
-        ("raw-macro-cxx-aligned-boundary", 29),
+        ("raw-macro-cxx-aligned-delete-boundary", 8),
+        ("raw-macro-cxx-aligned-new64-boundary", 6),
+        ("raw-macro-cxx-aligned-new32-boundary", 6),
+        ("raw-macro-cxx-aligned-operator-boundary", 9),
         ("raw-macro-cxx-nothrow-boundary", 7),
         ("raw-macro-cxx-new-boundary", 4),
         ("raw-macro-header-forwarding-boundary", 6),
@@ -125,12 +128,16 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-delete-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-array-delete-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-delete-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-new64-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-new32-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-operator-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-new-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")
             && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
             && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-boundary]")
+            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]")
             && raw_macros_rs.contains("core::arch::global_asm!(")
             && raw_macros_rs.contains("mod unix_bootstrap")
             && raw_macros_rs.contains("if crate::internal::_mi_preloading()")

@@ -173,7 +173,7 @@ unsafe fn mi_page_decrement_retire_expire(page: *mut mi_page_t) -> crate::core_t
 /// `page` must be valid, and `head` must be a detached thread-free list for that page.
 #[inline]
 pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut mi_block_t) {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         if head.is_null() {
             return;
@@ -195,7 +195,7 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
     remote: RemoteFreeList,
     local: LocalFreeList,
 ) -> LocalFreeList {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = page.page();
         let page = page_ptr.as_ptr();
@@ -245,7 +245,7 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
 /// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = LocalPage::new_unchecked(page_ptr);
@@ -267,7 +267,7 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
     page: LocalPage,
     remote: RemoteFreeList,
 ) -> LocalFreeList {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = page.page();
         let page = page_ptr.as_ptr();
@@ -281,7 +281,7 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
 /// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = LocalPage::new_unchecked(page_ptr);
@@ -299,7 +299,7 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
     available: AvailableFreeList,
     local: LocalFreeList,
 ) -> bool {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         if available.0.is_some() {
             return true;
@@ -319,7 +319,7 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
-// SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
     unsafe {
@@ -366,7 +366,7 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
 
 /// # Safety
 /// `page` must be valid, and `head` must be null or a detached block list belonging to `page`.
-// SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
     unsafe {
@@ -389,7 +389,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
     local_page: LocalPage,
     remote_head: RemoteFreeList,
 ) {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = local_page.page();
         let page = page_ptr.as_ptr();
@@ -792,7 +792,7 @@ unsafe fn mi_page_free_list_extend_secure(
     bsize: usize,
     extend: usize,
 ) {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         mi_page_free_list_extend_secure_typed(
             theap,
@@ -810,7 +810,7 @@ unsafe fn mi_page_free_list_extend_secure_typed(
     bsize: crate::core_types::BlockSize,
     extend: usize,
 ) {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let page_raw = page.as_ptr();
@@ -881,7 +881,7 @@ unsafe fn mi_page_free_list_extend_secure_typed(
     }
 }
 
-// SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 unsafe extern "C" fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: usize) {
     unsafe {
@@ -899,7 +899,7 @@ unsafe fn mi_page_free_list_extend_typed(
     bsize: crate::core_types::BlockSize,
     extend: usize,
 ) {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
@@ -929,12 +929,12 @@ unsafe fn mi_page_free_list_extend_typed(
     }
 }
 
-// SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[used]
 static MI_PAGE_FREE_LIST_EXTEND_KEEP: unsafe extern "C" fn(*mut mi_page_t, usize, usize) =
     mi_page_free_list_extend;
 
-// SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
     unsafe {
@@ -950,7 +950,7 @@ unsafe fn mi_page_extend_free_typed(
     theap: crate::core_types::ThreadHeapLocal,
     page_ptr: PagePtr,
 ) -> bool {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap_local = theap;
         let theap = theap.ptr().as_ptr();
@@ -1047,7 +1047,7 @@ unsafe fn mi_page_extend_free_typed(
     }
 }
 
-// SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[used]
 static MI_PAGE_EXTEND_FREE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) -> bool =
     mi_page_extend_free;
@@ -1176,7 +1176,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
 
 /// # Safety
 /// `theap` must be valid. If non-null, `pq` must be a page queue belonging to `theap`.
-// SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn mi_page_fresh_alloc(
     theap: *mut mi_theap_t,
@@ -1184,7 +1184,7 @@ pub unsafe extern "C" fn mi_page_fresh_alloc(
     block_size: usize,
     page_alignment: usize,
 ) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         crate::internal::mi_assert_internal!(pq.is_null() || mi_theap_contains_queue(theap, pq));
         crate::internal::mi_assert_internal!(
@@ -1218,7 +1218,7 @@ unsafe fn mi_page_fresh_alloc_typed(
     layout: crate::core_types::LayoutRequest,
     page_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let block_size = layout.padded().get();
@@ -1273,7 +1273,7 @@ unsafe fn mi_page_fresh_alloc_typed(
     }
 }
 
-// SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[used]
 static MI_PAGE_FRESH_ALLOC_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,
@@ -1282,13 +1282,13 @@ static MI_PAGE_FRESH_ALLOC_KEEP: unsafe extern "C" fn(
     usize,
 ) -> *mut mi_page_t = mi_page_fresh_alloc;
 
-// SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_init(
     theap: *mut mi_theap_t,
     page: *mut mi_page_t,
 ) -> bool {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         crate::internal::mi_assert!(!page.is_null());
         crate::internal::mi_assert!(!theap.is_null());
@@ -1308,7 +1308,7 @@ unsafe fn _mi_page_init_typed(
     owner: crate::core_types::ThreadHeapLocal,
     page_uninit: crate::core_types::Page<crate::core_types::Uninit>,
 ) -> bool {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let page = page_uninit.ptr().as_ptr();
@@ -1386,7 +1386,7 @@ unsafe fn _mi_page_init_typed(
 /// `theap` must be valid, and `pq` must be a page queue belonging to `theap`.
 #[inline]
 pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
         let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
@@ -1417,7 +1417,7 @@ unsafe fn mi_page_fresh_typed(
     block_size_typed: crate::core_types::BlockSize,
     slice_count: crate::core_types::SliceCount,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -2358,7 +2358,7 @@ unsafe fn mi_page_queue_find_free_ex(
     pq: *mut mi_page_queue_t,
     first_try: bool,
 ) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-queue-search-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let queue = page_queue_ptr(pq);
         let Some(queue) = crate::core_types::NormalPageQueue::new(queue) else {
@@ -2385,7 +2385,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
     block_size: crate::core_types::BlockSize,
     first_try: bool,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-queue-search-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap_raw = theap.ptr().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -2526,7 +2526,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
 
 #[inline]
 unsafe fn mi_find_free_page(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-queue-search-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let queue = page_queue_ptr(pq);
         let Some(queue) = crate::core_types::NormalPageQueue::new(queue) else {
@@ -2553,7 +2553,7 @@ unsafe fn mi_find_free_page_typed(
     queue: crate::core_types::NormalPageQueue,
     block_size: crate::core_types::BlockSize,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY[AUDIT:page-queue-search-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page = queue.ptr().first();
         if let Some(page) = page.filter(|page| mi_page_free_quick_collect(page.as_ptr())) {

@@ -1122,7 +1122,7 @@ define_ptr_wrapper!(SubprocPtr, mi_subproc_t, "Non-null raw subproc metadata");
 impl SubprocPtr {
     /// # Safety
     /// The subproc pointer must refer to initialized subproc metadata.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn sequence(self) -> SubprocSeq {
         let raw = self.as_ptr();
@@ -1131,7 +1131,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to writable subproc metadata.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_sequence(self, sequence: SubprocSeq) {
         let raw = self.as_ptr();
@@ -1140,7 +1140,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn arena_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
@@ -1149,7 +1149,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn arena_count(self, order: MemoryOrder) -> ArenaCount {
         ArenaCount::new(unsafe { self.arena_count_cell().load(order) })
@@ -1157,7 +1157,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_arena_count(self, count: ArenaCount, order: MemoryOrder) {
         unsafe { self.arena_count_cell().store(count.get(), order) };
@@ -1165,7 +1165,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to initialized subproc metadata.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn arena(self, index: ArenaIndex) -> Option<ArenaPtr> {
         let raw = self.as_ptr();
@@ -1174,7 +1174,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to writable subproc metadata.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_arena(self, index: ArenaIndex, arena: Option<ArenaPtr>) {
         let raw = self.as_ptr();
@@ -1189,7 +1189,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose lock field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn arena_reserve_lock(self) -> MiLockPtr {
         let raw = self.as_ptr();
@@ -1198,7 +1198,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose purge field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn purge_expire_cell(self) -> AtomicI64Field {
         let raw = self.as_ptr();
@@ -1207,7 +1207,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to initialized subproc metadata.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-heap-link-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn main_heap(self) -> Option<HeapPtr> {
         let raw = self.as_ptr();
@@ -1216,7 +1216,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to writable subproc metadata.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-heap-link-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_main_heap(self, heap: Option<HeapPtr>) {
         let raw = self.as_ptr();
@@ -1226,7 +1226,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to initialized subproc metadata.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-heap-link-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn heaps(self) -> Option<HeapPtr> {
         let raw = self.as_ptr();
@@ -1235,7 +1235,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to writable subproc metadata.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-heap-link-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_heaps(self, heap: Option<HeapPtr>) {
         let raw = self.as_ptr();
@@ -1245,7 +1245,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose lock field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-heap-link-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn heaps_lock(self) -> MiLockPtr {
         let raw = self.as_ptr();
@@ -1254,7 +1254,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
@@ -1263,7 +1263,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_count(self, order: MemoryOrder) -> ThreadCount {
         ThreadCount::new(unsafe { self.thread_count_cell().load(order) })
@@ -1271,7 +1271,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_thread_count(self, count: ThreadCount, order: MemoryOrder) {
         unsafe { self.thread_count_cell().store(count.get(), order) };
@@ -1279,7 +1279,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_total_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
@@ -1288,7 +1288,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_total_count(self, order: MemoryOrder) -> ThreadCount {
         ThreadCount::new(unsafe { self.thread_total_count_cell().load(order) })
@@ -1296,7 +1296,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_thread_total_count(self, count: ThreadCount, order: MemoryOrder) {
         unsafe { self.thread_total_count_cell().store(count.get(), order) };
@@ -1304,7 +1304,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn heap_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
@@ -1313,7 +1313,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn heap_count(self, order: MemoryOrder) -> HeapCount {
         HeapCount::new(unsafe { self.heap_count_cell().load(order) })
@@ -1321,7 +1321,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_heap_count(self, count: HeapCount, order: MemoryOrder) {
         unsafe { self.heap_count_cell().store(count.get(), order) };
@@ -1329,7 +1329,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn heap_total_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
@@ -1338,7 +1338,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn heap_total_count(self, order: MemoryOrder) -> HeapCount {
         HeapCount::new(unsafe { self.heap_total_count_cell().load(order) })
@@ -1346,7 +1346,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-count-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_heap_total_count(self, count: HeapCount, order: MemoryOrder) {
         unsafe { self.heap_total_count_cell().store(count.get(), order) };
@@ -1354,7 +1354,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose memid field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-metadata-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn memid_ptr(self) -> *mut mi_memid_t {
         let raw = self.as_ptr();
@@ -1363,7 +1363,7 @@ impl SubprocPtr {
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose stats field is valid.
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-metadata-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn stats(self) -> *mut mi_stats_t {
         let raw = self.as_ptr();
@@ -1708,21 +1708,21 @@ pub(super) fn __lint_touch() {
 
     let _ = SubprocPtr::sequence as unsafe fn(SubprocPtr) -> SubprocSeq;
     let _ = SubprocPtr::set_sequence as unsafe fn(SubprocPtr, SubprocSeq);
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-fixture-touch-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     let _ = SubprocPtr::set_arena_count as unsafe fn(SubprocPtr, ArenaCount, MemoryOrder);
     let _ = SubprocPtr::purge_expire_cell as unsafe fn(SubprocPtr) -> AtomicI64Field;
     let _ = SubprocPtr::main_heap as unsafe fn(SubprocPtr) -> Option<HeapPtr>;
     let _ = SubprocPtr::set_main_heap as unsafe fn(SubprocPtr, Option<HeapPtr>);
     let _ = SubprocPtr::heaps as unsafe fn(SubprocPtr) -> Option<HeapPtr>;
     let _ = SubprocPtr::set_heaps as unsafe fn(SubprocPtr, Option<HeapPtr>);
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-fixture-touch-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     let _ = SubprocPtr::heaps_lock as unsafe fn(SubprocPtr) -> MiLockPtr;
     let _ = SubprocPtr::thread_count as unsafe fn(SubprocPtr, MemoryOrder) -> ThreadCount;
     let _ = SubprocPtr::set_thread_count as unsafe fn(SubprocPtr, ThreadCount, MemoryOrder);
     let _ = SubprocPtr::thread_total_count as unsafe fn(SubprocPtr, MemoryOrder) -> ThreadCount;
     let _ = SubprocPtr::set_thread_total_count as unsafe fn(SubprocPtr, ThreadCount, MemoryOrder);
     let _ = SubprocPtr::heap_count_cell as unsafe fn(SubprocPtr) -> AtomicUsizeField;
-    // SAFETY[AUDIT:typed-subproc-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-subproc-fixture-touch-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     let _ = SubprocPtr::heap_count as unsafe fn(SubprocPtr, MemoryOrder) -> HeapCount;
     let _ = SubprocPtr::set_heap_count as unsafe fn(SubprocPtr, HeapCount, MemoryOrder);
     let _ = SubprocPtr::heap_total_count_cell as unsafe fn(SubprocPtr) -> AtomicUsizeField;

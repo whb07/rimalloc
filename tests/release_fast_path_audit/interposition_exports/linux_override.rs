@@ -94,9 +94,21 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
                 .count()
                 >= 3
             && override_rs
-                .matches("SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]")
+                .matches("SAFETY[AUDIT:raw-macro-cxx-aligned-delete-boundary]")
                 .count()
-                >= 29
+                >= 8
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-cxx-aligned-new64-boundary]")
+                .count()
+                >= 6
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-cxx-aligned-new32-boundary]")
+                .count()
+                >= 6
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-cxx-aligned-operator-boundary]")
+                .count()
+                >= 9
             && override_rs
                 .matches("SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]")
                 .count()
@@ -110,6 +122,7 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
                 .count()
                 >= 6
             && !override_rs.contains("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
+            && !override_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]")
             && override_rs.contains("core::arch::global_asm!(")
             && override_rs.contains("mod unix_bootstrap")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")

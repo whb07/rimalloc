@@ -23,7 +23,9 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
         "_mi_stats_init should keep C's local process statistics initialization boundary"
     );
     for (audit_id, min_count) in [
-        ("stats-counter-boundary", 25),
+        ("stats-init-bin-boundary", 4),
+        ("stats-counter-update-boundary", 23),
+        ("stats-counter-accumulate-boundary", 3),
         ("stats-counter-merge-boundary", 14),
         ("stats-clock-boundary", 1),
         ("stats-heap-merge-boundary", 14),
@@ -44,7 +46,8 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/stats.rs\t"))
-            && !stats_rs.contains("SAFETY[AUDIT:stats-reporting-boundary]"),
+            && !stats_rs.contains("SAFETY[AUDIT:stats-reporting-boundary]")
+            && !stats_rs.contains("SAFETY[AUDIT:stats-counter-boundary]"),
         "stats unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
     assert!(

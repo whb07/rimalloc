@@ -501,12 +501,23 @@ Operation IDs:
   Unsafe operations are limited to page/block metadata reached through
   allocator ownership, active-page witnesses, refill helpers, and guarded block
   state while preserving page ownership and zeroing guarantees.
-- `SAFETY[AUDIT:page-free-list-refill-boundary]`:
-  `src/allocator/page.rs` owns page-local free-list collection, extension,
-  search, and refill. Unsafe operations are limited to caller-proven page and
-  block pointers, typed free-list witnesses, capacity counters, commit growth,
-  and refill helpers while preserving block ownership and no-allocation
-  hot-path constraints.
+- `SAFETY[AUDIT:page-free-list-collect-boundary]`:
+  `src/allocator/page.rs` owns remote/local free-list collection and quick
+  collection. Unsafe operations are limited to caller-proven page and block
+  pointers while preserving local block ownership and no-allocation hot-path
+  constraints.
+- `SAFETY[AUDIT:page-free-list-extend-boundary]`:
+  `src/allocator/page.rs` owns free-list extension for already-owned pages.
+  Unsafe operations update free-list heads, capacity counters, and typed block
+  links while preserving page ownership and committed block bounds.
+- `SAFETY[AUDIT:page-fresh-allocation-boundary]`:
+  `src/allocator/page.rs` owns fresh page initialization and first free-list
+  publication. Unsafe operations are limited to newly allocated page metadata,
+  block-area setup, and typed free-list witnesses.
+- `SAFETY[AUDIT:page-queue-search-refill-boundary]`:
+  `src/allocator/page.rs` owns queue search and refill dispatch. Unsafe
+  operations borrow candidate page queues and pages through thread-heap
+  ownership while preserving availability and queue membership invariants.
 - `SAFETY[AUDIT:page-queue-full-transition-boundary]`:
   `src/allocator/page.rs` owns full/active page transitions. Unsafe operations
   are limited to typed active/full page witnesses and queue membership checks
@@ -552,12 +563,19 @@ Operation IDs:
   operations are limited to caller-proven page/heap pointers, typed count/bin
   witnesses, usable-size out-pointers, and ABI flag decoding while preserving
   public null/failure semantics and typed metadata invariants.
-- `SAFETY[AUDIT:arena-slice-boundary]`: `src/allocator/arena.rs` owns arena
-  slice/range projection, arena area queries, containment checks, info-slice
-  sizing, and arena bitmap layout. Unsafe operations are limited to
-  caller-proven arena pointers, typed `SliceIndex`/`SliceRange` witnesses,
-  bounded metadata projection, and address containment arithmetic while
-  preserving arena bounds and slice alignment.
+- `SAFETY[AUDIT:arena-slice-geometry-boundary]`:
+  `src/allocator/arena.rs` owns arena slice geometry, address projection, and
+  typed slice/page helper routing. Unsafe operations are limited to
+  caller-proven arena pointers and bounded `SliceIndex`/`SliceRange`
+  witnesses while preserving arena bounds and slice alignment.
+- `SAFETY[AUDIT:arena-slice-containment-boundary]`:
+  `src/allocator/arena.rs` owns arena area queries and containment checks.
+  Unsafe operations perform bounded address arithmetic and metadata reads
+  without mutating arena ownership state.
+- `SAFETY[AUDIT:arena-slice-layout-boundary]`:
+  `src/allocator/arena.rs` owns arena info-slice sizing and bitmap layout.
+  Unsafe operations project typed metadata slices from validated arena layout
+  witnesses while preserving committed range and bitmap bounds.
 - `SAFETY[AUDIT:arena-registry-count-index-boundary]`:
   `src/allocator/arena.rs` owns public arena count/index lookups and C ABI
   registry shims. Unsafe operations are limited to validating subproc pointers,
@@ -584,12 +602,19 @@ Operation IDs:
 - `SAFETY[AUDIT:arena-registry-add-boundary]`: `src/allocator/arena.rs` owns
   arena registration. Unsafe operations publish typed arena indexes through
   atomic subproc cells, update arena stats, and roll back failed publication.
-- `SAFETY[AUDIT:arena-slice-allocation-boundary]`:
-  `src/allocator/arena.rs` owns arena slice allocation, arena commit/reuse,
-  slice bitmap mutation, memid creation, and allocation metadata publication.
-  Unsafe operations are limited to typed arena/range/layout witnesses,
-  free/dirty/committed bitmaps, OS commit primitives, and stat adjustments
-  while preserving zeroing and commit accounting.
+- `SAFETY[AUDIT:arena-slice-commit-boundary]`:
+  `src/allocator/arena.rs` owns arena commit/reuse for existing slices. Unsafe
+  operations are limited to typed arena/range witnesses and OS commit
+  primitives while preserving zeroing and commit accounting.
+- `SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]`:
+  `src/allocator/arena.rs` owns core arena slice allocation bitmap updates,
+  memid creation, and allocation metadata publication. Unsafe operations are
+  limited to typed arena/range/layout witnesses and free/dirty/committed
+  bitmaps while preserving allocation ownership.
+- `SAFETY[AUDIT:arena-slice-allocation-dispatch-boundary]`:
+  `src/allocator/arena.rs` owns arena allocation search and dispatch. Unsafe
+  operations borrow registry entries and allocation metadata through validated
+  arena/table witnesses before handing work to the bitmap allocation path.
 - `SAFETY[AUDIT:arena-initialization-boundary]`:
   `src/allocator/arena.rs` owns arena metadata initialization, guard-page
   setup, bitmap layout, page metadata table setup, and initial registry
@@ -902,10 +927,17 @@ Operation IDs:
   assertion failure abort shims. Unsafe operations read caller-proven C strings,
   call platform diagnostic output, preserve the test abort fixture, and abort
   without unwinding.
-- `SAFETY[AUDIT:stats-counter-boundary]`: `src/allocator/stats.rs` owns stats
-  initialization and counter/count mutation helpers. Unsafe operations are
-  limited to POD zero initialization, checked bin indexes, and atomic counter
-  field access while preserving counter width and stat-level gating.
+- `SAFETY[AUDIT:stats-init-bin-boundary]`: `src/allocator/stats.rs` owns stats
+  initialization and bin-size access. Unsafe operations are limited to POD zero
+  initialization, checked bin indexes, and initialized stats-buffer witnesses.
+- `SAFETY[AUDIT:stats-counter-update-boundary]`:
+  `src/allocator/stats.rs` owns raw counter increment, decrement, and adjust
+  helpers. Unsafe operations are limited to atomic counter field access while
+  preserving counter width and stat-level gating.
+- `SAFETY[AUDIT:stats-counter-accumulate-boundary]`:
+  `src/allocator/stats.rs` owns raw stats counter add entrypoints and
+  accumulate helpers. Unsafe operations validate stats pointers before
+  delegating to the focused counter merge body.
 - `SAFETY[AUDIT:stats-counter-merge-boundary]`: `src/allocator/stats.rs` owns
   raw stats counter merge bodies and reset handoff. Unsafe operations are
   limited to validated stats pointers, non-null counter merges, bin stat
@@ -943,9 +975,22 @@ Operation IDs:
   callback routing. Unsafe operations are limited to JSON buffer allocation and
   free, C string buffer projection, callback writes, and heap stats witnesses
   while preserving buffer ownership and output bounds.
-- `SAFETY[AUDIT:owned-allocation]`: `src/safe/allocation.rs` owns non-zero
-  allocations through move-only wrappers. Slice views and copies are bounded by
-  the stored layout, and `Drop` releases live blocks exactly once.
+- `SAFETY[AUDIT:owned-allocation-traits-boundary]`:
+  `src/safe/allocation.rs` owns Send/Sync proofs and zero-sized sentinel
+  construction for owned allocation wrappers.
+- `SAFETY[AUDIT:owned-allocation-slice-boundary]`:
+  `src/safe/allocation.rs` owns unsafe uninitialized byte-slice views. Slice
+  projection is bounded by the stored layout and unique wrapper borrow.
+- `SAFETY[AUDIT:owned-allocation-resize-boundary]`:
+  `src/safe/allocation.rs` owns allocation, resize, copy, and drop ownership
+  transfer. Live blocks are released exactly once and failed resize preserves
+  the original owner.
+- `SAFETY[AUDIT:owned-initialized-allocation-boundary]`:
+  `src/safe/allocation.rs` owns initialized allocation wrapper proofs and byte
+  slice views after callers establish initialization.
+- `SAFETY[AUDIT:owned-allocation-test-fixtures]`: `src/safe/tests.rs` owns
+  local safe allocation fixtures for construction, initialization, resize,
+  drop, and raw escape hatch assertions.
 - `SAFETY[AUDIT:panic-boundary]`: `src/lib.rs` no-std panic handling and abort
   declarations terminate instead of unwinding across allocator or C ABI
   boundaries.
@@ -1018,10 +1063,22 @@ Operation IDs:
   array C++ delete compatibility symbols and sized array helper shims. Unsafe
   operations are limited to forwarding Itanium array-delete symbols to the
   matching allocator free path.
-- `SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]`: `src/raw/macros.rs` owns
-  aligned C++ new/delete compatibility symbols, including aligned nothrow and
-  operator helper variants. Unsafe operations are limited to preserving
-  `align_val_t` ABI signatures while forwarding to aligned allocator exports.
+- `SAFETY[AUDIT:raw-macro-cxx-aligned-delete-boundary]`:
+  `src/raw/macros.rs` owns aligned C++ delete compatibility symbols. Unsafe
+  operations preserve `align_val_t` delete ABI signatures while forwarding to
+  aligned allocator free exports.
+- `SAFETY[AUDIT:raw-macro-cxx-aligned-new64-boundary]`:
+  `src/raw/macros.rs` owns 64-bit Itanium aligned C++ new symbols. Unsafe
+  operations preserve pointer-width-specific `align_val_t` ABI signatures while
+  forwarding to aligned allocation exports.
+- `SAFETY[AUDIT:raw-macro-cxx-aligned-new32-boundary]`:
+  `src/raw/macros.rs` owns 32-bit Itanium aligned C++ new symbols. Unsafe
+  operations preserve pointer-width-specific `align_val_t` ABI signatures while
+  forwarding to aligned allocation exports.
+- `SAFETY[AUDIT:raw-macro-cxx-aligned-operator-boundary]`:
+  `src/raw/macros.rs` owns inline aligned C++ operator helper variants. Unsafe
+  operations preserve nothrow/aligned operator forwarding without adding Rust
+  ownership guarantees.
 - `SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]`: `src/raw/macros.rs` owns
   non-aligned nothrow C++ compatibility shims. Unsafe operations are limited to
   consuming the nothrow tag ABI and forwarding through null-returning allocation
@@ -1724,11 +1781,25 @@ Operation IDs:
   accessors. Unsafe operations are limited to arena memid, subproc, index,
   slice count, NUMA/exclusive flags, purge state, parent links, slice bitmaps,
   page metadata, and arena-page records while preserving arena table domains.
-- `SAFETY[AUDIT:typed-subproc-accessors]`: `src/types/ptr.rs` owns
-  `SubprocPtr` accessors. Unsafe operations are limited to sequence, arena
-  counters, arena table entries, reserve/heaps locks, main heap/heaps links,
-  thread and heap counters, memid, and stats pointer projection while
-  preserving atomic ordering wrappers.
+- `SAFETY[AUDIT:typed-subproc-identity-accessors]`: `src/types/ptr.rs` owns
+  `SubprocPtr` sequence accessors. Unsafe operations are limited to typed
+  subproc identity fields while preserving atomic ordering wrappers.
+- `SAFETY[AUDIT:typed-subproc-arena-accessors]`: `src/types/ptr.rs` owns
+  `SubprocPtr` arena counters, table entries, reserve locks, and purge fields.
+  Unsafe operations preserve arena table domains and allocator lock ownership.
+- `SAFETY[AUDIT:typed-subproc-heap-link-accessors]`:
+  `src/types/ptr.rs` owns `SubprocPtr` main heap, heap list, and heap-lock
+  accessors. Unsafe operations only project initialized heap linkage fields
+  through transparent non-null wrappers.
+- `SAFETY[AUDIT:typed-subproc-count-accessors]`: `src/types/ptr.rs` owns
+  `SubprocPtr` thread and heap count cells, loads, and stores. Unsafe
+  operations preserve typed atomic domains and ordering wrappers.
+- `SAFETY[AUDIT:typed-subproc-metadata-accessors]`:
+  `src/types/ptr.rs` owns `SubprocPtr` memid and stats pointer projection.
+  Unsafe operations keep metadata access behind transparent non-null wrappers.
+- `SAFETY[AUDIT:typed-subproc-fixture-touch-accessors]`:
+  `src/types/ptr.rs` owns lint-touch references that keep subproc accessors
+  visible to release-audit and unit-test fixtures.
 - `SAFETY[AUDIT:typed-page-queue-accessors]`: `src/types/ptr.rs` owns
   `PageQueuePtr` accessors. Unsafe operations are limited to queue first/last
   page links, queue counts, optional block-size domains, and lint-touch
@@ -1769,11 +1840,18 @@ Operation IDs:
   `src/types/ptr/tests.rs` uses stack-local byte buffers plus non-dereferenced
   extreme or dangling pointer witnesses to exercise checked page/slice/OS
   pointer offsets and exposed-address provenance helpers.
-- `SAFETY[AUDIT:typed-scalar-test-fixtures]`:
+- `SAFETY[AUDIT:typed-scalar-arithmetic-test-fixtures]`:
   `src/types/scalar/tests.rs` uses concrete raw scalar values to exercise
-  unchecked constructor boundaries, overflow reporting, and table-index
-  domains. The fixtures never allocate, touch allocator metadata, or escape
-  the assertion that constructs them.
+  arithmetic and overflow assertions.
+- `SAFETY[AUDIT:typed-scalar-unchecked-constructor-test-fixtures]`:
+  `src/types/scalar/tests.rs` uses concrete raw scalar values to exercise
+  unchecked constructor boundaries.
+- `SAFETY[AUDIT:typed-scalar-padding-test-fixtures]`:
+  `src/types/scalar/tests.rs` uses local padding and block-size fixtures.
+- `SAFETY[AUDIT:typed-scalar-index-boundary-test-fixtures]`:
+  `src/types/scalar/tests.rs` uses concrete table/bin indexes to exercise
+  bounded scalar domains. Scalar fixtures never allocate, touch allocator
+  metadata, or escape the assertion that constructs them.
 - `SAFETY[AUDIT:typed-page-test-fixtures]`: `src/types/page/tests.rs` builds
   stack-local page metadata and synthetic page-map range witnesses to exercise
   typed page wrapper accessors. The fixtures are not registered with allocator

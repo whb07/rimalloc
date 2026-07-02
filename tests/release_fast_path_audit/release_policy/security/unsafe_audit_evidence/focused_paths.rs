@@ -31,7 +31,10 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         "allocation-calloc-dispatch-boundary",
         "allocation-layout-request-boundary",
         "allocation-page-refill-boundary",
-        "page-free-list-refill-boundary",
+        "page-free-list-collect-boundary",
+        "page-free-list-extend-boundary",
+        "page-fresh-allocation-boundary",
+        "page-queue-search-refill-boundary",
         "page-queue-full-transition-boundary",
         "page-queue-free-release-boundary",
         "page-queue-retire-boundary",
@@ -83,6 +86,8 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         "tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs";
     const DATATYPE_FIXTURE_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs";
+    const STRICT_TYPE_FOCUSED_PATH: &str =
+        "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs";
     for audit_id in [
         "windows-virtual-memory-import-boundary",
         "windows-virtual-memory-config-boundary",
@@ -179,7 +184,16 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
     for (audit_id, focused_path) in [
         ("raw-macro-cxx-delete-boundary", RAW_CXX_FOCUSED_PATH),
         ("raw-macro-cxx-array-delete-boundary", RAW_CXX_FOCUSED_PATH),
-        ("raw-macro-cxx-aligned-boundary", RAW_CXX_FOCUSED_PATH),
+        (
+            "raw-macro-cxx-aligned-delete-boundary",
+            RAW_CXX_FOCUSED_PATH,
+        ),
+        ("raw-macro-cxx-aligned-new64-boundary", RAW_CXX_FOCUSED_PATH),
+        ("raw-macro-cxx-aligned-new32-boundary", RAW_CXX_FOCUSED_PATH),
+        (
+            "raw-macro-cxx-aligned-operator-boundary",
+            RAW_CXX_FOCUSED_PATH,
+        ),
         ("raw-macro-cxx-nothrow-boundary", RAW_CXX_FOCUSED_PATH),
         ("raw-macro-cxx-new-boundary", RAW_CXX_FOCUSED_PATH),
         (
@@ -262,7 +276,15 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
             EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH,
         ),
         (
-            "stats-counter-boundary",
+            "stats-init-bin-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "stats-counter-update-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "stats-counter-accumulate-boundary",
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
         ),
         (
@@ -331,40 +353,27 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         ),
         (
             "typed-pointer-constructor-boundary",
-            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+            STRICT_TYPE_FOCUSED_PATH,
         ),
+        ("typed-page-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-block-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-heap-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-thread-heap-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-tld-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-arena-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-subproc-identity-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-subproc-arena-accessors", STRICT_TYPE_FOCUSED_PATH),
         (
-            "typed-page-accessors",
-            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+            "typed-subproc-heap-link-accessors",
+            STRICT_TYPE_FOCUSED_PATH,
         ),
+        ("typed-subproc-count-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-subproc-metadata-accessors", STRICT_TYPE_FOCUSED_PATH),
         (
-            "typed-block-accessors",
-            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+            "typed-subproc-fixture-touch-accessors",
+            STRICT_TYPE_FOCUSED_PATH,
         ),
-        (
-            "typed-heap-accessors",
-            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
-        ),
-        (
-            "typed-thread-heap-accessors",
-            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
-        ),
-        (
-            "typed-tld-accessors",
-            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
-        ),
-        (
-            "typed-arena-accessors",
-            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
-        ),
-        (
-            "typed-subproc-accessors",
-            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
-        ),
-        (
-            "typed-page-queue-accessors",
-            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
-        ),
+        ("typed-page-queue-accessors", STRICT_TYPE_FOCUSED_PATH),
     ] {
         assert_focused_evidence(audit_id, focused_path);
     }

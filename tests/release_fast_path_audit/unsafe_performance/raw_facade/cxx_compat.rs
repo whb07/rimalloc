@@ -11,7 +11,10 @@ pub(super) fn assert_cxx_compatibility_boundaries(sources: &UnsafePerformanceSou
     for (audit_id, min_count) in [
         ("raw-macro-cxx-delete-boundary", 3),
         ("raw-macro-cxx-array-delete-boundary", 3),
-        ("raw-macro-cxx-aligned-boundary", 29),
+        ("raw-macro-cxx-aligned-delete-boundary", 8),
+        ("raw-macro-cxx-aligned-new64-boundary", 6),
+        ("raw-macro-cxx-aligned-new32-boundary", 6),
+        ("raw-macro-cxx-aligned-operator-boundary", 9),
         ("raw-macro-cxx-nothrow-boundary", 7),
         ("raw-macro-cxx-new-boundary", 4),
     ] {
@@ -21,6 +24,10 @@ pub(super) fn assert_cxx_compatibility_boundaries(sources: &UnsafePerformanceSou
             "C++ raw facade boundary {audit_id} should retain at least {min_count} local operation markers"
         );
     }
+    assert!(
+        !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]"),
+        "aligned C++ raw facade markers should stay split by delete, pointer-width new, and operator helpers"
+    );
     for symbol in [
         "pub static _mi_cxx_interposes: [mi_interpose_s; 8]",
         "unsafe(export_name = \"_ZdlPv\")",

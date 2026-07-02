@@ -75,8 +75,9 @@ formatting, panic, lock, or syscall behavior to allocator critical paths.
 ## Audit Tags And Evidence
 
 Unsafe subsystems are tracked with `SAFETY[AUDIT:*]` tags such as
-`global-alloc`, `owned-allocation`, `safe-heap`, `unsafe-callback`,
-`ffi-export`, `raw-macro-boundary`, `panic-boundary`, and `raw-auto-trait`.
+`global-alloc`, `owned-allocation-resize-boundary`, `safe-heap`,
+`unsafe-callback`, `ffi-export`, `raw-macro-boundary`, `panic-boundary`, and
+`raw-auto-trait`.
 `docs/unsafe-audit.md` explains the current proof obligations, and
 `docs/unsafe-audit-evidence.tsv` maps tags to tests, scripts, Miri,
 sanitizers, benchmark evidence, or assembly evidence.

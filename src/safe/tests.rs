@@ -59,7 +59,7 @@ fn owned_allocation_covers_sizes_and_alignments() {
 #[test]
 fn zeroed_allocation_returns_zeroed_bytes() {
     let allocation = Allocation::zeroed_with_size_align(32, 8).expect("allocation");
-    // SAFETY[AUDIT:owned-allocation]: the zeroed allocation is live for
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: the zeroed allocation is live for
     // its stored length and is only read during this test.
     let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
     assert!(bytes.iter().all(|byte| *byte == 0));
@@ -78,7 +78,7 @@ fn zeroed_allocation_covers_sizes_and_alignments() {
             assert_eq!(allocation.layout().align(), align);
             assert_eq!(allocation.as_ptr() as usize % align, 0);
 
-            // SAFETY[AUDIT:owned-allocation]: each zeroed allocation is
+            // SAFETY[AUDIT:owned-allocation-test-fixtures]: each zeroed allocation is
             // live for its stored length and is only read during this test.
             let bytes =
                 unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
@@ -96,12 +96,12 @@ fn uninitialized_allocation_can_be_written_before_unsafe_read() {
     );
 
     for i in 0..allocation.len() {
-        // SAFETY[AUDIT:owned-allocation]: `i` stays within the allocation
+        // SAFETY[AUDIT:owned-allocation-test-fixtures]: `i` stays within the allocation
         // length and the test owns unique mutable access.
         unsafe { allocation.as_mut_ptr().add(i).write((i % 251) as u8) };
     }
 
-    // SAFETY[AUDIT:owned-allocation]: every byte was initialized by the
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: every byte was initialized by the
     // loop above and the allocation remains live for its stored length.
     let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
     assert_eq!(bytes[0], 0);
@@ -116,7 +116,7 @@ fn maybe_uninit_allocation_views_initialize_without_raw_pointer_loop() {
         slot.write((idx + 1) as u8);
     }
 
-    // SAFETY[AUDIT:owned-allocation]: the loop above initializes every
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: the loop above initializes every
     // byte in the allocation before the initialized transition.
     let initialized = unsafe { allocation.assume_initialized() };
     assert_eq!(initialized.as_bytes(), &[1, 2, 3, 4, 5, 6, 7, 8]);
@@ -168,13 +168,13 @@ fn byte_allocation_constructors_use_alignment_one() {
 fn allocation_is_move_only_and_drops_once() {
     let mut allocation = Allocation::with_size_align(64, 16).expect("allocation");
     let ptr = allocation.as_mut_ptr();
-    // SAFETY[AUDIT:owned-allocation]: the allocation is live, uniquely
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: the allocation is live, uniquely
     // owned, and large enough for one byte.
     unsafe { ptr.write(42) };
 
     let moved = allocation;
     assert_eq!(moved.as_ptr(), ptr.cast_const());
-    // SAFETY[AUDIT:owned-allocation]: `moved` still owns the live
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: `moved` still owns the live
     // allocation and the first byte was initialized above.
     assert_eq!(unsafe { moved.as_ptr().read() }, 42);
 }
@@ -260,21 +260,21 @@ fn allocation_resize_grow_shrink_same_and_zero_edges() {
     let layout = Layout::from_size_align(16, 8).expect("layout");
     let mut allocation = Allocation::new(layout).expect("allocation");
     for idx in 0..allocation.len() {
-        // SAFETY[AUDIT:owned-allocation]: `idx` stays within the live
+        // SAFETY[AUDIT:owned-allocation-test-fixtures]: `idx` stays within the live
         // allocation and the test owns unique mutable access.
         unsafe { allocation.as_mut_ptr().add(idx).write(idx as u8) };
     }
 
     let grown_layout = Layout::from_size_align(64, 8).expect("layout");
     let grown = allocation.resize(grown_layout).expect("grow");
-    // SAFETY[AUDIT:owned-allocation]: the grown allocation is live and the
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: the grown allocation is live and the
     // prefix length is the initialized prefix written above.
     let grown_bytes = unsafe { core::slice::from_raw_parts(grown.as_ptr(), 16) };
     assert_eq!(grown_bytes, (0u8..16).collect::<Vec<_>>().as_slice());
 
     let shrunk_layout = Layout::from_size_align(8, 8).expect("layout");
     let shrunk = grown.resize(shrunk_layout).expect("shrink");
-    // SAFETY[AUDIT:owned-allocation]: the shrunk allocation is live and
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: the shrunk allocation is live and
     // the requested prefix is within the new layout.
     let shrunk_bytes = unsafe { core::slice::from_raw_parts(shrunk.as_ptr(), 8) };
     assert_eq!(shrunk_bytes, (0u8..8).collect::<Vec<_>>().as_slice());
@@ -339,11 +339,11 @@ fn initialized_allocation_exposes_safe_slices_and_clone() {
 fn uninitialized_allocation_requires_explicit_initialization() {
     let mut allocation = Allocation::with_size_align(8, 8).expect("allocation");
     for idx in 0..allocation.len() {
-        // SAFETY[AUDIT:owned-allocation]: `idx` stays within the live
+        // SAFETY[AUDIT:owned-allocation-test-fixtures]: `idx` stays within the live
         // allocation and the test owns unique mutable access.
         unsafe { allocation.as_mut_ptr().add(idx).write((idx + 1) as u8) };
     }
-    // SAFETY[AUDIT:owned-allocation]: the loop above initializes every
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: the loop above initializes every
     // byte before the initialized transition.
     let initialized = unsafe { allocation.assume_initialized() };
     assert_eq!(initialized.as_bytes(), &[1, 2, 3, 4, 5, 6, 7, 8]);
@@ -389,7 +389,7 @@ fn deterministic_resize_failure_preserves_original_allocation() {
     assert!(matches!(err.kind(), ResizeErrorKind::Alloc(_)));
     assert_eq!(err.allocation().layout(), old_layout);
     let allocation = err.into_allocation();
-    // SAFETY[AUDIT:owned-allocation]: failed resize preserves the original
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: failed resize preserves the original
     // live allocation and all bytes were initialized before the failure.
     let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
     assert_eq!(bytes, &[1, 2, 3, 4, 5, 6, 7, 8]);
@@ -505,7 +505,7 @@ fn deterministic_heap_allocation_failure_preserves_heap_ownership() {
 #[test]
 fn raw_product_allocation_failure_is_deterministic_and_null_returning() {
     let _quiet_expected_errors = ShowErrorsGuard::disabled();
-    // SAFETY[AUDIT:owned-allocation]: this test calls raw allocation
+    // SAFETY[AUDIT:owned-allocation-test-fixtures]: this test calls raw allocation
     // entrypoints with overflow requests and asserts their null-return
     // failure contract without dereferencing returned pointers.
     unsafe {

@@ -156,7 +156,7 @@ impl Default for mi_stats_t {
 /// `stats` must point to a valid writable `mi_stats_t`.
 pub unsafe fn mi_stats_header_init(stats: *mut mi_stats_t) {
     // SAFETY: caller guarantees `stats` is a valid writable `mi_stats_t`.
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-init-bin-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         (*stats).size = core::mem::size_of::<mi_stats_t>();
         (*stats).version = MI_STAT_VERSION;
@@ -167,14 +167,14 @@ pub unsafe fn mi_stats_header_init(stats: *mut mi_stats_t) {
 /// `stats` must point to a valid writable `mi_stats_t`.
 pub unsafe fn mi_stats_init(stats: *mut mi_stats_t) {
     // SAFETY: caller guarantees `stats` is a valid writable `mi_stats_t`.
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-init-bin-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         ptr::write_bytes(stats, 0, 1);
         mi_stats_header_init(stats);
     }
 }
 
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-init-bin-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
     let Some(typed_bin) = u16::try_from(bin).ok().and_then(StatsBin::new) else {
@@ -195,7 +195,7 @@ fn mi_stats_get_bin_size_typed(bin: StatsBin) -> StatBinSize {
 fn initialized_stats() -> mi_stats_t {
     let mut stats = mi_stats_t::default();
     // SAFETY: `stats` is a fresh writable `mi_stats_t`.
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-init-bin-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_init(&mut stats) };
     stats
 }
@@ -205,7 +205,7 @@ fn mi_stat_update_mt(stat: &mut mi_stat_count_t, amount: i64) {
         return;
     }
     // SAFETY: `stat` points to valid `i64` fields and these helpers operate atomically on them.
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         let current = mi_atomic_addi64_relaxed(&mut stat.current, amount);
         mi_atomic_maxi64_relaxed(&mut stat.peak, current + amount);
@@ -230,14 +230,14 @@ fn mi_stat_update(stat: &mut mi_stat_count_t, amount: i64) {
 
 /// # Safety
 /// `stat` must point to valid writable counter storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_counter_increase_mt(
     stat: *mut mi_stat_counter_t,
     amount: usize,
 ) {
     // SAFETY: `stat.total` is a valid atomic-compatible `i64` storage location.
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).total), amount as i64);
     }
@@ -245,13 +245,13 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase_mt(
 
 /// # Safety
 /// `stat` must point to valid writable counter storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
     stat: *mut mi_stat_counter_t,
     amount: usize,
 ) {
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         (*stat).total += amount as i64;
     }
@@ -259,37 +259,37 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_increase_mt(stat: *mut mi_stat_count_t, amount: usize) {
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_update_mt(unsafe { &mut *stat }, amount as i64);
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_increase(stat: *mut mi_stat_count_t, amount: usize) {
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_update(unsafe { &mut *stat }, amount as i64);
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_decrease_mt(stat: *mut mi_stat_count_t, amount: usize) {
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_update_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_decrease(stat: *mut mi_stat_count_t, amount: usize) {
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_update(unsafe { &mut *stat }, -(amount as i64));
 }
 
@@ -298,7 +298,7 @@ fn mi_stat_adjust_mt(stat: &mut mi_stat_count_t, amount: i64) {
         return;
     }
     // SAFETY: `stat` points to valid `i64` fields and these helpers operate atomically on them.
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_atomic_addi64_relaxed(&mut stat.current, amount);
         mi_atomic_addi64_relaxed(&mut stat.total, amount);
@@ -315,54 +315,54 @@ fn mi_stat_adjust(stat: &mut mi_stat_count_t, amount: i64) {
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase_mt(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_adjust_mt(unsafe { &mut *stat }, amount as i64);
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_adjust(unsafe { &mut *stat }, amount as i64);
 }
 
 #[used]
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 static MI_STAT_ADJUST_INCREASE_KEEP: unsafe extern "C" fn(*mut mi_stat_count_t, usize) =
     __mi_stat_adjust_increase;
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease_mt(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_adjust_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-update-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_adjust(unsafe { &mut *stat }, -(amount as i64));
 }
 
@@ -371,7 +371,7 @@ fn mi_stat_count_add_mt(stat: *mut mi_stat_count_t, src: *const mi_stat_count_t)
         return;
     }
     // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-accumulate-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_atomic_void_addi64_relaxed(
             ptr::addr_of_mut!((*stat).total),
@@ -388,7 +388,7 @@ fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_coun
         return;
     }
     // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
-    // SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-accumulate-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_atomic_void_addi64_relaxed(
             ptr::addr_of_mut!((*stat).total),
@@ -397,7 +397,7 @@ fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_coun
     }
 }
 
-// SAFETY[AUDIT:stats-counter-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-accumulate-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {

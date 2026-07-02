@@ -10,7 +10,9 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
     } = sources;
 
     let focused_markers = [
-        "SAFETY[AUDIT:arena-slice-boundary]",
+        "SAFETY[AUDIT:arena-slice-geometry-boundary]",
+        "SAFETY[AUDIT:arena-slice-containment-boundary]",
+        "SAFETY[AUDIT:arena-slice-layout-boundary]",
         "SAFETY[AUDIT:arena-registry-count-index-boundary]",
         "SAFETY[AUDIT:arena-heap-page-table-boundary]",
         "SAFETY[AUDIT:arena-registry-start-index-boundary]",
@@ -18,7 +20,9 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
         "SAFETY[AUDIT:arena-registry-iteration-boundary]",
         "SAFETY[AUDIT:arena-registry-destroy-boundary]",
         "SAFETY[AUDIT:arena-registry-add-boundary]",
-        "SAFETY[AUDIT:arena-slice-allocation-boundary]",
+        "SAFETY[AUDIT:arena-slice-commit-boundary]",
+        "SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]",
+        "SAFETY[AUDIT:arena-slice-allocation-dispatch-boundary]",
         "SAFETY[AUDIT:arena-initialization-boundary]",
         "SAFETY[AUDIT:arena-reserve-growth-boundary]",
         "SAFETY[AUDIT:arena-os-fallback-boundary]",
@@ -46,7 +50,9 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
         .map(|marker| arena_rs.matches(marker).count())
         .sum::<usize>();
     for (audit_id, min_count) in [
-        ("arena-slice-boundary", 31),
+        ("arena-slice-geometry-boundary", 11),
+        ("arena-slice-containment-boundary", 13),
+        ("arena-slice-layout-boundary", 7),
         ("arena-registry-count-index-boundary", 6),
         ("arena-heap-page-table-boundary", 5),
         ("arena-registry-start-index-boundary", 3),
@@ -54,7 +60,9 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
         ("arena-registry-iteration-boundary", 4),
         ("arena-registry-destroy-boundary", 6),
         ("arena-registry-add-boundary", 10),
-        ("arena-slice-allocation-boundary", 30),
+        ("arena-slice-commit-boundary", 3),
+        ("arena-slice-allocation-bitmaps-boundary", 21),
+        ("arena-slice-allocation-dispatch-boundary", 6),
         ("arena-initialization-boundary", 17),
         ("arena-reserve-growth-boundary", 11),
         ("arena-os-fallback-boundary", 15),
@@ -93,6 +101,8 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
             && !arena_rs.contains("SAFETY[AUDIT:arena-page-lifecycle-boundary]")
             && !arena_rs.contains("SAFETY[AUDIT:arena-registry-boundary]")
             && !arena_rs.contains("SAFETY[AUDIT:arena-purge-boundary]")
+            && !arena_rs.contains("SAFETY[AUDIT:arena-slice-boundary]")
+            && !arena_rs.contains("SAFETY[AUDIT:arena-slice-allocation-boundary]")
             && marker_total >= 340
             && focused_markers
                 .into_iter()

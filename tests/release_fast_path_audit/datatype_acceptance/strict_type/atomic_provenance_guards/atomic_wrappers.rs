@@ -56,11 +56,13 @@ pub(super) fn assert_atomic_wrapper_guards(audit_sources: &DatatypeAcceptanceSou
     assert!(
         strict_check_rs.contains("REMOVE_ENTRY_CAP = 0")
             && !allowlist_rs.contains("bare-domain-usize|src/allocator/aligned.rs|*|usize|")
+            && !allowlist_rs
+                .contains("bare-domain-usize|src/allocator/aligned/thread_heap.rs|*|usize|")
             && allowlist_rs.contains(
                 "bare-domain-usize|src/allocator/aligned.rs|aligned_layout_or_report|usize|"
             )
             && allowlist_rs.contains(
-                "bare-domain-usize|src/allocator/aligned.rs|mi_theap_malloc_zero_aligned_at|usize|"
+                "bare-domain-usize|src/allocator/aligned/thread_heap.rs|mi_theap_malloc_zero_aligned_at|usize|"
             )
             && allowlist_rs.contains(
                 "bare-domain-usize|src/allocator/aligned.rs|mi_theap_recalloc_aligned|usize|"

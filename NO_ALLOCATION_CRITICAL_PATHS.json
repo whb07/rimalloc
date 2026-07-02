@@ -2,11 +2,11 @@
   "critical_paths": [
     {
       "entrypoint": "mi_malloc",
-      "file": "src/allocator/alloc.rs"
+      "file": "src/allocator/alloc/public_malloc.rs"
     },
     {
       "entrypoint": "mi_malloc_small",
-      "file": "src/allocator/alloc.rs"
+      "file": "src/allocator/alloc/public_malloc.rs"
     },
     {
       "entrypoint": "mi_calloc",
@@ -18,7 +18,7 @@
     },
     {
       "entrypoint": "mi_heap_malloc",
-      "file": "src/allocator/alloc.rs"
+      "file": "src/allocator/alloc/public_malloc.rs"
     },
     {
       "entrypoint": "mi_zalloc_aligned",

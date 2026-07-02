@@ -15,7 +15,7 @@ use crate::internal::{
     mi_page_start, mi_page_usable_block_size, mi_theap_is_initialized, mi_theap_malloc_use_guarded,
     mi_unlikely,
 };
-use crate::mimalloc::{mi_free, mi_malloc_aligned};
+use crate::mimalloc::mi_free;
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
     _mi_malloc_generic_typed, _mi_theap_or_default_typed, MI_MAX_ALLOC_SIZE, mi_bin_from_usable,
@@ -31,17 +31,25 @@ use crate::types::{
 };
 
 mod cxx_new;
+mod public_malloc;
 mod string_path;
+#[allow(unused_imports)]
+pub use cxx_new::{
+    mi_heap_alloc_new, mi_heap_alloc_new_n, mi_new, mi_new_aligned, mi_new_aligned_nothrow,
+    mi_new_n, mi_new_nothrow, mi_new_realloc, mi_new_reallocn,
+};
+#[allow(unused_imports)]
+pub(crate) use cxx_new::{mi_theap_alloc_new, mi_theap_try_new};
+#[allow(unused_imports)]
+pub use public_malloc::{
+    mi_heap_malloc, mi_heap_malloc_small, mi_heap_zalloc_small, mi_malloc, mi_malloc_small,
+    mi_theap_malloc, mi_theap_malloc_small, mi_theap_zalloc_small, mi_zalloc_small,
+};
 #[cfg(all(unix, not(target_os = "wasi")))]
 #[allow(unused_imports)]
 pub use string_path::{mi_heap_realpath, mi_realpath, mi_theap_realpath};
 #[allow(unused_imports)]
 pub use string_path::{mi_heap_strdup, mi_heap_strndup, mi_strdup, mi_strndup};
-
-// SAFETY[AUDIT:allocation-platform-shim-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-unsafe extern "C" {
-    fn abort() -> !;
-}
 
 pub const _DEFAULT_SOURCE: () = ();
 
@@ -455,51 +463,6 @@ unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapL
     }
 }
 
-/// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
-    unsafe {
-        mi_theap_malloc_small_zero(
-            _mi_theap_default(),
-            crate::core_types::RequestedSize::new(size),
-            crate::core_types::Zeroed::No,
-            ptr::null_mut(),
-        )
-    }
-}
-
-/// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
-    unsafe {
-        mi_theap_malloc_small_zero(
-            theap,
-            crate::core_types::RequestedSize::new(size),
-            crate::core_types::Zeroed::No,
-            ptr::null_mut(),
-        )
-    }
-}
-
-/// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return ptr::null_mut();
-        };
-        let size = crate::core_types::RequestedSize::new(size);
-        mi_heap_malloc_small_typed(heap, size)
-    }
-}
-
 unsafe fn mi_heap_malloc_small_typed(
     heap: BorrowedHeap,
     size: crate::core_types::RequestedSize,
@@ -657,56 +620,12 @@ static MI_THEAP_MALLOC_ZERO_KEEP: unsafe extern "C" fn(
     *mut usize,
 ) -> *mut c_void = _mi_theap_malloc_zero;
 
-/// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
-    unsafe {
-        if theap.is_null() && MI_THEAP_INITASNULL {
-            return _mi_theap_malloc_zero(theap, size, false, ptr::null_mut());
-        }
-        let Some(layout) = malloc_layout_or_report(size, false) else {
-            return ptr::null_mut();
-        };
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_malloc_typed(ThreadHeapLocal::new_unchecked(theap), layout)
-    }
-}
-
 unsafe fn mi_theap_malloc_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
     // SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
     unsafe { _mi_theap_malloc_zero_typed(theap, layout, ptr::null_mut()) }
-}
-
-/// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
-#[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
-pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
-    unsafe { mi_theap_malloc(_mi_theap_default(), size) }
-}
-
-/// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return ptr::null_mut();
-        };
-        let Ok(layout) = crate::core_types::LayoutRequest::malloc(size) else {
-            return core::ptr::null_mut();
-        };
-        mi_heap_malloc_typed(heap, layout)
-    }
 }
 
 unsafe fn mi_heap_malloc_typed(
@@ -719,62 +638,6 @@ unsafe fn mi_heap_malloc_typed(
             return ptr::null_mut();
         };
         mi_theap_malloc_typed(theap, layout)
-    }
-}
-
-/// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
-    unsafe {
-        mi_theap_malloc_small_zero(
-            _mi_theap_default(),
-            crate::core_types::RequestedSize::new(size),
-            crate::core_types::Zeroed::Yes,
-            ptr::null_mut(),
-        )
-    }
-}
-
-/// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
-    unsafe {
-        if theap.is_null() && MI_THEAP_INITASNULL {
-            return mi_theap_malloc_small_zero(
-                theap,
-                crate::core_types::RequestedSize::new(size),
-                crate::core_types::Zeroed::Yes,
-                ptr::null_mut(),
-            );
-        }
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_malloc_small_zero_typed(
-            ThreadHeapLocal::new_unchecked(theap),
-            crate::core_types::RequestedSize::new(size),
-            crate::core_types::Zeroed::Yes,
-            ptr::null_mut(),
-        )
-    }
-}
-
-/// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_heap_zalloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return ptr::null_mut();
-        };
-        let size = crate::core_types::RequestedSize::new(size);
-        mi_heap_zalloc_small_typed(heap, size)
     }
 }
 
@@ -1944,336 +1807,6 @@ unsafe fn mi_heap_recalloc_typed(
         mi_theap_recalloc(theap, req, realloc_req)
     }
 }
-
-// SAFETY[AUDIT:allocation-cxx-new-handler-boundary]: C++ new-handler lookup and invocation preserve platform ABI and abort/nothrow policy.
-type StdNewHandler = Option<unsafe extern "C" fn()>;
-
-#[cfg(all(unix, not(target_os = "wasi")))]
-unsafe fn mi_get_new_handler() -> StdNewHandler {
-    unsafe {
-        // SAFETY[AUDIT:allocation-cxx-new-handler-boundary]: C++ new-handler lookup and invocation preserve platform ABI and abort/nothrow policy.
-        // lookup preserves the platform ABI function-pointer shape.
-        type GetNewHandler = unsafe extern "C" fn() -> StdNewHandler;
-
-        // SAFETY[AUDIT:allocation-cxx-new-handler-boundary]: C++ new-handler lookup and invocation preserve platform ABI and abort/nothrow policy.
-        unsafe extern "C" {
-            fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
-        }
-
-        let symbol = dlsym(ptr::null_mut(), c"_ZSt15get_new_handlerv".as_ptr());
-        if symbol.is_null() {
-            None
-        } else {
-            let get_new_handler = core::mem::transmute::<*mut c_void, GetNewHandler>(symbol);
-            get_new_handler()
-        }
-    }
-}
-
-#[cfg(not(all(unix, not(target_os = "wasi"))))]
-#[allow(non_snake_case)]
-unsafe fn _ZSt15get_new_handlerv() -> StdNewHandler {
-    None
-}
-
-#[cfg(not(all(unix, not(target_os = "wasi"))))]
-unsafe fn mi_get_new_handler() -> StdNewHandler {
-    _ZSt15get_new_handlerv()
-}
-
-unsafe fn mi_try_new_handler(nothrow: bool) -> bool {
-    // SAFETY[AUDIT:allocation-cxx-new-handler-boundary]: C++ new-handler lookup and invocation preserve platform ABI and abort/nothrow policy.
-    unsafe {
-        let h = mi_get_new_handler();
-        if let Some(h) = h {
-            h();
-            true
-        } else {
-            _mi_error_message_fmt(Errno::ENOMEM, format_args!("out of memory in 'new'"));
-            if !nothrow {
-                abort();
-            }
-            false
-        }
-    }
-}
-
-// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn mi_theap_try_new(
-    theap: *mut mi_theap_t,
-    size: usize,
-    nothrow: bool,
-) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
-    unsafe {
-        let mut p = mi_theap_malloc(theap, size);
-        while p.is_null() && mi_try_new_handler(nothrow) {
-            p = mi_theap_malloc(theap, size);
-        }
-        p
-    }
-}
-
-// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
-#[inline(never)]
-unsafe extern "C" fn mi_try_new(size: usize, nothrow: bool) -> *mut c_void {
-    unsafe { mi_theap_try_new(_mi_theap_default(), size, nothrow) }
-}
-
-unsafe fn mi_heap_try_new_typed(
-    heap: BorrowedHeap,
-    size: crate::core_types::RequestedSize,
-    nothrow: bool,
-) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
-    unsafe {
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_try_new(theap.ptr().as_ptr(), size.get(), nothrow)
-    }
-}
-
-// SAFETY[AUDIT:allocation-cxx-new-public-boundary]: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
-pub(crate) unsafe extern "C" fn mi_theap_alloc_new(
-    theap: *mut mi_theap_t,
-    size: usize,
-) -> *mut c_void {
-    unsafe {
-        let p = mi_theap_malloc(theap, size);
-        if mi_unlikely(p.is_null()) {
-            mi_theap_try_new(theap, size, false)
-        } else {
-            p
-        }
-    }
-}
-
-/// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-public-boundary]: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
-    unsafe { mi_theap_alloc_new(_mi_theap_default(), size) }
-}
-
-/// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-public-boundary]: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_heap_alloc_new(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return ptr::null_mut();
-        };
-        let size = crate::core_types::RequestedSize::new(size);
-        mi_heap_alloc_new_typed(heap, size)
-    }
-}
-
-unsafe fn mi_heap_alloc_new_typed(
-    heap: BorrowedHeap,
-    size: crate::core_types::RequestedSize,
-) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-public-boundary]: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
-    unsafe {
-        let Ok(layout) = crate::core_types::LayoutRequest::malloc(size.get()) else {
-            return mi_heap_try_new_typed(heap, size, false);
-        };
-        let p = mi_heap_malloc_typed(heap, layout);
-        if mi_unlikely(p.is_null()) {
-            mi_heap_try_new_typed(heap, size, false)
-        } else {
-            p
-        }
-    }
-}
-
-unsafe fn mi_theap_alloc_new_n(
-    theap: *mut mi_theap_t,
-    req: crate::core_types::AllocProduct,
-) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
-    unsafe { mi_theap_alloc_new(theap, req.total().get()) }
-}
-
-/// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_new_n(count: usize, size: usize) -> *mut c_void {
-    unsafe {
-        match alloc_product_or_report(count, size) {
-            Some(req) => mi_theap_alloc_new_n(_mi_theap_default(), req),
-            None => {
-                mi_try_new_handler(false);
-                ptr::null_mut()
-            }
-        }
-    }
-}
-
-/// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_heap_alloc_new_n(
-    heap: *mut mi_heap_t,
-    count: usize,
-    size: usize,
-) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return ptr::null_mut();
-        };
-        match alloc_product_or_report(count, size) {
-            Some(req) => mi_heap_alloc_new_n_typed(heap, req),
-            None => {
-                mi_try_new_handler(false);
-                ptr::null_mut()
-            }
-        }
-    }
-}
-
-unsafe fn mi_heap_alloc_new_n_typed(
-    heap: BorrowedHeap,
-    req: crate::core_types::AllocProduct,
-) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
-    unsafe {
-        let p = mi_heap_malloc_typed(heap, req.layout());
-        if mi_unlikely(p.is_null()) {
-            mi_heap_try_new_typed(heap, req.total(), false)
-        } else {
-            p
-        }
-    }
-}
-
-/// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
-    unsafe {
-        let p = mi_malloc(size);
-        if mi_unlikely(p.is_null()) {
-            mi_try_new(size, true)
-        } else {
-            p
-        }
-    }
-}
-
-/// # Safety
-/// `alignment` must be valid for the aligned allocation API. Returned memory must be released
-/// through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_new_aligned(size: usize, alignment: usize) -> *mut c_void {
-    unsafe {
-        let Some(alignment) = alignment_or_report(size, alignment) else {
-            return ptr::null_mut();
-        };
-        mi_new_aligned_typed(crate::core_types::RequestedSize::new(size), alignment)
-    }
-}
-
-unsafe fn mi_new_aligned_typed(
-    size: crate::core_types::RequestedSize,
-    alignment: crate::core_types::Alignment,
-) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
-    unsafe {
-        let mut p: *mut c_void;
-        loop {
-            p = mi_malloc_aligned(size.get(), alignment.get());
-            if !p.is_null() || !mi_try_new_handler(false) {
-                return p;
-            }
-        }
-    }
-}
-
-/// # Safety
-/// `alignment` must be valid for the aligned allocation API. Returned memory must be released
-/// through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_new_aligned_nothrow(size: usize, alignment: usize) -> *mut c_void {
-    unsafe {
-        let Some(alignment) = alignment_or_report(size, alignment) else {
-            return ptr::null_mut();
-        };
-        mi_new_aligned_nothrow_typed(crate::core_types::RequestedSize::new(size), alignment)
-    }
-}
-
-unsafe fn mi_new_aligned_nothrow_typed(
-    size: crate::core_types::RequestedSize,
-    alignment: crate::core_types::Alignment,
-) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
-    unsafe {
-        let mut p: *mut c_void;
-        loop {
-            p = mi_malloc_aligned(size.get(), alignment.get());
-            if !p.is_null() || !mi_try_new_handler(true) {
-                return p;
-            }
-        }
-    }
-}
-
-/// # Safety
-/// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-realloc-boundary]: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_new_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
-    unsafe {
-        let mut q: *mut c_void;
-        loop {
-            q = mi_realloc(p, newsize);
-            if !q.is_null() || !mi_try_new_handler(false) {
-                return q;
-            }
-        }
-    }
-}
-
-/// # Safety
-/// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-realloc-boundary]: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_new_reallocn(
-    p: *mut c_void,
-    newcount: usize,
-    size: usize,
-) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-realloc-boundary]: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
-    unsafe {
-        match alloc_product_or_report(newcount, size) {
-            Some(req) => mi_new_realloc(p, req.total().get()),
-            None => {
-                mi_try_new_handler(false);
-                ptr::null_mut()
-            }
-        }
-    }
-}
-
-// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
-#[used]
-static MI_THEAP_TRY_NEW_KEEP: unsafe extern "C" fn(*mut mi_theap_t, usize, bool) -> *mut c_void =
-    mi_theap_try_new;
-
-// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
-// shim function pointer shape for release-audit source checks.
-#[used]
-static MI_TRY_NEW_KEEP: unsafe extern "C" fn(usize, bool) -> *mut c_void = mi_try_new;
 
 unsafe fn mi_block_ptr_set_guarded(
     block: crate::core_types::GuardedBlock,

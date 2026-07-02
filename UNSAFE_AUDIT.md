@@ -44,9 +44,15 @@ Per-file review:
 - `src/allocator/alloc/cxx_new.rs`: explicit-heap C++ new retry compatibility
   shims validate raw heap pointers before invoking the typed retry/new-handler
   policy.
+- `src/allocator/alloc/public_malloc.rs`: public malloc, small-malloc, and heap
+  malloc wrappers normalize raw heap and thread-heap handles before delegating
+  to typed allocation helpers.
 - `src/alloc_aligned.rs`: aligned allocation/reallocation uses C-equivalent
   offset and alignment checks before computing adjusted pointers; the original
   allocation pointer is preserved through mimalloc metadata before free.
+- `src/allocator/aligned/thread_heap.rs`: thread-heap aligned
+  malloc/zalloc/calloc wrappers validate raw thread heaps and size/alignment
+  domains before request helpers and page fast paths.
 - `src/alloc_override.rs`: override shims expose C/C++ ABI entry points and
   forward to public allocation APIs. Unsafe operations are FFI boundary calls and
   symbol interposition wrappers; ownership remains with the allocator APIs.
@@ -121,6 +127,9 @@ Per-file review:
 - `src/internal/memid.rs`: raw memory-origin identifiers keep the C-compatible
   `mi_memid_t` layout and route construction/classification through
   `crate::core_types::MemId` typed views.
+- `src/internal/page_metadata.rs`: page block-size, TLD, and heap projections
+  convert caller-proven page pointers into typed page metadata domains before
+  returning C-compatible values.
 - `src/internal/page_flags.rs`: page flag, owner-id, availability, and
   thread-free accessors read allocator-owned page metadata through typed atomic
   page-thread-id and thread-free wrappers.
@@ -140,6 +149,10 @@ Per-file review:
   abandonment, and reclaim paths operate on pages selected by heap/theap queues
   and size classes. Encoded block links and thread-free state follow C page
   invariants.
+- `src/allocator/page/lifecycle.rs`: page lifecycle metadata, retire-expire
+  counters, remote/local free-list collection, and partial free-collect entry
+  points preserve page ownership and free-list invariants before queue or arena
+  release paths run.
 - `src/allocator/page/flags.rs`: page flag, full-queue, huge-page,
   abandoned-page, and thread-heap owner helpers route raw page metadata through
   typed page, flag, memid, and atomic owner wrappers.
@@ -185,6 +198,9 @@ Per-file review:
 - `src/raw/macros/header_forwarding.rs`: header-shaped raw forwarding helpers
   call caller-supplied C function pointers or raw allocator exports without
   adding Rust ownership guarantees.
+- `src/raw/macros/linux_libc.rs`: Linux libc forwarding helpers preserve the
+  platform ABI while forwarding malloc/calloc/realloc/free and aligned
+  allocation symbols to audited Unix or mimalloc entrypoints.
 - `src/safe.rs`: safe facade wrappers forward to raw allocator APIs while keeping
   unsafe pointer use at the boundary.
 - `src/safe/allocations.rs`, `src/safe/heaps.rs`, and `src/safe/stats.rs`:
@@ -497,9 +513,9 @@ Operation IDs:
   operations validate layouts, optional huge alignment, usable out-pointers,
   and generic fallback routing.
 - `SAFETY[AUDIT:allocation-public-malloc-boundary]`:
-  `src/allocator/alloc.rs` owns public malloc and heap malloc entrypoints.
-  Unsafe operations validate raw heap/thread-heap handles before typed
-  dispatch.
+  `src/allocator/alloc/public_malloc.rs` owns public malloc, small-malloc, and
+  heap malloc entrypoints. Unsafe operations validate raw heap/thread-heap
+  handles before typed dispatch.
 - `SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]`:
   `src/allocator/alloc.rs` owns zalloc entrypoints. Unsafe operations route
   typed zeroing layout requests without hidden Rust allocation or dynamic
@@ -540,24 +556,24 @@ Operation IDs:
   caching, heap/default thread-heap routing, and caller-owned output buffers
   while preserving realpath behavior.
 - `SAFETY[AUDIT:allocation-cxx-new-handler-boundary]`:
-  `src/allocator/alloc.rs` owns C++ new-handler lookup and invocation. Unsafe
-  operations preserve platform ABI function pointer shape and abort/nothrow
-  policy.
+  `src/allocator/alloc/cxx_new.rs` owns C++ new-handler lookup and invocation.
+  Unsafe operations preserve platform ABI function pointer shape and
+  abort/nothrow policy.
 - `SAFETY[AUDIT:allocation-cxx-new-try-boundary]`:
-  `src/allocator/alloc.rs` and `src/allocator/alloc/cxx_new.rs` own C++ new
-  retry helpers and retained function pointer shapes. Unsafe operations route
-  allocation failures through the new-handler policy.
+  `src/allocator/alloc/cxx_new.rs` owns C++ new retry helpers and retained
+  function pointer shapes. Unsafe operations route allocation failures through
+  the new-handler policy.
 - `SAFETY[AUDIT:allocation-cxx-new-public-boundary]`:
-  `src/allocator/alloc.rs` owns public C++ new entrypoints. Unsafe operations
-  validate heap/thread dispatch before retrying allocation failure.
+  `src/allocator/alloc/cxx_new.rs` owns public C++ new entrypoints. Unsafe
+  operations validate heap/thread dispatch before retrying allocation failure.
 - `SAFETY[AUDIT:allocation-cxx-new-product-boundary]`:
-  `src/allocator/alloc.rs` owns C++ new_n paths. Unsafe operations validate
+  `src/allocator/alloc/cxx_new.rs` owns C++ new_n paths. Unsafe operations validate
   checked products before typed allocation and retry dispatch.
 - `SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]`:
-  `src/allocator/alloc.rs` owns nothrow and aligned C++ new wrappers. Unsafe
+  `src/allocator/alloc/cxx_new.rs` owns nothrow and aligned C++ new wrappers. Unsafe
   operations preserve alignment validation and retry policy.
 - `SAFETY[AUDIT:allocation-cxx-new-realloc-boundary]`:
-  `src/allocator/alloc.rs` owns C++ new realloc wrappers. Unsafe operations
+  `src/allocator/alloc/cxx_new.rs` owns C++ new realloc wrappers. Unsafe operations
   retry realloc-family requests through the new-handler policy.
 - `SAFETY[AUDIT:allocation-page-refill-boundary]`:
   `src/allocator/alloc.rs` owns page refill handoff, generic fallback
@@ -566,10 +582,10 @@ Operation IDs:
   allocator ownership, active-page witnesses, refill helpers, and guarded block
   state while preserving page ownership and zeroing guarantees.
 - `SAFETY[AUDIT:page-free-list-collect-boundary]`:
-  `src/allocator/page.rs` owns remote/local free-list collection and quick
-  collection. Unsafe operations are limited to caller-proven page and block
-  pointers while preserving local block ownership and no-allocation hot-path
-  constraints.
+  `src/allocator/page/lifecycle.rs` owns remote/local free-list collection and
+  quick collection. Unsafe operations are limited to caller-proven page and
+  block pointers while preserving local block ownership and no-allocation
+  hot-path constraints.
 - `SAFETY[AUDIT:page-free-list-extend-boundary]`:
   `src/allocator/page.rs` owns free-list extension for already-owned pages.
   Unsafe operations update free-list heads, capacity counters, and typed block
@@ -622,8 +638,9 @@ Operation IDs:
   typed layout/alignment witnesses, and arena page allocation handoff while
   preserving singleton page layout, alignment, and huge allocation stats.
 - `SAFETY[AUDIT:page-metadata-accessor-boundary]`:
-  `src/allocator/page.rs` owns page metadata accessors. Unsafe operations are
-  limited to caller-proven page pointers and typed scalar metadata projection.
+  `src/allocator/page/lifecycle.rs` owns page lifecycle metadata accessors.
+  Unsafe operations are limited to caller-proven page pointers and typed scalar
+  metadata projection.
 - `SAFETY[AUDIT:page-stats-public-boundary]`:
   `src/allocator/page.rs` and `src/allocator/page/stats_bin.rs` own stats/bin
   helpers, public C-shaped page helpers, and generic allocation entry shims.
@@ -885,11 +902,12 @@ Operation IDs:
   owns page-map lookup helpers. Unsafe operations convert allocator addresses
   through page-map indexes, submap pointers, and checked/unchecked page lookup.
 - `SAFETY[AUDIT:internal-page-size-count-boundary]`: `src/internal/mod.rs`
-  owns page size, count, committed-size, and availability projections from
-  caller-proven page metadata into typed scalar domains.
+  and `src/internal/page_metadata.rs` own page size, count, committed-size, and
+  availability projections from caller-proven page metadata into typed scalar
+  domains.
 - `SAFETY[AUDIT:internal-page-owner-heap-boundary]`: `src/internal/mod.rs`
-  owns page heap, TLD, and queue ownership projections from caller-proven page
-  or thread-heap metadata.
+  and `src/internal/page_metadata.rs` own page heap, TLD, and queue ownership
+  projections from caller-proven page or thread-heap metadata.
 - `SAFETY[AUDIT:internal-page-location-boundary]`: `src/internal/mod.rs` owns
   page start, arena membership, slice start, slice offset, and address-range
   predicates derived from allocator-owned page metadata.
@@ -970,20 +988,20 @@ Operation IDs:
   are limited to page/block metadata projection, interior-pointer tagging,
   usable-size checks, and tracking updates after pointer adjustment.
 - `SAFETY[AUDIT:aligned-thread-heap-allocation-boundary]`:
-  `src/allocator/aligned.rs` owns thread-heap aligned malloc and zalloc entry
-  paths after checked layout normalization. Unsafe operations are limited to
-  local thread-heap witnesses and delegation into typed aligned allocation
-  requests.
+  `src/allocator/aligned/thread_heap.rs` owns thread-heap aligned malloc and
+  zalloc entry paths after checked layout normalization. Unsafe operations are
+  limited to local thread-heap witnesses and delegation into typed aligned
+  allocation requests.
 - `SAFETY[AUDIT:aligned-page-allocation-boundary]`:
   `src/allocator/aligned.rs` owns aligned allocation fast paths that inspect
   guarded allocation state and small-page free slots. Unsafe operations are
   limited to active page witnesses, usable-size out-pointers, direct page
   allocation, and tracking handoff for aligned blocks.
 - `SAFETY[AUDIT:aligned-calloc-product-boundary]`:
-  `src/allocator/aligned.rs` owns aligned calloc product handling for
-  thread-heap and heap entry paths. Unsafe operations are limited to checked
-  `CallocRequest` totals, heap/thread-heap witness creation, and zeroed aligned
-  dispatch.
+  `src/allocator/aligned.rs` and `src/allocator/aligned/thread_heap.rs` own
+  aligned calloc product handling for thread-heap and heap entry paths. Unsafe
+  operations are limited to checked `CallocRequest` totals, heap/thread-heap
+  witness creation, and zeroed aligned dispatch.
 - `SAFETY[AUDIT:aligned-global-allocation-export-boundary]`:
   `src/allocator/aligned.rs` owns global aligned allocation C ABI exports.
   Unsafe operations are limited to raw global malloc/zalloc/calloc entry points
@@ -1212,13 +1230,14 @@ Operation IDs:
   libc malloc/calloc/realloc/free/memalign forwarding. Unsafe operations are
   limited to `__libc_*` export wrappers that preserve raw WASI libc ownership
   contracts.
-- `SAFETY[AUDIT:raw-macro-linux-libc-boundary]`: `src/raw/macros.rs` owns
-  Linux `__libc_*` malloc/calloc/realloc/free/cfree forwarding shims. Unsafe
-  operations are limited to Linux libc core allocation symbol wrappers.
-- `SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]`: `src/raw/macros.rs`
-  owns Linux `__libc_*` valloc/pvalloc/memalign and `__posix_memalign`
-  forwarding shims. Unsafe operations are limited to Linux libc aligned
-  allocation symbol wrappers.
+- `SAFETY[AUDIT:raw-macro-linux-libc-boundary]`:
+  `src/raw/macros/linux_libc.rs` owns Linux `__libc_*`
+  malloc/calloc/realloc/free/cfree forwarding shims. Unsafe operations are
+  limited to Linux libc core allocation symbol wrappers.
+- `SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]`:
+  `src/raw/macros/linux_libc.rs` owns Linux `__libc_*`
+  valloc/pvalloc/memalign and `__posix_memalign` forwarding shims. Unsafe
+  operations are limited to Linux libc aligned allocation symbol wrappers.
 - `SAFETY[AUDIT:raw-macro-allocation-query-boundary]`: `src/raw/macros.rs`
   owns malloc size, usable-size, and good-size compatibility queries. Unsafe
   operations are limited to checked heap-region probes and raw forwarding to

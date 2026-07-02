@@ -15,6 +15,7 @@ MANIFEST = ROOT / "NO_ALLOCATION_CRITICAL_PATHS.json"
 
 CRITICAL_FILES = {
     "src/allocator/alloc.rs",
+    "src/allocator/alloc/public_malloc.rs",
     "src/allocator/aligned.rs",
     "src/allocator/arena.rs",
     "src/allocator/arena/os_memory.rs",

@@ -60,10 +60,20 @@ impl UnsafePerformanceSources {
         Self {
             unsafe_allowlist: read_source(root, "docs/unsafe-migration-allowlist.tsv"),
             page_map: read_source(root, "src/allocator/page_map.rs"),
-            internal: read_source(root, "src/internal/mod.rs"),
+            internal: read_sources(
+                root,
+                &["src/internal/mod.rs", "src/internal/page_metadata.rs"],
+            ),
             internal_memid: read_source(root, "src/internal/memid.rs"),
             internal_page_flags_rs: read_source(root, "src/internal/page_flags.rs"),
-            alloc_rs: read_source(root, "src/allocator/alloc.rs"),
+            alloc_rs: read_sources(
+                root,
+                &[
+                    "src/allocator/alloc.rs",
+                    "src/allocator/alloc/public_malloc.rs",
+                    "src/allocator/alloc/cxx_new.rs",
+                ],
+            ),
             alloc_cxx_new_rs: read_source(root, "src/allocator/alloc/cxx_new.rs"),
             alloc_string_path_rs: read_source(root, "src/allocator/alloc/string_path.rs"),
             arena_rs: read_source(root, "src/allocator/arena.rs"),
@@ -92,7 +102,10 @@ impl UnsafePerformanceSources {
             page_queues_rs: read_source(root, "src/types/page_queues.rs"),
             os_rs: read_source(root, "src/platform/os.rs"),
             options_rs: read_source(root, "src/allocator/options.rs"),
-            page_rs: read_source(root, "src/allocator/page.rs"),
+            page_rs: read_sources(
+                root,
+                &["src/allocator/page.rs", "src/allocator/page/lifecycle.rs"],
+            ),
             page_bins_rs: read_source(root, "src/allocator/page/bins.rs"),
             page_counts_rs: read_source(root, "src/allocator/page/counts.rs"),
             deferred_rs: read_source(root, "src/allocator/page/deferred.rs"),
@@ -100,13 +113,22 @@ impl UnsafePerformanceSources {
             page_stats_bin_rs: read_source(root, "src/allocator/page/stats_bin.rs"),
             page_validation_rs: read_source(root, "src/allocator/page/validation.rs"),
             random_rs: read_source(root, "src/internal/random.rs"),
-            raw_macros_rs: read_source(root, "src/raw/macros.rs"),
+            raw_macros_rs: read_sources(
+                root,
+                &["src/raw/macros.rs", "src/raw/macros/linux_libc.rs"],
+            ),
             raw_header_forwarding_rs: read_source(root, "src/raw/macros/header_forwarding.rs"),
             stats_rs: read_source(root, "src/allocator/stats.rs"),
             theap_rs: read_source(root, "src/allocator/thread_heap.rs"),
             init_rs: read_source(root, "src/allocator/init.rs"),
             threadlocal_rs: read_source(root, "src/allocator/threadlocal.rs"),
-            alloc_aligned_rs: read_source(root, "src/allocator/aligned.rs"),
+            alloc_aligned_rs: read_sources(
+                root,
+                &[
+                    "src/allocator/aligned.rs",
+                    "src/allocator/aligned/thread_heap.rs",
+                ],
+            ),
             heap_rs: read_source(root, "src/allocator/heap.rs"),
             prim_rs: read_source(root, "src/platform/mod.rs"),
             prim_unix_rs: read_source(root, "src/platform/unix.rs"),
@@ -116,6 +138,13 @@ impl UnsafePerformanceSources {
 
 fn read_source(root: &Path, rel: &str) -> String {
     fs::read_to_string(root.join(rel)).unwrap_or_else(|err| panic!("read {rel}: {err}"))
+}
+
+fn read_sources(root: &Path, rels: &[&str]) -> String {
+    rels.iter()
+        .map(|rel| read_source(root, rel))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub(super) fn source_has_inline_never_function(source: &str, signature: &str) -> bool {

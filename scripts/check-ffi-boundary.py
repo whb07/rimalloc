@@ -12,8 +12,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 EXPORT_FILE_CLASSIFICATION = {
     "src/allocator/alloc.rs": "c-abi",
+    "src/allocator/alloc/cxx_new.rs": "c-abi",
+    "src/allocator/alloc/public_malloc.rs": "c-abi",
     "src/allocator/alloc/string_path.rs": "c-abi",
     "src/allocator/aligned.rs": "c-abi",
+    "src/allocator/aligned/thread_heap.rs": "c-abi",
     "src/raw/macros.rs": "malloc-cxx-override",
     "src/raw/posix.rs": "c-abi",
     "src/allocator/arena.rs": "c-abi-internal-classified",

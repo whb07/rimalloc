@@ -38,14 +38,15 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
         "_mi_theap_malloc_zero_ex should keep C's force-inline body and both allocation helpers should retain local definitions"
     );
     assert!(
-        alloc_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn mi_theap_try_new")
-            && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_try_new")
+        alloc_cxx_new_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn mi_theap_try_new")
+            && alloc_cxx_new_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_try_new")
             && alloc_cxx_new_rs
                 .contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_try_new")
             && alloc_cxx_new_rs.contains("mi_heap_try_new_typed(heap, size, nothrow)")
-            && alloc_rs.contains("mi_try_new(size, true)")
-            && alloc_rs.contains("static MI_THEAP_TRY_NEW_KEEP")
-            && alloc_rs.contains("static MI_TRY_NEW_KEEP")
+            && alloc_cxx_new_rs.contains("mi_try_new(size, true)")
+            && alloc_cxx_new_rs.contains("static MI_THEAP_TRY_NEW_KEEP")
+            && alloc_cxx_new_rs.contains("static MI_TRY_NEW_KEEP")
             && alloc_cxx_new_rs.contains("static MI_HEAP_TRY_NEW_KEEP"),
         "C++ new retry paths should keep C's separate theap/default-heap/explicit-heap helper boundaries"
     );

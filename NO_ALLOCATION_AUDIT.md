@@ -12,8 +12,10 @@ dynamic TLS storage follows the C baseline's `mi_rezalloc`,
 
 ## Reviewed Critical Files
 
-- `src/alloc.rs`, `src/alloc_aligned.rs`, and `src/free.rs`: allocation,
-  realloc, aligned allocation, and free paths use mimalloc page/theap helpers.
+- `src/alloc.rs`, `src/allocator/alloc/public_malloc.rs`,
+  `src/alloc_aligned.rs`, and `src/free.rs`: allocation, public malloc/heap
+  malloc entrypoints, realloc, aligned allocation, and free paths use mimalloc
+  page/theap helpers.
   Debug-only invalid-pointer diagnostics may format borrowed static C strings
   through `format_args!`, but the default supported path has `MI_DEBUG=0` and
   does not allocate through Rust's global allocator.

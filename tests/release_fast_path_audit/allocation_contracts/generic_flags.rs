@@ -6,6 +6,8 @@ fn generic_allocation_flags_use_typed_boundary() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
         .expect("read src/allocator/alloc.rs");
+    let alloc_cxx_new_rs = fs::read_to_string(root.join("src/allocator/alloc/cxx_new.rs"))
+        .expect("read src/allocator/alloc/cxx_new.rs");
     let page_rs =
         fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
     let layout_rs = fs::read_to_string(root.join("src/types/layout.rs")).expect("read layout.rs");
@@ -19,9 +21,9 @@ fn generic_allocation_flags_use_typed_boundary() {
             && alloc_rs.contains("crate::core_types::MaybeAlignment::new(alignment)")
             && alloc_rs.contains("crate::core_types::MaybeHugeAlignment::new(huge_alignment.get())")
             && alloc_rs.contains("fn no_alignment() -> crate::core_types::MaybeAlignment")
-            && alloc_rs.contains("unsafe fn mi_new_aligned_typed(")
-            && alloc_rs.contains("unsafe fn mi_new_aligned_nothrow_typed(")
-            && alloc_rs.contains("alignment: crate::core_types::Alignment,")
+            && alloc_cxx_new_rs.contains("unsafe fn mi_new_aligned_typed(")
+            && alloc_cxx_new_rs.contains("unsafe fn mi_new_aligned_nothrow_typed(")
+            && alloc_cxx_new_rs.contains("alignment: crate::core_types::Alignment,")
             && page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(")
             && page_rs.contains("theap: crate::core_types::ThreadHeapPtr")
             && page_rs.contains("pub(crate) unsafe fn _mi_theap_or_default_typed(")

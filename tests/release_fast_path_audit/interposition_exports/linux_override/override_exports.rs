@@ -13,10 +13,12 @@ fn linux_malloc_overrides_use_direct_fast_paths() {
         fs::read_to_string(root.join("src/allocator/free.rs")).expect("read src/allocator/free.rs");
     let override_rs =
         fs::read_to_string(root.join("src/raw/macros.rs")).expect("read src/raw/macros.rs");
+    let raw_linux_libc_rs = fs::read_to_string(root.join("src/raw/macros/linux_libc.rs"))
+        .expect("read src/raw/macros/linux_libc.rs");
     let raw_header_forwarding_rs =
         fs::read_to_string(root.join("src/raw/macros/header_forwarding.rs"))
             .expect("read src/raw/macros/header_forwarding.rs");
-    let raw_facade_rs = format!("{override_rs}\n{raw_header_forwarding_rs}");
+    let raw_facade_rs = format!("{override_rs}\n{raw_linux_libc_rs}\n{raw_header_forwarding_rs}");
 
     raw_marker_inventory::assert_raw_marker_inventory(&unsafe_allowlist, &raw_facade_rs);
     assert!(

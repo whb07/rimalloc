@@ -10,6 +10,8 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
         .expect("read src/allocator/alloc.rs");
+    let alloc_cxx_new_rs = fs::read_to_string(root.join("src/allocator/alloc/cxx_new.rs"))
+        .expect("read src/allocator/alloc/cxx_new.rs");
     let page_rs =
         fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
     let free_rs =
@@ -111,10 +113,10 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
             && alloc_rs.contains(
                 "unsafe fn mi_theap_malloc_small_zero_nonnull(\n    theap: ThreadHeapLocal,\n    size: crate::core_types::RequestedSize,"
             )
-            && alloc_rs.contains(
+            && alloc_cxx_new_rs.contains(
                 "unsafe fn mi_heap_try_new_typed(\n    heap: BorrowedHeap,\n    size: crate::core_types::RequestedSize,"
             )
-            && alloc_rs.contains(
+            && alloc_cxx_new_rs.contains(
                 "unsafe fn mi_heap_alloc_new_typed(\n    heap: BorrowedHeap,\n    size: crate::core_types::RequestedSize,"
             )
             && page_rs.contains("layout: crate::core_types::LayoutRequest")

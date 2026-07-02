@@ -6,8 +6,13 @@ fn allocation_product_paths_use_typed_requests() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let aligned_rs =
         fs::read_to_string(root.join("src/allocator/aligned.rs")).expect("read alloc_aligned.rs");
+    let aligned_thread_heap_rs =
+        fs::read_to_string(root.join("src/allocator/aligned/thread_heap.rs"))
+            .expect("read src/allocator/aligned/thread_heap.rs");
     let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
         .expect("read src/allocator/alloc.rs");
+    let alloc_cxx_new_rs = fs::read_to_string(root.join("src/allocator/alloc/cxx_new.rs"))
+        .expect("read src/allocator/alloc/cxx_new.rs");
     let posix_rs = fs::read_to_string(root.join("src/raw/posix.rs")).expect("read alloc_posix.rs");
     let layout_rs = fs::read_to_string(root.join("src/types/layout.rs")).expect("read layout.rs");
 
@@ -43,8 +48,8 @@ fn allocation_product_paths_use_typed_requests() {
             && alloc_rs.contains("unsafe fn mi_theap_reallocf_req(")
             && alloc_rs.contains("unsafe fn mi_theap_reallocn_req(")
             && alloc_rs.contains("unsafe fn mi_theap_recalloc_req(")
-            && alloc_rs.contains("alloc_product_or_report(newcount, size)")
-            && alloc_rs.contains(
+            && alloc_cxx_new_rs.contains("alloc_product_or_report(newcount, size)")
+            && alloc_cxx_new_rs.contains(
                 "unsafe fn mi_theap_alloc_new_n(\n    theap: *mut mi_theap_t,\n    req: crate::core_types::AllocProduct,"
             )
             && alloc_rs.contains("realloc_req: crate::core_types::ReallocRequest,")
@@ -65,7 +70,7 @@ fn allocation_product_paths_use_typed_requests() {
                 "crate::core_types::LayoutRequest::aligned_at(newsize, alignment, offset, zeroed)"
             )
             && aligned_rs.contains("mi_theap_realloc_layout(theap, p, layout)")
-            && aligned_rs.contains("calloc_request_or_report(count, size)")
+            && aligned_thread_heap_rs.contains("calloc_request_or_report(count, size)")
             && aligned_rs.contains("calloc_request_or_report(newcount, size)")
             && posix_rs.contains("crate::core_types::CallocRequest::new(count, size)")
             && !posix_rs.contains("SAFETY[AUDIT:raw-posix-compat]")

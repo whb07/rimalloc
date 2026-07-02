@@ -265,7 +265,39 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
         ),
         (
-            "typed-pointer-accessors",
+            "typed-pointer-constructor-boundary",
+            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+        ),
+        (
+            "typed-page-accessors",
+            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+        ),
+        (
+            "typed-block-accessors",
+            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+        ),
+        (
+            "typed-heap-accessors",
+            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+        ),
+        (
+            "typed-thread-heap-accessors",
+            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+        ),
+        (
+            "typed-tld-accessors",
+            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+        ),
+        (
+            "typed-arena-accessors",
+            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+        ),
+        (
+            "typed-subproc-accessors",
+            "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
+        ),
+        (
+            "typed-page-queue-accessors",
             "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
         ),
     ] {
@@ -307,7 +339,15 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         "stats-output-boundary",
         "stats-process-info-boundary",
         "stats-json-boundary",
-        "typed-pointer-accessors",
+        "typed-pointer-constructor-boundary",
+        "typed-page-accessors",
+        "typed-block-accessors",
+        "typed-heap-accessors",
+        "typed-thread-heap-accessors",
+        "typed-tld-accessors",
+        "typed-arena-accessors",
+        "typed-subproc-accessors",
+        "typed-page-queue-accessors",
     ];
     let stale_paths = [
         "tests/release_fast_path_audit.rs",

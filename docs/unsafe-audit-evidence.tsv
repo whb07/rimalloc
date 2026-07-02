@@ -263,9 +263,33 @@ typed-padding-metadata	test	src/types/padding/tests.rs	Exercises padding pointer
 typed-padding-metadata	test	tests/release_fast_path_audit.rs	Checks production padding wrappers keep canary and delta fields private and route metadata access through PaddingPtr.
 typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-local padding metadata, canary witnesses, and padding pointer arithmetic fixtures.
 typed-page-domain	test	src/types/page/tests.rs	Exercises thread-id flag classification, free-path branch classification, and registered page-range witness construction.
-typed-pointer-accessors	test	src/types/ptr/tests.rs	Exercises page, block, heap, thread-heap, TLD, arena, subproc, page-queue, encoded-link, and exposed-address pointer accessor fixtures.
-typed-pointer-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks pointer wrappers stay transparent, niche-sized, inlineable, locally audited, and off the migration allowlist.
-typed-pointer-accessors	script	scripts/check-unsafe-audit.py	Checks typed pointer accessor unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-pointer-constructor-boundary	test	src/types/ptr/tests.rs	Exercises transparent pointer constructors, user/interior pointers, page/slice starts, OS memory pointers, and exposed-address helpers.
+typed-pointer-constructor-boundary	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks pointer constructors stay transparent, niche-sized, inlineable, locally audited, and off the migration allowlist.
+typed-pointer-constructor-boundary	script	scripts/check-unsafe-audit.py	Checks typed pointer constructor unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-page-accessors	test	src/types/ptr/tests.rs	Exercises PagePtr block-size, used/capacity/reserved, free-list, atomic ownership, key, start, byte-size, and containment accessors.
+typed-page-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks PagePtr accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
+typed-page-accessors	script	scripts/check-unsafe-audit.py	Checks typed page pointer unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-block-accessors	test	src/types/ptr/tests.rs	Exercises BlockPtr encoded-link reads, writes, next decoding, and next encoding fixtures.
+typed-block-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks BlockPtr accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
+typed-block-accessors	script	scripts/check-unsafe-audit.py	Checks typed block pointer unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-heap-accessors	test	src/types/ptr/tests.rs	Exercises HeapPtr subproc, thread-local key, thread-heap links, exclusive arena, NUMA, arena-page, lock, and stats accessors.
+typed-heap-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks HeapPtr accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
+typed-heap-accessors	script	scripts/check-unsafe-audit.py	Checks typed heap pointer unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-thread-heap-accessors	test	src/types/ptr/tests.rs	Exercises ThreadHeapPtr TLD, heap cell, refcount, heartbeat, page queue, direct page, and stats accessors.
+typed-thread-heap-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks ThreadHeapPtr accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
+typed-thread-heap-accessors	script	scripts/check-unsafe-audit.py	Checks typed thread-heap pointer unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-tld-accessors	test	src/types/ptr/tests.rs	Exercises TldPtr thread identity, subproc, stats, arena, memid, thread-heap, recursion, and thread-pool accessors.
+typed-tld-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks TldPtr accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
+typed-tld-accessors	script	scripts/check-unsafe-audit.py	Checks typed TLD pointer unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-arena-accessors	test	src/types/ptr/tests.rs	Exercises ArenaPtr memid, subproc, index, slice count, NUMA, exclusivity, purge, parent, slice bitmap, page, and arena-page accessors.
+typed-arena-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks ArenaPtr accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
+typed-arena-accessors	script	scripts/check-unsafe-audit.py	Checks typed arena pointer unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-subproc-accessors	test	src/types/ptr/tests.rs	Exercises SubprocPtr sequence, arena counters, arena entries, locks, heap links, thread/heap counters, memid, and stats accessors.
+typed-subproc-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks SubprocPtr accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
+typed-subproc-accessors	script	scripts/check-unsafe-audit.py	Checks typed subproc pointer unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-page-queue-accessors	test	src/types/ptr/tests.rs	Exercises PageQueuePtr first/last page, count, and optional block-size accessors.
+typed-page-queue-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks PageQueuePtr accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
+typed-page-queue-accessors	script	scripts/check-unsafe-audit.py	Checks typed page-queue pointer unsafe operations retain operation-level SAFETY markers and source audit coverage.
 typed-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises stack-local allocator metadata pointer wrappers, raw field accessors, and exposed-address pointer arithmetic fixtures.
 typed-scalar-test-fixtures	test	src/types/scalar/tests.rs	Exercises concrete unchecked scalar constructor fixtures, overflow assertions, and table-index boundary checks.
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.

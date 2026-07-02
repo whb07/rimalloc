@@ -762,13 +762,48 @@ Operation IDs:
   construction. Unsafe operations are limited to unchecked constructors whose
   callers prove non-zero/thread-flag or page-map registration invariants before
   packaging those raw domains into transparent typed wrappers.
-- `SAFETY[AUDIT:typed-pointer-accessors]`: `src/types/ptr.rs` owns transparent
-  `NonNull` pointer wrappers and raw metadata accessors. Unsafe operations are
-  limited to caller-proven non-null construction, raw field reads/writes,
-  atomic field projections, encoded free-list link access, page/block address
-  arithmetic, heap/thread-heap/TLD/arena/subproc/page-queue accessors, scalar
-  narrowing after local assertions, lock pointer projections, and lint-touch
-  function-pointer references without allocation or dynamic dispatch.
+- `SAFETY[AUDIT:typed-pointer-constructor-boundary]`: `src/types/ptr.rs` owns
+  transparent `NonNull` pointer wrapper constructors, const page pointers,
+  user/interior pointer wrappers, page/slice starts, and OS memory pointers.
+  Unsafe operations are limited to caller-proven non-null construction and
+  non-dereferenced lint-touch references while preserving transparent layout
+  and pointer-sized option niches.
+- `SAFETY[AUDIT:typed-page-accessors]`: `src/types/ptr.rs` owns `PagePtr`
+  metadata accessors. Unsafe operations are limited to page field reads/writes,
+  free-list heads, atomic page ownership fields, page keys, block-area starts,
+  and locally asserted scalar narrowing while preserving initialized page
+  metadata invariants.
+- `SAFETY[AUDIT:typed-block-accessors]`: `src/types/ptr.rs` owns `BlockPtr`
+  free-list link accessors. Unsafe operations are limited to encoded link
+  reads/writes and page-key based link decoding/encoding while preserving
+  free-list provenance and page ownership requirements.
+- `SAFETY[AUDIT:typed-heap-accessors]`: `src/types/ptr.rs` owns `HeapPtr`
+  accessors. Unsafe operations are limited to heap subproc/thread-local fields,
+  thread-heap links, exclusive arena state, NUMA state, arena-page cells, locks,
+  and stats pointers while preserving heap metadata ownership.
+- `SAFETY[AUDIT:typed-thread-heap-accessors]`: `src/types/ptr.rs` owns
+  `ThreadHeapPtr` accessors. Unsafe operations are limited to TLD association,
+  heap cells, refcount cells, heartbeat, page queue/direct-page fields, direct
+  page array initialization, and stats pointers while preserving thread-heap
+  locality requirements.
+- `SAFETY[AUDIT:typed-tld-accessors]`: `src/types/ptr.rs` owns `TldPtr`
+  accessors. Unsafe operations are limited to thread identity, sequence, NUMA,
+  subproc, stats, arena table, memid, thread-heap, recursion, and thread-pool
+  fields while preserving TLD ownership and optional subproc behavior.
+- `SAFETY[AUDIT:typed-arena-accessors]`: `src/types/ptr.rs` owns `ArenaPtr`
+  accessors. Unsafe operations are limited to arena memid, subproc, index,
+  slice count, NUMA/exclusive flags, purge state, parent links, slice bitmaps,
+  page metadata, and arena-page records while preserving arena table domains.
+- `SAFETY[AUDIT:typed-subproc-accessors]`: `src/types/ptr.rs` owns
+  `SubprocPtr` accessors. Unsafe operations are limited to sequence, arena
+  counters, arena table entries, reserve/heaps locks, main heap/heaps links,
+  thread and heap counters, memid, and stats pointer projection while
+  preserving atomic ordering wrappers.
+- `SAFETY[AUDIT:typed-page-queue-accessors]`: `src/types/ptr.rs` owns
+  `PageQueuePtr` accessors. Unsafe operations are limited to queue first/last
+  page links, queue counts, optional block-size domains, and lint-touch
+  function references while preserving queue sentinel and block-size
+  invariants.
 - `SAFETY[AUDIT:typed-pointer-test-fixtures]`: `src/types/ptr/tests.rs`
   builds stack-local page, block, heap, thread-heap, TLD, arena, subproc, and
   page-queue metadata to exercise pointer wrapper field accessors and exposed

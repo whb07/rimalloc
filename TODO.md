@@ -1,7 +1,7 @@
 # TODO: Next Strict-Type and Audit Granularity Backlog
 
-Fresh-eyes review after splitting allocation, aligned allocation, stats,
-page-map, and OS audit clusters on `master`.
+Fresh-eyes review after splitting typed pointer accessor audit coverage on
+`master`.
 The previous backlog is complete and pushed. The next mechanical translation
 debt is in remaining strict-type wildcard allowances, broad unsafe operation
 IDs, and a root release-audit harness that is still close to its cap.
@@ -9,9 +9,9 @@ IDs, and a root release-audit harness that is still close to its cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` still covers 82 source files, 5,893 unsafe
-  mentions, and 115 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 115 operation IDs with
-  282 automated evidence rows.
+  mentions, and 123 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 123 operation IDs with
+  306 automated evidence rows.
 - `strict-type-allowlist.txt` has 26 wildcard entries left: 4
   raw-pointer-parameter entries, 13 bare-domain `usize` entries, 4
   pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
@@ -22,7 +22,6 @@ Current review evidence:
   `src/platform/mod.rs`, `src/raw/macros.rs`, `src/types/layout.rs`,
   `src/safe/allocation.rs`, and `src/types/atomic.rs`.
 - The largest remaining unsafe audit marker clusters are
-  `typed-pointer-accessors` with 161 markers,
   `init-thread-tls-boundary` with 129 markers,
   `windows-primitive-boundary` with 114 markers,
   `arena-page-lifecycle-boundary` with 107 markers,
@@ -46,6 +45,17 @@ Current review evidence:
   `aligned-realloc-boundary` with 67 markers,
   `page-map-register-boundary` with 66 markers, and
   `os-memory-allocation-boundary` with 59 markers.
+- The previous `typed-pointer-accessors` aggregate with 161 markers is split
+  into pointer-family review units. The largest new typed pointer units are
+  `typed-subproc-accessors` with 31 markers,
+  `typed-arena-accessors` with 27 markers,
+  `typed-page-accessors` with 25 markers,
+  `typed-tld-accessors` with 24 markers,
+  `typed-heap-accessors` with 16 markers,
+  `typed-thread-heap-accessors` with 14 markers,
+  `typed-page-queue-accessors` with 10 markers,
+  `typed-block-accessors` with 8 markers, and
+  `typed-pointer-constructor-boundary` with 6 markers.
 - Audit evidence rows for allocation, aligned allocation, split raw macro IDs,
   OS memory, page-map, stats, and typed pointer checks point at focused
   release-audit modules instead of the old aggregate harness paths.
@@ -134,16 +144,16 @@ tests.
 
 ## Issue 5: Split typed pointer accessor audit coverage
 
-> **Comment:** `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers in
+> **Comment:** `SAFETY[AUDIT:typed-pointer-accessors]` had 161 markers in
 > `src/types/ptr.rs`. The module is doing useful work, but page, block, heap,
 > thread-heap, TLD, arena, subproc, page-queue, and provenance helpers are
 > separate invariants.
 
-- [ ] Split typed pointer accessor markers by pointer family and provenance
+- [x] Split typed pointer accessor markers by pointer family and provenance
       helper responsibility.
-- [ ] Keep layout/niche tests and strict-type allowlist coverage aligned with
+- [x] Keep layout/niche tests and strict-type allowlist coverage aligned with
       the new operation IDs.
-- [ ] Preserve transparent wrapper layout, hot-path inlining, and no allocator
+- [x] Preserve transparent wrapper layout, hot-path inlining, and no allocator
       allocation in strict-type wrappers.
 
 Verify: pointer/layout tests, datatype acceptance audit, strict-type checker,
@@ -172,7 +182,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 3. [x] Split the raw macro allocation audit cluster.
 4. [x] Split allocation, aligned allocation, stats, page-map, and OS audit
        clusters.
-5. [ ] Split typed pointer accessor audit coverage.
+5. [x] Split typed pointer accessor audit coverage.
 6. [ ] Split the release fast-path root harness and lower the root cap.
 
 ## Definition of done for this backlog

@@ -92,12 +92,29 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
             && core_types_layout_tests_rs.contains("fn witness_wrappers_match_pointer_layout()")
             && core_types_layout_tests_rs
                 .contains("fn packed_and_atomic_wrappers_match_raw_layout()")
-            && !unsafe_migration_allowlist.contains("src/types/ptr.rs")
-            && ptr_core_rs
-                .matches("SAFETY[AUDIT:typed-pointer-accessors]")
-                .count()
-                >= 150,
+            && !unsafe_migration_allowlist.contains("src/types/ptr.rs"),
         "hot strict-type wrappers should stay transparent, copyable where they carry copyable fast-path witnesses, inlineable, and covered by layout/niche tests"
+    );
+    for (audit_id, min_count) in [
+        ("typed-pointer-constructor-boundary", 5),
+        ("typed-page-accessors", 20),
+        ("typed-block-accessors", 6),
+        ("typed-heap-accessors", 12),
+        ("typed-thread-heap-accessors", 10),
+        ("typed-tld-accessors", 20),
+        ("typed-arena-accessors", 22),
+        ("typed-subproc-accessors", 25),
+        ("typed-page-queue-accessors", 8),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            ptr_core_rs.matches(&marker).count() >= min_count,
+            "typed pointer boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
+    assert!(
+        !ptr_core_rs.contains("SAFETY[AUDIT:typed-pointer-accessors]"),
+        "typed pointer unsafe markers should stay split by pointer family"
     );
     assert!(
         freelist_wrappers_rs.contains("pub(crate) struct EncodedPtr<T> {")

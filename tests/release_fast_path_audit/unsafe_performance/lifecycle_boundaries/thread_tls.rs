@@ -355,10 +355,23 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/thread_heap.rs\t"))
-            && theap_rs
-                .matches("SAFETY[AUDIT:thread-heap-lifecycle]")
-                .count()
-                >= 70,
-        "thread-heap lifecycle unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+            && !theap_rs.contains("SAFETY[AUDIT:thread-heap-lifecycle]"),
+        "thread-heap lifecycle unsafe boundaries should stay split without a migration allowlist entry"
     );
+    for (audit_id, minimum) in [
+        ("thread-heap-visit-boundary", 28),
+        ("thread-heap-collect-boundary", 15),
+        ("thread-heap-default-boundary", 3),
+        ("thread-heap-create-boundary", 7),
+        ("thread-heap-random-boundary", 2),
+        ("thread-heap-refcount-boundary", 9),
+        ("thread-heap-delete-boundary", 7),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = theap_rs.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "thread-heap unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
+        );
+    }
 }

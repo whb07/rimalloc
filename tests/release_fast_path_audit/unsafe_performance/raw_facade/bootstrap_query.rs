@@ -39,10 +39,7 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/internal/mod.rs\t"))
-            && internal
-                .matches("SAFETY[AUDIT:internal-translation-boundary]")
-                .count()
-                >= 70
+            && !internal.contains("SAFETY[AUDIT:internal-translation-boundary]")
             && internal.contains("unsafe extern \"C\" {")
             && internal.contains("pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t")
             && internal.contains("pub unsafe fn _mi_checked_ptr_page(p: *const c_void)")
@@ -69,6 +66,22 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && internal.contains("core::arch::asm!("),
         "internal translation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    for (audit_id, minimum) in [
+        ("internal-runtime-shim-boundary", 1),
+        ("internal-c-abi-shim-boundary", 1),
+        ("internal-cpu-memory-boundary", 15),
+        ("internal-thread-heap-shim-boundary", 5),
+        ("internal-page-metadata-boundary", 35),
+        ("internal-thread-free-boundary", 4),
+        ("internal-block-link-boundary", 13),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = internal.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "internal unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
+        );
+    }
     assert!(
         !unsafe_allowlist
             .lines()

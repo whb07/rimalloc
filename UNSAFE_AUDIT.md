@@ -226,18 +226,70 @@ Operation IDs:
   zero-sized `MiMalloc` facade. Rust's allocator contract supplies the layout,
   pointer, and ownership preconditions, and each operation forwards directly to
   the matching allocator entry point.
-- `SAFETY[AUDIT:heap-lifecycle-boundary]`: `src/allocator/heap.rs` owns raw
-  heap lifecycle and ownership-inspection shims. Unsafe operations are limited
-  to heap creation/registration, NUMA affinity updates, stats merging, owned
-  heap delete/destroy teardown, allocator page ownership lookups,
-  under-utilized page inspection, and lazy per-heap thread-heap initialization
-  while preserving typed heap witnesses and lock-protected list updates.
-- `SAFETY[AUDIT:thread-heap-lifecycle]`: `src/allocator/thread_heap.rs` owns
-  thread-heap visitors, collection, default switching, initialization,
-  creation, free/delete, refcount, random, stats-merge, and arena-memory cleanup
-  boundaries. Unsafe operations stay at C ABI shims, callback invocations,
-  page/block traversal, fast-divisor out-pointers, and caller-proven
-  heap/thread-heap/TLD metadata transitions routed through typed wrappers.
+- `SAFETY[AUDIT:heap-thread-association-boundary]`: `src/allocator/heap.rs`
+  owns heap-to-thread-heap lookup and lazy per-heap thread-heap initialization.
+  Unsafe operations are limited to nullable heap metadata, thread-local heap
+  slots, default/main thread-heap fallbacks, and cached thread-heap publication.
+- `SAFETY[AUDIT:heap-configuration-boundary]`: `src/allocator/heap.rs` owns
+  heap NUMA affinity mutation. Unsafe operations are limited to nullable heap
+  normalization, OS NUMA count reads, and typed heap field updates.
+- `SAFETY[AUDIT:heap-stats-merge-boundary]`: `src/allocator/heap.rs` owns
+  heap-to-main stats merge shims. Unsafe operations are limited to borrowed heap
+  witnesses and raw stats pointers derived from live heap metadata.
+- `SAFETY[AUDIT:heap-creation-boundary]`: `src/allocator/heap.rs` owns public
+  heap creation. Unsafe operations initialize the allocator thread state,
+  allocate zeroed heap metadata from the main heap, create a thread-local slot,
+  and link the heap into the subproc list under its lock.
+- `SAFETY[AUDIT:heap-nonmain-cleanup-boundary]`: `src/allocator/heap.rs` owns
+  final non-main heap cleanup. Unsafe operations walk and free heap-local
+  thread heaps, release arena page tables and thread-local slots, unlink the
+  heap from its subproc, tear down locks, and free heap metadata.
+- `SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]`: `src/allocator/heap.rs`
+  owns non-main heap delete and destroy entry points. Unsafe operations reject
+  main heaps, move or destroy owned pages as required, and delegate final
+  cleanup through typed `OwnedHeap` witnesses.
+- `SAFETY[AUDIT:heap-main-lifecycle-boundary]`: `src/allocator/heap.rs` owns
+  main-heap force-destroy handling. Unsafe operations classify live heap
+  metadata, preserve main-heap ownership, and destroy pages/thread heaps without
+  freeing the static main heap record.
+- `SAFETY[AUDIT:heap-ownership-query-boundary]`: `src/allocator/heap.rs` owns
+  allocator page ownership queries. Unsafe operations are limited to safe page
+  lookup, nullable heap selection, borrowed/owned heap witness construction, and
+  raw C ABI ownership shims.
+- `SAFETY[AUDIT:heap-underutilized-boundary]`: `src/allocator/heap.rs` owns
+  under-utilized page inspection. Unsafe operations convert raw heap/page
+  arguments into typed witnesses, read page counters, and compare optional heap
+  ownership without retaining pointers.
+- `SAFETY[AUDIT:thread-heap-visit-boundary]`:
+  `src/allocator/thread_heap.rs` owns thread-heap area, page, and block
+  visitation. Unsafe operations are limited to C ABI callbacks, visitor argument
+  slots, page/queue traversal, fast-divisor out-pointers, and typed heap/page
+  witnesses during the walk.
+- `SAFETY[AUDIT:thread-heap-collect-boundary]`:
+  `src/allocator/thread_heap.rs` owns page and heap collection. Unsafe
+  operations validate initialized thread heaps, visit pages for collect/abandon,
+  run deferred free and arena collection, and merge thread-heap stats.
+- `SAFETY[AUDIT:thread-heap-default-boundary]`:
+  `src/allocator/thread_heap.rs` owns default thread-heap get/set shims. Unsafe
+  operations are limited to initialized TLS-backed default thread heaps and
+  raw C ABI compatibility.
+- `SAFETY[AUDIT:thread-heap-create-boundary]`:
+  `src/allocator/thread_heap.rs` owns thread-heap init and create paths. Unsafe
+  operations allocate metadata, initialize random/options/guarded state, set
+  refcounts and heap/TLD links, and publish list nodes under heap and TLD locks.
+- `SAFETY[AUDIT:thread-heap-random-boundary]`:
+  `src/allocator/thread_heap.rs` owns thread-heap random-number helper access.
+  Unsafe operations read initialized thread-heap random state through typed
+  local thread-heap witnesses.
+- `SAFETY[AUDIT:thread-heap-refcount-boundary]`:
+  `src/allocator/thread_heap.rs` owns thread-heap refcount and backing-memory
+  release helpers. Unsafe operations classify memid ownership, adjust atomic
+  refcounts, update stats, and free metadata through the matching allocator
+  backend only when the final reference is released.
+- `SAFETY[AUDIT:thread-heap-delete-boundary]`:
+  `src/allocator/thread_heap.rs` owns thread-heap free/delete. Unsafe
+  operations exchange heap ownership, merge stats, unlink heap/TLD list nodes
+  under the requested locks, abandon pages, and clear metadata before decref.
 - `SAFETY[AUDIT:init-subproc-identity-boundary]`: `src/allocator/init.rs` owns
   subproc ID conversion and current/main subproc lookup. Unsafe operations are
   limited to caller-proven subproc IDs, typed subproc witness construction, raw
@@ -475,15 +527,32 @@ Operation IDs:
   bounded chunk and field projection, raw callback invocation, typed
   arena/slice wrapper handoff, and local test fixtures while preserving bit
   ordering, field width, empty/full handling, and allocation-free search paths.
-- `SAFETY[AUDIT:internal-translation-boundary]`: `src/internal/mod.rs` owns
-  translated internal header helpers, page and block pointer lookup, page
-  metadata accessors, thread-free ownership words, packed pointer
-  encode/decode, tracking gates, CPU copy/fill shims, and C-compatible helper
-  declarations. Unsafe operations are limited to caller-proven allocator
-  metadata pointers, page-map projection, typed atomic field wrappers, encoded
-  free-list words, provenance-aware pointer/integer conversions, inline
-  assembly copy/fill thresholds, and raw helper shims while preserving the
-  local ABI shape and allocation-free hot paths.
+- `SAFETY[AUDIT:internal-runtime-shim-boundary]`: `src/internal/mod.rs` owns
+  Rust-side assertion shims that forward static caller-proven C strings into the
+  audited options abort path.
+- `SAFETY[AUDIT:internal-c-abi-shim-boundary]`: `src/internal/mod.rs` owns the
+  declaration-only internal C helper surface. The declarations preserve
+  translated raw signatures without dereferencing pointers.
+- `SAFETY[AUDIT:internal-cpu-memory-boundary]`: `src/internal/mod.rs` owns
+  copy, fill, zero, and zero-check helpers. Unsafe operations are limited to
+  caller-proven byte ranges, architecture-specific `rep movs/stos` thresholds,
+  and fallback `ptr` copy/fill operations.
+- `SAFETY[AUDIT:internal-thread-heap-shim-boundary]`: `src/internal/mod.rs`
+  owns thread-heap and allocation helper projections. Unsafe operations load
+  heap pointers, direct small-page slots, and guarded-allocation state from
+  caller-proven thread-heap metadata through typed wrappers.
+- `SAFETY[AUDIT:internal-page-metadata-boundary]`: `src/internal/mod.rs` owns
+  page-map and page metadata helpers. Unsafe operations project caller-proven
+  pages into typed page-map, block-size, heap/TLD, slice, committed, queue,
+  owner, flag, and availability fields.
+- `SAFETY[AUDIT:internal-thread-free-boundary]`: `src/internal/mod.rs` owns
+  thread-free ownership-word helpers. Unsafe operations are limited to typed
+  atomic thread-free loads and ownership claims while preserving encoded head
+  and ownership bits.
+- `SAFETY[AUDIT:internal-block-link-boundary]`: `src/internal/mod.rs` owns
+  encoded free-list block links. Unsafe operations preserve pointer provenance,
+  tracking gates, page keys, encoded/unencoded link reads and writes, and
+  same-page corruption checks.
 - `SAFETY[AUDIT:free-path-boundary]`: `src/allocator/free.rs` owns free and
   usable-size routing. Unsafe operations are limited to free fast-path assembly
   aliases, validated page/block/user-pointer lookup, padding and guarded-block
@@ -511,23 +580,54 @@ Operation IDs:
   old allocation pointers, heap borrowing, aligned allocation/free handoff, and
   bounded copy metadata while preserving old contents and realloc failure
   semantics.
-- `SAFETY[AUDIT:options-callback-boundary]`: `src/allocator/options.rs` owns
-  option descriptors, output/error callback state, recursion guards,
-  environment parsing, diagnostic output, option raw exports, and assert abort
-  shims. Unsafe operations are limited to extern C declarations, locked global
-  option/callback state, C string reads, bounded stack output buffers,
-  primitive stderr forwarding, callback invocation, environment lookup, and
-  raw C ABI option exports while preserving no allocator allocation in
-  primitive output paths.
+- `SAFETY[AUDIT:options-storage-lock-boundary]`: `src/allocator/options.rs`
+  owns option descriptor storage and initialization. Unsafe operations are
+  limited to mimalloc lock guards, atomic option values, bounded environment
+  buffers, static option-name C strings, and raw option get/set exports.
+- `SAFETY[AUDIT:options-message-output-boundary]`: `src/allocator/options.rs`
+  owns diagnostic output and output callback dispatch. Unsafe operations are
+  limited to C stdout/stderr symbols, recursion guards, delayed output buffers,
+  bounded stack formatting, primitive stderr forwarding, and registered output
+  callback invocation.
+- `SAFETY[AUDIT:options-warning-error-callback-boundary]`:
+  `src/allocator/options.rs` owns warning display shims and warning/error
+  counter gates. Unsafe operations are limited to C-compatible warning entry
+  points and bounded message output.
+- `SAFETY[AUDIT:options-allocation-failure-callback-boundary]`:
+  `src/allocator/options.rs` owns registered error callback storage and
+  allocation/error failure callback dispatch. Unsafe operations are limited to
+  locked callback state, callback argument publication, callback invocation,
+  and the default abort policy.
+- `SAFETY[AUDIT:options-assertion-boundary]`: `src/allocator/options.rs` owns
+  assertion failure abort shims. Unsafe operations read caller-proven C strings,
+  call platform diagnostic output, preserve the test abort fixture, and abort
+  without unwinding.
 - `SAFETY[AUDIT:stats-counter-boundary]`: `src/allocator/stats.rs` owns stats
   initialization and counter/count mutation helpers. Unsafe operations are
   limited to POD zero initialization, checked bin indexes, and atomic counter
   field access while preserving counter width and stat-level gating.
-- `SAFETY[AUDIT:stats-merge-boundary]`: `src/allocator/stats.rs` owns stats
-  merge, copy, reset, heap aggregation, subproc aggregation, and lifecycle
-  merge exports. Unsafe operations are limited to raw stats pointer validation,
-  non-null merge bodies, heap/subproc witness construction, visitor callbacks,
-  and memzero reset handoff while preserving aggregate semantics.
+- `SAFETY[AUDIT:stats-counter-merge-boundary]`: `src/allocator/stats.rs` owns
+  raw stats counter merge bodies and reset handoff. Unsafe operations are
+  limited to validated stats pointers, non-null counter merges, bin stat
+  projection, and zeroing the source stats buffer after merge.
+- `SAFETY[AUDIT:stats-clock-boundary]`: `src/allocator/stats.rs` owns stats
+  clock reads. Unsafe operations delegate to the primitive clock source without
+  allocation or retained state.
+- `SAFETY[AUDIT:stats-heap-merge-boundary]`: `src/allocator/stats.rs` owns
+  thread-heap to heap stats merging and heap stats lookup. Unsafe operations
+  are limited to typed thread-heap/heap witnesses, initialized-thread checks,
+  and borrowed heap stats pointers.
+- `SAFETY[AUDIT:stats-public-merge-boundary]`: `src/allocator/stats.rs` owns
+  public merge and reset exports. Unsafe operations preserve legacy process
+  stats behavior, default heap lookup, and subproc merge handoff.
+- `SAFETY[AUDIT:stats-heap-visitor-boundary]`: `src/allocator/stats.rs` owns
+  heap stats print and aggregate visitors. Unsafe operations keep callback
+  argument storage, borrowed heap witnesses, and stats buffers valid for the
+  duration of heap walks.
+- `SAFETY[AUDIT:stats-public-export-boundary]`: `src/allocator/stats.rs` owns
+  public stats copy/get exports. Unsafe operations validate output buffers,
+  subproc IDs, nullable heap pointers, and stats header versions before copying
+  or aggregating results.
 - `SAFETY[AUDIT:stats-output-boundary]`: `src/allocator/stats.rs` owns
   formatted stats output, stack-buffer amount formatting, callback forwarding,
   and raw print/export shims. Unsafe operations are limited to callback output

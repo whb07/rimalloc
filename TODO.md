@@ -9,25 +9,33 @@ strict-type wildcard allowlist entries.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 167 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 167 operation IDs with
-  394 automated evidence rows.
+  mentions, and 196 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 196 operation IDs with
+  437 automated evidence rows.
 - No unsafe audit operation ID is above 100 source markers after splitting
   `allocation-abi-entry-boundary` into `allocation-realloc-entry-boundary` with
   37 markers, `allocation-cxx-new-boundary` with 30 markers,
   `allocation-product-entry-boundary` with 21 markers,
   `allocation-string-path-boundary` with 20 markers, and
   `allocation-platform-shim-boundary` with 4 markers.
+- The Issue 2 runtime/internal split removed the broad
+  `heap-lifecycle-boundary`, `options-callback-boundary`,
+  `internal-translation-boundary`, `stats-merge-boundary`, and
+  `thread-heap-lifecycle` source markers. The largest replacement clusters are
+  `options-message-output-boundary` with 39 markers,
+  `internal-page-metadata-boundary` with 37 markers,
+  `thread-heap-visit-boundary` with 28 markers, and
+  `heap-ownership-query-boundary` with 23 markers.
 - The largest remaining marker clusters are
   `typed-pointer-test-fixtures` with 87 markers,
-  `macos-zone-override` with 84 markers,
-  `heap-lifecycle-boundary` with 80 markers,
-  `options-callback-boundary` and `internal-translation-boundary` with 77
-  markers each, `stats-merge-boundary` with 76 markers,
-  `thread-heap-lifecycle`, `raw-posix-compat`, and
-  `internal-bitmap-boundary` with 72 markers each, `free-path-boundary` with 70
-  markers, and `raw-macro-libc-forwarding-boundary` and
-  `aligned-heap-allocation-boundary` with 68 markers each.
+  `macos-zone-override` with 83 markers,
+  `internal-bitmap-boundary` with 71 markers,
+  `raw-posix-compat` with 70 markers, `free-path-boundary` with 69 markers,
+  `aligned-heap-allocation-boundary` with 68 markers,
+  `aligned-realloc-boundary` with 67 markers,
+  `page-map-register-boundary` with 66 markers, and
+  `raw-macro-libc-forwarding-boundary` and `internal-atomic-field-boundary`
+  with 65 markers each.
 - `strict-type-allowlist.txt` has 515 active entries: 323
   raw-pointer-parameter entries, 131 bare-domain `usize` entries, 35
   metadata-reference entries, 22 pointer/usize round-trip entries, 2
@@ -88,13 +96,13 @@ tests.
 > `stats-merge-boundary` has 76, `thread-heap-lifecycle` has 72, and
 > `heap-lifecycle-boundary` has 80.
 
-- [ ] Split `options-callback-boundary` into option storage/locking,
+- [x] Split `options-callback-boundary` into option storage/locking,
       C-string/message output, warning/error callbacks, assertion failure, and
       allocation failure callback operation IDs.
-- [ ] Split `internal-translation-boundary` into page metadata helpers,
+- [x] Split `internal-translation-boundary` into page metadata helpers,
       encoded block-link helpers, CPU memcpy/memset helpers, and internal
       allocation/thread-heap shims.
-- [ ] Split `stats-merge-boundary`, `heap-lifecycle-boundary`, and
+- [x] Split `stats-merge-boundary`, `heap-lifecycle-boundary`, and
       `thread-heap-lifecycle` where release-audit checks already distinguish
       public merge/export shims, process/main heap lifecycle, non-main heap
       lifecycle, thread-heap refcounting, and thread-heap create/delete paths.
@@ -105,9 +113,9 @@ full tests.
 
 ## Issue 3: Split raw/POSIX, bitmap, and release-audit no-export modules
 
-> **Comment:** `raw-posix-compat` has 72 markers,
-> `internal-bitmap-boundary` has 72, and `raw-macro-libc-forwarding-boundary`
-> has 68. The release-audit no-export table in
+> **Comment:** `internal-bitmap-boundary` has 71 markers,
+> `raw-posix-compat` has 70, and `raw-macro-libc-forwarding-boundary` has 65.
+> The release-audit no-export table in
 > `unsafe_performance/raw_facade/raw_override.rs` is still the largest audit
 > module at 754 lines, blocking a lower module cap.
 
@@ -145,7 +153,7 @@ formatting, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Split allocation ABI entry audit cluster.
-2. [ ] Split broad runtime and internal marker clusters.
+2. [x] Split broad runtime and internal marker clusters.
 3. [ ] Split raw/POSIX, bitmap, and release-audit no-export modules.
 4. [ ] Reduce strict-type wildcard debt.
 

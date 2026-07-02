@@ -404,7 +404,7 @@ unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t
         return;
     }
     // SAFETY: null and self-add cases were checked above.
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
     unsafe { mi_stats_add_nonnull(stats, src) };
 }
 
@@ -412,7 +412,7 @@ unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t
 unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     macro_rules! MI_STAT_COUNT {
         ($field:ident) => {
-            // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+            // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
             unsafe {
                 mi_stat_count_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -423,7 +423,7 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     }
     macro_rules! MI_STAT_COUNTER {
         ($field:ident) => {
-            // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+            // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
             unsafe {
                 mi_stat_counter_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -471,30 +471,30 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     MI_STAT_COUNTER!(heaps_delete_wait);
 
     if MI_STAT > 1 {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
         let stats_malloc_bins =
             unsafe { ptr::addr_of_mut!((*stats).malloc_bins).cast::<mi_stat_count_t>() };
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
         let src_malloc_bins =
             unsafe { ptr::addr_of!((*src).malloc_bins).cast::<mi_stat_count_t>() };
         for i in 0..=MI_BIN_HUGE {
-            // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+            // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
             let bin = unsafe { StatsBin::new_unchecked(i as u16) };
-            // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+            // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
             mi_stat_count_add_mt(unsafe { stats_malloc_bins.add(bin.as_usize()) }, unsafe {
                 src_malloc_bins.add(bin.as_usize())
             });
         }
     }
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
     let stats_page_bins =
         unsafe { ptr::addr_of_mut!((*stats).page_bins).cast::<mi_stat_count_t>() };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
     let src_page_bins = unsafe { ptr::addr_of!((*src).page_bins).cast::<mi_stat_count_t>() };
     for i in 0..=MI_BIN_HUGE {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
         let bin = unsafe { StatsBin::new_unchecked(i as u16) };
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
         mi_stat_count_add_mt(unsafe { stats_page_bins.add(bin.as_usize()) }, unsafe {
             src_page_bins.add(bin.as_usize())
         });
@@ -504,13 +504,13 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
 fn mi_stats_add_into(to: &mut mi_stats_t, from: &mi_stats_t) {
     // SAFETY: references are valid `mi_stats_t` values; the checked raw helper preserves C's
     // null/self guard at the compatibility boundary.
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
     unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };
 }
 
 fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bool {
     // SAFETY: callers must pass valid pointers when non-null; header checks gate the copy.
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
     unsafe {
         if stats_to.is_null()
             || (*stats_to).size != size_of::<mi_stats_t>()
@@ -527,7 +527,7 @@ fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bo
 }
 
 fn clock_now_msecs() -> i64 {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-clock-boundary]: stats clock helpers delegate to primitive monotonic clock reads without allocation.
     unsafe { _mi_prim_clock_now() }
 }
 
@@ -565,14 +565,14 @@ static MI_STATS_INIT_KEEP: extern "C" fn() = _mi_stats_init;
 
 /// # Safety
 /// `to` and `from` must point to valid writable `mi_stats_t` values.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi_stats_t) {
     if to.is_null() || from.is_null() || core::ptr::eq(to, from) {
         return;
     }
     // SAFETY: caller guarantees valid pointers to `mi_stats_t` values.
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-counter-merge-boundary]: raw stats merge bodies update validated counter fields and reset source buffers.
     unsafe {
         mi_stats_add_nonnull(to, from);
         _mi_memzero(from.cast(), size_of::<mi_stats_t>());
@@ -1190,14 +1190,14 @@ unsafe fn _mi_stats_print(
 }
 
 unsafe fn mi_stats_merge_theap_to_heap(theap: *mut mi_theap_t) -> *const mi_stats_t {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     let theap = unsafe { ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap)) };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     let Some(heap) = (unsafe { theap.ptr().heap() }) else {
         crate::internal::mi_assert_internal!(false);
         return core::ptr::null();
     };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     unsafe { mi_stats_merge_theap_to_heap_typed(theap, heap) }
 }
 
@@ -1205,108 +1205,108 @@ unsafe fn mi_stats_merge_theap_to_heap_typed(
     theap: ThreadHeapLocal,
     heap: HeapPtr,
 ) -> *const mi_stats_t {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     let stats = unsafe { &mut (*theap.ptr().as_ptr()).stats };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     let heap_stats = unsafe { &mut (*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     unsafe { _mi_stats_merge_into(heap_stats, stats) };
     heap_stats as *const mi_stats_t
 }
 
 unsafe fn mi_heap_get_stats(heap: *mut mi_heap_t) -> *const mi_stats_t {
     let heap = if heap.is_null() {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     unsafe { mi_heap_get_stats_borrowed(BorrowedHeap::new_unchecked(heap)) }
 }
 
 unsafe fn mi_heap_get_stats_borrowed(heap: BorrowedHeap) -> *const mi_stats_t {
     let heap = heap.ptr();
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     if !unsafe { crate::prim::_mi_thread_is_initialized() } {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
         return unsafe { &(*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats };
     }
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     let theap = unsafe { _mi_heap_theap_peek(heap.as_ptr()) };
     if theap.is_null() {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
         unsafe { &(*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats }
     } else {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-heap-merge-boundary]: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
         unsafe { mi_stats_merge_theap_to_heap(theap) }
     }
 }
 
 /// # Safety
 /// `heap` must be null or a valid heap pointer owned by the current subproc.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_subproc(heap: *mut mi_heap_t) {
     let heap = if heap.is_null() {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     let Some(subproc) = (unsafe { heap.subproc() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     unsafe { mi_heap_stats_merge_to_subproc_typed(BorrowedHeap::new_unchecked(heap), subproc) };
 }
 
 unsafe fn mi_heap_stats_merge_to_subproc_typed(heap: BorrowedHeap, subproc: SubprocPtr) {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     unsafe { _mi_stats_merge_into(&mut *subproc.stats(), &mut *heap.ptr().stats()) };
 }
 
 /// # Safety
 /// Uses the process-default heap/theap state and follows the legacy C ABI.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_reset() {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
         return;
     }
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     let heap = unsafe { mi_heap_main() };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     let _ = unsafe { mi_heap_get_stats(heap) };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     unsafe { mi_heap_stats_merge_to_subproc(heap) };
 }
 
 /// # Safety
 /// Uses process-global stats and heap state and must not race with process teardown.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_merge() {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
         return;
     }
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     let heap = unsafe { mi_heap_main() };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     let _ = unsafe { mi_heap_get_stats(heap) };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-merge-boundary]: public stats merge and reset shims preserve process-global C ABI behavior.
     unsafe { mi_heap_stats_merge_to_subproc(heap) };
 }
 
 /// # Safety
 /// `heap` must be null or a valid `mi_heap_t*`; any output callback must obey the C ABI.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_print_out(
     heap: *mut mi_heap_t,
@@ -1314,13 +1314,13 @@ pub unsafe extern "C" fn mi_heap_stats_print_out(
     arg: *mut c_void,
 ) {
     let heap = if heap.is_null() {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
     unsafe {
         mi_heap_stats_print_out_typed(
             BorrowedHeap::new_unchecked(heap),
@@ -1337,7 +1337,7 @@ unsafe fn mi_heap_stats_print_out_typed(
 ) {
     let heap_ptr = heap.ptr();
     let heap_prefix = heap_ptr.as_ptr().cast::<MiHeapStatsPrefix>();
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
     unsafe {
         _mi_stats_print(
             "heap",
@@ -1349,34 +1349,34 @@ unsafe fn mi_heap_stats_print_out_typed(
     };
 }
 
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
 #[inline(never)]
 unsafe extern "C" fn mi_heap_print_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
     let vinfo =
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
         HeapPrintVisitInfo::from_raw(unsafe { &*(arg.cast::<mi_heap_print_visit_info_t>()) });
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
     let heap = unsafe { BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(heap)) };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
     unsafe { mi_heap_print_visitor_typed(heap, vinfo) }
 }
 
 unsafe fn mi_heap_print_visitor_typed(heap: BorrowedHeap, vinfo: HeapPrintVisitInfo) -> bool {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
     unsafe { mi_heap_stats_print_out_typed(heap, vinfo.out, vinfo.out_arg) };
     true
 }
 
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
 #[inline(never)]
 unsafe extern "C" fn mi_heap_aggregate_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
     let vinfo = HeapAggregateVisitInfo {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
         stats: unsafe { &mut *arg.cast::<mi_stats_t>() },
     };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
     let heap = unsafe { BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(heap)) };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
     unsafe { mi_heap_aggregate_visitor_typed(heap, vinfo) }
 }
 
@@ -1384,10 +1384,10 @@ unsafe fn mi_heap_aggregate_visitor_typed(
     heap: BorrowedHeap,
     vinfo: HeapAggregateVisitInfo<'_>,
 ) -> bool {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
     let heap_stats = unsafe { mi_heap_get_stats_borrowed(heap) };
     // SAFETY: both pointers refer to valid stats buffers during the heap walk.
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-heap-visitor-boundary]: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
     unsafe { mi_stats_add_into(vinfo.stats, &*heap_stats) };
     true
 }
@@ -1400,7 +1400,7 @@ static MI_HEAP_AGGREGATE_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_aggregate_vis
 
 /// # Safety
 /// `subproc_id` must identify a live subproc and any output callback must obey the C ABI.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
     subproc_id: mi_subproc_id_t,
@@ -1412,7 +1412,7 @@ pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
         return;
     }
     let mut vinfo = mi_heap_print_visit_info_t { out, out_arg: arg };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
     unsafe {
         mi_subproc_visit_heaps(
             subproc_id,
@@ -1431,7 +1431,7 @@ pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
 
 /// # Safety
 /// `subproc_id` must identify a live subproc and `stats` must point to writable stats storage.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
     subproc_id: mi_subproc_id_t,
@@ -1444,13 +1444,13 @@ pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
     if subproc.is_null() {
         return false;
     }
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
     unsafe { mi_stats_copy(&mut *stats, &(*subproc).stats) }
 }
 
 /// # Safety
 /// `subproc_id` must identify a live subproc and `stats` must point to writable stats storage.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get(
     subproc_id: mi_subproc_id_t,
@@ -1463,7 +1463,7 @@ pub unsafe extern "C" fn mi_subproc_stats_get(
     if subproc.is_null() {
         return false;
     }
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
     unsafe {
         if !mi_stats_copy(&mut *stats, &(*subproc).stats) {
             return false;
@@ -1479,34 +1479,34 @@ pub unsafe extern "C" fn mi_subproc_stats_get(
 
 /// # Safety
 /// `stats` must point to writable stats storage.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_get(stats: *mut mi_stats_t) -> bool {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
     unsafe { mi_subproc_stats_get(mi_subproc_current(), stats) }
 }
 
 /// # Safety
 /// `heap` must be null or a valid heap pointer, and `stats` must point to writable stats storage.
-// SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_get(heap: *mut mi_heap_t, stats: *mut mi_stats_t) -> bool {
     if stats.is_null() {
         return false;
     }
     let heap = if heap.is_null() {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
-        // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
     unsafe { mi_heap_stats_get_borrowed(BorrowedHeap::new_unchecked(heap), &mut *stats) }
 }
 
 unsafe fn mi_heap_stats_get_borrowed(heap: BorrowedHeap, stats: &mut mi_stats_t) -> bool {
-    // SAFETY[AUDIT:stats-merge-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY[AUDIT:stats-public-export-boundary]: public stats export shims validate output buffers before copying heap or subproc stats.
     unsafe { mi_stats_copy(stats, mi_heap_get_stats_borrowed(heap)) }
 }
 

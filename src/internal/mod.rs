@@ -155,7 +155,7 @@ pub type mi_submap_t = *mut *mut mi_page_t;
 
 #[cold]
 pub(crate) fn _mi_rust_assert_fail(assertion: *const c_char, fname: *const c_char, line: u32) -> ! {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-runtime-shim-boundary]: runtime assertion shims forward caller-proven C strings into the audited abort path.
     unsafe { crate::options::_mi_assert_fail(assertion, fname, line, ptr::null()) }
 }
 
@@ -252,13 +252,13 @@ pub const fn MI_UNUSED_RELEASE<T>(_x: &T) {}
 /// `x` must be valid for writes of one `T`.
 #[inline]
 pub unsafe fn _mi_memzero_var<T>(x: *mut T) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         ptr::write_bytes(x, 0, 1);
     }
 }
 
-// SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+// SAFETY[AUDIT:internal-c-abi-shim-boundary]: internal declarations preserve translated C helper signatures without dereferencing pointers.
 unsafe extern "C" {
     pub fn _mi_snprintf(buf: *mut c_char, buflen: usize, fmt: *const c_char, ...) -> c_int;
 
@@ -354,7 +354,7 @@ pub const fn _mi_clamp(sz: usize, min: usize, max: usize) -> usize {
 /// `p..p + size` must be valid for reads.
 #[inline]
 pub unsafe fn mi_mem_is_zero(p: *const c_void, size: usize) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         let bytes = p.cast::<u8>();
         let mut i = 0;
@@ -378,7 +378,7 @@ pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectB
     let idx = crate::core_types::WordCount::from_size(size).get();
     crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
     crate::internal::mi_debug_assert!(u16::try_from(idx).is_ok());
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe { crate::core_types::DirectBin::new_unchecked(idx as u16) }
 }
 
@@ -426,7 +426,7 @@ pub unsafe fn mi_count_size_overflow(count: usize, size: usize, total: &mut usiz
 /// `theap` must point to initialized thread-heap metadata.
 #[inline]
 pub unsafe fn _mi_theap_heap(theap: *const mi_theap_t) -> *mut mi_heap_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-thread-heap-shim-boundary]: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     unsafe {
         crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())
             .load(crate::core_types::MemoryOrder::Acquire)
@@ -437,7 +437,7 @@ pub unsafe fn _mi_theap_heap(theap: *const mi_theap_t) -> *mut mi_heap_t {
 /// `theap` must be null or point to thread-heap metadata allocated by this allocator.
 #[inline]
 pub unsafe fn mi_theap_is_initialized(theap: *const mi_theap_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-thread-heap-shim-boundary]: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     !theap.is_null() && !unsafe { _mi_theap_heap(theap) }.is_null()
 }
 
@@ -446,7 +446,7 @@ pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
     theap: crate::core_types::ThreadHeapLocal,
     padded: crate::core_types::PaddedSize,
 ) -> *mut mi_page_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-thread-heap-shim-boundary]: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let idx = mi_direct_bin_from_padded(padded).as_usize();
@@ -467,7 +467,7 @@ pub fn _mi_page_map_index(p: *const c_void) -> usize {
 pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize {
     let u = crate::core_types::ptr_exposed_addr(p) / MI_ARENA_SLICE_SIZE;
     if !sub_idx.is_null() {
-        // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+        // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
         unsafe { *sub_idx = u % MI_PAGE_MAP_SUB_COUNT };
     }
     u / MI_PAGE_MAP_SUB_COUNT
@@ -478,7 +478,7 @@ pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize
 /// `idx` must be within the initialized page-map base range.
 #[inline]
 pub unsafe fn _mi_page_map_at(idx: usize) -> mi_submap_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))
             .load(crate::core_types::MemoryOrder::Acquire)
@@ -522,7 +522,7 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be a pointer in the allocator's page-map domain.
 #[inline]
 pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         let mut sub_idx = 0usize;
         let idx = _mi_page_map_index(p, &mut sub_idx);
@@ -535,7 +535,7 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be a pointer in the allocator's page-map domain.
 #[inline]
 pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         let mut sub_idx = 0usize;
         let idx = _mi_page_map_index(p, &mut sub_idx);
@@ -552,7 +552,7 @@ pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be null or a pointer allocated by this allocator.
 #[inline]
 pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::internal::mi_assert_internal!(
             p.is_null() || crate::mimalloc::mi_is_in_heap_region(p)
@@ -569,7 +569,7 @@ pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
 pub(crate) unsafe fn mi_page_block_size_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::BlockSize {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::internal::mi_assert_internal!((*page).block_size > 0);
         crate::core_types::BlockSize::new_unchecked((*page).block_size)
@@ -580,7 +580,7 @@ pub(crate) unsafe fn mi_page_block_size_typed(
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe { mi_page_block_size_typed(page).get() }
 }
 
@@ -588,7 +588,7 @@ pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
 /// `page` must point to non-abandoned page metadata with a valid owning thread heap.
 #[inline]
 pub unsafe fn mi_page_tld(page: *const mi_page_t) -> *mut mi_tld_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::internal::mi_assert_internal!(!crate::page::mi_page_is_abandoned(page));
         crate::internal::mi_assert_internal!(!(*page).theap.is_null());
@@ -600,7 +600,7 @@ pub unsafe fn mi_page_tld(page: *const mi_page_t) -> *mut mi_tld_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_heap(page: *const mi_page_t) -> *mut mi_heap_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         let mut heap = (*page).heap;
         if mi_likely(heap.is_null()) {
@@ -615,7 +615,7 @@ pub unsafe fn mi_page_heap(page: *const mi_page_t) -> *mut mi_heap_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe { (*page).page_start }
 }
 
@@ -623,7 +623,7 @@ pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_size(page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         let block_size = mi_page_block_size(page);
         block_size * crate::page::mi_page_reserved_count(page).as_usize()
@@ -635,7 +635,7 @@ pub unsafe fn mi_page_size(page: *const mi_page_t) -> usize {
 /// for a `usize` write.
 #[inline]
 pub unsafe fn mi_page_area(page: *const mi_page_t, size: *mut usize) -> *mut u8 {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         if !size.is_null() {
             *size = mi_page_size(page);
@@ -653,7 +653,7 @@ pub const fn mi_page_info_size() -> usize {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_contains_address(page: *const mi_page_t, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         let mut psize = 0usize;
         let start = mi_page_area(page, &mut psize);
@@ -665,7 +665,7 @@ pub unsafe fn mi_page_contains_address(page: *const mi_page_t, p: *const c_void)
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         matches!(
             crate::core_types::MemId::view((*page).memid),
@@ -678,7 +678,7 @@ pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe { crate::page::mi_page_reserved_count(page).get() == 1 }
 }
 
@@ -686,7 +686,7 @@ pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
 pub(crate) unsafe fn mi_page_usable_block_size(
     page: *const mi_page_t,
 ) -> crate::core_types::UsableSize {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe { mi_page_block_size_typed(page).usable() }
 }
 
@@ -694,7 +694,7 @@ pub(crate) unsafe fn mi_page_usable_block_size(
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         if MI_PAGE_META_IS_SEPARATED != 0 {
             mi_page_is_in_arena(page)
@@ -710,7 +710,7 @@ pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_slice_start(page: *const mi_page_t) -> *mut u8 {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         if mi_page_meta_is_separated(page) {
             _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN).cast::<u8>()
@@ -727,7 +727,7 @@ pub unsafe fn mi_page_slice_offset_of(
     page: *const mi_page_t,
     offset_relative_to_page_start: usize,
 ) -> usize {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         ((*page).page_start as usize - mi_page_slice_start(page) as usize)
             + offset_relative_to_page_start
@@ -740,7 +740,7 @@ pub unsafe fn mi_page_slice_offset_of(
 pub(crate) unsafe fn mi_page_committed_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::CommittedBytes {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::core_types::CommittedBytes::new(if (*page).slice_committed == 0 {
             mi_page_size(page)
@@ -754,7 +754,7 @@ pub(crate) unsafe fn mi_page_committed_typed(
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_committed(page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe { mi_page_committed_typed(page).get() }
 }
 
@@ -762,7 +762,7 @@ pub unsafe fn mi_page_committed(page: *const mi_page_t) -> usize {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::page::mi_page_used_count(page).get() == 0
@@ -773,7 +773,7 @@ pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         !(*page).free.is_null()
@@ -784,7 +784,7 @@ pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         let capacity = crate::page::mi_page_capacity_count(page);
@@ -798,7 +798,7 @@ pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         let full = crate::page::mi_page_reserved_count(page).get()
             == crate::page::mi_page_used_count(page).get();
@@ -811,7 +811,7 @@ pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
 /// `page` must be null or point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         if page.is_null() {
             return true;
@@ -827,7 +827,7 @@ pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
 /// `page` must be null or point to page metadata owned by this allocator. `n` must be nonzero.
 #[inline]
 pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         if page.is_null() {
             return true;
@@ -840,7 +840,7 @@ pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
 }
 
 #[inline]
-// SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+// SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
 pub(crate) unsafe fn mi_page_queue(
     theap: *const mi_theap_t,
     block_size: crate::core_types::BlockSize,
@@ -871,7 +871,7 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
     page: crate::core_types::PagePtr,
     has_aligned: bool,
 ) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         page.thread_id_cell().set_flags(
             crate::core_types::PageFlags::HAS_INTERIOR_POINTERS,
@@ -884,7 +884,7 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         let atomic_tid =
             crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
@@ -898,7 +898,7 @@ pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_thread_id(page: *const mi_page_t) -> mi_threadid_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     let xthread_id = crate::core_types::PageThreadId::new(unsafe { mi_page_xthread_id(page) });
     xthread_id.owner_bits()
 }
@@ -907,7 +907,7 @@ pub unsafe fn mi_page_thread_id(page: *const mi_page_t) -> mi_threadid_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_flags(page: *const mi_page_t) -> mi_page_flags_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     let xthread_id = crate::core_types::PageThreadId::new(unsafe { mi_page_xthread_id(page) });
     xthread_id.flags().bits()
 }
@@ -916,7 +916,7 @@ pub unsafe fn mi_page_flags(page: *const mi_page_t) -> mi_page_flags_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_has_interior_pointers(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     crate::core_types::PageFlags::from_low_bits(unsafe { mi_page_flags(page) })
         .contains(crate::core_types::PageFlags::HAS_INTERIOR_POINTERS)
 }
@@ -925,7 +925,7 @@ pub unsafe fn mi_page_has_interior_pointers(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     crate::core_types::PageThreadId::new(unsafe { mi_page_xthread_id(page) }).is_abandoned_mapped()
 }
 
@@ -933,7 +933,7 @@ pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
 /// `page` must point to mutable abandoned page metadata owned by this allocator.
 #[inline]
 pub(crate) unsafe fn mi_page_set_abandoned_mapped(page: crate::core_types::PagePtr) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::internal::mi_assert_internal!(crate::page::mi_page_is_abandoned(page.as_ptr()));
         let atomic_tid = page.thread_id_cell();
@@ -953,7 +953,7 @@ const _: unsafe fn(crate::core_types::PagePtr) = mi_page_set_abandoned_mapped;
 /// `page` must point to mutable abandoned-mapped page metadata owned by this allocator.
 #[inline]
 pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::PagePtr) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_is_abandoned_mapped(page.as_ptr()));
         let atomic_tid = crate::core_types::AtomicPageThreadId(
@@ -1003,7 +1003,7 @@ const _: fn(*mut mi_block_t, bool) -> mi_thread_free_t = mi_tf_create;
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-thread-free-boundary]: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
         let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
             ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
@@ -1016,7 +1016,7 @@ pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-thread-free-boundary]: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         let reserved = crate::page::mi_page_reserved_count(page);
@@ -1030,7 +1030,7 @@ pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-thread-free-boundary]: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
         let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
             ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
@@ -1045,7 +1045,7 @@ pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
 pub(crate) unsafe fn mi_page_claim_ownership(
     page: crate::core_types::AbandonedPage,
 ) -> Option<crate::core_types::OwnedAbandonedPage> {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-thread-free-boundary]: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
         let page_ptr = page.page();
         let page = page_ptr.as_ptr();
@@ -1066,7 +1066,7 @@ pub(crate) unsafe fn mi_page_claim_ownership(
 /// `block` and `p` must refer to the same allocated block when guarded allocation is enabled.
 #[inline]
 pub unsafe fn mi_block_ptr_is_guarded(block: *const mi_block_t, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-thread-heap-shim-boundary]: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     unsafe {
         if MI_GUARDED == 0 {
             MI_UNUSED(&block);
@@ -1093,7 +1093,7 @@ pub(crate) unsafe fn mi_theap_malloc_use_guarded(
     }
     #[cfg(feature = "guarded")]
     {
-        // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+        // SAFETY[AUDIT:internal-thread-heap-shim-boundary]: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
         unsafe {
             let theap = theap.ptr().as_ptr();
             let size = size.get();
@@ -1123,7 +1123,7 @@ pub(crate) unsafe fn mi_theap_malloc_use_guarded(
 /// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges.
 #[inline(always)]
 pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         #[cfg(target_arch = "x86_64")]
         {
@@ -1146,7 +1146,7 @@ pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         #[cfg(target_arch = "x86_64")]
         {
@@ -1168,7 +1168,7 @@ pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
 #[cfg(target_arch = "x86_64")]
 #[inline(always)]
 unsafe fn mi_rep_movsq(dst: *mut c_void, src: *const c_void, count: usize) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         core::arch::asm!(
             "rep movsq",
@@ -1226,7 +1226,7 @@ pub const fn _mi_random_shuffle(mut x: usize) -> usize {
 /// that page's usable address range.
 #[inline]
 pub unsafe fn mi_is_in_same_page(p: *const c_void, q: *const c_void) -> bool {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     let page = unsafe { _mi_ptr_page(p) };
     unsafe { mi_page_contains_address(page, q) }
 }
@@ -1302,7 +1302,7 @@ pub unsafe fn mi_page_keys(page: *const mi_page_t) -> [usize; 2] {
         feature = "track-asan"
     ))]
     {
-        // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+        // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
         unsafe { (*page).keys }
     }
 
@@ -1325,7 +1325,7 @@ pub(crate) unsafe fn mi_page_set_keys(
     page: crate::core_types::PagePtr,
     keys: crate::core_types::PageKeys,
 ) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { page.set_keys(keys) }
 }
 
@@ -1338,7 +1338,7 @@ pub unsafe fn mi_block_nextx(
     block: *const mi_block_t,
     keys: &[usize; 2],
 ) -> *mut mi_block_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { crate::track::mi_track_mem_defined(block.cast_mut().cast(), size_of::<mi_block_t>()) };
     let link = unsafe { crate::core_types::EncodedPtr::read_word_from_raw(block) };
     let next = if MI_ENCODE_FREELIST != 0 {
@@ -1346,7 +1346,7 @@ pub unsafe fn mi_block_nextx(
     } else {
         link.as_unencoded_raw()
     };
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe {
         crate::track::mi_track_mem_noaccess(block.cast_mut().cast(), size_of::<mi_block_t>())
     };
@@ -1363,7 +1363,7 @@ pub(crate) unsafe fn mi_block_set_nextx_typed(
     next: Option<crate::core_types::BlockPtr>,
     keys: crate::core_types::PageKeys,
 ) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { crate::track::mi_track_mem_undefined(block.as_ptr().cast(), size_of::<mi_block_t>()) };
     let link = if MI_ENCODE_FREELIST != 0 {
         unsafe { crate::core_types::EncodedPtr::encode_block(next, page, keys) }
@@ -1374,7 +1374,7 @@ pub(crate) unsafe fn mi_block_set_nextx_typed(
                 .cast_const(),
         )
     };
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { block.write_link(crate::core_types::BlockLink::FreeList(link)) };
     unsafe { crate::track::mi_track_mem_noaccess(block.as_ptr().cast(), size_of::<mi_block_t>()) };
 }
@@ -1390,7 +1390,7 @@ pub unsafe fn mi_block_set_nextx(
     keys: &[usize; 2],
 ) {
     if !null.is_null() {
-        // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+        // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
         let page = unsafe { crate::core_types::PagePtr::new_unchecked(null.cast_mut().cast()) };
         let block = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
         let next = crate::core_types::BlockPtr::new(next.cast_mut());
@@ -1400,7 +1400,7 @@ pub unsafe fn mi_block_set_nextx(
         return;
     }
 
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { crate::track::mi_track_mem_undefined(block.cast(), size_of::<mi_block_t>()) };
     let link = if MI_ENCODE_FREELIST != 0 {
         unsafe {
@@ -1413,7 +1413,7 @@ pub unsafe fn mi_block_set_nextx(
     } else {
         crate::core_types::EncodedPtr::from_unencoded_raw(next)
     };
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     let block_ptr = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
     unsafe { block_ptr.write_link(crate::core_types::BlockLink::FreeList(link)) };
     unsafe { crate::track::mi_track_mem_noaccess(block.cast(), size_of::<mi_block_t>()) };
@@ -1423,7 +1423,7 @@ pub unsafe fn mi_block_set_nextx(
 /// `page` must be valid, and `block` must point to a block list node belonging to that page.
 #[inline]
 pub unsafe fn mi_block_next(page: *const mi_page_t, block: *const mi_block_t) -> *mut mi_block_t {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe {
         let keys = mi_page_keys(page);
         if MI_ENCODE_FREELIST == 0 {
@@ -1454,7 +1454,7 @@ pub(crate) unsafe fn mi_block_set_next_typed(
     block: crate::core_types::BlockPtr,
     next: Option<crate::core_types::BlockPtr>,
 ) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     let keys = unsafe { page.keys() };
     unsafe { mi_block_set_nextx_typed(page, block, next, keys) };
 }
@@ -1468,7 +1468,7 @@ pub unsafe fn mi_block_set_next(
     block: *mut mi_block_t,
     next: *const mi_block_t,
 ) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     let page = unsafe { crate::core_types::PagePtr::new_unchecked(page.cast_mut()) };
     let block = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
     let next = crate::core_types::BlockPtr::new(next.cast_mut());
@@ -1479,7 +1479,7 @@ pub unsafe fn mi_block_set_next(
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 unsafe fn mi_cpu_movsb_max() -> usize {
     let max: usize;
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         core::arch::asm!(
             "mov {max}, qword ptr [rip + _mi_cpu_movsb_max]",
@@ -1493,7 +1493,7 @@ unsafe fn mi_cpu_movsb_max() -> usize {
 #[inline]
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 unsafe fn mi_cpu_movsb_max() -> usize {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe { crate::init::_mi_cpu_movsb_max }
 }
 
@@ -1501,7 +1501,7 @@ unsafe fn mi_cpu_movsb_max() -> usize {
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 unsafe fn mi_cpu_stosb_max() -> usize {
     let max: usize;
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         core::arch::asm!(
             "mov {max}, qword ptr [rip + _mi_cpu_stosb_max]",
@@ -1515,7 +1515,7 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 #[inline]
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 unsafe fn mi_cpu_stosb_max() -> usize {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe { crate::init::_mi_cpu_stosb_max }
 }
 
@@ -1523,7 +1523,7 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 /// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges.
 #[inline]
 pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         #[cfg(target_arch = "x86_64")]
         {
@@ -1540,7 +1540,7 @@ pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         #[cfg(target_arch = "x86_64")]
         {
@@ -1558,7 +1558,7 @@ pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
 /// by callers of the aligned helper.
 #[inline]
 pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         #[cfg(target_arch = "x86_64")]
         {
@@ -1581,7 +1581,7 @@ pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize)
 /// helper.
 #[inline]
 pub unsafe fn _mi_memset_aligned(dst: *mut c_void, val: i32, n: usize) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         _mi_memset(dst, val, n);
     }
@@ -1591,7 +1591,7 @@ pub unsafe fn _mi_memset_aligned(dst: *mut c_void, val: i32, n: usize) {
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn _mi_memzero(dst: *mut c_void, n: usize) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         _mi_memset(dst, 0, n);
     }
@@ -1602,7 +1602,7 @@ pub unsafe fn _mi_memzero(dst: *mut c_void, n: usize) {
 /// helper.
 #[inline]
 pub unsafe fn _mi_memzero_aligned(dst: *mut c_void, n: usize) {
-    // SAFETY[AUDIT:internal-translation-boundary]: internal helper raw pointers, packed pointer conversions, metadata references, runtime gates, and C-compatible shims preserve translated mimalloc invariants.
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         _mi_memset_aligned(dst, 0, n);
     }

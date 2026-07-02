@@ -24,7 +24,12 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
     );
     for (audit_id, min_count) in [
         ("stats-counter-boundary", 25),
-        ("stats-merge-boundary", 70),
+        ("stats-counter-merge-boundary", 14),
+        ("stats-clock-boundary", 1),
+        ("stats-heap-merge-boundary", 14),
+        ("stats-public-merge-boundary", 16),
+        ("stats-heap-visitor-boundary", 16),
+        ("stats-public-export-boundary", 14),
         ("stats-output-boundary", 25),
         ("stats-process-info-boundary", 6),
         ("stats-json-boundary", 18),
@@ -41,6 +46,10 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
             .any(|line| line.starts_with("src/allocator/stats.rs\t"))
             && !stats_rs.contains("SAFETY[AUDIT:stats-reporting-boundary]"),
         "stats unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
+    );
+    assert!(
+        !stats_rs.contains("SAFETY[AUDIT:stats-merge-boundary]"),
+        "stats merge boundaries should remain split into focused operation markers"
     );
     assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_auto_process_init()")
@@ -67,7 +76,7 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
         ) && stats_rs.contains(
             "mi_stat_counter_add_mt(\n                    ptr::addr_of_mut!((*stats).$field),\n                    ptr::addr_of!((*src).$field),\n                )"
         ) && stats_rs.contains(
-            "if MI_STAT > 1 {\n        // SAFETY[AUDIT:stats-merge-boundary]"
+            "if MI_STAT > 1 {\n        // SAFETY[AUDIT:stats-counter-merge-boundary]"
         )
             && stats_rs.contains("let stats_malloc_bins =")
             && stats_rs.contains("for i in 0..=MI_BIN_HUGE")

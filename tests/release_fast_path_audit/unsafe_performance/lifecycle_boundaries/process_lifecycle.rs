@@ -146,6 +146,28 @@ pub(super) fn assert_process_lifecycle_boundaries(sources: &UnsafePerformanceSou
 
     assert_init_lifecycle_markers(init_rs, prim_rs, unsafe_allowlist);
     assert!(
+        !heap_rs.contains("SAFETY[AUDIT:heap-lifecycle-boundary]"),
+        "heap lifecycle boundaries should remain split into focused operation markers"
+    );
+    for (audit_id, minimum) in [
+        ("heap-thread-association-boundary", 14),
+        ("heap-configuration-boundary", 6),
+        ("heap-stats-merge-boundary", 5),
+        ("heap-creation-boundary", 8),
+        ("heap-nonmain-cleanup-boundary", 6),
+        ("heap-nonmain-lifecycle-boundary", 10),
+        ("heap-main-lifecycle-boundary", 4),
+        ("heap-ownership-query-boundary", 23),
+        ("heap-underutilized-boundary", 4),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = heap_rs.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "heap unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
+        );
+    }
+    assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")
             && init_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_to_id")

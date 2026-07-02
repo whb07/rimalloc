@@ -193,11 +193,20 @@ file when such a module exists.
   operations in `src/internal/bitmap.rs`. The boundary covers chunk/field
   projection, bit set/clear/search loops, arena traversal callbacks, typed
   slice wrappers, and allocation-free bitmap search paths.
-- `SAFETY[AUDIT:internal-translation-boundary]`: translated internal header
-  helpers in `src/internal/mod.rs`. The boundary covers page-map lookup,
-  page/block metadata accessors, thread-free ownership words, packed pointer
-  encode/decode, tracking gates, CPU copy/fill shims, and raw C-compatible
-  helper declarations.
+- `SAFETY[AUDIT:internal-runtime-shim-boundary]`: assertion shims in
+  `src/internal/mod.rs`.
+- `SAFETY[AUDIT:internal-c-abi-shim-boundary]`: translated internal helper
+  declarations in `src/internal/mod.rs`.
+- `SAFETY[AUDIT:internal-cpu-memory-boundary]`: copy/fill/zero helpers in
+  `src/internal/mod.rs`.
+- `SAFETY[AUDIT:internal-thread-heap-shim-boundary]`: thread-heap and guarded
+  allocation helper projections in `src/internal/mod.rs`.
+- `SAFETY[AUDIT:internal-page-metadata-boundary]`: page map and page metadata
+  helpers in `src/internal/mod.rs`.
+- `SAFETY[AUDIT:internal-thread-free-boundary]`: thread-free ownership-word
+  helpers in `src/internal/mod.rs`.
+- `SAFETY[AUDIT:internal-block-link-boundary]`: encoded free-list link helpers
+  in `src/internal/mod.rs`.
 - `SAFETY[AUDIT:unix-mmap-syscall-boundary]`,
   `SAFETY[AUDIT:unix-process-info-boundary]`,
   `SAFETY[AUDIT:unix-output-env-boundary]`,

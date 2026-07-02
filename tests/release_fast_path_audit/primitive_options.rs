@@ -158,7 +158,12 @@ fn options_state_uses_internal_locks_like_c() {
     );
     for (audit_id, min_count) in [
         ("stats-counter-boundary", 25),
-        ("stats-merge-boundary", 70),
+        ("stats-counter-merge-boundary", 14),
+        ("stats-clock-boundary", 1),
+        ("stats-heap-merge-boundary", 14),
+        ("stats-public-merge-boundary", 16),
+        ("stats-heap-visitor-boundary", 16),
+        ("stats-public-export-boundary", 14),
         ("stats-output-boundary", 25),
         ("stats-process-info-boundary", 6),
         ("stats-json-boundary", 18),
@@ -175,6 +180,10 @@ fn options_state_uses_internal_locks_like_c() {
             .any(|line| line.starts_with("src/allocator/stats.rs\t"))
             && !stats_rs.contains("SAFETY[AUDIT:stats-reporting-boundary]"),
         "stats unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
+    );
+    assert!(
+        !stats_rs.contains("SAFETY[AUDIT:stats-merge-boundary]"),
+        "stats merge boundaries should remain split into focused operation markers"
     );
     assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")
@@ -197,12 +206,22 @@ fn options_state_uses_internal_locks_like_c() {
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/options.rs\t"))
-            && options_rs
-                .matches("SAFETY[AUDIT:options-callback-boundary]")
-                .count()
-                >= 76,
-        "options/callback unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+            && !options_rs.contains("SAFETY[AUDIT:options-callback-boundary]"),
+        "options/callback unsafe boundaries should stay split without a migration allowlist entry"
     );
+    for (audit_id, min_count) in [
+        ("options-storage-lock-boundary", 15),
+        ("options-message-output-boundary", 35),
+        ("options-warning-error-callback-boundary", 1),
+        ("options-allocation-failure-callback-boundary", 10),
+        ("options-assertion-boundary", 8),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            options_rs.matches(&marker).count() >= min_count,
+            "options unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     assert!(
         atomic_rs.contains(
             "#[cfg(all(target_os = \"linux\", not(debug_assertions)))]\n#[link(name = \"pthread\")]"

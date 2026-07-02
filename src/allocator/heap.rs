@@ -35,11 +35,11 @@ const MI_THEAP_TLS_BUSY: *mut mi_theap_t = core::ptr::dangling_mut::<mi_theap_t>
 ///
 /// `heap` must be null or point to a live heap object accepted by the
 /// mimalloc heap APIs. Non-null heaps must not be concurrently destroyed.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: raw heap-to-thread-heap lookup shims
+// SAFETY[AUDIT:heap-thread-association-boundary]: raw heap-to-thread-heap lookup shims
 // validate nullable heap metadata before returning a nullable C pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_theap(heap: *mut mi_heap_t) -> *mut mi_theap_t {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: upheld by the caller contract for
+    // SAFETY[AUDIT:heap-thread-association-boundary]: upheld by the caller contract for
     // this C ABI boundary.
     unsafe { mi_heap_theap_typed(HeapPtr::new(heap)) }
         .map(ThreadHeapPtr::as_ptr)
@@ -50,12 +50,12 @@ pub unsafe extern "C" fn mi_heap_theap(heap: *mut mi_heap_t) -> *mut mi_theap_t 
 ///
 /// `heap` must be `None` or point to a live heap object accepted by the
 /// mimalloc heap APIs. Non-null heaps must not be concurrently destroyed.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: the typed helper forwards a validated
+// SAFETY[AUDIT:heap-thread-association-boundary]: the typed helper forwards a validated
 // optional heap pointer to the platform thread-heap accessor.
 #[inline]
 pub(crate) unsafe fn mi_heap_theap_typed(heap: Option<HeapPtr>) -> Option<ThreadHeapPtr> {
     let heap = heap.map(HeapPtr::as_ptr).unwrap_or(ptr::null_mut());
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: `heap` is null or came from
+    // SAFETY[AUDIT:heap-thread-association-boundary]: `heap` is null or came from
     // `HeapPtr`; `_mi_heap_theap` preserves nullable lookup semantics.
     ThreadHeapPtr::new(unsafe { _mi_heap_theap(heap) })
 }
@@ -64,18 +64,18 @@ pub(crate) unsafe fn mi_heap_theap_typed(heap: Option<HeapPtr>) -> Option<Thread
 ///
 /// `heap` may be null to select the main heap. Otherwise it must point to a
 /// live heap whose NUMA affinity may be mutated by the caller.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: the raw NUMA affinity shim parses the
+// SAFETY[AUDIT:heap-configuration-boundary]: the raw NUMA affinity shim parses the
 // nullable heap argument once and routes mutation through `HeapPtr`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_set_numa_affinity(heap: *mut mi_heap_t, numa_node: i32) {
     let heap = if heap.is_null() {
-        // SAFETY[AUDIT:heap-lifecycle-boundary]: null heap selects the process
+        // SAFETY[AUDIT:heap-configuration-boundary]: null heap selects the process
         // main heap by API contract.
         HeapPtr::new(unsafe { mi_heap_main() })
     } else {
         HeapPtr::new(heap)
     };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: non-null heap pointers are live
+    // SAFETY[AUDIT:heap-configuration-boundary]: non-null heap pointers are live
     // and mutable by the caller contract.
     unsafe {
         let Some(heap) = heap else {
@@ -88,14 +88,14 @@ pub unsafe extern "C" fn mi_heap_set_numa_affinity(heap: *mut mi_heap_t, numa_no
 /// # Safety
 ///
 /// `heap` must point to live heap metadata whose NUMA affinity may be mutated.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: NUMA affinity mutation stays behind a
+// SAFETY[AUDIT:heap-configuration-boundary]: NUMA affinity mutation stays behind a
 // typed heap witness while preserving the OS NUMA count query.
 #[inline]
 unsafe fn mi_heap_set_numa_affinity_typed(heap: HeapPtr, numa_node: crate::core_types::NumaNode) {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: querying the OS NUMA count has no
+    // SAFETY[AUDIT:heap-configuration-boundary]: querying the OS NUMA count has no
     // heap side effects and matches the C helper boundary.
     let numa_count = unsafe { _mi_os_numa_node_count() };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: `heap` is live and mutable by the
+    // SAFETY[AUDIT:heap-configuration-boundary]: `heap` is live and mutable by the
     // caller contract; `normalize` bounds the stored NUMA value.
     unsafe { heap.set_numa_node(numa_node.normalize(numa_count)) };
 }
@@ -104,11 +104,11 @@ unsafe fn mi_heap_set_numa_affinity_typed(heap: HeapPtr, numa_node: crate::core_
 ///
 /// `heap` may be null. A non-null heap must be live and its stats must not be
 /// concurrently mutated outside the allocator synchronization rules.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: stats merge accepts nullable heap
+// SAFETY[AUDIT:heap-stats-merge-boundary]: stats merge accepts nullable heap
 // metadata and immediately converts it to a borrowed heap witness.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: the raw heap pointer is borrowed
+    // SAFETY[AUDIT:heap-stats-merge-boundary]: the raw heap pointer is borrowed
     // only for this stats merge and null is ignored.
     unsafe {
         let Some(heap) = BorrowedHeap::from_lookup_raw(heap) else {
@@ -118,11 +118,11 @@ pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
     }
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: the typed stats merge keeps raw stat
+// SAFETY[AUDIT:heap-stats-merge-boundary]: the typed stats merge keeps raw stat
 // pointers derived from live heap witnesses.
 #[inline]
 unsafe fn mi_heap_stats_merge_to_main_typed(heap: BorrowedHeap) {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: both stats pointers come from live
+    // SAFETY[AUDIT:heap-stats-merge-boundary]: both stats pointers come from live
     // heap metadata accepted by the allocator runtime.
     unsafe {
         let Some(main) = HeapPtr::new(mi_heap_main()) else {
@@ -137,20 +137,20 @@ unsafe fn mi_heap_stats_merge_to_main_typed(heap: BorrowedHeap) {
 /// The allocator runtime must be initialized or safe to initialize on this
 /// thread. The returned heap, when non-null, must later be released through the
 /// heap deletion or destruction APIs.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: heap creation initializes allocator
+// SAFETY[AUDIT:heap-creation-boundary]: heap creation initializes allocator
 // state, allocates raw heap metadata, and registers it with the subproc list.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t) -> *mut mi_heap_t {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: heap creation is a C ABI boundary;
+    // SAFETY[AUDIT:heap-creation-boundary]: heap creation is a C ABI boundary;
     // initialization follows mimalloc's allocator synchronization rules.
     unsafe { crate::mimalloc::mi_thread_init() };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: after thread initialization, the
+    // SAFETY[AUDIT:heap-creation-boundary]: after thread initialization, the
     // process main heap is the allocation owner for heap metadata.
     let heap_main = unsafe { mi_heap_main() };
     if heap_main.is_null() {
         return ptr::null_mut();
     }
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: allocate zeroed storage for one
+    // SAFETY[AUDIT:heap-creation-boundary]: allocate zeroed storage for one
     // `mi_heap_t` from the initialized main heap.
     let heap =
         unsafe { mi_heap_zalloc(heap_main, core::mem::size_of::<mi_heap_t>()) }.cast::<mi_heap_t>();
@@ -164,13 +164,13 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
             Errno::EFAULT,
             format_args!("unable to dynamically create a thread local for a heap\n"),
         );
-        // SAFETY[AUDIT:heap-lifecycle-boundary]: the heap metadata was just
+        // SAFETY[AUDIT:heap-creation-boundary]: the heap metadata was just
         // allocated and has not been registered with the subproc list.
         unsafe { mi_free(heap.cast::<c_void>()) };
         return ptr::null_mut();
     }
 
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: `heap` is freshly allocated,
+    // SAFETY[AUDIT:heap-creation-boundary]: `heap` is freshly allocated,
     // `heap_main` is initialized, and subproc list insertion is lock-protected.
     unsafe {
         (*heap).theap = theap_slot;
@@ -210,20 +210,20 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
 /// The allocator runtime must be initialized or safe to initialize on this
 /// thread. The returned heap, when non-null, must later be released through the
 /// heap deletion or destruction APIs.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: public heap creation forwards to the
+// SAFETY[AUDIT:heap-creation-boundary]: public heap creation forwards to the
 // arena-aware constructor with no exclusive arena.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_new() -> *mut mi_heap_t {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: forwards the heap creation
+    // SAFETY[AUDIT:heap-creation-boundary]: forwards the heap creation
     // contract with no exclusive arena.
     unsafe { mi_heap_new_in_arena(ptr::null_mut()) }
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: thread-heap teardown walks only the
+// SAFETY[AUDIT:heap-nonmain-cleanup-boundary]: thread-heap teardown walks only the
 // live heap's thread-heap list while holding its list lock.
 unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
     let heap = heap.as_ptr();
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: callers pass a live heap whose
+    // SAFETY[AUDIT:heap-nonmain-cleanup-boundary]: callers pass a live heap whose
     // thread heaps are being deleted or destroyed.
     unsafe {
         loop {
@@ -250,19 +250,19 @@ unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
     }
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: owned heap teardown cannot target the
+// SAFETY[AUDIT:heap-nonmain-cleanup-boundary]: owned heap teardown cannot target the
 // process main heap and delegates to the lock-protected list walker.
 unsafe fn mi_heap_free_theaps(heap: OwnedHeap) {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: `OwnedHeap` proves non-main live
+    // SAFETY[AUDIT:heap-nonmain-cleanup-boundary]: `OwnedHeap` proves non-main live
     // heap metadata for thread-heap teardown.
     unsafe { mi_heap_free_theaps_in(heap.ptr()) };
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: final owned heap cleanup unregisters
+// SAFETY[AUDIT:heap-nonmain-cleanup-boundary]: final owned heap cleanup unregisters
 // the heap, frees page tables, releases TLS state, and frees metadata.
 unsafe fn mi_heap_free(heap: OwnedHeap) {
     let heap = heap.ptr().as_ptr();
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: callers pass a non-main heap that
+    // SAFETY[AUDIT:heap-nonmain-cleanup-boundary]: callers pass a non-main heap that
     // is no longer reachable by mutators.
     unsafe {
         crate::internal::mi_assert_internal!(!heap.is_null() && !_mi_is_heap_main(heap));
@@ -308,30 +308,30 @@ unsafe fn mi_heap_free(heap: OwnedHeap) {
 ///
 /// `heap` may be null. A non-null heap must be live, must not be the main heap,
 /// and must not be used again after this call returns.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: heap deletion rejects main heaps,
+// SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: heap deletion rejects main heaps,
 // moves pages to main heap, and then frees owned heap metadata.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
     let Some(heap) = HeapPtr::new(heap) else {
         return;
     };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: non-null heap is live by the
+    // SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: non-null heap is live by the
     // caller contract and `OwnedHeap` rejects the process main heap.
     let Some(heap) = (unsafe { OwnedHeap::new(heap) }) else {
         _mi_warning_message_fmt(format_args!("cannot delete the main heap\n"));
         return;
     };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: heap deletion owns the non-main
+    // SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: heap deletion owns the non-main
     // heap teardown sequence.
     unsafe { mi_heap_delete_typed(heap) };
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: typed heap delete moves live pages
+// SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: typed heap delete moves live pages
 // away before freeing the owned heap metadata.
 #[inline]
 unsafe fn mi_heap_delete_typed(heap: OwnedHeap) {
     let heap_raw = heap.ptr().as_ptr();
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: heap deletion owns the non-main
+    // SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: heap deletion owns the non-main
     // heap teardown sequence.
     unsafe {
         mi_heap_free_theaps(heap);
@@ -344,14 +344,14 @@ unsafe fn mi_heap_delete_typed(heap: OwnedHeap) {
 ///
 /// `heap` may be null. A non-null heap must be live and must not be accessed
 /// after destruction starts, except through allocator teardown internals.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: force destroy classifies live heap
+// SAFETY[AUDIT:heap-main-lifecycle-boundary]: force destroy classifies live heap
 // metadata into main or owned teardown witnesses before destroying pages.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
     let Some(heap) = HeapPtr::new(heap) else {
         return;
     };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: force-destroy owns teardown of
+    // SAFETY[AUDIT:heap-main-lifecycle-boundary]: force-destroy owns teardown of
     // the live heap pointer.
     unsafe {
         if let Some(heap) = MainHeap::new(heap) {
@@ -362,12 +362,12 @@ pub(crate) unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
     }
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: force-destroy of the main heap keeps
+// SAFETY[AUDIT:heap-main-lifecycle-boundary]: force-destroy of the main heap keeps
 // metadata ownership and destroys only pages and thread heaps.
 #[inline]
 unsafe fn mi_heap_force_destroy_main(heap: MainHeap) {
     let heap = heap.ptr();
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: force-destroy owns teardown of
+    // SAFETY[AUDIT:heap-main-lifecycle-boundary]: force-destroy owns teardown of
     // this main heap.
     unsafe {
         mi_heap_free_theaps_in(heap);
@@ -375,12 +375,12 @@ unsafe fn mi_heap_force_destroy_main(heap: MainHeap) {
     }
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: force-destroy of an owned heap frees
+// SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: force-destroy of an owned heap frees
 // thread heaps, destroys pages, then releases owned heap metadata.
 #[inline]
 unsafe fn mi_heap_force_destroy_owned(heap: OwnedHeap) {
     let heap_ptr = heap.ptr();
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: force-destroy owns teardown of
+    // SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: force-destroy owns teardown of
     // this non-main heap.
     unsafe {
         mi_heap_free_theaps(heap);
@@ -393,20 +393,20 @@ unsafe fn mi_heap_force_destroy_owned(heap: OwnedHeap) {
 ///
 /// `heap` may be null. A non-null heap must be live, must not be the main heap,
 /// and must not be used again after this call returns.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: heap destruction rejects main heaps
+// SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: heap destruction rejects main heaps
 // before entering the owned force-destroy path.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_destroy(heap: *mut mi_heap_t) {
     let Some(heap) = HeapPtr::new(heap) else {
         return;
     };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: non-null heap is live by the
+    // SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: non-null heap is live by the
     // caller contract and `OwnedHeap` rejects the process main heap.
     let Some(heap) = (unsafe { OwnedHeap::new(heap) }) else {
         _mi_warning_message_fmt(format_args!("cannot destroy the main heap\n"));
         return;
     };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: non-main heap is live and destroy
+    // SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]: non-main heap is live and destroy
     // owns teardown.
     unsafe { mi_heap_force_destroy_owned(heap) };
 }
@@ -415,17 +415,17 @@ pub unsafe extern "C" fn mi_heap_destroy(heap: *mut mi_heap_t) {
 ///
 /// `p` may be null. A non-null pointer must be suitable for mimalloc's safe
 /// page lookup, such as an allocation pointer or supported interior pointer.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: ownership lookup translates an
+// SAFETY[AUDIT:heap-ownership-query-boundary]: ownership lookup translates an
 // allocation pointer to its allocator page and heap without taking ownership.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_of(p: *const c_void) -> *mut mi_heap_t {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: caller permits allocator page
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: caller permits allocator page
     // lookup for `p`.
     let page: *mut mi_page_t = unsafe { _mi_safe_ptr_page(p) };
     if page.is_null() {
         return ptr::null_mut();
     }
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: non-null page came from the
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: non-null page came from the
     // allocator page map.
     unsafe { mi_page_heap(page) }
 }
@@ -434,11 +434,11 @@ pub unsafe extern "C" fn mi_heap_of(p: *const c_void) -> *mut mi_heap_t {
 ///
 /// `p` may be null. A non-null pointer must be suitable for mimalloc's safe
 /// page lookup, such as an allocation pointer or supported interior pointer.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: heap containment is a nullable
+// SAFETY[AUDIT:heap-ownership-query-boundary]: heap containment is a nullable
 // ownership lookup and does not retain pointers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_any_heap_contains(p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
     // ownership-inspection contract.
     unsafe { !mi_heap_of(p).is_null() }
 }
@@ -447,18 +447,18 @@ pub unsafe extern "C" fn mi_any_heap_contains(p: *const c_void) -> bool {
 ///
 /// `heap` may be null to select the main heap. Non-null heap and pointer
 /// arguments must remain valid for allocator ownership inspection.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: heap-specific containment selects the
+// SAFETY[AUDIT:heap-ownership-query-boundary]: heap-specific containment selects the
 // main heap for null and compares against allocator page ownership.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_void) -> bool {
     let heap = if heap.is_null() {
-        // SAFETY[AUDIT:heap-lifecycle-boundary]: null heap selects the main
+        // SAFETY[AUDIT:heap-ownership-query-boundary]: null heap selects the main
         // heap by API contract.
         unsafe { mi_heap_main() }
     } else {
         heap.cast_mut()
     };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
     // ownership-inspection contract.
     core::ptr::eq(heap.cast_const(), unsafe { mi_heap_of(p) })
 }
@@ -467,69 +467,69 @@ pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_vo
 ///
 /// `heap` may be null to select the main heap. Non-null heap and pointer
 /// arguments must remain valid for allocator ownership inspection.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: checked ownership parses heap metadata
+// SAFETY[AUDIT:heap-ownership-query-boundary]: checked ownership parses heap metadata
 // into a borrowed witness before comparing allocator page ownership.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_void) -> bool {
     let heap = if heap.is_null() {
-        // SAFETY[AUDIT:heap-lifecycle-boundary]: null heap selects the main
+        // SAFETY[AUDIT:heap-ownership-query-boundary]: null heap selects the main
         // heap by API contract.
         unsafe { mi_heap_main() }
     } else {
         heap
     };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
     // ownership-inspection contract.
     let Some(heap) = (unsafe { BorrowedHeap::from_lookup_raw(heap) }) else {
         return false;
     };
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: heap and pointer arguments remain
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: heap and pointer arguments remain
     // valid for ownership inspection.
     unsafe { mi_heap_check_owned_typed(heap, p) }
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: typed ownership check preserves the
+// SAFETY[AUDIT:heap-ownership-query-boundary]: typed ownership check preserves the
 // main-heap and owned-heap distinction without retaining pointer state.
 #[inline]
 unsafe fn mi_heap_check_owned_typed(heap: BorrowedHeap, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: `heap` is a live heap borrowed for
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: `heap` is a live heap borrowed for
     // this ownership check.
     if let Some(heap) = unsafe { OwnedHeap::new(heap.ptr()) } {
-        // SAFETY[AUDIT:heap-lifecycle-boundary]: non-main heap and pointer
+        // SAFETY[AUDIT:heap-ownership-query-boundary]: non-main heap and pointer
         // remain valid for ownership inspection.
         unsafe { mi_heap_check_owned_owned(heap, p) }
     } else {
-        // SAFETY[AUDIT:heap-lifecycle-boundary]: main heap and pointer remain
+        // SAFETY[AUDIT:heap-ownership-query-boundary]: main heap and pointer remain
         // valid for ownership inspection.
         unsafe { mi_heap_check_owned_borrowed(heap, p) }
     }
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: owned-heap ownership check compares
+// SAFETY[AUDIT:heap-ownership-query-boundary]: owned-heap ownership check compares
 // only the heap metadata pointer against allocator page ownership.
 #[inline]
 unsafe fn mi_heap_check_owned_owned(heap: OwnedHeap, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
     // ownership-inspection contract.
     core::ptr::eq(heap.ptr().as_ptr().cast_const(), unsafe { mi_heap_of(p) })
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: borrowed main-heap ownership check
+// SAFETY[AUDIT:heap-ownership-query-boundary]: borrowed main-heap ownership check
 // compares only the heap metadata pointer against allocator page ownership.
 #[inline]
 unsafe fn mi_heap_check_owned_borrowed(heap: BorrowedHeap, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
     // ownership-inspection contract.
     core::ptr::eq(heap.ptr().as_ptr().cast_const(), unsafe { mi_heap_of(p) })
 }
 
 #[cfg(feature = "c-abi")]
-// SAFETY[AUDIT:heap-lifecycle-boundary]: const ABI witness preserves the raw C
+// SAFETY[AUDIT:heap-stats-merge-boundary]: const ABI witness preserves the raw C
 // signature for feature-gated stats merge exports.
 const _: unsafe extern "C" fn(*mut mi_heap_t) = mi_heap_stats_merge_to_main;
 
 #[cfg(feature = "c-abi")]
-// SAFETY[AUDIT:heap-lifecycle-boundary]: const ABI witness preserves the raw C
+// SAFETY[AUDIT:heap-ownership-query-boundary]: const ABI witness preserves the raw C
 // signature for feature-gated heap ownership exports.
 const _: unsafe extern "C" fn(*mut mi_heap_t, *const c_void) -> bool = mi_heap_check_owned;
 
@@ -537,11 +537,11 @@ const _: unsafe extern "C" fn(*mut mi_heap_t, *const c_void) -> bool = mi_heap_c
 ///
 /// `p` may be null. A non-null pointer must be suitable for mimalloc's safe
 /// page lookup, such as an allocation pointer or supported interior pointer.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: global ownership check is a raw C ABI
+// SAFETY[AUDIT:heap-ownership-query-boundary]: global ownership check is a raw C ABI
 // shim over the same allocator page lookup as `mi_any_heap_contains`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_check_owned(p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
     // ownership-inspection contract.
     unsafe { mi_any_heap_contains(p) }
 }
@@ -550,7 +550,7 @@ pub unsafe extern "C" fn mi_check_owned(p: *const c_void) -> bool {
 ///
 /// `heap` may be null. A non-null `p` must be suitable for mimalloc's safe page
 /// lookup, and the owning page and heap must not be concurrently destroyed.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: under-utilized inspection converts
+// SAFETY[AUDIT:heap-underutilized-boundary]: under-utilized inspection converts
 // raw heap/page metadata to typed witnesses before reading page counters.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
@@ -561,7 +561,7 @@ pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
     if p.is_null() {
         return false;
     }
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: non-null `p` is suitable for
+    // SAFETY[AUDIT:heap-underutilized-boundary]: non-null `p` is suitable for
     // allocator page lookup by API contract.
     unsafe {
         let heap = if heap.is_null() {
@@ -577,7 +577,7 @@ pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
     }
 }
 
-// SAFETY[AUDIT:heap-lifecycle-boundary]: typed under-utilized inspection reads
+// SAFETY[AUDIT:heap-underutilized-boundary]: typed under-utilized inspection reads
 // page counters and optional heap ownership without allocating or retaining.
 #[inline]
 unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
@@ -585,7 +585,7 @@ unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
     page: PagePtr,
     perc_threshold: usize,
 ) -> bool {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: `page` comes from the safe page
+    // SAFETY[AUDIT:heap-underutilized-boundary]: `page` comes from the safe page
     // map; optional `heap` is a live borrowed heap for comparison only.
     unsafe {
         let page_raw = page.as_ptr();
@@ -618,14 +618,14 @@ unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
 /// # Safety
 ///
 /// `heap` must be a live heap pointer with initialized thread-local metadata.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: lazy thread-heap initialization uses
+// SAFETY[AUDIT:heap-thread-association-boundary]: lazy thread-heap initialization uses
 // the heap's reserved TLS key and publishes a per-thread theap for that heap.
 #[inline(never)]
 unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let heap = heap.cast_mut();
     crate::internal::mi_assert_internal!(!heap.is_null());
 
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: caller passes a live heap pointer
+    // SAFETY[AUDIT:heap-thread-association-boundary]: caller passes a live heap pointer
     // with initialized heap-local metadata.
     unsafe {
         if _mi_is_heap_main(heap) {
@@ -672,11 +672,11 @@ unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap
 ///
 /// `heap` may be null or point to a live heap. Non-main heaps must have a valid
 /// thread-local slot and must not be concurrently destroyed.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: peek returns the current thread's
+// SAFETY[AUDIT:heap-thread-association-boundary]: peek returns the current thread's
 // cached heap-local theap or the main theap without allocating.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: caller passes null or a live heap
+    // SAFETY[AUDIT:heap-thread-association-boundary]: caller passes null or a live heap
     // pointer with initialized thread-local metadata.
     unsafe {
         if heap.is_null() || _mi_is_heap_main(heap) {
@@ -691,37 +691,37 @@ pub(crate) unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) 
 ///
 /// `heap` may be null or point to a live heap. Non-main heaps must have a valid
 /// thread-local slot and must not be concurrently destroyed.
-// SAFETY[AUDIT:heap-lifecycle-boundary]: get-or-init preserves the no-allocation
+// SAFETY[AUDIT:heap-thread-association-boundary]: get-or-init preserves the no-allocation
 // fast peek path and initializes only on a missing heap-local theap.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_theap_get_or_init(
     heap: *const mi_heap_t,
 ) -> *mut mi_theap_t {
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-thread-association-boundary]: forwards this API's
     // live-heap/thread-local metadata contract.
     let mut theap = unsafe { _mi_heap_theap_get_peek(heap) };
     if theap.is_null() {
-        // SAFETY[AUDIT:heap-lifecycle-boundary]: same contract as above;
+        // SAFETY[AUDIT:heap-thread-association-boundary]: same contract as above;
         // initializes the heap-local thread heap if needed.
         theap = unsafe { mi_heap_init_theap(heap) };
         if theap.is_null() {
             return ptr::addr_of!(_mi_theap_empty_wrong).cast_mut();
         }
     }
-    // SAFETY[AUDIT:heap-lifecycle-boundary]: `theap` is either an initialized
+    // SAFETY[AUDIT:heap-thread-association-boundary]: `theap` is either an initialized
     // thread heap or the allocator empty sentinel.
     unsafe { _mi_theap_cached_set(theap) };
     theap
 }
 
 #[used]
-// SAFETY[AUDIT:heap-lifecycle-boundary]: retention anchor keeps the local C ABI
+// SAFETY[AUDIT:heap-thread-association-boundary]: retention anchor keeps the local C ABI
 // lazy thread-heap initializer visible to generated artifacts.
 static MI_HEAP_INIT_THEAP_KEEP: unsafe extern "C" fn(*const mi_heap_t) -> *mut mi_theap_t =
     mi_heap_init_theap;
 
 #[used]
-// SAFETY[AUDIT:heap-lifecycle-boundary]: retention anchor keeps the local C ABI
+// SAFETY[AUDIT:heap-thread-association-boundary]: retention anchor keeps the local C ABI
 // get-or-init helper visible to generated artifacts.
 static MI_HEAP_THEAP_GET_OR_INIT_KEEP: unsafe extern "C" fn(*const mi_heap_t) -> *mut mi_theap_t =
     _mi_heap_theap_get_or_init;

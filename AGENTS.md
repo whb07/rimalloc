@@ -75,6 +75,18 @@ For Rust code changes, run:
 
 If any command cannot be run or fails for reasons unrelated to your changes, report that explicitly in the final response. Do not silently skip these checks.
 
+## 6. Avoid Audit Theater and Make-Work
+
+**Hard results beat process metrics. Don't confuse motion with progress.**
+
+Audit, compliance, and ratchet-style work must produce a real reduction in risk or complexity, not just larger ledgers. Before declaring any audit or refactoring task done, the code must be measurably better on a metric that matters — not just better documented.
+
+- **Prefer fewer unsafe sites over more evidence rows.** Adding TSV rows, allowlist entries, or test files is not an achievement if the production unsafe count is flat.
+- **Caps and limits are guardrails, not goals.** Splitting a module to stay under a line limit only counts if the split isolates an invariant or removes a hotspot. Fragmentation for its own sake is still churn.
+- **Verification is a hard gate, not a footnote.** `cargo fmt`, `cargo clippy`, and `cargo test` must pass before claiming progress. A long commit history with no verification commits is a red flag, not a flex.
+- **Commit the actual state.** A dirty working tree full of "TODO backlog" updates at the end of a run means the recorded state is stale. Land or revert it.
+- **Ask whether a senior engineer would call it make-work.** If the main effect of a change is more files, more entries, or more metadata rather than a smaller trust surface, stop and do the real reduction first.
+
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, clarifying questions come before implementation rather than after mistakes, and audit work shows up as reduced risk rather than expanded paperwork.

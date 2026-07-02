@@ -46,7 +46,10 @@ pub(super) fn assert_allocation_free_focused_evidence(evidence: &str) {
         "page-huge-allocation-boundary",
         "page-stats-public-boundary",
         "free-raw-export-boundary",
-        "free-validation-boundary",
+        "free-double-check-boundary",
+        "free-pointer-lookup-boundary",
+        "free-abi-validation-boundary",
+        "free-validation-fixtures",
         "free-padding-boundary",
         "free-usable-size-boundary",
         "free-stats-boundary",
@@ -64,7 +67,9 @@ pub(super) fn assert_allocation_free_focused_evidence(evidence: &str) {
         "aligned-realloc-copy-boundary",
         "aligned-recalloc-product-boundary",
         "aligned-realloc-global-export-boundary",
-        "aligned-realloc-heap-export-boundary",
+        "aligned-realloc-heap-realloc-boundary",
+        "aligned-realloc-heap-rezalloc-boundary",
+        "aligned-realloc-heap-recalloc-boundary",
     ] {
         assert_focused_evidence(audit_id, ALLOCATION_FREE_FOCUSED_PATH);
     }

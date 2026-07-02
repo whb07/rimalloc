@@ -217,10 +217,24 @@ Operation IDs:
   dereference pointers; it preserves upstream nullable raw pointer signatures so
   each unsafe call site inherits the documented C ABI ownership and lifetime
   obligations.
-- `SAFETY[AUDIT:ffi-libc-string-boundary]`: `src/ffi/libc.rs` owns libc-like
-  C-string helpers for bounded scans, comparisons, copies, concatenation, and
-  substring lookup. Callers provide readable nul-terminated strings and writable
-  destination ranges where required.
+- `SAFETY[AUDIT:ffi-libc-string-compare-boundary]`: `src/ffi/libc.rs` owns
+  libc-like case-insensitive and equality comparison helpers. Unsafe operations
+  are limited to caller-proven readable C-string prefixes and nullable equality
+  handling.
+- `SAFETY[AUDIT:ffi-libc-string-copy-boundary]`: `src/ffi/libc.rs` owns
+  libc-like bounded copy and concatenation helpers. Unsafe operations validate
+  nullable source/destination pointers, cap reads and writes to the supplied
+  destination capacity, and preserve explicit NUL termination.
+- `SAFETY[AUDIT:ffi-libc-string-scan-boundary]`: `src/ffi/libc.rs` owns
+  libc-like string length scanners. Unsafe operations are limited to bounded
+  byte reads or the caller-supplied nul-terminated C-string contract.
+- `SAFETY[AUDIT:ffi-libc-string-search-boundary]`: `src/ffi/libc.rs` owns
+  libc-like substring search. Unsafe operations bound haystack and pattern
+  scans before returning a pointer into the original haystack.
+- `SAFETY[AUDIT:ffi-libc-string-test-fixtures]`: `src/ffi/libc.rs` owns
+  test-only C-string fixtures. Unsafe operations are limited to local
+  nul-terminated buffers, static C strings, and pointer-offset assertions used
+  to exercise the libc helper boundaries.
 - `SAFETY[AUDIT:ffi-libc-env-boundary]`: `src/ffi/libc.rs` owns environment
   lookup forwarding. Unsafe operations are limited to validating nullable
   C-string and output-buffer arguments before calling the platform primitive.
@@ -273,11 +287,18 @@ Operation IDs:
   under-utilized page inspection. Unsafe operations convert raw heap/page
   arguments into typed witnesses, read page counters, and compare optional heap
   ownership without retaining pointers.
-- `SAFETY[AUDIT:thread-heap-visit-boundary]`:
-  `src/allocator/thread_heap.rs` owns thread-heap area, page, and block
-  visitation. Unsafe operations are limited to C ABI callbacks, visitor argument
-  slots, page/queue traversal, fast-divisor out-pointers, and typed heap/page
-  witnesses during the walk.
+- `SAFETY[AUDIT:thread-heap-visit-callback-boundary]`:
+  `src/allocator/thread_heap.rs` owns thread-heap visitation callback shims and
+  raw callback argument slots. Unsafe operations are limited to ABI callback
+  invocation after converting allocator metadata into typed witnesses.
+- `SAFETY[AUDIT:thread-heap-area-block-boundary]`:
+  `src/allocator/thread_heap.rs` owns heap-area initialization and live-block
+  visitation. Unsafe operations derive page, heap, block-size, and fast-divisor
+  witnesses before walking allocator-owned block ranges.
+- `SAFETY[AUDIT:thread-heap-page-visit-boundary]`:
+  `src/allocator/thread_heap.rs` owns thread-heap page and area visitor exports.
+  Unsafe operations traverse typed page queues, preserve visitor state for the
+  duration of the walk, and validate page ownership before callback entry.
 - `SAFETY[AUDIT:thread-heap-collect-boundary]`:
   `src/allocator/thread_heap.rs` owns page and heap collection. Unsafe
   operations validate initialized thread heaps, visit pages for collect/abandon,
@@ -798,11 +819,20 @@ Operation IDs:
   shims. Unsafe operations are limited to symbol-preserving entry points and
   direct delegation into validated routing while preserving no-allocation
   interposition behavior.
-- `SAFETY[AUDIT:free-validation-boundary]`: `src/allocator/free.rs` owns free
-  pointer validation, double-free detection, interior/guarded pointer
-  classification, and validation proof fixtures. Unsafe operations are limited
-  to allocator-owned page/block/user-pointer witnesses, same-page checks, and
-  guarded-block unprotection.
+- `SAFETY[AUDIT:free-double-check-boundary]`: `src/allocator/free.rs` owns
+  double-free detection. Unsafe operations inspect allocator-owned page free
+  lists and encoded next pointers without mutating allocator state.
+- `SAFETY[AUDIT:free-pointer-lookup-boundary]`: `src/allocator/free.rs` owns
+  free pointer lookup and guarded/interior pointer classification. Unsafe
+  operations convert allocator-owned user pointers into typed page, block, and
+  guarded-block witnesses before free routing.
+- `SAFETY[AUDIT:free-abi-validation-boundary]`: `src/allocator/free.rs` owns
+  legacy C ABI free validation exports. Unsafe operations route raw free-size,
+  aligned-free, ufree, and small-free inputs through the validated free path.
+- `SAFETY[AUDIT:free-validation-fixtures]`: `src/allocator/free.rs` owns
+  test-only free validation fixtures. Unsafe operations build stack-local page
+  and block metadata, exercise null/interior/guarded lookup, and verify
+  local/remote/abandoned owner classification.
 - `SAFETY[AUDIT:free-padding-boundary]`: `src/allocator/free.rs` owns padding
   decode, shrink, verification, and debug canary checks. Unsafe operations are
   limited to typed padding metadata on validated blocks and the matching
@@ -879,11 +909,18 @@ Operation IDs:
   `src/allocator/aligned.rs` owns global aligned realloc C ABI exports. Unsafe
   operations are limited to raw realloc/rezalloc/recalloc entry points
   forwarding into checked default thread-heap requests.
-- `SAFETY[AUDIT:aligned-realloc-heap-export-boundary]`:
+- `SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]`:
   `src/allocator/aligned.rs` owns heap aligned realloc C ABI exports. Unsafe
-  operations are limited to borrowing raw heap handles, validating old
-  allocation pointers, checked layout/product handling, and forwarding typed
-  heap realloc requests.
+  operations borrow heap handles, validate old allocation pointers, build
+  checked layout requests, and dispatch typed heap realloc calls.
+- `SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]`:
+  `src/allocator/aligned.rs` owns heap aligned rezalloc C ABI exports. Unsafe
+  operations preserve zeroing layout requirements while borrowing heap handles
+  and forwarding typed heap realloc requests.
+- `SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]`:
+  `src/allocator/aligned.rs` owns heap aligned recalloc C ABI exports. Unsafe
+  operations preserve checked product sizing, zeroed layout construction, old
+  allocation validation, and typed heap recalloc dispatch.
 - `SAFETY[AUDIT:options-storage-lock-boundary]`: `src/allocator/options.rs`
   owns option descriptor storage and initialization. Unsafe operations are
   limited to mimalloc lock guards, atomic option values, bounded environment
@@ -960,12 +997,18 @@ Operation IDs:
   public stats copy/get exports. Unsafe operations validate output buffers,
   subproc IDs, nullable heap pointers, and stats header versions before copying
   or aggregating results.
-- `SAFETY[AUDIT:stats-output-boundary]`: `src/allocator/stats.rs` owns
-  formatted stats output, stack-buffer amount formatting, callback forwarding,
-  and raw print/export shims. Unsafe operations are limited to callback output
-  buffers, legacy callback pointer transmutation, C string formatting, and C
-  ABI print shims while preserving buffer bounds and allocator recursion
-  constraints.
+- `SAFETY[AUDIT:stats-formatting-boundary]`: `src/allocator/stats.rs` owns
+  fixed-buffer stats formatting and typed bin conversion helpers. Unsafe
+  operations are limited to stack buffer C-string projection, format string
+  reads, and locally asserted bin newtypes.
+- `SAFETY[AUDIT:stats-buffered-output-boundary]`: `src/allocator/stats.rs`
+  owns buffered stats output forwarding. Unsafe operations write within the
+  stack-backed output buffer and forward flushed C strings through the selected
+  output callback.
+- `SAFETY[AUDIT:stats-print-export-boundary]`: `src/allocator/stats.rs` owns
+  raw stats print/export C ABI shims. Unsafe operations validate nullable
+  subproc, heap, thread-heap, stats, and callback witnesses before delegating to
+  formatted stats output.
 - `SAFETY[AUDIT:stats-process-info-boundary]`: `src/allocator/stats.rs` owns
   process-info collection and raw out-pointer publication. Unsafe operations
   are limited to platform process-info calls, nullable out-pointer writes, and
@@ -1121,11 +1164,20 @@ Operation IDs:
   primitive libc/syscall declarations and errno slot imports. Unsafe operations
   are limited to source-present FFI declarations and errno reads while keeping
   the primitive backend allocation-free and C ABI compatible.
-- `SAFETY[AUDIT:unix-mmap-syscall-boundary]`: `src/platform/unix.rs` owns Unix
-  `mmap`/`munmap`/`madvise`/`mprotect` allocation primitives and direct file or
-  syscall helper wrappers. Unsafe operations are limited to caller-proven
-  address ranges, file descriptors, alignment hints, errno propagation, and
-  nullable out-pointer writes.
+- `SAFETY[AUDIT:unix-file-syscall-boundary]`: `src/platform/unix.rs` owns Unix
+  direct file syscall wrappers. Unsafe operations preserve caller-proven path,
+  file descriptor, and buffer contracts for open/read/close/access.
+- `SAFETY[AUDIT:unix-mmap-primitive-boundary]`: `src/platform/unix.rs` owns
+  Unix `mmap`, `munmap`, and `madvise` primitive helpers. Unsafe operations are
+  limited to caller-proven address ranges, alignment hints, and errno
+  propagation.
+- `SAFETY[AUDIT:unix-memory-alloc-boundary]`: `src/platform/unix.rs` owns the
+  Unix primitive allocation export. Unsafe operations preserve mmap flag
+  construction, large-page delegation, and nullable allocation out-pointers.
+- `SAFETY[AUDIT:unix-memory-commit-boundary]`: `src/platform/unix.rs` owns Unix
+  commit, reuse, decommit, reset, and protect exports. Unsafe operations are
+  limited to caller-proven managed address ranges, mprotect/madvise calls,
+  recommit out-pointers, and retained function pointer anchors.
 - `SAFETY[AUDIT:unix-process-info-boundary]`: `src/platform/unix.rs` owns Unix
   process, clock, page-size, overcommit, and physical-memory probes. Unsafe
   operations are limited to `sysconf`, proc/sys reads, `clock_gettime`,
@@ -1189,11 +1241,20 @@ Operation IDs:
   Windows stderr and environment helpers. Unsafe operations are limited to
   C-string reads, case-insensitive environment lookup, bounded result copying,
   standard-error handle probing, console/file writes, and std fallback output.
-- `SAFETY[AUDIT:windows-tls-fls-boundary]`: `src/platform/windows.rs` owns
-  Windows TLS/FLS, DLL lifecycle, CRT attach/detach, allocator init/done shims,
-  TEB thread-pool probing, and thread-yield helpers. Unsafe operations are
-  limited to callback dispatch, FLS key create/delete/set calls, thread-heap
-  destructor callbacks, and attach/detach forwarding.
+- `SAFETY[AUDIT:windows-fls-api-boundary]`: `src/platform/windows.rs` owns
+  Windows FLS callback type and primitive import declarations. Unsafe
+  operations preserve the FLS callback ABI and imported system function shapes.
+- `SAFETY[AUDIT:windows-dll-lifecycle-boundary]`: `src/platform/windows.rs`
+  owns Windows DLL, CRT, allocator init/done, and thread-yield lifecycle shims.
+  Unsafe operations forward attach/detach events, module checks, and process
+  init/done hooks through the translated C lifecycle paths.
+- `SAFETY[AUDIT:windows-fls-thread-boundary]`: `src/platform/windows.rs` owns
+  Windows FLS thread cleanup and thread-heap association. Unsafe operations
+  create/delete FLS keys, clear thread-local values, and publish default thread
+  heaps under the Windows FLS lifecycle contract.
+- `SAFETY[AUDIT:windows-teb-threadpool-boundary]`: `src/platform/windows.rs`
+  owns Windows TEB thread-pool probing. Unsafe operations read TEB thread-pool
+  data only after Windows-version and null checks.
 - `SAFETY[AUDIT:windows-large-page-boundary]`: `src/platform/windows.rs` owns
   Windows large and huge page privilege enablement, page-size probing, large
   allocation attempts, huge-page fallback, and large-allocation out-pointers.
@@ -1755,11 +1816,20 @@ Operation IDs:
   Unsafe operations are limited to caller-proven non-null construction and
   non-dereferenced lint-touch references while preserving transparent layout
   and pointer-sized option niches.
-- `SAFETY[AUDIT:typed-page-accessors]`: `src/types/ptr.rs` owns `PagePtr`
-  metadata accessors. Unsafe operations are limited to page field reads/writes,
-  free-list heads, atomic page ownership fields, page keys, block-area starts,
-  and locally asserted scalar narrowing while preserving initialized page
-  metadata invariants.
+- `SAFETY[AUDIT:typed-page-scalar-accessors]`: `src/types/ptr.rs` owns
+  `PagePtr` scalar metadata accessors. Unsafe operations are limited to
+  block-size, used/capacity/reserved, page-start, byte-size, and containment
+  projections while preserving initialized page metadata invariants.
+- `SAFETY[AUDIT:typed-page-free-list-accessors]`: `src/types/ptr.rs` owns
+  `PagePtr` free-list head accessors. Unsafe operations read and write local
+  and available free-list heads through typed free-list wrappers.
+- `SAFETY[AUDIT:typed-page-atomic-accessors]`: `src/types/ptr.rs` owns
+  `PagePtr` atomic owner/free and key accessors. Unsafe operations project page
+  thread-id cells, thread-free cells, and debug/secure keys through typed
+  atomic and key wrappers.
+- `SAFETY[AUDIT:typed-page-fixture-touch-accessors]`: `src/types/ptr.rs` owns
+  lint-touch references that keep page accessors visible to release-audit and
+  unit-test fixtures without dereferencing page metadata.
 - `SAFETY[AUDIT:typed-block-accessors]`: `src/types/ptr.rs` owns `BlockPtr`
   free-list link accessors. Unsafe operations are limited to encoded link
   reads/writes and page-key based link decoding/encoding while preserving
@@ -1777,10 +1847,17 @@ Operation IDs:
   accessors. Unsafe operations are limited to thread identity, sequence, NUMA,
   subproc, stats, arena table, memid, thread-heap, recursion, and thread-pool
   fields while preserving TLD ownership and optional subproc behavior.
-- `SAFETY[AUDIT:typed-arena-accessors]`: `src/types/ptr.rs` owns `ArenaPtr`
-  accessors. Unsafe operations are limited to arena memid, subproc, index,
-  slice count, NUMA/exclusive flags, purge state, parent links, slice bitmaps,
-  page metadata, and arena-page records while preserving arena table domains.
+- `SAFETY[AUDIT:typed-arena-identity-accessors]`: `src/types/ptr.rs` owns
+  `ArenaPtr` identity and scalar metadata accessors. Unsafe operations are
+  limited to arena memid, subproc, index, slice count, NUMA, and exclusivity
+  fields while preserving arena table domains.
+- `SAFETY[AUDIT:typed-arena-linkage-accessors]`: `src/types/ptr.rs` owns
+  `ArenaPtr` linkage and page-table accessors. Unsafe operations project purge
+  state, parent links, slice bitmaps, page metadata, and arena-page records
+  through transparent wrappers.
+- `SAFETY[AUDIT:typed-arena-fixture-touch-accessors]`: `src/types/ptr.rs` owns
+  lint-touch references that keep arena accessors visible to release-audit and
+  unit-test fixtures without dereferencing arena metadata.
 - `SAFETY[AUDIT:typed-subproc-identity-accessors]`: `src/types/ptr.rs` owns
   `SubprocPtr` sequence accessors. Unsafe operations are limited to typed
   subproc identity fields while preserving atomic ordering wrappers.
@@ -1915,12 +1992,17 @@ Operation IDs:
   after pointer lookup has associated the user pointer, page, and block, or
   through the explicitly unsafe fast path that requires the same proof from its
   caller.
-- `SAFETY[AUDIT:unsafe-callback]`: `src/ffi/callbacks.rs` owns the unsafe
-  callback registration/trampoline boundary. The registered argument pointer is
-  created from the borrowed closure held by the guard, remains valid until
-  `Drop` restores the previous process-global callback state, and trampoline
-  entry catches Rust panics before returning through the C ABI where `std` or
-  tests permit panic containment.
+- `SAFETY[AUDIT:unsafe-callback-guard-boundary]`: `src/ffi/callbacks.rs` owns
+  unsafe callback guard registration, restoration, and trampoline entry. The
+  registered argument pointer is created from the borrowed closure held by the
+  guard, remains valid until `Drop` restores the previous process-global
+  callback state, and trampoline entry catches Rust panics before returning
+  through the C ABI where `std` or tests permit panic containment.
+- `SAFETY[AUDIT:unsafe-callback-test-fixtures]`: `src/safe/tests.rs` owns
+  callback guard test fixtures. Unsafe operations serialize process-global
+  callback registration, use local thread-heap fixtures for synchronous
+  deferred-free callback entry, and copy callback function pointer options only
+  for equality checks in tests.
 
 Evidence:
 

@@ -290,7 +290,9 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
         "thread-heap lifecycle unsafe boundaries should stay split without a migration allowlist entry"
     );
     for (audit_id, minimum) in [
-        ("thread-heap-visit-boundary", 28),
+        ("thread-heap-visit-callback-boundary", 5),
+        ("thread-heap-area-block-boundary", 10),
+        ("thread-heap-page-visit-boundary", 13),
         ("thread-heap-collect-boundary", 15),
         ("thread-heap-default-boundary", 3),
         ("thread-heap-create-boundary", 7),
@@ -305,4 +307,8 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
             "thread-heap unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
         );
     }
+    assert!(
+        !theap_rs.contains("SAFETY[AUDIT:thread-heap-visit-boundary]"),
+        "thread-heap visitation markers should stay split by callback, area/block, and page-walk responsibility"
+    );
 }

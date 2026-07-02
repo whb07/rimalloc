@@ -130,20 +130,20 @@ define_ptr_wrapper!(PagePtr, mi_page_t, "Non-null, aligned raw page metadata");
 impl PagePtr {
     /// # Safety
     /// The page pointer must refer to initialized page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn block_size(self) -> BlockSize {
         let raw = self.as_ptr();
         let block_size = unsafe { ptr::read(ptr::addr_of!((*raw).block_size)) };
         crate::internal::mi_assert_internal!(block_size > 0);
         // SAFETY: asserted above; initialized pages keep block_size non-zero.
-        // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+        // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
         unsafe { BlockSize::new_unchecked(block_size) }
     }
 
     /// # Safety
     /// The page pointer must refer to writable page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_block_size(self, block_size: BlockSize) {
         let raw = self.as_ptr();
@@ -152,7 +152,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to initialized page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn used(self) -> UsedBlockCount {
         let raw = self.as_ptr();
@@ -161,7 +161,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to writable page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_used(self, used: UsedBlockCount) {
         let raw = self.as_ptr();
@@ -171,24 +171,24 @@ impl PagePtr {
     /// # Safety
     /// The page pointer must refer to initialized page metadata satisfying
     /// `used <= capacity <= reserved`.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn capacity(self) -> PageCapacity {
         let raw = self.as_ptr();
         let used = unsafe { self.used() };
         let reserved = unsafe { self.reserved() };
-        // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+        // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
         let capacity = unsafe { ptr::read(ptr::addr_of!((*raw).capacity)) };
         crate::internal::mi_assert_internal!(used.get() <= capacity);
         crate::internal::mi_assert_internal!(capacity <= reserved.get());
         PageCapacity::new(used, capacity, reserved)
-            // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+            // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
             .unwrap_or_else(|| unsafe { PageCapacity::new_unchecked(capacity) })
     }
 
     /// # Safety
     /// The page pointer must refer to writable page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_capacity(self, capacity: PageCapacity) {
         let raw = self.as_ptr();
@@ -197,7 +197,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to initialized page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn reserved(self) -> ReservedBlockCount {
         let raw = self.as_ptr();
@@ -206,7 +206,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to writable page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_reserved(self, reserved: ReservedBlockCount) {
         let raw = self.as_ptr();
@@ -215,7 +215,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to initialized page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-free-list-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn free(self) -> AvailableFreeList {
         let raw = self.as_ptr();
@@ -224,7 +224,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to writable page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-free-list-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_free(self, free: AvailableFreeList) {
         let raw = self.as_ptr();
@@ -234,7 +234,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to initialized page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-free-list-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn local_free(self) -> LocalFreeList {
         let raw = self.as_ptr();
@@ -243,7 +243,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to writable page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-free-list-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_local_free(self, local_free: LocalFreeList) {
         let raw = self.as_ptr();
@@ -254,7 +254,7 @@ impl PagePtr {
     /// # Safety
     /// The page pointer must refer to page metadata whose `xthread_id` field can
     /// be accessed through the allocator's atomic field protocol.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-atomic-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_id_cell(self) -> AtomicPageThreadId {
         let raw = self.as_ptr();
@@ -266,7 +266,7 @@ impl PagePtr {
     /// # Safety
     /// The page pointer must refer to page metadata whose `xthread_free` field can
     /// be accessed through the allocator's atomic field protocol.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-atomic-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_free_cell(self) -> AtomicThreadFree {
         let raw = self.as_ptr();
@@ -277,7 +277,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to initialized page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-atomic-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn keys(self) -> PageKeys {
         #[cfg(any(
@@ -288,7 +288,7 @@ impl PagePtr {
         ))]
         {
             let raw = self.as_ptr();
-            // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+            // SAFETY[AUDIT:typed-page-atomic-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
             PageKeys(unsafe { ptr::read(ptr::addr_of!((*raw).keys)) })
         }
 
@@ -306,7 +306,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to writable page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-atomic-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_keys(self, keys: PageKeys) {
         #[cfg(any(
@@ -317,7 +317,7 @@ impl PagePtr {
         ))]
         {
             let raw = self.as_ptr();
-            // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+            // SAFETY[AUDIT:typed-page-atomic-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
             unsafe { ptr::write(ptr::addr_of_mut!((*raw).keys), keys.0) };
         }
 
@@ -335,7 +335,7 @@ impl PagePtr {
     /// # Safety
     /// The page pointer must refer to initialized page metadata with a non-null
     /// block-area start.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn start(self) -> PageStart {
         let raw = self.as_ptr();
@@ -344,7 +344,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to initialized page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn byte_size(self) -> usize {
         unsafe { self.block_size().get() * self.reserved().as_usize() }
@@ -352,7 +352,7 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer must refer to initialized page metadata.
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn contains_user(self, user: UserPtr) -> bool {
         let start = ptr_exposed_addr(unsafe { self.start() }.as_ptr());
@@ -916,7 +916,7 @@ define_ptr_wrapper!(ArenaPtr, mi_arena_t, "Non-null raw arena metadata");
 impl ArenaPtr {
     /// # Safety
     /// The arena pointer must refer to arena metadata whose memid field is valid.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn memid_ptr(self) -> *mut mi_memid_t {
         let raw = self.as_ptr();
@@ -925,7 +925,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn subproc(self) -> Option<SubprocPtr> {
         let raw = self.as_ptr();
@@ -934,7 +934,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to writable arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_subproc(self, subproc: Option<SubprocPtr>) {
         let raw = self.as_ptr();
@@ -945,19 +945,19 @@ impl ArenaPtr {
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata with an arena
     /// index less than `MI_MAX_ARENAS`.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn index(self) -> ArenaIndex {
         let raw = self.as_ptr();
         let index = unsafe { ptr::read(ptr::addr_of!((*raw).arena_idx)) };
         crate::internal::mi_assert_internal!(index < crate::types::MI_MAX_ARENAS);
-        // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+        // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
         unsafe { ArenaIndex::new_unchecked(index as u16) }
     }
 
     /// # Safety
     /// The arena pointer must refer to writable arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_index(self, index: ArenaIndex) {
         let raw = self.as_ptr();
@@ -967,7 +967,7 @@ impl ArenaPtr {
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata with non-zero
     /// slice count.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn slice_count(self) -> SliceCount {
         let raw = self.as_ptr();
@@ -975,14 +975,14 @@ impl ArenaPtr {
         crate::internal::mi_assert_internal!(count != 0);
         SliceCount::from_usize(count).unwrap_or_else(|| {
             crate::internal::mi_assert_internal!(false);
-            // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+            // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
             unsafe { SliceCount::new_unchecked(1) }
         })
     }
 
     /// # Safety
     /// The arena pointer must refer to writable arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_slice_count(self, count: SliceCount) {
         let raw = self.as_ptr();
@@ -991,7 +991,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn numa_node(self) -> NumaNode {
         let raw = self.as_ptr();
@@ -1000,7 +1000,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to writable arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_numa_node(self, node: NumaNode) {
         let raw = self.as_ptr();
@@ -1009,7 +1009,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn is_exclusive(self) -> bool {
         let raw = self.as_ptr();
@@ -1018,7 +1018,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to writable arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-identity-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_is_exclusive(self, is_exclusive: bool) {
         let raw = self.as_ptr();
@@ -1027,7 +1027,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to arena metadata whose purge field is valid.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn purge_expire_cell(self) -> AtomicI64Field {
         let raw = self.as_ptr();
@@ -1036,7 +1036,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn parent(self) -> Option<ArenaPtr> {
         let raw = self.as_ptr();
@@ -1045,7 +1045,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to writable arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_parent(self, parent: Option<ArenaPtr>) {
         let raw = self.as_ptr();
@@ -1055,7 +1055,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn slices_free(self) -> *mut mi_bbitmap_t {
         let raw = self.as_ptr();
@@ -1064,7 +1064,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn slices_committed(self) -> *mut mi_bitmap_t {
         let raw = self.as_ptr();
@@ -1073,7 +1073,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn slices_dirty(self) -> *mut mi_bitmap_t {
         let raw = self.as_ptr();
@@ -1082,7 +1082,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn slices_purge(self) -> *mut mi_bitmap_t {
         let raw = self.as_ptr();
@@ -1091,7 +1091,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to initialized arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn pages_meta(self) -> Option<PagePtr> {
         let raw = self.as_ptr();
@@ -1100,7 +1100,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to writable arena metadata.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_pages_meta(self, pages: Option<PagePtr>) {
         let raw = self.as_ptr();
@@ -1110,7 +1110,7 @@ impl ArenaPtr {
 
     /// # Safety
     /// The arena pointer must refer to arena metadata whose page table field is valid.
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-linkage-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn pages_main(self) -> *mut mi_arena_pages_t {
         let raw = self.as_ptr();
@@ -1622,7 +1622,7 @@ pub(super) fn __lint_touch() {
     let _ = checked_non_null_byte_add as fn(NonNull<u8>, usize) -> Option<NonNull<u8>>;
     let _ = checked_non_null_byte_sub as fn(NonNull<u8>, usize) -> Option<NonNull<u8>>;
 
-    // SAFETY[AUDIT:typed-page-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-page-fixture-touch-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     let _ = PagePtr::set_block_size as unsafe fn(PagePtr, BlockSize);
     let _ = BlockPtr::encoded_link as unsafe fn(BlockPtr) -> EncodedPtr<mi_block_t>;
     let _ = BlockPtr::next as unsafe fn(BlockPtr, PagePtr) -> Option<BlockPtr>;
@@ -1680,28 +1680,28 @@ pub(super) fn __lint_touch() {
     let _ = TldPtr::is_in_threadpool as unsafe fn(TldPtr) -> bool;
     let _ = TldPtr::set_is_in_threadpool as unsafe fn(TldPtr, bool);
 
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-fixture-touch-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     let _ = ArenaPtr::memid_ptr as unsafe fn(ArenaPtr) -> *mut mi_memid_t;
     let _ = ArenaPtr::subproc as unsafe fn(ArenaPtr) -> Option<SubprocPtr>;
     let _ = ArenaPtr::set_subproc as unsafe fn(ArenaPtr, Option<SubprocPtr>);
     let _ = ArenaPtr::index as unsafe fn(ArenaPtr) -> ArenaIndex;
     let _ = ArenaPtr::set_index as unsafe fn(ArenaPtr, ArenaIndex);
     let _ = ArenaPtr::slice_count as unsafe fn(ArenaPtr) -> SliceCount;
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-fixture-touch-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     let _ = ArenaPtr::set_slice_count as unsafe fn(ArenaPtr, SliceCount);
     let _ = ArenaPtr::numa_node as unsafe fn(ArenaPtr) -> NumaNode;
     let _ = ArenaPtr::set_numa_node as unsafe fn(ArenaPtr, NumaNode);
     let _ = ArenaPtr::is_exclusive as unsafe fn(ArenaPtr) -> bool;
     let _ = ArenaPtr::set_is_exclusive as unsafe fn(ArenaPtr, bool);
     let _ = ArenaPtr::purge_expire_cell as unsafe fn(ArenaPtr) -> AtomicI64Field;
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-fixture-touch-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     let _ = ArenaPtr::parent as unsafe fn(ArenaPtr) -> Option<ArenaPtr>;
     let _ = ArenaPtr::set_parent as unsafe fn(ArenaPtr, Option<ArenaPtr>);
     let _ = ArenaPtr::slices_free as unsafe fn(ArenaPtr) -> *mut mi_bbitmap_t;
     let _ = ArenaPtr::slices_committed as unsafe fn(ArenaPtr) -> *mut mi_bitmap_t;
     let _ = ArenaPtr::slices_dirty as unsafe fn(ArenaPtr) -> *mut mi_bitmap_t;
     let _ = ArenaPtr::slices_purge as unsafe fn(ArenaPtr) -> *mut mi_bitmap_t;
-    // SAFETY[AUDIT:typed-arena-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-arena-fixture-touch-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     let _ = ArenaPtr::pages_meta as unsafe fn(ArenaPtr) -> Option<PagePtr>;
     let _ = ArenaPtr::set_pages_meta as unsafe fn(ArenaPtr, Option<PagePtr>);
     let _ = ArenaPtr::pages_main as unsafe fn(ArenaPtr) -> *mut mi_arena_pages_t;

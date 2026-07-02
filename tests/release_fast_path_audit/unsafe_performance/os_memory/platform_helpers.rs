@@ -152,7 +152,10 @@ pub(super) fn assert_os_memory_and_platform_boundaries(sources: &UnsafePerforman
         "Unix primitive backend unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
     for (marker, minimum_count) in [
-        ("unix-mmap-syscall-boundary", 26),
+        ("unix-file-syscall-boundary", 4),
+        ("unix-mmap-primitive-boundary", 6),
+        ("unix-memory-alloc-boundary", 3),
+        ("unix-memory-commit-boundary", 13),
         ("unix-huge-page-boundary", 14),
         ("unix-output-env-boundary", 13),
         ("unix-process-info-boundary", 11),
@@ -168,6 +171,10 @@ pub(super) fn assert_os_memory_and_platform_boundaries(sources: &UnsafePerforman
             "Unix primitive audit marker `{marker}` should have at least {minimum_count} source markers, found {count}"
         );
     }
+    assert!(
+        !prim_unix_rs.contains("SAFETY[AUDIT:unix-mmap-syscall-boundary]"),
+        "Unix mmap/syscall markers should stay split by file syscall, mmap primitive, allocation, and commit/protect responsibility"
+    );
     for marker in [
         "#[inline(never)]\npub(crate) extern \"C\" fn _mi_os_random_weak(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_split(",

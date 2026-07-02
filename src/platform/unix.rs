@@ -339,7 +339,7 @@ fn mi_last_errno() -> c_int {
 /// # Safety
 ///
 /// `fpath` must point to a valid NUL-terminated path string.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-file-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_prim_open(fpath: *const c_char, open_flags: c_int) -> c_int {
     unsafe { open(fpath, open_flags) }
@@ -348,7 +348,7 @@ pub unsafe extern "C" fn mi_prim_open(fpath: *const c_char, open_flags: c_int) -
 /// # Safety
 ///
 /// `buf` must be valid writable storage for `bufsize` bytes.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-file-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_prim_read(fd: c_int, buf: *mut c_void, bufsize: usize) -> ssize_t {
     unsafe { read(fd, buf, bufsize) }
@@ -357,7 +357,7 @@ pub unsafe extern "C" fn mi_prim_read(fd: c_int, buf: *mut c_void, bufsize: usiz
 /// # Safety
 ///
 /// `fd` must be a file descriptor that can be passed to `close`.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-file-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_prim_close(fd: c_int) -> c_int {
     unsafe { close(fd) }
@@ -366,7 +366,7 @@ pub unsafe extern "C" fn mi_prim_close(fd: c_int) -> c_int {
 /// # Safety
 ///
 /// `fpath` must point to a valid NUL-terminated path string.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-file-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_prim_access(fpath: *const c_char, mode: c_int) -> c_int {
     unsafe { access(fpath, mode) }
@@ -388,13 +388,13 @@ pub unsafe fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
 ///
 /// `addr..addr + size` must describe a range previously returned by the Unix
 /// primitive allocator.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-mmap-primitive-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
     if size == 0 {
         return 0;
     }
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-mmap-primitive-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     let err = unsafe { munmap(addr, size) == -1 };
     if err { mi_last_errno() } else { 0 }
 }
@@ -496,7 +496,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_
 
 #[inline]
 unsafe fn unix_madvise(addr: *mut c_void, size: usize, advice: c_int) -> c_int {
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-mmap-primitive-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     let res = unsafe { madvise(addr, size, advice) };
     if res == 0 { 0 } else { mi_last_errno() }
 }
@@ -509,7 +509,7 @@ unsafe fn unix_mmap_prim(
     flags: c_int,
     fd: c_int,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-mmap-primitive-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     let p = unsafe { mmap(addr, size, protect_flags, flags, fd, 0) };
     if p == MAP_FAILED { ptr::null_mut() } else { p }
 }
@@ -524,7 +524,7 @@ unsafe fn unix_mmap_prim_aligned(
     fd: c_int,
 ) -> *mut c_void {
     if addr.is_null() && try_alignment > 1 {
-        // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+        // SAFETY[AUDIT:unix-mmap-primitive-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
         let hint = unsafe { _mi_os_get_aligned_hint(try_alignment, size) };
         if !hint.is_null() {
             let p = unsafe { unix_mmap_prim(hint, size, protect_flags, flags, fd) };
@@ -533,7 +533,7 @@ unsafe fn unix_mmap_prim_aligned(
             }
         }
     }
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-mmap-primitive-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     unsafe { unix_mmap_prim(addr, size, protect_flags, flags, fd) }
 }
 
@@ -671,7 +671,7 @@ unsafe fn unix_mmap(
 ///
 /// `is_large`, `is_zero`, and `addr`, when non-null, must be valid writable
 /// out-pointers for the duration of the call.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-memory-alloc-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_alloc(
@@ -684,7 +684,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc(
     is_zero: *mut bool,
     addr: *mut *mut c_void,
 ) -> c_int {
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-memory-alloc-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     unsafe {
         crate::internal::mi_assert_internal!(
             size > 0 && size.is_multiple_of(_mi_os_page_size_typed().get())
@@ -722,7 +722,7 @@ unsafe fn unix_mprotect_hint(_err: c_int) {}
 ///
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator. `is_zero`, when non-null, must be a valid writable out-pointer.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_commit(
@@ -730,7 +730,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_commit(
     size: usize,
     is_zero: *mut bool,
 ) -> c_int {
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     unsafe {
         if !is_zero.is_null() {
             *is_zero = false;
@@ -751,7 +751,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_commit(
 ///
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) -> c_int {
     let _ = start;
@@ -764,14 +764,14 @@ pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) 
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator. `needs_recommit`, when non-null, must be a valid writable
 /// out-pointer.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_decommit(
     start: *mut c_void,
     size: usize,
     needs_recommit: *mut bool,
 ) -> c_int {
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     unsafe {
         let err = unix_madvise(start, size, MADV_DONTNEED);
         if !needs_recommit.is_null() {
@@ -790,7 +790,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_decommit(
 ///
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_int {
@@ -799,14 +799,14 @@ pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) 
     if advice == 0 {
         advice = MADV_DONTNEED;
     }
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     let mut err = unsafe { unix_madvise(start, size, advice) };
     while err == EAGAIN {
         err = unsafe { unix_madvise(start, size, advice) };
     }
     if err == EINVAL && advice == MADV_FREE {
         ADVICE.store(MADV_DONTNEED, Ordering::Release);
-        // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+        // SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
         err = unsafe { unix_madvise(start, size, MADV_DONTNEED) };
     }
     err
@@ -816,7 +816,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) 
 ///
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator.
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_protect(
@@ -829,13 +829,13 @@ pub(crate) unsafe extern "C" fn _mi_prim_protect(
     } else {
         PROT_READ | PROT_WRITE
     };
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     let err = if unsafe { mprotect(start, size, prot) } == 0 {
         0
     } else {
         mi_last_errno()
     };
-    // SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
     unsafe { unix_mprotect_hint(err) };
     err
 }
@@ -1395,7 +1395,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_yield() {
     let _ = unsafe { sleep(0) };
 }
 
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-memory-alloc-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[used]
 static MI_PRIM_MEM_INIT_KEEP: unsafe extern "C" fn(*mut mi_os_mem_config_t) = _mi_prim_mem_init;
 #[used]
@@ -1409,13 +1409,13 @@ static MI_PRIM_ALLOC_KEEP: unsafe extern "C" fn(
     *mut bool,
     *mut *mut c_void,
 ) -> c_int = _mi_prim_alloc;
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[used]
 static MI_PRIM_COMMIT_KEEP: unsafe extern "C" fn(*mut c_void, usize, *mut bool) -> c_int =
     _mi_prim_commit;
 #[used]
 static MI_PRIM_RESET_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> c_int = _mi_prim_reset;
-// SAFETY[AUDIT:unix-mmap-syscall-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:unix-memory-commit-boundary]: Unix mmap/mprotect/madvise/syscall primitives preserve address range, errno, alignment, and out-pointer contracts.
 #[used]
 static MI_PRIM_PROTECT_KEEP: unsafe extern "C" fn(*mut c_void, usize, bool) -> c_int =
     _mi_prim_protect;

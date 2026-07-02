@@ -76,7 +76,7 @@ unsafe fn mi_list_contains(
     mut list: *const mi_block_t,
     elem: *const mi_block_t,
 ) -> bool {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-double-check-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         while !list.is_null() {
             if ptr::eq(elem, list) {
@@ -88,13 +88,13 @@ unsafe fn mi_list_contains(
     }
 }
 
-// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+// SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_ptr_unalign(
     page: *const mi_page_t,
     p: *const c_void,
 ) -> *mut mi_block_t {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null() && !p.is_null());
         let diff = p.cast::<u8>().offset_from(mi_page_start(page)) as usize;
@@ -109,7 +109,7 @@ pub(crate) unsafe extern "C" fn _mi_page_ptr_unalign(
 }
 
 unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_block_t) -> bool {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-double-check-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         if mi_list_contains(page, (*page).free, block)
             || mi_list_contains(page, (*page).local_free, block)
@@ -278,7 +278,7 @@ pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t)
 /// # Safety
 /// `page` and `block` must refer to a valid block owned by that page.
 pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_block_t) -> bool {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-double-check-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         if MI_ENCODE_FREELIST == 0 || (crate::internal::MI_SECURE < 4 && MI_DEBUG == 0) {
             return false;
@@ -497,7 +497,7 @@ unsafe fn mi_block_unguard(
     block: crate::core_types::GuardedBlock,
     p: crate::core_types::UserPtr,
 ) {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let page = page.as_ptr();
         let block = block.block().as_ptr();
@@ -535,7 +535,7 @@ pub(crate) unsafe fn mi_block_check_unguard(
     block: crate::core_types::BlockForFree,
     p: crate::core_types::UserPtr,
 ) -> bool {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let block_ptr = block.block();
         let user = p.as_ptr();
@@ -563,7 +563,7 @@ pub(crate) unsafe fn mi_validate_block_from_ptr(
     page: crate::core_types::PagePtr,
     user: crate::core_types::UserPtr,
 ) -> crate::core_types::PointerLookup {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let location = mi_pointer_location(page, user, MI_SECURE > 0, true);
 
@@ -574,7 +574,7 @@ pub(crate) unsafe fn mi_validate_block_from_ptr(
 unsafe fn mi_lookup_pointer_page(
     user: crate::core_types::UserPtr,
 ) -> Option<crate::core_types::PagePtr> {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let p = user.as_ptr();
         if MI_DEBUG != 0 || cfg!(feature = "secure") {
@@ -597,7 +597,7 @@ unsafe fn mi_pointer_location(
     force_unalign: bool,
     assert_block_start: bool,
 ) -> crate::core_types::PointerLocation {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let page_raw = page.as_ptr();
         let user_raw = user.as_ptr();
@@ -637,7 +637,7 @@ unsafe fn mi_pointer_location(
 unsafe fn mi_block_for_free_from_lookup(
     lookup: crate::core_types::PointerLookup,
 ) -> Option<crate::core_types::BlockForFree> {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe { mi_prepare_validated_free(lookup).map(crate::core_types::ValidatedFree::block) }
 }
 
@@ -765,7 +765,7 @@ pub(crate) unsafe fn mi_validate_pointer(
 unsafe fn mi_prepare_validated_free(
     lookup: crate::core_types::PointerLookup,
 ) -> Option<crate::core_types::ValidatedFree> {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let validated = lookup.prepare_free()?;
         if validated.block().was_guarded() == crate::core_types::WasGuarded::Yes {
@@ -777,7 +777,7 @@ unsafe fn mi_prepare_validated_free(
 
 #[inline(always)]
 unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable: *mut usize) {
-    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let page = validated.page().as_ptr();
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
@@ -1327,7 +1327,7 @@ pub unsafe extern "C" fn mi_usable_size(p: *const c_void) -> usize {
 // Retained as an exported C ABI free-size symbol; release cdylib builds may
 // reference it only from external dynamic callers or assembly aliases.
 #[allow(dead_code)]
-// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+// SAFETY[AUDIT:free-abi-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
     unsafe {
@@ -1345,7 +1345,7 @@ pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
 // Retained as an exported C ABI free-size-aligned symbol; release cdylib builds
 // may reference it only from external dynamic callers or assembly aliases.
 #[allow(dead_code)]
-// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+// SAFETY[AUDIT:free-abi-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size_aligned(p: *mut c_void, size: usize, alignment: usize) {
     unsafe {
@@ -1359,7 +1359,7 @@ pub unsafe extern "C" fn mi_free_size_aligned(p: *mut c_void, size: usize, align
 // Retained as an exported C ABI aligned-free symbol; release cdylib builds may
 // reference it only from external dynamic callers or assembly aliases.
 #[allow(dead_code)]
-// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+// SAFETY[AUDIT:free-abi-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_aligned(p: *mut c_void, alignment: usize) {
     unsafe {
@@ -1371,7 +1371,7 @@ pub unsafe extern "C" fn mi_free_aligned(p: *mut c_void, alignment: usize) {
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator and not yet freed. If
 /// `usable` is non-null it must be writable for one `usize`.
-// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+// SAFETY[AUDIT:free-abi-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_ufree(p: *mut c_void, usable: *mut usize) {
     unsafe {
@@ -1381,7 +1381,7 @@ pub unsafe extern "C" fn mi_ufree(p: *mut c_void, usable: *mut usize) {
 
 /// # Safety
 /// `p` must be null or a small allocation pointer previously returned by this allocator.
-// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+// SAFETY[AUDIT:free-abi-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_free_small(p: *mut c_void) {
     unsafe {
@@ -1438,7 +1438,7 @@ mod tests {
                     mi_block_t::default(),
                 ],
             };
-            // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+            // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
             unsafe {
                 let page = fixture.page.as_mut_ptr();
                 ptr::addr_of_mut!((*page).xthread_id)
@@ -1467,7 +1467,7 @@ mod tests {
         }
 
         fn page(&mut self) -> PagePtr {
-            // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+            // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
             unsafe {
                 ptr::addr_of_mut!((*self.page.as_mut_ptr()).page_start)
                     .write(ptr::addr_of_mut!(self.blocks[0]).cast::<u8>());
@@ -1476,7 +1476,7 @@ mod tests {
         }
 
         fn user(&mut self, index: usize) -> UserPtr {
-            // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+            // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
             unsafe { UserPtr::new_unchecked(ptr::addr_of_mut!(self.blocks[index * 2]).cast()) }
         }
 
@@ -1514,7 +1514,7 @@ mod tests {
     #[test]
     fn free_validation_covers_null_invalid_and_bad_alignment() {
         let _quiet_expected_errors = ShowErrorsGuard::disabled();
-        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+        // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             assert!(matches!(
                 mi_validate_pointer(ptr::null_mut(), c"free-test".as_ptr()),
@@ -1547,7 +1547,7 @@ mod tests {
     fn free_validation_covers_interior_pointer_lookup() {
         let mut fixture =
             FreeFixture::new(current_thread_owner(), PageFlags::HAS_INTERIOR_POINTERS);
-        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+        // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let page = fixture.page();
             let user = UserPtr::new_unchecked(fixture.user(0).as_u8_ptr().add(1).cast());
@@ -1571,7 +1571,7 @@ mod tests {
     fn free_validation_covers_guarded_pointer_lookup() {
         let mut fixture =
             FreeFixture::new(current_thread_owner(), PageFlags::HAS_INTERIOR_POINTERS);
-        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+        // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             crate::core_types::BlockTag::write_guarded_to(fixture.block(0));
             let page = fixture.page();
@@ -1615,7 +1615,7 @@ mod tests {
         let current = ThreadId::new(_mi_thread_id()).expect("current thread id is valid");
 
         let mut local = FreeFixture::new(current_thread_owner(), PageFlags::EMPTY);
-        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+        // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let validated =
                 mi_prepare_validated_free(mi_validate_block_from_ptr(local.page(), local.user(0)))
@@ -1638,7 +1638,7 @@ mod tests {
         };
         let remote_owner = PageOwnerId::Thread(ThreadId::new(remote_raw).expect("valid remote id"));
         let mut remote = FreeFixture::new(remote_owner, PageFlags::EMPTY);
-        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+        // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let validated = mi_prepare_validated_free(mi_validate_block_from_ptr(
                 remote.page(),
@@ -1657,7 +1657,7 @@ mod tests {
         }
 
         let mut abandoned = FreeFixture::new(PageOwnerId::Abandoned, PageFlags::EMPTY);
-        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+        // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let validated = mi_prepare_validated_free(mi_validate_block_from_ptr(
                 abandoned.page(),
@@ -1679,7 +1679,7 @@ mod tests {
     fn free_checks_cover_double_free_detection() {
         let mut fixture = FreeFixture::new(current_thread_owner(), PageFlags::EMPTY);
         let _quiet_expected_errors = ShowErrorsGuard::disabled();
-        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+        // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let page = fixture.page().as_ptr();
             let block = fixture.block(0).as_ptr();

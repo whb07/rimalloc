@@ -36,7 +36,9 @@ pub(super) fn assert_stats_format_and_markers(unsafe_allowlist: &str, stats_rs: 
         ("stats-public-merge-boundary", 16),
         ("stats-heap-visitor-boundary", 16),
         ("stats-public-export-boundary", 14),
-        ("stats-output-boundary", 25),
+        ("stats-formatting-boundary", 6),
+        ("stats-buffered-output-boundary", 3),
+        ("stats-print-export-boundary", 19),
         ("stats-process-info-boundary", 6),
         ("stats-json-boundary", 18),
     ] {
@@ -55,7 +57,8 @@ pub(super) fn assert_stats_format_and_markers(unsafe_allowlist: &str, stats_rs: 
         "stats unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
     assert!(
-        !stats_rs.contains("SAFETY[AUDIT:stats-merge-boundary]"),
-        "stats merge boundaries should remain split into focused operation markers"
+        !stats_rs.contains("SAFETY[AUDIT:stats-merge-boundary]")
+            && !stats_rs.contains("SAFETY[AUDIT:stats-output-boundary]"),
+        "stats merge and output boundaries should remain split into focused operation markers"
     );
 }

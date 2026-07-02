@@ -52,7 +52,7 @@ pub const MI_MAX_BLOCKS: usize = MI_SMALL_PAGE_SIZE / core::mem::size_of::<*cons
 ///
 /// The callback receives allocator-owned thread-heap, queue, and page pointers
 /// that must remain valid for the duration of the visit.
-// SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub type theap_page_visitor_fun = unsafe extern "C" fn(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -78,7 +78,7 @@ impl TheapPageVisitCallback {
         page: PagePtr,
         state: TheapPageVisitState,
     ) -> bool {
-        // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+        // SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
         unsafe {
             (self.0)(
                 theap.as_ptr(),
@@ -111,7 +111,7 @@ pub type mi_theap_area_ex_t = mi_theap_area_ex_s;
 ///
 /// The callback receives allocator-owned thread-heap and area pointers that
 /// must remain valid for the duration of the visit.
-// SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub type mi_theap_area_visit_fun = unsafe extern "C" fn(
     theap: *const mi_theap_t,
     area: *const mi_theap_area_ex_t,
@@ -124,7 +124,7 @@ struct TheapAreaVisitCallback(mi_theap_area_visit_fun);
 impl TheapAreaVisitCallback {
     #[inline(always)]
     unsafe fn from_raw_slot(vfun: *mut c_void) -> Self {
-        // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+        // SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
         unsafe { Self(*vfun.cast::<mi_theap_area_visit_fun>()) }
     }
 
@@ -135,7 +135,7 @@ impl TheapAreaVisitCallback {
         area: *const mi_theap_area_ex_t,
         arg: *mut c_void,
     ) -> bool {
-        // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+        // SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
         unsafe { (self.0)(theap.as_ptr().cast_const(), area, arg) }
     }
 }
@@ -153,21 +153,21 @@ type mi_visit_blocks_args_t = mi_visit_blocks_args_s;
 ///
 /// `area` must point to writable heap-area storage and `page` must point to a
 /// valid page owned by this allocator.
-// SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_area_init(
     area: *mut mi_heap_area_t,
     page: *mut mi_page_t,
 ) {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     let page = unsafe { PagePtr::new_unchecked(page) };
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     let heap = unsafe { HeapPtr::new_unchecked(mi_page_heap(page.as_ptr())) };
     unsafe { mi_heap_area_init_typed(area, heap, page) };
 }
 
 unsafe fn mi_heap_area_init_typed(area: *mut mi_heap_area_t, heap: HeapPtr, page: PagePtr) {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::MI_UNUSED(&heap);
         let page = page.as_ptr();
@@ -189,7 +189,7 @@ unsafe fn mi_heap_area_init_typed(area: *mut mi_heap_area_t, heap: HeapPtr, page
 }
 
 unsafe fn mi_get_fast_divisor(divisor: usize, magic: *mut u64, shift: *mut usize) {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::mi_assert_internal!(divisor > 0 && u32::try_from(divisor).is_ok());
         *shift = MI_SIZE_BITS - mi_clz(divisor - 1);
@@ -212,7 +212,7 @@ pub unsafe fn mi_fast_divide(n: usize, magic: u64, shift: usize) -> usize {
 ///
 /// `area` and `page` must describe the same valid allocator page. `visitor`
 /// must be valid to call for each live block in the page.
-// SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
     area: *const mi_heap_area_t,
@@ -220,13 +220,13 @@ pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
     visitor: BlockVisitCallback,
     arg: BlockVisitCallbackArg,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     let page = unsafe { PagePtr::new_unchecked(page) };
     if unsafe { mi_page_is_abandoned(page.as_ptr()) } {
         return true;
     }
     let theap = unsafe { ThreadHeapPtr::new_unchecked(mi_page_theap(page.as_ptr())) };
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe { mi_theap_area_visit_blocks_typed(area, theap, page, visitor, arg) }
 }
 
@@ -237,7 +237,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
     visitor: BlockVisitCallback,
     arg: BlockVisitCallbackArg,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::mi_assert_internal!(!area.is_null());
         if area.is_null() {
@@ -340,7 +340,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
     }
 }
 
-// SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[used]
 static MI_THEAP_AREA_VISIT_BLOCKS_KEEP: unsafe extern "C" fn(
     *const mi_heap_area_t,
@@ -349,7 +349,7 @@ static MI_THEAP_AREA_VISIT_BLOCKS_KEEP: unsafe extern "C" fn(
     BlockVisitCallbackArg,
 ) -> bool = _mi_theap_area_visit_blocks;
 
-// SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 unsafe extern "C" fn mi_theap_visit_areas_page(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -357,7 +357,7 @@ unsafe extern "C" fn mi_theap_visit_areas_page(
     vfun: *mut c_void,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::MI_UNUSED(&pq);
         let theap = ThreadHeapPtr::new_unchecked(theap);
@@ -373,7 +373,7 @@ unsafe fn mi_theap_visit_areas_page_typed(
     visitor: TheapAreaVisitCallback,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_theap(page.as_ptr()) == theap.as_ptr());
         let page = page.as_ptr();
@@ -391,7 +391,7 @@ unsafe fn mi_theap_visit_areas(
     visitor: Option<mi_theap_area_visit_fun>,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let Some(visitor) = visitor else {
             return false;
@@ -407,14 +407,14 @@ unsafe fn mi_theap_visit_areas(
     }
 }
 
-// SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[inline(never)]
 unsafe extern "C" fn mi_theap_area_visitor(
     theap: *const mi_theap_t,
     xarea: *const mi_theap_area_ex_t,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let args = arg.cast::<mi_visit_blocks_args_t>();
         if !(*args).visitor.invoke(
@@ -446,7 +446,7 @@ static MI_THEAP_AREA_VISITOR_KEEP: mi_theap_area_visit_fun = mi_theap_area_visit
 ///
 /// `theap`, when non-null, must point to a valid thread heap. `visitor`, when
 /// present, must be valid for every visited heap area and block.
-// SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_visit_blocks(
     theap: *const mi_theap_t,
@@ -454,7 +454,7 @@ pub unsafe extern "C" fn mi_theap_visit_blocks(
     visitor: Option<mi_block_visit_fun>,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let Some(visitor) = visitor else {
             return false;
@@ -483,7 +483,7 @@ pub unsafe fn mi_theap_visit_pages(
     arg1: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let Some(theap) = ThreadHeapPtr::new(theap) else {
             return false;
@@ -502,7 +502,7 @@ unsafe fn mi_theap_visit_pages_typed(
     include_full: bool,
     state: TheapPageVisitState,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let theap_ptr = theap.as_ptr();
         if (*theap_ptr).page_count == 0 {
@@ -547,7 +547,7 @@ unsafe fn mi_theap_visit_pages_typed(
 ///
 /// `theap`, `pq`, and `page` must be valid allocator objects from the same
 /// thread heap.
-// SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub unsafe extern "C" fn mi_theap_page_is_valid(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -555,7 +555,7 @@ pub unsafe extern "C" fn mi_theap_page_is_valid(
     arg1: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::MI_UNUSED(&arg1);
         crate::internal::MI_UNUSED(&arg2);
@@ -567,7 +567,7 @@ pub unsafe extern "C" fn mi_theap_page_is_valid(
 }
 
 unsafe fn mi_theap_page_is_valid_typed(theap: ThreadHeapPtr, page: PagePtr) -> bool {
-    // SAFETY[AUDIT:thread-heap-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let page = page.as_ptr();
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.as_ptr());

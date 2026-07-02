@@ -55,7 +55,7 @@ static MI_TOUPPER_KEEP: extern "C" fn(c_char) -> c_char = _mi_toupper;
 ///
 /// `s` and `t`, when non-null, must point to readable C strings for at least
 /// `n` bytes or until their first nul byte.
-// SAFETY[AUDIT:ffi-libc-string-boundary]: the exported C-shaped helper inherits
+// SAFETY[AUDIT:ffi-libc-string-compare-boundary]: the exported C-shaped helper inherits
 // bounded readable C-string pointers from its callers.
 #[inline(never)]
 #[allow(clippy::many_single_char_names)]
@@ -65,7 +65,7 @@ pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char,
     }
     let mut i = 0usize;
     while i < n {
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: `i < n`, and the helper contract
+        // SAFETY[AUDIT:ffi-libc-string-compare-boundary]: `i < n`, and the helper contract
         // requires both strings to be readable until `n` or their first nul.
         let a = unsafe { *as_bytes_ptr(s).add(i) };
         let b = unsafe { *as_bytes_ptr(t).add(i) };
@@ -83,7 +83,7 @@ pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char,
 /// # Safety
 ///
 /// `s` and `t`, when non-null, must point to readable nul-terminated C strings.
-// SAFETY[AUDIT:ffi-libc-string-boundary]: nullable equality handling is explicit; live
+// SAFETY[AUDIT:ffi-libc-string-compare-boundary]: nullable equality handling is explicit; live
 // inputs inherit the readable nul-terminated C-string contract.
 #[inline(never)]
 #[allow(clippy::many_single_char_names)]
@@ -96,7 +96,7 @@ pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) ->
     }
     let mut i = 0usize;
     loop {
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: the function contract requires both
+        // SAFETY[AUDIT:ffi-libc-string-compare-boundary]: the function contract requires both
         // strings to be readable through their first nul byte.
         let a = unsafe { *as_bytes_ptr(s).add(i) };
         let b = unsafe { *as_bytes_ptr(t).add(i) };
@@ -114,7 +114,7 @@ pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) ->
 ///
 /// `dest` must be writable for `dest_size` bytes when non-null. `src`, when
 /// non-null, must point to a readable nul-terminated C string.
-// SAFETY[AUDIT:ffi-libc-string-boundary]: the C-shaped copy helper validates null and
+// SAFETY[AUDIT:ffi-libc-string-copy-boundary]: the C-shaped copy helper validates null and
 // zero-capacity inputs before bounded destination writes.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlcpy(
@@ -125,15 +125,15 @@ pub(crate) unsafe extern "C" fn _mi_strlcpy(
     if dest.is_null() || src.is_null() || dest_size == 0 {
         return;
     }
-    // SAFETY[AUDIT:ffi-libc-string-boundary]: non-null `src` is required to point to a
+    // SAFETY[AUDIT:ffi-libc-string-copy-boundary]: non-null `src` is required to point to a
     // readable nul-terminated C string.
     let src_bytes = unsafe { CStr::from_ptr(src) }.to_bytes();
     let n = min(src_bytes.len(), dest_size - 1);
-    // SAFETY[AUDIT:ffi-libc-string-boundary]: `dest` is writable for `dest_size` bytes
+    // SAFETY[AUDIT:ffi-libc-string-copy-boundary]: `dest` is writable for `dest_size` bytes
     // by contract, `n` is at most `dest_size - 1`, and `src_bytes` came from
     // the non-null source C string.
     unsafe { ptr::copy_nonoverlapping(src_bytes.as_ptr(), as_bytes_mut_ptr(dest), n) };
-    // SAFETY[AUDIT:ffi-libc-string-boundary]: `n < dest_size`, so the terminator write
+    // SAFETY[AUDIT:ffi-libc-string-copy-boundary]: `n < dest_size`, so the terminator write
     // stays in-bounds.
     unsafe { *as_bytes_mut_ptr(dest).add(n) = 0 };
 }
@@ -143,7 +143,7 @@ pub(crate) unsafe extern "C" fn _mi_strlcpy(
 /// `dest` must be writable for `dest_size` bytes and contain a nul byte within
 /// that range when non-null. `src`, when non-null, must point to a readable
 /// nul-terminated C string.
-// SAFETY[AUDIT:ffi-libc-string-boundary]: the C-shaped concatenation helper scans only
+// SAFETY[AUDIT:ffi-libc-string-copy-boundary]: the C-shaped concatenation helper scans only
 // within the caller-provided destination capacity before reusing `strlcpy`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlcat(
@@ -156,7 +156,7 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
     }
     let mut len = 0usize;
     while len < dest_size {
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: the loop bounds every destination
+        // SAFETY[AUDIT:ffi-libc-string-copy-boundary]: the loop bounds every destination
         // read by `dest_size`.
         if unsafe { *as_bytes_ptr(dest).add(len) } == 0 {
             break;
@@ -166,7 +166,7 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
     if len >= dest_size {
         return;
     }
-    // SAFETY[AUDIT:ffi-libc-string-boundary]: `len < dest_size`, so the suffix pointer
+    // SAFETY[AUDIT:ffi-libc-string-copy-boundary]: `len < dest_size`, so the suffix pointer
     // and remaining capacity describe the writable tail of `dest`.
     unsafe {
         _mi_strlcpy(dest.add(len), src, dest_size - len);
@@ -177,7 +177,7 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
 ///
 /// `s`, when non-null, must be readable for `max_len` bytes or until its first
 /// nul byte.
-// SAFETY[AUDIT:ffi-libc-string-boundary]: null is handled explicitly; otherwise reads
+// SAFETY[AUDIT:ffi-libc-string-scan-boundary]: null is handled explicitly; otherwise reads
 // are bounded by `max_len`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize {
@@ -185,7 +185,7 @@ pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) ->
         return 0;
     }
     let mut len = 0usize;
-    // SAFETY[AUDIT:ffi-libc-string-boundary]: each byte read is within the caller's
+    // SAFETY[AUDIT:ffi-libc-string-scan-boundary]: each byte read is within the caller's
     // `max_len` readable prefix or stops at the first nul.
     while len < max_len && unsafe { *as_bytes_ptr(s).add(len) } != 0 {
         len += 1;
@@ -196,11 +196,11 @@ pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) ->
 /// # Safety
 ///
 /// `s` must point to a readable nul-terminated C string when non-null.
-// SAFETY[AUDIT:ffi-libc-string-boundary]: delegates to the bounded scanner with the
+// SAFETY[AUDIT:ffi-libc-string-scan-boundary]: delegates to the bounded scanner with the
 // C `strlen` contract supplied by callers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
-    // SAFETY[AUDIT:ffi-libc-string-boundary]: `_mi_strlen` inherits the readable
+    // SAFETY[AUDIT:ffi-libc-string-scan-boundary]: `_mi_strlen` inherits the readable
     // nul-terminated string contract and maps it to an unbounded C-style scan.
     unsafe { _mi_strnlen(s, usize::MAX) }
 }
@@ -210,7 +210,7 @@ pub(crate) unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
 /// `s`, when non-null, must be readable for `max_len` bytes or until its first
 /// nul byte. `pat`, when non-null, must point to a readable nul-terminated C
 /// string.
-// SAFETY[AUDIT:ffi-libc-string-boundary]: the search helper treats nulls explicitly and
+// SAFETY[AUDIT:ffi-libc-string-search-boundary]: the search helper treats nulls explicitly and
 // bounds all haystack reads by `max_len`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnstr(
@@ -224,7 +224,7 @@ pub(crate) unsafe extern "C" fn _mi_strnstr(
     if pat.is_null() {
         return s;
     }
-    // SAFETY[AUDIT:ffi-libc-string-boundary]: both scans use the caller-provided
+    // SAFETY[AUDIT:ffi-libc-string-search-boundary]: both scans use the caller-provided
     // readable C-string contracts.
     let s_len = unsafe { _mi_strnlen(s, max_len) };
     let pat_len = unsafe { _mi_strlen(pat) };
@@ -237,13 +237,13 @@ pub(crate) unsafe extern "C" fn _mi_strnstr(
     let mut start = 0usize;
     while start <= end {
         let mut i = 0usize;
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: `start <= end` keeps haystack reads
+        // SAFETY[AUDIT:ffi-libc-string-search-boundary]: `start <= end` keeps haystack reads
         // within `s_len`, and `i < pat_len` bounds pattern reads.
         while i < pat_len && unsafe { *s_bytes.add(start + i) == *pat_bytes.add(i) } {
             i += 1;
         }
         if i == pat_len {
-            // SAFETY[AUDIT:ffi-libc-string-boundary]: the matching offset is within the
+            // SAFETY[AUDIT:ffi-libc-string-search-boundary]: the matching offset is within the
             // bounded haystack slice.
             return unsafe { s.add(start) };
         }
@@ -601,7 +601,7 @@ mod tests {
     use core::ptr;
 
     fn c_bytes(buf: &[c_char]) -> &[u8] {
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: test buffers passed here are
+        // SAFETY[AUDIT:ffi-libc-string-test-fixtures]: test buffers passed here are
         // explicitly nul-terminated by the helper under test.
         unsafe { CStr::from_ptr(buf.as_ptr()).to_bytes() }
     }
@@ -609,14 +609,14 @@ mod tests {
     #[test]
     fn string_helpers_handle_null_truncation_and_search_edges() {
         let mut copied = [b'X' as c_char; 5];
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: `copied` is writable and the source
+        // SAFETY[AUDIT:ffi-libc-string-test-fixtures]: `copied` is writable and the source
         // is a static C string.
         unsafe { _mi_strlcpy(copied.as_mut_ptr(), c"abcdef".as_ptr(), copied.len()) };
         assert_eq!(c_bytes(&copied), b"abcd");
         assert_eq!(copied[4], 0);
 
         let mut unchanged = [b'X' as c_char; 4];
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: null inputs are valid edge cases for
+        // SAFETY[AUDIT:ffi-libc-string-test-fixtures]: null inputs are valid edge cases for
         // these compatibility helpers.
         unsafe {
             _mi_strlcpy(unchanged.as_mut_ptr(), ptr::null(), unchanged.len());
@@ -625,7 +625,7 @@ mod tests {
         assert_eq!(unchanged, [b'X' as c_char; 4]);
 
         let mut concatenated = [0 as c_char; 6];
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: `concatenated` is writable and both
+        // SAFETY[AUDIT:ffi-libc-string-test-fixtures]: `concatenated` is writable and both
         // inputs are static C strings.
         unsafe {
             _mi_strlcpy(
@@ -649,7 +649,7 @@ mod tests {
             0,
             b'z' as c_char,
         ];
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: `bounded` is readable and contains a
+        // SAFETY[AUDIT:ffi-libc-string-test-fixtures]: `bounded` is readable and contains a
         // nul terminator.
         unsafe {
             assert_eq!(_mi_strnlen(bounded.as_ptr(), 2), 2);
@@ -659,15 +659,15 @@ mod tests {
         }
 
         let mut haystack = [b'a' as c_char, b'b' as c_char, b'c' as c_char, 0];
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: `haystack` and the pattern are
+        // SAFETY[AUDIT:ffi-libc-string-test-fixtures]: `haystack` and the pattern are
         // readable C strings within the bounded search length.
         let found = unsafe { _mi_strnstr(haystack.as_mut_ptr(), haystack.len(), c"bc".as_ptr()) };
         assert!(!found.is_null());
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: `found` came from inside `haystack`.
+        // SAFETY[AUDIT:ffi-libc-string-test-fixtures]: `found` came from inside `haystack`.
         let offset = unsafe { found.offset_from(haystack.as_mut_ptr()) };
         assert_eq!(offset, 1);
 
-        // SAFETY[AUDIT:ffi-libc-string-boundary]: a null pattern is a valid edge case
+        // SAFETY[AUDIT:ffi-libc-string-test-fixtures]: a null pattern is a valid edge case
         // and returns the haystack pointer.
         let found = unsafe { _mi_strnstr(haystack.as_mut_ptr(), haystack.len(), ptr::null()) };
         assert_eq!(found, haystack.as_mut_ptr());

@@ -1650,7 +1650,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1660,7 +1660,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
@@ -1672,16 +1672,16 @@ unsafe fn mi_heap_realloc_aligned_at_typed(
     alignment: crate::core_types::Alignment,
     offset: crate::core_types::AlignmentOffset,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc_aligned(
     heap: *mut mi_heap_t,
@@ -1689,7 +1689,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -1711,7 +1711,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1721,14 +1721,14 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -1737,7 +1737,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -1747,7 +1747,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1757,14 +1757,14 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     heap: *mut mi_heap_t,
@@ -1772,7 +1772,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -1794,7 +1794,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1804,14 +1804,14 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -1821,7 +1821,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -1841,7 +1841,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
         return core::ptr::null_mut();
     };
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(realloc_request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1851,7 +1851,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe {
         mi_heap_recalloc_aligned_at_typed(heap, request, realloc_request, alignment_typed, offset)
     }
@@ -1866,16 +1866,16 @@ unsafe fn mi_heap_recalloc_aligned_at_typed(
     alignment: crate::core_types::Alignment,
     offset: crate::core_types::AlignmentOffset,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_theap_recalloc_aligned_at_req(theap, request, realloc_request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     heap: *mut mi_heap_t,
@@ -1884,7 +1884,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -1909,7 +1909,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
         return core::ptr::null_mut();
     };
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(realloc_request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1919,6 +1919,6 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-export-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_recalloc_aligned_at_typed(heap, request, realloc_request, alignment, offset) }
 }

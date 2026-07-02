@@ -33,7 +33,10 @@ fn windows_primitive_backend_stays_bounded_and_audited() {
         ("windows-virtual-memory-reserve-boundary", 6),
         ("windows-virtual-memory-retry-boundary", 2),
         ("windows-virtual-memory-allocation-export-boundary", 6),
-        ("windows-tls-fls-boundary", 27),
+        ("windows-fls-api-boundary", 1),
+        ("windows-dll-lifecycle-boundary", 19),
+        ("windows-fls-thread-boundary", 5),
+        ("windows-teb-threadpool-boundary", 2),
         ("windows-large-page-boundary", 22),
         ("windows-process-info-boundary", 11),
         ("windows-numa-boundary", 8),
@@ -49,6 +52,10 @@ fn windows_primitive_backend_stays_bounded_and_audited() {
             "Windows primitive audit marker `{marker}` should have at least {minimum_count} source markers, found {count}"
         );
     }
+    assert!(
+        !windows_rs.contains("SAFETY[AUDIT:windows-tls-fls-boundary]"),
+        "Windows TLS/FLS markers should stay split by FLS API, DLL lifecycle, FLS thread, and TEB probe responsibility"
+    );
     for import in [
         "pub fn VirtualAlloc(",
         "pub fn VirtualFree(lpAddress: PVOID, dwSize: SIZE_T, dwFreeType: DWORD) -> BOOL;",

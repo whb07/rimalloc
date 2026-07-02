@@ -36,7 +36,10 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
     );
     for (audit_id, expected_count) in [
         ("free-raw-export-boundary", 13),
-        ("free-validation-boundary", 28),
+        ("free-double-check-boundary", 3),
+        ("free-pointer-lookup-boundary", 10),
+        ("free-abi-validation-boundary", 5),
+        ("free-validation-fixtures", 10),
         ("free-padding-boundary", 5),
         ("free-usable-size-boundary", 9),
         ("free-stats-boundary", 1),
@@ -63,7 +66,9 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         ("aligned-realloc-copy-boundary", 4),
         ("aligned-recalloc-product-boundary", 8),
         ("aligned-realloc-global-export-boundary", 14),
-        ("aligned-realloc-heap-export-boundary", 26),
+        ("aligned-realloc-heap-realloc-boundary", 8),
+        ("aligned-realloc-heap-rezalloc-boundary", 8),
+        ("aligned-realloc-heap-recalloc-boundary", 10),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert_eq!(
@@ -72,6 +77,11 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             "aligned allocation unsafe boundary {audit_id} should retain exactly {expected_count} local operation markers"
         );
     }
+    assert!(
+        !free_rs.contains("SAFETY[AUDIT:free-validation-boundary]")
+            && !alloc_aligned_rs.contains("SAFETY[AUDIT:aligned-realloc-heap-export-boundary]"),
+        "free validation and heap aligned realloc markers should stay split into focused operation families"
+    );
     assert!(
         !unsafe_allowlist
             .lines()

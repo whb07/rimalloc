@@ -142,8 +142,16 @@ fn options_state_uses_internal_locks_like_c() {
             && !libc_rs.contains("SAFETY[AUDIT:ffi-libc-helpers]"),
         "libc helper unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    assert!(
+        !libc_rs.contains("SAFETY[AUDIT:ffi-libc-string-boundary]"),
+        "libc string helpers should stay split by compare/copy/scan/search/test fixture responsibility"
+    );
     for (audit_id, min_count) in [
-        ("ffi-libc-string-boundary", 27),
+        ("ffi-libc-string-compare-boundary", 4),
+        ("ffi-libc-string-copy-boundary", 7),
+        ("ffi-libc-string-scan-boundary", 4),
+        ("ffi-libc-string-search-boundary", 4),
+        ("ffi-libc-string-test-fixtures", 8),
         ("ffi-libc-env-boundary", 2),
         ("ffi-libc-output-boundary", 5),
         ("ffi-libc-format-boundary", 8),

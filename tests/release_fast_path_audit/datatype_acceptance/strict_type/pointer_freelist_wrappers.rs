@@ -33,12 +33,17 @@ pub(super) fn assert_pointer_and_freelist_wrappers(audit_sources: &DatatypeAccep
     );
     for (audit_id, min_count) in [
         ("typed-pointer-constructor-boundary", 5),
-        ("typed-page-accessors", 20),
+        ("typed-page-scalar-accessors", 14),
+        ("typed-page-free-list-accessors", 4),
+        ("typed-page-atomic-accessors", 6),
+        ("typed-page-fixture-touch-accessors", 1),
         ("typed-block-accessors", 6),
         ("typed-heap-accessors", 12),
         ("typed-thread-heap-accessors", 10),
         ("typed-tld-accessors", 20),
-        ("typed-arena-accessors", 22),
+        ("typed-arena-identity-accessors", 13),
+        ("typed-arena-linkage-accessors", 10),
+        ("typed-arena-fixture-touch-accessors", 4),
         ("typed-subproc-identity-accessors", 2),
         ("typed-subproc-arena-accessors", 7),
         ("typed-subproc-heap-link-accessors", 5),
@@ -55,8 +60,10 @@ pub(super) fn assert_pointer_and_freelist_wrappers(audit_sources: &DatatypeAccep
     }
     assert!(
         !ptr_core_rs.contains("SAFETY[AUDIT:typed-pointer-accessors]")
+            && !ptr_core_rs.contains("SAFETY[AUDIT:typed-page-accessors]")
+            && !ptr_core_rs.contains("SAFETY[AUDIT:typed-arena-accessors]")
             && !ptr_core_rs.contains("SAFETY[AUDIT:typed-subproc-accessors]"),
-        "typed pointer unsafe markers should stay split by pointer family"
+        "typed pointer unsafe markers should stay split by pointer family and page/arena accessor responsibility"
     );
     let from_raw_allowlist_entry =
         "raw-pointer-parameter|src/types/freelist_wrappers.rs|from_raw|mi_block_t|";

@@ -1,26 +1,25 @@
 # TODO: Fresh-Eyes Audit Cap, Harness, and Strict-Type Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`8ade753`. The previous backlog is implemented, validated, committed, and
-pushed. The next mechanical-translation debt is concentrated in broad source
-audit IDs just below the current cap, release-audit modules still clustered
-around 300 lines, and strict-type allowlist hotspots that need sharper
-governance before deeper typed rewrites.
+`8ade753` and lowering the source audit marker cap to 24. The previous backlog
+and Issue 1 below are implemented. The remaining mechanical-translation debt is
+concentrated in release-audit modules still clustered around 300 lines and
+strict-type allowlist hotspots that need sharper governance before deeper typed
+rewrites.
 
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,899 unsafe
-  mentions, and 437 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 437 operation IDs with
-  927 automated evidence rows.
-- No source audit operation ID remains over 28 source markers. The next useful
-  cap is 24 markers. The IDs blocking that cap are
-  `thread-heap-visit-boundary`, `stats-output-boundary`, and
-  `free-validation-boundary` at 28 markers each;
-  `windows-tls-fls-boundary`, `typed-arena-accessors`, and
-  `ffi-libc-string-boundary` at 27 markers each; and `unsafe-callback`,
-  `unix-mmap-syscall-boundary`, and
-  `aligned-realloc-heap-export-boundary` at 26 markers each.
+  mentions, and 462 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 462 operation IDs with
+  990 automated evidence rows.
+- No source audit operation ID has more than 24 source markers. The IDs at the
+  current cap are `os-memory-config-boundary`, `typed-tld-accessors`, and
+  `arena-id-memid-helpers` at 24 markers each.
+- The retired broad marker families have been split into focused source IDs for
+  thread-heap visitation, stats output, free validation, Windows TLS/FLS, typed
+  page/arena accessors, libc string helpers, unsafe callback guards, Unix memory
+  primitives, and heap aligned realloc variants.
 - `strict-type-allowlist.txt` has 634 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -39,20 +38,19 @@ Current review evidence:
 - The largest raw-pointer domains are `mi_theap_t` with 111 entries,
   `mi_page_t` with 110, and `mi_heap_t` with 67.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 118 module files recursively and
-  enforces a 320-line cap. The next useful cap is 280 lines. The largest
-  release-audit modules are:
-  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 308 lines,
-  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 305 lines,
-  `release_policy/callbacks.rs` at 303 lines,
-  `release_policy/api_surface/raw_facade.rs` at 302 lines,
-  `unsafe_performance/platform_primitive_boundaries/windows.rs` at 299 lines,
-  and `unsafe_performance/thread_stats.rs` at 284 lines.
+  release-audit module-size guard discovers 119 module files recursively and
+  enforces a 320-line cap. The next useful cap is 280 lines. Five modules still
+  exceed that target. The largest release-audit modules are:
+  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 314 lines,
+  `unsafe_performance/platform_primitive_boundaries/windows.rs` at 306 lines,
+  `release_policy/callbacks.rs` at 304 lines,
+  `release_policy/api_surface/raw_facade.rs` at 302 lines, and
+  `unsafe_performance/thread_stats.rs` at 284 lines, and
+  `interposition_exports/linux_override.rs` at 279 lines.
 - Review sampling found the largest release-audit modules still mix independent
-  assertion families: thread/TLS lifecycle, focused evidence path groups,
-  callback ABI versus safe guard policy, raw facade versus nullability policy,
-  Windows TLS/FLS versus virtual memory policy, and stats output versus marker
-  inventory.
+  assertion families: thread/TLS lifecycle, callback ABI versus safe guard policy,
+  raw facade versus nullability policy, Windows TLS/FLS versus virtual memory policy,
+  stats output versus marker inventory, and Linux override export policy.
 - Validation for commit `8ade753` passed: `cargo fmt --all`, `cargo clippy
   --workspace --all-targets --all-features`, `cargo test --workspace
   --all-targets --all-features`, `cargo test --test release_fast_path_audit
@@ -62,23 +60,23 @@ Current review evidence:
 
 ## Issue 1: Lower the source audit marker cap to 24
 
-The current 28-marker cap is no longer the most useful review boundary. Nine
-operation IDs still group unrelated unsafe concerns and should be split before
-the cap moves to 24.
+Completed in this pass. The source audit cap is now measured at 24 markers and
+the missed 25-marker `typed-page-accessors` hotspot was split as part of the
+same cap-lowering work.
 
-- [ ] Split `thread-heap-visit-boundary` into independent visitation,
+- [x] Split `thread-heap-visit-boundary` into independent visitation,
       callback-argument, page-area, and thread-heap helper audit IDs.
-- [ ] Split `stats-output-boundary` by stack-buffer formatting, output callback
+- [x] Split `stats-output-boundary` by stack-buffer formatting, output callback
       forwarding, print/export C ABI paths, and stats-output test fixtures.
-- [ ] Split `free-validation-boundary` by null/alignment validation,
+- [x] Split `free-validation-boundary` by null/alignment validation,
       pointer-page lookup, interior/guarded lookup, double-free checks, and
       local/remote/abandoned validation fixtures.
-- [ ] Split the 26-27 marker IDs by operation family:
+- [x] Split the 25-27 marker IDs by operation family:
       `windows-tls-fls-boundary`, `typed-arena-accessors`,
-      `ffi-libc-string-boundary`, `unsafe-callback`,
+      `typed-page-accessors`, `ffi-libc-string-boundary`, `unsafe-callback`,
       `unix-mmap-syscall-boundary`, and
       `aligned-realloc-heap-export-boundary`.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
       release-audit guards so no source audit operation ID exceeds 24 source
       markers.
 
@@ -87,14 +85,15 @@ full formatting, full clippy, and full tests.
 
 ## Issue 2: Split release-audit modules over 280 lines
 
-The release-audit cap is now 320 lines. Six modules still sit near 300 lines and
-mix assertion families that should be independently reviewable.
+The release-audit cap is now 320 lines. Five modules still exceed the next
+280-line target and mix assertion families that should be independently
+reviewable.
 
 - [ ] Split `unsafe_performance/lifecycle_boundaries/thread_tls.rs` by thread
       lifecycle, TLS/default-heap checks, visitation checks, and reclaim helpers.
-- [ ] Split `release_policy/security/unsafe_audit_evidence/focused_paths.rs`
-      so allocation/free, datatype fixtures, raw facade, and mixed evidence path
-      groups live in focused child modules.
+- [x] Split `release_policy/security/unsafe_audit_evidence/focused_paths.rs`
+      below 280 lines by moving platform primitive evidence checks into a
+      focused child module.
 - [ ] Split `release_policy/callbacks.rs` into callback ABI inventory,
       no-alloc/no-unwind trampoline policy, and safe callback guard policy.
 - [ ] Split `release_policy/api_surface/raw_facade.rs` into raw facade shape,
@@ -128,13 +127,13 @@ clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Lower the source audit marker cap to 24.
+1. [x] Lower the source audit marker cap to 24.
 2. [ ] Split release-audit modules over 280 lines.
 3. [ ] Tighten strict-type allowlist hotspot governance.
 
 ## Definition of done for this backlog
 
-- [ ] No source audit operation ID has more than 24 source markers.
+- [x] No source audit operation ID has more than 24 source markers.
 - [ ] Release-audit modules are split enough to lower the recursive module cap
       to 280 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type allowlist hotspot governance is split, measured, and tied to

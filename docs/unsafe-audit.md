@@ -419,7 +419,10 @@ file:
   helpers in `src/internal/mod.rs`.
 - `SAFETY[AUDIT:internal-block-link-boundary]`: encoded free-list link helpers
   in `src/internal/mod.rs`.
-- `SAFETY[AUDIT:unix-mmap-syscall-boundary]`,
+- `SAFETY[AUDIT:unix-file-syscall-boundary]`,
+  `SAFETY[AUDIT:unix-mmap-primitive-boundary]`,
+  `SAFETY[AUDIT:unix-memory-alloc-boundary]`,
+  `SAFETY[AUDIT:unix-memory-commit-boundary]`,
   `SAFETY[AUDIT:unix-process-info-boundary]`,
   `SAFETY[AUDIT:unix-output-env-boundary]`,
   `SAFETY[AUDIT:unix-random-boundary]`,
@@ -440,7 +443,10 @@ file:
   `SAFETY[AUDIT:windows-virtual-memory-allocation-export-boundary]`,
   `SAFETY[AUDIT:windows-process-info-boundary]`,
   `SAFETY[AUDIT:windows-output-env-boundary]`,
-  `SAFETY[AUDIT:windows-tls-fls-boundary]`,
+  `SAFETY[AUDIT:windows-fls-api-boundary]`,
+  `SAFETY[AUDIT:windows-dll-lifecycle-boundary]`,
+  `SAFETY[AUDIT:windows-fls-thread-boundary]`,
+  `SAFETY[AUDIT:windows-teb-threadpool-boundary]`,
   `SAFETY[AUDIT:windows-large-page-boundary]`,
   `SAFETY[AUDIT:windows-numa-boundary]`,
   `SAFETY[AUDIT:windows-etw-boundary]`,
@@ -459,13 +465,18 @@ file:
   `SAFETY[AUDIT:internal-atomic-platform-lock-boundary]`: internal atomic
   raw-view, scalar operation, pointer, guard/once, and lock facade slices in
   `src/internal/atomic.rs`.
-- `SAFETY[AUDIT:unsafe-callback]`: unsafe-adjacent callback guards. Unsafe guard construction
-  registers a trampoline with a borrowed callback context, stores the previous
-  registration, restores that previous registration on drop, and catches Rust
+- `SAFETY[AUDIT:unsafe-callback-guard-boundary]`: unsafe-adjacent callback guards.
+  Unsafe guard construction registers a trampoline with a borrowed callback
+  context, stores the previous registration, restores that previous registration on drop,
+  restores the process-global snapshot, and catches Rust
   panics before callback ABI return in `std` and test builds. Callers must
-  prevent concurrent registration changes and concurrent or reentrant callback
-  entry for the same borrowed `FnMut`. Output callbacks remain raw until output
-  recursion and diagnostic allocation semantics are designed.
+  prevent concurrent registration changes; no concurrent or reentrant entry may access the same
+  borrowed callback.
+- `SAFETY[AUDIT:unsafe-callback-test-fixtures]`: callback tests serialize
+  process-global registration, use synchronous local thread-heap fixtures, and
+  copy callback function pointer options only for equality checks. Output
+  callbacks remain raw until output recursion and diagnostic allocation
+  semantics are designed.
 - `SAFETY[AUDIT:panic-boundary]`: no-std panic/personality shims and aborting
   assertion paths. These paths must not allocate or unwind.
 - `SAFETY[AUDIT:safe-heap]`: safe heap wrappers. Owned heaps delete exactly

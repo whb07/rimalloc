@@ -730,13 +730,13 @@ fn stats_and_process_info_are_typed_and_nonprinting() {
 static PREVIOUS_ERROR_CALLBACK_HITS: AtomicUsize = AtomicUsize::new(0);
 static PREVIOUS_DEFERRED_CALLBACK_HITS: AtomicUsize = AtomicUsize::new(0);
 
-// SAFETY[AUDIT:unsafe-callback]: test-only C ABI callback used as a
+// SAFETY[AUDIT:unsafe-callback-test-fixtures]: test-only C ABI callback used as a
 // previous error registration fixture; it only updates an atomic counter.
 unsafe extern "C" fn previous_error_callback(_err: i32, _arg: *mut c_void) {
     PREVIOUS_ERROR_CALLBACK_HITS.fetch_add(1, Ordering::SeqCst);
 }
 
-// SAFETY[AUDIT:unsafe-callback]: test-only C ABI callback used as a
+// SAFETY[AUDIT:unsafe-callback-test-fixtures]: test-only C ABI callback used as a
 // previous deferred-free registration fixture; it only updates an atomic
 // counter.
 unsafe extern "C" fn previous_deferred_free_callback(
@@ -772,7 +772,7 @@ struct DeferredFreeCallbackRestoreGuard {
 impl DeferredFreeCallbackRestoreGuard {
     fn new() -> Self {
         Self {
-            // SAFETY[AUDIT:unsafe-callback]: tests snapshot the current
+            // SAFETY[AUDIT:unsafe-callback-test-fixtures]: tests snapshot the current
             // process-global callback state while holding the callback
             // serialization lock.
             snapshot: unsafe { crate::page::registered_deferred_free_callback() },
@@ -782,7 +782,7 @@ impl DeferredFreeCallbackRestoreGuard {
 
 impl Drop for DeferredFreeCallbackRestoreGuard {
     fn drop(&mut self) {
-        // SAFETY[AUDIT:unsafe-callback]: tests restore the exact callback
+        // SAFETY[AUDIT:unsafe-callback-test-fixtures]: tests restore the exact callback
         // snapshot captured under the callback serialization lock.
         unsafe { crate::page::restore_deferred_free_callback(self.snapshot) };
     }
@@ -796,7 +796,7 @@ fn trigger_error_callback() {
 }
 
 fn with_test_thread_heap<R>(f: impl FnOnce(*mut crate::types::mi_theap_t) -> R) -> R {
-    // SAFETY[AUDIT:unsafe-callback]: the zeroed values are local callback
+    // SAFETY[AUDIT:unsafe-callback-test-fixtures]: the zeroed values are local callback
     // test fixtures and are initialized only enough for deferred-free
     // reentry suppression through the `tld` field.
     let mut tld = unsafe { MaybeUninit::<crate::types::mi_tld_t>::zeroed().assume_init() };
@@ -807,7 +807,7 @@ fn with_test_thread_heap<R>(f: impl FnOnce(*mut crate::types::mi_theap_t) -> R) 
 
 fn trigger_deferred_free_callback(theap: *mut crate::types::mi_theap_t, force: bool) {
     assert!(!theap.is_null());
-    // SAFETY[AUDIT:unsafe-callback]: `theap` comes from
+    // SAFETY[AUDIT:unsafe-callback-test-fixtures]: `theap` comes from
     // `with_test_thread_heap` and stays live for this synchronous callback
     // trigger.
     unsafe { crate::page::_mi_deferred_free(theap, force) };
@@ -827,7 +827,7 @@ fn error_callback_guard_invokes_and_restores_previous_callback_quietly() {
         let mut callback = |_err: i32| {
             hits += 1;
         };
-        // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback test lock,
+        // SAFETY[AUDIT:unsafe-callback-test-fixtures]: this test holds the process-wide callback test lock,
         // triggers the callback synchronously, and restores the original
         // registration before releasing the lock.
         let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
@@ -857,14 +857,14 @@ fn nested_error_callback_guards_restore_lifo_previous_callbacks() {
         inner_hits.fetch_add(1, Ordering::SeqCst);
     };
 
-    // SAFETY[AUDIT:unsafe-callback]: this test serializes process-global callback registration,
+    // SAFETY[AUDIT:unsafe-callback-test-fixtures]: this test serializes process-global callback registration,
     // invokes callbacks synchronously, and drops nested guards in LIFO
     // order before the borrowed callbacks go out of scope.
     let outer_guard = unsafe { ErrorCallbackGuard::new(&mut outer_callback) };
     trigger_error_callback();
 
     {
-        // SAFETY[AUDIT:unsafe-callback]: same synchronization and LIFO nesting contract as above.
+        // SAFETY[AUDIT:unsafe-callback-test-fixtures]: same synchronization and LIFO nesting contract as above.
         let _inner_guard = unsafe { ErrorCallbackGuard::new(&mut inner_callback) };
         trigger_error_callback();
     }
@@ -891,7 +891,7 @@ fn panicking_error_callback_is_caught_before_c_abi_return() {
         let mut callback = |_err: i32| {
             panic!("callback panic should be caught");
         };
-        // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback test lock,
+        // SAFETY[AUDIT:unsafe-callback-test-fixtures]: this test holds the process-wide callback test lock,
         // triggers the callback synchronously, and restores the original
         // registration before releasing the lock.
         let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
@@ -908,14 +908,14 @@ fn deferred_free_callback_guard_registers_and_restores() {
     let restore = DeferredFreeCallbackRestoreGuard::new();
     {
         let mut callback = |_force: bool, _heartbeat: u64| {};
-        // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback test lock and
+        // SAFETY[AUDIT:unsafe-callback-test-fixtures]: this test holds the process-wide callback test lock and
         // only observes registration state without concurrent allocator
         // callback entry.
         let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
         let current = unsafe { crate::page::registered_deferred_free_callback() };
         assert!(current.0.is_some());
     }
-    // SAFETY[AUDIT:unsafe-callback]: the callback test lock is still held
+    // SAFETY[AUDIT:unsafe-callback-test-fixtures]: the callback test lock is still held
     // and the guard has restored the previous registration.
     let restored = unsafe { crate::page::registered_deferred_free_callback() };
     assert_eq!(callback_addr(restored.0), callback_addr(restore.snapshot.0));
@@ -928,7 +928,7 @@ fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
     let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
     let _restore = DeferredFreeCallbackRestoreGuard::new();
     PREVIOUS_DEFERRED_CALLBACK_HITS.store(0, Ordering::SeqCst);
-    // SAFETY[AUDIT:unsafe-callback]: this test holds the callback
+    // SAFETY[AUDIT:unsafe-callback-test-fixtures]: this test holds the callback
     // serialization lock and installs a test-only previous callback.
     unsafe {
         crate::page::mi_register_deferred_free(
@@ -946,7 +946,7 @@ fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
         inner_hits.fetch_add(1, Ordering::SeqCst);
     };
 
-    // SAFETY[AUDIT:unsafe-callback]: this test serializes process-global callback registration,
+    // SAFETY[AUDIT:unsafe-callback-test-fixtures]: this test serializes process-global callback registration,
     // invokes callbacks synchronously on a local thread-heap fixture, and drops
     // nested guards in LIFO order before borrowed callbacks go out of scope.
     with_test_thread_heap(|theap| {
@@ -954,7 +954,7 @@ fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
         trigger_deferred_free_callback(theap, false);
 
         {
-            // SAFETY[AUDIT:unsafe-callback]: same synchronization and LIFO nesting contract as above.
+            // SAFETY[AUDIT:unsafe-callback-test-fixtures]: same synchronization and LIFO nesting contract as above.
             let _inner_guard = unsafe { DeferredFreeCallbackGuard::new(&mut inner_callback) };
             trigger_deferred_free_callback(theap, true);
         }
@@ -990,7 +990,7 @@ fn error_callback_allows_allocator_reentry_without_recursive_error() {
         }
     };
 
-    // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback lock, invokes the
+    // SAFETY[AUDIT:unsafe-callback-test-fixtures]: this test holds the process-wide callback lock, invokes the
     // callback synchronously, and records any callback allocation failure
     // instead of panicking inside the panic-catching trampoline.
     let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
@@ -1027,7 +1027,7 @@ fn deferred_free_callback_allows_allocator_reentry_and_suppresses_recursive_entr
             }
         };
 
-        // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback lock and
+        // SAFETY[AUDIT:unsafe-callback-test-fixtures]: this test holds the process-wide callback lock and
         // invokes the deferred-free callback synchronously on a local
         // thread-heap fixture. The recursive trigger exercises the
         // allocator's per-thread reentry suppression before the borrowed
@@ -1053,7 +1053,7 @@ fn panicking_deferred_free_callback_is_caught_before_c_abi_return() {
         let mut callback = |_force: bool, _heartbeat: u64| {
             panic!("deferred-free callback panic should be caught");
         };
-        // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback test lock,
+        // SAFETY[AUDIT:unsafe-callback-test-fixtures]: this test holds the process-wide callback test lock,
         // triggers the callback synchronously, and restores the original
         // registration before releasing the lock.
         let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
@@ -1112,7 +1112,7 @@ fn callback_addr<T>(callback: Option<T>) -> usize
 where
     T: Copy,
 {
-    // SAFETY[AUDIT:unsafe-callback]: callback function pointer options are
+    // SAFETY[AUDIT:unsafe-callback-test-fixtures]: callback function pointer options are
     // copied to an integer address only for equality checks in tests.
     callback.map_or(0, |callback| unsafe {
         core::mem::transmute_copy::<T, usize>(&callback)

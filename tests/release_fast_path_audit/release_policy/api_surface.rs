@@ -331,13 +331,28 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
         fs::read_to_string(root.join("src/raw/macros.rs")).expect("read src/raw/macros.rs");
     let unsafe_doc =
         fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read unsafe audit");
+    let raw_macro_allocation_ids = [
+        "raw-macro-bootstrap-boundary",
+        "raw-macro-override-entry-boundary",
+        "raw-macro-libc-forwarding-boundary",
+        "raw-macro-allocation-query-boundary",
+        "raw-macro-cxx-boundary",
+        "raw-macro-header-forwarding-boundary",
+    ];
+
+    for audit_id in raw_macro_allocation_ids {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            raw_macros_rs.contains(&marker) && unsafe_doc.contains(&marker),
+            "raw macro allocation audit tag {audit_id} should be mirrored in source and docs"
+        );
+    }
 
     assert!(
         abi_rs.contains("SAFETY[AUDIT:raw-macro-boundary]")
             && headers_rs.contains("SAFETY[AUDIT:raw-macro-boundary]")
             && unsafe_doc.contains("SAFETY[AUDIT:raw-macro-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
-            && unsafe_doc.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
+            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
             && abi_doc.contains("## Raw Macro Unsafe Boundary"),
         "raw macro unsafe-boundary audit tags should be mirrored in source and docs"
     );

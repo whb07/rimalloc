@@ -8,7 +8,7 @@ IDs, and a root release-audit harness that is still close to its cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` still covers 82 source files, 5,893 unsafe
-  mentions, and 91 operation IDs. The migration allowlist remains empty.
+  mentions, and 96 operation IDs. The migration allowlist remains empty.
 - `strict-type-allowlist.txt` has 26 wildcard entries left: 4
   raw-pointer-parameter entries, 13 bare-domain `usize` entries, 4
   pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
@@ -19,7 +19,6 @@ Current review evidence:
   `src/platform/mod.rs`, `src/raw/macros.rs`, `src/types/layout.rs`,
   `src/safe/allocation.rs`, and `src/types/atomic.rs`.
 - The largest remaining unsafe audit marker clusters are
-  `raw-macro-allocation-boundary` with 178 markers,
   `allocation-entry-boundary` with 166 markers,
   `stats-reporting-boundary` with 161 markers,
   `typed-pointer-accessors` with 161 markers,
@@ -28,7 +27,14 @@ Current review evidence:
   `os-memory-boundary` with 136 markers,
   `init-thread-tls-boundary` with 129 markers, and
   `windows-primitive-boundary` with 114 markers.
-- Audit evidence rows for allocation, aligned allocation, raw macro allocation,
+- The previous raw macro aggregate is split into
+  `raw-macro-libc-forwarding-boundary` with 65 markers,
+  `raw-macro-cxx-boundary` with 46 markers,
+  `raw-macro-override-entry-boundary` with 36 markers,
+  `raw-macro-bootstrap-boundary` with 15 markers,
+  `raw-macro-allocation-query-boundary` with 10 markers, and
+  `raw-macro-header-forwarding-boundary` with 6 markers.
+- Audit evidence rows for allocation, aligned allocation, split raw macro IDs,
   OS memory, page-map, stats, and typed pointer checks now point at focused
   release-audit modules instead of the old aggregate harness paths.
 - The release-audit module cap is 1,000 lines, but the root harness is still
@@ -78,17 +84,17 @@ no-allocation audit, full clippy, and full tests.
 
 ## Issue 3: Split the raw macro allocation audit cluster
 
-> **Comment:** `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers in
-> the raw allocation override and forwarding layer. It mixes bootstrap
-> allocation, malloc/free/realloc shims, C header macro behavior, and platform
-> forwarding contracts.
+> **Comment:** The previous `SAFETY[AUDIT:raw-macro-allocation-boundary]`
+> cluster had 178 markers in the raw allocation override and forwarding layer.
+> It mixed bootstrap allocation, malloc/free/realloc shims, C header macro
+> behavior, and platform forwarding contracts.
 
-- [ ] Split raw macro markers into narrower operation IDs for bootstrap
+- [x] Split raw macro markers into narrower operation IDs for bootstrap
       tracking, allocator override entry points, libc/posix forwarding,
       usability/size queries, and C header macro compatibility.
-- [ ] Update audit docs and evidence rows with separate invariants and tests for
+- [x] Update audit docs and evidence rows with separate invariants and tests for
       each new raw macro operation ID.
-- [ ] Preserve exported allocator symbols, no hidden Rust allocation before init,
+- [x] Preserve exported allocator symbols, no hidden Rust allocation before init,
       downstream header macro expansion, and Unix bootstrap allocation behavior.
 
 Verify: header macro expansion tests, raw macro unit tests, release fast-path
@@ -150,7 +156,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 1. [x] Refresh audit evidence paths after the release-audit split.
 2. [x] Narrow the remaining allocator/init strict-type wildcards.
-3. [ ] Split the raw macro allocation audit cluster.
+3. [x] Split the raw macro allocation audit cluster.
 4. [ ] Split allocation, aligned allocation, stats, page-map, and OS audit
        clusters.
 5. [ ] Split typed pointer accessor audit coverage.

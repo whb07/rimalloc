@@ -687,13 +687,38 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/raw/macros.rs\t"))
+            && !override_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
             && override_rs
-                .matches("SAFETY[AUDIT:raw-macro-allocation-boundary]")
+                .matches("SAFETY[AUDIT:raw-macro-bootstrap-boundary]")
                 .count()
-                >= 170
+                >= 15
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
+                .count()
+                >= 35
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
+                .count()
+                >= 60
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
+                .count()
+                >= 10
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-cxx-boundary]")
+                .count()
+                >= 45
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")
+                .count()
+                >= 6
             && override_rs.contains("core::arch::global_asm!(")
+            && override_rs.contains("mod unix_bootstrap")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
+            && override_rs.contains("pub unsafe fn mi_forward1")
+            && override_rs.contains("pub unsafe fn mi_malloc_size_forward")
             && override_rs.contains("pub unsafe fn mi_unix_malloc(")
+            && override_rs.contains("pub unsafe fn mi_unix_posix_memalign")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_unix_malloc_export")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_wasi_libc_malloc_export")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_linux_libc_malloc_export"),

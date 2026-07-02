@@ -59,11 +59,21 @@ file when such a module exists.
   allocation macros and C header override macros expand to unsafe raw C-shaped
   calls without internal unsafe blocks, so the downstream expansion site must
   provide the unsafe boundary.
-- `SAFETY[AUDIT:raw-macro-allocation-boundary]`: raw allocation override facade
-  in `src/raw/macros.rs`. Export attributes, C++ operator symbols, libc/WASI
-  aliases, macOS interpose records, assembly overrides, and bootstrap
-  allocation tracking preserve the raw C allocation ABI and do not add Rust
-  ownership guarantees.
+- `SAFETY[AUDIT:raw-macro-bootstrap-boundary]`: Unix bootstrap allocation
+  tracking in `src/raw/macros.rs`, including mmap-backed bootstrap blocks,
+  preloading handoffs, and free/realloc ownership transfer.
+- `SAFETY[AUDIT:raw-macro-override-entry-boundary]`: allocator override entry
+  points in `src/raw/macros.rs`, including fast assembly aliases, macOS
+  interpose records, and Windows CRT override exports.
+- `SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]`: libc, Linux libc, WASI,
+  POSIX, and libc-adjacent allocation forwarding shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-allocation-query-boundary]`: malloc size,
+  usable-size, and good-size compatibility queries in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-cxx-boundary]`: C++ operator new/delete compatibility
+  symbols and nothrow/aligned/sized variants in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-header-forwarding-boundary]`: header-shaped raw
+  forwarding helpers in `src/raw/macros.rs` that call raw function pointers or
+  allocator exports without adding Rust ownership guarantees.
 - `SAFETY[AUDIT:init-subproc-boundary]`: subproc identity, subproc list
   mutation, subproc ID conversion, main-subproc address resolution, main-heap
   lookup, and subproc heap visitation in `src/allocator/init.rs`.

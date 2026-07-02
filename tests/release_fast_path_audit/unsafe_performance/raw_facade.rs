@@ -25,6 +25,23 @@ pub(super) fn assert_raw_facade_boundaries(sources: &UnsafePerformanceSources) {
     let heap_rs = sources.heap_rs.as_str();
     let prim_rs = sources.prim_rs.as_str();
     let prim_unix_rs = sources.prim_unix_rs.as_str();
+    let raw_macro_marker_minimums = [
+        ("raw-macro-bootstrap-boundary", 15),
+        ("raw-macro-override-entry-boundary", 35),
+        ("raw-macro-libc-forwarding-boundary", 60),
+        ("raw-macro-allocation-query-boundary", 10),
+        ("raw-macro-cxx-boundary", 45),
+        ("raw-macro-header-forwarding-boundary", 6),
+    ];
+
+    for (audit_id, minimum) in raw_macro_marker_minimums {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = raw_macros_rs.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "raw macro facade should retain at least {minimum} {audit_id} markers; found {count}"
+        );
+    }
 
     assert!(
         !unsafe_allowlist
@@ -64,13 +81,22 @@ pub(super) fn assert_raw_facade_boundaries(sources: &UnsafePerformanceSources) {
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/raw/macros.rs\t"))
-            && raw_macros_rs
-                .matches("SAFETY[AUDIT:raw-macro-allocation-boundary]")
-                .count()
-                >= 170
+            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-bootstrap-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")
             && raw_macros_rs.contains("core::arch::global_asm!(")
+            && raw_macros_rs.contains("mod unix_bootstrap")
+            && raw_macros_rs.contains("if crate::internal::_mi_preloading()")
             && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
+            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_cxx_delete")
+            && raw_macros_rs.contains("pub unsafe fn mi_forward1")
+            && raw_macros_rs.contains("pub unsafe fn mi_malloc_size_forward")
             && raw_macros_rs.contains("pub unsafe fn mi_unix_malloc(")
+            && raw_macros_rs.contains("pub unsafe fn mi_unix_posix_memalign")
             && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_unix_malloc_export")
             && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_wasi_libc_malloc_export")
             && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_linux_libc_malloc_export"),

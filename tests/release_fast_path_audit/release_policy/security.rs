@@ -129,11 +129,31 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
             "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
         ),
         (
-            "raw-macro-allocation-boundary",
+            "raw-macro-bootstrap-boundary",
             "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
         ),
         (
-            "raw-macro-allocation-boundary",
+            "raw-macro-override-entry-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-override-entry-boundary",
+            "tests/release_fast_path_audit/release_policy/api_surface.rs",
+        ),
+        (
+            "raw-macro-libc-forwarding-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-allocation-query-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-cxx-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-header-forwarding-boundary",
             "tests/release_fast_path_audit/release_policy/api_surface.rs",
         ),
         (
@@ -167,7 +187,12 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
     let tracked_ids = [
         "allocation-entry-boundary",
         "aligned-allocation-boundary",
-        "raw-macro-allocation-boundary",
+        "raw-macro-bootstrap-boundary",
+        "raw-macro-override-entry-boundary",
+        "raw-macro-libc-forwarding-boundary",
+        "raw-macro-allocation-query-boundary",
+        "raw-macro-cxx-boundary",
+        "raw-macro-header-forwarding-boundary",
         "os-memory-boundary",
         "page-map-boundary",
         "stats-reporting-boundary",

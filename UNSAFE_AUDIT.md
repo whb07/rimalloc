@@ -392,14 +392,34 @@ Operation IDs:
 - `SAFETY[AUDIT:raw-macro-boundary]`: `src/ffi/abi.rs` and
   `src/ffi/headers.rs` expose raw C-header macro compatibility without adding
   Rust ownership guarantees; callers inherit the documented raw ABI contract.
-- `SAFETY[AUDIT:raw-macro-allocation-boundary]`: `src/raw/macros.rs` owns the
-  raw allocation override facade for C, C++, libc, WASI, Linux libc, macOS
-  interposition, fast assembly aliases, bootstrap allocation tracking, and
-  header-shaped forwarding helpers. Unsafe operations are limited to exported
-  ABI attributes, foreign allocation declarations, platform interpose records,
-  assembly override entry points, bootstrap `mmap`/`munmap` tracking, raw
-  forwarding to allocator exports, C++ operator symbol shims, and test fixtures
-  that exercise bootstrap allocation ownership.
+- `SAFETY[AUDIT:raw-macro-bootstrap-boundary]`: `src/raw/macros.rs` owns Unix
+  bootstrap allocation tracking before allocator initialization. Unsafe
+  operations are limited to bootstrap `mmap`/`munmap` declarations, header
+  pointer reconstruction, sanitizer slot tracking, preloading handoffs, and
+  fixtures that prove bootstrap ownership transfers to normal free/realloc.
+- `SAFETY[AUDIT:raw-macro-override-entry-boundary]`: `src/raw/macros.rs` owns
+  raw allocator override entry points, macOS interpose records, Windows CRT
+  override exports, and fast assembly aliases. Unsafe operations are limited to
+  exported ABI attributes, global/naked assembly, interpose records, foreign
+  target declarations, and raw forwarding to allocator entry points.
+- `SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]`: `src/raw/macros.rs` owns
+  Unix, Linux libc, WASI libc, POSIX, and libc-adjacent allocation forwarding
+  shims. Unsafe operations are limited to C-shaped malloc/free/realloc/calloc,
+  strdup/strndup, valloc/pvalloc, memalign/posix_memalign, reallocarray, and
+  symbol alias forwarding while preserving raw libc ownership contracts.
+- `SAFETY[AUDIT:raw-macro-allocation-query-boundary]`: `src/raw/macros.rs`
+  owns malloc size, usable-size, and good-size compatibility queries. Unsafe
+  operations are limited to checked heap-region probes and raw forwarding to
+  allocator query exports, including bootstrap allocation size queries.
+- `SAFETY[AUDIT:raw-macro-cxx-boundary]`: `src/raw/macros.rs` owns C++ operator
+  new/delete compatibility symbols and nothrow/aligned/sized variants. Unsafe
+  operations are limited to exported C++ ABI symbol shims and direct forwarding
+  to the corresponding allocator allocation or free entry points.
+- `SAFETY[AUDIT:raw-macro-header-forwarding-boundary]`: `src/raw/macros.rs`
+  owns header-shaped forwarding helpers used by raw macro compatibility layers.
+  Unsafe operations are limited to calling caller-supplied raw C function
+  pointers or forwarding to raw allocator exports without adding Rust ownership
+  guarantees.
 - `SAFETY[AUDIT:raw-posix-compat]`: `src/raw/posix.rs` owns POSIX and
   libc-adjacent raw compatibility helpers. Unsafe operations are limited to
   errno slot publication, environment lookup, raw allocation forwarding,

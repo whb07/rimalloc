@@ -65,9 +65,6 @@ SKIP_DIRS = {
 }
 
 PATH_ALIASES = {
-    "src/allocator/arena/debug.rs": {"src/allocator/arena.rs"},
-    "src/allocator/arena/heap_pages.rs": {"src/allocator/arena.rs"},
-    "src/allocator/arena/ids.rs": {"src/allocator/arena.rs"},
     "src/allocator/page/bins.rs": {"src/allocator/page.rs"},
     "src/allocator/page/counts.rs": {"src/allocator/page.rs"},
     "src/allocator/page/flags.rs": {"src/allocator/page.rs"},

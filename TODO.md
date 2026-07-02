@@ -37,9 +37,12 @@ Current review evidence:
   `src/types/heap.rs` is 312 lines, and
   `src/allocator/arena_meta.rs` is 316 lines.
 - `strict-type-allowlist.txt` has 0 remaining `remove:` entries.
-  `REMOVE_ENTRY_CAP` is 0, but `src/allocator/arena.rs` still has broad
-  permanent raw-pointer and pointer/usize compatibility entries that should be
-  revisited as cohesive child modules split out.
+  `REMOVE_ENTRY_CAP` is 0. Arena raw-pointer entries are now symbol-level for
+  `src/allocator/arena.rs`, `src/allocator/arena/debug.rs`,
+  `src/allocator/arena/ids.rs`, and `src/allocator/arena/heap_pages.rs`. One
+  path-level `src/allocator/arena.rs` pointer/usize entry remains for arena
+  range, alignment, and huge-page interleave arithmetic because the checker
+  does not yet classify pointer/usize hits by function symbol.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 3,915 lines after moving arena id/memid helpers
   into `src/allocator/arena/ids.rs`, which is 244 lines, and heap page visitors
@@ -165,21 +168,20 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 
 ## Issue: Arena strict-type entries are still broad after child splits
 
-> **Comment:** The final `remove:` strict-type entries are gone, but several
-> permanent `src/allocator/arena.rs|*` entries still cover raw page, heap,
-> thread-heap, arena, subproc, and pointer/usize boundaries. As modules split
-> out, these should become narrower path- or symbol-level entries where the
-> checker can support that without losing C compatibility documentation.
+> **Comment:** Arena raw-pointer strict-type entries are now symbol-level across
+> `arena.rs`, `arena/debug.rs`, `arena/ids.rs`, and `arena/heap_pages.rs`. The
+> retained path-level pointer/usize entry documents the checker limitation and
+> the concrete arena range/alignment arithmetic boundary.
 
-- [ ] Re-run `scripts/check-strict-types.py` after the next arena child module
+- [x] Re-run `scripts/check-strict-types.py` after the next arena child module
       split and collect the live arena hits.
-- [ ] Replace any broad arena entries made unnecessary by the split with
+- [x] Replace any broad arena entries made unnecessary by the split with
       child-module or symbol-level entries.
-- [ ] Keep permanent compatibility entries only where raw C-shaped signatures or
+- [x] Keep permanent compatibility entries only where raw C-shaped signatures or
       translated arena range arithmetic genuinely remain.
-- [ ] Update allowlist comments so each retained entry identifies its concrete
+- [x] Update allowlist comments so each retained entry identifies its concrete
       boundary instead of only saying "translated C arena".
-- [ ] Keep `REMOVE_ENTRY_CAP` at 0.
+- [x] Keep `REMOVE_ENTRY_CAP` at 0.
 
 Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
 `cargo test --test release_fast_path_audit --all-features`, full clippy, and
@@ -191,7 +193,7 @@ full tests.
 2. [x] Migrate `src/internal/random.rs` off the unsafe migration allowlist.
 3. [x] Split the arena heap visit/delete/move/destroy cluster.
 4. [x] Split one more `unsafe_performance.rs` assertion cluster.
-5. [ ] Narrow broad arena strict-type entries after the arena split.
+5. [x] Narrow broad arena strict-type entries after the arena split.
 
 ## Definition of done for this backlog
 
@@ -202,5 +204,5 @@ full tests.
 - [x] `src/allocator/arena.rs` is smaller again without API, ABI, or hot-path
       performance drift.
 - [x] One release-audit module has more review margin.
-- [ ] Broad arena strict-type documentation is narrower where the code now has
+- [x] Broad arena strict-type documentation is narrower where the code now has
       child-module boundaries.

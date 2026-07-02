@@ -60,7 +60,9 @@ fn rust_idiom_backlog_tracks_current_work() {
         "strict-type-allowlist.txt",
         "0 remaining `remove:` entries",
         "`REMOVE_ENTRY_CAP` is 0",
-        "`src/allocator/arena.rs` still has broad\n  permanent raw-pointer and pointer/usize compatibility entries",
+        "Arena raw-pointer entries are now symbol-level for\n  `src/allocator/arena.rs`",
+        "`src/allocator/arena/heap_pages.rs`. One\n  path-level `src/allocator/arena.rs` pointer/usize entry remains",
+        "does not yet classify pointer/usize hits by function symbol",
         "`src/allocator/arena.rs` is 3,915 lines",
         "`src/allocator/arena/ids.rs`, which is 244 lines",
         "`src/allocator/arena/heap_pages.rs`, which is 543 lines",
@@ -94,6 +96,8 @@ fn rust_idiom_backlog_tracks_current_work() {
         "SAFETY[AUDIT:random-context-boundaries]",
         "`src/internal/random.rs` off the unsafe migration allowlist",
         "`src/allocator/arena.rs` is smaller again without API, ABI, or hot-path\n      performance drift",
+        "Arena raw-pointer strict-type entries are now symbol-level across",
+        "retained path-level pointer/usize entry documents the checker limitation",
         "Keep `REMOVE_ENTRY_CAP` at 0",
     ];
 

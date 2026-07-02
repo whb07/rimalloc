@@ -15,8 +15,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 16 entries: 14 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 16.
+- `docs/unsafe-migration-allowlist.tsv` has 15 entries: 13 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 15.
 - The completed pass moved `src/platform/macos.rs`, `src/platform/mod.rs`,
   `src/internal/atomic.rs`, `src/allocator/page_map.rs`, and
   `src/types/scalar.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -25,18 +25,25 @@ Current review evidence:
   `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers for raw callback typedef
   declarations while retaining 2 `SAFETY[AUDIT:raw-auto-trait]` markers for
   sentinel `Sync` impls, and is off the unsafe migration allowlist.
+- The current pass moved `src/allocator/thread_heap.rs` to 71
+  `SAFETY[AUDIT:thread-heap-lifecycle]` markers for visitor callback
+  invocation, area metadata initialization, fast-divisor out-pointer writes,
+  page/block traversal, page validation/collection, stats merging,
+  collect/default-switching shims, thread-heap init/create/free/delete,
+  refcount updates, random next, and arena-memory cleanup, and is off the
+  unsafe migration allowlist.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/allocator/thread_heap.rs` at 1,267 lines with 120 `unsafe` hits,
   `src/platform/unix.rs` at 1,371 lines with 143 `unsafe` hits,
   `src/platform/os.rs` at 1,614 lines with 200 `unsafe` hits,
-  `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits, and
-  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits.
+  `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits,
+  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits, and
+  `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits.
 - The next allowlisted production files after those are
-  `src/allocator/options.rs` at 1,715 lines with 78 `unsafe` hits,
   `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits,
-  `src/allocator/stats.rs` at 2,021 lines with 196 `unsafe` hits,
-  `src/raw/macros.rs` at 2,223 lines with 381 `unsafe` hits, and
-  `src/allocator/init.rs` at 2,339 lines with 336 `unsafe` hits.
+  `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits,
+  `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits,
+  `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits, and
+  `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits.
 - `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
   `symbol = *` entries. The largest categories are 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
@@ -53,6 +60,7 @@ Current review evidence:
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
   `SAFETY[AUDIT:macos-zone-override]` has 83 markers,
   `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
+  `SAFETY[AUDIT:thread-heap-lifecycle]` has 71 markers,
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers,
   `SAFETY[AUDIT:platform-tls-primitives]` has 60 markers,
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
@@ -106,24 +114,24 @@ scripts, unsafe inventory regeneration/check, full clippy, and full tests.
 
 > **Comment:** `src/allocator/thread_heap.rs` owns thread-heap visitation,
 > collection, default switching, initialization, creation, refcounting, free,
-> delete, and random/arena-memory cleanup paths. These paths are already partly
-> shaped by typed heap/thread-heap witnesses, but the file still hides all
-> unsafe operations behind a dated migration entry.
+> delete, and random/arena-memory cleanup paths. These paths are shaped by typed
+> heap/thread-heap witnesses, and this pass moved the remaining unsafe
+> operations from a dated file allowance to local operation markers.
 
-- [ ] Add local `SAFETY[AUDIT:thread-heap-lifecycle]` markers for visitor
+- [x] Add local `SAFETY[AUDIT:thread-heap-lifecycle]` markers for visitor
       callback invocation, area metadata initialization, fast-divisor out-pointer
       writes, page/block traversal, page validation/collection, stats merging,
       collect/default-switching shims, thread-heap init/create/free/delete,
       refcount updates, random next, and arena-memory cleanup.
-- [ ] Preserve `ThreadHeapLocal`, `ThreadHeapPtr`, `HeapPtr`, `TldPtr`, and
+- [x] Preserve `ThreadHeapLocal`, `ThreadHeapPtr`, `HeapPtr`, `TldPtr`, and
       callback wrapper boundaries; default-thread-heap semantics; lock ordering;
       refcount acquire/release behavior; page ownership checks; and no heap
       allocation or dynamic dispatch on lifecycle hot paths.
-- [ ] Add or extend release-audit assertions and focused tests for area/block
+- [x] Add or extend release-audit assertions and focused tests for area/block
       visitation, page validation/collection, stats merge, collect/default
       switching, init/create/delete/free ordering, refcount transitions, and
       marker coverage without a migration allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/allocator/thread_heap.rs` from the unsafe migration allowlist,
       regenerate unsafe inventory, and lower the cap.
 
@@ -223,7 +231,7 @@ clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/types/constants.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/allocator/thread_heap.rs` off the unsafe migration
+2. [x] Migrate `src/allocator/thread_heap.rs` off the unsafe migration
        allowlist.
 3. [ ] Migrate `src/platform/unix.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/platform/os.rs` off the unsafe migration allowlist.

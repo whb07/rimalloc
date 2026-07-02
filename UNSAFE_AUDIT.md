@@ -227,6 +227,12 @@ Operation IDs:
   heap delete/destroy teardown, allocator page ownership lookups,
   under-utilized page inspection, and lazy per-heap thread-heap initialization
   while preserving typed heap witnesses and lock-protected list updates.
+- `SAFETY[AUDIT:thread-heap-lifecycle]`: `src/allocator/thread_heap.rs` owns
+  thread-heap visitors, collection, default switching, initialization,
+  creation, free/delete, refcount, random, stats-merge, and arena-memory cleanup
+  boundaries. Unsafe operations stay at C ABI shims, callback invocations,
+  page/block traversal, fast-divisor out-pointers, and caller-proven
+  heap/thread-heap/TLD metadata transitions routed through typed wrappers.
 - `SAFETY[AUDIT:owned-allocation]`: `src/safe/allocation.rs` owns non-zero
   allocations through move-only wrappers. Slice views and copies are bounded by
   the stored layout, and `Drop` releases live blocks exactly once.
@@ -555,10 +561,10 @@ Migration:
 - The migration allowlist is intentionally file-level and temporary. Each entry
   must include a `production`, `test`, or `translation` category, an owner, a
   concrete `remove_by` date, and a reason. The checker caps the current
-  allowlist at 64 entries; removing entries requires lowering that cap in the
-  same change. Migrating a file means adding stable operation IDs near unsafe
-  operations, documenting each ID in this section, and removing the file from
-  the allowlist.
+  allowlist at the current entry count; removing entries requires lowering that
+  cap in the same change. Migrating a file means adding stable operation IDs
+  near unsafe operations, documenting each ID in this section, and removing the
+  file from the allowlist.
 
 Validation:
 

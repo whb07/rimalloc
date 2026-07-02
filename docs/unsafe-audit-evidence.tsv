@@ -41,6 +41,9 @@ heap-lifecycle-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw heap
 heap-lifecycle-boundary	test	tests/no_allocation_critical_paths.rs	Checks heap creation/delete and heap lookup helpers do not route through Rust's global allocator.
 heap-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks heap lifecycle markers, creation registration, owned cleanup, lazy thread-heap initialization, and under-utilized page inspection shape.
 heap-lifecycle-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks heap delete/destroy/check-owned helpers retain typed heap witnesses and main-heap rejection.
+thread-heap-lifecycle	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap visitation, collection, init/create/free/delete, refcount, random, cleanup, marker coverage, and migration allowlist removal.
+thread-heap-lifecycle	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching, routed heap thread-heap lookup, heap lifecycle, stats, and allocation smoke paths.
+thread-heap-lifecycle	script	scripts/check-unsafe-audit.py	Checks thread-heap lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
 owned-allocation	test	src/safe/tests.rs	Exercises safe owned Allocation construction, resize, initialization, and drop paths.
 owned-allocation	test	tests/allocation_boundary_cases.rs	Covers allocation boundary cases that the owned wrapper forwards to.
 panic-boundary	test	tests/ffi_panic_audit.rs	Checks production panic-abort policy and callback panic containment documentation.

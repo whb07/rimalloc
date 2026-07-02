@@ -571,6 +571,16 @@ fn lifecycle_and_local_boundary_helpers_stay_classified() {
         "heap lifecycle unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
     assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/thread_heap.rs\t"))
+            && theap_rs
+                .matches("SAFETY[AUDIT:thread-heap-lifecycle]")
+                .count()
+                >= 70,
+        "thread-heap lifecycle unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
+    assert!(
         heap_rs.contains("pub unsafe extern \"C\" fn mi_heap_new_in_arena(")
             && heap_rs.contains("unsafe { crate::mimalloc::mi_thread_init() };")
             && heap_rs.contains("let heap_main = unsafe { mi_heap_main() };")

@@ -9,17 +9,16 @@ that now block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 270 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 270 operation IDs with
-  589 automated evidence rows.
+  mentions, and 280 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 280 operation IDs with
+  618 automated evidence rows.
 - No source audit operation ID is over 60 source markers. The largest remaining
-  source IDs are `os-memory-allocation-boundary` with 59 markers,
-  `init-thread-heap-tls-boundary` and `arena-heap-page-visitors` with 56 markers
-  each, `typed-atomic-domain` with 51 markers, `threadlocal-key-manager` and
-  `ffi-libc-helpers` with 50 markers each, `page-queue-transition-boundary`
-  with 49 markers, `init-thread-lifecycle-boundary` with 48 markers,
-  `raw-macro-cxx-boundary` with 46 markers, and `page-map-init-boundary` with
-  45 markers.
+  source IDs are `init-thread-heap-tls-boundary` and
+  `arena-heap-page-visitors` with 56 markers each, `typed-atomic-domain` with
+  51 markers, `threadlocal-key-manager` and `ffi-libc-helpers` with 50 markers
+  each, `page-queue-transition-boundary` with 49 markers,
+  `init-thread-lifecycle-boundary` with 48 markers, and
+  `raw-macro-cxx-boundary` with 46 markers.
 - `strict-type-allowlist.txt` has 634 active entries: 335
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -45,21 +44,25 @@ Current review evidence:
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
   scripts, strict-type checks, no-allocation audit, unsafe inventory
   refresh/check, atomic ordering audit, and `git diff --check`.
+- Issue 1 split `os-memory-allocation-boundary` into primitive allocation,
+  aligned allocation, memid/provenance, zeroing, direct request allocation, and
+  public export IDs. It split `page-map-init-boundary` into 32-bit commit
+  bitmap, 32-bit bootstrap, top-level lazy commit, global bootstrap, initial
+  submap, and null-sentinel IDs.
 
 ## Issue 1: Split OS memory and page-map initialization audit clusters
 
-> **Comment:** `os-memory-allocation-boundary` has 59 markers and still mixes
-> reservation, commit/decommit, reset, free, remap, alignment, and memid work.
-> `page-map-init-boundary` has 45 markers and still mixes global map bootstrap,
-> submap allocation, initialization, and publication.
+> **Comment:** Completed. The stale broad source IDs
+> `os-memory-allocation-boundary` and `page-map-init-boundary` are gone from
+> allocator source and are now explicitly rejected by release-audit guards.
 
-- [ ] Split `os-memory-allocation-boundary` by operation: reserve/commit,
+- [x] Split `os-memory-allocation-boundary` by operation: reserve/commit,
       decommit/reset, aligned allocation, free/release, remap/protect, large-page
       handling, and memid/provenance helpers.
-- [ ] Split `page-map-init-boundary` by operation: global map bootstrap, submap
+- [x] Split `page-map-init-boundary` by operation: global map bootstrap, submap
       allocation/initialization, lazy publication, lookup base setup, and
       teardown safety.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
       release-audit guards so each new operation ID is named and counted
       independently.
 
@@ -178,7 +181,7 @@ formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Split OS memory and page-map initialization audit clusters.
+1. [x] Split OS memory and page-map initialization audit clusters.
 2. [ ] Split thread lifecycle and thread-local audit clusters.
 3. [ ] Split arena visitor and page queue audit clusters.
 4. [ ] Split atomic, FFI libc, and raw macro facade audit clusters.

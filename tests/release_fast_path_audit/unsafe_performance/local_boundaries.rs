@@ -49,7 +49,12 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
     }
     for (audit_id, expected_count) in [
         ("page-map-global-boundary", 12),
-        ("page-map-init-boundary", 45),
+        ("page-map-32bit-commit-bitmap-boundary", 8),
+        ("page-map-32bit-bootstrap-boundary", 9),
+        ("page-map-top-level-lazy-commit-boundary", 4),
+        ("page-map-global-bootstrap-boundary", 12),
+        ("page-map-initial-submap-boundary", 4),
+        ("page-map-null-sentinel-boundary", 8),
         ("page-map-teardown-boundary", 13),
         ("page-map-commit-boundary", 5),
         ("page-map-page-register-boundary", 14),
@@ -71,6 +76,7 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
         !unsafe_allowlist.contains("src/allocator/page_map.rs")
             && !page_map.contains("SAFETY[AUDIT:page-map-boundary]")
             && !page_map.contains("SAFETY[AUDIT:page-map-register-boundary]")
+            && !page_map.contains("SAFETY[AUDIT:page-map-init-boundary]")
             && page_map.contains("pub(crate) static mut _mi_page_map")
             && page_map.contains("static mut mi_page_map_max_address")
             && page_map.contains("static mut mi_page_map_memid")

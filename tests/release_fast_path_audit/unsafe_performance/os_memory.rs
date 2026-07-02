@@ -383,7 +383,12 @@ pub(super) fn assert_os_memory_and_platform_boundaries(sources: &UnsafePerforman
         ("os-memory-guard-boundary", 6),
         ("os-memory-commit-boundary", 12),
         ("os-memory-free-boundary", 8),
-        ("os-memory-allocation-boundary", 50),
+        ("os-memory-primitive-allocation-boundary", 4),
+        ("os-memory-aligned-allocation-boundary", 18),
+        ("os-memory-memid-provenance-boundary", 6),
+        ("os-memory-zeroing-boundary", 5),
+        ("os-memory-request-allocation-boundary", 2),
+        ("os-memory-public-export-boundary", 21),
         ("os-memory-huge-page-boundary", 10),
         ("os-memory-numa-boundary", 6),
     ] {
@@ -397,7 +402,8 @@ pub(super) fn assert_os_memory_and_platform_boundaries(sources: &UnsafePerforman
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/platform/os.rs\t"))
-            && !os_rs.contains("SAFETY[AUDIT:os-memory-boundary]"),
+            && !os_rs.contains("SAFETY[AUDIT:os-memory-boundary]")
+            && !os_rs.contains("SAFETY[AUDIT:os-memory-allocation-boundary]"),
         "OS memory unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
 }

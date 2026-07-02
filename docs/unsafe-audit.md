@@ -14,7 +14,8 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   mutate the allocation contents through `&Allocation`; raw pointer dereference
   remains an unsafe caller boundary.
 - `page/arena/os`: page ownership, commit/decommit/reset/purge state, arena
-  slice boundaries, and OS out-parameters.
+  slice boundaries, OS out-parameters, and operation-level OS allocation plus
+  page-map bootstrap audit tags tracked in `UNSAFE_AUDIT.md`.
 - `threadlocal/theap`: thread-local heap pointer lifetime, abandonment, reclaim,
   and cross-thread publication.
 - `atomic`: acquire/release/relaxed ordering around free lists, ownership, locks,

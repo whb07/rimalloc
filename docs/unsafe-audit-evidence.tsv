@@ -401,9 +401,23 @@ os-memory-commit-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory 
 os-memory-free-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS free helper marker coverage, primitive free handoff, huge-page free behavior, and migration allowlist removal.
 os-memory-free-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation and free boundary cases routed through OS memory helpers.
 os-memory-free-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory free unsafe operations retain operation-level SAFETY markers and source audit coverage.
-os-memory-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS allocation, zero-allocation, aligned allocation, trimming, marker coverage, and retained wrapper shape.
-os-memory-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation, aligned allocation, realloc, and zero-size cases routed through OS memory helpers.
-os-memory-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-primitive-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks primitive OS reserve/allocation marker coverage, primitive handoff shape, and stat accounting.
+os-memory-primitive-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation cases routed through primitive OS memory helpers.
+os-memory-primitive-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks primitive OS allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-aligned-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks aligned OS allocation marker coverage, offset trimming, retained aligned helpers, and wrapper shape.
+os-memory-aligned-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises aligned allocation and realloc cases routed through OS memory helpers.
+os-memory-aligned-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks aligned OS allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-memid-provenance-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS memid publication, provenance projection, nullable out-pointers, and retained wrapper shape.
+os-memory-memid-provenance-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation, aligned allocation, and zero-size cases that publish OS memids.
+os-memory-memid-provenance-boundary	script	scripts/check-unsafe-audit.py	Checks OS memid/provenance unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-zeroing-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS zero-allocation marker coverage and memid zero/commit state transitions.
+os-memory-zeroing-boundary	test	tests/allocation_boundary_cases.rs	Exercises zero allocation and allocation/free cases routed through OS zeroing helpers.
+os-memory-zeroing-boundary	script	scripts/check-unsafe-audit.py	Checks OS zeroing unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-request-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks direct internal OS allocation entry markers, good-size normalization, and retained wrapper shape.
+os-memory-request-allocation-boundary	test	tests/allocation_boundary_cases.rs	Exercises direct allocation boundary cases routed through OS memory helpers.
+os-memory-request-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks direct OS allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-public-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks public OS wrapper markers, retained local helper shims, nullable out-pointers, and exported wrapper shape.
+os-memory-public-export-boundary	script	scripts/check-unsafe-audit.py	Checks public OS wrapper unsafe operations retain operation-level SAFETY markers and source audit coverage.
 os-memory-huge-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks huge-page claim/free marker coverage, arena claim callback handoff, NUMA placement, and rollback behavior.
 os-memory-huge-page-boundary	script	scripts/check-unsafe-audit.py	Checks OS huge-page unsafe operations retain operation-level SAFETY markers and source audit coverage.
 os-memory-numa-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks NUMA helper marker coverage, retained C ABI wrappers, and fallback behavior.
@@ -449,9 +463,24 @@ internal-atomic-platform-lock-boundary	script	scripts/check-unsafe-audit.py	Chec
 page-map-global-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map global metadata marker coverage and migration allowlist removal.
 page-map-global-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks page-map typed page span/index helpers and process-global metadata publication.
 page-map-global-boundary	script	scripts/check-unsafe-audit.py	Checks page-map global unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-map-init-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map initialization marker coverage and local C ABI helper shape.
-page-map-init-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks typed index/sub-index/range helpers and AtomicPtrField submap publication during initialization and growth.
-page-map-init-boundary	script	scripts/check-unsafe-audit.py	Checks page-map init unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-32bit-commit-bitmap-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks 32-bit page-map commit bitmap marker coverage and local C ABI helper shape.
+page-map-32bit-commit-bitmap-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks typed index/count witnesses used by 32-bit commit bitmap publication.
+page-map-32bit-commit-bitmap-boundary	script	scripts/check-unsafe-audit.py	Checks 32-bit page-map commit bitmap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-32bit-bootstrap-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks 32-bit page-map bootstrap marker coverage and local C ABI helper shape.
+page-map-32bit-bootstrap-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks 32-bit page-map typed sizing, backing reservation, and byte-map publication shape.
+page-map-32bit-bootstrap-boundary	script	scripts/check-unsafe-audit.py	Checks 32-bit page-map bootstrap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-top-level-lazy-commit-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks non-32-bit top-level lazy commit marker coverage and helper shape.
+page-map-top-level-lazy-commit-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks lazy submap publication keeps typed page-map indexes and AtomicPtrField publication behavior.
+page-map-top-level-lazy-commit-boundary	script	scripts/check-unsafe-audit.py	Checks top-level lazy commit unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-global-bootstrap-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks non-32-bit global page-map bootstrap marker coverage and local C ABI helper shape.
+page-map-global-bootstrap-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks global page-map count, top-level table reservation, and base publication behavior.
+page-map-global-bootstrap-boundary	script	scripts/check-unsafe-audit.py	Checks global page-map bootstrap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-initial-submap-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks first-submap allocation, commit, and zeroing marker coverage.
+page-map-initial-submap-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks first-submap carving and publication behavior stays behind typed page-map helpers.
+page-map-initial-submap-boundary	script	scripts/check-unsafe-audit.py	Checks initial submap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-null-sentinel-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks null sentinel marker coverage for both page-map layouts.
+page-map-null-sentinel-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks zero-index witnesses and null lookup verification behavior.
+page-map-null-sentinel-boundary	script	scripts/check-unsafe-audit.py	Checks page-map null sentinel unsafe operations retain operation-level SAFETY markers and source audit coverage.
 page-map-teardown-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map teardown marker coverage and local unsafe destroy helper shape.
 page-map-teardown-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks recorded memid and submap teardown behavior remain bounded by typed page-map helpers.
 page-map-teardown-boundary	script	scripts/check-unsafe-audit.py	Checks page-map teardown unsafe operations retain operation-level SAFETY markers and source audit coverage.

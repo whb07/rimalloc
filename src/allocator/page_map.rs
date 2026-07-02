@@ -230,41 +230,41 @@ unsafe fn mi_page_map_ensure_committed(
 ) -> bool {
     let slice_count = slice_count.get() as usize;
     let idx = idx.get();
-    // SAFETY[AUDIT:page-map-init-boundary]: 32-bit commit bitmap is installed during
+    // SAFETY[AUDIT:page-map-32bit-commit-bitmap-boundary]: 32-bit commit bitmap is installed during
     // page-map initialization before range registration.
     if unsafe { !mi_page_map_commit.is_null() } {
         let commit_idx = idx / MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT;
         let commit_idx_hi = (idx + slice_count - 1) / MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT;
         for i in commit_idx..=commit_idx_hi {
-            // SAFETY[AUDIT:page-map-init-boundary]: bitmap index is derived from a
+            // SAFETY[AUDIT:page-map-32bit-commit-bitmap-boundary]: bitmap index is derived from a
             // validated page-map range and stays within the allocated bitmap.
             if unsafe { mi_bitmap_is_clear(mi_page_map_commit, i) } {
-                // SAFETY[AUDIT:page-map-init-boundary]: committed range offsets are
+                // SAFETY[AUDIT:page-map-32bit-commit-bitmap-boundary]: committed range offsets are
                 // within the reserved byte page-map allocation.
                 let start = unsafe { _mi_page_map.add(i * MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT) };
                 let size = MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT;
                 let mut is_zero = false;
-                // SAFETY[AUDIT:page-map-init-boundary]: commits exactly one bitmap
+                // SAFETY[AUDIT:page-map-32bit-commit-bitmap-boundary]: commits exactly one bitmap
                 // tracked page-map chunk inside the reserved page-map region.
                 if !unsafe { _mi_os_commit(start.cast::<c_void>(), size, &mut is_zero) } {
                     mi_page_map_cannot_commit();
                     return false;
                 }
-                // SAFETY[AUDIT:page-map-init-boundary]: memid was captured at reserve
+                // SAFETY[AUDIT:page-map-32bit-commit-bitmap-boundary]: memid was captured at reserve
                 // time and describes whether committed memory is initially zero.
                 if !is_zero && !unsafe { mi_page_map_memid.initially_zero } {
-                    // SAFETY[AUDIT:page-map-init-boundary]: committed chunk is live
+                    // SAFETY[AUDIT:page-map-32bit-commit-bitmap-boundary]: committed chunk is live
                     // and writable before registration bytes are published.
                     unsafe { _mi_memzero(start.cast::<c_void>(), size) };
                 }
-                // SAFETY[AUDIT:page-map-init-boundary]: bitmap entry corresponds to
+                // SAFETY[AUDIT:page-map-32bit-commit-bitmap-boundary]: bitmap entry corresponds to
                 // the just-committed page-map chunk.
                 unsafe { mi_bitmap_set(mi_page_map_commit, i) };
             }
         }
     }
     if cfg!(debug_assertions) {
-        // SAFETY[AUDIT:page-map-init-boundary]: debug sentinel touches validated
+        // SAFETY[AUDIT:page-map-32bit-commit-bitmap-boundary]: debug sentinel touches validated
         // first/last bytes of the committed 32-bit page-map slice range.
         unsafe {
             *_mi_page_map.add(idx) = 0;
@@ -279,14 +279,14 @@ unsafe fn mi_page_map_ensure_committed(
 /// Must be called during allocator initialization before concurrent page-map
 /// use starts.
 #[cfg(target_pointer_width = "32")]
-// SAFETY[AUDIT:page-map-init-boundary]: 32-bit page-map initialization owns the
+// SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]: 32-bit page-map initialization owns the
 // process-global reserve/commit state before concurrent allocator use starts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     let mut vbits =
         mi_option_get_clamp(mi_option_t::mi_option_max_vabits, 0, MI_SIZE_BITS as i64) as usize;
     if vbits == 0 {
-        // SAFETY[AUDIT:page-map-init-boundary]: platform virtual-address query is
+        // SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]: platform virtual-address query is
         // read-only during allocator initialization.
         vbits = unsafe { _mi_os_virtual_address_bits() };
         #[cfg(target_arch = "x86_64")]
@@ -298,7 +298,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         vbits = MI_ARENA_SLICE_SHIFT;
     }
 
-    // SAFETY[AUDIT:page-map-init-boundary]: initialization has exclusive access to
+    // SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]: initialization has exclusive access to
     // page-map max-address metadata before publication.
     unsafe {
         mi_page_map_max_address = if vbits >= MI_SIZE_BITS {
@@ -314,12 +314,12 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     let bitmap_size = if commit {
         0
     } else {
-        // SAFETY[AUDIT:page-map-init-boundary]: bitmap sizing only reads the derived
+        // SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]: bitmap sizing only reads the derived
         // commit-bit count and writes no caller state with a null out pointer.
         unsafe { mi_bitmap_size(commit_bits, ptr::null_mut()) }
     };
     let reserve_size = bitmap_size + page_map_size;
-    // SAFETY[AUDIT:page-map-init-boundary]: initialization reserves the complete
+    // SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]: initialization reserves the complete
     // page-map backing allocation and records its OS memid in global metadata.
     let base =
         unsafe { _mi_os_alloc_aligned(reserve_size, 1, commit, true, &raw mut mi_page_map_memid) }
@@ -334,18 +334,18 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         );
         return false;
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: memid flags describe the just-reserved
+    // SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]: memid flags describe the just-reserved
     // backing allocation before global page-map publication.
     if unsafe { mi_page_map_memid.initially_committed && !mi_page_map_memid.initially_zero } {
         _mi_warning_message_fmt(format_args!(
             "internal: the page map was committed but not zero initialized!\n"
         ));
-        // SAFETY[AUDIT:page-map-init-boundary]: the full reserved page-map backing
+        // SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]: the full reserved page-map backing
         // allocation is committed and writable when it needs zeroing.
         unsafe { _mi_memzero_aligned(base.cast::<c_void>(), reserve_size) };
     }
     if bitmap_size > 0 {
-        // SAFETY[AUDIT:page-map-init-boundary]: bitmap storage lives in the reserved
+        // SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]: bitmap storage lives in the reserved
         // prefix and is committed before bitmap initialization.
         unsafe {
             mi_page_map_commit = base.cast::<mi_bitmap_t>();
@@ -360,28 +360,28 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
             mi_bitmap_init(mi_page_map_commit, commit_bits, true);
         }
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: initialization publishes the byte map
+    // SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]: initialization publishes the byte map
     // base after reserving any bitmap prefix.
     unsafe {
         _mi_page_map = base.add(bitmap_size);
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: zero index and one-slice witnesses are
+    // SAFETY[AUDIT:page-map-null-sentinel-boundary]: zero index and one-slice witnesses are
     // constants inside the page-map domains used to reserve null-pointer lookup.
     let zero_index = unsafe { crate::core_types::PageMapIndex::new_unchecked(0) };
     let one_slice = unsafe { crate::core_types::SliceCount::new_unchecked(1) };
-    // SAFETY[AUDIT:page-map-init-boundary]: initialization commits the null-page
+    // SAFETY[AUDIT:page-map-null-sentinel-boundary]: initialization commits the null-page
     // sentinel byte before writing it.
     if !commit && !unsafe { mi_page_map_ensure_committed(zero_index, one_slice) } {
         mi_page_map_cannot_commit();
         return false;
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: null-page sentinel byte is within the
+    // SAFETY[AUDIT:page-map-null-sentinel-boundary]: null-page sentinel byte is within the
     // committed page-map base range.
     unsafe {
         *_mi_page_map.add(0) = 1;
     }
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:page-map-init-boundary]: initialization verifies null lookup
+        // SAFETY[AUDIT:page-map-null-sentinel-boundary]: initialization verifies null lookup
         // through the page-map facade after publishing the sentinel.
         unsafe { crate::internal::_mi_ptr_page(ptr::null()) }.is_null()
     );
@@ -667,12 +667,12 @@ unsafe fn mi_page_map_ensure_committed(
     idx: crate::core_types::PageMapIndex,
     submap: *mut mi_submap_t,
 ) -> bool {
-    // SAFETY[AUDIT:page-map-init-boundary]: caller provides a writable out slot that
+    // SAFETY[AUDIT:page-map-top-level-lazy-commit-boundary]: caller provides a writable out slot that
     // is still null before commit/publication fills it.
     crate::internal::mi_assert_internal!(!submap.is_null() && unsafe { (*submap).is_null() });
     let mut bit_idx = 0usize;
     if !mi_page_map_is_committed(idx, &mut bit_idx) {
-        // SAFETY[AUDIT:page-map-init-boundary]: committed bit index maps to a
+        // SAFETY[AUDIT:page-map-top-level-lazy-commit-boundary]: committed bit index maps to a
         // page-map chunk inside the reserved top-level submap table.
         let start = unsafe {
             (&raw mut _mi_page_map)
@@ -680,7 +680,7 @@ unsafe fn mi_page_map_ensure_committed(
                 .cast::<u8>()
                 .add(bit_idx * MI_PAGE_MAP_ENTRIES_PER_CBIT * core::mem::size_of::<mi_submap_t>())
         };
-        // SAFETY[AUDIT:page-map-init-boundary]: commits exactly the top-level
+        // SAFETY[AUDIT:page-map-top-level-lazy-commit-boundary]: commits exactly the top-level
         // page-map chunk represented by the validated commit bit.
         if !unsafe {
             _mi_os_commit(
@@ -694,7 +694,7 @@ unsafe fn mi_page_map_ensure_committed(
         }
         mi_page_map_commit.fetch_or(1usize << bit_idx, Ordering::AcqRel);
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: committed top-level index can be read via
+    // SAFETY[AUDIT:page-map-top-level-lazy-commit-boundary]: committed top-level index can be read via
     // `_mi_page_map_at` and published to the caller's out slot.
     unsafe {
         *submap = _mi_page_map_at(idx.get());
@@ -707,7 +707,7 @@ unsafe fn mi_page_map_ensure_committed(
 /// Must be called during allocator initialization before concurrent page-map
 /// use starts.
 #[cfg(not(target_pointer_width = "32"))]
-// SAFETY[AUDIT:page-map-init-boundary]: non-32-bit page-map initialization owns the
+// SAFETY[AUDIT:page-map-global-bootstrap-boundary]: non-32-bit page-map initialization owns the
 // top-level table and first submap before concurrent allocator use starts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
@@ -718,7 +718,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     let mut vbits =
         mi_option_get_clamp(mi_option_t::mi_option_max_vabits, 0, MI_SIZE_BITS as i64) as usize;
     if vbits == 0 {
-        // SAFETY[AUDIT:page-map-init-boundary]: platform virtual-address query is
+        // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: platform virtual-address query is
         // read-only during allocator initialization.
         vbits = unsafe { _mi_os_virtual_address_bits() };
         #[cfg(target_arch = "x86_64")]
@@ -730,7 +730,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         vbits = MI_PAGE_MAP_SUB_SHIFT + MI_ARENA_SLICE_SHIFT;
     }
 
-    // SAFETY[AUDIT:page-map-init-boundary]: initialization has exclusive access to
+    // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: initialization has exclusive access to
     // max-address and count globals before publishing the page-map base.
     unsafe {
         mi_page_map_max_address = if vbits >= MI_SIZE_BITS {
@@ -740,15 +740,15 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         };
         mi_page_map_count = 1usize << (vbits - MI_PAGE_MAP_SUB_SHIFT - MI_ARENA_SLICE_SHIFT);
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: page-map count was just derived from
+    // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: page-map count was just derived from
     // virtual-address bits and is still owned by initialization.
     crate::internal::mi_assert!(unsafe { mi_page_map_count } <= MI_PAGE_MAP_COUNT);
 
-    // SAFETY[AUDIT:page-map-init-boundary]: OS page-size query is read-only during
+    // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: OS page-size query is read-only during
     // initialization.
     let os_page_size = unsafe { crate::os::_mi_os_page_size_typed().get() };
     let page_map_size = _mi_align_up(
-        // SAFETY[AUDIT:page-map-init-boundary]: page-map count was initialized above
+        // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: page-map count was initialized above
         // and bounds the top-level table reservation.
         unsafe { mi_page_map_count } * core::mem::size_of::<mi_submap_t>(),
         os_page_size,
@@ -757,11 +757,11 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     let reserve_size = page_map_size + submap_size;
     let commit = page_map_size <= 64 * MI_KiB
         || mi_option_is_enabled(mi_option_t::mi_option_pagemap_commit)
-        // SAFETY[AUDIT:page-map-init-boundary]: overcommit capability query is
+        // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: overcommit capability query is
         // read-only and only influences reservation commit policy.
         || unsafe { _mi_os_has_overcommit() };
 
-    // SAFETY[AUDIT:page-map-init-boundary]: initialization reserves the top-level
+    // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: initialization reserves the top-level
     // table plus first submap and records the OS memid in global metadata.
     let base =
         unsafe { _mi_os_alloc_aligned(reserve_size, 1, commit, true, &raw mut mi_page_map_memid) }
@@ -776,22 +776,22 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         );
         return false;
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: initialization publishes the top-level
+    // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: initialization publishes the top-level
     // base only after successful reservation.
     unsafe {
         _mi_page_map = base;
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: memid flags describe the just-reserved
+    // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: memid flags describe the just-reserved
     // top-level page-map allocation before concurrent publication.
     if unsafe { mi_page_map_memid.initially_committed && !mi_page_map_memid.initially_zero } {
-        // SAFETY[AUDIT:page-map-init-boundary]: committed top-level table is writable
+        // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: committed top-level table is writable
         // and sized by `page_map_size`.
         unsafe {
             _mi_memzero_aligned(_mi_page_map.cast::<c_void>(), page_map_size);
         }
     }
     mi_page_map_commit.store(
-        // SAFETY[AUDIT:page-map-init-boundary]: initial commit flags come from the
+        // SAFETY[AUDIT:page-map-global-bootstrap-boundary]: initial commit flags come from the
         // page-map backing allocation memid captured above.
         if unsafe { mi_page_map_memid.initially_committed } {
             usize::MAX
@@ -801,43 +801,43 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         Ordering::Release,
     );
 
-    // SAFETY[AUDIT:page-map-init-boundary]: first submap is carved from the reserved
+    // SAFETY[AUDIT:page-map-initial-submap-boundary]: first submap is carved from the reserved
     // allocation immediately after the aligned top-level table.
     let sub0 = unsafe { _mi_page_map.cast::<u8>().add(page_map_size) }.cast::<*mut mi_page_t>();
-    // SAFETY[AUDIT:page-map-init-boundary]: initial commit flags describe whether
+    // SAFETY[AUDIT:page-map-initial-submap-boundary]: initial commit flags describe whether
     // the first submap range needs an explicit commit.
     if !unsafe { mi_page_map_memid.initially_committed }
-        // SAFETY[AUDIT:page-map-init-boundary]: commits the first submap range before
+        // SAFETY[AUDIT:page-map-initial-submap-boundary]: commits the first submap range before
         // it is published at top-level index zero.
         && !unsafe { _mi_os_commit(sub0.cast::<c_void>(), submap_size, ptr::null_mut()) }
     {
         mi_page_map_cannot_commit();
         return false;
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: initial zeroing flag determines whether
+    // SAFETY[AUDIT:page-map-initial-submap-boundary]: initial zeroing flag determines whether
     // the first committed submap range needs explicit clearing.
     if !unsafe { mi_page_map_memid.initially_zero } {
         unsafe { _mi_memzero_aligned(sub0.cast::<c_void>(), submap_size) };
     }
 
     let mut nullsub: mi_submap_t = ptr::null_mut();
-    // SAFETY[AUDIT:page-map-init-boundary]: zero index is within the top-level
+    // SAFETY[AUDIT:page-map-null-sentinel-boundary]: zero index is within the top-level
     // page-map domain for the null-pointer sentinel submap.
     let zero_index = unsafe { crate::core_types::PageMapIndex::new_unchecked(0) };
-    // SAFETY[AUDIT:page-map-init-boundary]: initialization commits/publishes the
+    // SAFETY[AUDIT:page-map-null-sentinel-boundary]: initialization commits/publishes the
     // top-level zero entry before installing the first submap.
     if !unsafe { mi_page_map_ensure_committed(zero_index, &mut nullsub) } {
         mi_page_map_cannot_commit();
         return false;
     }
-    // SAFETY[AUDIT:page-map-init-boundary]: top-level index zero and the lock global
+    // SAFETY[AUDIT:page-map-null-sentinel-boundary]: top-level index zero and the lock global
     // are exclusively owned during initialization.
     unsafe {
         *_mi_page_map.add(0) = sub0;
         mi_lock_init(&raw mut mi_page_map_lock);
     }
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:page-map-init-boundary]: initialization verifies null lookup
+        // SAFETY[AUDIT:page-map-null-sentinel-boundary]: initialization verifies null lookup
         // through the page-map facade after publishing index zero.
         unsafe { crate::internal::_mi_ptr_page(ptr::null()) }.is_null()
     );

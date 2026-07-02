@@ -925,11 +925,31 @@ Operation IDs:
   operations are limited to recorded memid witnesses, committed-byte
   classification, primitive free calls, and huge-page segment iteration while
   preserving pinned/committed semantics.
-- `SAFETY[AUDIT:os-memory-allocation-boundary]`: `src/platform/os.rs` owns OS
-  allocation, zero-allocation, aligned allocation, trimming, and public OS
-  allocation shims. Unsafe operations are limited to primitive allocation
-  handoff, typed reserve/commit witnesses, memid publication, out-pointer
-  writes, and alignment trimming while preserving zero-state and ownership.
+- `SAFETY[AUDIT:os-memory-primitive-allocation-boundary]`:
+  `src/platform/os.rs` owns the primitive OS reserve/allocation handoff and
+  reserved/committed stat accounting. Unsafe operations are limited to
+  primitive allocation calls, caller-provided large/zero out-pointers, and
+  subproc stat projection while preserving page-size alignment.
+- `SAFETY[AUDIT:os-memory-aligned-allocation-boundary]`:
+  `src/platform/os.rs` owns aligned OS allocation request shaping, over-reserve
+  alignment, partial-free trimming, and offset adjustment. Unsafe operations are
+  limited to typed size/page witnesses, aligned pointer arithmetic, direct
+  primitive allocation dispatch, and aligned wrapper calls.
+- `SAFETY[AUDIT:os-memory-memid-provenance-boundary]`: `src/platform/os.rs`
+  owns raw memory-id initialization, OS/external memid projection, and memid
+  publication to caller out-pointers. Unsafe operations are limited to writable
+  memid slots and preserving recorded base/size/provenance flags.
+- `SAFETY[AUDIT:os-memory-zeroing-boundary]`: `src/platform/os.rs` owns
+  zero-allocation and post-allocation zeroing helpers. Unsafe operations are
+  limited to committed writable ranges and memid zero/commit flag updates.
+- `SAFETY[AUDIT:os-memory-request-allocation-boundary]`: `src/platform/os.rs`
+  owns direct internal OS allocation entry points that produce raw OS memids.
+  Unsafe operations are limited to good-size normalization, primitive
+  allocation dispatch, and nullable memid output behavior.
+- `SAFETY[AUDIT:os-memory-public-export-boundary]`: `src/platform/os.rs` owns
+  retained local helper shims and public C ABI OS allocation wrappers. Unsafe
+  operations are limited to nullable output pointers, wrapper forwarding, and
+  exported symbol compatibility without taking ownership beyond the C contract.
 - `SAFETY[AUDIT:os-memory-huge-page-boundary]`: `src/platform/os.rs` owns huge
   OS page detection, reservation, claiming, and aligned huge allocation.
   Unsafe operations are limited to primitive huge-page calls, arena claim
@@ -1027,11 +1047,33 @@ Operation IDs:
   process-global page-map metadata, base pointers, commit bitmaps, and typed
   page span/index projection. Unsafe operations are limited to allocator
   lifecycle synchronized global reads/writes and typed page metadata witnesses.
-- `SAFETY[AUDIT:page-map-init-boundary]`: `src/allocator/page_map.rs` owns
-  32-bit and non-32-bit page-map initialization, reserve/commit setup, initial
-  submap setup, and null sentinel publication. Unsafe operations are limited to
-  OS reserve/commit calls, typed index/count witnesses, and acquire/release
-  publication of initialization state.
+- `SAFETY[AUDIT:page-map-32bit-commit-bitmap-boundary]`:
+  `src/allocator/page_map.rs` owns 32-bit commit-bitmap driven page-map chunk
+  commitment. Unsafe operations are limited to validated bitmap indexes,
+  reserved byte-map offsets, OS commit calls, zeroing committed chunks, and
+  bitmap publication.
+- `SAFETY[AUDIT:page-map-32bit-bootstrap-boundary]`:
+  `src/allocator/page_map.rs` owns 32-bit page-map bootstrap, including virtual
+  address sizing, backing reservation, commit bitmap allocation, memid state,
+  and byte-map publication before concurrent use.
+- `SAFETY[AUDIT:page-map-top-level-lazy-commit-boundary]`:
+  `src/allocator/page_map.rs` owns non-32-bit lazy top-level table commit and
+  submap-slot publication. Unsafe operations are limited to caller-provided
+  empty out slots, commit-bit-derived table offsets, OS commit calls, and
+  acquire/release commit-bit publication.
+- `SAFETY[AUDIT:page-map-global-bootstrap-boundary]`:
+  `src/allocator/page_map.rs` owns non-32-bit global page-map bootstrap,
+  top-level table reservation, max-address/count globals, memid-derived commit
+  state, and top-level base publication before concurrent use.
+- `SAFETY[AUDIT:page-map-initial-submap-boundary]`:
+  `src/allocator/page_map.rs` owns first-submap carving, commit, and zeroing
+  during non-32-bit initialization. Unsafe operations are limited to pointer
+  arithmetic inside the reserved backing allocation and OS commit/zero calls.
+- `SAFETY[AUDIT:page-map-null-sentinel-boundary]`:
+  `src/allocator/page_map.rs` owns null-pointer sentinel installation for both
+  page-map layouts. Unsafe operations are limited to typed zero index/slice
+  witnesses, committing or publishing index zero, lock initialization, and
+  post-publication null lookup verification.
 - `SAFETY[AUDIT:page-map-teardown-boundary]`: `src/allocator/page_map.rs` owns
   page-map unsafe destroy paths. Unsafe operations are limited to lifecycle
   exclusive global reads, recorded memid witnesses, submap iteration, and OS

@@ -29,9 +29,9 @@ Current review evidence:
   `src/types/arena.rs` is 260 lines,
   `src/types/page_queues.rs` is 304 lines, and
   `src/allocator/arena_meta.rs` is 316 lines.
-- `strict-type-allowlist.txt` has 104 entries; 4 are still marked `remove:`.
+- `strict-type-allowlist.txt` has 118 entries; 3 are still marked `remove:`.
   The remaining broad `bare-domain-usize` allowances are for `alloc`,
-  `aligned`, `bitmap`, and `internal`.
+  `aligned`, and `bitmap`.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 4,628 lines,
   `src/allocator/page.rs` is 3,109 lines,
@@ -116,22 +116,28 @@ release audit, full clippy, and full tests.
 
 ## Issue: Broad strict-type usize allowances remain after the page split
 
-> **Comment:** The page allowance is now symbol-level, but `bitmap` and
-> `internal` still use broad `bare-domain-usize` entries. The next narrowing
-> should pick one broad allowance, classify live hits, and keep only true ABI or
-> C-parity boundaries.
+> **Comment:** The page and internal allowances are now symbol-level, but
+> `alloc`, `aligned`, and `bitmap` still use broad `bare-domain-usize` entries.
+> The next narrowing should pick one broad allowance, classify live hits, and
+> keep only true ABI or C-parity boundaries.
 
-- [ ] Run `scripts/check-strict-types.py` after temporarily removing either
+- [x] Run `scripts/check-strict-types.py` after temporarily removing either
       `bare-domain-usize|src/bitmap.rs|*|usize` or
       `bare-domain-usize|src/internal/mod.rs|*|usize`.
-- [ ] Classify each hit as raw ABI, hot C-parity helper, local typed-domain
+- [x] Classify each hit as raw ABI, hot C-parity helper, local typed-domain
       constructor, or migratable helper.
-- [ ] Replace the broad allowance with symbol-level entries or typed scalar
+- [x] Replace the broad allowance with symbol-level entries or typed scalar
       wrappers where practical.
-- [ ] Keep path aliases accurate for `src/internal/bitmap/bfield.rs`,
+- [x] Keep path aliases accurate for `src/internal/bitmap/bfield.rs`,
       `src/internal/bitmap.rs`, and logical `src/bitmap.rs`.
-- [ ] Lower or tighten the strict-type removable-entry guard if a broad
+- [x] Lower or tighten the strict-type removable-entry guard if a broad
       allowance is removed.
+  - Evidence: the broad
+    `bare-domain-usize|src/internal/mod.rs|*|usize` allowance was replaced with
+    symbol-level entries for the 15 live internal helpers, including
+    `_mi_malloc_generic`, `_mi_align_up`, `_mi_align_down`, `mi_mem_is_zero`,
+    `mi_direct_bin_from_size`, overflow helpers, `_mi_page_map_at`,
+    `mi_rep_movsq`, and `mi_slice_count_of_size`. `REMOVE_ENTRY_CAP` is now 3.
 
 Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
 `scripts/check-api-inventory.py`, `scripts/check-public-abi.py`, release audit,
@@ -184,7 +190,7 @@ full tests.
 
 1. [x] Migrate one small test fixture off the unsafe migration allowlist.
 2. [x] Migrate one small production file off the unsafe migration allowlist.
-3. [ ] Narrow one remaining broad strict-type `usize` allowance.
+3. [x] Narrow one remaining broad strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
 5. [ ] Split one more production helper boundary.
 
@@ -193,7 +199,7 @@ full tests.
 - [x] The unsafe migration allowlist is below 53 entries and the cap is lowered.
 - [x] At least one additional production allowlisted file is covered by
       operation-level audit markers.
-- [ ] One remaining broad strict-type `remove:` allowance is narrowed or
+- [x] One remaining broad strict-type `remove:` allowance is narrowed or
       eliminated.
 - [ ] One release-audit module has more guard margin.
 - [ ] One large production translation unit is smaller without API, ABI, or

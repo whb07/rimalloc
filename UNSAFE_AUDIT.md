@@ -379,6 +379,12 @@ Operation IDs:
   metadata to exercise normal, huge, full, linked, unlinked, and mismatched
   queue/page witnesses. The fixtures are not registered with allocator globals
   and are used only while the local records are live.
+- `SAFETY[AUDIT:typed-page-queue-domain]`: `src/types/page_queues.rs` owns
+  typed page-queue witness construction and transitions. Unsafe operations are
+  limited to reading initialized queue metadata, delegating membership and
+  full-state checks to page helpers, moving pages between already-typed queues,
+  removing typed queued pages, and converting all-free local pages to destroyed
+  arena-free witnesses.
 - `SAFETY[AUDIT:typed-page-state-test-fixtures]`:
   `src/types/page_states/tests.rs` builds stack-local page metadata and
   non-dereferenced thread-heap identity witnesses to exercise page typestate

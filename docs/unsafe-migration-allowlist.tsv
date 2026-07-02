@@ -34,7 +34,6 @@ src/types/freelist_wrappers.rs	production	release-readiness	2026-09-30	legacy ty
 src/types/heap.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/layout.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/memid.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
-src/types/page_queues.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/page_states.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/ptr.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/scalar.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration

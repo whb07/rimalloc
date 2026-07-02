@@ -67,6 +67,7 @@ typed-scalar-test-fixtures	test	src/types/scalar/tests.rs	Exercises concrete unc
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
 typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page metadata and registered-range witness fixture construction.
 typed-page-test-fixtures	test	tests/release_fast_path_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.
+typed-page-queue-domain	test	src/types/page_queues/tests.rs	Exercises normal, huge, full, linked, unlinked, transition, and arena-free page queue witnesses.
 typed-page-queue-test-fixtures	test	src/types/page_queues/tests.rs	Exercises stack-local page and queue metadata for normal, huge, full, linked, unlinked, and mismatched queue/page witnesses.
 typed-page-state-test-fixtures	test	src/types/page_states/tests.rs	Exercises stack-local page metadata and non-dereferenced thread-heap identity witnesses for typestate transition fixtures.
 typed-free-validation	test	src/types/validation/tests.rs	Exercises pointer lookup conversion into validated free witnesses.

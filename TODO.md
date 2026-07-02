@@ -13,21 +13,25 @@ strict-type entries, or smaller release-audit modules.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` now has 39 entries: 36 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 39.
+- `docs/unsafe-migration-allowlist.tsv` now has 38 entries: 35 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 38.
 - `src/types/arena.rs` now uses 7
   `SAFETY[AUDIT:typed-arena-domain]` markers for slice-range count
   construction and arena role witnesses, and is off the unsafe migration
   allowlist.
+- `src/types/page_queues.rs` now uses 10
+  `SAFETY[AUDIT:typed-page-queue-domain]` markers for queue classification,
+  queued-page membership, full/unfull transitions, queue removal, and
+  arena-free page destruction, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are:
-  `src/types/page_queues.rs` at 304 lines with 32 `unsafe` hits and 0 local
-  markers,
   `src/types/heap.rs` at 312 lines with 44 `unsafe` hits and 0 local markers,
-  `src/allocator/arena_meta.rs` at 316 lines with 24 `unsafe` hits and 0 local
+  `src/allocator/arena_meta.rs` at 316 lines with 22 `unsafe` hits and 0 local
   markers, and
   `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers,
-  followed by `src/allocator/bench_diagnostics.rs` at 350 lines with
-  8 `unsafe` hits and 0 local markers.
+  `src/allocator/bench_diagnostics.rs` at 350 lines with 8 `unsafe` hits and
+  0 local markers, and
+  `src/platform/wasi.rs` at 373 lines with 34 `unsafe` hits and 0 local
+  markers.
 - `src/types/freelist_wrappers.rs` is 409 lines with 46 `unsafe` hits and
   0 local `SAFETY[AUDIT:*]` markers. It also still has broad strict-type rows:
   `raw-pointer-parameter|src/types/freelist_wrappers.rs|*|mi_block_t` and
@@ -91,15 +95,15 @@ clippy, and full tests.
 > already sit at queue classification and transition boundaries; they need
 > local audit markers without changing the hot queue operations.
 
-- [ ] Add local `SAFETY[AUDIT:typed-page-queue-domain]` markers for normal,
+- [x] Add local `SAFETY[AUDIT:typed-page-queue-domain]` markers for normal,
       huge, and full queue constructors, queued-page constructors, queue
       removal, full/unfull transitions, and arena-free destroyed-page
       construction.
-- [ ] Keep `PageQueue<K>` and queue witnesses allocation-free, transparent, and
+- [x] Keep `PageQueue<K>` and queue witnesses allocation-free, transparent, and
       `PhantomData` based.
-- [ ] Keep queue-membership checks delegated to the existing C-shaped page
+- [x] Keep queue-membership checks delegated to the existing C-shaped page
       helpers instead of adding duplicate traversal logic.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -177,7 +181,7 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 ## Suggested implementation order
 
 1. [x] Migrate `src/types/arena.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/types/page_queues.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/types/page_queues.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/types/heap.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/types/freelist_wrappers.rs` off the unsafe migration
        allowlist and narrow its broad strict-type entries where possible.

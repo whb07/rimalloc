@@ -615,6 +615,8 @@ fn safe_byte_allocations_keep_object_ownership_separate() {
 fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");
+    let unsafe_allowlist = fs::read_to_string(root.join("docs/unsafe-migration-allowlist.tsv"))
+        .expect("read unsafe migration allowlist");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let tls_shim = fs::read_to_string(root.join("src/tls_shim.c")).expect("read src/tls_shim.c");
     let tls_recurse_shim = fs::read_to_string(root.join("src/tls_recurse_shim.c"))
@@ -709,6 +711,14 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
             && threadlocal_rs.contains("static mi_thread_locals_empty: mi_thread_locals_t;")
             && !tls_shim.contains("static __thread void* mi_tls_thread_locals"),
         "Linux x86_64 dynamic thread-local storage should use C's mi_thread_locals TLS cell directly"
+    );
+    assert!(
+        !unsafe_allowlist.contains("src/allocator/threadlocal.rs")
+            && threadlocal_rs
+                .matches("SAFETY[AUDIT:threadlocal-key-manager]")
+                .count()
+                >= 40,
+        "dynamic thread-local unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
     assert!(
         threadlocal_rs.contains(

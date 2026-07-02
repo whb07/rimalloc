@@ -49,6 +49,10 @@ raw-macro-boundary	test	tests/header_macro_expansion.rs	Exercises macro expansio
 raw-posix-compat	test	tests/compat_exports.rs	Exercises POSIX out-pointer and errno-style behavior for mi_posix_memalign, mi_reallocarray, mi_reallocarr, mbsdup, dupenv_s, and related compatibility exports.
 raw-posix-compat	test	tests/release_fast_path_audit.rs	Checks src/raw/posix.rs keeps product allocation typed, raw POSIX compatibility exports present, and operation-level audit markers local.
 random-context-boundaries	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks random context entry points stay no-retention direct-call C ABI shims with local audit markers.
+threadlocal-key-manager	test	src/allocator/threadlocal.rs	Exercises versioned key helper splitting and callback keep-set witness clearing.
+threadlocal-key-manager	test	tests/release_fast_path_audit.rs	Checks Linux TLS shim shape, dynamic thread-local marker coverage, and migration allowlist removal.
+threadlocal-key-manager	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks dynamic TLS helper boundaries, slot expansion, bitmap publication, key claim/free, and thread-done reset shape.
+threadlocal-key-manager	test	tests/thread_stats_regression.rs	Exercises worker thread teardown returning current thread stats to the main thread.
 wasi-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks WASI primitive imports, memory-growth fallback, nullable out-pointers, bounded stderr/env C-string handling, and thread association shims.
 emscripten-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Emscripten imports, emmalloc allocation/free, nullable out-pointers, clock/console fallbacks, pthread key lifecycle, and fallback thread-local association.
 safe-heap	test	src/safe/tests.rs	Exercises safe heap creation, main heap handling, heap-tied allocation, resize, and stats paths.

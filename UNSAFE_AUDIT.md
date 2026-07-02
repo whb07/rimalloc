@@ -335,6 +335,11 @@ Operation IDs:
 - `SAFETY[AUDIT:safe-stats]`: `src/safe/stats.rs` initializes stats buffers
   before use, passes valid writable output slices to JSON formatting, and
   exposes only typed totals/counts to callers.
+- `SAFETY[AUDIT:threadlocal-key-manager]`: `src/allocator/threadlocal.rs`
+  owns dynamic thread-local key bookkeeping, including Linux TLS shim access,
+  x86_64 initial-exec assembly, static lock use, slot block growth, global free
+  bitmap publication, callback keep-set writes, and versioned key claim/free
+  operations.
 - `SAFETY[AUDIT:tracking-hooks]`: `src/allocator/tracking.rs` owns the
   Valgrind/ASan tracking hook boundary. Default builds keep the hooks as
   allocation-free no-ops or assertions, while tracking feature builds forward

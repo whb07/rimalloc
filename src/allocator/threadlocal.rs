@@ -83,6 +83,8 @@ struct ThreadLocalsEmpty(mi_thread_locals_t);
     not(target_os = "linux"),
     all(feature = "std", not(feature = "tls-shim"))
 ))]
+// SAFETY[AUDIT:threadlocal-key-manager]: the empty sentinel is immutable after
+// static initialization and only exposes null/zero slot metadata.
 unsafe impl Sync for ThreadLocalsEmpty {}
 
 #[cfg(any(
@@ -106,6 +108,8 @@ thread_local! {
 }
 
 #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
+// SAFETY[AUDIT:threadlocal-key-manager]: declares the C initial-exec TLS cell
+// and accessors owned by `src/tls_shim.c`.
 unsafe extern "C" {
     static mi_thread_locals_empty: mi_thread_locals_t;
     fn _mi_tls_thread_locals_get() -> *mut mi_thread_locals_t;
@@ -118,9 +122,13 @@ unsafe extern "C" {
     target_arch = "x86_64",
     not(target_env = "musl")
 ))]
+// SAFETY[AUDIT:threadlocal-key-manager]: reads the hidden Linux TLS cell using
+// the same initial-exec `@GOTTPOFF` sequence as the C shim.
 #[inline(always)]
 unsafe fn mi_linux_x64_thread_locals_get() -> *mut mi_thread_locals_t {
     let tls: *mut mi_thread_locals_t;
+    // SAFETY[AUDIT:threadlocal-key-manager]: the inline assembly reads only
+    // the thread-local `mi_thread_locals` slot and writes the output register.
     unsafe {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + mi_thread_locals@GOTTPOFF]",
@@ -139,8 +147,12 @@ unsafe fn mi_linux_x64_thread_locals_get() -> *mut mi_thread_locals_t {
     target_arch = "x86_64",
     not(target_env = "musl")
 ))]
+// SAFETY[AUDIT:threadlocal-key-manager]: writes the hidden Linux TLS cell using
+// the same initial-exec `@GOTTPOFF` sequence as the C shim.
 #[inline(always)]
 unsafe fn mi_linux_x64_thread_locals_set(tls: *mut mi_thread_locals_t) {
+    // SAFETY[AUDIT:threadlocal-key-manager]: the inline assembly writes the
+    // caller-provided TLS pointer into this thread's TLS slot.
     unsafe {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + mi_thread_locals@GOTTPOFF]",
@@ -184,6 +196,8 @@ fn thread_locals_ptr() -> *mut mi_thread_locals_t {
         target_arch = "x86_64",
         not(target_env = "musl")
     ))]
+    // SAFETY[AUDIT:threadlocal-key-manager]: x86_64 Linux reads the current
+    // thread's TLS pointer from the C shim cell.
     unsafe {
         mi_linux_x64_thread_locals_get()
     }
@@ -193,6 +207,8 @@ fn thread_locals_ptr() -> *mut mi_thread_locals_t {
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
     {
+        // SAFETY[AUDIT:threadlocal-key-manager]: non-inline Linux paths read
+        // the current thread's TLS pointer through the C shim accessor.
         unsafe { _mi_tls_thread_locals_get() }
     }
     #[cfg(any(
@@ -219,6 +235,8 @@ fn set_thread_locals_ptr(tls: *mut mi_thread_locals_t) {
         target_arch = "x86_64",
         not(target_env = "musl")
     ))]
+    // SAFETY[AUDIT:threadlocal-key-manager]: x86_64 Linux writes this thread's
+    // TLS pointer through the C shim cell.
     unsafe {
         mi_linux_x64_thread_locals_set(tls);
     }
@@ -227,6 +245,8 @@ fn set_thread_locals_ptr(tls: *mut mi_thread_locals_t) {
         any(feature = "tls-shim", not(feature = "std")),
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
+    // SAFETY[AUDIT:threadlocal-key-manager]: non-inline Linux paths write this
+    // thread's TLS pointer through the C shim accessor.
     unsafe {
         _mi_tls_thread_locals_set(tls);
     }
@@ -241,6 +261,8 @@ fn set_thread_locals_ptr(tls: *mut mi_thread_locals_t) {
 
 #[inline]
 fn tls_slots(tls: *mut mi_thread_locals_t) -> *mut mi_tls_slot_t {
+    // SAFETY[AUDIT:threadlocal-key-manager]: callers pass a live thread-local
+    // slot block; this helper only returns its flexible slot array pointer.
     unsafe { (*tls).slots.as_mut_ptr() }
 }
 
@@ -252,6 +274,8 @@ fn thread_locals_size(slot_count: ThreadLocalSlotCount) -> Option<usize> {
 
 #[inline]
 fn bitmap_alloc_size(bit_count: usize) -> usize {
+    // SAFETY[AUDIT:threadlocal-key-manager]: null output means the bitmap
+    // helper computes size only and does not publish a chunk count.
     unsafe { mi_bitmap_size(bit_count, ptr::null_mut()) }
 }
 
@@ -280,6 +304,8 @@ fn mi_key_create(
 #[inline]
 fn mi_thread_locals_expand(least_idx: ThreadLocalSlotIndex) -> Option<*mut mi_thread_locals_t> {
     let tls_old = thread_locals_ptr();
+    // SAFETY[AUDIT:threadlocal-key-manager]: `thread_locals_ptr` returns the
+    // current thread's live TLS block or the immutable empty sentinel.
     let count_old = unsafe { (*tls_old).count };
     let mut count = if count_old == 0 {
         16
@@ -301,11 +327,15 @@ fn mi_thread_locals_expand(least_idx: ThreadLocalSlotIndex) -> Option<*mut mi_th
     } else {
         tls_old.cast()
     };
+    // SAFETY[AUDIT:threadlocal-key-manager]: `old_ptr` is either null or the
+    // current thread's owned TLS block; `size_new` was checked above.
     let tls = unsafe { mi_rezalloc(old_ptr, size_new).cast::<mi_thread_locals_t>() };
 
     if tls.is_null() {
         return None;
     }
+    // SAFETY[AUDIT:threadlocal-key-manager]: `tls` is writable newly allocated
+    // or resized TLS storage large enough for `count` slots.
     unsafe {
         (*tls).count = count;
     }
@@ -324,7 +354,11 @@ fn mi_thread_local_set_expand(key: mi_thread_local_t, val: *mut core::ffi::c_voi
         None => return false,
     };
     crate::internal::mi_debug_assert!(tls == thread_locals_ptr());
+    // SAFETY[AUDIT:threadlocal-key-manager]: expansion ensures `idx` is within
+    // the current thread-local slot count.
     crate::internal::mi_debug_assert!(idx.get() < unsafe { (*tls).count });
+    // SAFETY[AUDIT:threadlocal-key-manager]: `idx` is in bounds and the TLS
+    // block belongs to this thread.
     unsafe {
         let slots = tls_slots(tls);
         (*slots.add(idx.get())).value = val;
@@ -338,14 +372,20 @@ struct ThreadLocalKeepSet(ptr::NonNull<bool>);
 impl ThreadLocalKeepSet {
     /// # Safety
     /// `keep_set` must be valid for a `bool` write.
+    // SAFETY[AUDIT:threadlocal-key-manager]: raw callback state is converted to
+    // a non-null write witness before the typed claim helper sees it.
     #[inline(always)]
     unsafe fn from_raw(keep_set: *mut bool) -> Self {
         crate::internal::mi_assert_internal!(!keep_set.is_null());
+        // SAFETY[AUDIT:threadlocal-key-manager]: null was asserted above and
+        // callers provide a writable bool slot.
         Self(unsafe { ptr::NonNull::new_unchecked(keep_set) })
     }
 
     #[inline(always)]
     fn clear(self) {
+        // SAFETY[AUDIT:threadlocal-key-manager]: the witness was constructed
+        // only from a non-null writable bool slot.
         unsafe {
             *self.0.as_ptr() = false;
         }
@@ -353,11 +393,15 @@ impl ThreadLocalKeepSet {
 }
 
 #[inline]
+// SAFETY[AUDIT:threadlocal-key-manager]: C bitmap traversal calls this callback
+// with raw arena and keep-set arguments that are immediately wrapped.
 unsafe extern "C" fn mi_thread_local_claim_fun(
     slice_index: usize,
     arena: *mut mi_arena_t,
     keep_set: *mut bool,
 ) -> bool {
+    // SAFETY[AUDIT:threadlocal-key-manager]: raw callback arguments are wrapped
+    // into typed witnesses before mutation.
     unsafe {
         mi_thread_local_claim_fun_typed(
             SliceIndex::new(slice_index),
@@ -384,6 +428,9 @@ fn mi_thread_local_claim() -> mi_thread_local_t {
         return 0;
     }
     let claim_fun = ThreadLocalClaimCallback::new(mi_thread_local_claim_fun);
+    // SAFETY[AUDIT:threadlocal-key-manager]: `slots` is the acquired published
+    // free bitmap, `idx` is a valid out slot, and the callback only clears its
+    // keep flag through a typed witness.
     if unsafe { mi_bitmap_try_find_and_claim(slots, ThreadSeq::new(0), &mut idx, claim_fun, None) }
     {
         let mut version = mi_thread_locals_version
@@ -407,6 +454,8 @@ fn mi_thread_local_create_expand() -> bool {
     let oldcount = if slots.is_null() {
         0
     } else {
+        // SAFETY[AUDIT:threadlocal-key-manager]: non-null `slots` is the
+        // acquired published bitmap.
         unsafe { mi_bitmap_max_bits(slots) }
     };
     let Some(newcount) = oldcount.checked_add(1024) else {
@@ -416,19 +465,27 @@ fn mi_thread_local_create_expand() -> bool {
         return false;
     }
     let newsize = bitmap_alloc_size(newcount);
+    // SAFETY[AUDIT:threadlocal-key-manager]: allocates aligned bitmap storage
+    // for the expanded free-slot bitmap.
     let newslots = unsafe { mi_zalloc_aligned(newsize, MI_BCHUNK_SIZE).cast::<mi_bitmap_t>() };
     if newslots.is_null() {
         return false;
     }
 
     if !slots.is_null() {
+        // SAFETY[AUDIT:threadlocal-key-manager]: `slots` is the previous
+        // published bitmap; the null output only asks for its byte size.
         let oldsize = unsafe { mi_bitmap_size(oldcount, ptr::null_mut()) };
+        // SAFETY[AUDIT:threadlocal-key-manager]: both bitmaps have at least
+        // `oldsize` bytes, and ownership moves to `newslots` before publish.
         unsafe {
             ptr::copy_nonoverlapping(slots.cast::<u8>(), newslots.cast::<u8>(), oldsize);
             mi_free(slots.cast());
         }
     }
 
+    // SAFETY[AUDIT:threadlocal-key-manager]: `newslots` points to writable
+    // bitmap storage sized for `newcount`; new bits are published as free.
     unsafe {
         mi_bitmap_init(newslots, newcount, true);
         mi_bitmap_unsafe_setN(newslots, oldcount, newcount - oldcount);
@@ -437,12 +494,16 @@ fn mi_thread_local_create_expand() -> bool {
     true
 }
 
+// SAFETY[AUDIT:threadlocal-key-manager]: initializes process-global dynamic
+// TLS bookkeeping once with acquire/release publication.
 #[inline(never)]
 pub extern "C" fn _mi_thread_locals_init() {
     if mi_thread_locals_initialized
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
     {
+        // SAFETY[AUDIT:threadlocal-key-manager]: the once transition gives this
+        // thread exclusive initialization access to the static lock.
         unsafe {
             mi_lock_init(ptr::addr_of_mut!(mi_thread_locals_lock));
         }
@@ -454,20 +515,28 @@ pub extern "C" fn _mi_thread_locals_init() {
 #[used]
 static MI_THREAD_LOCALS_INIT_KEEP: extern "C" fn() = _mi_thread_locals_init;
 
+// SAFETY[AUDIT:threadlocal-key-manager]: tears down the global free bitmap
+// under the static lock when dynamic TLS slots were allocated.
 #[inline(never)]
 pub extern "C" fn _mi_thread_locals_done() {
     if mi_thread_locals_free.load(Ordering::Acquire).is_null() {
         return;
     }
+    // SAFETY[AUDIT:threadlocal-key-manager]: global bitmap teardown is
+    // serialized by the static lock.
     unsafe {
         mi_lock_acquire(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
     let slots = mi_thread_locals_free.swap(ptr::null_mut(), Ordering::AcqRel);
     if !slots.is_null() {
+        // SAFETY[AUDIT:threadlocal-key-manager]: `slots` was removed from the
+        // global publication point and is now owned by this teardown path.
         unsafe {
             mi_free(slots.cast());
         }
     }
+    // SAFETY[AUDIT:threadlocal-key-manager]: releases and finalizes the static
+    // lock after the global free bitmap has been unpublished.
     unsafe {
         mi_lock_release(ptr::addr_of_mut!(mi_thread_locals_lock));
         mi_lock_done(ptr::addr_of_mut!(mi_thread_locals_lock));
@@ -477,6 +546,8 @@ pub extern "C" fn _mi_thread_locals_done() {
 #[used]
 static MI_THREAD_LOCALS_DONE_KEEP: extern "C" fn() = _mi_thread_locals_done;
 
+// SAFETY[AUDIT:threadlocal-key-manager]: stores a value into this thread's TLS
+// slot block or expands that block before storing.
 #[inline(never)]
 pub extern "C" fn _mi_thread_local_set(
     key: mi_thread_local_t,
@@ -486,6 +557,8 @@ pub extern "C" fn _mi_thread_local_set(
     crate::internal::mi_debug_assert!(!tls.is_null());
     crate::internal::mi_debug_assert!(key != 0);
     let idx = mi_key_index(key);
+    // SAFETY[AUDIT:threadlocal-key-manager]: `tls` is this thread's TLS block;
+    // versioned slot writes are in bounds or delegated to expansion.
     unsafe {
         if idx.get() < (*tls).count {
             let slots = tls_slots(tls);
@@ -502,12 +575,16 @@ pub extern "C" fn _mi_thread_local_set(
 static MI_THREAD_LOCAL_SET_KEEP: extern "C" fn(mi_thread_local_t, *mut core::ffi::c_void) -> bool =
     _mi_thread_local_set;
 
+// SAFETY[AUDIT:threadlocal-key-manager]: reads a value from this thread's TLS
+// slot block only when the key version still matches.
 #[inline(never)]
 pub extern "C" fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut core::ffi::c_void {
     let tls = thread_locals_ptr();
     crate::internal::mi_debug_assert!(!tls.is_null());
     crate::internal::mi_debug_assert!(key != 0);
     let idx = mi_key_index(key);
+    // SAFETY[AUDIT:threadlocal-key-manager]: `tls` is this thread's TLS block;
+    // reads are in bounds and stale key versions return null.
     unsafe {
         if idx.get() < (*tls).count {
             let slots = tls_slots(tls);
@@ -526,10 +603,16 @@ pub extern "C" fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut core::ffi
 static MI_THREAD_LOCAL_GET_KEEP: extern "C" fn(mi_thread_local_t) -> *mut core::ffi::c_void =
     _mi_thread_local_get;
 
+// SAFETY[AUDIT:threadlocal-key-manager]: frees only this thread's dynamically
+// allocated TLS slot block and restores the empty sentinel.
 #[inline(never)]
 pub extern "C" fn _mi_thread_locals_thread_done() {
     let tls = thread_locals_ptr();
+    // SAFETY[AUDIT:threadlocal-key-manager]: `tls` is the current thread's TLS
+    // pointer; positive count distinguishes allocated blocks from the sentinel.
     if unsafe { !tls.is_null() && (*tls).count > 0 } {
+        // SAFETY[AUDIT:threadlocal-key-manager]: a positive count means this
+        // thread owns a dynamically allocated TLS block.
         unsafe {
             mi_free(tls.cast());
         }
@@ -540,8 +623,12 @@ pub extern "C" fn _mi_thread_locals_thread_done() {
 #[used]
 static MI_THREAD_LOCALS_THREAD_DONE_KEEP: extern "C" fn() = _mi_thread_locals_thread_done;
 
+// SAFETY[AUDIT:threadlocal-key-manager]: allocates a versioned TLS key under
+// the global bitmap lock, expanding the bitmap when needed.
 pub extern "C" fn _mi_thread_local_create() -> mi_thread_local_t {
     _mi_thread_locals_init();
+    // SAFETY[AUDIT:threadlocal-key-manager]: key creation and bitmap expansion
+    // are serialized by the static lock.
     unsafe {
         mi_lock_acquire(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
@@ -549,27 +636,39 @@ pub extern "C" fn _mi_thread_local_create() -> mi_thread_local_t {
     if key == 0 && mi_thread_local_create_expand() {
         key = mi_thread_local_claim();
     }
+    // SAFETY[AUDIT:threadlocal-key-manager]: releases the lock acquired for key
+    // claim/expansion.
     unsafe {
         mi_lock_release(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
     key
 }
 
+// SAFETY[AUDIT:threadlocal-key-manager]: returns a versioned key's slot to the
+// global free bitmap while holding the bitmap lock.
 #[inline(never)]
 pub extern "C" fn _mi_thread_local_free(key: mi_thread_local_t) {
     if key == 0 {
         return;
     }
     let idx = mi_key_index(key);
+    // SAFETY[AUDIT:threadlocal-key-manager]: slot free mutates the global free
+    // bitmap while serialized by the static lock.
     unsafe {
         mi_lock_acquire(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
     let slots = mi_thread_locals_free.load(Ordering::Acquire);
+    // SAFETY[AUDIT:threadlocal-key-manager]: non-null `slots` is the acquired
+    // published free bitmap and can be queried while the lock is held.
     if !slots.is_null() && idx.get() < unsafe { mi_bitmap_max_bits(slots) } {
+        // SAFETY[AUDIT:threadlocal-key-manager]: `idx` is within the bitmap and
+        // marks the slot as free for a future versioned key.
         unsafe {
             mi_bitmap_set(slots, idx.get());
         }
     }
+    // SAFETY[AUDIT:threadlocal-key-manager]: releases the lock acquired for
+    // free bitmap mutation.
     unsafe {
         mi_lock_release(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
@@ -577,3 +676,29 @@ pub extern "C" fn _mi_thread_local_free(key: mi_thread_local_t) {
 
 #[used]
 static MI_THREAD_LOCAL_FREE_KEEP: extern "C" fn(mi_thread_local_t) = _mi_thread_local_free;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_helpers_split_index_and_version_domains() {
+        let key = mi_key_create(ThreadLocalSlotIndex::new(17), ThreadLocalKeyVersion::new(3));
+        assert_eq!(mi_key_index(key).get(), 17);
+        assert_eq!(mi_key_version(key).get(), 3);
+    }
+
+    #[test]
+    fn keep_set_witness_clears_claim_flag() {
+        let mut keep_flag = true;
+        // SAFETY[AUDIT:threadlocal-key-manager]: the test passes a live
+        // stack-local bool as the callback keep-set slot.
+        let keep_set = unsafe { ThreadLocalKeepSet::from_raw(&mut keep_flag) };
+        assert!(mi_thread_local_claim_fun_typed(
+            SliceIndex::new(0),
+            None,
+            keep_set
+        ));
+        assert!(!keep_flag);
+    }
+}

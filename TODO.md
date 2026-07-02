@@ -14,8 +14,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 24 entries: 21 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 24.
+- `docs/unsafe-migration-allowlist.tsv` has 23 entries: 20 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 23.
 - The completed pass moved `src/ffi/abi.rs`, `src/allocator/arena_meta.rs`,
   `src/platform/wasi.rs`, `src/platform/emscripten.rs`, and
   `src/types/atomic.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -33,14 +33,19 @@ Current review evidence:
   bounded C-string reads, destination writes, `vsnprintf` forwarding,
   fixed-buffer formatting, number-output reversal, environment forwarding, and
   helper edge-case tests, and is off the unsafe migration allowlist.
+- `src/allocator/threadlocal.rs` now uses 50
+  `SAFETY[AUDIT:threadlocal-key-manager]` markers for Linux TLS shim access,
+  x86_64 assembly, sentinel `Sync`, static lock access, slot growth, bitmap
+  copy/free/publication, keep-set writes, versioned key claim/free, and helper
+  tests, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are
-  `src/allocator/threadlocal.rs` at 579 lines with 44 `unsafe` hits and 0 local
-  markers,
   `src/allocator/heap.rs` at 604 lines with 94 `unsafe` hits and 0 local
   markers,
   `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits and 0 local
   markers, and
-  `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits.
+  `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits,
+  `src/internal/atomic.rs` at 914 lines with 135 `unsafe` hits, and
+  `src/allocator/page_map.rs` at 1,052 lines with 182 `unsafe` hits.
 - After the current remaining TODO items, the next smallest remaining
   allowlisted production files are
   `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits,
@@ -65,7 +70,8 @@ Current review evidence:
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
   `SAFETY[AUDIT:typed-heap-test-fixtures]` has 55 markers,
   `SAFETY[AUDIT:typed-atomic-domain]` has 51 markers,
-  `SAFETY[AUDIT:ffi-libc-helpers]` has 50 markers, and
+  `SAFETY[AUDIT:ffi-libc-helpers]` has 50 markers,
+  `SAFETY[AUDIT:threadlocal-key-manager]` has 50 markers, and
   `SAFETY[AUDIT:emscripten-primitive-boundary]` has 48 markers.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 3,915 lines,
@@ -78,7 +84,7 @@ Current review evidence:
 - The release audit is still split but has large review units:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,386 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
-  `tests/release_fast_path_audit.rs` is 1,859 lines, and
+  `tests/release_fast_path_audit.rs` is 1,869 lines, and
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,108 lines.
 
 ## Issue: Raw POSIX compatibility facade still uses a file-level unsafe allowance
@@ -157,27 +163,27 @@ regeneration/check, release audit, full clippy, and full tests.
 ## Issue: Dynamic thread-local key manager still uses a file-level unsafe allowance
 
 > **Comment:** `src/allocator/threadlocal.rs` is a synchronization and platform
-> boundary. Its unsafe operations cover Linux TLS externs and x86_64 assembly,
+> boundary. Its unsafe operations covered Linux TLS externs and x86_64 assembly,
 > sentinel `Sync`, static lock access, TLS slot allocation/reallocation/free,
 > bitmap publication, callback keep-set writes, and lock-protected key
 > lifecycle operations.
 
-- [ ] Add local `SAFETY[AUDIT:threadlocal-key-manager]` markers for TLS
+- [x] Add local `SAFETY[AUDIT:threadlocal-key-manager]` markers for TLS
       extern/assembly access, sentinel `Sync`, static lock access, thread-local
       pointer get/set, slot growth and writes, bitmap copy/free/publication,
       callback keep-set writes, and key claim/free operations.
-- [ ] Preserve documented memory orderings from `docs/memory-ordering.md`, the
+- [x] Preserve documented memory orderings from `docs/memory-ordering.md`, the
       Linux TLS shim ABI, direct `mi_free` thread-done behavior, lock scope,
       and no extra heap allocation on hot TLS get paths.
-- [ ] Add or extend release-audit assertions and focused tests for TLS shim
+- [x] Add or extend release-audit assertions and focused tests for TLS shim
       shape, initialization/done locking, slot expansion, key version checks,
       bitmap claim/free behavior, and thread-done reset semantics.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/allocator/threadlocal.rs` from the unsafe migration allowlist,
       regenerate unsafe inventory, and lower the cap.
 
-Verify: threadlocal boundary release audit, `cargo test
-thread_stats_regression --test thread_stats_regression --all-features`, unsafe
+Verify: threadlocal boundary release audit, `cargo test --test
+thread_stats_regression --all-features`, unsafe
 audit scripts, unsafe inventory regeneration/check, full clippy, and full
 tests.
 
@@ -213,7 +219,7 @@ clippy, and full tests.
 1. [x] Migrate `src/raw/posix.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/lib.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/ffi/libc.rs` off the unsafe migration allowlist.
-4. [ ] Migrate `src/allocator/threadlocal.rs` off the unsafe migration
+4. [x] Migrate `src/allocator/threadlocal.rs` off the unsafe migration
        allowlist.
 5. [ ] Migrate `src/allocator/heap.rs` off the unsafe migration allowlist.
 

@@ -25,6 +25,57 @@ pub(super) fn assert_dynamic_threadlocal_boundaries(threadlocal_rs: &str) {
             && threadlocal_rs.contains("_mi_thread_locals_init();"),
         "dynamic thread-local helpers should keep C's local helper boundaries"
     );
+    assert!(
+        threadlocal_rs
+            .matches("SAFETY[AUDIT:threadlocal-key-manager]")
+            .count()
+            >= 40,
+        "dynamic thread-local unsafe boundaries should stay covered by local operation markers"
+    );
+    assert!(
+        threadlocal_rs.contains("fn mi_thread_locals_expand(")
+            && threadlocal_rs.contains("let tls_old = thread_locals_ptr();")
+            && threadlocal_rs.contains("mi_rezalloc(old_ptr, size_new)")
+            && threadlocal_rs.contains("(*tls).count = count;")
+            && threadlocal_rs.contains("set_thread_locals_ptr(tls);"),
+        "thread-local slot expansion should keep the current-thread block ownership and publish path"
+    );
+    assert!(
+        threadlocal_rs.contains("fn mi_thread_local_claim() -> mi_thread_local_t")
+            && threadlocal_rs.contains(
+                "mi_bitmap_try_find_and_claim(slots, ThreadSeq::new(0), &mut idx, claim_fun, None)"
+            )
+            && threadlocal_rs
+                .contains("mi_thread_locals_version.store(version, Ordering::Relaxed);")
+            && threadlocal_rs
+                .contains("mi_key_create(\n            ThreadLocalSlotIndex::new(idx.get()),")
+            && threadlocal_rs.contains("ThreadLocalKeepSet::from_raw(keep_set)"),
+        "thread-local key claim should keep bitmap callback wrapping and versioned key creation"
+    );
+    assert!(
+        threadlocal_rs.contains("fn mi_thread_local_create_expand() -> bool")
+            && threadlocal_rs.contains("mi_zalloc_aligned(newsize, MI_BCHUNK_SIZE)")
+            && threadlocal_rs.contains(
+                "ptr::copy_nonoverlapping(slots.cast::<u8>(), newslots.cast::<u8>(), oldsize)"
+            )
+            && threadlocal_rs.contains("mi_bitmap_init(newslots, newcount, true);")
+            && threadlocal_rs
+                .contains("mi_bitmap_unsafe_setN(newslots, oldcount, newcount - oldcount);")
+            && threadlocal_rs.contains("mi_thread_locals_free.store(newslots, Ordering::Release);"),
+        "thread-local bitmap expansion should keep aligned allocation, copy/free handoff, and release publication"
+    );
+    assert!(
+        threadlocal_rs.contains("pub extern \"C\" fn _mi_thread_local_free(")
+            && threadlocal_rs
+                .contains("mi_lock_acquire(ptr::addr_of_mut!(mi_thread_locals_lock));")
+            && threadlocal_rs.contains(
+                "if !slots.is_null() && idx.get() < unsafe { mi_bitmap_max_bits(slots) }"
+            )
+            && threadlocal_rs.contains("mi_bitmap_set(slots, idx.get());")
+            && threadlocal_rs
+                .contains("mi_lock_release(ptr::addr_of_mut!(mi_thread_locals_lock));"),
+        "thread-local key free should remain lock-protected and return slots through the free bitmap"
+    );
     let thread_locals_thread_done_start = threadlocal_rs
         .find("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_thread_done")
         .expect("find _mi_thread_locals_thread_done");

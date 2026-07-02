@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5972 |
-| `unsafe_blocks` | 3556 |
-| `unsafe_fns` | 1993 |
+| `unsafe_mentions` | 5974 |
+| `unsafe_blocks` | 3557 |
+| `unsafe_fns` | 1994 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -50,7 +50,8 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/page/bins.rs` | 3 | 2 | 0 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/counts.rs` | 44 | 22 | 22 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
-| `src/allocator/page.rs` | 224 | 105 | 119 | 0 | 0 | 0 | 0 |
+| `src/allocator/page/flags.rs` | 20 | 10 | 10 | 0 | 0 | 0 | 0 |
+| `src/allocator/page.rs` | 206 | 96 | 110 | 0 | 0 | 0 | 0 |
 | `src/allocator/page_map.rs` | 184 | 144 | 38 | 0 | 0 | 2 | 0 |
 | `src/allocator/stats.rs` | 198 | 124 | 51 | 0 | 0 | 22 | 0 |
 | `src/allocator/thread_heap.rs` | 120 | 56 | 58 | 0 | 0 | 6 | 0 |

@@ -64,6 +64,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/page/counts.rs");
     let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
         .expect("read src/allocator/page/deferred.rs");
+    let page_flags_rs = fs::read_to_string(root.join("src/allocator/page/flags.rs"))
+        .expect("read src/allocator/page/flags.rs");
     let random_rs = fs::read_to_string(root.join("src/internal/random.rs"))
         .expect("read src/internal/random.rs");
     let stats_rs = fs::read_to_string(root.join("src/allocator/stats.rs"))
@@ -1605,9 +1607,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !page_rs.contains(
                 "pub unsafe fn mi_page_queue_enqueue_from_full(\n    to: *mut mi_page_queue_t,"
             )
-            && page_rs.contains("match crate::core_types::MemId::view((*page).memid)")
-            && page_rs.contains("crate::core_types::MemIdView::Os(os) => os")
-            && !page_rs.contains("(*page).memid.mem.os.base")
+            && page_flags_rs.contains("match crate::core_types::MemId::view((*page).memid)")
+            && page_flags_rs.contains("crate::core_types::MemIdView::Os(os) => os")
+            && !page_flags_rs.contains("(*page).memid.mem.os.base")
             && page_rs.contains(
                 "let _ = _mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked("
             )

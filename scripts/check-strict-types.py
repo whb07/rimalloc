@@ -68,6 +68,7 @@ PATH_ALIASES = {
     "src/allocator/arena/debug.rs": {"src/allocator/arena.rs"},
     "src/allocator/page/bins.rs": {"src/allocator/page.rs"},
     "src/allocator/page/counts.rs": {"src/allocator/page.rs"},
+    "src/allocator/page/flags.rs": {"src/allocator/page.rs"},
     "src/internal/bitmap/bfield.rs": {"src/bitmap.rs", "src/internal/bitmap.rs"},
     "src/internal/bitmap.rs": {"src/bitmap.rs"},
     "src/internal/guarded.rs": {"src/types/guarded.rs"},

@@ -34,7 +34,7 @@ Current review evidence:
   `aligned`, and `bitmap`.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 4,628 lines,
-  `src/allocator/page.rs` is 3,109 lines,
+  `src/allocator/page.rs` is 2,951 lines,
   `src/allocator/alloc.rs` is 2,545 lines,
   `src/internal/bitmap.rs` is 2,358 lines,
   `src/allocator/init.rs` is 2,339 lines,
@@ -42,6 +42,9 @@ Current review evidence:
   `src/platform/windows.rs` is 2,191 lines.
 - `src/internal/bitmap/bfield.rs` is 271 lines and owns the bit-field atomic
   helper layer that was previously embedded in `src/internal/bitmap.rs`.
+- `src/allocator/page/flags.rs` is 181 lines and owns page flag, full-queue,
+  huge-page, abandoned-page, and thread-heap owner accessors that were
+  previously embedded in `src/allocator/page.rs`.
 - The largest operation-level unsafe marker clusters are still
   `SAFETY[AUDIT:arena-debug-render]` with 34 markers in
   `src/allocator/arena/debug.rs`,
@@ -174,17 +177,23 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 > The next split should move one cohesive helper cluster with narrow imports and
 > explicit re-exports only for current callers.
 
-- [ ] Re-scan `src/allocator/arena.rs`, `src/allocator/page.rs`,
+- [x] Re-scan `src/allocator/arena.rs`, `src/allocator/page.rs`,
       `src/allocator/alloc.rs`, `src/internal/bitmap.rs`, and
       `src/allocator/init.rs` for low-risk helper clusters.
-- [ ] Prefer non-hot, already-audited, or pure helper groups with narrow
+- [x] Prefer non-hot, already-audited, or pure helper groups with narrow
       imports.
-- [ ] Move the group into an existing or new submodule with explicit
+- [x] Move the group into an existing or new submodule with explicit
       re-exports only for current callers.
-- [ ] Update source-path assertions, strict-type aliases, no-allocation audit
+- [x] Update source-path assertions, strict-type aliases, no-allocation audit
       coverage, unsafe audit evidence, and generated unsafe inventory as needed.
-- [ ] Preserve C ABI symbols, public Rust facade shape, and benchmark-critical
+- [x] Preserve C ABI symbols, public Rust facade shape, and benchmark-critical
       inline behavior.
+  - Evidence: page flag and owner helpers moved into
+    `src/allocator/page/flags.rs` with the same `#[inline]` annotations and
+    re-exports from `src/allocator/page.rs`. The parent module dropped from
+    3,109 lines to 2,951 lines, the child module is 181 lines, strict-type path
+    aliases and no-allocation critical-path scanning include the new child, and
+    no C ABI exports moved.
 
 Verify: focused module tests, `scripts/check-ffi-boundary.py`,
 `scripts/check-api-inventory.py`, `scripts/check-public-abi.py`,
@@ -197,7 +206,7 @@ full tests.
 2. [x] Migrate one small production file off the unsafe migration allowlist.
 3. [x] Narrow one remaining broad strict-type `usize` allowance.
 4. [x] Split one more release-audit assertion cluster.
-5. [ ] Split one more production helper boundary.
+5. [x] Split one more production helper boundary.
 
 ## Definition of done for this backlog
 
@@ -207,5 +216,5 @@ full tests.
 - [x] One remaining broad strict-type `remove:` allowance is narrowed or
       eliminated.
 - [x] One release-audit module has more guard margin.
-- [ ] One large production translation unit is smaller without API, ABI, or
+- [x] One large production translation unit is smaller without API, ABI, or
       hot-path performance drift.

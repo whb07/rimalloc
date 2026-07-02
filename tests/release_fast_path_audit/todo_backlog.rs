@@ -61,11 +61,12 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`mi_direct_bin_from_size`, overflow helpers, `_mi_page_map_at`",
         "`REMOVE_ENTRY_CAP` is now 3",
         "`src/allocator/arena.rs` is 4,628 lines",
-        "`src/allocator/page.rs` is 3,109",
+        "`src/allocator/page.rs` is 2,951",
         "`src/allocator/alloc.rs` is 2,545 lines",
         "`src/internal/bitmap.rs` is 2,358 lines",
         "`src/allocator/init.rs` is 2,339 lines",
         "`src/internal/bitmap/bfield.rs` is 271 lines",
+        "`src/allocator/page/flags.rs` is 181 lines",
         "SAFETY[AUDIT:arena-debug-render]` with 34 markers",
         "SAFETY[AUDIT:page-count-accessors]` with 22 markers",
         "SAFETY[AUDIT:unsafe-callback]` with 19 markers",
@@ -78,6 +79,8 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is\n  160 lines",
         "security-policy assertion cluster moved into\n    `tests/release_fast_path_audit/release_policy/security.rs`",
         "release audit still runs 67 tests",
+        "page flag and owner helpers moved into\n    `src/allocator/page/flags.rs`",
+        "strict-type path\n    aliases and no-allocation critical-path scanning include the new child",
     ];
 
     for evidence in required_evidence {

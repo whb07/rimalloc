@@ -21,6 +21,8 @@ fn lifecycle_and_local_boundary_helpers_stay_classified() {
         fs::read_to_string(root.join("src/internal/mod.rs")).expect("read src/internal/mod.rs");
     let page_rs =
         fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let page_flags_rs = fs::read_to_string(root.join("src/allocator/page/flags.rs"))
+        .expect("read src/allocator/page/flags.rs");
     let prim_rs =
         fs::read_to_string(root.join("src/platform/mod.rs")).expect("read src/platform/mod.rs");
     let stats_rs = fs::read_to_string(root.join("src/allocator/stats.rs"))
@@ -318,22 +320,23 @@ fn lifecycle_and_local_boundary_helpers_stay_classified() {
             && internal.contains("atomic_tid.compare_exchange_owner(&mut old, new)")
             && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);")
             && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);")
-            && page_rs.contains("let Some(flag) = crate::core_types::PageFlags::new(newflag) else")
-            && page_rs.contains("let old = atomic_tid.set_flags(flag, set);")
-            && page_rs.contains("let tid = atomic_tid.load();")
-            && page_rs.contains("let mut xtid_old = atomic_tid.load();")
-            && page_rs.contains("let xtid = xtid_old.with_owner(owner);")
-            && page_rs.contains("atomic_tid.compare_exchange_owner(&mut xtid_old, xtid)")
+            && page_flags_rs
+                .contains("let Some(flag) = crate::core_types::PageFlags::new(newflag) else")
+            && page_flags_rs.contains("let old = atomic_tid.set_flags(flag, set);")
+            && page_flags_rs.contains("let tid = atomic_tid.load();")
+            && page_flags_rs.contains("let mut xtid_old = atomic_tid.load();")
+            && page_flags_rs.contains("let xtid = xtid_old.with_owner(owner);")
+            && page_flags_rs.contains("atomic_tid.compare_exchange_owner(&mut xtid_old, xtid)")
             && arena_rs.contains("unsafe { atomic_tid.store_owner(crate::core_types::PageOwnerId::AbandonedMapped) };")
             && !internal.contains("atomic_tid.load_relaxed().raw()")
             && !internal.contains("atomic_tid.compare_exchange_release(&mut old, new)")
-            && !page_rs.contains("atomic_tid.compare_exchange_release(&mut xtid_old, xtid)")
+            && !page_flags_rs.contains("atomic_tid.compare_exchange_release(&mut xtid_old, xtid)")
             && !arena_rs.contains("atomic_tid.set_owner_release(crate::core_types::PageOwnerId::AbandonedMapped)")
             && !internal.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
             && !internal.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
-            && !page_rs.contains("mi_atomic_cas_weak_release(&mut (*page).xthread_id")
-            && !page_rs.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
-            && !page_rs.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
+            && !page_flags_rs.contains("mi_atomic_cas_weak_release(&mut (*page).xthread_id")
+            && !page_flags_rs.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
+            && !page_flags_rs.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
             && !arena_rs.contains("MI_THREADID_ABANDONED_MAPPED | flags")
             && page_rs.contains(
                 "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),\n        ));"

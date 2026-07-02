@@ -1529,6 +1529,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     bitmap_boundaries::assert_bitmap_traversal_and_regular_boundaries(
         &bitmap_rs,
+        &unsafe_allowlist,
         &arena_rs,
         &arena_heap_pages_rs,
         &callbacks_rs,

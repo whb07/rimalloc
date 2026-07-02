@@ -1,10 +1,21 @@
 pub(super) fn assert_bitmap_traversal_and_regular_boundaries(
     bitmap_rs: &str,
+    unsafe_allowlist: &str,
     arena_rs: &str,
     arena_heap_pages_rs: &str,
     callbacks_rs: &str,
     threadlocal_rs: &str,
 ) {
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/internal/bitmap.rs\t"))
+            && bitmap_rs
+                .matches("SAFETY[AUDIT:internal-bitmap-boundary]")
+                .count()
+                >= 60,
+        "internal bitmap unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
     assert!(
         bitmap_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_bitmap_forall_set(")
             && bitmap_rs.contains(
@@ -125,6 +136,14 @@ pub(super) fn assert_bitmap_traversal_and_regular_boundaries(
             && threadlocal_rs.contains("ThreadLocalKeepSet::from_raw(keep_set),")
             && !bitmap_rs.contains("*mut mi_claim_fun_t"),
         "thread-local claim callbacks should route through typed callback wrappers below raw typedefs"
+    );
+    assert!(
+        bitmap_rs.contains("pub type mi_bchunk_t = mi_bchunk_s;")
+            && bitmap_rs.contains("pub type mi_bitmap_t = mi_bitmap_s;")
+            && bitmap_rs.contains("pub type mi_bbitmap_t = mi_bbitmap_s;")
+            && bitmap_rs.contains("if idx + n > maxbits {\n            if idx >= maxbits {\n                return false;\n            }\n            n = maxbits - idx;\n        }")
+            && bitmap_rs.contains("if idx + n > maxbits {\n            if idx >= maxbits {\n                return 0;\n            }\n            n = maxbits - idx;\n        }"),
+        "bitmap aliases and release out-of-range branches should remain explicit at the translated bitmap boundary"
     );
 }
 

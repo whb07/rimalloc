@@ -241,6 +241,13 @@ Operation IDs:
   setup, typed subproc/thread-heap witness construction, statically linked
   assembly symbols, option/stat initialization ordering, and teardown paths
   while preserving idempotent initialization and no-unwind lifecycle behavior.
+- `SAFETY[AUDIT:internal-bitmap-boundary]`: `src/internal/bitmap.rs` owns
+  bitmap and binned-bitmap chunk maps, bit scanning, set/clear mutation,
+  first-fit claim loops, arena traversal callbacks, and AVX2 bitmap helper
+  shims. Unsafe operations are limited to caller-proven bitmap storage,
+  bounded chunk and field projection, raw callback invocation, typed
+  arena/slice wrapper handoff, and local test fixtures while preserving bit
+  ordering, field width, empty/full handling, and allocation-free search paths.
 - `SAFETY[AUDIT:free-path-boundary]`: `src/allocator/free.rs` owns free and
   usable-size routing. Unsafe operations are limited to free fast-path assembly
   aliases, validated page/block/user-pointer lookup, padding and guarded-block

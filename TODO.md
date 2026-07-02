@@ -7,9 +7,9 @@ at `da44c1a`. That pass moved `src/allocator/free.rs`,
 allowlist with local operation markers, audit evidence, release-audit guards,
 and full validation.
 
-This follow-up pass has now also moved `src/allocator/init.rs` off the unsafe
-migration allowlist with local init lifecycle markers, audit evidence, and
-release-audit guards.
+This follow-up pass has now also moved `src/allocator/init.rs` and
+`src/internal/bitmap.rs` off the unsafe migration allowlist with local operation
+markers, audit evidence, release-audit guards, and focused behavior tests.
 
 The next pass should finish the same class of work: retire every remaining
 file-level unsafe migration allowance, one file at a time, while preserving raw
@@ -19,8 +19,8 @@ test exposes a concrete bug.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 6 entries: 4 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 6.
+- `docs/unsafe-migration-allowlist.tsv` has 5 entries: 3 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 5.
 - The just-completed pass moved `src/allocator/free.rs` to 69
   `SAFETY[AUDIT:free-path-boundary]` markers, `src/allocator/options.rs` to 76
   `SAFETY[AUDIT:options-callback-boundary]` markers,
@@ -31,9 +31,10 @@ Current review evidence:
   `src/raw/macros.rs` to 178
   `SAFETY[AUDIT:raw-macro-allocation-boundary]` markers.
 - The current pass moved `src/allocator/init.rs` to 277
-  `SAFETY[AUDIT:init-lifecycle-boundary]` markers.
+  `SAFETY[AUDIT:init-lifecycle-boundary]` markers and
+  `src/internal/bitmap.rs` to 71
+  `SAFETY[AUDIT:internal-bitmap-boundary]` markers.
 - Remaining production allowlist entries with no local markers are
-  `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits,
   `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits,
   `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits, and
   `src/allocator/arena.rs` at 3,915 lines with 607 `unsafe` hits.
@@ -65,10 +66,11 @@ Current review evidence:
   `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
   `SAFETY[AUDIT:options-callback-boundary]` has 76 markers,
   `SAFETY[AUDIT:thread-heap-lifecycle]` has 71 markers,
+  `SAFETY[AUDIT:internal-bitmap-boundary]` has 71 markers,
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers, and
   `SAFETY[AUDIT:free-path-boundary]` has 69 markers.
 - The release audit is split but still has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,463 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,464 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
   `tests/release_fast_path_audit.rs` is 1,935 lines,
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines, and
@@ -104,25 +106,25 @@ Verify: lifecycle release audit, runtime-gate tests, original lifecycle/override
 tests, unsafe audit scripts, unsafe inventory regeneration/check, full clippy,
 and full tests.
 
-## Issue: Internal bitmap boundary still uses a file-level unsafe allowance
+## Completed: Internal bitmap boundary moved off the file-level unsafe allowance
 
 > **Comment:** `src/internal/bitmap.rs` owns translated bitmap field access,
-> bit scanning, claim/clear loops, and arena bitmap traversal helpers. It is
-> smaller than the remaining hot allocator files and has a narrow state domain,
-> so it should be migrated before alloc/page/arena.
+> bit scanning, claim/clear loops, and arena bitmap traversal helpers. It now
+> has local operation markers, evidence rows, release-audit guards, and focused
+> tests instead of a file-level migration allowance.
 
-- [ ] Add local `SAFETY[AUDIT:internal-bitmap-boundary]` markers for bitmap
+- [x] Add local `SAFETY[AUDIT:internal-bitmap-boundary]` markers for bitmap
       field pointer projection, bit index arithmetic, claim/clear mutation,
       visited-range callbacks, arena bitmap helper entry points, and local test
       fixtures.
-- [ ] Preserve bit ordering, field width, bounds checks, first-fit search
+- [x] Preserve bit ordering, field width, bounds checks, first-fit search
       behavior, arena callback contracts, empty/full handling, and no hidden
       allocation or dynamic dispatch in bitmap search paths.
-- [ ] Add or extend release-audit assertions and focused tests for marker
+- [x] Add or extend release-audit assertions and focused tests for marker
       coverage, no migration allowlist entry, bit claim/clear behavior,
       out-of-range rejection, arena callback traversal, and strict-type bitmap
       aliases.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/internal/bitmap.rs` from the unsafe migration allowlist, regenerate
       unsafe inventory, and lower the cap.
 
@@ -268,7 +270,7 @@ and full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/allocator/init.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/internal/bitmap.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/internal/bitmap.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/allocator/alloc.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/page.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/allocator/arena.rs` off the unsafe migration allowlist.
@@ -279,10 +281,10 @@ and full tests.
 
 - [ ] The unsafe migration allowlist cap is lowered after each migrated file and
       reaches zero when the final entry is removed.
-- [ ] The completed init migration and all 6 remaining allowlisted files are
-      covered by operation-level audit
-      markers, source audit entries, evidence rows, release-audit guards, and
-      focused behavior tests instead of file-level migration exceptions.
+- [ ] The completed init and bitmap migrations plus all 5 remaining
+      allowlisted files are covered by operation-level audit markers, source
+      audit entries, evidence rows, release-audit guards, and focused behavior
+      tests instead of file-level migration exceptions.
 - [ ] Allocator initialization, bitmap traversal, allocation hot paths, page
       allocation, arena ownership, internal translation helpers, and Windows
       platform primitives preserve their raw ABI contracts and performance

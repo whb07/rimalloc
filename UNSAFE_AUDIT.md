@@ -409,12 +409,21 @@ Operation IDs:
   full-state checks to page helpers, moving pages between already-typed queues,
   removing typed queued pages, and converting all-free local pages to destroyed
   arena-free witnesses.
+- `SAFETY[AUDIT:typed-page-state-domain]`: `src/types/page_states.rs` owns
+  page typestate witness construction and transitions. Unsafe operations are
+  limited to transparent page and thread-heap witness construction, page-local
+  free-list availability and pop state updates, all-free/full/retired/destroyed
+  transitions, abandoned ownership claiming, remote-free classification, and
+  thread-id based local, foreign, abandoned, and abandoned-mapped free-path
+  classification.
 - `SAFETY[AUDIT:typed-page-state-test-fixtures]`:
-  `src/types/page_states/tests.rs` builds stack-local page metadata and
+  `src/types/page_states.rs` and `src/types/page_states/tests.rs` build
+  stack-local page metadata, non-dereferenced page identities, and
   non-dereferenced thread-heap identity witnesses to exercise page typestate
-  transitions, ownership classification, and abandoned-page claiming. The
-  fixtures are not registered with allocator globals and are used only while
-  the local records are live.
+  transitions, ownership classification, lint-touch reachability, and
+  abandoned-page claiming. The fixtures are not registered with allocator
+  globals and are used only while the local records are live or as
+  non-dereferenced identity values.
 - `SAFETY[AUDIT:typed-free-validation]`: `src/types/validation.rs` converts
   validated pointer-lookup results into free-list witnesses, and
   `src/types/validation/tests.rs` builds stack-local page/block/user fixtures

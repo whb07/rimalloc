@@ -20,6 +20,8 @@ impl Page<Uninit> {
     /// `ptr` must identify page metadata that is being initialized and is not
     /// yet represented by another page-state witness.
     #[inline(always)]
+    // SAFETY[AUDIT:typed-page-state-domain]: callers establish exclusive
+    // initialization ownership before creating the uninitialized page witness.
     pub(crate) unsafe fn new_unchecked(ptr: PagePtr) -> Self {
         Self {
             ptr,
@@ -29,6 +31,9 @@ impl Page<Uninit> {
 
     #[inline(always)]
     pub(crate) fn initialize(self, _owner: ThreadHeapLocal) -> ActivePage {
+        // SAFETY[AUDIT:typed-page-state-domain]: consuming `Page<Uninit>`
+        // plus a local thread-heap owner establishes an initialized active
+        // page witness for the same page pointer.
         unsafe { ActivePage::new_unchecked(self.ptr) }
     }
 }
@@ -87,6 +92,9 @@ macro_rules! impl_page_witness {
             /// # Safety
             #[doc = $doc]
             #[inline(always)]
+            // SAFETY[AUDIT:typed-page-state-domain]: each transparent page
+            // witness is constructed only by callers that establish the
+            // state-specific invariant in the generated safety contract.
             pub(crate) unsafe fn new_unchecked(page: PagePtr) -> Self {
                 Self(page)
             }
@@ -155,6 +163,8 @@ impl AllFreePage<Active> {
     /// # Safety
     /// `page` must be an active page whose blocks are all free.
     #[inline(always)]
+    // SAFETY[AUDIT:typed-page-state-domain]: callers have already checked that
+    // this active page has no used blocks.
     pub(crate) unsafe fn active_unchecked(page: ActivePage) -> Self {
         Self {
             page: Page {
@@ -169,6 +179,8 @@ impl AllFreePage<Abandoned> {
     /// # Safety
     /// `page` must be an abandoned page whose blocks are all free.
     #[inline(always)]
+    // SAFETY[AUDIT:typed-page-state-domain]: callers have already checked that
+    // this abandoned page has no used blocks.
     pub(crate) unsafe fn abandoned_unchecked(page: AbandonedPageType) -> Self {
         Self {
             page: Page {
@@ -181,11 +193,17 @@ impl AllFreePage<Abandoned> {
 
 impl ActivePage {
     #[inline(always)]
+    // SAFETY[AUDIT:typed-page-state-domain]: callers hold an active page
+    // witness and may inspect the page-local free-list head.
     pub(crate) unsafe fn available(self) -> Option<AvailablePage> {
         let page = self.page();
+        // SAFETY[AUDIT:typed-page-state-domain]: active page metadata is live;
+        // a null free head means there is no available block witness.
         if unsafe { (*page.as_ptr()).free.is_null() } {
             None
         } else {
+            // SAFETY[AUDIT:typed-page-state-domain]: a non-null free head
+            // proves at least one available block for this active page.
             Some(unsafe { AvailablePage::new_unchecked(page) })
         }
     }
@@ -196,6 +214,9 @@ impl ActivePage {
         from: crate::core_types::NormalPageQueue,
         to: crate::core_types::FullPageQueue,
     ) -> FullPage {
+        // SAFETY[AUDIT:typed-page-state-domain]: the caller supplies matching
+        // typed source/target queues for an active page that is transitioning
+        // into the full queue.
         unsafe {
             crate::page::mi_page_queue_enqueue_from_raw(to.ptr(), from.ptr(), true, self.page());
             crate::page::mi_page_set_in_full(self.page().as_ptr(), true);
@@ -206,8 +227,12 @@ impl ActivePage {
     #[inline(always)]
     pub(crate) unsafe fn mark_all_free(self) -> Option<AllFreePage<Active>> {
         let page = self.page();
+        // SAFETY[AUDIT:typed-page-state-domain]: active page metadata is live
+        // and the used count determines the all-free witness.
         let used = unsafe { (*page.as_ptr()).used };
         if used == 0 {
+            // SAFETY[AUDIT:typed-page-state-domain]: zero used blocks proves
+            // the active all-free page witness.
             Some(unsafe { AllFreePage::active_unchecked(self) })
         } else {
             None
@@ -224,8 +249,12 @@ impl FullPage {
     #[inline(always)]
     pub(crate) unsafe fn mark_all_free(self) -> Option<AllFreePage<Full>> {
         let page = self.page();
+        // SAFETY[AUDIT:typed-page-state-domain]: full page metadata is live
+        // and the used count determines the all-free witness.
         let used = unsafe { (*page.as_ptr()).used };
         if used == 0 {
+            // SAFETY[AUDIT:typed-page-state-domain]: zero used blocks proves
+            // the full all-free page witness.
             Some(unsafe { AllFreePage::full_unchecked(self) })
         } else {
             None
@@ -247,11 +276,17 @@ impl AvailablePage {
         ActivePage,
     ) {
         let page = self.page();
+        // SAFETY[AUDIT:typed-page-state-domain]: `AvailablePage` proves a
+        // non-empty page-local available list to pop from.
         let (block, next) = unsafe { crate::core_types::AvailableFreeList::pop(self) };
+        // SAFETY[AUDIT:typed-page-state-domain]: after popping one available
+        // block, the page free head and used count are updated together.
         unsafe {
             page.set_free(next);
             page.set_used(page.used().increment_wrapping());
         }
+        // SAFETY[AUDIT:typed-page-state-domain]: after consuming the
+        // available witness, the page remains active.
         (block, unsafe { ActivePage::new_unchecked(page) })
     }
 }
@@ -259,6 +294,8 @@ impl AvailablePage {
 impl AllFreePage<Active> {
     #[inline(always)]
     pub(crate) fn retire(self) -> RetiredPage {
+        // SAFETY[AUDIT:typed-page-state-domain]: an active all-free page can
+        // enter the retired countdown state for the same page pointer.
         unsafe { RetiredPage::new_unchecked(self.page()) }
     }
 }
@@ -273,6 +310,8 @@ impl<S> AllFreePage<S> {
 impl RetiredPage {
     #[inline(always)]
     pub(crate) fn expire(self) -> DestroyedPage {
+        // SAFETY[AUDIT:typed-page-state-domain]: an expired retired page has
+        // completed the transition to destroyed/free-to-arena state.
         unsafe { DestroyedPage::new_unchecked(self.page()) }
     }
 }
@@ -281,8 +320,12 @@ impl AbandonedPageType {
     #[inline(always)]
     pub(crate) unsafe fn claim_ownership(self) -> Option<OwnedAbandonedPage> {
         let page = self.page();
+        // SAFETY[AUDIT:typed-page-state-domain]: abandoned page metadata is
+        // live and owns the atomic thread-free cell used for claiming.
         let atomic = unsafe { page.thread_free_cell() };
         if unsafe { atomic.claim_acq_rel() } {
+            // SAFETY[AUDIT:typed-page-state-domain]: a successful claim owns
+            // the abandoned page for reclaim or reabandon.
             Some(unsafe { OwnedAbandonedPage::new_unchecked(page) })
         } else {
             None
@@ -291,6 +334,8 @@ impl AbandonedPageType {
 
     #[inline(always)]
     pub(crate) fn remote_free_page(self) -> ForeignPage {
+        // SAFETY[AUDIT:typed-page-state-domain]: abandoned pages are not local
+        // to the current thread and route remote frees through `ForeignPage`.
         unsafe { ForeignPage::new_unchecked(self.page()) }
     }
 }
@@ -298,6 +343,8 @@ impl AbandonedPageType {
 impl AbandonedMappedPageType {
     #[inline(always)]
     pub(crate) fn remote_free_page(self) -> ForeignPage {
+        // SAFETY[AUDIT:typed-page-state-domain]: abandoned-mapped pages are
+        // not local to the current thread and route remote frees as foreign.
         unsafe { ForeignPage::new_unchecked(self.page()) }
     }
 }
@@ -305,11 +352,15 @@ impl AbandonedMappedPageType {
 impl OwnedAbandonedPage {
     #[inline(always)]
     pub(crate) fn reclaim(self, _target: ThreadHeapLocal) -> ActivePage {
+        // SAFETY[AUDIT:typed-page-state-domain]: ownership has been claimed
+        // and the target local thread heap reclaims this page as active.
         unsafe { ActivePage::new_unchecked(self.page()) }
     }
 
     #[inline(always)]
     pub(crate) fn reabandon_to_mapped(self) -> AbandonedMappedPageType {
+        // SAFETY[AUDIT:typed-page-state-domain]: the owned abandoned page is
+        // being returned to mapped abandoned state.
         unsafe { AbandonedMappedPageType::new_unchecked(self.page()) }
     }
 }
@@ -318,6 +369,8 @@ impl AllFreePage<Full> {
     /// # Safety
     /// `page` must be a full-queue page whose blocks are all free.
     #[inline(always)]
+    // SAFETY[AUDIT:typed-page-state-domain]: callers have already checked that
+    // this full page has no used blocks.
     pub(crate) unsafe fn full_unchecked(page: FullPage) -> Self {
         Self {
             page: Page {
@@ -356,6 +409,8 @@ impl ThreadHeapLocal {
     /// `theap` must be initialized and known to belong to the current thread, or
     /// be at an initialization/reclaim boundary that establishes local ownership.
     #[inline(always)]
+    // SAFETY[AUDIT:typed-page-state-domain]: callers establish that this
+    // thread-heap pointer is live and local for the page-state operation.
     pub(crate) unsafe fn new_unchecked(theap: ThreadHeapPtr) -> Self {
         Self(theap)
     }
@@ -367,6 +422,8 @@ impl ThreadHeapLocal {
 
     #[inline(always)]
     pub(crate) fn borrowed(self) -> crate::core_types::ThreadHeapBorrowed {
+        // SAFETY[AUDIT:typed-page-state-domain]: a local thread heap is also a
+        // live borrowed thread-heap witness.
         unsafe { crate::core_types::ThreadHeapBorrowed::new_unchecked(self.0) }
     }
 
@@ -374,6 +431,8 @@ impl ThreadHeapLocal {
     /// The wrapped thread heap must still be live.
     #[inline(always)]
     pub(crate) unsafe fn state(self) -> crate::core_types::ThreadHeapState {
+        // SAFETY[AUDIT:typed-page-state-domain]: forwarded to the wrapped live
+        // thread-heap pointer under this method's safety contract.
         unsafe { self.0.state() }
     }
 }
@@ -383,6 +442,8 @@ impl PagePtr {
         self,
         current: crate::core_types::ThreadId,
     ) -> Result<LocalPage, PagePtr> {
+        // SAFETY[AUDIT:typed-page-state-domain]: classification reads the
+        // page owner word from live page metadata.
         match unsafe { self.classify_for_free(current) } {
             PageFreeOwner::Local(lp) => Ok(lp),
             _ => Err(self),
@@ -390,8 +451,12 @@ impl PagePtr {
     }
 
     pub(crate) unsafe fn try_abandoned(self) -> Result<AbandonedPageType, PagePtr> {
+        // SAFETY[AUDIT:typed-page-state-domain]: page metadata is live and its
+        // typed thread-id cell owns the abandoned bit classification.
         let tid = unsafe { self.thread_id_cell().load_relaxed() };
         if tid.is_abandoned() {
+            // SAFETY[AUDIT:typed-page-state-domain]: the thread-id word marks
+            // this page as abandoned.
             Ok(unsafe { AbandonedPageType::new_unchecked(self) })
         } else {
             Err(self)
@@ -402,19 +467,29 @@ impl PagePtr {
         self,
         current: crate::core_types::ThreadId,
     ) -> PageFreeOwner {
+        // SAFETY[AUDIT:typed-page-state-domain]: page metadata is live and its
+        // typed thread-id cell owns free-path classification bits.
         let tid = unsafe { self.thread_id_cell().load_relaxed() };
         if tid.is_abandoned() {
+            // SAFETY[AUDIT:typed-page-state-domain]: the thread-id word marks
+            // this page as abandoned.
             PageFreeOwner::Abandoned(unsafe { AbandonedPageType::new_unchecked(self) })
         } else if tid.is_abandoned_mapped() {
+            // SAFETY[AUDIT:typed-page-state-domain]: the thread-id word marks
+            // this page as abandoned-mapped.
             PageFreeOwner::AbandonedMapped(unsafe { AbandonedMappedPageType::new_unchecked(self) })
         } else {
             match tid.classify_free_path(current) {
                 crate::core_types::FreePathKind::LocalFast
                 | crate::core_types::FreePathKind::LocalSlowFlags => {
+                    // SAFETY[AUDIT:typed-page-state-domain]: the owner bits
+                    // classify this page as local to `current`.
                     PageFreeOwner::Local(unsafe { LocalPage::new_unchecked(self) })
                 }
                 crate::core_types::FreePathKind::RemotePlain
                 | crate::core_types::FreePathKind::RemoteSlowFlags => {
+                    // SAFETY[AUDIT:typed-page-state-domain]: the owner bits
+                    // classify this page as foreign to `current`.
                     PageFreeOwner::Foreign(unsafe { ForeignPage::new_unchecked(self) })
                 }
             }
@@ -427,25 +502,40 @@ pub(super) fn __lint_touch() {
     let _ = core::mem::size_of::<AbandonedMapped>();
     let _ = core::mem::size_of::<Destroyed>();
 
+    // SAFETY[AUDIT:typed-page-state-test-fixtures]: lint-touch uses
+    // non-dereferenced dangling pointers only to keep typestate accessors and
+    // function items visible to dead-code analysis.
     let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
+    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic page pointer
+    // is never dereferenced; the witness is consumed only by accessor coverage.
     let retired = unsafe { RetiredPage::new_unchecked(page) };
     let _ = retired.page();
     let _ = retired.expire();
+    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic abandoned
+    // witness is used only to keep remote-free and function-item APIs live.
     let abandoned = unsafe { AbandonedPageType::new_unchecked(page) };
     let _ = AbandonedPageType::claim_ownership
         as unsafe fn(AbandonedPageType) -> Option<OwnedAbandonedPage>;
     let _ = abandoned.remote_free_page();
+    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic mapped
+    // abandoned witness is not dereferenced.
     let mapped = unsafe { AbandonedMappedPageType::new_unchecked(page) };
     let _ = mapped.remote_free_page();
+    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic owned
+    // abandoned witness is used only for transition API reachability.
     let owned = unsafe { OwnedAbandonedPage::new_unchecked(page) };
     let _ = owned.reabandon_to_mapped();
 
     if let PageFreeOwner::Local(local) =
+        // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic page is
+        // wrapped but not dereferenced while checking enum-field reachability.
         PageFreeOwner::Local(unsafe { LocalPage::new_unchecked(page) })
     {
         let _ = local.page();
     }
     if let PageFreeOwner::Foreign(foreign) =
+        // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic page is
+        // wrapped but not dereferenced while checking enum-field reachability.
         PageFreeOwner::Foreign(unsafe { ForeignPage::new_unchecked(page) })
     {
         let _ = foreign.page();
@@ -454,12 +544,18 @@ pub(super) fn __lint_touch() {
         let _ = abandoned.page();
     }
     if let PageAbandonOutcome::Destroyed(destroyed) =
+        // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic
+        // destroyed witness is used only for enum-field reachability.
         PageAbandonOutcome::Destroyed(unsafe { DestroyedPage::new_unchecked(page) })
     {
         let _ = destroyed.page();
     }
 
+    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the dangling thread-heap
+    // pointer is used as identity only and is not dereferenced by this helper.
     let theap = unsafe { ThreadHeapPtr::new_unchecked(core::ptr::dangling_mut()) };
+    // SAFETY[AUDIT:typed-page-state-test-fixtures]: the synthetic local
+    // thread-heap witness is used only for accessor/function-item reachability.
     let local = unsafe { ThreadHeapLocal::new_unchecked(theap) };
     let _ = local.borrowed();
     let _ =

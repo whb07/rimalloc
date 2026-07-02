@@ -13,8 +13,8 @@ strict-type entries, or smaller review units.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 34 entries: 31 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 34.
+- `docs/unsafe-migration-allowlist.tsv` has 33 entries: 30 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 33.
 - `src/types/memid.rs` now uses 4
   `SAFETY[AUDIT:typed-memid-view]` markers for discriminant-gated union reads,
   plus a `SAFETY[AUDIT:typed-memid-test-fixtures]` marker for its lint-touch
@@ -24,10 +24,16 @@ Current review evidence:
   old-allocation, and flag constructors, plus 2
   `SAFETY[AUDIT:typed-layout-test-fixtures]` markers for lint-touch fixtures,
   and is off the unsafe migration allowlist.
-- The remaining low-risk typed-wrapper migration targets are
-  `src/types/page_states.rs` at 473 lines with 60 `unsafe` hits and 0 local
-  markers, and `src/types/atomic.rs` at 755 lines with 101 `unsafe` hits and
-  0 local markers.
+- `src/types/page_states.rs` now uses 36
+  `SAFETY[AUDIT:typed-page-state-domain]` markers for page/thread-heap
+  witnesses, free-list availability/pop transitions,
+  all-free/full/retired/destroyed transitions, abandoned ownership, and owner
+  classification, plus 10
+  `SAFETY[AUDIT:typed-page-state-test-fixtures]` markers for lint-touch
+  fixtures, and is off the unsafe migration allowlist.
+- The remaining low-risk typed-wrapper migration target is
+  `src/types/atomic.rs` at 755 lines with 101 `unsafe` hits and 0 local
+  markers.
 - The smallest remaining allowlisted production files are:
   `src/allocator/arena_meta.rs` at 316 lines with 24 `unsafe` hits and 0 local
   markers,
@@ -43,6 +49,7 @@ Current review evidence:
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 88 markers,
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 58 markers,
   `SAFETY[AUDIT:typed-heap-test-fixtures]` has 56 markers,
+  `SAFETY[AUDIT:typed-page-state-domain]` has 36 markers,
   `SAFETY[AUDIT:arena-debug-render]` has 35 markers,
   `SAFETY[AUDIT:owned-allocation]` has 32 markers,
   `SAFETY[AUDIT:typed-scalar-test-fixtures]` has 32 markers,
@@ -114,14 +121,14 @@ full tests.
 > the kind of Rust domain boundary we want, but its witness constructors and
 > transitions still hide behind a file-level migration allowance.
 
-- [ ] Add local `SAFETY[AUDIT:typed-page-state-domain]` markers for page and
+- [x] Add local `SAFETY[AUDIT:typed-page-state-domain]` markers for page and
       thread-heap witness construction, free-list state transitions, abandoned
       ownership checks, and destroy/retire transitions.
-- [ ] Keep page-state witnesses transparent and `Copy` where they are today;
+- [x] Keep page-state witnesses transparent and `Copy` where they are today;
       do not add allocation, dynamic dispatch, or duplicate page traversal.
-- [ ] Preserve existing tests for abandon/reclaim, all-free transitions,
+- [x] Preserve existing tests for abandon/reclaim, all-free transitions,
       available/free block updates, and abandoned mapped classification.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -155,7 +162,7 @@ full tests.
 
 1. [x] Migrate `src/types/memid.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/types/layout.rs` off the unsafe migration allowlist.
-3. [ ] Migrate `src/types/page_states.rs` off the unsafe migration allowlist.
+3. [x] Migrate `src/types/page_states.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/bench_diagnostics.rs` off the unsafe migration
        allowlist.
 

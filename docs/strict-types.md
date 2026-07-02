@@ -114,13 +114,14 @@ largest file hotspots are `src/internal/mod.rs`, `src/allocator/alloc.rs`,
 and `src/raw/macros.rs`; these are guarded by the release fast-path audit so
 new growth must be intentional.
 
-Permanent reason-group caps are also guarded by the release fast-path audit:
-`allocation compatibility boundary` (47) is a permanent allocation ABI/source-shape edge,
-`typed-domain constructor boundary` (42) is a permanent constructor/proof-helper edge,
-`internal translated C helper boundary` (41) is a permanent translated-C source-shape edge,
+Permanent reason-group caps are also guarded by the release fast-path audit.
+No permanent reason group exceeds 40 entries:
+`internal page metadata helper boundary` (33) is a permanent translated-C page metadata edge,
 `compatibility boundary retained for C ABI parity or translated-C source shape` (33) is a permanent raw ABI/source-shape edge,
 `C/platform ABI forwarding boundary` (32) is a permanent platform ABI forwarding edge,
-and `aligned allocation compatibility boundary` (30) is a permanent aligned allocation ABI/source-shape edge.
+`aligned allocation compatibility boundary` (30) is a permanent aligned allocation ABI/source-shape edge,
+`thread-heap compatibility boundary` (24) is a permanent thread-heap source-shape edge,
+and `scalar domain constructor boundary` (24) is a permanent scalar constructor/proof edge.
 
 Raw pointer file/domain caps are guarded separately:
 `src/internal/mod.rs`/`mi_page_t` at 33,

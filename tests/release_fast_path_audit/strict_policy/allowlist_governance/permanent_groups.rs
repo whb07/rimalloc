@@ -21,15 +21,24 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
     }
 
     for (reason, expected) in [
-        ("allocation compatibility boundary", 47),
-        ("typed-domain constructor boundary", 42),
-        ("internal translated C helper boundary", 41),
+        ("internal page metadata helper boundary", 33),
         (
             "compatibility boundary retained for C ABI parity or translated-C source shape",
             33,
         ),
         ("C/platform ABI forwarding boundary", 32),
         ("aligned allocation compatibility boundary", 30),
+        ("thread-heap compatibility boundary", 24),
+        ("scalar domain constructor boundary", 24),
+        ("thread-heap allocation compatibility boundary", 18),
+        ("realloc allocation compatibility boundary", 13),
+        ("layout request constructor boundary", 11),
+        ("heap allocation export compatibility boundary", 9),
+        ("C++ and guarded allocation compatibility boundary", 7),
+        ("guarded configuration constructor boundary", 5),
+        ("internal thread-heap helper boundary", 4),
+        ("internal free-list helper boundary", 4),
+        ("memid byte-count constructor boundary", 2),
     ] {
         assert_eq!(
             permanent_reasons.get(reason),
@@ -38,8 +47,8 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         );
     }
     assert!(
-        permanent_reasons.values().all(|count| *count <= 47),
-        "strict-type allowlist has a new permanent reason group above the documented cap"
+        permanent_reasons.values().all(|count| *count <= 40),
+        "strict-type allowlist has a new permanent reason group above the 40-entry cap"
     );
 
     for ((path, domain), expected) in [
@@ -65,12 +74,13 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         "TODO.md",
         &todo,
         &[
-            "largest strict-type permanent reason groups are allocation compatibility\n  boundary with 47 entries",
-            "typed-domain constructor boundary with 42 entries",
-            "internal translated C helper boundary with 41 entries",
+            "No strict-type permanent reason group exceeds 40 entries",
+            "internal page metadata helper boundary with 33 entries",
             "C ABI parity or\n  translated-C source shape with 33 entries",
             "C/platform ABI forwarding boundary\n  with 32 entries",
-            "aligned allocation compatibility boundary with 30\n  entries",
+            "aligned allocation compatibility boundary with 30 entries",
+            "thread-heap compatibility boundary with 24 entries",
+            "scalar domain\n  constructor boundary with 24 entries",
             "largest strict-type raw-pointer file/domain hotspots are\n  `src/internal/mod.rs`/`mi_page_t` with 33 entries",
             "`src/allocator/alloc.rs`/`mi_theap_t` with 30",
             "`src/allocator/page.rs`/`mi_page_t` with 25",
@@ -84,12 +94,13 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         &strict_docs,
         &[
             "Permanent reason-group caps",
-            "`allocation compatibility boundary` (47) is a permanent allocation ABI/source-shape edge",
-            "`typed-domain constructor boundary` (42) is a permanent constructor/proof-helper edge",
-            "`internal translated C helper boundary` (41) is a permanent translated-C source-shape edge",
+            "No permanent reason group exceeds 40 entries",
+            "`internal page metadata helper boundary` (33) is a permanent translated-C page metadata edge",
             "`compatibility boundary retained for C ABI parity or translated-C source shape` (33) is a permanent raw ABI/source-shape edge",
             "`C/platform ABI forwarding boundary` (32) is a permanent platform ABI forwarding edge",
             "`aligned allocation compatibility boundary` (30) is a permanent aligned allocation ABI/source-shape edge",
+            "`thread-heap compatibility boundary` (24) is a permanent thread-heap source-shape edge",
+            "`scalar domain constructor boundary` (24) is a permanent scalar constructor/proof edge",
             "Raw pointer file/domain caps",
             "`src/internal/mod.rs`/`mi_page_t` at 33",
             "`src/allocator/alloc.rs`/`mi_theap_t` at 30",

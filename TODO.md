@@ -54,9 +54,10 @@ Current review evidence:
   `SAFETY[AUDIT:unsafe-callback]` has 26 markers,
   `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 22 markers, and
   `SAFETY[AUDIT:page-count-accessors]` has 22 markers.
-- The release audit still has large review units:
+- The release audit still has large review units, with the size-class/bin
+  assertions now split into a child module:
   `tests/release_fast_path_audit.rs` is 2,889 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,657 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,564 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
   is 660 lines,
@@ -64,7 +65,9 @@ Current review evidence:
   206 lines,
   `tests/release_fast_path_audit/release_policy/security.rs` is 181 lines, and
   `tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is
-  160 lines.
+  160 lines. The new size-class child module,
+  `tests/release_fast_path_audit/unsafe_performance/size_class_boundaries.rs`
+  is 132 lines.
 
 ## Issue: Memid test fixtures still hide unsafe migration debt
 
@@ -130,17 +133,17 @@ full tests.
 
 ## Issue: Release audit unsafe_performance.rs remains oversized
 
-> **Comment:** `unsafe_performance.rs` is still 2,657 lines after the bitmap
-> and thread-local splits. Another cohesive assertion group should move into a
-> child module so future audit additions have room.
+> **Comment:** `unsafe_performance.rs` is now 2,564 lines after the bitmap,
+> thread-local, and size-class/bin splits. Another cohesive assertion group can
+> move into a child module later if future audit additions need room.
 
-- [ ] Inventory assertion sections in `unsafe_performance.rs`, prioritizing
+- [x] Inventory assertion sections in `unsafe_performance.rs`, prioritizing
       size-class/bin, atomic-wrapper, or arena-prefix assertion clusters.
-- [ ] Move one cohesive cluster into a new or existing file under
+- [x] Move one cohesive cluster into a new or existing file under
       `tests/release_fast_path_audit/unsafe_performance/`.
-- [ ] Pass borrowed source strings rather than duplicating large file reads.
-- [ ] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
-- [ ] Preserve the release audit test count and coverage intent.
+- [x] Pass borrowed source strings rather than duplicating large file reads.
+- [x] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
+- [x] Preserve the release audit test count and coverage intent.
 
 Verify: `cargo test --test release_fast_path_audit --all-features`,
 `git diff --check`, full clippy, and full tests.
@@ -174,7 +177,7 @@ full tests.
 1. [x] Migrate `src/types/memid/tests.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/types/callbacks.rs` off the unsafe migration allowlist.
 3. [x] Narrow or eliminate the broad `aligned` strict-type `usize` allowance.
-4. [ ] Split one more release-audit assertion cluster.
+4. [x] Split one more release-audit assertion cluster.
 5. [ ] Split one more cohesive helper group out of `src/allocator/arena.rs`.
 
 ## Definition of done for this backlog
@@ -183,6 +186,6 @@ full tests.
 - [x] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.
 - [x] The final broad strict-type `remove:` allowance is narrowed or eliminated.
-- [ ] One release-audit module has more review margin.
+- [x] One release-audit module has more review margin.
 - [ ] `src/allocator/arena.rs` is smaller again without API, ABI, or hot-path
       performance drift.

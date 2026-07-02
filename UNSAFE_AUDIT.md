@@ -428,12 +428,40 @@ Operation IDs:
   block pointers, typed free-list witnesses, capacity counters, commit growth,
   and refill helpers while preserving block ownership and no-allocation
   hot-path constraints.
-- `SAFETY[AUDIT:page-queue-transition-boundary]`:
-  `src/allocator/page.rs` owns page queue movement, full/unfull transitions,
-  retire/free handoff, abandon/reclaim, queue validation, and queue append
-  operations. Unsafe operations are limited to typed page-state witnesses,
-  caller-proven heap/queue/page pointers, and arena page free/abandon handoff
-  while preserving queue links, heap ownership, and page counters.
+- `SAFETY[AUDIT:page-queue-full-transition-boundary]`:
+  `src/allocator/page.rs` owns full/active page transitions. Unsafe operations
+  are limited to typed active/full page witnesses and queue membership checks
+  while preserving heap ownership.
+- `SAFETY[AUDIT:page-queue-free-release-boundary]`:
+  `src/allocator/page.rs` owns all-free page removal and arena release handoff.
+  Unsafe operations remove active/full pages from queues, clear page metadata,
+  and free through arena ownership witnesses.
+- `SAFETY[AUDIT:page-queue-retire-boundary]`:
+  `src/allocator/page.rs` owns page retire and retired-page collection. Unsafe
+  operations update retire counters, queue front caches, and thread-heap retire
+  ranges under the owning thread heap.
+- `SAFETY[AUDIT:page-queue-abandon-boundary]`:
+  `src/allocator/page.rs` owns active/full page abandon transitions. Unsafe
+  operations detach pages from queues and publish arena abandon state while
+  preserving same-theap reclaim information.
+- `SAFETY[AUDIT:page-queue-reclaim-boundary]`:
+  `src/allocator/page.rs` owns abandoned-page reclaim. Unsafe operations
+  reattach reclaimed pages to target thread-heap queues and collect remote
+  frees before normal page use resumes.
+- `SAFETY[AUDIT:page-queue-validation-boundary]`:
+  `src/allocator/page.rs` owns page queue containment and validation walks.
+  Unsafe operations inspect linked queue nodes and block-size identity without
+  mutating ownership.
+- `SAFETY[AUDIT:page-queue-direct-cache-boundary]`:
+  `src/allocator/page.rs` owns direct-page cache publication from normal queue
+  fronts for small pages.
+- `SAFETY[AUDIT:page-queue-link-mutation-boundary]`:
+  `src/allocator/page.rs` owns queue link insertion, removal, and cross-queue
+  enqueue. Unsafe operations update first/last pointers, page links, queue
+  counts, thread-heap page counts, and in-full state together.
+- `SAFETY[AUDIT:page-queue-append-boundary]`:
+  `src/allocator/page.rs` owns page queue append. Unsafe operations splice
+  linked page lists, retarget the owning thread heap, and merge queue counts.
 - `SAFETY[AUDIT:page-huge-allocation-boundary]`:
   `src/allocator/page.rs` owns huge-page selection and allocation dispatch.
   Unsafe operations are limited to caller-proven heap and huge-queue pointers,
@@ -596,10 +624,24 @@ Operation IDs:
   owns thread-heap and allocation helper projections. Unsafe operations load
   heap pointers, direct small-page slots, and guarded-allocation state from
   caller-proven thread-heap metadata through typed wrappers.
-- `SAFETY[AUDIT:internal-page-metadata-boundary]`: `src/internal/mod.rs` owns
-  page-map and page metadata helpers. Unsafe operations project caller-proven
-  pages into typed page-map, block-size, heap/TLD, slice, committed, queue,
-  owner, flag, and availability fields.
+- `SAFETY[AUDIT:internal-direct-bin-boundary]`: `src/internal/mod.rs` owns
+  direct-bin derivation from padded sizes. Unsafe operations are limited to
+  unchecked `DirectBin` construction after page-direct table bounds checks.
+- `SAFETY[AUDIT:internal-page-map-lookup-boundary]`: `src/internal/mod.rs`
+  owns page-map lookup helpers. Unsafe operations convert allocator addresses
+  through page-map indexes, submap pointers, and checked/unchecked page lookup.
+- `SAFETY[AUDIT:internal-page-size-count-boundary]`: `src/internal/mod.rs`
+  owns page size, count, committed-size, and availability projections from
+  caller-proven page metadata into typed scalar domains.
+- `SAFETY[AUDIT:internal-page-owner-heap-boundary]`: `src/internal/mod.rs`
+  owns page heap, TLD, and queue ownership projections from caller-proven page
+  or thread-heap metadata.
+- `SAFETY[AUDIT:internal-page-location-boundary]`: `src/internal/mod.rs` owns
+  page start, arena membership, slice start, slice offset, and address-range
+  predicates derived from allocator-owned page metadata.
+- `SAFETY[AUDIT:internal-page-flag-owner-boundary]`: `src/internal/mod.rs`
+  owns page flags and owner-id projections. Unsafe operations use typed atomic
+  thread-id fields to read and update abandoned/interior-pointer state.
 - `SAFETY[AUDIT:internal-thread-free-boundary]`: `src/internal/mod.rs` owns
   thread-free ownership-word helpers. Unsafe operations are limited to typed
   atomic thread-free loads and ownership claims while preserving encoded head
@@ -1207,12 +1249,33 @@ Operation IDs:
   `PagePtr` witnesses. Unsafe operations are limited to arena prefix reads,
   validated out-pointer writes, and page/base pointer offset checks for
   allocator-owned memid ranges.
-- `SAFETY[AUDIT:arena-heap-page-visitors]`:
-  `src/allocator/arena/heap_pages.rs` owns heap page visitation, public C
-  callback traversal, and heap page move/destroy helpers. Callers supply live
-  heap/page metadata, and the helpers wrap raw pointers in typed heap/page
-  witnesses before walking arena bitmaps, claiming page ownership, or moving
-  pages between heap arena-page tables.
+- `SAFETY[AUDIT:arena-heap-visit-callback-boundary]`:
+  `src/allocator/arena/heap_pages.rs` owns raw bitmap callback adaptation into
+  typed heap/page visit state.
+- `SAFETY[AUDIT:arena-heap-block-visit-boundary]`:
+  `src/allocator/arena/heap_pages.rs` owns public and internal block-visit C
+  ABI wrappers and non-null heap witness construction.
+- `SAFETY[AUDIT:arena-heap-page-iteration-boundary]`:
+  `src/allocator/arena/heap_pages.rs` owns heap arena-page bitmap iteration for
+  visit callbacks.
+- `SAFETY[AUDIT:arena-heap-abandoned-visit-boundary]`:
+  `src/allocator/arena/heap_pages.rs` owns abandoned-page visit wrappers and
+  lock-protected abandoned list traversal.
+- `SAFETY[AUDIT:arena-heap-delete-boundary]`:
+  `src/allocator/arena/heap_pages.rs` owns delete callback page claiming,
+  unlinking, empty-page release, and non-empty page destruction setup.
+- `SAFETY[AUDIT:arena-heap-transfer-boundary]`:
+  `src/allocator/arena/heap_pages.rs` owns heap-to-heap page transfer, including
+  source/target arena-page bitmaps and stat/abandon publication.
+- `SAFETY[AUDIT:arena-heap-delete-dispatch-boundary]`:
+  `src/allocator/arena/heap_pages.rs` owns heap delete traversal dispatch and
+  debug-only post-drain verification.
+- `SAFETY[AUDIT:arena-heap-move-boundary]`:
+  `src/allocator/arena/heap_pages.rs` owns page move C ABI shims and typed
+  source/target heap witness conversion.
+- `SAFETY[AUDIT:arena-heap-destroy-boundary]`:
+  `src/allocator/arena/heap_pages.rs` owns non-main heap page destruction C ABI
+  shims and owned heap destruction handoff.
 - `SAFETY[AUDIT:arena-prefix-accessors]`:
   `src/allocator/arena/prefix.rs` centralizes heap, arena, sub-process, and
   arena-page prefix accessors. Callers supply allocator-owned metadata plus

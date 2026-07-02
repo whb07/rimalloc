@@ -378,7 +378,7 @@ pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectB
     let idx = crate::core_types::WordCount::from_size(size).get();
     crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
     crate::internal::mi_debug_assert!(u16::try_from(idx).is_ok());
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-direct-bin-boundary]: direct bin derivation checks page queue table bounds before unchecked construction.
     unsafe { crate::core_types::DirectBin::new_unchecked(idx as u16) }
 }
 
@@ -467,7 +467,7 @@ pub fn _mi_page_map_index(p: *const c_void) -> usize {
 pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize {
     let u = crate::core_types::ptr_exposed_addr(p) / MI_ARENA_SLICE_SIZE;
     if !sub_idx.is_null() {
-        // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+        // SAFETY[AUDIT:internal-page-map-lookup-boundary]: page-map lookup helpers convert allocator addresses through validated submap indexes.
         unsafe { *sub_idx = u % MI_PAGE_MAP_SUB_COUNT };
     }
     u / MI_PAGE_MAP_SUB_COUNT
@@ -478,7 +478,7 @@ pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize
 /// `idx` must be within the initialized page-map base range.
 #[inline]
 pub unsafe fn _mi_page_map_at(idx: usize) -> mi_submap_t {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-map-lookup-boundary]: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
         crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))
             .load(crate::core_types::MemoryOrder::Acquire)
@@ -522,7 +522,7 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be a pointer in the allocator's page-map domain.
 #[inline]
 pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-map-lookup-boundary]: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
         let mut sub_idx = 0usize;
         let idx = _mi_page_map_index(p, &mut sub_idx);
@@ -535,7 +535,7 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be a pointer in the allocator's page-map domain.
 #[inline]
 pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-map-lookup-boundary]: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
         let mut sub_idx = 0usize;
         let idx = _mi_page_map_index(p, &mut sub_idx);
@@ -552,7 +552,7 @@ pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be null or a pointer allocated by this allocator.
 #[inline]
 pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-map-lookup-boundary]: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
         crate::internal::mi_assert_internal!(
             p.is_null() || crate::mimalloc::mi_is_in_heap_region(p)
@@ -569,7 +569,7 @@ pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
 pub(crate) unsafe fn mi_page_block_size_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::BlockSize {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         crate::internal::mi_assert_internal!((*page).block_size > 0);
         crate::core_types::BlockSize::new_unchecked((*page).block_size)
@@ -580,7 +580,7 @@ pub(crate) unsafe fn mi_page_block_size_typed(
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe { mi_page_block_size_typed(page).get() }
 }
 
@@ -588,7 +588,7 @@ pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
 /// `page` must point to non-abandoned page metadata with a valid owning thread heap.
 #[inline]
 pub unsafe fn mi_page_tld(page: *const mi_page_t) -> *mut mi_tld_t {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-owner-heap-boundary]: page owner helpers resolve heap, thread heap, and queue pointers from caller-proven metadata.
     unsafe {
         crate::internal::mi_assert_internal!(!crate::page::mi_page_is_abandoned(page));
         crate::internal::mi_assert_internal!(!(*page).theap.is_null());
@@ -600,7 +600,7 @@ pub unsafe fn mi_page_tld(page: *const mi_page_t) -> *mut mi_tld_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_heap(page: *const mi_page_t) -> *mut mi_heap_t {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-owner-heap-boundary]: page owner helpers resolve heap, thread heap, and queue pointers from caller-proven metadata.
     unsafe {
         let mut heap = (*page).heap;
         if mi_likely(heap.is_null()) {
@@ -615,7 +615,7 @@ pub unsafe fn mi_page_heap(page: *const mi_page_t) -> *mut mi_heap_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe { (*page).page_start }
 }
 
@@ -623,7 +623,7 @@ pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_size(page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         let block_size = mi_page_block_size(page);
         block_size * crate::page::mi_page_reserved_count(page).as_usize()
@@ -635,7 +635,7 @@ pub unsafe fn mi_page_size(page: *const mi_page_t) -> usize {
 /// for a `usize` write.
 #[inline]
 pub unsafe fn mi_page_area(page: *const mi_page_t, size: *mut usize) -> *mut u8 {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         if !size.is_null() {
             *size = mi_page_size(page);
@@ -653,7 +653,7 @@ pub const fn mi_page_info_size() -> usize {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_contains_address(page: *const mi_page_t, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe {
         let mut psize = 0usize;
         let start = mi_page_area(page, &mut psize);
@@ -665,7 +665,7 @@ pub unsafe fn mi_page_contains_address(page: *const mi_page_t, p: *const c_void)
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe {
         matches!(
             crate::core_types::MemId::view((*page).memid),
@@ -678,7 +678,7 @@ pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe { crate::page::mi_page_reserved_count(page).get() == 1 }
 }
 
@@ -686,7 +686,7 @@ pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
 pub(crate) unsafe fn mi_page_usable_block_size(
     page: *const mi_page_t,
 ) -> crate::core_types::UsableSize {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe { mi_page_block_size_typed(page).usable() }
 }
 
@@ -694,7 +694,7 @@ pub(crate) unsafe fn mi_page_usable_block_size(
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe {
         if MI_PAGE_META_IS_SEPARATED != 0 {
             mi_page_is_in_arena(page)
@@ -710,7 +710,7 @@ pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_slice_start(page: *const mi_page_t) -> *mut u8 {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe {
         if mi_page_meta_is_separated(page) {
             _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN).cast::<u8>()
@@ -727,7 +727,7 @@ pub unsafe fn mi_page_slice_offset_of(
     page: *const mi_page_t,
     offset_relative_to_page_start: usize,
 ) -> usize {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe {
         ((*page).page_start as usize - mi_page_slice_start(page) as usize)
             + offset_relative_to_page_start
@@ -740,7 +740,7 @@ pub unsafe fn mi_page_slice_offset_of(
 pub(crate) unsafe fn mi_page_committed_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::CommittedBytes {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         crate::core_types::CommittedBytes::new(if (*page).slice_committed == 0 {
             mi_page_size(page)
@@ -754,7 +754,7 @@ pub(crate) unsafe fn mi_page_committed_typed(
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_committed(page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe { mi_page_committed_typed(page).get() }
 }
 
@@ -762,7 +762,7 @@ pub unsafe fn mi_page_committed(page: *const mi_page_t) -> usize {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::page::mi_page_used_count(page).get() == 0
@@ -773,7 +773,7 @@ pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         !(*page).free.is_null()
@@ -784,7 +784,7 @@ pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         let capacity = crate::page::mi_page_capacity_count(page);
@@ -798,7 +798,7 @@ pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         let full = crate::page::mi_page_reserved_count(page).get()
             == crate::page::mi_page_used_count(page).get();
@@ -811,7 +811,7 @@ pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
 /// `page` must be null or point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         if page.is_null() {
             return true;
@@ -827,7 +827,7 @@ pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
 /// `page` must be null or point to page metadata owned by this allocator. `n` must be nonzero.
 #[inline]
 pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         if page.is_null() {
             return true;
@@ -840,7 +840,7 @@ pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
 }
 
 #[inline]
-// SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+// SAFETY[AUDIT:internal-page-owner-heap-boundary]: page owner helpers resolve heap, thread heap, and queue pointers from caller-proven metadata.
 pub(crate) unsafe fn mi_page_queue(
     theap: *const mi_theap_t,
     block_size: crate::core_types::BlockSize,
@@ -871,7 +871,7 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
     page: crate::core_types::PagePtr,
     has_aligned: bool,
 ) {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
         page.thread_id_cell().set_flags(
             crate::core_types::PageFlags::HAS_INTERIOR_POINTERS,
@@ -884,7 +884,7 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
         let atomic_tid =
             crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
@@ -898,7 +898,7 @@ pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_thread_id(page: *const mi_page_t) -> mi_threadid_t {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     let xthread_id = crate::core_types::PageThreadId::new(unsafe { mi_page_xthread_id(page) });
     xthread_id.owner_bits()
 }
@@ -907,7 +907,7 @@ pub unsafe fn mi_page_thread_id(page: *const mi_page_t) -> mi_threadid_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_flags(page: *const mi_page_t) -> mi_page_flags_t {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     let xthread_id = crate::core_types::PageThreadId::new(unsafe { mi_page_xthread_id(page) });
     xthread_id.flags().bits()
 }
@@ -916,7 +916,7 @@ pub unsafe fn mi_page_flags(page: *const mi_page_t) -> mi_page_flags_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_has_interior_pointers(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     crate::core_types::PageFlags::from_low_bits(unsafe { mi_page_flags(page) })
         .contains(crate::core_types::PageFlags::HAS_INTERIOR_POINTERS)
 }
@@ -925,7 +925,7 @@ pub unsafe fn mi_page_has_interior_pointers(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     crate::core_types::PageThreadId::new(unsafe { mi_page_xthread_id(page) }).is_abandoned_mapped()
 }
 
@@ -933,7 +933,7 @@ pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
 /// `page` must point to mutable abandoned page metadata owned by this allocator.
 #[inline]
 pub(crate) unsafe fn mi_page_set_abandoned_mapped(page: crate::core_types::PagePtr) {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
         crate::internal::mi_assert_internal!(crate::page::mi_page_is_abandoned(page.as_ptr()));
         let atomic_tid = page.thread_id_cell();
@@ -953,7 +953,7 @@ const _: unsafe fn(crate::core_types::PagePtr) = mi_page_set_abandoned_mapped;
 /// `page` must point to mutable abandoned-mapped page metadata owned by this allocator.
 #[inline]
 pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::PagePtr) {
-    // SAFETY[AUDIT:internal-page-metadata-boundary]: page map and metadata helpers project caller-proven pages into typed allocator fields.
+    // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_is_abandoned_mapped(page.as_ptr()));
         let atomic_tid = crate::core_types::AtomicPageThreadId(

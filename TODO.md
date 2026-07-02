@@ -9,17 +9,17 @@ that now block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 300 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 300 operation IDs with
-  654 automated evidence rows.
-- No source audit operation ID is over 60 source markers. The largest remaining
-  source ID is `arena-heap-page-visitors` with 56 markers, followed by
-  `typed-atomic-domain` with 51 markers, `ffi-libc-helpers` with 50 markers,
-  `page-queue-transition-boundary` with 49 markers, `raw-macro-cxx-boundary`
-  with 46 markers, `options-message-output-boundary` with 39 markers,
-  `arena-purge-boundary` with 38 markers, and
-  `internal-page-metadata-boundary`, `arena-registry-boundary`, and
-  `allocation-realloc-entry-boundary` with 37 markers each.
+  mentions, and 321 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 321 operation IDs with
+  695 automated evidence rows.
+- No source audit operation ID is over 51 source markers. The largest remaining
+  source IDs are `typed-atomic-domain` with 51 markers, `ffi-libc-helpers` with
+  50 markers, `raw-macro-cxx-boundary` with 46 markers,
+  `options-message-output-boundary` with 39 markers, `arena-purge-boundary`
+  with 38 markers, `arena-registry-boundary` and
+  `allocation-realloc-entry-boundary` with 37 markers each, and
+  `typed-page-state-domain`, `raw-macro-override-entry-boundary`, and
+  `init-subproc-heap-association-boundary` with 36 markers each.
 - `strict-type-allowlist.txt` has 634 active entries: 335
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -39,7 +39,7 @@ Current review evidence:
   `release_policy/security.rs` at 597 lines,
   `release_policy/api_surface.rs` at 523 lines, and
   `release_policy/release_process.rs` at 504 lines.
-- Full validation for Issue 2 passed: `cargo fmt --all`,
+- Full validation for Issue 3 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -58,6 +58,13 @@ Current review evidence:
   `threadlocal-key-manager` into empty sentinel, TLS shim, slot block, claim
   callback, key claim/free/create/access, free bitmap, global manager, and
   thread-done IDs.
+- Issue 3 split `arena-heap-page-visitors` into visit callback, block visit,
+  page iteration, abandoned visit, delete, transfer, delete dispatch, move, and
+  destroy IDs. It split `page-queue-transition-boundary` into full transition,
+  free release, retire, abandon, reclaim, validation, direct-cache, link
+  mutation, and append IDs. It split `internal-page-metadata-boundary` into
+  direct-bin, page-map lookup, size/count, owner/heap, location, and flag/owner
+  IDs while retaining free-list link helpers under `internal-block-link-boundary`.
 
 ## Issue 1: Split OS memory and page-map initialization audit clusters
 
@@ -101,18 +108,18 @@ evidence scripts, full formatting, full clippy, and full tests.
 
 ## Issue 3: Split arena visitor and page queue audit clusters
 
-> **Comment:** `arena-heap-page-visitors` has 56 markers,
-> `page-queue-transition-boundary` has 49 markers, and
-> `internal-page-metadata-boundary` has 37 markers. They still hide several
-> independent page ownership and visitation invariants behind broad IDs.
+> **Comment:** Completed. The stale broad source IDs
+> `arena-heap-page-visitors`, `page-queue-transition-boundary`, and
+> `internal-page-metadata-boundary` are gone from allocator source and are now
+> explicitly rejected by release-audit guards.
 
-- [ ] Split `arena-heap-page-visitors` into focused IDs for block visitation,
+- [x] Split `arena-heap-page-visitors` into focused IDs for block visitation,
       abandoned-block visitation, heap page iteration, page delete/destroy,
       page move/transfer, and visitor callback adapters.
-- [ ] Split `page-queue-transition-boundary` into focused IDs for normal queue
+- [x] Split `page-queue-transition-boundary` into focused IDs for normal queue
       insertion/removal, full queue insertion/removal, abandoned queue
       transitions, delayed-free collection, and queue statistic updates.
-- [ ] Split `internal-page-metadata-boundary` where release-audit guards already
+- [x] Split `internal-page-metadata-boundary` where release-audit guards already
       distinguish page size/count fields, free-list fields, heap/thread-heap
       ownership, and page flags.
 
@@ -168,7 +175,7 @@ no-allocation audit, full formatting, full clippy, and full tests.
 > **Comment:** Issue 5 lowered the cap to 600. The next release-audit bottleneck
 > is now four files over 500 lines:
 > `datatype_acceptance/strict_type.rs` at 592,
-> `release_policy/security.rs` at 584,
+> `release_policy/security.rs` at 597,
 > `release_policy/api_surface.rs` at 523, and
 > `release_policy/release_process.rs` at 504.
 
@@ -192,7 +199,7 @@ formatting, full clippy, and full tests.
 
 1. [x] Split OS memory and page-map initialization audit clusters.
 2. [x] Split thread lifecycle and thread-local audit clusters.
-3. [ ] Split arena visitor and page queue audit clusters.
+3. [x] Split arena visitor and page queue audit clusters.
 4. [ ] Split atomic, FFI libc, and raw macro facade audit clusters.
 5. [ ] Tighten strict-type allowlist hotspots.
 6. [ ] Split release-audit modules over 500 lines and lower the cap.

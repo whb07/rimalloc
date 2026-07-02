@@ -77,7 +77,12 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
         ("internal-c-abi-shim-boundary", 1),
         ("internal-cpu-memory-boundary", 15),
         ("internal-thread-heap-shim-boundary", 5),
-        ("internal-page-metadata-boundary", 35),
+        ("internal-direct-bin-boundary", 1),
+        ("internal-page-map-lookup-boundary", 5),
+        ("internal-page-size-count-boundary", 13),
+        ("internal-page-owner-heap-boundary", 3),
+        ("internal-page-location-boundary", 7),
+        ("internal-page-flag-owner-boundary", 8),
         ("internal-thread-free-boundary", 4),
         ("internal-block-link-boundary", 13),
     ] {
@@ -88,6 +93,10 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             "internal unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
         );
     }
+    assert!(
+        !internal.contains("SAFETY[AUDIT:internal-page-metadata-boundary]"),
+        "internal page metadata helpers should stay split into focused operation markers"
+    );
     assert!(
         !unsafe_allowlist
             .lines()

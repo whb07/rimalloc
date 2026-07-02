@@ -12,8 +12,24 @@ arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance/local
 bench-diagnostics-ffi	test	src/allocator/bench_diagnostics.rs	Exercises reset, null snapshot rejection, snapshot copying, JSON size queries, zero-length buffers, truncation, and NUL termination.
 arena-id-memid-helpers	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena id and memid helpers stay in src/allocator/arena/ids.rs while preserving raw C ABI shims, typed MemIdView routing, and arena call sites.
 arena-id-memid-helpers	script	scripts/check-unsafe-audit.py	Checks arena id and memid unsafe operations retain operation-level SAFETY markers and source audit coverage.
-arena-heap-page-visitors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks heap page visit/delete/move/destroy helpers stay in src/allocator/arena/heap_pages.rs while preserving C ABI shims, callback traversal, and heap.rs call sites.
-arena-heap-page-visitors	script	scripts/check-unsafe-audit.py	Checks heap page visitor unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-heap-visit-callback-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap page visit callback marker coverage, raw slice-index adaptation, and typed page lookup state.
+arena-heap-visit-callback-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap visit callback unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-heap-block-visit-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap block visit wrappers, nullable heap routing, and typed heap witness construction.
+arena-heap-block-visit-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap block visit unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-heap-page-iteration-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap arena-page bitmap iteration remains in the split heap page visitor module.
+arena-heap-page-iteration-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap page iteration unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-heap-abandoned-visit-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks abandoned-page visit wrapper coverage and lock-protected abandoned-list traversal shape.
+arena-heap-abandoned-visit-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap abandoned visit unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-heap-delete-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap page delete callback marker coverage, page claiming, unlink, release, and destroy setup.
+arena-heap-delete-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap delete unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-heap-transfer-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap page transfer marker coverage, arena bitmap movement, stats, and abandon publication.
+arena-heap-transfer-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap transfer unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-heap-delete-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap delete traversal dispatch marker coverage and debug post-drain verification.
+arena-heap-delete-dispatch-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap delete dispatch unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-heap-move-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap page move C ABI shims and typed source/target heap witness conversion.
+arena-heap-move-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap move unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-heap-destroy-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks non-main heap page destruction C ABI shims and owned heap destruction handoff.
+arena-heap-destroy-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap destroy unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-prefix-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena prefix accessors stay in src/allocator/arena/prefix.rs and preserve typed Bin, ArenaIndex, AtomicAbandonedCount, AtomicArenaPage, and AtomicPtrField routing.
 arena-prefix-accessors	script	scripts/check-unsafe-audit.py	Checks arena prefix accessor unsafe operations retain operation-level SAFETY markers and source audit coverage.
 typed-arena-domain	test	src/types/arena/tests.rs	Exercises slice-range bounds and shared, exclusive, and parent arena-role witness construction.
@@ -145,8 +161,24 @@ allocation-page-refill-boundary	script	scripts/check-no-allocation-audit.py	Chec
 allocation-page-refill-boundary	script	scripts/check-unsafe-audit.py	Checks allocation page refill unsafe operations retain operation-level SAFETY markers and source audit coverage.
 page-free-list-refill-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page free-list collection, extension, search, refill marker coverage, and no-allocation hot-path shape.
 page-free-list-refill-boundary	script	scripts/check-unsafe-audit.py	Checks page free-list refill unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-queue-transition-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page queue transition marker coverage, retire/free/abandon/reclaim helpers, queue validation, and append operations.
-page-queue-transition-boundary	script	scripts/check-unsafe-audit.py	Checks page queue transition unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-queue-full-transition-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks full/active page transition marker coverage and typed queue membership helpers.
+page-queue-full-transition-boundary	script	scripts/check-unsafe-audit.py	Checks page queue full transition unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-queue-free-release-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks all-free page removal, arena release handoff, and page metadata clearing shape.
+page-queue-free-release-boundary	script	scripts/check-unsafe-audit.py	Checks page queue free release unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-queue-retire-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page retire and retired-page collection marker coverage, expire counters, and direct queue front updates.
+page-queue-retire-boundary	script	scripts/check-unsafe-audit.py	Checks page queue retire unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-queue-abandon-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks active/full page abandon marker coverage and arena abandon publication shape.
+page-queue-abandon-boundary	script	scripts/check-unsafe-audit.py	Checks page queue abandon unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-queue-reclaim-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks abandoned-page reclaim marker coverage, remote-free collection, and target queue publication.
+page-queue-reclaim-boundary	script	scripts/check-unsafe-audit.py	Checks page queue reclaim unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-queue-validation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page queue containment and validation marker coverage.
+page-queue-validation-boundary	script	scripts/check-unsafe-audit.py	Checks page queue validation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-queue-direct-cache-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks direct-page cache updates mirror normal queue fronts for small pages.
+page-queue-direct-cache-boundary	script	scripts/check-unsafe-audit.py	Checks page queue direct-cache unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-queue-link-mutation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks queue link insertion, removal, enqueue, first/last pointers, counts, and in-full state updates.
+page-queue-link-mutation-boundary	script	scripts/check-unsafe-audit.py	Checks page queue link mutation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-queue-append-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page queue append marker coverage, linked list splicing, thread-heap retargeting, and count merge.
+page-queue-append-boundary	script	scripts/check-unsafe-audit.py	Checks page queue append unsafe operations retain operation-level SAFETY markers and source audit coverage.
 page-huge-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks huge-page allocation marker coverage, huge queue selection, generic allocation routing, and stat accounting evidence.
 page-huge-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks page huge allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 page-stats-public-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks page stats/public marker coverage, page helper exports, generic allocation entrypoints, and typed bin/count helpers.
@@ -219,9 +251,18 @@ internal-cpu-memory-boundary	test	tests/release_fast_path_audit/unsafe_performan
 internal-cpu-memory-boundary	script	scripts/check-unsafe-audit.py	Checks internal CPU memory unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-thread-heap-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks thread-heap/allocation shim marker coverage and typed metadata routing.
 internal-thread-heap-shim-boundary	script	scripts/check-unsafe-audit.py	Checks internal thread-heap shim unsafe operations retain operation-level SAFETY markers and source audit coverage.
-internal-page-metadata-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks pointer/metadata aliases, strict-type boundaries, and wrapper source shape for internal page helpers.
-internal-page-metadata-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks page metadata marker coverage, page-map lookup, and page field accessor shape.
-internal-page-metadata-boundary	script	scripts/check-strict-types.py	Checks internal page metadata strict-type allowlist coverage remains explicit.
+internal-direct-bin-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks direct-bin marker coverage and unchecked construction remains bounds-guarded.
+internal-direct-bin-boundary	script	scripts/check-strict-types.py	Checks internal direct-bin strict-type coverage remains explicit.
+internal-page-map-lookup-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks page-map lookup marker coverage, submap indexing, and checked/unchecked pointer lookup shape.
+internal-page-map-lookup-boundary	script	scripts/check-strict-types.py	Checks internal page-map lookup strict-type coverage remains explicit.
+internal-page-size-count-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks page size/count marker coverage, typed scalar projections, and availability predicates.
+internal-page-size-count-boundary	script	scripts/check-strict-types.py	Checks internal page size/count strict-type coverage remains explicit.
+internal-page-owner-heap-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks page heap, TLD, and queue ownership projection marker coverage.
+internal-page-owner-heap-boundary	script	scripts/check-strict-types.py	Checks internal page owner/heap strict-type coverage remains explicit.
+internal-page-location-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks page location marker coverage, arena membership, slice starts, offsets, and address predicates.
+internal-page-location-boundary	script	scripts/check-strict-types.py	Checks internal page location strict-type coverage remains explicit.
+internal-page-flag-owner-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks page flag/owner marker coverage and typed atomic thread-id field updates.
+internal-page-flag-owner-boundary	script	scripts/check-strict-types.py	Checks internal page flag/owner strict-type coverage remains explicit.
 internal-thread-free-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-free ownership word helpers remain routed through typed atomic wrappers.
 internal-thread-free-boundary	script	scripts/check-strict-types.py	Checks internal thread-free strict-type allowlist coverage remains explicit.
 internal-block-link-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks packed-pointer round trips and encoded block-link wrapper source shape.

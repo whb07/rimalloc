@@ -427,7 +427,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
 
 /// # Safety
 /// `page` must point to a page currently owned by a full queue.
-// SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+// SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
     unsafe {
@@ -441,7 +441,7 @@ pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
 pub(crate) unsafe fn _mi_page_unfull_internal(
     page_wrapper: crate::core_types::FullPage,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -475,7 +475,7 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
 
 #[inline]
 unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
     unsafe {
         crate::internal::mi_assert_internal!(pq == mi_page_queue_of(page));
         crate::internal::mi_assert_internal!(!mi_page_immediate_available(page));
@@ -514,7 +514,7 @@ unsafe fn mi_page_move_to_full_typed(
     from: crate::core_types::NormalPageQueue,
     to: crate::core_types::FullPageQueue,
 ) -> crate::core_types::FullPage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
     unsafe { page.to_full(from, to) }
 }
 
@@ -523,13 +523,13 @@ unsafe fn mi_page_unfull_typed(
     page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,
     to: crate::core_types::NormalPageQueue,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
     unsafe { mi_page_queue_enqueue_from_full(to, page) }
 }
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-free-release-boundary]: all-free pages are removed from queues before arena release.
     unsafe {
         if mi_page_queue_is_full(pq) {
             if !mi_page_is_in_full(page) {
@@ -573,7 +573,7 @@ pub(crate) unsafe fn _mi_page_free_active_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
     queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-free-release-boundary]: all-free pages are removed from queues before arena release.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -592,7 +592,7 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Full>,
     queue: crate::core_types::FullPageQueue,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-free-release-boundary]: all-free pages are removed from queues before arena release.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -619,7 +619,7 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
 unsafe fn _mi_page_free_after_remove<S>(
     page_wrapper: crate::core_types::AllFreePage<S>,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-free-release-boundary]: all-free pages are removed from queues before arena release.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let theap = mi_page_theap(page);
@@ -636,7 +636,7 @@ unsafe fn _mi_page_free_after_remove<S>(
 
 const MI_RETIRE_CYCLES: u8 = 16;
 
-// SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+// SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     unsafe {
         let active = crate::core_types::ActivePage::new_unchecked(
@@ -653,7 +653,7 @@ pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
 pub(crate) unsafe fn _mi_page_retire_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
 ) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -719,7 +719,7 @@ pub(crate) unsafe fn _mi_page_retire_internal(
     }
 }
 
-// SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+// SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
 pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool) {
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
@@ -731,7 +731,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t
 
 #[inline]
 unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLocal, force: bool) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let mut min = MI_BIN_FULL;
@@ -1041,7 +1041,7 @@ unsafe fn mi_page_extend_free_typed(theap: *mut mi_theap_t, page_ptr: PagePtr) -
 static MI_PAGE_EXTEND_FREE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) -> bool =
     mi_page_extend_free;
 
-// SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+// SAFETY[AUDIT:page-queue-abandon-boundary]: abandon transitions detach active/full pages before arena abandon publication.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     unsafe {
@@ -1056,7 +1056,7 @@ unsafe fn _mi_page_abandon_typed(
     page_ptr: crate::core_types::PagePtr,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::PageAbandonOutcome {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-abandon-boundary]: abandon transitions detach active/full pages before arena abandon publication.
     unsafe {
         let page_wrapper = if mi_page_is_in_full(page_ptr.as_ptr()) {
             crate::core_types::FullPage::new_unchecked(page_ptr).for_abandon()
@@ -1071,7 +1071,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
     page_wrapper: crate::core_types::PageForAbandon,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::PageAbandonOutcome {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-abandon-boundary]: abandon transitions detach active/full pages before arena abandon publication.
     unsafe {
         let page_ptr = match page_wrapper {
             crate::core_types::PageForAbandon::Active(page) => page.page(),
@@ -1429,7 +1429,7 @@ pub(crate) unsafe fn try_reclaim_abandoned(
     page_wrapper: crate::core_types::OwnedAbandonedPage,
     target: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-reclaim-boundary]: abandoned-page reclaim reattaches pages to target thread-heap queues.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let theap = target.ptr().as_ptr();
@@ -1471,14 +1471,14 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
     page: crate::core_types::OwnedAbandonedPage,
     target: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-reclaim-boundary]: abandoned-page reclaim reattaches pages to target thread-heap queues.
     unsafe { try_reclaim_abandoned(page, target) }
 }
 
 /// # Safety
 /// C-ABI-shaped keep boundary for page reclaim. The caller must ensure `theap`
 /// and `page` are valid, and that `page` is an owned abandoned page.
-// SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+// SAFETY[AUDIT:page-queue-reclaim-boundary]: abandoned-page reclaim reattaches pages to target thread-heap queues.
 #[inline(never)]
 unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mut mi_page_t) {
     unsafe {
@@ -1490,7 +1490,7 @@ unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mu
     }
 }
 
-// SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+// SAFETY[AUDIT:page-queue-reclaim-boundary]: abandoned-page reclaim reattaches pages to target thread-heap queues.
 #[used]
 static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) =
     mi_theap_page_reclaim_raw;
@@ -1499,7 +1499,7 @@ static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi
 /// `queue` must be valid, and `page` must be null or page metadata compatible with that queue.
 #[inline]
 pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         let queue_ptr = page_queue_ptr(queue);
@@ -1531,7 +1531,7 @@ pub unsafe fn mi_theap_contains_queue(
     theap: *const mi_theap_t,
     pq: *const mi_page_queue_t,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         let start = crate::core_types::ptr_exposed_addr(ptr::addr_of!((*theap).pages[0]));
         let end = crate::core_types::ptr_exposed_addr(ptr::addr_of!((*theap).pages[MI_BIN_FULL]));
@@ -1542,13 +1542,13 @@ pub unsafe fn mi_theap_contains_queue(
 
 /// # Safety
 /// `theap` must be valid, and `pq` must point to a page queue belonging to that heap.
-// SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+// SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_queue_is_valid(
     theap: *mut mi_theap_t,
     pq: *const mi_page_queue_t,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         if pq.is_null() {
             return false;
@@ -1574,7 +1574,7 @@ pub(crate) unsafe fn mi_normal_page_queue_is_valid(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
     unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
 }
 
@@ -1583,7 +1583,7 @@ pub(crate) unsafe fn mi_huge_page_queue_is_valid(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::HugePageQueue,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
     unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
 }
 
@@ -1592,7 +1592,7 @@ pub(crate) unsafe fn mi_full_page_queue_is_valid(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::FullPageQueue,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
     unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
 }
 
@@ -1601,7 +1601,7 @@ unsafe fn mi_page_queue_is_valid_typed(
     theap: crate::core_types::ThreadHeapLocal,
     pq: crate::core_types::PageQueuePtr,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let pq = pq.as_ptr();
@@ -1781,7 +1781,7 @@ pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
 /// # Safety
 /// `theap` must be valid, and `pq` must point to one of its page queues.
 pub unsafe fn mi_theap_queue_first_update(theap: *mut mi_theap_t, pq: *const mi_page_queue_t) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-direct-cache-boundary]: direct-page cache updates mirror normal queue fronts for small pages.
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
         let queue = page_queue_ptr(pq);
@@ -1799,7 +1799,7 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
 ) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-direct-cache-boundary]: direct-page cache updates mirror normal queue fronts for small pages.
     unsafe {
         let pq = queue.ptr().as_ptr();
         let Some(block_size) = queue.ptr().block_size() else {
@@ -1863,7 +1863,7 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
 /// # Safety
 /// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
 pub(crate) unsafe fn mi_page_queue_remove_raw(queue: *mut mi_page_queue_t, page: *mut mi_page_t) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let queue = PageQueuePtr::new_unchecked(queue);
         let page = PagePtr::new_unchecked(page);
@@ -1875,7 +1875,7 @@ pub(crate) unsafe fn mi_page_queue_remove_raw(queue: *mut mi_page_queue_t, page:
 /// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
 #[inline]
 pub(crate) unsafe fn mi_page_queue_remove_typed(queue: PageQueuePtr, page: PagePtr) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let queue_ptr = queue;
         let queue = queue.as_ptr();
@@ -1925,7 +1925,7 @@ unsafe fn mi_page_queue_push_raw(
     queue: *mut mi_page_queue_t,
     page: *mut mi_page_t,
 ) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -1947,7 +1947,7 @@ unsafe fn mi_page_queue_push_internal(
     queue: PageQueuePtr,
     page: PagePtr,
 ) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let theap_raw = theap.ptr().as_ptr();
         let queue_raw = queue.as_ptr();
@@ -1989,7 +1989,7 @@ unsafe fn mi_page_queue_push_at_end_raw(
     queue: *mut mi_page_queue_t,
     page: *mut mi_page_t,
 ) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -2011,7 +2011,7 @@ unsafe fn mi_page_queue_push_at_end_internal(
     queue: PageQueuePtr,
     page: PagePtr,
 ) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let theap_raw = theap.ptr().as_ptr();
         let queue_raw = queue.as_ptr();
@@ -2054,7 +2054,7 @@ unsafe fn mi_page_queue_push_at_end_typed(
     queue: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         mi_page_queue_push_at_end_internal(theap, queue.ptr(), page.page());
         crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(page, queue)
@@ -2067,7 +2067,7 @@ unsafe fn mi_page_queue_push_typed(
     queue: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         mi_page_queue_push_internal(theap, queue.ptr(), page.page());
         crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(page, queue)
@@ -2080,7 +2080,7 @@ unsafe fn mi_page_queue_move_to_front_typed(
     queue: crate::core_types::NormalPageQueue,
     queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let page = queued.page().as_ptr();
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.ptr().as_ptr());
@@ -2108,7 +2108,7 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_raw(
     enqueue_at_end: bool,
     page: crate::core_types::PagePtr,
 ) {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let to_ptr = to;
         let from_ptr = from;
@@ -2195,7 +2195,7 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from(
     to: crate::core_types::FullPageQueue,
     page: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
 ) -> crate::core_types::FullPage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe { page.into_full(to) }
 }
 
@@ -2204,20 +2204,20 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_full(
     to: crate::core_types::NormalPageQueue,
     page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe { page.unfull(to) }
 }
 
 /// # Safety
 /// `theap`, `pq`, and `append` must be valid page-queue structures with compatible block sizes.
-// SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+// SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_queue_append(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
     append: *mut mi_page_queue_t,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe {
         let queue = page_queue_ptr(pq);
         let append_queue = page_queue_ptr(append);
@@ -2257,7 +2257,7 @@ unsafe fn mi_page_queue_append_normal_typed(
     queue: crate::core_types::NormalPageQueue,
     append: crate::core_types::NormalPageQueue,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe { mi_page_queue_append_typed(theap, queue.ptr(), append.ptr(), Some(queue)) }
 }
 
@@ -2267,7 +2267,7 @@ unsafe fn mi_page_queue_append_huge_typed(
     queue: crate::core_types::HugePageQueue,
     append: crate::core_types::HugePageQueue,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe { mi_page_queue_append_typed(theap, queue.ptr(), append.ptr(), None) }
 }
 
@@ -2277,7 +2277,7 @@ unsafe fn mi_page_queue_append_full_typed(
     queue: crate::core_types::FullPageQueue,
     append: crate::core_types::FullPageQueue,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe { mi_page_queue_append_typed(theap, queue.ptr(), append.ptr(), None) }
 }
 
@@ -2288,7 +2288,7 @@ unsafe fn mi_page_queue_append_typed(
     append_queue: crate::core_types::PageQueuePtr,
     first_update_queue: Option<crate::core_types::NormalPageQueue>,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe {
         if append_queue.first().is_none() {
             return 0;
@@ -2333,7 +2333,7 @@ unsafe fn mi_page_queue_append_typed(
     }
 }
 
-// SAFETY[AUDIT:page-queue-transition-boundary]: page queue movement, retirement, abandon/reclaim, and full/active transitions preserve heap ownership and queue links.
+// SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
 #[used]
 static MI_PAGE_QUEUE_APPEND_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,

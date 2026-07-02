@@ -9,10 +9,29 @@ pub(super) fn assert_heap_page_visitor_boundaries(sources: HeapPageVisitorSource
         heap_rs,
     } = sources;
 
+    let split_marker_minimums = [
+        ("arena-heap-visit-callback-boundary", 5),
+        ("arena-heap-block-visit-boundary", 6),
+        ("arena-heap-page-iteration-boundary", 1),
+        ("arena-heap-abandoned-visit-boundary", 5),
+        ("arena-heap-delete-boundary", 8),
+        ("arena-heap-transfer-boundary", 12),
+        ("arena-heap-delete-dispatch-boundary", 9),
+        ("arena-heap-move-boundary", 5),
+        ("arena-heap-destroy-boundary", 5),
+    ];
     assert!(
-        arena_heap_pages_rs.contains("SAFETY[AUDIT:arena-heap-page-visitors]"),
-        "arena heap page visitor operations should retain operation-level audit markers"
+        !arena_heap_pages_rs.contains("SAFETY[AUDIT:arena-heap-page-visitors]"),
+        "arena heap page visitors should stay split instead of reusing the old broad marker"
     );
+    for (audit_id, minimum) in split_marker_minimums {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = arena_heap_pages_rs.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "arena heap page visitor boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
+        );
+    }
     assert!(
         arena_heap_pages_rs.contains("struct mi_heap_visit_info_t")
             && arena_heap_pages_rs.contains("struct mi_heap_delete_visit_info_t")

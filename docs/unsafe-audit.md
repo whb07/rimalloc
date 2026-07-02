@@ -174,8 +174,16 @@ file:
   publication in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:page-free-list-refill-boundary]`: page-local free-list
   collection, extension, search, and refill in `src/allocator/page.rs`.
-- `SAFETY[AUDIT:page-queue-transition-boundary]`: page queue movement,
-  full/unfull transitions, retire/free handoff, abandon/reclaim, validation,
+- `SAFETY[AUDIT:page-queue-full-transition-boundary]`,
+  `SAFETY[AUDIT:page-queue-free-release-boundary]`,
+  `SAFETY[AUDIT:page-queue-retire-boundary]`,
+  `SAFETY[AUDIT:page-queue-abandon-boundary]`,
+  `SAFETY[AUDIT:page-queue-reclaim-boundary]`,
+  `SAFETY[AUDIT:page-queue-validation-boundary]`,
+  `SAFETY[AUDIT:page-queue-direct-cache-boundary]`,
+  `SAFETY[AUDIT:page-queue-link-mutation-boundary]`, and
+  `SAFETY[AUDIT:page-queue-append-boundary]`: focused page queue movement,
+  full/free/retire/abandon/reclaim, validation, direct-cache, link mutation,
   and append operations in `src/allocator/page.rs`.
 - `SAFETY[AUDIT:page-huge-allocation-boundary]`: huge-page selection and
   allocation dispatch in `src/allocator/page.rs`.
@@ -259,7 +267,13 @@ file:
   `src/internal/mod.rs`.
 - `SAFETY[AUDIT:internal-thread-heap-shim-boundary]`: thread-heap and guarded
   allocation helper projections in `src/internal/mod.rs`.
-- `SAFETY[AUDIT:internal-page-metadata-boundary]`: page map and page metadata
+- `SAFETY[AUDIT:internal-direct-bin-boundary]`,
+  `SAFETY[AUDIT:internal-page-map-lookup-boundary]`,
+  `SAFETY[AUDIT:internal-page-size-count-boundary]`,
+  `SAFETY[AUDIT:internal-page-owner-heap-boundary]`,
+  `SAFETY[AUDIT:internal-page-location-boundary]`, and
+  `SAFETY[AUDIT:internal-page-flag-owner-boundary]`: focused direct-bin,
+  page-map lookup, page size/count, owner/heap, location, and flag/owner
   helpers in `src/internal/mod.rs`.
 - `SAFETY[AUDIT:internal-thread-free-boundary]`: thread-free ownership-word
   helpers in `src/internal/mod.rs`.

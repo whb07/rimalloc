@@ -131,7 +131,15 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
     );
     for (audit_id, min_count) in [
         ("page-free-list-refill-boundary", 30),
-        ("page-queue-transition-boundary", 49),
+        ("page-queue-full-transition-boundary", 5),
+        ("page-queue-free-release-boundary", 4),
+        ("page-queue-retire-boundary", 4),
+        ("page-queue-abandon-boundary", 3),
+        ("page-queue-reclaim-boundary", 4),
+        ("page-queue-validation-boundary", 8),
+        ("page-queue-direct-cache-boundary", 2),
+        ("page-queue-link-mutation-boundary", 12),
+        ("page-queue-append-boundary", 7),
         ("page-huge-allocation-boundary", 4),
         ("page-stats-public-boundary", 19),
     ] {
@@ -141,6 +149,10 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             "page unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
         );
     }
+    assert!(
+        !page_rs.contains("SAFETY[AUDIT:page-queue-transition-boundary]"),
+        "page queue transitions should stay split into focused operation markers"
+    );
     assert!(
         !unsafe_allowlist
             .lines()

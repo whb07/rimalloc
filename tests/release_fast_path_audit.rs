@@ -266,6 +266,8 @@ fn stderr_output_routes_through_platform_primitive() {
 #[test]
 fn options_state_uses_internal_locks_like_c() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let unsafe_allowlist = fs::read_to_string(root.join("docs/unsafe-migration-allowlist.tsv"))
+        .expect("read unsafe migration allowlist");
     let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
         .expect("read src/allocator/alloc.rs");
     let atomic_rs = fs::read_to_string(root.join("src/internal/atomic.rs"))
@@ -318,8 +320,16 @@ fn options_state_uses_internal_locks_like_c() {
             && libc_rs.contains("struct FixedBuffer")
             && libc_rs.contains("impl fmt::Write for FixedBuffer")
             && libc_rs.contains("ptr::copy_nonoverlapping(s.as_ptr(), self.ptr.add(self.used), n)")
-            && libc_rs.contains("*out.ptr.add(out.used) = 0;"),
+            && libc_rs.contains("*out.ptr.add(out.used) = 0;")
+            && libc_rs.contains("#[cfg(unix)]\nunsafe extern \"C\"")
+            && libc_rs.contains("fn vsnprintf(")
+            && libc_rs.contains("#[cfg(not(unix))]"),
         "Rust-side bounded snprintf formatting should write directly into the caller buffer"
+    );
+    assert!(
+        !unsafe_allowlist.contains("src/ffi/libc.rs")
+            && libc_rs.matches("SAFETY[AUDIT:ffi-libc-helpers]").count() >= 35,
+        "libc helper unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
     assert!(
         !stats_rs.contains("fn format_amount(mut n: i64, unit: i64) -> String")

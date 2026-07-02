@@ -25,8 +25,8 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5876 |
-| `unsafe_blocks` | 3452 |
+| `unsafe_mentions` | 5884 |
+| `unsafe_blocks` | 3460 |
 | `unsafe_fns` | 1999 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
@@ -64,7 +64,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/ffi/abi.rs` | 4 | 0 | 0 | 1 | 0 | 0 | 0 |
 | `src/ffi/callbacks.rs` | 19 | 7 | 4 | 0 | 0 | 0 | 0 |
 | `src/ffi/headers.rs` | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `src/ffi/libc.rs` | 46 | 26 | 19 | 1 | 0 | 0 | 0 |
+| `src/ffi/libc.rs` | 54 | 34 | 19 | 1 | 0 | 0 | 0 |
 | `src/internal/atomic.rs` | 135 | 72 | 62 | 1 | 0 | 0 | 0 |
 | `src/internal/bitmap.rs` | 141 | 62 | 79 | 0 | 0 | 0 | 0 |
 | `src/internal/guarded.rs` | 2 | 1 | 1 | 0 | 0 | 0 | 0 |

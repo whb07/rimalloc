@@ -212,6 +212,11 @@ Operation IDs:
   dereference pointers; it preserves upstream nullable raw pointer signatures so
   each unsafe call site inherits the documented C ABI ownership and lifetime
   obligations.
+- `SAFETY[AUDIT:ffi-libc-helpers]`: `src/ffi/libc.rs` owns libc-like helper
+  routines for bounded C-string scans, destination writes, fixed-buffer
+  formatting, Unix `vsnprintf` forwarding, numeric output reversal, and
+  environment lookup forwarding. Callers provide C-compatible readable strings,
+  writable output buffers, and valid varargs objects where required.
 - `SAFETY[AUDIT:global-alloc]`: `src/lib.rs` implements `GlobalAlloc` for the
   zero-sized `MiMalloc` facade. Rust's allocator contract supplies the layout,
   pointer, and ownership preconditions, and each operation forwards directly to

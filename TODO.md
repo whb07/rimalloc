@@ -14,8 +14,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 25 entries: 22 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 25.
+- `docs/unsafe-migration-allowlist.tsv` has 24 entries: 21 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 24.
 - The completed pass moved `src/ffi/abi.rs`, `src/allocator/arena_meta.rs`,
   `src/platform/wasi.rs`, `src/platform/emscripten.rs`, and
   `src/types/atomic.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -29,20 +29,24 @@ Current review evidence:
   `SAFETY[AUDIT:panic-boundary]` markers for `GlobalAlloc` trait methods,
   allocation forwarding blocks, the no-std panic handler, the abort extern, and
   the personality export, and is off the unsafe migration allowlist.
+- `src/ffi/libc.rs` now uses 50 `SAFETY[AUDIT:ffi-libc-helpers]` markers for
+  bounded C-string reads, destination writes, `vsnprintf` forwarding,
+  fixed-buffer formatting, number-output reversal, environment forwarding, and
+  helper edge-case tests, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are
-  `src/ffi/libc.rs` at 518 lines with 46 `unsafe` hits and 0 local markers,
-  `src/allocator/threadlocal.rs` at 579 lines with 42 `unsafe` hits and 0 local
+  `src/allocator/threadlocal.rs` at 579 lines with 44 `unsafe` hits and 0 local
   markers,
-  `src/allocator/heap.rs` at 604 lines with 93 `unsafe` hits and 0 local
+  `src/allocator/heap.rs` at 604 lines with 94 `unsafe` hits and 0 local
   markers,
   `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits and 0 local
   markers, and
   `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits.
 - After the current remaining TODO items, the next smallest remaining
   allowlisted production files are
+  `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits,
   `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits,
   `src/internal/atomic.rs` at 914 lines with 135 `unsafe` hits,
-  `src/allocator/page_map.rs` at 1,052 lines with 184 `unsafe` hits, and
+  `src/allocator/page_map.rs` at 1,052 lines with 182 `unsafe` hits, and
   `src/types/scalar.rs` at 1,097 lines with 33 `unsafe` hits.
 - `strict-type-allowlist.txt` still has 75 path-wide entries with `symbol = *`,
   including 29 path-wide raw-pointer entries, 21 path-wide bare-domain `usize`
@@ -57,11 +61,12 @@ Current review evidence:
   `src/allocator/aligned.rs` has 19 entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
+  `SAFETY[AUDIT:raw-posix-compat]` has 70 markers,
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
   `SAFETY[AUDIT:typed-heap-test-fixtures]` has 55 markers,
   `SAFETY[AUDIT:typed-atomic-domain]` has 51 markers,
-  `SAFETY[AUDIT:emscripten-primitive-boundary]` has 48 markers, and
-  `SAFETY[AUDIT:wasi-primitive-boundary]` has 42 markers.
+  `SAFETY[AUDIT:ffi-libc-helpers]` has 50 markers, and
+  `SAFETY[AUDIT:emscripten-primitive-boundary]` has 48 markers.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 3,915 lines,
   `src/allocator/page.rs` is 2,801 lines,
@@ -73,7 +78,7 @@ Current review evidence:
 - The release audit is still split but has large review units:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,386 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
-  `tests/release_fast_path_audit.rs` is 1,832 lines, and
+  `tests/release_fast_path_audit.rs` is 1,859 lines, and
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,108 lines.
 
 ## Issue: Raw POSIX compatibility facade still uses a file-level unsafe allowance
@@ -133,16 +138,16 @@ unsafe inventory regeneration/check, release audit, full clippy, and full tests.
 > `strlcpy`/`strlcat` copies, fixed-buffer formatting writes, and environment
 > primitive forwarding.
 
-- [ ] Add local `SAFETY[AUDIT:ffi-libc-helpers]` markers for C-string reads,
+- [x] Add local `SAFETY[AUDIT:ffi-libc-helpers]` markers for C-string reads,
       bounded destination writes, `vsnprintf` forwarding, fixed-buffer format
       writes, pointer-distance reversal, and environment lookup forwarding.
-- [ ] Preserve no-heap-allocation helper behavior, nul-termination guarantees,
+- [x] Preserve no-heap-allocation helper behavior, nul-termination guarantees,
       existing `#[inline]`/`#[inline(never)]` boundaries, used symbol keepers,
       and platform fallback behavior.
-- [ ] Add or extend release-audit assertions or focused tests for null inputs,
+- [x] Add or extend release-audit assertions or focused tests for null inputs,
       truncating copy/cat behavior, guaranteed trailing nul writes, and
       Unix/non-Unix `vsnprintf` behavior.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/ffi/libc.rs` from
+- [x] Add matching unsafe audit/evidence entries, remove `src/ffi/libc.rs` from
       the unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -207,7 +212,7 @@ clippy, and full tests.
 
 1. [x] Migrate `src/raw/posix.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/lib.rs` off the unsafe migration allowlist.
-3. [ ] Migrate `src/ffi/libc.rs` off the unsafe migration allowlist.
+3. [x] Migrate `src/ffi/libc.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/threadlocal.rs` off the unsafe migration
        allowlist.
 5. [ ] Migrate `src/allocator/heap.rs` off the unsafe migration allowlist.

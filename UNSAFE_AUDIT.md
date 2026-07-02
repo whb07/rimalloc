@@ -267,6 +267,12 @@ Operation IDs:
   stack-local page metadata and synthetic page-map range witnesses to exercise
   typed page wrapper accessors. The fixtures are not registered with allocator
   globals and are used only for local invariant tests.
+- `SAFETY[AUDIT:typed-page-state-test-fixtures]`:
+  `src/types/page_states/tests.rs` builds stack-local page metadata and
+  non-dereferenced thread-heap identity witnesses to exercise page typestate
+  transitions, ownership classification, and abandoned-page claiming. The
+  fixtures are not registered with allocator globals and are used only while
+  the local records are live.
 - `SAFETY[AUDIT:typed-free-validation]`: `src/types/validation.rs` converts
   validated pointer-lookup results into free-list witnesses, and
   `src/types/validation/tests.rs` builds stack-local page/block/user fixtures

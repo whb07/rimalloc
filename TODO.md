@@ -12,14 +12,14 @@ mechanical file-level exceptions.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 53 entries: 43 production, 7 test,
+- `docs/unsafe-migration-allowlist.tsv` has 52 entries: 43 production, 6 test,
   and 3 translation files.
 - The smallest remaining allowlisted test fixtures are reviewable:
-  `src/types/page_states/tests.rs` is 151 lines,
   `src/types/page_queues/tests.rs` is 160 lines,
   `src/types/heap/tests.rs` is 212 lines,
   `src/types/memid/tests.rs` is 243 lines, and
-  `src/types/atomic/tests.rs` is 287 lines.
+  `src/types/atomic/tests.rs` is 287 lines, and
+  `src/types/scalar/tests.rs` is 412 lines.
 - The smallest remaining allowlisted production files are narrow:
   `src/types/padding.rs` is 143 lines,
   `src/allocator/tracking.rs` is 185 lines,
@@ -67,15 +67,21 @@ Current review evidence:
 > one more fixture file to operation-level markers keeps test debt from masking
 > production migration progress.
 
-- [ ] Rank `src/types/page_states/tests.rs`,
+- [x] Rank `src/types/page_states/tests.rs`,
       `src/types/page_queues/tests.rs`, `src/types/heap/tests.rs`, and
       `src/types/memid/tests.rs` by proof complexity.
-- [ ] Migrate at least one test fixture file to local `SAFETY[AUDIT:*]`
+- [x] Migrate at least one test fixture file to local `SAFETY[AUDIT:*]`
       markers.
-- [ ] Add matching `UNSAFE_AUDIT.md` and
+- [x] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [ ] Remove migrated files from `docs/unsafe-migration-allowlist.tsv`.
-- [ ] Lower `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
+- [x] Remove migrated files from `docs/unsafe-migration-allowlist.tsv`.
+- [x] Lower `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
+  - Evidence: `src/types/page_states/tests.rs` now uses
+    `SAFETY[AUDIT:typed-page-state-test-fixtures]` for stack-local page
+    metadata, non-dereferenced thread-heap identity witnesses, typestate
+    transitions, abandoned ownership classification, and thread-free ownership
+    claiming. The file was removed from `docs/unsafe-migration-allowlist.tsv`,
+    and `ALLOWLIST_ENTRY_CAP` is now 52.
 
 Verify: `scripts/check-unsafe-audit.py`,
 `scripts/check-unsafe-audit-evidence.py`,
@@ -171,7 +177,7 @@ full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate one small test fixture off the unsafe migration allowlist.
+1. [x] Migrate one small test fixture off the unsafe migration allowlist.
 2. [ ] Migrate one small production file off the unsafe migration allowlist.
 3. [ ] Narrow one remaining broad strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
@@ -179,7 +185,7 @@ full tests.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is below 53 entries and the cap is lowered.
+- [x] The unsafe migration allowlist is below 53 entries and the cap is lowered.
 - [ ] At least one additional production allowlisted file is covered by
       operation-level audit markers.
 - [ ] One remaining broad strict-type `remove:` allowance is narrowed or

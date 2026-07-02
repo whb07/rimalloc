@@ -39,6 +39,7 @@ typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-loca
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
 typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page metadata and registered-range witness fixture construction.
 typed-page-test-fixtures	test	tests/release_fast_path_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.
+typed-page-state-test-fixtures	test	src/types/page_states/tests.rs	Exercises stack-local page metadata and non-dereferenced thread-heap identity witnesses for typestate transition fixtures.
 typed-free-validation	test	src/types/validation/tests.rs	Exercises pointer lookup conversion into validated free witnesses.
 typed-free-validation	test	tests/release_fast_path_audit.rs	Checks free-path validation uses typed pointer lookup boundaries.
 unsafe-callback	test	src/safe/tests.rs	Exercises unsafe callback guards, restoration, and panic containment.

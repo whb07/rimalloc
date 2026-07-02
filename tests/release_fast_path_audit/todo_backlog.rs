@@ -2,8 +2,10 @@ use super::*;
 
 const RELEASE_AUDIT_MODULES: &[&str] = &[
     "release_policy.rs",
+    "runtime_gates.rs",
     "todo_backlog.rs",
     "unsafe_performance.rs",
+    "unsafe_performance/lifecycle_boundaries.rs",
 ];
 
 #[test]
@@ -35,7 +37,7 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`src/allocator/arena.rs` is 4,613 lines",
         "`src/allocator/arena/debug.rs`",
         "`tests/release_fast_path_audit.rs` is split",
-        "`tests/release_fast_path_audit/unsafe_performance.rs` is 3,645 lines",
+        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,981 lines",
     ];
 
     for evidence in required_evidence {
@@ -69,7 +71,7 @@ fn release_audit_harness_stays_split() {
             .count();
 
         assert!(
-            line_count <= 4_200,
+            line_count <= 3_200,
             "release fast-path audit module {} should stay reviewable; found {line_count} lines",
             path.display()
         );

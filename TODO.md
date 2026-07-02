@@ -22,8 +22,10 @@ Review evidence:
   lines, `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
 - `tests/release_fast_path_audit.rs` is split, but the split is still uneven:
-  the root harness is 2,961 lines and
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 3,645 lines.
+  the root harness is 2,862 lines and
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,981 lines, with
+  runtime gates in a 102-line child module and lifecycle-boundary audit in a
+  700-line nested module.
 - `src/allocator/arena/debug.rs` is a clear 504-line diagnostic module, but it
   now carries many repeated `SAFETY[AUDIT:arena-debug-render]` comments around
   direct arena/page metadata reads. That is audited, but not yet pleasant Rust.
@@ -125,16 +127,25 @@ Review evidence:
 > 2,961 lines. This is better than the original monolith, but future review
 > would be easier with smaller domain modules and stricter size guards.
 
-- [ ] Split `tests/release_fast_path_audit/unsafe_performance.rs` into smaller
+- [x] Split `tests/release_fast_path_audit/unsafe_performance.rs` into smaller
       modules such as hot-path codegen, private ABI/export boundaries,
       typed-domain migration, and allocator metadata invariants.
-- [ ] Move root-harness tests into child modules where they have a clear domain
+- [x] Move root-harness tests into child modules where they have a clear domain
       owner.
-- [ ] Keep shared source-reading helpers in the root and avoid duplicating file
+- [x] Keep shared source-reading helpers in the root and avoid duplicating file
       slicing utilities.
-- [ ] Tighten `release_audit_harness_stays_split` so no child module can grow
+- [x] Tighten `release_audit_harness_stays_split` so no child module can grow
       past the new review threshold.
-- [ ] Preserve all existing assertion coverage while moving tests.
+- [x] Preserve all existing assertion coverage while moving tests.
+  - Evidence: runtime gate assertions moved from the root harness into
+    `tests/release_fast_path_audit/runtime_gates.rs`, and lifecycle and
+    local-boundary assertions moved into
+    `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`.
+    The root harness is down from 2,961 to 2,862 lines, the unsafe-performance
+    parent module is down from 3,646 to 2,981 lines, release audit coverage
+    remains 67 tests after splitting the root runtime gates, and
+    `release_audit_harness_stays_split` now caps each listed child module at
+    3,200 lines, including the runtime and nested lifecycle modules.
 - Verify: `cargo test --test release_fast_path_audit --all-features`,
   `git diff --check`, full clippy, and full tests.
 
@@ -161,7 +172,7 @@ Review evidence:
 1. [x] Shrink the unsafe migration allowlist with small reviewable files.
 2. [x] Reduce one removable strict-type file-level allowance.
 3. [x] Consolidate unsafe arena diagnostic metadata reads.
-4. [ ] Split the uneven release-audit unsafe/performance module further.
+4. [x] Split the uneven release-audit unsafe/performance module further.
 5. [ ] Split one low-risk page module cluster.
 
 ## Definition of done for this backlog
@@ -171,7 +182,7 @@ Review evidence:
       removable-entry count is capped lower.
 - [x] `src/allocator/arena/debug.rs` has clearer diagnostic helper boundaries
       and fewer repeated local safety-marker comments.
-- [ ] Release fast-path audit modules are smaller and guarded against growing
+- [x] Release fast-path audit modules are smaller and guarded against growing
       back into large review units.
 - [ ] At least one page-module boundary is improved without API, ABI, or
       hot-path performance drift.

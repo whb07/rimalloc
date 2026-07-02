@@ -71,9 +71,12 @@ fn rust_idiom_backlog_tracks_current_work() {
         "SAFETY[AUDIT:unsafe-callback]` has 28 markers",
         "SAFETY[AUDIT:page-count-accessors]` has 24 markers",
         "`tests/release_fast_path_audit.rs` is 2,864 lines",
-        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,758 lines",
+        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,643 lines",
         "`tests/release_fast_path_audit/release_policy.rs` is 2,115 lines",
         "`tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`\n  is 703 lines",
+        "`tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs` is\n  206 lines",
+        "bitmap traversal, regular bitmap helper, and thread-local\n    find/claim callback assertions moved",
+        "the release audit remains 67\n    tests",
         "`tests/release_fast_path_audit/release_policy/security.rs` is 181 lines",
         "`tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is\n  160 lines",
     ];

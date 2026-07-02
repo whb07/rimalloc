@@ -47,9 +47,22 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
             "{internal_name} should stay crate-internal instead of a dynamic export"
         );
     }
+    for (audit_id, min_count) in [
+        ("page-map-global-boundary", 10),
+        ("page-map-init-boundary", 40),
+        ("page-map-teardown-boundary", 10),
+        ("page-map-register-boundary", 60),
+        ("page-map-lookup-boundary", 15),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            page_map.matches(&marker).count() >= min_count,
+            "page-map unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     assert!(
         !unsafe_allowlist.contains("src/allocator/page_map.rs")
-            && page_map.matches("SAFETY[AUDIT:page-map-boundary]").count() >= 130
+            && !page_map.contains("SAFETY[AUDIT:page-map-boundary]")
             && page_map.contains("pub(crate) static mut _mi_page_map")
             && page_map.contains("static mut mi_page_map_max_address")
             && page_map.contains("static mut mi_page_map_memid")
@@ -60,7 +73,7 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
             && page_map
                 .contains("RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count)")
             && page_map.contains("pub unsafe extern \"C\" fn mi_is_in_heap_region"),
-        "page-map unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+        "page-map unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
     assert!(
         page_map

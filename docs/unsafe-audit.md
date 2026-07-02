@@ -93,10 +93,17 @@ file when such a module exists.
 - `SAFETY[AUDIT:init-platform-hooks-boundary]`: hidden init link-name assembly
   in `src/allocator/init.rs` plus process attach/detach constructor and
   destructor hook glue in `src/platform/mod.rs`.
-- `SAFETY[AUDIT:allocation-entry-boundary]`: allocation entry points in
-  `src/allocator/alloc.rs`. The boundary covers malloc/calloc/realloc request
-  construction, heap/thread-heap dispatch, zeroing, padding/provenance recovery,
-  product overflow checks, raw allocation exports, and no-allocation hot paths.
+- `SAFETY[AUDIT:allocation-abi-entry-boundary]`: public allocation, string,
+  realpath, realloc-family, and C++ ABI entry shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-heap-dispatch-boundary]`: thread-heap and heap
+  allocation dispatch in `src/allocator/alloc.rs` for small, zeroed, calloc,
+  and typed allocation requests.
+- `SAFETY[AUDIT:allocation-layout-request-boundary]`: product overflow checks,
+  layout padding, request construction, and realloc-size validation in
+  `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-page-refill-boundary]`: page refill handoff,
+  generic fallback allocation, guarded allocation, zeroing, and padding canary
+  publication in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:page-allocation-boundary]`: page-local allocation in
   `src/allocator/page.rs`. The boundary covers free-list collection and
   extension, generic refill, page queue movement, retire/free/abandon

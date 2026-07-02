@@ -273,14 +273,30 @@ Operation IDs:
   are limited to hidden local link-name assembly, process attach/detach C ABI
   shims, and ELF constructor/destructor callback slots that forward into the
   bounded process lifecycle.
-- `SAFETY[AUDIT:allocation-entry-boundary]`: `src/allocator/alloc.rs` owns
-  malloc/calloc/realloc request construction, thread-heap and heap dispatch,
-  small-page allocation, zeroing, padding/provenance recovery, product
-  overflow checks, raw allocation exports, and new/nothrow shims. Unsafe
-  operations are limited to caller-proven raw allocation pointers, typed layout
-  witnesses, page/block metadata reached through allocator ownership, C ABI
-  entry points, and local test fixtures while preserving failure/null
-  semantics, realloc copy bounds, and no-allocation hot-path constraints.
+- `SAFETY[AUDIT:allocation-abi-entry-boundary]`: `src/allocator/alloc.rs` owns
+  public C allocation, string, realpath, realloc-family, and C++ new/delete
+  entry shims. Unsafe operations are limited to caller-proven ABI pointers,
+  errno slots, exported symbol wrappers, old-allocation validation handoff, and
+  new-handler callbacks while preserving C null/failure semantics and raw
+  ownership transfer.
+- `SAFETY[AUDIT:allocation-heap-dispatch-boundary]`:
+  `src/allocator/alloc.rs` owns thread-heap and heap allocation dispatch for
+  small, zeroed, calloc, and typed allocation requests. Unsafe operations are
+  limited to typed heap/thread-heap witnesses, usable-size out-pointers, page
+  free-list inspection, and tracking handoff while preserving no-allocation
+  hot paths.
+- `SAFETY[AUDIT:allocation-layout-request-boundary]`:
+  `src/allocator/alloc.rs` owns allocation request construction, product
+  overflow handling, layout padding, realloc-size validation, and old-block
+  usable-size recovery. Unsafe operations are limited to caller-proven
+  allocation pointers, typed layout witnesses, and bounded metadata queries
+  while preserving overflow and realloc copy bounds.
+- `SAFETY[AUDIT:allocation-page-refill-boundary]`:
+  `src/allocator/alloc.rs` owns page refill handoff, generic fallback
+  allocation, guarded allocation, zeroing, and padding canary publication.
+  Unsafe operations are limited to page/block metadata reached through
+  allocator ownership, active-page witnesses, refill helpers, and guarded block
+  state while preserving page ownership and zeroing guarantees.
 - `SAFETY[AUDIT:page-allocation-boundary]`: `src/allocator/page.rs` owns
   page-local allocation, free-list collection and extension, generic refill,
   page queue movement, retire/free/abandon transitions, page stat updates,
@@ -348,15 +364,26 @@ Operation IDs:
   publication, abandoned-page collect/reclaim/reabandon decisions, usable-size
   shims, and raw C ABI free exports while preserving allocator ownership and
   no-allocation hot-path constraints.
-- `SAFETY[AUDIT:aligned-allocation-boundary]`:
-  `src/allocator/aligned.rs` owns alignment-sensitive allocation, aligned
-  realloc, offset-aware layout adjustment, usable-size preservation,
-  over-allocation trimming, and original-allocation pointer recovery. Unsafe
-  operations are limited to padding-shrink assembly shims, thread-heap local
-  witnesses, guarded and aligned allocation calls, page/free-list inspection,
-  padding metadata updates, tracking hooks, realloc old-allocation validation,
-  heap borrowing, and raw C ABI aligned exports while preserving alignment,
-  offset, zeroing, usable-size, and hot-path dispatch constraints.
+- `SAFETY[AUDIT:aligned-padding-boundary]`:
+  `src/allocator/aligned.rs` owns padding shrink/grow behavior, over-allocation
+  trimming, guarded aligned allocation, interior-pointer tagging, and tracking
+  metadata for adjusted aligned blocks. Unsafe operations are limited to
+  padding-shrink shims, page/block metadata, padding metadata writes, and
+  tracking hooks while preserving usable-size and offset invariants.
+- `SAFETY[AUDIT:aligned-heap-allocation-boundary]`:
+  `src/allocator/aligned.rs` owns heap and thread-heap aligned malloc, zalloc,
+  calloc, and zeroed aligned entry paths after safe request normalization.
+  Unsafe operations are limited to thread-heap local witnesses, aligned page
+  free-list checks, usable-size out-pointers, heap borrowing, guarded handoff,
+  and raw aligned allocation exports while preserving alignment and hot-path
+  dispatch constraints.
+- `SAFETY[AUDIT:aligned-realloc-boundary]`:
+  `src/allocator/aligned.rs` owns aligned realloc, recalloc, offset-aware
+  realloc request routing, old-allocation validation, copy preservation, and
+  raw aligned realloc exports. Unsafe operations are limited to caller-proven
+  old allocation pointers, heap borrowing, aligned allocation/free handoff, and
+  bounded copy metadata while preserving old contents and realloc failure
+  semantics.
 - `SAFETY[AUDIT:options-callback-boundary]`: `src/allocator/options.rs` owns
   option descriptors, output/error callback state, recursion guards,
   environment parsing, diagnostic output, option raw exports, and assert abort
@@ -365,15 +392,30 @@ Operation IDs:
   primitive stderr forwarding, callback invocation, environment lookup, and
   raw C ABI option exports while preserving no allocator allocation in
   primitive output paths.
-- `SAFETY[AUDIT:stats-reporting-boundary]`: `src/allocator/stats.rs` owns
-  counter updates, stats merge/reset/copy, formatted stats output, process
-  info, JSON output buffers, heap/subproc aggregation visitors, and raw C stats
-  exports. Unsafe operations are limited to POD zero initialization, atomic
-  counter field access, raw stats merge/copy helpers, checked bin indexes,
-  callback output buffers, heap/subproc witness construction, process-info
-  out-pointers, JSON buffer allocation/free, legacy callback pointer
-  transmutation, and C ABI shims while preserving counter semantics, output
-  buffer bounds, and allocator recursion constraints.
+- `SAFETY[AUDIT:stats-counter-boundary]`: `src/allocator/stats.rs` owns stats
+  initialization and counter/count mutation helpers. Unsafe operations are
+  limited to POD zero initialization, checked bin indexes, and atomic counter
+  field access while preserving counter width and stat-level gating.
+- `SAFETY[AUDIT:stats-merge-boundary]`: `src/allocator/stats.rs` owns stats
+  merge, copy, reset, heap aggregation, subproc aggregation, and lifecycle
+  merge exports. Unsafe operations are limited to raw stats pointer validation,
+  non-null merge bodies, heap/subproc witness construction, visitor callbacks,
+  and memzero reset handoff while preserving aggregate semantics.
+- `SAFETY[AUDIT:stats-output-boundary]`: `src/allocator/stats.rs` owns
+  formatted stats output, stack-buffer amount formatting, callback forwarding,
+  and raw print/export shims. Unsafe operations are limited to callback output
+  buffers, legacy callback pointer transmutation, C string formatting, and C
+  ABI print shims while preserving buffer bounds and allocator recursion
+  constraints.
+- `SAFETY[AUDIT:stats-process-info-boundary]`: `src/allocator/stats.rs` owns
+  process-info collection and raw out-pointer publication. Unsafe operations
+  are limited to platform process-info calls, nullable out-pointer writes, and
+  elapsed-time reads while preserving C-compatible optional output behavior.
+- `SAFETY[AUDIT:stats-json-boundary]`: `src/allocator/stats.rs` owns JSON
+  output buffering, heap stats serialization, fixed stack formatting, and JSON
+  callback routing. Unsafe operations are limited to JSON buffer allocation and
+  free, C string buffer projection, callback writes, and heap stats witnesses
+  while preserving buffer ownership and output bounds.
 - `SAFETY[AUDIT:owned-allocation]`: `src/safe/allocation.rs` owns non-zero
   allocations through move-only wrappers. Slice views and copies are bounded by
   the stored layout, and `Drop` releases live blocks exactly once.
@@ -440,14 +482,40 @@ Operation IDs:
   large/huge-page privilege and allocation paths, TEB thread-pool probing, and
   ETW provider callbacks while preserving nullable C out-pointer conventions,
   Windows error handling, and source-present platform isolation.
-- `SAFETY[AUDIT:os-memory-boundary]`: `src/platform/os.rs` owns the typed OS
-  memory boundary above the primitive backends. Unsafe operations are limited
-  to memory-config reads and writes, sub-process stats projection, page-size
-  and alignment queries, aligned hint generation, guard-page callbacks,
-  commit/decommit/reset/reuse/purge/protect/free paths, aligned allocation and
-  trimming, zero-state publication, huge-page claim/free, NUMA helpers, and raw
-  OS shims while preserving memid commit/zero/pinned semantics and avoiding
-  allocator recursion.
+- `SAFETY[AUDIT:os-memory-config-boundary]`: `src/platform/os.rs` owns OS
+  memory configuration, sub-process stats projection, page-size queries, and
+  aligned address hints. Unsafe operations are limited to process-global memory
+  config reads/writes, page-size statics, typed subproc witnesses, and primitive
+  hint calls while preserving allocator-recursion avoidance.
+- `SAFETY[AUDIT:os-memory-guard-boundary]`: `src/platform/os.rs` owns secure
+  guard-page placement and reset callbacks. Unsafe operations are limited to
+  random guard-page offset selection, primitive guard-page calls, and retained
+  local helper shims while preserving page-size alignment and nullable pointer
+  behavior.
+- `SAFETY[AUDIT:os-memory-commit-boundary]`: `src/platform/os.rs` owns
+  commit, decommit, reset, reuse, purge, protect, and unprotect state
+  transitions. Unsafe operations are limited to typed OS pointer/range
+  witnesses, memid zero/commit state updates, primitive range calls, and stats
+  updates while preserving commit accounting.
+- `SAFETY[AUDIT:os-memory-free-boundary]`: `src/platform/os.rs` owns OS memory
+  free paths, huge-page free helpers, and retained free wrappers. Unsafe
+  operations are limited to recorded memid witnesses, committed-byte
+  classification, primitive free calls, and huge-page segment iteration while
+  preserving pinned/committed semantics.
+- `SAFETY[AUDIT:os-memory-allocation-boundary]`: `src/platform/os.rs` owns OS
+  allocation, zero-allocation, aligned allocation, trimming, and public OS
+  allocation shims. Unsafe operations are limited to primitive allocation
+  handoff, typed reserve/commit witnesses, memid publication, out-pointer
+  writes, and alignment trimming while preserving zero-state and ownership.
+- `SAFETY[AUDIT:os-memory-huge-page-boundary]`: `src/platform/os.rs` owns huge
+  OS page detection, reservation, claiming, and aligned huge allocation.
+  Unsafe operations are limited to primitive huge-page calls, arena claim
+  callback handoff, per-segment memid state, and huge-page free rollback while
+  preserving huge-page size and NUMA placement contracts.
+- `SAFETY[AUDIT:os-memory-numa-boundary]`: `src/platform/os.rs` owns NUMA node
+  count and current-node helper shims. Unsafe operations are limited to
+  primitive NUMA calls and retained C ABI wrappers while preserving nullable
+  and fallback behavior.
 - `SAFETY[AUDIT:macos-zone-override]`: `src/platform/macos.rs` owns the
   source-present macOS malloc-zone override boundary. Unsafe operations are
   limited to Darwin malloc-zone callback signatures and imports, mutable
@@ -467,13 +535,28 @@ Operation IDs:
   caller-proven storage, memory-order mapping helpers, load/store/RMW/CAS
   wrappers, pointer-sized atomic helpers, volatile addend reads, guard/once
   entry shims, fallback spin locks, and release Linux lock init/done behavior.
-- `SAFETY[AUDIT:page-map-boundary]`: `src/allocator/page_map.rs` owns allocator
-  page registration, lookup, and teardown. Unsafe operations are limited to
-  process-global page-map metadata, OS reserve/commit/free calls, 32-bit commit
-  bitmap access, typed page span/index conversion, lock-protected submap
-  allocation and acquire/release publication, page range set/clear/register/
-  unregister operations, `RegisteredPageRange` witness construction, safe
-  arbitrary-pointer lookup, and heap-region query forwarding.
+- `SAFETY[AUDIT:page-map-global-boundary]`: `src/allocator/page_map.rs` owns
+  process-global page-map metadata, base pointers, commit bitmaps, and typed
+  page span/index projection. Unsafe operations are limited to allocator
+  lifecycle synchronized global reads/writes and typed page metadata witnesses.
+- `SAFETY[AUDIT:page-map-init-boundary]`: `src/allocator/page_map.rs` owns
+  32-bit and non-32-bit page-map initialization, reserve/commit setup, null
+  sentinel publication, and lazy submap growth. Unsafe operations are limited
+  to OS reserve/commit calls, typed index/count witnesses, lock-protected
+  submap allocation, and acquire/release publication.
+- `SAFETY[AUDIT:page-map-teardown-boundary]`: `src/allocator/page_map.rs` owns
+  page-map unsafe destroy paths. Unsafe operations are limited to lifecycle
+  exclusive global reads, recorded memid witnesses, submap iteration, and OS
+  free calls while preserving teardown after all users are gone.
+- `SAFETY[AUDIT:page-map-register-boundary]`: `src/allocator/page_map.rs` owns
+  page register, unregister, unregister-range, and range set/clear helpers.
+  Unsafe operations are limited to raw page validation, typed page range
+  witnesses, committed-range checks, sub-index writes, and
+  `RegisteredPageRange` construction.
+- `SAFETY[AUDIT:page-map-lookup-boundary]`: `src/allocator/page_map.rs` owns
+  arbitrary-pointer page lookup and heap-region queries. Unsafe operations are
+  limited to nullable input handling, committed index checks, submap reads, and
+  page metadata projection while preserving safe lookup for invalid pointers.
 - `SAFETY[AUDIT:scalar-domain-wrappers]`: `src/types/scalar.rs` owns transparent
   scalar domains for allocator sizes, alignments, indexes, bins, counts, and
   optional out-pointers. Unsafe operations are limited to unchecked non-zero

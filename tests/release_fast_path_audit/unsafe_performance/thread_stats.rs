@@ -22,15 +22,25 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
             && stats_rs.contains("static MI_STATS_INIT_KEEP: extern \"C\" fn() = _mi_stats_init;"),
         "_mi_stats_init should keep C's local process statistics initialization boundary"
     );
+    for (audit_id, min_count) in [
+        ("stats-counter-boundary", 25),
+        ("stats-merge-boundary", 70),
+        ("stats-output-boundary", 25),
+        ("stats-process-info-boundary", 6),
+        ("stats-json-boundary", 18),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            stats_rs.matches(&marker).count() >= min_count,
+            "stats unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     assert!(
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/stats.rs\t"))
-            && stats_rs
-                .matches("SAFETY[AUDIT:stats-reporting-boundary]")
-                .count()
-                >= 150,
-        "stats reporting unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+            && !stats_rs.contains("SAFETY[AUDIT:stats-reporting-boundary]"),
+        "stats unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
     assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_auto_process_init()")
@@ -57,7 +67,7 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
         ) && stats_rs.contains(
             "mi_stat_counter_add_mt(\n                    ptr::addr_of_mut!((*stats).$field),\n                    ptr::addr_of!((*src).$field),\n                )"
         ) && stats_rs.contains(
-            "if MI_STAT > 1 {\n        // SAFETY[AUDIT:stats-reporting-boundary]"
+            "if MI_STAT > 1 {\n        // SAFETY[AUDIT:stats-merge-boundary]"
         )
             && stats_rs.contains("let stats_malloc_bins =")
             && stats_rs.contains("for i in 0..=MI_BIN_HUGE")

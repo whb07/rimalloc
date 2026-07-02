@@ -364,11 +364,26 @@ pub(super) fn assert_os_memory_and_platform_boundaries(sources: &UnsafePerforman
             && os_rs.contains("static MI_OS_SECURE_GUARD_PAGE_RESET_BEFORE_KEEP"),
         "OS helper wrappers should keep C's local helper boundaries and retained wrapper set"
     );
+    for (audit_id, min_count) in [
+        ("os-memory-config-boundary", 20),
+        ("os-memory-guard-boundary", 6),
+        ("os-memory-commit-boundary", 12),
+        ("os-memory-free-boundary", 8),
+        ("os-memory-allocation-boundary", 50),
+        ("os-memory-huge-page-boundary", 10),
+        ("os-memory-numa-boundary", 6),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            os_rs.matches(&marker).count() >= min_count,
+            "OS memory unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     assert!(
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/platform/os.rs\t"))
-            && os_rs.matches("SAFETY[AUDIT:os-memory-boundary]").count() >= 130,
-        "OS memory boundary unsafe operations should stay covered by local operation markers without a migration allowlist entry"
+            && !os_rs.contains("SAFETY[AUDIT:os-memory-boundary]"),
+        "OS memory unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
 }

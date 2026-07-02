@@ -41,27 +41,47 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             && free_rs.contains("pub unsafe extern \"C\" fn mi_free_small("),
         "free-path unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    for (audit_id, min_count) in [
+        ("aligned-padding-boundary", 20),
+        ("aligned-heap-allocation-boundary", 60),
+        ("aligned-realloc-boundary", 60),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            alloc_aligned_rs.matches(&marker).count() >= min_count,
+            "aligned allocation unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     assert!(
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/aligned.rs\t"))
-            && alloc_aligned_rs
-                .matches("SAFETY[AUDIT:aligned-allocation-boundary]")
-                .count()
-                >= 150
+            && !alloc_aligned_rs.contains("SAFETY[AUDIT:aligned-allocation-boundary]")
+            && alloc_aligned_rs.contains("fn mi_malloc_is_naturally_aligned(")
+            && alloc_aligned_rs.contains("fn aligned_layout_or_report(")
+            && alloc_aligned_rs.contains("crate::core_types::LayoutRequest::aligned_at(")
             && alloc_aligned_rs.contains("pub unsafe extern \"C\" fn mi_malloc_aligned")
             && alloc_aligned_rs.contains("unsafe fn mi_theap_realloc_zero_aligned_at_req(")
             && alloc_aligned_rs.contains("fn mi_padding_shrink_call("),
-        "aligned allocation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+        "aligned allocation unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
+    for (audit_id, min_count) in [
+        ("allocation-abi-entry-boundary", 100),
+        ("allocation-heap-dispatch-boundary", 30),
+        ("allocation-layout-request-boundary", 15),
+        ("allocation-page-refill-boundary", 8),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            alloc_rs.matches(&marker).count() >= min_count,
+            "allocation unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     assert!(
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/alloc.rs\t"))
-            && alloc_rs
-                .matches("SAFETY[AUDIT:allocation-entry-boundary]")
-                .count()
-                >= 160
+            && !alloc_rs.contains("SAFETY[AUDIT:allocation-entry-boundary]")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_malloc(")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_calloc(")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_realloc(")
@@ -70,7 +90,7 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             && alloc_rs.contains("pub(crate) fn calloc_request_or_report(")
             && alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
             && alloc_rs.contains("crate::core_types::PaddingCanary::from_page_block_keys("),
-        "allocation entry unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+        "allocation unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
     assert!(
         !unsafe_allowlist

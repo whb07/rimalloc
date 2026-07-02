@@ -377,15 +377,25 @@ fn options_state_uses_internal_locks_like_c() {
             && stats_rs.contains("mi_json_buf_print(hbuf, c_char_buffer_str(&buf));"),
         "stats JSON formatting should use fixed stack buffers like C"
     );
+    for (audit_id, min_count) in [
+        ("stats-counter-boundary", 25),
+        ("stats-merge-boundary", 70),
+        ("stats-output-boundary", 25),
+        ("stats-process-info-boundary", 6),
+        ("stats-json-boundary", 18),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            stats_rs.matches(&marker).count() >= min_count,
+            "stats unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     assert!(
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/stats.rs\t"))
-            && stats_rs
-                .matches("SAFETY[AUDIT:stats-reporting-boundary]")
-                .count()
-                >= 150,
-        "stats reporting unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+            && !stats_rs.contains("SAFETY[AUDIT:stats-reporting-boundary]"),
+        "stats unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
     assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")

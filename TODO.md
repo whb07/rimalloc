@@ -1,6 +1,7 @@
 # TODO: Next Strict-Type and Audit Granularity Backlog
 
-Fresh-eyes review after refreshing audit evidence on `master` at `53db80e`.
+Fresh-eyes review after splitting allocation, aligned allocation, stats,
+page-map, and OS audit clusters on `master`.
 The previous backlog is complete and pushed. The next mechanical translation
 debt is in remaining strict-type wildcard allowances, broad unsafe operation
 IDs, and a root release-audit harness that is still close to its cap.
@@ -8,7 +9,9 @@ IDs, and a root release-audit harness that is still close to its cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` still covers 82 source files, 5,893 unsafe
-  mentions, and 96 operation IDs. The migration allowlist remains empty.
+  mentions, and 115 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 115 operation IDs with
+  282 automated evidence rows.
 - `strict-type-allowlist.txt` has 26 wildcard entries left: 4
   raw-pointer-parameter entries, 13 bare-domain `usize` entries, 4
   pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
@@ -19,14 +22,15 @@ Current review evidence:
   `src/platform/mod.rs`, `src/raw/macros.rs`, `src/types/layout.rs`,
   `src/safe/allocation.rs`, and `src/types/atomic.rs`.
 - The largest remaining unsafe audit marker clusters are
-  `allocation-entry-boundary` with 166 markers,
-  `stats-reporting-boundary` with 161 markers,
   `typed-pointer-accessors` with 161 markers,
-  `aligned-allocation-boundary` with 158 markers,
-  `page-map-boundary` with 153 markers,
-  `os-memory-boundary` with 136 markers,
-  `init-thread-tls-boundary` with 129 markers, and
-  `windows-primitive-boundary` with 114 markers.
+  `init-thread-tls-boundary` with 129 markers,
+  `windows-primitive-boundary` with 114 markers,
+  `arena-page-lifecycle-boundary` with 107 markers,
+  `arena-allocation-boundary` with 105 markers,
+  `allocation-abi-entry-boundary` with 104 markers,
+  `internal-atomic-facade` with 103 markers,
+  `page-allocation-boundary` with 102 markers, and
+  `init-subproc-boundary` with 102 markers.
 - The previous raw macro aggregate is split into
   `raw-macro-libc-forwarding-boundary` with 65 markers,
   `raw-macro-cxx-boundary` with 46 markers,
@@ -34,8 +38,16 @@ Current review evidence:
   `raw-macro-bootstrap-boundary` with 15 markers,
   `raw-macro-allocation-query-boundary` with 10 markers, and
   `raw-macro-header-forwarding-boundary` with 6 markers.
+- The previous allocation, aligned allocation, stats, page-map, and OS
+  aggregates are split into focused review units. The largest of those new
+  units are `allocation-abi-entry-boundary` with 104 markers,
+  `stats-merge-boundary` with 75 markers,
+  `aligned-heap-allocation-boundary` with 68 markers,
+  `aligned-realloc-boundary` with 67 markers,
+  `page-map-register-boundary` with 66 markers, and
+  `os-memory-allocation-boundary` with 59 markers.
 - Audit evidence rows for allocation, aligned allocation, split raw macro IDs,
-  OS memory, page-map, stats, and typed pointer checks now point at focused
+  OS memory, page-map, stats, and typed pointer checks point at focused
   release-audit modules instead of the old aggregate harness paths.
 - The release-audit module cap is 1,000 lines, but the root harness is still
   1,935 lines. The largest split modules are
@@ -107,11 +119,12 @@ tests.
 > mixes multiple invariants. They should be split only where the code already
 > has clear boundaries so performance-sensitive paths stay stable.
 
-- [ ] Split `allocation-entry-boundary` into allocation ABI entry, heap/thread
+- [x] Split `allocation-entry-boundary` into allocation ABI entry, heap/thread
       heap dispatch, layout/product request, and page refill handoff IDs.
-- [ ] Split `aligned-allocation-boundary` into alignment request normalization,
-      padding shrink/grow, heap aligned allocation, and realloc/recalloc IDs.
-- [ ] Split `stats-reporting-boundary`, `page-map-boundary`, and
+- [x] Split `aligned-allocation-boundary` into safe alignment request
+      normalization plus padding shrink/grow, heap aligned allocation, and
+      realloc/recalloc unsafe IDs.
+- [x] Split `stats-reporting-boundary`, `page-map-boundary`, and
       `os-memory-boundary` into review units that match their helper groups and
       update evidence for each new operation ID.
 
@@ -157,7 +170,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 1. [x] Refresh audit evidence paths after the release-audit split.
 2. [x] Narrow the remaining allocator/init strict-type wildcards.
 3. [x] Split the raw macro allocation audit cluster.
-4. [ ] Split allocation, aligned allocation, stats, page-map, and OS audit
+4. [x] Split allocation, aligned allocation, stats, page-map, and OS audit
        clusters.
 5. [ ] Split typed pointer accessor audit coverage.
 6. [ ] Split the release fast-path root harness and lower the root cap.

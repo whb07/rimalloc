@@ -121,11 +121,31 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
 
     for (audit_id, focused_path) in [
         (
-            "allocation-entry-boundary",
+            "allocation-abi-entry-boundary",
             "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
         ),
         (
-            "aligned-allocation-boundary",
+            "allocation-heap-dispatch-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "allocation-layout-request-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "allocation-page-refill-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "aligned-padding-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "aligned-heap-allocation-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "aligned-realloc-boundary",
             "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
         ),
         (
@@ -157,19 +177,91 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
             "tests/release_fast_path_audit/release_policy/api_surface.rs",
         ),
         (
-            "os-memory-boundary",
+            "os-memory-config-boundary",
             "tests/release_fast_path_audit/unsafe_performance/os_memory.rs",
         ),
         (
-            "page-map-boundary",
+            "os-memory-guard-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/os_memory.rs",
+        ),
+        (
+            "os-memory-commit-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/os_memory.rs",
+        ),
+        (
+            "os-memory-free-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/os_memory.rs",
+        ),
+        (
+            "os-memory-allocation-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/os_memory.rs",
+        ),
+        (
+            "os-memory-huge-page-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/os_memory.rs",
+        ),
+        (
+            "os-memory-numa-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/os_memory.rs",
+        ),
+        (
+            "page-map-global-boundary",
             "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
         ),
         (
-            "page-map-boundary",
+            "page-map-init-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
+        ),
+        (
+            "page-map-teardown-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
+        ),
+        (
+            "page-map-register-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
+        ),
+        (
+            "page-map-lookup-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
+        ),
+        (
+            "page-map-global-boundary",
             "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
         ),
         (
-            "stats-reporting-boundary",
+            "page-map-init-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
+        ),
+        (
+            "page-map-teardown-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
+        ),
+        (
+            "page-map-register-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
+        ),
+        (
+            "page-map-lookup-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
+        ),
+        (
+            "stats-counter-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "stats-merge-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "stats-output-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "stats-process-info-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "stats-json-boundary",
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
         ),
         (
@@ -185,17 +277,36 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
     }
 
     let tracked_ids = [
-        "allocation-entry-boundary",
-        "aligned-allocation-boundary",
+        "allocation-abi-entry-boundary",
+        "allocation-heap-dispatch-boundary",
+        "allocation-layout-request-boundary",
+        "allocation-page-refill-boundary",
+        "aligned-padding-boundary",
+        "aligned-heap-allocation-boundary",
+        "aligned-realloc-boundary",
         "raw-macro-bootstrap-boundary",
         "raw-macro-override-entry-boundary",
         "raw-macro-libc-forwarding-boundary",
         "raw-macro-allocation-query-boundary",
         "raw-macro-cxx-boundary",
         "raw-macro-header-forwarding-boundary",
-        "os-memory-boundary",
-        "page-map-boundary",
-        "stats-reporting-boundary",
+        "os-memory-config-boundary",
+        "os-memory-guard-boundary",
+        "os-memory-commit-boundary",
+        "os-memory-free-boundary",
+        "os-memory-allocation-boundary",
+        "os-memory-huge-page-boundary",
+        "os-memory-numa-boundary",
+        "page-map-global-boundary",
+        "page-map-init-boundary",
+        "page-map-teardown-boundary",
+        "page-map-register-boundary",
+        "page-map-lookup-boundary",
+        "stats-counter-boundary",
+        "stats-merge-boundary",
+        "stats-output-boundary",
+        "stats-process-info-boundary",
+        "stats-json-boundary",
         "typed-pointer-accessors",
     ];
     let stale_paths = [

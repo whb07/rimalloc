@@ -131,9 +131,18 @@ file:
   `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-subproc-registry-boundary]`: subproc creation, destruction,
   list mutation, and metadata cleanup in `src/allocator/init.rs`.
-- `SAFETY[AUDIT:init-subproc-heap-association-boundary]`: subproc main-heap
-  lookup, heap-to-subproc lookup, main heap predicates, and subproc heap
-  visitation in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-prefix-boundary]`: subproc prefix projection in
+  `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-main-heap-load-boundary]`: subproc main-heap and
+  heap-to-subproc prefix loads in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-main-heap-export-boundary]`: subproc main-heap
+  export fallback in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-current-main-heap-boundary]`: current main-heap
+  lookup in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]`: heap and
+  thread-heap main predicates in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-heap-visit-boundary]`: subproc heap visitation in
+  `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-subproc-stats-count-boundary]`: subproc stats header,
   stats merge, thread sequence, and thread/heap counter updates in
   `src/allocator/init.rs`.

@@ -5,7 +5,12 @@ fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist:
         "SAFETY[AUDIT:init-main-subproc-lifecycle-boundary]",
         "SAFETY[AUDIT:init-platform-tls-boundary]",
         "SAFETY[AUDIT:init-process-boundary]",
-        "SAFETY[AUDIT:init-subproc-heap-association-boundary]",
+        "SAFETY[AUDIT:init-subproc-prefix-boundary]",
+        "SAFETY[AUDIT:init-subproc-main-heap-load-boundary]",
+        "SAFETY[AUDIT:init-subproc-main-heap-export-boundary]",
+        "SAFETY[AUDIT:init-subproc-current-main-heap-boundary]",
+        "SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]",
+        "SAFETY[AUDIT:init-subproc-heap-visit-boundary]",
         "SAFETY[AUDIT:init-subproc-identity-boundary]",
         "SAFETY[AUDIT:init-subproc-registry-boundary]",
         "SAFETY[AUDIT:init-subproc-stats-count-boundary]",
@@ -32,7 +37,12 @@ fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist:
     let split_marker_minimums = [
         ("init-main-subproc-lifecycle-boundary", 6),
         ("init-platform-tls-boundary", 17),
-        ("init-subproc-heap-association-boundary", 36),
+        ("init-subproc-prefix-boundary", 1),
+        ("init-subproc-main-heap-load-boundary", 5),
+        ("init-subproc-main-heap-export-boundary", 8),
+        ("init-subproc-current-main-heap-boundary", 7),
+        ("init-subproc-main-heap-predicate-boundary", 11),
+        ("init-subproc-heap-visit-boundary", 4),
         ("init-subproc-identity-boundary", 16),
         ("init-subproc-registry-boundary", 32),
         ("init-subproc-stats-count-boundary", 12),
@@ -57,6 +67,7 @@ fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist:
             .any(|line| line.starts_with("src/allocator/init.rs\t"))
             && !init_rs.contains("SAFETY[AUDIT:init-lifecycle-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-subproc-boundary]")
+            && !init_rs.contains("SAFETY[AUDIT:init-subproc-heap-association-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-thread-tls-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-thread-heap-tls-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-thread-lifecycle-boundary]")

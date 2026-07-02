@@ -317,12 +317,26 @@ Operation IDs:
   subproc creation, destruction, list mutation, and metadata cleanup. Unsafe
   operations are limited to lock-protected registry updates, metadata allocation
   and free, arena/page-map teardown handoff, and heap destruction ordering.
-- `SAFETY[AUDIT:init-subproc-heap-association-boundary]`:
-  `src/allocator/init.rs` owns subproc-to-main-heap lookup, heap-to-subproc
-  lookup, main heap predicates, and subproc heap visitor dispatch. Unsafe
-  operations are limited to typed subproc/main-heap witness construction,
-  inline C-equivalent prefix loads, lazy main heap initialization, and
-  lock-protected heap visitation.
+- `SAFETY[AUDIT:init-subproc-prefix-boundary]`: `src/allocator/init.rs` owns
+  subproc prefix projection from validated subproc pointer witnesses.
+- `SAFETY[AUDIT:init-subproc-main-heap-load-boundary]`:
+  `src/allocator/init.rs` owns subproc main-heap field loads and heap-to-subproc
+  prefix loads through typed subproc and heap witnesses.
+- `SAFETY[AUDIT:init-subproc-main-heap-export-boundary]`:
+  `src/allocator/init.rs` owns `_mi_subproc_heap_main` and typed subproc
+  main-heap export fallback. Unsafe operations preserve lazy main heap
+  initialization and return a typed main-heap witness.
+- `SAFETY[AUDIT:init-subproc-current-main-heap-boundary]`:
+  `src/allocator/init.rs` owns public current main-heap lookup. Unsafe
+  operations preserve raw default-thread inspection, subproc selection, and
+  lazy main-heap initialization.
+- `SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]`:
+  `src/allocator/init.rs` owns heap/thread-heap main predicates. Unsafe
+  operations compare validated heap and thread-heap associations against the
+  subproc main heap.
+- `SAFETY[AUDIT:init-subproc-heap-visit-boundary]`:
+  `src/allocator/init.rs` owns subproc heap visitor dispatch. Unsafe operations
+  validate subproc IDs, lock the heap list, and invoke typed heap callbacks.
 - `SAFETY[AUDIT:init-subproc-stats-count-boundary]`: `src/allocator/init.rs`
   owns subproc thread/heap counters and stats merges. Unsafe operations are
   limited to typed subproc metadata access, stats header initialization,
@@ -1712,13 +1726,39 @@ Operation IDs:
   full-state checks to page helpers, moving pages between already-typed queues,
   removing typed queued pages, and converting all-free local pages to destroyed
   arena-free witnesses.
-- `SAFETY[AUDIT:typed-page-state-domain]`: `src/types/page_states.rs` owns
-  page typestate witness construction and transitions. Unsafe operations are
-  limited to transparent page and thread-heap witness construction, page-local
-  free-list availability and pop state updates, all-free/full/retired/destroyed
-  transitions, abandoned ownership claiming, remote-free classification, and
-  thread-id based local, foreign, abandoned, and abandoned-mapped free-path
+- `SAFETY[AUDIT:typed-page-uninit-initialization-boundary]`:
+  `src/types/page_states.rs` owns uninitialized page witness construction and
+  active-page initialization.
+- `SAFETY[AUDIT:typed-page-witness-constructor-boundary]`:
+  `src/types/page_states.rs` owns transparent page witness construction after
+  callers establish state-specific invariants.
+- `SAFETY[AUDIT:typed-page-all-free-witness-boundary]`:
+  `src/types/page_states.rs` owns active, full, and abandoned all-free witness
+  construction.
+- `SAFETY[AUDIT:typed-page-active-transition-boundary]`:
+  `src/types/page_states.rs` owns active page availability, full-queue, and
+  all-free transitions.
+- `SAFETY[AUDIT:typed-page-full-transition-boundary]`:
+  `src/types/page_states.rs` owns full page all-free classification.
+- `SAFETY[AUDIT:typed-page-available-pop-boundary]`:
+  `src/types/page_states.rs` owns available free-list pop state updates.
+- `SAFETY[AUDIT:typed-page-retire-destroy-boundary]`:
+  `src/types/page_states.rs` owns all-free retire and retired expire/destroyed
+  transitions.
+- `SAFETY[AUDIT:typed-page-abandoned-claim-boundary]`:
+  `src/types/page_states.rs` owns abandoned page ownership claims.
+- `SAFETY[AUDIT:typed-page-remote-free-classification-boundary]`:
+  `src/types/page_states.rs` owns abandoned and abandoned-mapped remote-free
   classification.
+- `SAFETY[AUDIT:typed-page-abandoned-reclaim-boundary]`:
+  `src/types/page_states.rs` owns claimed abandoned page reclaim and
+  reabandon-to-mapped transitions.
+- `SAFETY[AUDIT:typed-thread-heap-local-witness-boundary]`:
+  `src/types/page_states.rs` owns local thread-heap witness construction,
+  borrowing, and state forwarding.
+- `SAFETY[AUDIT:typed-page-free-owner-classification-boundary]`:
+  `src/types/page_states.rs` owns thread-id based local, foreign, abandoned, and
+  abandoned-mapped free-path classification.
 - `SAFETY[AUDIT:typed-page-state-test-fixtures]`:
   `src/types/page_states.rs` and `src/types/page_states/tests.rs` build
   stack-local page metadata, non-dereferenced page identities, and

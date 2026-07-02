@@ -116,8 +116,18 @@ init-main-subproc-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_p
 init-main-subproc-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks main subproc lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-subproc-registry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc creation, destruction, lock-protected list mutation, registry teardown, metadata cleanup, and arena/page-map handoff shape.
 init-subproc-registry-boundary	script	scripts/check-unsafe-audit.py	Checks subproc registry unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-heap-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc main-heap lookup, heap-to-subproc prefix loads, main heap predicates, lazy main heap initialization, and heap visitor shape.
-init-subproc-heap-association-boundary	script	scripts/check-unsafe-audit.py	Checks subproc heap association unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-prefix-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc prefix projection stays behind typed subproc pointer witnesses.
+init-subproc-prefix-boundary	script	scripts/check-unsafe-audit.py	Checks subproc prefix unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-main-heap-load-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc main-heap lookup and heap-to-subproc prefix loads.
+init-subproc-main-heap-load-boundary	script	scripts/check-unsafe-audit.py	Checks subproc main-heap load unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-main-heap-export-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks `_mi_subproc_heap_main` export shape, typed fallback, and lazy main heap initialization.
+init-subproc-main-heap-export-boundary	script	scripts/check-unsafe-audit.py	Checks subproc main-heap export unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-current-main-heap-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks current main-heap lookup, raw default-thread inspection, and subproc selection.
+init-subproc-current-main-heap-boundary	script	scripts/check-unsafe-audit.py	Checks current main-heap lookup unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-main-heap-predicate-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks heap and thread-heap main predicates use inline subproc main-heap loads.
+init-subproc-main-heap-predicate-boundary	script	scripts/check-unsafe-audit.py	Checks subproc main-heap predicate unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-heap-visit-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc heap visitation locks heap lists and invokes typed callbacks.
+init-subproc-heap-visit-boundary	script	scripts/check-unsafe-audit.py	Checks subproc heap visitor unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-subproc-stats-count-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc stats header initialization, thread sequence/count updates, and stats merge into the main subproc.
 init-subproc-stats-count-boundary	script	scripts/check-unsafe-audit.py	Checks subproc stats/count unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-process-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks process marker coverage, process init/done helper shape, preloading gates, allocator init/done callbacks, and teardown ordering.
@@ -801,8 +811,30 @@ typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page
 typed-page-test-fixtures	test	tests/release_fast_path_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.
 typed-page-queue-domain	test	src/types/page_queues/tests.rs	Exercises normal, huge, full, linked, unlinked, transition, and arena-free page queue witnesses.
 typed-page-queue-test-fixtures	test	src/types/page_queues/tests.rs	Exercises stack-local page and queue metadata for normal, huge, full, linked, unlinked, and mismatched queue/page witnesses.
-typed-page-state-domain	test	src/types/page_states/tests.rs	Exercises uninit, active, available, all-free, retired, destroyed, abandoned, mapped, owned, local, and foreign page-state transitions.
-typed-page-state-domain	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks page-state witnesses keep private page pointers and explicit constructors/accessors.
+typed-page-uninit-initialization-boundary	test	src/types/page_states/tests.rs	Exercises uninit page initialization into active page witnesses.
+typed-page-uninit-initialization-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks page-state witnesses keep private page pointers and explicit constructors/accessors.
+typed-page-witness-constructor-boundary	test	src/types/page_states/tests.rs	Exercises transparent page witness constructors through typestate transitions.
+typed-page-witness-constructor-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks transparent page witnesses expose constructors only at audited boundaries.
+typed-page-all-free-witness-boundary	test	src/types/page_states/tests.rs	Exercises active, full, and abandoned all-free witness construction.
+typed-page-all-free-witness-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks all-free page witnesses remain private behind typestate constructors.
+typed-page-active-transition-boundary	test	src/types/page_states/tests.rs	Exercises active page availability, full-queue, and all-free transitions.
+typed-page-active-transition-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks active page transitions retain explicit constructors/accessors.
+typed-page-full-transition-boundary	test	src/types/page_states/tests.rs	Exercises full page all-free classification.
+typed-page-full-transition-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks full page transitions remain separate from active transitions.
+typed-page-available-pop-boundary	test	src/types/page_states/tests.rs	Exercises available free-list pop state updates.
+typed-page-available-pop-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks available-page pop transitions remain typed and private.
+typed-page-retire-destroy-boundary	test	src/types/page_states/tests.rs	Exercises all-free retire and retired expire/destroyed transitions.
+typed-page-retire-destroy-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks retire/destroy typestate transitions remain explicit.
+typed-page-abandoned-claim-boundary	test	src/types/page_states/tests.rs	Exercises abandoned page ownership claims.
+typed-page-abandoned-claim-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks abandoned page claim transitions stay separated from reclaim.
+typed-page-remote-free-classification-boundary	test	src/types/page_states/tests.rs	Exercises abandoned and abandoned-mapped remote-free classification.
+typed-page-remote-free-classification-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks remote-free classification remains represented by typed page witnesses.
+typed-page-abandoned-reclaim-boundary	test	src/types/page_states/tests.rs	Exercises claimed abandoned page reclaim and reabandon-to-mapped transitions.
+typed-page-abandoned-reclaim-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks abandoned reclaim transitions stay separated from claim.
+typed-thread-heap-local-witness-boundary	test	src/types/page_states/tests.rs	Exercises local thread-heap witness construction, borrowing, and state forwarding.
+typed-thread-heap-local-witness-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks local thread-heap page-state witnesses remain private and non-allocating.
+typed-page-free-owner-classification-boundary	test	src/types/page_states/tests.rs	Exercises local, foreign, abandoned, and abandoned-mapped free-path classification.
+typed-page-free-owner-classification-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks free-owner classification remains represented by typed page witnesses.
 typed-page-state-test-fixtures	test	src/types/page_states/tests.rs	Exercises stack-local page metadata and non-dereferenced thread-heap identity witnesses for typestate transition fixtures.
 typed-page-state-test-fixtures	test	src/types/page_states.rs	Exercises lint-touch reachability with non-dereferenced page and thread-heap identity witnesses.
 typed-free-validation	test	src/types/validation/tests.rs	Exercises pointer lookup conversion into validated free witnesses.

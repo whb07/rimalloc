@@ -4,8 +4,35 @@ pub(super) fn assert_padding_and_page_state_acceptance(
     audit_sources: &DatatypeAcceptanceSources<'_>,
 ) {
     let validation_extra_rs = audit_sources.source("src/types/validation_extra.rs");
+    let page_states_rs = audit_sources.source("src/types/page_states.rs");
 
     let padding_rs = audit_sources.source("src/types/padding.rs");
+    for (audit_id, minimum) in [
+        ("typed-page-uninit-initialization-boundary", 2),
+        ("typed-page-witness-constructor-boundary", 1),
+        ("typed-page-all-free-witness-boundary", 3),
+        ("typed-page-active-transition-boundary", 6),
+        ("typed-page-full-transition-boundary", 2),
+        ("typed-page-available-pop-boundary", 3),
+        ("typed-page-retire-destroy-boundary", 2),
+        ("typed-page-abandoned-claim-boundary", 2),
+        ("typed-page-remote-free-classification-boundary", 2),
+        ("typed-page-abandoned-reclaim-boundary", 2),
+        ("typed-thread-heap-local-witness-boundary", 3),
+        ("typed-page-free-owner-classification-boundary", 8),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = page_states_rs.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "page-state audit boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
+        );
+    }
+    assert!(
+        !page_states_rs.contains("SAFETY[AUDIT:typed-page-state-domain]"),
+        "page-state typestate operations should stay split into focused audit IDs"
+    );
+
     assert!(
         padding_rs.contains("pub(crate) struct PaddingCanary(u32);")
             && padding_rs.contains("pub(crate) struct PaddingDelta(u32);")

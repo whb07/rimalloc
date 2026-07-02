@@ -9,13 +9,11 @@ release-audit modules that now block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,899 unsafe
-  mentions, and 375 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 375 operation IDs with
-  810 automated evidence rows.
-- No source audit operation ID is over 36 source markers. The largest remaining
-  source IDs are `init-subproc-heap-association-boundary` and
-  `typed-page-state-domain` with 36 markers each.
-  `typed-heap-thread-tld-pointer-test-fixtures` has 35 markers, while
+  mentions, and 391 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 391 operation IDs with
+  842 automated evidence rows.
+- No source audit operation ID is over 35 source markers. The largest remaining
+  source ID is `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers.
   `init-subproc-registry-boundary`, `platform-thread-heap-association-boundary`,
   and `windows-virtual-memory-boundary` have 32 markers each.
 - `strict-type-allowlist.txt` has 631 active entries: 332
@@ -41,12 +39,12 @@ Current review evidence:
   release-audit module-size guard discovers 91 module files recursively and
   enforces a 500-line cap. The largest release-audit modules are:
   `release_policy/security/unsafe_audit_evidence.rs` at 480 lines,
+  `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 459 lines,
   `interposition_exports.rs` at 457 lines,
-  `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 448 lines,
   `unsafe_performance/allocation_free.rs` at 432 lines,
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines, and
   `unsafe_performance/os_memory.rs` at 409 lines.
-- Full validation for Issue 3 passed: `cargo fmt --all`,
+- Full validation for Issue 4 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -123,19 +121,23 @@ scripts, full formatting, full clippy, and full tests.
 
 ## Issue 4: Split typed page-state and subproc association audit clusters
 
-`typed-page-state-domain` has 36 markers in `src/types/page_states.rs`, and
-`init-subproc-heap-association-boundary` has 36 markers in
-`src/allocator/init.rs`. Both are typed Rust improvements, but each still groups
-several independent ownership transitions under one audit ID.
+> **Comment:** Completed. `typed-page-state-domain` and
+> `init-subproc-heap-association-boundary` are gone from allocator source. Page
+> typestate markers are split across uninit initialization, witness
+> construction, active/full/available/all-free transitions, retire/destroy,
+> abandoned claim/reclaim, remote-free classification, local thread-heap
+> witnesses, and free-owner classification. Subproc association markers are
+> split across prefix projection, main-heap loads, main-heap export/current
+> lookup, main-heap predicates, and heap visitation.
 
-- [ ] Split `typed-page-state-domain` into uninit initialization, active/free
+- [x] Split `typed-page-state-domain` into uninit initialization, active/free
       transitions, available/full transitions, all-free retire/expire,
       abandoned claim/reclaim, foreign/remote-free classification, and
       thread-heap local/borrowed witnesses.
-- [ ] Split `init-subproc-heap-association-boundary` into subproc prefix/main
+- [x] Split `init-subproc-heap-association-boundary` into subproc prefix/main
       heap lookup, heap-to-subproc lookup, current subproc lookup, main heap
       export, main heap predicates, thread association, and heap visitation IDs.
-- [ ] Update strict-type and datatype acceptance guards so the typed witness
+- [x] Update strict-type and datatype acceptance guards so the typed witness
       transitions remain covered after the audit IDs are split.
 
 Verify: page-state tests, lifecycle/subproc release-audit modules, strict-type
@@ -168,8 +170,8 @@ no-allocation audit, full formatting, full clippy, and full tests.
 
 The recursive module-size guard now enforces 500 lines. The next bottleneck is
 the 400-line band: `release_policy/security/unsafe_audit_evidence.rs` at 480,
+`unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 459,
 `interposition_exports.rs` at 457,
-`unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 448,
 `unsafe_performance/allocation_free.rs` at 432,
 `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at
 421, and `unsafe_performance/os_memory.rs` at 409.
@@ -192,7 +194,7 @@ formatting, full clippy, and full tests.
 1. [x] Split options output and diagnostic audit clusters.
 2. [x] Split arena registry and purge audit clusters.
 3. [x] Split allocation entry and raw override audit clusters.
-4. [ ] Split typed page-state and subproc association audit clusters.
+4. [x] Split typed page-state and subproc association audit clusters.
 5. [ ] Tighten strict-type allowlist hotspots.
 6. [ ] Split release-audit modules over 400 lines and lower the cap.
 

@@ -591,7 +591,7 @@ impl MiSubprocPrefix {
 }
 
 unsafe fn mi_subproc_prefix(subproc: *mut mi_subproc_t) -> *mut MiSubprocPrefix {
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-prefix-boundary]: subproc prefix projection uses validated subproc pointer witnesses.
     unsafe { mi_subproc_prefix_typed(SubprocPtr::new_unchecked(subproc)) }
 }
 
@@ -603,23 +603,23 @@ unsafe fn mi_subproc_heap_main_raw(subproc: *mut mi_subproc_t) -> *mut mi_heap_t
     let Some(subproc) = SubprocPtr::new(subproc) else {
         return ptr::null_mut();
     };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-load-boundary]: subproc main-heap loads preserve typed subproc and heap witnesses.
     let subproc = unsafe { BorrowedSubproc::new(subproc) };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-load-boundary]: subproc main-heap loads preserve typed subproc and heap witnesses.
     unsafe { mi_subproc_heap_main_typed(subproc) }
         .map(HeapPtr::as_ptr)
         .unwrap_or(ptr::null_mut())
 }
 
 unsafe fn mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> Option<HeapPtr> {
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-load-boundary]: subproc main-heap loads preserve typed subproc and heap witnesses.
     let subproc = unsafe { mi_subproc_prefix_typed(subproc.ptr()) };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-load-boundary]: subproc main-heap loads preserve typed subproc and heap witnesses.
     HeapPtr::new(unsafe { ptr::addr_of!((*subproc).heap_main).read_unaligned() })
 }
 
 unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-load-boundary]: subproc main-heap loads preserve typed subproc and heap witnesses.
     unsafe { ptr::addr_of!((*(heap.cast::<MiHeapMainPrefix>())).subproc).read_unaligned() }
 }
 
@@ -2053,35 +2053,35 @@ pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
     _mi_subproc_to_id_typed(Some(unsafe { _mi_subproc_typed().ptr() }))
 }
 
-// SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+// SAFETY[AUDIT:init-subproc-main-heap-export-boundary]: subproc main-heap export initializes and returns a typed main-heap witness.
 /// # Safety
 /// `subproc` must point to a valid local subproc prefix.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     subproc: *mut mi_subproc_t,
 ) -> *mut mi_heap_t {
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-export-boundary]: subproc main-heap export initializes and returns a typed main-heap witness.
     let subproc = unsafe { BorrowedSubproc::new(SubprocPtr::new_unchecked(subproc)) };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-export-boundary]: subproc main-heap export initializes and returns a typed main-heap witness.
     unsafe { _mi_subproc_heap_main_typed(subproc).ptr().as_ptr() }
 }
 
 unsafe fn _mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-export-boundary]: subproc main-heap export initializes and returns a typed main-heap witness.
     let heap = unsafe { mi_subproc_heap_main_typed(subproc) };
     if let Some(heap) = heap {
-        // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+        // SAFETY[AUDIT:init-subproc-main-heap-export-boundary]: subproc main-heap export initializes and returns a typed main-heap witness.
         return unsafe { MainHeap::new_unchecked(heap) };
     }
     mi_heap_main_init();
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-export-boundary]: subproc main-heap export initializes and returns a typed main-heap witness.
     let heap = unsafe { mi_subproc_heap_main_typed(subproc) };
     crate::internal::mi_assert_internal!(heap.is_some());
     let Some(heap) = heap else {
-        // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+        // SAFETY[AUDIT:init-subproc-main-heap-export-boundary]: subproc main-heap export initializes and returns a typed main-heap witness.
         return unsafe { MainHeap::new_unchecked(HeapPtr::new_unchecked(mi_heap_main())) };
     };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-export-boundary]: subproc main-heap export initializes and returns a typed main-heap witness.
     unsafe { MainHeap::new_unchecked(heap) }
 }
 
@@ -2089,74 +2089,74 @@ unsafe fn _mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
 static MI_SUBPROC_HEAP_MAIN_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> *mut mi_heap_t =
     _mi_subproc_heap_main;
 
-// SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+// SAFETY[AUDIT:init-subproc-current-main-heap-boundary]: current main-heap lookup preserves raw default-thread and subproc association semantics.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Returns the current subproc main heap for the bounded init/runtime scaffold.
 pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-current-main-heap-boundary]: current main-heap lookup preserves raw default-thread and subproc association semantics.
     let theap = unsafe { crate::prim::_mi_theap_default_raw() };
     let subproc = if theap.is_null() {
-        // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+        // SAFETY[AUDIT:init-subproc-current-main-heap-boundary]: current main-heap lookup preserves raw default-thread and subproc association semantics.
         unsafe { mi_subproc_main_addr() }
     } else {
-        // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+        // SAFETY[AUDIT:init-subproc-current-main-heap-boundary]: current main-heap lookup preserves raw default-thread and subproc association semantics.
         let tld = unsafe { (*theap).tld };
-        // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+        // SAFETY[AUDIT:init-subproc-current-main-heap-boundary]: current main-heap lookup preserves raw default-thread and subproc association semantics.
         unsafe { (*tld).subproc }
     };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-current-main-heap-boundary]: current main-heap lookup preserves raw default-thread and subproc association semantics.
     let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if heap.is_null() {
         mi_heap_main_init();
-        // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+        // SAFETY[AUDIT:init-subproc-current-main-heap-boundary]: current main-heap lookup preserves raw default-thread and subproc association semantics.
         heap = unsafe { mi_subproc_heap_main_raw(subproc) };
         crate::internal::mi_assert_internal!(!heap.is_null());
     }
     heap
 }
 
-// SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+// SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
 /// # Safety
 /// `heap` must point to a heap prefix compatible with this crate's local scaffold.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
     let subproc = unsafe { mi_heap_subproc_raw(heap) };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
     let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if main_heap.is_null() {
         mi_heap_main_init();
-        // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+        // SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
         main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     }
     ptr::eq(main_heap, heap.cast_mut())
 }
 
-// SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+// SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
 /// # Safety
 /// `theap` must be null or point to a valid thread-heap structure.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
     if !unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return false;
     }
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
     let heap = unsafe { crate::internal::_mi_theap_heap(theap) };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
     let subproc = unsafe { mi_heap_subproc_raw(heap) };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
     let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if main_heap.is_null() {
         mi_heap_main_init();
-        // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+        // SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
         main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     }
     ptr::eq(main_heap, heap)
 }
 
-// SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+// SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]: main-heap predicates compare validated heap and thread-heap associations.
 #[used]
 static MI_IS_THEAP_MAIN_KEEP: unsafe extern "C" fn(*const mi_theap_t) -> bool = _mi_is_theap_main;
 
@@ -2407,7 +2407,7 @@ pub unsafe extern "C" fn mi_subproc_add_current_thread(subproc_id: mi_subproc_id
     }
 }
 
-// SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+// SAFETY[AUDIT:init-subproc-heap-visit-boundary]: subproc heap visitation locks the heap list and invokes typed heap callbacks.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `subproc_id` must identify a local subproc created by this crate.
@@ -2421,14 +2421,14 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
         return false;
     };
     let arg = HeapVisitCallbackArg::from_raw(arg);
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-heap-visit-boundary]: subproc heap visitation locks the heap list and invokes typed heap callbacks.
     let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
     if subproc.is_null() {
         return false;
     }
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-heap-visit-boundary]: subproc heap visitation locks the heap list and invokes typed heap callbacks.
     let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
-    // SAFETY[AUDIT:init-subproc-heap-association-boundary]: subproc/main-heap association and heap visitation use typed subproc and heap witnesses.
+    // SAFETY[AUDIT:init-subproc-heap-visit-boundary]: subproc heap visitation locks the heap list and invokes typed heap callbacks.
     unsafe {
         mi_lock_acquire(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
         let mut heap = (*subproc_prefix).heaps;

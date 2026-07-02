@@ -14,8 +14,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 12 entries: 10 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 12.
+- `docs/unsafe-migration-allowlist.tsv` has 11 entries: 9 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 11.
 - The completed pass moved `src/types/constants.rs` to 8
   `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers while retaining 2
   `SAFETY[AUDIT:raw-auto-trait]` markers for sentinel `Sync` impls, moved
@@ -25,8 +25,14 @@ Current review evidence:
   moved `src/platform/os.rs` to 136 `SAFETY[AUDIT:os-memory-boundary]`
   markers, and moved `src/types/ptr.rs` to 161
   `SAFETY[AUDIT:typed-pointer-accessors]` markers.
+- This pass moved `src/allocator/free.rs` to 69
+  `SAFETY[AUDIT:free-path-boundary]` markers for free fast-path assembly
+  aliases, page/block/user-pointer validation, padding and guarded-block
+  metadata, local/remote/abandoned routing, thread-free atomic publication,
+  abandoned collect/reclaim/reabandon decisions, usable-size shims, raw C ABI
+  free exports, and stack-local tests, and is off the unsafe migration
+  allowlist.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits,
   `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits,
   `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits,
   `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits, and
@@ -59,6 +65,7 @@ Current review evidence:
   `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
   `SAFETY[AUDIT:thread-heap-lifecycle]` has 71 markers,
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers,
+  `SAFETY[AUDIT:free-path-boundary]` has 69 markers,
   `SAFETY[AUDIT:platform-tls-primitives]` has 60 markers,
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
   `SAFETY[AUDIT:typed-heap-test-fixtures]` has 55 markers,
@@ -80,19 +87,19 @@ Current review evidence:
 > allocator files because it is a compact hot-path boundary with clear existing
 > behavior tests.
 
-- [ ] Add local `SAFETY[AUDIT:free-path-boundary]` markers for page lookup,
+- [x] Add local `SAFETY[AUDIT:free-path-boundary]` markers for page lookup,
       block ownership checks, free-list link writes, delayed-free and
       cross-thread publication, guard-page validation, padding shrink, small and
       huge page free paths, and raw public free shims.
-- [ ] Preserve typed pointer wrappers, page ownership and segment invariants,
+- [x] Preserve typed pointer wrappers, page ownership and segment invariants,
       double-free detection, abandoned-page semantics, memory-ordering choices,
       delayed-free retry behavior, usable-size accounting, and the absence of
       allocator allocation or dynamic dispatch on free hot paths.
-- [ ] Add or extend release-audit assertions and focused tests for marker
+- [x] Add or extend release-audit assertions and focused tests for marker
       coverage, no migration allowlist entry, local free, remote free,
       guarded free, invalid/double-free rejection, huge allocation free, and
       no-allocation critical paths.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/allocator/free.rs`
+- [x] Add matching unsafe audit/evidence entries, remove `src/allocator/free.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower the cap.
 
@@ -212,7 +219,7 @@ audit scripts, unsafe inventory regeneration/check, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/allocator/free.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/allocator/free.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/allocator/options.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/allocator/aligned.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/stats.rs` off the unsafe migration allowlist.

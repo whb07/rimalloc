@@ -233,6 +233,13 @@ Operation IDs:
   boundaries. Unsafe operations stay at C ABI shims, callback invocations,
   page/block traversal, fast-divisor out-pointers, and caller-proven
   heap/thread-heap/TLD metadata transitions routed through typed wrappers.
+- `SAFETY[AUDIT:free-path-boundary]`: `src/allocator/free.rs` owns free and
+  usable-size routing. Unsafe operations are limited to free fast-path assembly
+  aliases, validated page/block/user-pointer lookup, padding and guarded-block
+  metadata, local and remote free-list mutation, thread-free atomic
+  publication, abandoned-page collect/reclaim/reabandon decisions, usable-size
+  shims, and raw C ABI free exports while preserving allocator ownership and
+  no-allocation hot-path constraints.
 - `SAFETY[AUDIT:owned-allocation]`: `src/safe/allocation.rs` owns non-zero
   allocations through move-only wrappers. Slice views and copies are bounded by
   the stored layout, and `Drop` releases live blocks exactly once.

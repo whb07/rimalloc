@@ -44,6 +44,11 @@ heap-lifecycle-boundary	test	tests/release_fast_path_audit/datatype_acceptance.r
 thread-heap-lifecycle	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap visitation, collection, init/create/free/delete, refcount, random, cleanup, marker coverage, and migration allowlist removal.
 thread-heap-lifecycle	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching, routed heap thread-heap lookup, heap lifecycle, stats, and allocation smoke paths.
 thread-heap-lifecycle	script	scripts/check-unsafe-audit.py	Checks thread-heap lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
+free-path-boundary	test	src/allocator/free.rs	Exercises pointer validation, interior and guarded pointer lookup, local/remote/abandoned routing, and double-free fixtures.
+free-path-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks free-path marker coverage, migration allowlist removal, typed routing, C ABI shims, and no-allocation hot-path shape.
+free-path-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation/free boundary cases for zero-size, realloc, calloc/product overflow, and freeable pointers.
+free-path-boundary	test	tests/no_allocation_critical_paths.rs	Checks allocator critical paths avoid routing through Rust's global allocator.
+free-path-boundary	script	scripts/check-unsafe-audit.py	Checks free-path unsafe operations retain operation-level SAFETY markers and source audit coverage.
 owned-allocation	test	src/safe/tests.rs	Exercises safe owned Allocation construction, resize, initialization, and drop paths.
 owned-allocation	test	tests/allocation_boundary_cases.rs	Covers allocation boundary cases that the owned wrapper forwards to.
 panic-boundary	test	tests/ffi_panic_audit.rs	Checks production panic-abort policy and callback panic containment documentation.

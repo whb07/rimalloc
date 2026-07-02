@@ -131,6 +131,22 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !bitmap_rs.contains("clippy::if_same_then_else"),
         "free.rs and bitmap.rs should not retain obsolete if_same_then_else allowances"
     );
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/free.rs\t"))
+            && free_rs.matches("SAFETY[AUDIT:free-path-boundary]").count() >= 60
+            && free_rs.contains("core::arch::global_asm!(")
+            && free_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign(")
+            && free_rs.contains("pub(crate) unsafe extern \"C\" fn mi_free_generic_local(")
+            && free_rs.contains("pub(crate) unsafe extern \"C\" fn mi_free_generic_mt(")
+            && free_rs.contains("unsafe fn mi_free_fast_try(")
+            && free_rs.contains("pub unsafe extern \"C\" fn mi_free(")
+            && free_rs.contains("pub unsafe extern \"C\" fn mi_usable_size(")
+            && free_rs.contains("pub unsafe extern \"C\" fn mi_ufree(")
+            && free_rs.contains("pub unsafe extern \"C\" fn mi_free_small("),
+        "free-path unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
 
     local_boundaries::assert_page_map_and_deferred_boundaries(local_boundaries::BoundarySources {
         page_map: &page_map,

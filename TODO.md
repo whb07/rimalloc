@@ -13,17 +13,21 @@ strict-type entries, or smaller release-audit modules.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` now has 40 entries: 37 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 40.
+- `docs/unsafe-migration-allowlist.tsv` now has 39 entries: 36 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 39.
+- `src/types/arena.rs` now uses 7
+  `SAFETY[AUDIT:typed-arena-domain]` markers for slice-range count
+  construction and arena role witnesses, and is off the unsafe migration
+  allowlist.
 - The smallest remaining allowlisted production files are:
-  `src/types/arena.rs` at 260 lines with 13 `unsafe` hits and 0 local
-  `SAFETY[AUDIT:*]` markers,
   `src/types/page_queues.rs` at 304 lines with 32 `unsafe` hits and 0 local
   markers,
   `src/types/heap.rs` at 312 lines with 44 `unsafe` hits and 0 local markers,
   `src/allocator/arena_meta.rs` at 316 lines with 24 `unsafe` hits and 0 local
   markers, and
-  `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers.
+  `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers,
+  followed by `src/allocator/bench_diagnostics.rs` at 350 lines with
+  8 `unsafe` hits and 0 local markers.
 - `src/types/freelist_wrappers.rs` is 409 lines with 46 `unsafe` hits and
   0 local `SAFETY[AUDIT:*]` markers. It also still has broad strict-type rows:
   `raw-pointer-parameter|src/types/freelist_wrappers.rs|*|mi_block_t` and
@@ -65,14 +69,14 @@ Current review evidence:
 > witnesses, not allocator hot-path logic, so they should be documented at the
 > constructor boundary instead of hidden by a file-level migration exception.
 
-- [ ] Add local `SAFETY[AUDIT:typed-arena-domain]` markers for
+- [x] Add local `SAFETY[AUDIT:typed-arena-domain]` markers for
       `SliceRange` unchecked count construction and `SharedArena`,
       `ExclusiveArena`, and `ParentArena` role constructors.
-- [ ] Preserve the current small `Copy`/transparent wrapper shape and avoid new
+- [x] Preserve the current small `Copy`/transparent wrapper shape and avoid new
       allocation, dynamic dispatch, or global arena-table validation.
-- [ ] Add matching `UNSAFE_AUDIT.md` and
+- [x] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [ ] Remove `src/types/arena.rs` from
+- [x] Remove `src/types/arena.rs` from
       `docs/unsafe-migration-allowlist.tsv`, regenerate unsafe inventory, and
       lower `ALLOWLIST_ENTRY_CAP`.
 
@@ -172,7 +176,7 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/types/arena.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/types/arena.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/types/page_queues.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/types/heap.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/types/freelist_wrappers.rs` off the unsafe migration

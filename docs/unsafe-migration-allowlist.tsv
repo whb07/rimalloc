@@ -28,7 +28,6 @@ src/platform/wasi.rs	production	release-readiness	2026-09-30	legacy platform uns
 src/platform/windows.rs	translation	release-readiness	2026-09-30	legacy translated Windows ABI and platform unsafe pending per-operation SAFETY marker migration
 src/raw/macros.rs	production	release-readiness	2026-09-30	legacy raw facade unsafe pending per-operation SAFETY marker migration
 src/raw/posix.rs	production	release-readiness	2026-09-30	legacy raw facade unsafe pending per-operation SAFETY marker migration
-src/types/arena.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/atomic.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/constants.rs	translation	release-readiness	2026-09-30	legacy translated C layout unsafe pending per-operation SAFETY marker migration
 src/types/freelist_wrappers.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration

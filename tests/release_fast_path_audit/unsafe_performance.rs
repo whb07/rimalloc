@@ -1813,9 +1813,19 @@ fn free_path_internals_are_not_dynamic_exports() {
         arena_types.contains("#[repr(transparent)]\npub(crate) struct SharedArena(pub(crate) ArenaPtr);")
             && arena_types.contains("#[repr(transparent)]\npub(crate) struct ExclusiveArena(pub(crate) ArenaPtr);")
             && arena_types.contains("#[repr(transparent)]\npub(crate) struct ParentArena(pub(crate) ArenaPtr);")
-            && arena_types.contains("impl SharedArena {\n    /// # Safety\n    /// `arena` must point to initialized arena metadata.\n    #[inline(always)]\n    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {\n        if unsafe { arena.is_exclusive() } {")
-            && arena_types.contains("impl ExclusiveArena {\n    /// # Safety\n    /// `arena` must point to initialized arena metadata.\n    #[inline(always)]\n    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {\n        if unsafe { arena.is_exclusive() } {")
-            && arena_types.contains("impl ParentArena {\n    /// # Safety\n    /// `arena` must point to initialized arena metadata.\n    #[inline(always)]\n    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {\n        if unsafe { arena.parent().is_none() } {"),
+            && arena_types.matches("SAFETY[AUDIT:typed-arena-domain]").count() >= 7
+            && arena_types.contains("impl SharedArena {\n    /// # Safety\n    /// `arena` must point to initialized arena metadata.\n    #[inline(always)]\n    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self>")
+            && arena_types.contains(
+                "before packaging the shared-arena witness.\n        if unsafe { arena.is_exclusive() } {\n            None"
+            )
+            && arena_types.contains("impl ExclusiveArena {\n    /// # Safety\n    /// `arena` must point to initialized arena metadata.\n    #[inline(always)]\n    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self>")
+            && arena_types.contains(
+                "before packaging the exclusive-arena witness.\n        if unsafe { arena.is_exclusive() } {\n            Some(Self(arena))"
+            )
+            && arena_types.contains("impl ParentArena {\n    /// # Safety\n    /// `arena` must point to initialized arena metadata.\n    #[inline(always)]\n    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self>")
+            && arena_types.contains(
+                "packaging a root parent-arena witness.\n        if unsafe { arena.parent().is_none() } {\n            Some(Self(arena))"
+            ),
         "arena role wrappers should have checked constructors based on raw arena state"
     );
     assert!(

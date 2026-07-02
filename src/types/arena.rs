@@ -33,12 +33,18 @@ impl SliceRange {
         let end = start_u32
             .checked_add(count_u32)
             .ok_or(SliceError::Overflow)?;
+        // SAFETY[AUDIT:typed-arena-domain]: callers pass initialized arena
+        // metadata, and this checked constructor only reads the typed arena
+        // slice-count bound before accepting the range.
         if end > unsafe { arena.slice_count().get() } {
             return Err(SliceError::OutOfBounds);
         }
 
         Ok(Self {
             start: SliceIndex(start_u32 as usize),
+            // SAFETY[AUDIT:typed-arena-domain]: `nz_count` proves the raw
+            // count is non-zero and the earlier conversions prove it fits in
+            // the SliceCount `u32` domain.
             count: unsafe { SliceCount::new_unchecked(nz_count.get()) },
         })
     }
@@ -49,6 +55,8 @@ impl SliceRange {
 
         Ok(Self {
             start: SliceIndex(start as usize),
+            // SAFETY[AUDIT:typed-arena-domain]: `count` is a NonZeroU32 and
+            // `start + count` was checked above before building the range.
             count: unsafe { SliceCount::new_unchecked(count.get()) },
         })
     }
@@ -61,6 +69,8 @@ impl SliceRange {
 
         Ok(Self {
             start,
+            // SAFETY[AUDIT:typed-arena-domain]: one is the smallest non-zero
+            // valid slice count for the single-slice witness.
             count: unsafe { SliceCount::new_unchecked(1) },
         })
     }
@@ -125,6 +135,9 @@ impl SharedArena {
     /// `arena` must point to initialized arena metadata.
     #[inline(always)]
     pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {
+        // SAFETY[AUDIT:typed-arena-domain]: callers provide initialized
+        // arena metadata; this constructor only reads the exclusive flag
+        // before packaging the shared-arena witness.
         if unsafe { arena.is_exclusive() } {
             None
         } else {
@@ -146,6 +159,9 @@ impl ExclusiveArena {
     /// `arena` must point to initialized arena metadata.
     #[inline(always)]
     pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {
+        // SAFETY[AUDIT:typed-arena-domain]: callers provide initialized
+        // arena metadata; this constructor only reads the exclusive flag
+        // before packaging the exclusive-arena witness.
         if unsafe { arena.is_exclusive() } {
             Some(Self(arena))
         } else {
@@ -215,6 +231,9 @@ impl ParentArena {
     /// `arena` must point to initialized arena metadata.
     #[inline(always)]
     pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {
+        // SAFETY[AUDIT:typed-arena-domain]: callers provide initialized
+        // arena metadata; this constructor only reads the parent link before
+        // packaging a root parent-arena witness.
         if unsafe { arena.parent().is_none() } {
             Some(Self(arena))
         } else {

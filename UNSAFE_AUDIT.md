@@ -307,6 +307,11 @@ Operation IDs:
   permits the Miri-only provenance registry wrapper to cross `RwLock`
   synchronization boundaries. The stored raw pointer values are lookup tokens
   for later reconstruction and do not grant aliasing or lifetime permissions.
+- `SAFETY[AUDIT:typed-arena-domain]`: `src/types/arena.rs` owns typed
+  slice-range construction and arena role witnesses. Unsafe operations are
+  limited to reading initialized arena metadata, constructing non-zero
+  `SliceCount` values after checked bounds, and packaging shared, exclusive, or
+  parent arena role proofs into transparent wrappers.
 - `SAFETY[AUDIT:typed-arena-test-fixtures]`: `src/types/arena/tests.rs`
   builds stack-local arena metadata to exercise slice-range and arena-role
   constructors. The fixtures do not register with allocator globals and are

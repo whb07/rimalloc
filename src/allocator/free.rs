@@ -115,8 +115,9 @@ pub(crate) unsafe extern "C" fn _mi_page_ptr_unalign(
 unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_block_t) -> bool {
     // SAFETY[AUDIT:free-double-check-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
-        if mi_list_contains(page, (*page).free, block)
-            || mi_list_contains(page, (*page).local_free, block)
+        let page_ptr = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
+        if mi_list_contains(page, page_ptr.free().as_raw(), block)
+            || mi_list_contains(page, page_ptr.local_free().as_raw(), block)
             || mi_list_contains(page, mi_page_thread_free(page), block)
         {
             let block_size = mi_page_block_size(page);

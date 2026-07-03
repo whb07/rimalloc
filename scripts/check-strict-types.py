@@ -92,6 +92,7 @@ ALLOWED_BLOCK_NEXT = {
 ALLOWED_XTHREAD_ID = {
     "src/types/page.rs",
     "src/types/atomic.rs",
+    "src/types/atomic/page_thread.rs",
     "src/types/constants.rs",
 }
 

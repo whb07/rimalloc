@@ -125,7 +125,11 @@ impl UnsafePerformanceSources {
             scalar_types: read_source(root, "src/types/scalar.rs"),
             atomic_types: read_sources(
                 root,
-                &["src/types/atomic.rs", "src/types/atomic/thread_free.rs"],
+                &[
+                    "src/types/atomic.rs",
+                    "src/types/atomic/page_thread.rs",
+                    "src/types/atomic/thread_free.rs",
+                ],
             ),
             ptr_rs: read_source(root, "src/types/ptr.rs"),
             validation_types: read_source(root, "src/types/validation.rs"),

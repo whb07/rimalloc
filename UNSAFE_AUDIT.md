@@ -2007,8 +2007,9 @@ Operation IDs:
   temporary `AtomicI64` views over caller-proven raw `i64` fields.
 - `SAFETY[AUDIT:typed-atomic-pointer-field]`: `src/types/atomic.rs` owns
   temporary `AtomicPtr` views over caller-proven raw pointer fields.
-- `SAFETY[AUDIT:typed-atomic-page-thread-id]`: `src/types/atomic.rs` owns typed
-  page `xthread_id` load, flag, owner-store, and owner-CAS protocols.
+- `SAFETY[AUDIT:typed-atomic-page-thread-id]`: `src/types/atomic/page_thread.rs`
+  owns typed page `xthread_id` load, flag, owner-store, and owner-CAS
+  protocols.
 - `SAFETY[AUDIT:typed-atomic-thread-free]`: `src/types/atomic/thread_free.rs`
   owns typed `xthread_free` remote-list head and ownership bit protocols,
   including remote-list collection handoff fixtures.

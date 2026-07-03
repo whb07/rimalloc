@@ -2444,7 +2444,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
 
         let atomic_tid =
             // SAFETY[AUDIT:arena-page-abandon-boundary]: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
-            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField::from_raw(unsafe {
+            crate::core_types::AtomicPageThreadId::from_field(crate::core_types::AtomicUsizeField::from_raw(unsafe {
                 ptr::addr_of_mut!((*page).xthread_id)
             }));
         unsafe { atomic_tid.store_owner(crate::core_types::PageOwnerId::AbandonedMapped) };

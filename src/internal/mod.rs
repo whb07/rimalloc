@@ -667,10 +667,11 @@ pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::Pag
     // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_is_abandoned_mapped(page.as_ptr()));
-        let atomic_tid =
-            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField::from_raw(
-                ptr::addr_of_mut!((*page.as_ptr()).xthread_id),
-            ));
+        let atomic_tid = crate::core_types::AtomicPageThreadId::from_field(
+            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!(
+                (*page.as_ptr()).xthread_id
+            )),
+        );
         let mut old = atomic_tid.load();
         loop {
             let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);
@@ -721,7 +722,7 @@ pub(crate) unsafe fn mi_page_claim_ownership(
     unsafe {
         let page_ptr = page.page();
         let page = page_ptr.as_ptr();
-        let atomic_tf = crate::core_types::AtomicThreadFree(
+        let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
             crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),
         );
         if atomic_tf.claim_acq_rel() {

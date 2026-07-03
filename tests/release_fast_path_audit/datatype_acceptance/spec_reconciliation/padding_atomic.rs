@@ -32,8 +32,7 @@ pub(super) fn assert_padding_and_atomic_reconciliation(
         "padding metadata should construct canaries from typed PagePtr/BlockPtr plus PageKeys and deltas with the usable-size bound"
     );
     assert!(
-        atomic_thread_free
-            .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
+        atomic_thread_free.contains("pub(crate) struct AtomicThreadFree(AtomicUsizeField);")
             && !atomic_thread_free
                 .contains("pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);"),
         "AtomicThreadFree should be backed by AtomicUsizeField, matching TYPES_SPEC.md"

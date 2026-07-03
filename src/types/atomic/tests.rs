@@ -155,7 +155,7 @@ fn atomic_page_thread_id_updates_owner_and_flags() {
     let initial =
         PageThreadId::from_parts(PageOwnerId::Abandoned, PageFlags::HAS_INTERIOR_POINTERS);
     let atomic = AtomicUsize::new(initial.raw());
-    let field = AtomicPageThreadId(AtomicUsizeField::from_raw(
+    let field = AtomicPageThreadId::from_field(AtomicUsizeField::from_raw(
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
@@ -195,7 +195,7 @@ fn atomic_page_thread_id_updates_owner_and_flags() {
 #[test]
 fn atomic_thread_free_claims_and_releases_ownership_bit() {
     let atomic = AtomicUsize::new(0);
-    let field = AtomicThreadFree(AtomicUsizeField::from_raw(
+    let field = AtomicThreadFree::from_field(AtomicUsizeField::from_raw(
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
@@ -225,7 +225,7 @@ fn atomic_thread_free_take_head_preserves_owner_bit() {
     let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
     let word = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
     let atomic = AtomicUsize::new(word.raw());
-    let field = AtomicThreadFree(AtomicUsizeField::from_raw(
+    let field = AtomicThreadFree::from_field(AtomicUsizeField::from_raw(
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
@@ -253,7 +253,7 @@ fn empty_remote_free_list_collects_through_detached_atomic_path() {
         ptr::addr_of_mut!((*raw_page).local_free).write(ptr::addr_of_mut!(local));
 
         let page_ptr = PagePtr::new_unchecked(raw_page);
-        let atomic = AtomicThreadFree(AtomicUsizeField::from_raw(ptr::addr_of_mut!(
+        let atomic = AtomicThreadFree::from_field(AtomicUsizeField::from_raw(ptr::addr_of_mut!(
             (*raw_page).xthread_free
         )));
         let remote = atomic.collect_acq_rel();

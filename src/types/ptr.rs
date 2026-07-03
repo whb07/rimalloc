@@ -258,7 +258,7 @@ impl PagePtr {
     #[inline(always)]
     pub(crate) unsafe fn thread_id_cell(self) -> AtomicPageThreadId {
         let raw = self.as_ptr();
-        AtomicPageThreadId(AtomicUsizeField::from_raw(unsafe {
+        AtomicPageThreadId::from_field(AtomicUsizeField::from_raw(unsafe {
             ptr::addr_of_mut!((*raw).xthread_id)
         }))
     }
@@ -270,7 +270,7 @@ impl PagePtr {
     #[inline(always)]
     pub(crate) unsafe fn thread_free_cell(self) -> AtomicThreadFree {
         let raw = self.as_ptr();
-        AtomicThreadFree(AtomicUsizeField::from_raw(unsafe {
+        AtomicThreadFree::from_field(AtomicUsizeField::from_raw(unsafe {
             ptr::addr_of_mut!((*raw).xthread_free)
         }))
     }

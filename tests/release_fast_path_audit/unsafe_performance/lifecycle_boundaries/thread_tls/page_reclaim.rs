@@ -22,7 +22,7 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && atomic_types.contains("pub(crate) unsafe fn load(self) -> PageThreadId")
         && atomic_types.contains("pub(crate) unsafe fn store_owner(self, owner: PageOwnerId)")
         && atomic_types.contains("pub(crate) unsafe fn compare_exchange_owner(\n        self,\n        expected: &mut PageThreadId,")
-        && internal_page_boundary.contains("let atomic_tid =\n            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField::from_raw(")
+        && internal_page_boundary.contains("let atomic_tid = crate::core_types::AtomicPageThreadId::from_field(\n            crate::core_types::AtomicUsizeField::from_raw(")
         && internal_page_boundary.contains("atomic_tid.load().raw()")
         && internal_page_boundary.contains("let mut old = atomic_tid.load();")
         && internal_page_boundary.contains("atomic_tid.compare_exchange_owner(&mut old, new)")
@@ -47,7 +47,7 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && !page_flags_rs.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
         && !arena_rs.contains("MI_THREADID_ABANDONED_MAPPED | flags")
         && page_rs.contains(
-            "let atomic_tf = crate::core_types::AtomicThreadFree(\n            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),\n        );"
+            "let atomic_tf = crate::core_types::AtomicThreadFree::from_field(\n            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),\n        );"
         )
         && page_rs.contains("let remote = atomic_tf.collect_acq_rel();")
         && page_rs.contains("remote.collect_into_local(page_wrapper, local);")
@@ -78,13 +78,13 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && internal_page_boundary.contains("atomic_tf.load_relaxed().head_raw()")
         && internal_page_boundary.contains("pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool")
         && internal_page_boundary.contains("atomic_tf.load_relaxed().is_owned()")
-        && internal_page_boundary.contains("let atomic_tf = crate::core_types::AtomicThreadFree(\n            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),")
+        && internal_page_boundary.contains("let atomic_tf = crate::core_types::AtomicThreadFree::from_field(\n            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),")
         && internal_page_boundary.contains("atomic_tf.claim_acq_rel()")
         && !internal_page_boundary.contains("atomic_tf.claim_ownership()")
         && arena_rs.contains("(*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(\n            None,\n            crate::core_types::ThreadFreeOwner::Unowned,")
         && !arena_rs.contains("(*page).xthread_free = 0")
         && free_rs.contains(
-            "let atomic_tf = crate::core_types::AtomicThreadFree(\n            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),\n        );"
+            "let atomic_tf = crate::core_types::AtomicThreadFree::from_field(\n            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),\n        );"
         )
         && free_rs.contains("match atomic_tf.push_remote_acq_rel(&mut tf_old, bp)")
         && free_rs.contains("while !atomic_tf.release_acq_rel(&mut tf_expect)")
@@ -93,7 +93,7 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && !free_rs.contains("atomic_tf.compare_exchange_release_ownership(")
         && !free_rs.contains("mi_tf_create(expected_thread_free")
         && arena_rs.contains(
-            "let atomic_tf =\n        crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField::from_raw(\n            unsafe { ptr::addr_of_mut!((*page).xthread_free) },\n        ));"
+            "let atomic_tf = crate::core_types::AtomicThreadFree::from_field(\n        crate::core_types::AtomicUsizeField::from_raw(unsafe {\n            ptr::addr_of_mut!((*page).xthread_free)\n        }),\n    );"
         )
         && arena_rs.contains("let mut tf_old = atomic_tf.load_relaxed();")
         && arena_rs.contains("while tf_old.head().is_some()")

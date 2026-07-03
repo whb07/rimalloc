@@ -10,9 +10,14 @@ use crate::core_types::{PageFlags, PageOwnerId, PageThreadId};
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicPageThreadId(pub(crate) AtomicUsizeField);
+pub(crate) struct AtomicPageThreadId(AtomicUsizeField);
 
 impl AtomicPageThreadId {
+    #[inline(always)]
+    pub(crate) fn from_field(field: AtomicUsizeField) -> Self {
+        Self(field)
+    }
+
     /// Load the page's tagged thread-id word (thread id + flag bits) as a typed
     /// `PageThreadId`.
     ///

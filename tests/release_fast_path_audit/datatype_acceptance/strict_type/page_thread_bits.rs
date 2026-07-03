@@ -19,7 +19,9 @@ pub(super) fn assert_page_thread_and_free_bit_domains(
             && page_core_rs.contains("self.0 & !MI_PAGE_FLAG_MASK")
             && page_core_rs.contains("pub(crate) fn classify_free_path(self, current: ThreadId) -> FreePathKind")
             && atomic_page_thread_rs
-                .contains("pub(crate) struct AtomicPageThreadId(pub(crate) AtomicUsizeField);")
+                .contains("pub(crate) struct AtomicPageThreadId(AtomicUsizeField);")
+            && atomic_page_thread_rs
+                .contains("pub(crate) fn from_field(field: AtomicUsizeField) -> Self")
             && atomic_page_thread_rs.contains("pub(crate) unsafe fn load(self) -> PageThreadId")
             && atomic_page_thread_rs.contains("pub(crate) unsafe fn set_flags(self, flags: PageFlags, set: bool) -> PageThreadId")
             && atomic_page_thread_rs.contains("unsafe { self.0.fetch_or(flags.bits(), Ordering::Relaxed) }")
@@ -50,7 +52,9 @@ pub(super) fn assert_page_thread_and_free_bit_domains(
                 .contains("crate::internal::mi_assert_internal!((val & Self::OWNED_BIT) == 0);")
             && freelist_rs.contains("Self(ptr_val | bit)")
             && atomic_thread_free_rs
-                .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
+                .contains("pub(crate) struct AtomicThreadFree(AtomicUsizeField);")
+            && atomic_thread_free_rs
+                .contains("pub(crate) fn from_field(field: AtomicUsizeField) -> Self")
             && atomic_thread_free_rs.contains("pub(crate) fn load_relaxed(self) -> ThreadFreeWord")
             && atomic_thread_free_rs.contains("pub(crate) fn push_remote_acq_rel(")
             && atomic_thread_free_rs.contains(

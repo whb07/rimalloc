@@ -124,10 +124,11 @@ pub unsafe fn mi_page_is_abandoned(page: *const mi_page_t) -> bool {
     // SAFETY[AUDIT:page-flag-owner-accessors]: callers pass allocator-owned
     // page metadata; the owner word is read through AtomicPageThreadId.
     unsafe {
-        let atomic_tid =
-            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField::from_raw(
-                ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_id),
-            ));
+        let atomic_tid = crate::core_types::AtomicPageThreadId::from_field(
+            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!(
+                (*(page as *mut mi_page_t)).xthread_id
+            )),
+        );
         let tid = atomic_tid.load();
         tid.is_abandoned() || tid.is_abandoned_mapped()
     }

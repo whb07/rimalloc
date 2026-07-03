@@ -1037,7 +1037,7 @@ unsafe fn _mi_page_init_typed(
         crate::internal::mi_assert_internal!((*page).free.is_null());
         crate::internal::mi_assert_internal!(mi_page_used_count(page).get() == 0);
         crate::internal::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
-        let thread_free = crate::core_types::AtomicThreadFree(
+        let thread_free = crate::core_types::AtomicThreadFree::from_field(
             crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),
         )
         .load_relaxed();
@@ -1145,7 +1145,7 @@ pub(crate) unsafe fn try_reclaim_abandoned(
 
         mi_page_set_theap(page, theap);
 
-        let atomic_tf = crate::core_types::AtomicThreadFree(
+        let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
             crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),
         );
         let remote = atomic_tf.collect_acq_rel();

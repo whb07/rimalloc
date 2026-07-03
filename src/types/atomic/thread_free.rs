@@ -68,9 +68,14 @@ impl RemoteFreeList {
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);
+pub(crate) struct AtomicThreadFree(AtomicUsizeField);
 
 impl AtomicThreadFree {
+    #[inline(always)]
+    pub(crate) fn from_field(field: AtomicUsizeField) -> Self {
+        Self(field)
+    }
+
     #[inline(always)]
     fn field(self) -> AtomicUsizeField {
         self.0

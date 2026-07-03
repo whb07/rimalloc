@@ -21,7 +21,7 @@ pub(super) fn assert_memid_view_memory_kind_dispatch(sources: &PageArenaBehavior
             && sources
                 .arena_ids_rs
                 .contains("crate::core_types::MemIdView::Arena(arena_memid)")
-            && sources.arena_ids_rs.contains("let range = arena_memid.range;")
+            && sources.arena_ids_rs.contains("let range = arena_memid.range();")
             && sources
                 .arena_ids_rs
                 .contains("fn mi_memid_is_os(memid: mi_memid_t) -> bool")
@@ -48,7 +48,7 @@ pub(super) fn assert_memid_view_memory_kind_dispatch(sources: &PageArenaBehavior
                 .contains("let page_slice_count = match crate::core_types::MemId::view(unsafe { (*raw).memid })")
             && sources
                 .arena_debug_rs
-                .contains("crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize")
+                .contains("crate::core_types::MemIdView::Arena(a) => a.range().count_usize() as isize")
             && sources.os_rs.contains("external.size.get()")
             && sources
                 .os_rs

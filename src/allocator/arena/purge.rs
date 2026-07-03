@@ -84,9 +84,9 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
             unsafe { _mi_os_free(p, size, memid) };
         }
         crate::core_types::MemIdView::Arena(arena_memid) => {
-            let arena_ptr = arena_memid.arena;
+            let arena_ptr = arena_memid.arena();
             let arena = arena_ptr.as_ptr();
-            let range = arena_memid.range;
+            let range = arena_memid.range();
             let slice_index = range.start_usize();
             let slice_count = range.count_usize();
             let slice_end = range.end_usize();

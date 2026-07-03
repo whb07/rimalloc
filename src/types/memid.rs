@@ -456,12 +456,40 @@ pub(crate) struct ExternalMemId {
     pub(crate) pinned: Pinned,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct ArenaMemId {
-    pub(crate) arena: ArenaPtr,
-    pub(crate) range: SliceRange,
-    pub(crate) initially_committed: InitiallyCommitted,
-    pub(crate) initially_zero: InitiallyZero,
-    pub(crate) pinned: Pinned,
+    arena: ArenaPtr,
+    range: SliceRange,
+    initially_committed: InitiallyCommitted,
+    initially_zero: InitiallyZero,
+    pinned: Pinned,
+}
+
+impl ArenaMemId {
+    #[inline(always)]
+    pub(crate) const fn arena(self) -> ArenaPtr {
+        self.arena
+    }
+
+    #[inline(always)]
+    pub(crate) const fn range(self) -> SliceRange {
+        self.range
+    }
+
+    #[inline(always)]
+    pub(crate) const fn initially_committed(self) -> InitiallyCommitted {
+        self.initially_committed
+    }
+
+    #[inline(always)]
+    pub(crate) const fn initially_zero(self) -> InitiallyZero {
+        self.initially_zero
+    }
+
+    #[inline(always)]
+    pub(crate) const fn pinned(self) -> Pinned {
+        self.pinned
+    }
 }
 
 pub(crate) struct MetaMemId {
@@ -541,11 +569,11 @@ pub(super) fn __lint_touch() {
             pinned: Pinned(false),
         };
         let _ = (
-            arena.arena,
-            arena.range,
-            arena.initially_committed.0,
-            arena.initially_zero.0,
-            arena.pinned.0,
+            arena.arena(),
+            arena.range(),
+            arena.initially_committed().0,
+            arena.initially_zero().0,
+            arena.pinned().0,
         );
     }
 }

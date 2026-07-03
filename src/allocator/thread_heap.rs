@@ -1025,7 +1025,7 @@ unsafe fn _mi_theap_create_typed(heap: HeapPtr, tld: TldPtr) -> Option<ThreadHea
             if !theap.is_null() {
                 let allocated_size = match crate::core_types::MemId::view(memid) {
                     crate::core_types::MemIdView::Arena(a) => {
-                        a.range.count_usize() * crate::arena::MI_ARENA_SLICE_SIZE
+                        a.range().count_usize() * crate::arena::MI_ARENA_SLICE_SIZE
                     }
                     crate::core_types::MemIdView::Os(os) => os.size.get(),
                     crate::core_types::MemIdView::External(external) => external.size.get(),
@@ -1124,7 +1124,7 @@ unsafe fn mi_theap_free_mem_typed(
                 _mi_meta_free(raw.cast(), size.get(), raw_memid);
             }
             crate::core_types::MemIdView::Arena(arena_memid) => {
-                mi_theap_free_arena_mem(theap, raw_memid, arena_memid.range, size);
+                mi_theap_free_arena_mem(theap, raw_memid, arena_memid.range(), size);
             }
             _ => {
                 _mi_arenas_free(raw.cast(), size.get(), raw_memid);

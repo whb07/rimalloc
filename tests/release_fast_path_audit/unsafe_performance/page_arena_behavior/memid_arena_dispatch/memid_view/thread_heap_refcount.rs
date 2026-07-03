@@ -10,7 +10,7 @@ pub(super) fn assert_thread_heap_refcount_dispatch(sources: &PageArenaBehaviorSo
                 .contains("crate::core_types::MemIdView::Arena(a)")
             && sources
                 .theap_rs
-                .contains("a.range.count_usize() * crate::arena::MI_ARENA_SLICE_SIZE")
+                .contains("a.range().count_usize() * crate::arena::MI_ARENA_SLICE_SIZE")
             && sources
                 .theap_rs
                 .contains("fn mi_memid_is_refcounted(memid: mi_memid_t) -> bool")

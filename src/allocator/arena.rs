@@ -1708,14 +1708,14 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
             // SAFETY[AUDIT:arena-heap-page-publication-boundary]: heap arena-page publication installs or updates per-heap arena page bitmaps before page ownership becomes visible.
             match crate::core_types::MemId::view(unsafe { *memid }) {
                 crate::core_types::MemIdView::Arena(a) => {
-                    let arena = a.arena.as_ptr();
+                    let arena = a.arena().as_ptr();
                     let arena_pages = unsafe { mi_heap_ensure_arena_pages_from_raw(heap, arena) };
                     if arena_pages.is_null() {
                         // SAFETY[AUDIT:arena-heap-page-publication-boundary]: heap arena-page publication installs or updates per-heap arena page bitmaps before page ownership becomes visible.
                         unsafe { _mi_arenas_free(start.cast(), alloc_size, *memid) };
                         start = ptr::null_mut();
                     } else {
-                        let slice_idx = a.range.start_usize();
+                        let slice_idx = a.range().start_usize();
                         crate::internal::mi_assert_internal!(unsafe {
                             !mi_bitmap_is_setN((*arena_pages).pages, slice_idx, 1)
                         });
@@ -1837,13 +1837,13 @@ unsafe fn mi_arenas_page_alloc_fresh(
     let mut block_start = 0usize;
 
     if let crate::core_types::MemIdView::Arena(a) = crate::core_types::MemId::view(memid) {
-        let arena = a.arena.as_ptr();
+        let arena = a.arena().as_ptr();
         // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
         if unsafe { !(*arena.cast::<MiArenaPrefix>()).pages_meta.is_null() } {
             let page_meta = unsafe {
                 (*arena.cast::<MiArenaPrefix>())
                     .pages_meta
-                    .add(a.range.start_usize())
+                    .add(a.range().start_usize())
             };
             // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
             crate::internal::mi_assert_internal!(unsafe { (*page_meta).block_size == 0 });
@@ -1882,7 +1882,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
         // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
         if !unsafe {
             let (arena_ptr, range) = match crate::core_types::MemId::view(memid) {
-                crate::core_types::MemIdView::Arena(a) => (a.arena, a.range),
+                crate::core_types::MemIdView::Arena(a) => (a.arena(), a.range()),
                 _ => {
                     crate::internal::mi_assert_internal!(false);
                     _mi_arenas_free(slice_start.cast(), alloc_size, memid);
@@ -2034,7 +2034,7 @@ unsafe fn mi_arenas_page_regular_alloc(
     crate::internal::mi_assert_internal!(match crate::core_types::MemId::view(unsafe {
         (*page).memid
     }) {
-        crate::core_types::MemIdView::Arena(a) => a.range.count() == slice_count,
+        crate::core_types::MemIdView::Arena(a) => a.range().count() == slice_count,
         _ => true, // Non-arena allocations trivially pass this slice_count assert
     });
     // SAFETY[AUDIT:arena-page-regular-boundary]: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.

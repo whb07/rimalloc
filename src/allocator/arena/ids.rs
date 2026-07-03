@@ -89,7 +89,7 @@ unsafe fn mi_arena_memid_is_suitable_typed(
         // SAFETY[AUDIT:arena-memid-suitability-helpers]: `MemIdView::Arena` carries the
         // typed arena witness extracted from the raw memid.
         crate::core_types::MemIdView::Arena(a) => unsafe {
-            mi_arena_is_suitable(a.arena, request_arena)
+            mi_arena_is_suitable(a.arena(), request_arena)
         },
         _ => false,
     }
@@ -164,7 +164,7 @@ unsafe fn mi_arena_range_from_memid(
     memid: mi_memid_t,
 ) -> Option<(crate::core_types::ArenaPtr, crate::core_types::SliceRange)> {
     match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::Arena(a) => Some((a.arena, a.range)),
+        crate::core_types::MemIdView::Arena(a) => Some((a.arena(), a.range())),
         _ => {
             crate::internal::mi_assert_internal!(false);
             None
@@ -196,7 +196,7 @@ pub(super) unsafe fn mi_page_full_size(page: PagePtr) -> crate::core_types::Rese
     let memid = unsafe { (*page_raw).memid };
     match crate::core_types::MemId::view(memid) {
         crate::core_types::MemIdView::Arena(arena_memid) => {
-            let range = arena_memid.range;
+            let range = arena_memid.range();
             crate::core_types::ReservedBytes::new(range.count_usize() * MI_ARENA_SLICE_SIZE)
         }
         crate::core_types::MemIdView::Os(os) => {

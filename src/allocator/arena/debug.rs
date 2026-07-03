@@ -282,7 +282,7 @@ fn mi_debug_page_state(page: PagePtr) -> (u8, mi_ansi_color_t, isize) {
     };
     // SAFETY[AUDIT:arena-debug-page-state-boundary]: arena diagnostics classify page state from allocator-owned page metadata and memid slices.
     let page_slice_count = match crate::core_types::MemId::view(unsafe { (*raw).memid }) {
-        crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize,
+        crate::core_types::MemIdView::Arena(a) => a.range().count_usize() as isize,
         _ => {
             crate::internal::mi_assert_internal!(false);
             0

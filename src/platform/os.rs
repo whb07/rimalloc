@@ -376,7 +376,7 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
     }
     if MI_SECURE > 0 && !memid.is_pinned {
         let arena = match crate::core_types::MemId::view(memid) {
-            crate::core_types::MemIdView::Arena(a) => a.arena.as_ptr(),
+            crate::core_types::MemIdView::Arena(a) => a.arena().as_ptr(),
             _ => core::ptr::null_mut(),
         };
         if !arena.is_null() {
@@ -433,7 +433,7 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
     }
     if MI_SECURE > 0 && !memid.is_pinned {
         let arena = match crate::core_types::MemId::view(memid) {
-            crate::core_types::MemIdView::Arena(a) => a.arena.as_ptr(),
+            crate::core_types::MemIdView::Arena(a) => a.arena().as_ptr(),
             _ => core::ptr::null_mut(),
         };
         if !arena.is_null() {

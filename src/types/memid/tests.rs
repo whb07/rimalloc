@@ -150,12 +150,12 @@ fn arena_memid_round_trips_slice_metadata() {
     let MemIdView::Arena(view) = MemId::<AnyMem>::view(memid.as_raw()) else {
         panic!("expected arena memid view");
     };
-    assert_eq!(view.arena.as_ptr(), arena_ptr.as_ptr());
-    assert_eq!(view.range.start_usize(), 11);
-    assert_eq!(view.range.count_usize(), 5);
-    assert!(view.initially_committed.0);
-    assert!(!view.initially_zero.0);
-    assert!(view.pinned.0);
+    assert_eq!(view.arena().as_ptr(), arena_ptr.as_ptr());
+    assert_eq!(view.range().start_usize(), 11);
+    assert_eq!(view.range().count_usize(), 5);
+    assert!(view.initially_committed().0);
+    assert!(!view.initially_zero().0);
+    assert!(view.pinned().0);
 }
 
 #[test]

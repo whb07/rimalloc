@@ -9,12 +9,9 @@ use super::*;
 unsafe fn mi_abandoned_page_try_free(page: crate::core_types::OwnedAbandonedPage) -> bool {
     // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
-        let page_ptr = page.page();
-        if !mi_page_all_free(page_ptr.as_ptr()) {
+        let Some(all_free) = page.mark_all_free() else {
             return false;
-        }
-        let abandoned = crate::core_types::AbandonedPage::new_unchecked(page_ptr);
-        let all_free = crate::core_types::AllFreePage::abandoned_unchecked(abandoned);
+        };
         _mi_arenas_page_unabandon(all_free.page().as_ptr(), ptr::null_mut());
         _mi_arenas_page_free(all_free.page().as_ptr(), ptr::null_mut());
         true

@@ -111,6 +111,17 @@ fn abandon_and_reclaim_transitions_preserve_page_identity() {
         }
 
         let owned = OwnedAbandonedPage::new_unchecked(page);
+        ptr::addr_of_mut!((*page.as_ptr()).used).write(0);
+        assert_eq!(
+            owned
+                .mark_all_free()
+                .expect("owned abandoned page with used == 0 is all-free")
+                .page()
+                .as_ptr(),
+            page.as_ptr()
+        );
+        ptr::addr_of_mut!((*page.as_ptr()).used).write(1);
+        assert!(owned.mark_all_free().is_none());
         let reclaimed = owned.reclaim(heap_owner());
         assert_eq!(reclaimed.page().as_ptr(), page.as_ptr());
         let mapped = owned.reabandon_to_mapped();

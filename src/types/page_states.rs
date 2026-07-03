@@ -351,6 +351,23 @@ impl AbandonedMappedPageType {
 
 impl OwnedAbandonedPage {
     #[inline(always)]
+    pub(crate) fn mark_all_free(self) -> Option<AllFreePage<Abandoned>> {
+        let page = self.page();
+        // SAFETY[AUDIT:typed-page-abandoned-reclaim-boundary]: owned abandoned
+        // page metadata is live and its used count determines the all-free witness.
+        if unsafe { page.used().get() == 0 } {
+            Some(AllFreePage {
+                page: Page {
+                    ptr: page,
+                    _state: PhantomData,
+                },
+            })
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
     pub(crate) fn reclaim(self, _target: ThreadHeapLocal) -> ActivePage {
         // SAFETY[AUDIT:typed-page-abandoned-reclaim-boundary]: ownership has been claimed
         // and the target local thread heap reclaims this page as active.

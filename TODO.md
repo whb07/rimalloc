@@ -11,7 +11,7 @@ production module cap.
 
 Current review evidence:
 
-- `scripts/check-unsafe-audit.py` covers 101 source files, 5,899 unsafe
+- `scripts/check-unsafe-audit.py` covers 102 source files, 5,899 unsafe
   mentions, and 540 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 540 operation IDs with
   1,155 automated evidence rows.

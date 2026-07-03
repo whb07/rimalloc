@@ -89,6 +89,9 @@ Per-file review:
   expiration updates together with OS decommit handoff.
 - `src/allocator/arena_meta.rs`: arena metadata page stack operations publish
   and reclaim metadata pages through the audited atomic stack discipline.
+- `src/allocator/free/abandoned.rs`: abandoned-page remote-free collection keeps
+  temporary ownership, reclaim, reabandon, and ownership-release decisions
+  behind typed abandoned-page and remote-free-list witnesses.
 - `src/atomic.rs`: raw atomic pointer casts are centralized here and mapped to
   C mimalloc atomic operations. Ordering equivalence is covered by
   `ATOMIC_ORDERING_AUDIT.md`.
@@ -1006,11 +1009,11 @@ Operation IDs:
   hot and cold free dispatch after validation. Unsafe operations are limited to
   validated free witnesses, local/remote/abandoned owner classification, usable
   out-pointers, and no-allocation routing.
-- `SAFETY[AUDIT:free-abandoned-page-boundary]`: `src/allocator/free.rs` owns
-  abandoned-page collection, reclaim, reabandon, and ownership release from the
-  free path. Unsafe operations are limited to owned abandoned-page witnesses,
-  remote free-list collection, arena suitability checks, and thread-free
-  ownership-word release.
+- `SAFETY[AUDIT:free-abandoned-page-boundary]`:
+  `src/allocator/free/abandoned.rs` owns abandoned-page collection, reclaim,
+  reabandon, and ownership release from the free path. Unsafe operations are
+  limited to owned abandoned-page witnesses, remote free-list collection, arena
+  suitability checks, and thread-free ownership-word release.
 - `SAFETY[AUDIT:aligned-padding-shrink-boundary]`:
   `src/allocator/aligned.rs` owns padding-shrink helper calls from aligned
   allocation. Unsafe operations are limited to the C-compatible fast shim and

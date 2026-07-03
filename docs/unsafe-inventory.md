@@ -55,7 +55,8 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/arena.rs` | 390 | 328 | 52 | 2 | 0 | 0 | 0 |
 | `src/allocator/arena_meta.rs` | 22 | 13 | 9 | 0 | 0 | 0 | 0 |
 | `src/allocator/bench_diagnostics.rs` | 14 | 9 | 2 | 0 | 0 | 3 | 0 |
-| `src/allocator/free.rs` | 121 | 60 | 54 | 0 | 0 | 3 | 2 |
+| `src/allocator/free/abandoned.rs` | 13 | 6 | 7 | 0 | 0 | 0 | 0 |
+| `src/allocator/free.rs` | 108 | 54 | 47 | 0 | 0 | 3 | 2 |
 | `src/allocator/heap.rs` | 93 | 46 | 34 | 0 | 0 | 11 | 0 |
 | `src/allocator/init.rs` | 333 | 230 | 79 | 3 | 0 | 18 | 3 |
 | `src/allocator/options.rs` | 79 | 46 | 9 | 4 | 3 | 15 | 0 |

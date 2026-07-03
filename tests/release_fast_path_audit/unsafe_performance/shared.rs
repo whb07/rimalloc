@@ -111,7 +111,10 @@ impl UnsafePerformanceSources {
                 ],
             ),
             bitmap_chunkmap_rs: read_source(root, "src/internal/bitmap/chunkmap.rs"),
-            free_rs: read_source(root, "src/allocator/free.rs"),
+            free_rs: read_sources(
+                root,
+                &["src/allocator/free.rs", "src/allocator/free/abandoned.rs"],
+            ),
             libc_rs: read_source(root, "src/ffi/libc.rs"),
             memid_rs: read_source(root, "src/types/memid.rs"),
             callbacks_rs: read_source(root, "src/types/callbacks.rs"),

@@ -27,12 +27,12 @@ pub(super) fn assert_free_marker_counts(free_rs: &str, bitmap_rs: &str, unsafe_a
         ("free-abi-validation-boundary", 5),
         ("free-validation-fixtures", 10),
         ("free-padding-boundary", 5),
-        ("free-usable-size-boundary", 9),
+        ("free-usable-size-boundary", 4),
         ("free-stats-boundary", 1),
         ("free-local-list-boundary", 1),
         ("free-remote-list-boundary", 1),
         ("free-route-dispatch-boundary", 10),
-        ("free-abandoned-page-boundary", 1),
+        ("free-abandoned-page-boundary", 6),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert_eq!(

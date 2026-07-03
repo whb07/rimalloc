@@ -11,6 +11,7 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
 
     let validation_types = audit_sources.source("src/types/validation.rs");
     let free_rs = audit_sources.source("src/allocator/free.rs");
+    let free_abandoned_rs = audit_sources.source("src/allocator/free/abandoned.rs");
 
     let page_rs = audit_sources.source("src/allocator/page.rs");
     let page_runtime_queues_rs = audit_sources.source("src/allocator/page/queues.rs");
@@ -34,11 +35,11 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
             && page_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_theap_page_reclaim_raw")
             && page_rs.contains("_mi_theap_page_reclaim(wrapper, theap_wrapper);")
             && page_states_rs.contains("pub(crate) fn reclaim(self, _target: ThreadHeapLocal) -> ActivePage")
-            && free_rs.contains("unsafe fn mi_abandoned_page_try_reclaim(\n    page: crate::core_types::OwnedAbandonedPage,")
-            && free_rs.contains("_mi_theap_page_reclaim(\n            page,\n            crate::core_types::ThreadHeapLocal::new_unchecked")
+            && free_abandoned_rs.contains("unsafe fn mi_abandoned_page_try_reclaim(\n    page: crate::core_types::OwnedAbandonedPage,")
+            && free_abandoned_rs.contains("_mi_theap_page_reclaim(\n            page,\n            crate::core_types::ThreadHeapLocal::new_unchecked")
             && !page_rs.contains("pub(crate) unsafe fn _mi_theap_page_reclaim(\n    page: *mut mi_page_t")
             && !page_rs.contains("pub(crate) unsafe fn _mi_theap_page_reclaim(\n    theap: *mut mi_theap_t")
-            && !free_rs.contains("unsafe fn mi_abandoned_page_try_reclaim(\n    page: *mut mi_page_t"),
+            && !free_abandoned_rs.contains("unsafe fn mi_abandoned_page_try_reclaim(\n    page: *mut mi_page_t"),
         "reclaim should accept only OwnedAbandonedPage and ThreadHeapLocal below the raw shim"
     );
     assert!(
@@ -61,7 +62,7 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
             && free_rs.contains("mi_free_block_mt(foreign_page, validated.block());")
             && free_rs.contains("mi_free_block_mt(abandoned_page.remote_free_page(), validated.block());")
             && page_states_rs.contains("pub(crate) fn remote_free_page(self) -> ForeignPage")
-            && free_rs.contains(
+            && free_abandoned_rs.contains(
                 "unsafe fn mi_free_try_collect_mt_typed(\n    page: crate::core_types::OwnedAbandonedPage,\n    remote_free: crate::core_types::RemoteFreeList,"
             )
             && free_rs.contains(
@@ -69,7 +70,7 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
             )
             && free_rs.contains("crate::core_types::OwnedAbandonedPage::new_unchecked")
             && !free_rs.contains("pub(crate) unsafe fn mi_free_block_mt(\n    page: *mut mi_page_t")
-            && !free_rs.contains("unsafe fn mi_free_try_collect_mt_typed(\n    page: *mut mi_page_t"),
+            && !free_abandoned_rs.contains("unsafe fn mi_free_try_collect_mt_typed(\n    page: *mut mi_page_t"),
         "remote free should enter through ForeignPage or abandoned-page witnesses before touching remote-free internals"
     );
     assert!(

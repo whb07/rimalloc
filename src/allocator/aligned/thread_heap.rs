@@ -78,21 +78,20 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
         let page =
             unsafe { crate::internal::_mi_theap_get_free_small_page_typed(local_theap, padded) };
         // SAFETY[AUDIT:aligned-page-allocation-boundary]: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
-        if mi_likely(!page.is_null() && !unsafe { (*page).free }.is_null()) {
+        if mi_likely(!page.is_null()) {
             // SAFETY[AUDIT:aligned-page-allocation-boundary]: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
-            let is_aligned = ((unsafe { (*page).free } as usize) + offset_raw) & align_mask == 0;
-            if mi_likely(is_aligned) {
+            let (page_ptr, free) = unsafe {
+                let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
+                (page_ptr, page_ptr.free_raw())
+            };
+            if mi_likely(!free.is_null() && (((free as usize) + offset_raw) & align_mask == 0)) {
                 // SAFETY[AUDIT:aligned-page-allocation-boundary]: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
                 unsafe {
                     crate::core_types::UsableOut::new(usable)
                         .write_if_present(mi_page_usable_block_size(page));
                 }
                 // SAFETY[AUDIT:aligned-page-allocation-boundary]: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
-                let active = unsafe {
-                    crate::core_types::ActivePage::new_unchecked(
-                        crate::core_types::PagePtr::new_unchecked(page),
-                    )
-                };
+                let active = unsafe { crate::core_types::ActivePage::new_unchecked(page_ptr) };
                 // SAFETY[AUDIT:aligned-page-allocation-boundary]: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
                 let available = unsafe { active.available().unwrap_unchecked() };
                 // SAFETY[AUDIT:aligned-page-allocation-boundary]: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.

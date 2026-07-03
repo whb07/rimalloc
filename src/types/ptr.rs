@@ -223,6 +223,15 @@ impl PagePtr {
     }
 
     /// # Safety
+    /// The page pointer must refer to initialized page metadata.
+    // SAFETY[AUDIT:typed-page-free-list-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    #[inline(always)]
+    pub(crate) unsafe fn free_raw(self) -> *mut mi_block_t {
+        let raw = self.as_ptr();
+        unsafe { ptr::read(ptr::addr_of!((*raw).free)) }
+    }
+
+    /// # Safety
     /// The page pointer must refer to writable page metadata.
     // SAFETY[AUDIT:typed-page-free-list-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]

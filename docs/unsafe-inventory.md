@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5984 |
+| `unsafe_mentions` | 5985 |
 | `unsafe_blocks` | 3510 |
-| `unsafe_fns` | 2040 |
+| `unsafe_fns` | 2041 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -37,7 +37,7 @@ verify the source inventory after each supported advisory build mode checks.
 
 | File | unsafe | blocks | fns | extern blocks | impls | attrs | global asm |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `src/allocator/aligned/thread_heap.rs` | 36 | 26 | 9 | 0 | 0 | 1 | 0 |
+| `src/allocator/aligned/thread_heap.rs` | 35 | 25 | 9 | 0 | 0 | 1 | 0 |
 | `src/allocator/aligned.rs` | 179 | 104 | 47 | 0 | 0 | 28 | 0 |
 | `src/allocator/alloc/cxx_new.rs` | 60 | 21 | 28 | 2 | 0 | 9 | 0 |
 | `src/allocator/alloc/public_malloc.rs` | 27 | 9 | 9 | 0 | 0 | 8 | 0 |
@@ -145,7 +145,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/types/page_states/tests.rs` | 10 | 10 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/page_states.rs` | 65 | 44 | 21 | 0 | 0 | 0 | 0 |
 | `src/types/ptr/tests.rs` | 89 | 89 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/ptr.rs` | 370 | 147 | 223 | 0 | 0 | 0 | 0 |
+| `src/types/ptr.rs` | 372 | 148 | 224 | 0 | 0 | 0 | 0 |
 | `src/types/scalar/tests.rs` | 31 | 31 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/scalar.rs` | 33 | 17 | 16 | 0 | 0 | 0 | 0 |
 | `src/types/validation/tests.rs` | 3 | 3 | 0 | 0 | 0 | 0 | 0 |

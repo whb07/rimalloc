@@ -310,12 +310,13 @@ file:
   `SAFETY[AUDIT:page-queue-retire-boundary]`,
   `SAFETY[AUDIT:page-queue-abandon-boundary]`,
   `SAFETY[AUDIT:page-queue-reclaim-boundary]`,
-  `SAFETY[AUDIT:page-queue-validation-boundary]`,
-  `SAFETY[AUDIT:page-queue-direct-cache-boundary]`,
+  and `SAFETY[AUDIT:page-queue-direct-cache-boundary]`: focused page queue
+  movement, full/free/retire/abandon/reclaim, and direct-cache operations in
+  `src/allocator/page.rs`.
+- `SAFETY[AUDIT:page-queue-validation-boundary]`,
   `SAFETY[AUDIT:page-queue-link-mutation-boundary]`, and
-  `SAFETY[AUDIT:page-queue-append-boundary]`: focused page queue movement,
-  full/free/retire/abandon/reclaim, validation, direct-cache, link mutation,
-  and append operations in `src/allocator/page.rs`.
+  `SAFETY[AUDIT:page-queue-append-boundary]`: page queue validation, link
+  mutation, and append operations in `src/allocator/page/queues.rs`.
 - `SAFETY[AUDIT:page-huge-allocation-boundary]`: huge-page selection and
   allocation dispatch in `src/allocator/page.rs`.
 - `SAFETY[AUDIT:page-metadata-accessor-boundary]`: page metadata accessors in

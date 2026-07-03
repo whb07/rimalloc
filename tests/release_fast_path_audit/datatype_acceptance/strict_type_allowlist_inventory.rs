@@ -115,7 +115,7 @@ pub(super) fn assert_strict_type_allowlist_inventory(
             ("src/allocator/aligned.rs", 36),
             ("src/internal/bitmap.rs", 35),
             ("src/allocator/alloc.rs", 30),
-            ("src/allocator/page.rs", 29),
+            ("src/allocator/page.rs", 26),
             ("src/internal/mod.rs", 26),
             ("src/allocator/thread_heap.rs", 25),
         ],
@@ -126,13 +126,13 @@ pub(super) fn assert_strict_type_allowlist_inventory(
         [
             (("bare-domain-usize", "src/types/scalar.rs"), 24),
             (("raw-pointer-parameter", "src/allocator/alloc.rs"), 24),
-            (("raw-pointer-parameter", "src/allocator/page.rs"), 24),
             (
                 ("raw-pointer-parameter", "src/allocator/thread_heap.rs"),
                 24
             ),
             (("bare-domain-usize", "src/internal/bitmap.rs"), 23),
             (("bare-domain-usize", "src/raw/macros.rs"), 23),
+            (("raw-pointer-parameter", "src/allocator/aligned.rs"), 23),
         ],
         "strict-type allowlist kind/file hotspots should stay measured"
     );
@@ -161,15 +161,15 @@ pub(super) fn assert_strict_type_allowlist_inventory(
         "largest strict-type allowlist file hotspots are `src/allocator/aligned.rs`\n  with 36 active entries",
         "`src/internal/bitmap.rs` with 35",
         "`src/allocator/alloc.rs` with 30",
-        "`src/allocator/page.rs` with 29",
         "`src/internal/mod.rs` with 26",
+        "`src/allocator/page.rs` with 26",
         "`src/allocator/thread_heap.rs` with 25",
         "`bare-domain-usize` in\n  `src/types/scalar.rs` with 24 active entries",
         "`raw-pointer-parameter` in\n  `src/allocator/alloc.rs` with 24",
-        "`raw-pointer-parameter` in\n  `src/allocator/page.rs` with 24",
         "`raw-pointer-parameter` in\n  `src/allocator/thread_heap.rs` with 24",
         "`bare-domain-usize` in `src/internal/bitmap.rs` with 23",
         "`bare-domain-usize` in `src/raw/macros.rs` with 23",
+        "`raw-pointer-parameter` in `src/allocator/aligned.rs` with 23",
         "raw-pointer domains are `mi_page_t` with 110 entries",
         "`mi_theap_t` with 109",
         "`mi_heap_t` with 67",

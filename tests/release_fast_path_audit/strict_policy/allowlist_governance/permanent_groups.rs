@@ -57,7 +57,7 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         (("src/allocator/thread_heap.rs", "mi_theap_t"), 20),
         (("src/allocator/free.rs", "mi_page_t"), 19),
         (("src/allocator/alloc.rs", "mi_theap_t"), 18),
-        (("src/allocator/page.rs", "mi_theap_t"), 18),
+        (("src/allocator/page.rs", "mi_theap_t"), 15),
         (("src/internal/page_metadata.rs", "mi_page_t"), 15),
     ] {
         assert_eq!(
@@ -86,7 +86,7 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
             "`src/allocator/thread_heap.rs`/`mi_theap_t` with 20",
             "`src/allocator/free.rs`/`mi_page_t` with 19",
             "`src/allocator/alloc.rs`/`mi_theap_t` with 18",
-            "`src/allocator/page.rs`/`mi_theap_t` with 18",
+            "`src/allocator/page.rs`/`mi_theap_t` with 15",
             "`src/internal/page_metadata.rs`/`mi_page_t` with 15",
         ],
     );
@@ -107,7 +107,7 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
             "`src/allocator/thread_heap.rs`/`mi_theap_t` is at 20",
             "`src/allocator/free.rs`/`mi_page_t` is at 19",
             "`src/allocator/alloc.rs`/`mi_theap_t` is at 18",
-            "`src/allocator/page.rs`/`mi_theap_t` is at 18",
+            "`src/allocator/page.rs`/`mi_theap_t` is at 15",
             "`src/internal/page_metadata.rs`/`mi_page_t` is at 15",
         ],
     );

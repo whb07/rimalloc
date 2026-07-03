@@ -13,6 +13,7 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
     let free_rs = audit_sources.source("src/allocator/free.rs");
 
     let page_rs = audit_sources.source("src/allocator/page.rs");
+    let page_runtime_queues_rs = audit_sources.source("src/allocator/page/queues.rs");
     assert!(
         free_rs.contains(
             "pub(crate) unsafe fn mi_free_block_local(\n    page_wrapper: crate::core_types::LocalPage,\n    block_wrapper: crate::core_types::BlockForFree,"
@@ -72,16 +73,16 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
         "remote free should enter through ForeignPage or abandoned-page witnesses before touching remote-free internals"
     );
     assert!(
-        page_rs.contains(
+        page_runtime_queues_rs.contains(
             "pub(crate) unsafe fn mi_page_queue_enqueue_from(\n    to: crate::core_types::FullPageQueue,\n    page: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,"
-        ) && page_rs.contains(
+        ) && page_runtime_queues_rs.contains(
             "pub(crate) unsafe fn mi_page_queue_enqueue_from_full(\n    to: crate::core_types::NormalPageQueue,\n    page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,"
         ) && page_queues_rs.contains("impl QueuedPage<NormalQueue>")
             && page_queues_rs.contains("pub(crate) unsafe fn into_full(self, to: FullPageQueue)"),
         "page queue transitions should require typed queue/page witnesses"
     );
     assert!(
-        page_rs.contains(
+        page_runtime_queues_rs.contains(
             "unsafe fn mi_page_queue_append_full_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::FullPageQueue,\n    append: crate::core_types::FullPageQueue,"
         )
             && page_rs.contains(
@@ -99,7 +100,7 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
             )
             && page_queues_rs.contains("crate::page::mi_page_is_in_full(page.page().as_ptr())")
             && page_queues_rs.contains("queue: PageQueue::full(queue)")
-            && !page_rs.contains("unsafe fn mi_page_queue_append_full_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::PageQueuePtr")
+            && !page_runtime_queues_rs.contains("unsafe fn mi_page_queue_append_full_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::PageQueuePtr")
             && !page_rs.contains("pub(crate) unsafe fn _mi_page_free_full_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Full>,\n    queue: crate::core_types::PageQueuePtr")
             && !page_rs.contains(
                 "unsafe fn mi_page_unfull_typed(\n    page: crate::core_types::FullPage"
@@ -120,25 +121,25 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
                 "crate::page::mi_page_is_huge(page_ptr)\n                        && crate::page::mi_page_queue_is_huge(queue_ptr)"
             )
             && page_queues_rs.contains("queue: PageQueue::normal(queue)")
-            && page_rs.contains(
+            && page_runtime_queues_rs.contains(
                 "unsafe fn mi_page_queue_push_at_end_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
             )
-            && page_rs.contains(
+            && page_runtime_queues_rs.contains(
                 "unsafe fn mi_page_queue_push_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
             )
-            && page_rs.contains(
+            && page_runtime_queues_rs.contains(
                 "unsafe fn mi_page_queue_move_to_front_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,"
             )
             && page_rs.contains(
                 "pub(crate) unsafe fn _mi_page_free_active_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,\n    queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,"
             )
-            && page_rs.contains(
+            && page_runtime_queues_rs.contains(
                 "unsafe fn mi_page_queue_append_normal_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    append: crate::core_types::NormalPageQueue,"
             )
             && !page_queues_rs.contains(
                 "pub(crate) unsafe fn new(\n        page: crate::core_types::FullPage,\n        queue: NormalPageQueue,"
             )
-            && !page_rs.contains("unsafe fn mi_page_queue_push_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::PagePtr")
+            && !page_runtime_queues_rs.contains("unsafe fn mi_page_queue_push_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::PagePtr")
             && !page_rs.contains("pub(crate) unsafe fn _mi_page_free_active_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,\n    queued: crate::core_types::PagePtr"),
         "normal queue operations should accept only active non-full pages matching NormalPageQueue or the huge-page sentinel queue"
     );

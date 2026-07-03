@@ -34,17 +34,17 @@ Current review evidence:
 - Strict-type wildcard guard: total=0; none.
 - The largest strict-type allowlist file hotspots are `src/allocator/aligned.rs`
   with 36 active entries, `src/internal/bitmap.rs` with 35,
-  `src/allocator/alloc.rs` with 30, `src/allocator/page.rs` with 29,
+  `src/allocator/alloc.rs` with 30, `src/allocator/page.rs` with 26,
   `src/internal/mod.rs` with 26, and `src/allocator/thread_heap.rs` with 25.
   The active file hotspot cap is 40 active entries; the next useful file
   hotspot cap is 35 active entries.
 - The largest strict-type kind/file hotspots are `bare-domain-usize` in
   `src/types/scalar.rs` with 24 active entries, `raw-pointer-parameter` in
   `src/allocator/alloc.rs` with 24, `raw-pointer-parameter` in
-  `src/allocator/page.rs` with 24, `raw-pointer-parameter` in
   `src/allocator/thread_heap.rs` with 24,
-  `bare-domain-usize` in `src/internal/bitmap.rs` with 23, and
-  `bare-domain-usize` in `src/raw/macros.rs` with 23. The active kind/file
+  `bare-domain-usize` in `src/internal/bitmap.rs` with 23,
+  `bare-domain-usize` in `src/raw/macros.rs` with 23, and
+  `raw-pointer-parameter` in `src/allocator/aligned.rs` with 23. The active kind/file
   hotspot cap is 25 active entries; the next useful kind/file cap is 23 active
   entries.
 - The largest raw-pointer domains are `mi_page_t` with 110 entries,
@@ -60,7 +60,7 @@ Current review evidence:
   `src/allocator/thread_heap.rs`/`mi_theap_t` with 20 entries,
   `src/allocator/free.rs`/`mi_page_t` with 19,
   `src/allocator/alloc.rs`/`mi_theap_t` with 18,
-  `src/allocator/page.rs`/`mi_theap_t` with 18, and
+  `src/allocator/page.rs`/`mi_theap_t` with 15, and
   `src/internal/page_metadata.rs`/`mi_page_t` with 15. The active raw-pointer
   file/domain cap is 20 entries; the next useful raw-pointer file/domain cap is
   19 entries.
@@ -83,9 +83,10 @@ Current review evidence:
   190 lines; the next useful recursive module cap would be 180 lines.
 - Production source module size remains dominated by translated-C-shaped files:
   `src/allocator/arena.rs` at 2,711 lines, `src/allocator/init.rs` at 2,612,
-  `src/allocator/page.rs` at 2,419, `src/internal/bitmap.rs` at 2,372,
-  `src/platform/windows.rs` at 2,305, `src/raw/macros.rs` at 2,260,
-  `src/allocator/stats.rs` at 2,182, and `src/allocator/alloc.rs` at 1,794.
+  `src/internal/bitmap.rs` at 2,372, `src/platform/windows.rs` at 2,305,
+  `src/raw/macros.rs` at 2,260, `src/allocator/stats.rs` at 2,182,
+  `src/allocator/page.rs` at 2,003,
+  and `src/allocator/alloc.rs` at 1,794.
   No production source module currently exceeds the 3,000-line cap; the next
   useful production module cap would be 2,800 lines.
 

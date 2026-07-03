@@ -165,9 +165,9 @@ Per-file review:
 - `src/allocator/page/flags.rs`: page flag, full-queue, huge-page,
   abandoned-page, and thread-heap owner helpers route raw page metadata through
   typed page, flag, memid, and atomic owner wrappers.
-- `src/allocator/page/queues.rs`: page queue containment, lookup, and removal
-  helpers validate queue membership and update linked-list metadata before
-  returning to typed page/queue witnesses.
+- `src/allocator/page/queues.rs`: page queue containment, lookup, insertion,
+  removal, movement, and append helpers validate queue membership and update
+  linked-list metadata before returning to typed page/queue witnesses.
 - `src/allocator/page/validation.rs`: page validation and block lookup helpers
   route raw page/block metadata through typed page witnesses before checking
   capacity, free-list, queue-membership, and ownership invariants.
@@ -647,18 +647,18 @@ Operation IDs:
   reattach reclaimed pages to target thread-heap queues and collect remote
   frees before normal page use resumes.
 - `SAFETY[AUDIT:page-queue-validation-boundary]`:
-  `src/allocator/page.rs` owns page queue containment and validation walks.
+  `src/allocator/page/queues.rs` owns page queue containment and validation walks.
   Unsafe operations inspect linked queue nodes and block-size identity without
   mutating ownership.
 - `SAFETY[AUDIT:page-queue-direct-cache-boundary]`:
   `src/allocator/page.rs` owns direct-page cache publication from normal queue
   fronts for small pages.
 - `SAFETY[AUDIT:page-queue-link-mutation-boundary]`:
-  `src/allocator/page.rs` owns queue link insertion, removal, and cross-queue
-  enqueue. Unsafe operations update first/last pointers, page links, queue
-  counts, thread-heap page counts, and in-full state together.
+  `src/allocator/page/queues.rs` owns queue link insertion, removal, and
+  cross-queue enqueue. Unsafe operations update first/last pointers, page
+  links, queue counts, thread-heap page counts, and in-full state together.
 - `SAFETY[AUDIT:page-queue-append-boundary]`:
-  `src/allocator/page.rs` owns page queue append. Unsafe operations splice
+  `src/allocator/page/queues.rs` owns page queue append. Unsafe operations splice
   linked page lists, retarget the owning thread heap, and merge queue counts.
 - `SAFETY[AUDIT:page-huge-allocation-boundary]`:
   `src/allocator/page.rs` owns huge-page selection and allocation dispatch.

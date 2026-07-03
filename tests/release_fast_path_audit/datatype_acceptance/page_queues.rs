@@ -40,6 +40,14 @@ pub(super) fn assert_page_queue_and_memid_acceptance(
     assert!(
         page_queues_rs.contains("impl QueuedPage<NormalQueue>")
             && page_queues_rs.contains(
+                "pub(crate) struct QueuedPage<K> {\n    page: PagePtr,\n    queue: PageQueue<K>,"
+            )
+            && !page_queues_rs.contains("pub(crate) page: PagePtr")
+            && !page_queues_rs.contains("pub(crate) queue: PageQueue<K>")
+            && page_queues_rs
+                .contains("pub(crate) struct UnqueuedPage<S> {\n    page: Page<S>,")
+            && !page_queues_rs.contains("pub(crate) page: Page<S>")
+            && page_queues_rs.contains(
                 "pub(crate) unsafe fn new(\n        page: crate::core_types::ActivePage,\n        queue: NormalPageQueue,"
             )
             && page_queues_rs.contains("impl QueuedPage<FullQueue>")

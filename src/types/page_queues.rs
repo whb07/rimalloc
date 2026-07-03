@@ -140,8 +140,8 @@ impl FullPageQueue {
 
 /// Witness that a page is currently inside a specific queue.
 pub(crate) struct QueuedPage<K> {
-    pub(crate) page: PagePtr,
-    pub(crate) queue: PageQueue<K>,
+    page: PagePtr,
+    queue: PageQueue<K>,
 }
 
 impl<K> QueuedPage<K> {
@@ -280,7 +280,7 @@ impl QueuedPage<FullQueue> {
 
 /// Witness that a page is definitively *not* in any queue.
 pub(crate) struct UnqueuedPage<S> {
-    pub(crate) page: Page<S>,
+    page: Page<S>,
 }
 
 impl<S> UnqueuedPage<S> {

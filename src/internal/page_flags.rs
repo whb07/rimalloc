@@ -58,11 +58,8 @@ pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
 pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
     // SAFETY[AUDIT:internal-thread-free-boundary]: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
-        let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
-            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!(
-                (*(page as *mut mi_page_t)).xthread_free
-            )),
-        );
+        let page = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
+        let atomic_tf = page.thread_free_cell();
         atomic_tf.load_relaxed().head_raw()
     }
 }
@@ -87,11 +84,8 @@ pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
 pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
     // SAFETY[AUDIT:internal-thread-free-boundary]: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
-        let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
-            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!(
-                (*(page as *mut mi_page_t)).xthread_free
-            )),
-        );
+        let page = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
+        let atomic_tf = page.thread_free_cell();
         atomic_tf.load_relaxed().is_owned()
     }
 }

@@ -458,9 +458,7 @@ pub(crate) unsafe fn mi_free_block_mt(
             _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
         }
 
-        let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
-            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),
-        );
+        let atomic_tf = page_ptr.thread_free_cell();
 
         let mut tf_old = atomic_tf.load_relaxed();
         loop {

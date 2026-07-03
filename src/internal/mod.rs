@@ -721,10 +721,7 @@ pub(crate) unsafe fn mi_page_claim_ownership(
     // SAFETY[AUDIT:internal-thread-free-boundary]: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
         let page_ptr = page.page();
-        let page = page_ptr.as_ptr();
-        let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
-            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),
-        );
+        let atomic_tf = page_ptr.thread_free_cell();
         if atomic_tf.claim_acq_rel() {
             Some(crate::core_types::OwnedAbandonedPage::new_unchecked(
                 page_ptr,

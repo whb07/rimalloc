@@ -76,7 +76,7 @@ Current review evidence:
   `todo_backlog.rs` at 190 lines,
   `unsafe_performance/os_memory/platform_helpers.rs` at 189 lines,
   `unsafe_performance/shared.rs` at 190 lines,
-  `unsafe_performance/page_lifecycle.rs` at 186 lines,
+  `unsafe_performance/page_lifecycle.rs` at 187 lines,
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs` at 185 lines,
   `datatype_acceptance/strict_type_allowlist_inventory.rs` at 183 lines,
   `strict_policy.rs` at 182 lines,

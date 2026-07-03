@@ -22,11 +22,7 @@ pub(super) unsafe fn mi_abandoned_page_unown(
     // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
     let owned_page = unsafe { crate::core_types::OwnedAbandonedPage::new_unchecked(page_ptr) };
 
-    let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
-        crate::core_types::AtomicUsizeField::from_raw(unsafe {
-            ptr::addr_of_mut!((*page).xthread_free)
-        }),
-    );
+    let atomic_tf = unsafe { page_ptr.thread_free_cell() };
     let mut tf_old = atomic_tf.load_relaxed();
     loop {
         crate::internal::mi_assert_internal!(tf_old.is_owned());

@@ -46,12 +46,12 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && !page_flags_rs.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
         && !page_flags_rs.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
         && !arena_rs.contains("MI_THREADID_ABANDONED_MAPPED | flags")
-        && page_rs.contains(
-            "let atomic_tf = crate::core_types::AtomicThreadFree::from_field(\n            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),\n        );"
-        )
+        && page_rs.contains("let atomic_tf = page_ptr.thread_free_cell();")
         && page_rs.contains("let remote = atomic_tf.collect_acq_rel();")
         && page_rs.contains("remote.collect_into_local(page_wrapper, local);")
         && !page_rs.contains("atomic_tf.take_head_preserving_owner()")
+        && !page_rs.contains("AtomicThreadFree::from_field(")
+        && !page_rs.contains("addr_of_mut!((*page).xthread_free)")
         && atomic_types.contains("pub(crate) fn push_remote_acq_rel(")
         && atomic_types.contains(
             "pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList"
@@ -78,28 +78,31 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && internal_page_boundary.contains("atomic_tf.load_relaxed().head_raw()")
         && internal_page_boundary.contains("pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool")
         && internal_page_boundary.contains("atomic_tf.load_relaxed().is_owned()")
-        && internal_page_boundary.contains("let atomic_tf = crate::core_types::AtomicThreadFree::from_field(\n            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),")
+        && internal_page_boundary.contains("let atomic_tf = page_ptr.thread_free_cell();")
+        && internal_page_boundary.contains("let atomic_tf = page.thread_free_cell();")
         && internal_page_boundary.contains("atomic_tf.claim_acq_rel()")
+        && !internal_page_boundary.contains("AtomicThreadFree::from_field(")
+        && !internal_page_boundary.contains("addr_of_mut!((*page).xthread_free)")
         && !internal_page_boundary.contains("atomic_tf.claim_ownership()")
         && arena_rs.contains("(*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(\n            None,\n            crate::core_types::ThreadFreeOwner::Unowned,")
         && !arena_rs.contains("(*page).xthread_free = 0")
-        && free_rs.contains(
-            "let atomic_tf = crate::core_types::AtomicThreadFree::from_field(\n            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),\n        );"
-        )
+        && free_rs.contains("let atomic_tf = page_ptr.thread_free_cell();")
+        && free_rs.contains("let atomic_tf = page.page().thread_free_cell();")
         && free_rs.contains("match atomic_tf.push_remote_acq_rel(&mut tf_old, bp)")
         && free_rs.contains("while !atomic_tf.release_acq_rel(&mut tf_expect)")
         && free_rs.contains("tf_expect = atomic_tf.load_relaxed();")
         && !free_rs.contains("atomic_tf.compare_exchange_push(")
         && !free_rs.contains("atomic_tf.compare_exchange_release_ownership(")
         && !free_rs.contains("mi_tf_create(expected_thread_free")
-        && arena_rs.contains(
-            "let atomic_tf = crate::core_types::AtomicThreadFree::from_field(\n        crate::core_types::AtomicUsizeField::from_raw(unsafe {\n            ptr::addr_of_mut!((*page).xthread_free)\n        }),\n    );"
-        )
+        && !free_rs.contains("AtomicThreadFree::from_field(")
+        && arena_rs.contains("let atomic_tf = unsafe { page_ptr.thread_free_cell() };")
         && arena_rs.contains("let mut tf_old = atomic_tf.load_relaxed();")
         && arena_rs.contains("while tf_old.head().is_some()")
         && arena_rs.contains("if unsafe { atomic_tf.release_acq_rel(&mut tf_old) }")
         && !arena_rs.contains("atomic_tf.compare_exchange_release_ownership(")
         && !arena_rs.contains("mi_tf_create(ptr::null_mut(), false)")
+        && !arena_rs.contains("AtomicThreadFree::from_field(")
+        && !arena_rs.contains("addr_of_mut!((*page).xthread_free)")
         && page_rs.contains(
             "unsafe fn mi_page_queue_push_at_end_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
         )

@@ -168,9 +168,7 @@ pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = LocalPage::new_unchecked(page_ptr);
-        let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
-            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),
-        );
+        let atomic_tf = page_ptr.thread_free_cell();
         let remote = atomic_tf.collect_acq_rel();
         if remote.is_empty() {
             return;
@@ -324,11 +322,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             }
         }
         if mi_page_used_count(page).get() == 1 {
-            let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
-                crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!(
-                    (*page).xthread_free
-                )),
-            );
+            let atomic_tf = page_ptr.thread_free_cell();
             crate::internal::mi_assert_internal!(atomic_tf.load_relaxed().head_raw() == head);
             crate::internal::mi_assert_internal!(mi_block_next(page, head).is_null());
             #[cfg(feature = "bench-diagnostics")]

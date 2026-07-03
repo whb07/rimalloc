@@ -71,11 +71,7 @@ unsafe fn mi_abandoned_page_unown_from_free(
         crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
         crate::internal::mi_assert_internal!(!mi_page_all_free(page_raw));
 
-        let atomic_tf = crate::core_types::AtomicThreadFree::from_field(
-            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!(
-                (*page_raw).xthread_free
-            )),
-        );
+        let atomic_tf = page.page().thread_free_cell();
         while !atomic_tf.release_acq_rel(&mut tf_expect) {
             crate::internal::mi_assert_internal!(tf_expect.is_owned());
             while tf_expect.head().is_some() {

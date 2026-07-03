@@ -80,9 +80,9 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && internal.contains(
                 "crate::core_types::AtomicPtrField::from_raw(ptr::addr_of!((*theap).heap).cast_mut())"
             )
-            && internal_boundary.contains(
-                "crate::core_types::AtomicThreadFree::from_field(\n            crate::core_types::AtomicUsizeField::from_raw("
-            )
+            && internal_boundary.contains("let atomic_tf = page.thread_free_cell();")
+            && internal_boundary.contains("let atomic_tf = page_ptr.thread_free_cell();")
+            && !internal_boundary.contains("AtomicThreadFree::from_field(")
             && internal.contains("unsafe fn mi_cpu_movsb_max() -> usize")
             && internal.contains("unsafe fn mi_cpu_stosb_max() -> usize")
             && internal.contains("core::arch::asm!("),

@@ -78,18 +78,24 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
         "atomic guard scopes should acquire and release through typed AtomicGuard Drop"
     );
     assert!(
-        atomic_types.contains(
-            "pub(crate) struct MiLockPtr(pub(crate) NonNull<crate::types::mi_lock_t_pub>)"
-        ) && atomic_types.contains("pub(crate) struct MiLockGuard<'a>")
+        atomic_types.contains("pub(crate) struct MiLockPtr(NonNull<crate::types::mi_lock_t_pub>)")
+            && atomic_types.contains(
+                "pub(crate) fn from_nonnull(lock: NonNull<crate::types::mi_lock_t_pub>) -> Self"
+            )
+            && atomic_types
+                .contains("pub(crate) fn as_ptr(self) -> *mut crate::types::mi_lock_t_pub")
+            && atomic_types.contains("pub(crate) struct MiLockGuard<'a>")
             && atomic_types.contains("pub(crate) unsafe fn acquire(lock: MiLockPtr) -> Self")
-            && atomic_types.contains("crate::atomic::mi_lock_acquire(lock.0.as_ptr())")
+            && atomic_types.contains("crate::atomic::mi_lock_acquire(lock.as_ptr())")
             && atomic_types.contains("impl Drop for MiLockGuard<'_>")
-            && atomic_types.contains("crate::atomic::mi_lock_release(self.lock.0.as_ptr())")
+            && atomic_types.contains("crate::atomic::mi_lock_release(self.lock.as_ptr())")
+            && !atomic_types.contains("pub(crate) struct MiLockPtr(pub(crate)")
+            && !atomic_types.contains("lock.0.as_ptr()")
             && ptr_rs.contains("pub(crate) unsafe fn arena_reserve_lock(self) -> MiLockPtr")
             && ptr_rs.contains("pub(crate) unsafe fn heaps_lock(self) -> MiLockPtr")
             && arena_rs.contains("MiLockGuard::acquire(subproc.arena_reserve_lock())")
             && init_rs.contains(
-                "let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));"
+                "MiLockPtr::from_nonnull(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)))"
             )
             && init_rs.contains("let _lock = MiLockGuard::acquire(lock);")
             && init_rs.contains(

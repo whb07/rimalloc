@@ -619,11 +619,11 @@ fn subproc_ptr_field_helpers_read_and_write_subproc_fields() {
             ptr::addr_of_mut!((*raw_subproc).purge_expire).cast::<i64>()
         );
         assert_eq!(
-            subproc.arena_reserve_lock().0.as_ptr(),
+            subproc.arena_reserve_lock().as_ptr(),
             ptr::addr_of_mut!((*raw_subproc).arena_reserve_lock)
         );
         assert_eq!(
-            subproc.heaps_lock().0.as_ptr(),
+            subproc.heaps_lock().as_ptr(),
             ptr::addr_of_mut!((*raw_subproc).heaps_lock)
         );
         assert_eq!(subproc.memid_ptr(), ptr::addr_of_mut!((*raw_subproc).memid));

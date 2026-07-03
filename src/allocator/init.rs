@@ -817,7 +817,8 @@ unsafe fn mi_subprocs_unsafe_destroy_all() {
     // SAFETY[AUDIT:init-subproc-registry-teardown-boundary]: registry teardown walks remaining subprocs while holding the registry lock.
     unsafe {
         {
-            let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
+            let lock =
+                MiLockPtr::from_nonnull(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
             let _lock = MiLockGuard::acquire(lock);
             let mut subproc = subprocs;
             while !subproc.is_null() {
@@ -2320,7 +2321,8 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     // SAFETY: local subproc list mutation is serialized by `subprocs_lock`.
     // SAFETY[AUDIT:init-subproc-create-boundary]: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
     unsafe {
-        let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
+        let lock =
+            MiLockPtr::from_nonnull(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
         let _lock = MiLockGuard::acquire(lock);
         (*subproc_ptr).next = subprocs;
         if !subprocs.is_null() {

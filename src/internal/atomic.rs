@@ -169,7 +169,7 @@ pub unsafe fn mi_atomic_guard_enter(
 pub unsafe fn mi_atomic_do_once_enter(
     once: *mut mi_atomic_once_t,
 ) -> Option<mi_atomic_once_scope_t> {
-    let state = crate::core_types::OnceStatePtr(once.cast::<usize>());
+    let state = crate::core_types::OnceStatePtr::from_raw(once.cast::<usize>());
     // SAFETY[AUDIT:internal-atomic-guard-once-boundary]: callers provide a live once-state
     // word and the typed once wrapper owns release-on-drop.
     unsafe { crate::core_types::OnceGuard::try_enter(state) }

@@ -91,11 +91,10 @@ fn options_state_uses_internal_locks_like_c() {
     assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")
             && options_rs.contains("static mut mi_error_handler_lock: mi_lock_t")
+            && options_rs
+                .contains("MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(options_lock)))")
             && options_rs.contains(
-                "let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(options_lock)));"
-            )
-            && options_rs.contains(
-                "let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));"
+                "MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)))",
             )
             && options_rs.contains("let _lock = MiLockGuard::acquire(lock);")
             && !options_rs.contains("mi_lock_acquire(addr_of_mut!(options_lock))")

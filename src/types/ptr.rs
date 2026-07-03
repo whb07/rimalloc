@@ -1193,7 +1193,9 @@ impl SubprocPtr {
     #[inline(always)]
     pub(crate) unsafe fn arena_reserve_lock(self) -> MiLockPtr {
         let raw = self.as_ptr();
-        MiLockPtr(unsafe { NonNull::new_unchecked(ptr::addr_of_mut!((*raw).arena_reserve_lock)) })
+        MiLockPtr::from_nonnull(unsafe {
+            NonNull::new_unchecked(ptr::addr_of_mut!((*raw).arena_reserve_lock))
+        })
     }
 
     /// # Safety
@@ -1249,7 +1251,9 @@ impl SubprocPtr {
     #[inline(always)]
     pub(crate) unsafe fn heaps_lock(self) -> MiLockPtr {
         let raw = self.as_ptr();
-        MiLockPtr(unsafe { NonNull::new_unchecked(ptr::addr_of_mut!((*raw).heaps_lock)) })
+        MiLockPtr::from_nonnull(unsafe {
+            NonNull::new_unchecked(ptr::addr_of_mut!((*raw).heaps_lock))
+        })
     }
 
     /// # Safety

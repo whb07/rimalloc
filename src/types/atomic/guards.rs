@@ -11,8 +11,8 @@ use core::sync::atomic::Ordering;
 use super::AtomicUsizeField;
 
 pub(crate) struct AtomicGuard<'a> {
-    pub(crate) field: AtomicUsizeField,
-    pub(crate) _borrow: PhantomData<&'a ()>,
+    field: AtomicUsizeField,
+    _borrow: PhantomData<&'a ()>,
 }
 
 impl<'a> AtomicGuard<'a> {
@@ -45,11 +45,23 @@ impl Drop for AtomicGuard<'_> {
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct OnceStatePtr(pub(crate) *mut usize);
+pub(crate) struct OnceStatePtr(*mut usize);
+
+impl OnceStatePtr {
+    #[inline(always)]
+    pub(crate) fn from_raw(state: *mut usize) -> Self {
+        Self(state)
+    }
+
+    #[inline(always)]
+    fn as_once_ptr(self) -> *mut crate::atomic::mi_atomic_once_t {
+        self.0.cast::<crate::atomic::mi_atomic_once_t>()
+    }
+}
 
 pub(crate) struct OnceGuard<'a> {
-    pub(crate) once: OnceStatePtr,
-    pub(crate) _borrow: PhantomData<&'a ()>,
+    once: OnceStatePtr,
+    _borrow: PhantomData<&'a ()>,
 }
 
 impl<'a> OnceGuard<'a> {
@@ -59,9 +71,7 @@ impl<'a> OnceGuard<'a> {
     pub(crate) unsafe fn try_enter(once: OnceStatePtr) -> Option<Self> {
         // SAFETY[AUDIT:typed-atomic-guard-once-lock]: the caller provides a valid
         // allocator once-state and the guard releases it in Drop.
-        if unsafe {
-            crate::atomic::_mi_atomic_once_enter(once.0.cast::<crate::atomic::mi_atomic_once_t>())
-        } {
+        if unsafe { crate::atomic::_mi_atomic_once_enter(once.as_once_ptr()) } {
             Some(Self {
                 once,
                 _borrow: PhantomData,
@@ -77,21 +87,29 @@ impl Drop for OnceGuard<'_> {
     fn drop(&mut self) {
         // SAFETY[AUDIT:typed-atomic-guard-once-lock]: `OnceGuard` is constructed only
         // after entering this once-state.
-        unsafe {
-            crate::atomic::_mi_atomic_once_release(
-                self.once.0.cast::<crate::atomic::mi_atomic_once_t>(),
-            )
-        };
+        unsafe { crate::atomic::_mi_atomic_once_release(self.once.as_once_ptr()) };
     }
 }
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct MiLockPtr(pub(crate) NonNull<crate::types::mi_lock_t_pub>);
+pub(crate) struct MiLockPtr(NonNull<crate::types::mi_lock_t_pub>);
+
+impl MiLockPtr {
+    #[inline(always)]
+    pub(crate) fn from_nonnull(lock: NonNull<crate::types::mi_lock_t_pub>) -> Self {
+        Self(lock)
+    }
+
+    #[inline(always)]
+    pub(crate) fn as_ptr(self) -> *mut crate::types::mi_lock_t_pub {
+        self.0.as_ptr()
+    }
+}
 
 pub(crate) struct MiLockGuard<'a> {
-    pub(crate) lock: MiLockPtr,
-    pub(crate) _borrow: PhantomData<&'a ()>,
+    lock: MiLockPtr,
+    _borrow: PhantomData<&'a ()>,
 }
 
 impl<'a> MiLockGuard<'a> {
@@ -101,7 +119,7 @@ impl<'a> MiLockGuard<'a> {
     pub(crate) unsafe fn acquire(lock: MiLockPtr) -> Self {
         // SAFETY[AUDIT:typed-atomic-guard-once-lock]: the caller provides a valid
         // allocator lock and the guard releases it in Drop.
-        unsafe { crate::atomic::mi_lock_acquire(lock.0.as_ptr()) };
+        unsafe { crate::atomic::mi_lock_acquire(lock.as_ptr()) };
         Self {
             lock,
             _borrow: PhantomData,
@@ -114,6 +132,6 @@ impl Drop for MiLockGuard<'_> {
     fn drop(&mut self) {
         // SAFETY[AUDIT:typed-atomic-guard-once-lock]: `MiLockGuard` is constructed only
         // after acquiring this lock.
-        unsafe { crate::atomic::mi_lock_release(self.lock.0.as_ptr()) };
+        unsafe { crate::atomic::mi_lock_release(self.lock.as_ptr()) };
     }
 }

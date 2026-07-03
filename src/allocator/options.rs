@@ -604,7 +604,7 @@ static mi_error_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 fn with_options_table<R>(f: impl FnOnce(&mut [mi_option_desc_t; MI_OPTION_COUNT]) -> R) -> R {
     // SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
     unsafe {
-        let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(options_lock)));
+        let lock = MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(options_lock)));
         let _lock = MiLockGuard::acquire(lock);
         f(&mut *OPTIONS.0.get())
     }
@@ -614,7 +614,8 @@ fn with_options_table<R>(f: impl FnOnce(&mut [mi_option_desc_t; MI_OPTION_COUNT]
 fn error_handler_load() -> ErrorCallback {
     // SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
     unsafe {
-        let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
+        let lock =
+            MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
         let _lock = MiLockGuard::acquire(lock);
         *mi_error_handler.0.get()
     }
@@ -624,7 +625,8 @@ fn error_handler_load() -> ErrorCallback {
 fn error_handler_store(fun: ErrorCallback) {
     // SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
     unsafe {
-        let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
+        let lock =
+            MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
         let _lock = MiLockGuard::acquire(lock);
         *mi_error_handler.0.get() = fun;
     }

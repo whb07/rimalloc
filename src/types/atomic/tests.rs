@@ -327,7 +327,7 @@ fn atomic_guard_acquires_once_and_releases_on_drop() {
 #[test]
 fn once_guard_enters_once_and_releases_on_drop() {
     let mut once = crate::atomic::mi_atomic_once_t::new();
-    let state = OnceStatePtr(ptr::addr_of_mut!(once).cast::<usize>());
+    let state = OnceStatePtr::from_raw(ptr::addr_of_mut!(once).cast::<usize>());
 
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: `state` points at the
     // stack-local once cell and each successful guard releases it before the
@@ -348,17 +348,18 @@ fn mi_lock_guard_acquires_and_releases_on_drop() {
     let mut lock = crate::atomic::mi_lock_t::new();
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: `lock` is stack-local allocator
     // lock storage and the non-null pointer is used only while it is live.
-    let lock_ptr = MiLockPtr(unsafe { NonNull::new_unchecked(ptr::addr_of_mut!(lock)) });
+    let lock_ptr =
+        MiLockPtr::from_nonnull(unsafe { NonNull::new_unchecked(ptr::addr_of_mut!(lock)) });
 
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: the guard acquires the
     // stack-local lock, releases it on drop, and the final raw acquire is
     // released before the fixture exits.
     unsafe {
         let guard = MiLockGuard::acquire(lock_ptr);
-        assert!(!crate::atomic::mi_lock_try_acquire(lock_ptr.0.as_ptr()));
+        assert!(!crate::atomic::mi_lock_try_acquire(lock_ptr.as_ptr()));
 
         drop(guard);
-        assert!(crate::atomic::mi_lock_try_acquire(lock_ptr.0.as_ptr()));
-        crate::atomic::mi_lock_release(lock_ptr.0.as_ptr());
+        assert!(crate::atomic::mi_lock_try_acquire(lock_ptr.as_ptr()));
+        crate::atomic::mi_lock_release(lock_ptr.as_ptr());
     }
 }

@@ -39,10 +39,10 @@ pub(super) unsafe fn mi_abandoned_page_unown(
                     .collect_into_local(owned_page, local_free)
             };
             // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
-            if unsafe { page_ptr.free().0.is_none() } && local_free.0.is_some() {
+            if unsafe { page_ptr.free().is_empty() } && !local_free.is_empty() {
                 unsafe {
-                    page_ptr.set_free(crate::core_types::AvailableFreeList(local_free.0));
-                    page_ptr.set_local_free(crate::core_types::LocalFreeList(None));
+                    page_ptr.set_free(local_free.into_available());
+                    page_ptr.set_local_free(crate::core_types::LocalFreeList::empty());
                 }
             }
             // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.

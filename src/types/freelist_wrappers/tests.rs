@@ -99,7 +99,7 @@ fn available_pop_consumes_available_page_witness() {
         let (allocated, next) = AvailableFreeList::pop(available);
 
         assert_eq!(allocated.block().as_ptr(), ptr::addr_of_mut!(block));
-        assert!(next.0.is_none());
+        assert!(next.is_empty());
     }
 }
 
@@ -127,7 +127,7 @@ fn local_push_requires_free_block_witness() {
         let free = FreeBlock::new_unchecked(block_ptr);
         let list = LocalFreeList::from_raw(ptr::null_mut()).push(local_page, free);
 
-        assert_eq!(list.0.map(BlockPtr::as_ptr), Some(block_ptr.as_ptr()));
+        assert_eq!(list.as_raw(), block_ptr.as_ptr());
         assert!(mi_block_next(raw_page, block_ptr.as_ptr()).is_null());
     }
 }

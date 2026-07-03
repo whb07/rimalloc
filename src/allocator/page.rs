@@ -509,8 +509,8 @@ unsafe fn mi_page_free_list_extend_secure_typed(
         #[cfg(feature = "bench-diagnostics")]
         crate::bench_diagnostics::free_list_extend(extend);
         if MI_SECURE < 3 {
-            crate::internal::mi_assert_internal!(page.free().0.is_none());
-            crate::internal::mi_assert_internal!(page.local_free().0.is_none());
+            crate::internal::mi_assert_internal!(page.free().is_empty());
+            crate::internal::mi_assert_internal!(page.local_free().is_empty());
         }
         let capacity = page.capacity();
         crate::internal::mi_assert_internal!(
@@ -565,10 +565,11 @@ unsafe fn mi_page_free_list_extend_secure_typed(
                 .set_next(page, crate::core_types::BlockPtr::new(blocks[next]));
             current = next;
         }
-        crate::core_types::BlockPtr::new_unchecked(blocks[current]).set_next(page, page.free().0);
-        page.set_free(crate::core_types::AvailableFreeList(Some(
+        crate::core_types::BlockPtr::new_unchecked(blocks[current])
+            .set_next(page, page.free().head());
+        page.set_free(crate::core_types::AvailableFreeList::from_head(
             crate::core_types::BlockPtr::new_unchecked(free_start),
-        )));
+        ));
     }
 }
 
@@ -595,8 +596,8 @@ unsafe fn mi_page_free_list_extend_typed(
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
         if MI_SECURE < 3 {
-            crate::internal::mi_assert_internal!(page.free().0.is_none());
-            crate::internal::mi_assert_internal!(page.local_free().0.is_none());
+            crate::internal::mi_assert_internal!(page.free().is_empty());
+            crate::internal::mi_assert_internal!(page.local_free().is_empty());
         }
         let capacity = page.capacity();
         crate::internal::mi_assert_internal!(
@@ -613,10 +614,10 @@ unsafe fn mi_page_free_list_extend_typed(
                 .set_next(page, crate::core_types::BlockPtr::new(next));
             block = next;
         }
-        crate::core_types::BlockPtr::new_unchecked(last).set_next(page, page.free().0);
-        page.set_free(crate::core_types::AvailableFreeList(Some(
+        crate::core_types::BlockPtr::new_unchecked(last).set_next(page, page.free().head());
+        page.set_free(crate::core_types::AvailableFreeList::from_head(
             crate::core_types::BlockPtr::new_unchecked(start),
-        )));
+        ));
     }
 }
 
@@ -648,9 +649,9 @@ unsafe fn mi_page_extend_free_typed(
         let page = page_ptr.as_ptr();
         crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_ptr));
         if MI_SECURE < 3 {
-            crate::internal::mi_assert!(page_ptr.free().0.is_none());
-            crate::internal::mi_assert!(page_ptr.local_free().0.is_none());
-            if page_ptr.free().0.is_some() {
+            crate::internal::mi_assert!(page_ptr.free().is_empty());
+            crate::internal::mi_assert!(page_ptr.local_free().is_empty());
+            if !page_ptr.free().is_empty() {
                 return true;
             }
         }
@@ -1019,7 +1020,7 @@ unsafe fn _mi_page_init_typed(
 
         mi_page_set_keys(
             PagePtr::new_unchecked(page),
-            PageKeys([_mi_theap_random_next(theap), _mi_theap_random_next(theap)]),
+            PageKeys::from_raw([_mi_theap_random_next(theap), _mi_theap_random_next(theap)]),
         );
 
         if MI_DEBUG > 2 && (*page).memid.initially_zero {

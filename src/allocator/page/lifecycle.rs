@@ -150,7 +150,7 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
         }
 
         mi_block_set_next(page, last, local.as_raw());
-        let new_local = LocalFreeList(Some(head_block));
+        let new_local = LocalFreeList::from_head(head_block);
         (*page).local_free = new_local.as_raw();
 
         crate::internal::mi_assert_internal!(u16::try_from(count).is_ok());
@@ -220,15 +220,15 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
 ) -> bool {
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
-        if available.0.is_some() {
+        if !available.is_empty() {
             return true;
         }
-        let Some(local_head) = local.0 else {
+        if local.is_empty() {
             return false;
-        };
+        }
         let page = page.page().as_ptr();
-        let new_available = AvailableFreeList(Some(local_head));
-        let new_local = LocalFreeList(None);
+        let new_available = local.into_available();
+        let new_local = LocalFreeList::empty();
         (*page).free = new_available.as_raw();
         (*page).local_free = new_local.as_raw();
         (*page).free_is_zero = false;

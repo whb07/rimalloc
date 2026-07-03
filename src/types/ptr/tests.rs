@@ -42,8 +42,8 @@ fn page_ptr_field_helpers_read_and_write_hot_fields() {
     // SAFETY[AUDIT:typed-page-pointer-test-fixtures]: the page fixture stores only
     // the stack-local block pointers assigned above.
     unsafe {
-        assert_eq!(page.free().0.map(BlockPtr::as_ptr), Some(free_head));
-        assert_eq!(page.local_free().0.map(BlockPtr::as_ptr), Some(local_head));
+        assert_eq!(page.free().head().map(BlockPtr::as_ptr), Some(free_head));
+        assert_eq!(page.local_free().as_raw(), local_head);
     }
 
     // SAFETY[AUDIT:typed-page-pointer-test-fixtures]: clearing the free-list fields
@@ -56,8 +56,8 @@ fn page_ptr_field_helpers_read_and_write_hot_fields() {
     // SAFETY[AUDIT:typed-page-pointer-test-fixtures]: the page fixture is still live
     // and the free-list fields were just cleared.
     unsafe {
-        assert!(page.free().0.is_none());
-        assert!(page.local_free().0.is_none());
+        assert!(page.free().is_empty());
+        assert!(page.local_free().is_empty());
     }
 
     // SAFETY[AUDIT:typed-page-pointer-test-fixtures]: writes target the stack-local
@@ -84,14 +84,14 @@ fn page_ptr_field_helpers_read_and_write_hot_fields() {
 
     // SAFETY[AUDIT:typed-page-pointer-test-fixtures]: key writes mutate only the
     // stack-local page fixture.
-    unsafe { page.set_keys(PageKeys([11, 13])) };
+    unsafe { page.set_keys(PageKeys::from_raw([11, 13])) };
     #[cfg(any(
         feature = "secure",
         debug_assertions,
         feature = "track-valgrind",
         feature = "track-asan"
     ))]
-    let expected_keys = PageKeys([11, 13]);
+    let expected_keys = PageKeys::from_raw([11, 13]);
     #[cfg(not(any(
         feature = "secure",
         debug_assertions,

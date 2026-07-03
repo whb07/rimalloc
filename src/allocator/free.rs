@@ -151,7 +151,7 @@ unsafe fn mi_page_decode_padding(
         let metadata = padding.read();
         *delta = metadata.delta().get() as usize;
         let canary = metadata.canary().get();
-        let keys = crate::core_types::PageKeys(mi_page_keys(page));
+        let keys = crate::core_types::PageKeys::from_raw(mi_page_keys(page));
         let ok = crate::core_types::PaddingCanary::from_page_block_keys(page_ptr, block_ptr, keys)
             .get()
             == canary
@@ -422,10 +422,7 @@ pub(crate) unsafe fn mi_free_block_local(
             )),
             block_wrapper.into_free_block(),
         );
-        (*page).local_free = new_local
-            .0
-            .map(|b| b.as_ptr())
-            .unwrap_or(core::ptr::null_mut());
+        (*page).local_free = new_local.as_raw();
         let used = crate::page::mi_page_decrement_used_count(page);
         if used.get() == 0 {
             if crate::page::mi_page_retire_expire(page).is_zero() {

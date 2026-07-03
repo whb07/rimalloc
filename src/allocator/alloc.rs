@@ -178,7 +178,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
                 );
             }
             mi_track_mem_defined(padding_ptr.cast(), crate::core_types::PaddingPtr::SIZE);
-            let keys = crate::core_types::PageKeys(mi_page_keys(page));
+            let keys = crate::core_types::PageKeys::from_raw(mi_page_keys(page));
             padding.write(crate::core_types::Padding::new(
                 crate::core_types::PaddingCanary::from_page_block_keys(
                     crate::core_types::PagePtr::new_unchecked(page),

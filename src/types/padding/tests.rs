@@ -43,11 +43,11 @@ fn padding_canary_uses_typed_page_and_block() {
     // SAFETY[AUDIT:typed-padding-test-fixtures]: dangling non-null pointers are
     // used only as opaque canary inputs and are never dereferenced.
     let block = unsafe { BlockPtr::new_unchecked(core::ptr::NonNull::dangling().as_ptr()) };
-    let keys = PageKeys([1, 2]);
+    let keys = PageKeys::from_raw([1, 2]);
 
     assert_eq!(
         PaddingCanary::from_page_block_keys(page, block, keys).get(),
-        mi_ptr_encode_canary(page.as_ptr().cast(), block.as_ptr().cast(), &keys.0)
+        mi_ptr_encode_canary(page.as_ptr().cast(), block.as_ptr().cast(), keys.as_raw())
     );
 }
 

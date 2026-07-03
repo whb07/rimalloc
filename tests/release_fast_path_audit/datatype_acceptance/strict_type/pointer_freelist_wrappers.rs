@@ -21,8 +21,8 @@ pub(super) fn assert_pointer_and_freelist_wrappers(audit_sources: &DatatypeAccep
             && page_queues_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct NormalPageQueue(PageQueuePtr);")
             && page_queues_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct FullPageQueue(PageQueuePtr);")
             && validation_extra_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct FreeBlock(BlockPtr);")
-            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct AvailableFreeList(pub(crate) Option<BlockPtr>);")
-            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct LocalFreeList(pub(crate) Option<BlockPtr>);")
+            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct AvailableFreeList(Option<BlockPtr>);")
+            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct LocalFreeList(Option<BlockPtr>);")
             && core_types_layout_tests_rs.contains("fn pointer_wrappers_match_nonnull_layout()")
             && core_types_layout_tests_rs.contains("fn optional_pointer_wrappers_are_pointer_sized()")
             && core_types_layout_tests_rs.contains("fn witness_wrappers_match_pointer_layout()")
@@ -100,10 +100,17 @@ pub(super) fn assert_pointer_and_freelist_wrappers(audit_sources: &DatatypeAccep
                 .contains("Self::FreeList(link) => unsafe { link.write_word_to_raw(block) }")
             && freelist_wrappers_rs
                 .contains("Self::Guarded(tag) => unsafe { tag.write_to(block) }")
+            && freelist_wrappers_rs.contains("pub(crate) struct PageKeys([usize; 2]);")
+            && freelist_wrappers_rs.contains("pub(crate) const fn as_raw(&self) -> &[usize; 2]")
             && freelist_wrappers_rs
-                .contains("pub(crate) struct AvailableFreeList(pub(crate) Option<BlockPtr>);")
+                .contains("pub(crate) struct AvailableFreeList(Option<BlockPtr>);")
+            && freelist_wrappers_rs.contains("pub(crate) fn from_head(head: BlockPtr) -> Self")
+            && freelist_wrappers_rs.contains("pub(crate) fn head(self) -> Option<BlockPtr>")
             && freelist_wrappers_rs
-                .contains("pub(crate) struct LocalFreeList(pub(crate) Option<BlockPtr>);")
+                .contains("pub(crate) struct LocalFreeList(Option<BlockPtr>);")
+            && freelist_wrappers_rs.contains(
+                "pub(crate) fn into_available(self) -> AvailableFreeList",
+            )
             && freelist_wrappers_rs
                 .contains("let next_raw = unsafe { mi_block_next(raw_page, head_raw) };")
             && freelist_wrappers_rs

@@ -18,7 +18,7 @@ impl PaddingCanary {
         Self(mi_ptr_encode_canary(
             page.as_ptr().cast(),
             block.as_ptr().cast(),
-            &keys.0,
+            keys.as_raw(),
         ))
     }
 

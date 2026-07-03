@@ -289,7 +289,7 @@ impl PagePtr {
         {
             let raw = self.as_ptr();
             // SAFETY[AUDIT:typed-page-atomic-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
-            PageKeys(unsafe { ptr::read(ptr::addr_of!((*raw).keys)) })
+            PageKeys::from_raw(unsafe { ptr::read(ptr::addr_of!((*raw).keys)) })
         }
 
         #[cfg(not(any(
@@ -318,7 +318,7 @@ impl PagePtr {
         {
             let raw = self.as_ptr();
             // SAFETY[AUDIT:typed-page-atomic-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
-            unsafe { ptr::write(ptr::addr_of_mut!((*raw).keys), keys.0) };
+            unsafe { ptr::write(ptr::addr_of_mut!((*raw).keys), *keys.as_raw()) };
         }
 
         #[cfg(not(any(

@@ -126,7 +126,7 @@ pub unsafe fn mi_block_nextx(
     unsafe { crate::track::mi_track_mem_defined(block.cast_mut().cast(), size_of::<mi_block_t>()) };
     let link = unsafe { crate::core_types::EncodedPtr::read_word_from_raw(block) };
     let next = if MI_ENCODE_FREELIST != 0 {
-        unsafe { link.decode_block_raw(null, crate::core_types::PageKeys(*keys)) }
+        unsafe { link.decode_block_raw(null, crate::core_types::PageKeys::from_raw(*keys)) }
     } else {
         link.as_unencoded_raw()
     };
@@ -179,7 +179,12 @@ pub unsafe fn mi_block_set_nextx(
         let block = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
         let next = crate::core_types::BlockPtr::new(next.cast_mut());
         unsafe {
-            mi_block_set_nextx_typed(page, block, next, crate::core_types::PageKeys(*keys));
+            mi_block_set_nextx_typed(
+                page,
+                block,
+                next,
+                crate::core_types::PageKeys::from_raw(*keys),
+            );
         }
         return;
     }
@@ -191,7 +196,7 @@ pub unsafe fn mi_block_set_nextx(
             crate::core_types::EncodedPtr::encode_block_raw(
                 next,
                 null,
-                crate::core_types::PageKeys(*keys),
+                crate::core_types::PageKeys::from_raw(*keys),
             )
         }
     } else {

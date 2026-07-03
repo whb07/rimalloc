@@ -10,11 +10,21 @@ use crate::internal::{mi_block_next, mi_block_set_next};
 
 /// Keys used to encode and decode free-list pointers.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct PageKeys(pub(crate) [usize; 2]);
+pub(crate) struct PageKeys([usize; 2]);
 
 impl PageKeys {
+    #[inline(always)]
+    pub(crate) const fn from_raw(keys: [usize; 2]) -> Self {
+        Self(keys)
+    }
+
     pub(crate) const fn disabled() -> Self {
         Self([0, 0])
+    }
+
+    #[inline(always)]
+    pub(crate) const fn as_raw(&self) -> &[usize; 2] {
+        &self.0
     }
 }
 
@@ -114,7 +124,7 @@ impl EncodedPtr<mi_block_t> {
         null_context: *const c_void,
         keys: PageKeys,
     ) -> *mut mi_block_t {
-        crate::internal::mi_ptr_decode(null_context, self.word, &keys.0).cast()
+        crate::internal::mi_ptr_decode(null_context, self.word, keys.as_raw()).cast()
     }
 
     /// Encode a raw block pointer using a raw null context.
@@ -131,7 +141,7 @@ impl EncodedPtr<mi_block_t> {
         null_context: *const c_void,
         keys: PageKeys,
     ) -> Self {
-        let word = crate::internal::mi_ptr_encode(null_context, block.cast(), &keys.0);
+        let word = crate::internal::mi_ptr_encode(null_context, block.cast(), keys.as_raw());
         Self {
             word,
             _ty: PhantomData,
@@ -155,7 +165,8 @@ impl EncodedPtr<mi_block_t> {
         null_context: crate::core_types::PagePtr,
         keys: PageKeys,
     ) -> Option<BlockPtr> {
-        let raw = crate::internal::mi_ptr_decode(null_context.as_ptr().cast(), self.word, &keys.0);
+        let raw =
+            crate::internal::mi_ptr_decode(null_context.as_ptr().cast(), self.word, keys.as_raw());
         if raw.is_null() {
             None
         } else {
@@ -179,7 +190,7 @@ impl EncodedPtr<mi_block_t> {
         let p = block
             .map(|b| b.as_ptr().cast::<core::ffi::c_void>())
             .unwrap_or(core::ptr::null_mut());
-        let word = crate::internal::mi_ptr_encode(null_context.as_ptr().cast(), p, &keys.0);
+        let word = crate::internal::mi_ptr_encode(null_context.as_ptr().cast(), p, keys.as_raw());
         Self {
             word,
             _ty: PhantomData,
@@ -328,9 +339,24 @@ impl BlockLink {
 /// stored value is bit-identical to the raw `mi_block_t*` it replaces.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct AvailableFreeList(pub(crate) Option<BlockPtr>);
+pub(crate) struct AvailableFreeList(Option<BlockPtr>);
 
 impl AvailableFreeList {
+    #[inline(always)]
+    pub(crate) fn from_head(head: BlockPtr) -> Self {
+        Self(Some(head))
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_empty(self) -> bool {
+        self.0.is_none()
+    }
+
+    #[inline(always)]
+    pub(crate) fn head(self) -> Option<BlockPtr> {
+        self.0
+    }
+
     /// Return the raw nullable head stored in `(*page).free`.
     #[inline(always)]
     pub(crate) fn as_raw(self) -> *mut mi_block_t {
@@ -391,9 +417,29 @@ impl AvailableFreeList {
 /// that freed blocks from the owning thread are pushed onto.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct LocalFreeList(pub(crate) Option<BlockPtr>);
+pub(crate) struct LocalFreeList(Option<BlockPtr>);
 
 impl LocalFreeList {
+    #[inline(always)]
+    pub(crate) const fn empty() -> Self {
+        Self(None)
+    }
+
+    #[inline(always)]
+    pub(crate) fn from_head(head: BlockPtr) -> Self {
+        Self(Some(head))
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_empty(self) -> bool {
+        self.0.is_none()
+    }
+
+    #[inline(always)]
+    pub(crate) fn into_available(self) -> AvailableFreeList {
+        AvailableFreeList(self.0)
+    }
+
     /// Return the raw nullable head stored in `(*page).local_free`.
     #[inline(always)]
     pub(crate) fn as_raw(self) -> *mut mi_block_t {
@@ -437,7 +483,7 @@ impl LocalFreeList {
 /// Represents an explicitly encoded free list representation.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct EncodedFreeList(pub(crate) Option<BlockPtr>);
+pub(crate) struct EncodedFreeList(Option<BlockPtr>);
 
 pub(super) fn __lint_touch() {
     let _ = PageKeys::disabled();

@@ -1,15 +1,16 @@
 //! DT-13: Atomic field wrappers.
 
-use core::ffi::c_void;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use super::freelist::ThreadFreeWord;
 use super::page::{PageOwnerId, PageThreadId};
 use super::ptr::BlockPtr;
 
+mod arena_cells;
 mod guards;
 mod page_thread;
 mod thread_free;
+pub(crate) use arena_cells::{AtomicAbandonedCount, AtomicArenaPage};
 pub(crate) use guards::{AtomicGuard, MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr};
 pub(crate) use page_thread::AtomicPageThreadId;
 pub(crate) use thread_free::{AtomicThreadFree, RemoteFreeList, RemotePushOutcome};
@@ -265,35 +266,6 @@ impl<T> AtomicPtrField<T> {
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicAbandonedCount(pub(crate) *const AtomicUsize);
-
-impl AtomicAbandonedCount {
-    #[inline(always)]
-    fn field(self) -> AtomicUsizeField {
-        AtomicUsizeField(self.0.cast_mut().cast::<usize>())
-    }
-
-    pub(crate) unsafe fn load_relaxed(self) -> usize {
-        // SAFETY[AUDIT:typed-atomic-abandoned-count]: `AtomicAbandonedCount` points to an
-        // allocator-owned abandoned-count atomic and preserves relaxed loading.
-        unsafe { self.field().load(Ordering::Relaxed) }
-    }
-
-    pub(crate) unsafe fn fetch_add_relaxed(self, value: usize) -> usize {
-        // SAFETY[AUDIT:typed-atomic-abandoned-count]: `AtomicAbandonedCount` points to an
-        // allocator-owned abandoned-count atomic and preserves relaxed increment.
-        unsafe { self.field().fetch_add(value, Ordering::Relaxed) }
-    }
-
-    pub(crate) unsafe fn fetch_sub_relaxed(self, value: usize) -> usize {
-        // SAFETY[AUDIT:typed-atomic-abandoned-count]: `AtomicAbandonedCount` points to an
-        // allocator-owned abandoned-count atomic and preserves relaxed decrement.
-        unsafe { self.field().fetch_sub(value, Ordering::Relaxed) }
-    }
-}
-
-#[repr(transparent)]
-#[derive(Clone, Copy)]
 pub(crate) struct AtomicThreadHeapRefcount(pub(crate) AtomicUsizeField);
 
 impl AtomicThreadHeapRefcount {
@@ -313,28 +285,6 @@ impl AtomicThreadHeapRefcount {
         // SAFETY[AUDIT:typed-atomic-thread-heap-refcount]: the caller provides a valid thread
         // heap refcount field and preserves the existing AcqRel decrement.
         unsafe { self.0.fetch_sub(1, Ordering::AcqRel) }
-    }
-}
-
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub(crate) struct AtomicArenaPage(pub(crate) *const AtomicPtr<c_void>);
-
-impl AtomicArenaPage {
-    pub(crate) unsafe fn load_acquire(self) -> *mut crate::types::mi_arena_pages_t {
-        // SAFETY[AUDIT:typed-atomic-arena-page]: `AtomicArenaPage` points to an
-        // allocator-owned page-table pointer atomic and preserves acquire load.
-        let atomic = unsafe { &*self.0 };
-        atomic
-            .load(Ordering::Acquire)
-            .cast::<crate::types::mi_arena_pages_t>()
-    }
-
-    pub(crate) unsafe fn store_release(self, value: *mut crate::types::mi_arena_pages_t) {
-        // SAFETY[AUDIT:typed-atomic-arena-page]: `AtomicArenaPage` points to an
-        // allocator-owned page-table pointer atomic and preserves release store.
-        let atomic = unsafe { &*self.0 };
-        atomic.store(value.cast::<c_void>(), Ordering::Release);
     }
 }
 

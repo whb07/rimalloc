@@ -2013,12 +2013,13 @@ Operation IDs:
 - `SAFETY[AUDIT:typed-atomic-thread-free]`: `src/types/atomic/thread_free.rs`
   owns typed `xthread_free` remote-list head and ownership bit protocols,
   including remote-list collection handoff fixtures.
-- `SAFETY[AUDIT:typed-atomic-abandoned-count]`: `src/types/atomic.rs` owns
-  abandoned-count atomic load/increment/decrement helpers.
+- `SAFETY[AUDIT:typed-atomic-abandoned-count]`:
+  `src/types/atomic/arena_cells.rs` owns abandoned-count atomic
+  load/increment/decrement helpers.
 - `SAFETY[AUDIT:typed-atomic-thread-heap-refcount]`: `src/types/atomic.rs` owns
   thread-heap refcount store/increment/decrement helpers.
-- `SAFETY[AUDIT:typed-atomic-arena-page]`: `src/types/atomic.rs` owns arena
-  page-table pointer atomic load/store helpers.
+- `SAFETY[AUDIT:typed-atomic-arena-page]`: `src/types/atomic/arena_cells.rs`
+  owns arena page-table pointer atomic load/store helpers.
 - `SAFETY[AUDIT:typed-atomic-guard-once-lock]`: `src/types/atomic/guards.rs`
   owns RAII guard wrappers for atomic guards, once state, and mimalloc locks.
 - `SAFETY[AUDIT:typed-arena-test-fixtures]`: `src/types/arena/tests.rs`

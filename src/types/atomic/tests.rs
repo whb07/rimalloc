@@ -7,6 +7,7 @@ use crate::core_types::{
 };
 use crate::types::{mi_block_t, mi_page_t};
 use core::{
+    ffi::c_void,
     mem::MaybeUninit,
     ptr::{self, NonNull},
     sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize},
@@ -133,7 +134,7 @@ fn atomic_arena_page_loads_and_stores_page_table_pointer() {
     let mut pages = MaybeUninit::<crate::types::mi_arena_pages_t>::zeroed();
     let pages_ptr = pages.as_mut_ptr();
     let atomic = AtomicPtr::new(ptr::null_mut::<c_void>());
-    let field = AtomicArenaPage(&atomic);
+    let field = AtomicArenaPage::from_cell(&atomic);
 
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
     // stack-local `AtomicPtr`; `pages_ptr` is an opaque stack-local arena-page
@@ -268,7 +269,7 @@ fn empty_remote_free_list_collects_through_detached_atomic_path() {
 #[test]
 fn atomic_abandoned_count_uses_relaxed_cell_operations() {
     let atomic = AtomicUsize::new(2);
-    let count = AtomicAbandonedCount(&atomic);
+    let count = AtomicAbandonedCount::from_cell(&atomic);
 
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: `count` references the
     // stack-local abandoned-count atomic and is accessed only through relaxed

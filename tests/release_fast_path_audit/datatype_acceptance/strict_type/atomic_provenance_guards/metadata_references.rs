@@ -27,11 +27,13 @@ pub(super) fn assert_metadata_reference_boundaries(audit_sources: &DatatypeAccep
             && allowlist_rs
                 .contains("metadata-reference|src/allocator/stats.rs|mi_heap_stats_get|mi_heap_t|")
             && !allowlist_rs.contains("metadata-reference|src/types/atomic.rs|*|atomic-field|")
+            && !allowlist_rs
+                .contains("metadata-reference|src/types/atomic/arena_cells.rs|*|atomic-field|")
             && allowlist_rs.contains(
-                "metadata-reference|src/types/atomic.rs|AtomicArenaPage::load_acquire|atomic-field|"
+                "metadata-reference|src/types/atomic/arena_cells.rs|AtomicArenaPage::load_acquire|atomic-field|"
             )
             && allowlist_rs.contains(
-                "metadata-reference|src/types/atomic.rs|AtomicArenaPage::store_release|atomic-field|"
+                "metadata-reference|src/types/atomic/arena_cells.rs|AtomicArenaPage::store_release|atomic-field|"
             )
             && ptr_core_rs.contains("let raw = self.as_ptr();")
             && ptr_core_rs.contains("ptr::read(ptr::addr_of!((*raw).block_size))")

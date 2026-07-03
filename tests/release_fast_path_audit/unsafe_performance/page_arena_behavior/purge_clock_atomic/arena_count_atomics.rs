@@ -72,8 +72,11 @@ pub(super) fn assert_arena_count_atomic_boundaries(sources: &PageArenaBehaviorSo
     assert!(
         sources
             .atomic_types
-            .contains("pub(crate) struct AtomicAbandonedCount(pub(crate) *const AtomicUsize);")
+            .contains("pub(crate) struct AtomicAbandonedCount(*const AtomicUsize);")
             && sources.atomic_types.contains("impl AtomicAbandonedCount")
+            && sources
+                .atomic_types
+                .contains("pub(crate) fn from_cell(cell: *const AtomicUsize) -> Self")
             && sources
                 .atomic_types
                 .contains("pub(crate) unsafe fn load_relaxed(self) -> usize")
@@ -87,6 +90,9 @@ pub(super) fn assert_arena_count_atomic_boundaries(sources: &PageArenaBehaviorSo
                 "pub(super) unsafe fn mi_heap_abandoned_count(\n    heap: *mut mi_heap_t,\n    bin: crate::core_types::Bin,"
             )
             && sources.arena_prefix_rs.contains("abandoned_count[bin.as_usize()]")
+            && sources
+                .arena_prefix_rs
+                .contains("AtomicAbandonedCount::from_cell(ptr::addr_of!(")
             && sources
                 .arena_rs
                 .contains("mi_heap_abandoned_count(heap, bin).fetch_add_relaxed(1)")

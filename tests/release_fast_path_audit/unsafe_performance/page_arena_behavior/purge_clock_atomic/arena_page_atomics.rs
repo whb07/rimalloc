@@ -4,8 +4,11 @@ pub(super) fn assert_arena_page_atomic_boundaries(sources: &PageArenaBehaviorSou
     assert!(
         sources
             .atomic_types
-            .contains("pub(crate) struct AtomicArenaPage(pub(crate) *const AtomicPtr<c_void>);")
+            .contains("pub(crate) struct AtomicArenaPage(*const AtomicPtr<c_void>);")
             && sources.atomic_types.contains("impl AtomicArenaPage")
+            && sources
+                .atomic_types
+                .contains("pub(crate) fn from_cell(cell: *const AtomicPtr<c_void>) -> Self")
             && sources.atomic_types.contains(
                 "pub(crate) unsafe fn load_acquire(self) -> *mut crate::types::mi_arena_pages_t"
             )
@@ -24,6 +27,9 @@ pub(super) fn assert_arena_page_atomic_boundaries(sources: &PageArenaBehaviorSou
             && sources.arena_rs.contains(
                 "unsafe fn mi_heap_ensure_arena_pages(\n    heap: BorrowedHeap,\n    arena: ArenaPtr,\n    arena_idx: ArenaIndex,"
             )
+            && sources
+                .arena_prefix_rs
+                .contains("AtomicArenaPage::from_cell(ptr::addr_of!(")
             && sources
                 .arena_prefix_rs
                 .contains("arena_pages[arena_idx.get() as usize]")

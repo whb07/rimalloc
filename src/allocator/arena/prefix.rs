@@ -28,7 +28,7 @@ pub(super) unsafe fn mi_heap_abandoned_count(
     // SAFETY[AUDIT:arena-prefix-accessors]: the heap prefix owns the abandoned
     // count array and `bin` is a checked bin index.
     unsafe {
-        crate::core_types::AtomicAbandonedCount(ptr::addr_of!(
+        crate::core_types::AtomicAbandonedCount::from_cell(ptr::addr_of!(
             (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin.as_usize()]
         ))
     }
@@ -56,7 +56,7 @@ pub(super) unsafe fn mi_heap_arena_page_cell(
     // SAFETY[AUDIT:arena-prefix-accessors]: the heap prefix owns the arena page
     // table and `arena_idx` has already been checked for the table domain.
     unsafe {
-        crate::core_types::AtomicArenaPage(ptr::addr_of!(
+        crate::core_types::AtomicArenaPage::from_cell(ptr::addr_of!(
             (*heap.cast::<MiHeapPrefix>()).arena_pages[arena_idx.get() as usize]
         ))
     }

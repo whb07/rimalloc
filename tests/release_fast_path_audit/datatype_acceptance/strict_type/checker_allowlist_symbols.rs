@@ -65,7 +65,7 @@ pub(super) fn assert_strict_checker_and_allowlist_symbols(
         "metadata-reference|src/platform/unix.rs|_mi_prim_getenv|platform|",
         "metadata-reference|src/platform/windows.rs|McGenControlCallbackV2|platform|",
         "metadata-reference|src/internal/random.rs|_mi_random_next|random|",
-        "metadata-reference|src/types/atomic.rs|AtomicArenaPage::load_acquire|atomic-field|",
+        "metadata-reference|src/types/atomic/arena_cells.rs|AtomicArenaPage::load_acquire|atomic-field|",
         "pointer-usize-roundtrip|src/allocator/arena/os_memory.rs|mi_manage_os_memory_ex2|arena-range|",
         "pointer-usize-roundtrip|src/platform/os.rs|mi_os_alloc_aligned_memid|os-memory|",
         "pointer-usize-roundtrip|src/platform/unix.rs|unix_mmap_prim_aligned|platform|",

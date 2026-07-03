@@ -2,6 +2,7 @@ use super::DatatypeAcceptanceSources;
 
 pub(super) fn assert_atomic_wrapper_guards(audit_sources: &DatatypeAcceptanceSources<'_>) {
     let atomic_rs = audit_sources.source("src/types/atomic.rs");
+    let atomic_arena_cells_rs = audit_sources.source("src/types/atomic/arena_cells.rs");
     let atomic_guards_rs = audit_sources.source("src/types/atomic/guards.rs");
     let atomic_page_thread_rs = audit_sources.source("src/types/atomic/page_thread.rs");
     let atomic_thread_free_rs = audit_sources.source("src/types/atomic/thread_free.rs");
@@ -9,6 +10,7 @@ pub(super) fn assert_atomic_wrapper_guards(audit_sources: &DatatypeAcceptanceSou
     let allowlist_rs = audit_sources.strict_type_allowlist;
     let atomic_marker_count = |marker| {
         atomic_rs.matches(marker).count()
+            + atomic_arena_cells_rs.matches(marker).count()
             + atomic_guards_rs.matches(marker).count()
             + atomic_page_thread_rs.matches(marker).count()
             + atomic_thread_free_rs.matches(marker).count()

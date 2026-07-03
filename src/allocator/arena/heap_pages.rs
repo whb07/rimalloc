@@ -285,8 +285,8 @@ unsafe extern "C" fn mi_heap_delete_page(
         // SAFETY[AUDIT:arena-heap-delete-boundary]: owned non-abandoned pages can
         // be detached from heap page links before deletion or transfer.
         unsafe {
-            (*page).next = ptr::null_mut();
-            (*page).prev = ptr::null_mut();
+            page_ptr.set_queue_next(None);
+            page_ptr.set_queue_prev(None);
             mi_page_set_theap(page, ptr::null_mut());
         }
     }

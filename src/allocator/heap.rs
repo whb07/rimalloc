@@ -571,7 +571,7 @@ unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
         if used.get() == capacity.get() || capacity.get() < reserved.get() {
             return false;
         }
-        if (*page_raw).prev.is_null() {
+        if page.queue_prev().is_none() {
             return false;
         }
 

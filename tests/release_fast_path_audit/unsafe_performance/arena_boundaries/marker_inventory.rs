@@ -1,4 +1,6 @@
 pub(super) fn assert_arena_marker_inventory(arena_region: &str, unsafe_allowlist: &str) {
+    let arena_main_rs = include_str!("../../../../src/allocator/arena.rs");
+    let os_abandoned_rs = include_str!("../../../../src/allocator/arena/os_abandoned.rs");
     let focused_markers = [
         "SAFETY[AUDIT:arena-slice-geometry-boundary]",
         "SAFETY[AUDIT:arena-slice-containment-boundary]",
@@ -33,6 +35,7 @@ pub(super) fn assert_arena_marker_inventory(arena_region: &str, unsafe_allowlist
         "SAFETY[AUDIT:arena-page-free-release-boundary]",
         "SAFETY[AUDIT:arena-page-abandon-boundary]",
         "SAFETY[AUDIT:arena-page-abandon-os-list-boundary]",
+        "SAFETY[AUDIT:arena-os-abandoned-list-boundary]",
         "SAFETY[AUDIT:arena-page-reabandon-boundary]",
         "SAFETY[AUDIT:arena-page-unabandon-entry-boundary]",
         "SAFETY[AUDIT:arena-page-unabandon-mapped-boundary]",
@@ -84,11 +87,12 @@ pub(super) fn assert_arena_marker_inventory(arena_region: &str, unsafe_allowlist
         ("arena-page-free-stats-boundary", 4),
         ("arena-page-free-release-boundary", 6),
         ("arena-page-abandon-boundary", 15),
-        ("arena-page-abandon-os-list-boundary", 2),
+        ("arena-page-abandon-os-list-boundary", 1),
+        ("arena-os-abandoned-list-boundary", 11),
         ("arena-page-reabandon-boundary", 8),
         ("arena-page-unabandon-entry-boundary", 6),
         ("arena-page-unabandon-mapped-boundary", 5),
-        ("arena-page-unabandon-os-list-boundary", 4),
+        ("arena-page-unabandon-os-list-boundary", 3),
         ("arena-heap-page-publication-boundary", 3),
         ("arena-page-ownership-transition-boundary", 6),
         ("arena-purge-schedule-boundary", 6),
@@ -122,5 +126,16 @@ pub(super) fn assert_arena_marker_inventory(arena_region: &str, unsafe_allowlist
                 .into_iter()
                 .all(|marker| arena_region.contains(marker)),
         "arena unsafe boundaries should stay split into focused operation markers without a migration allowlist entry"
+    );
+    assert!(
+        arena_main_rs.contains("os_abandoned::push_front(")
+            && arena_main_rs.contains("os_abandoned::remove(")
+            && !arena_main_rs.contains("os_abandoned_pages")
+            && !arena_main_rs.contains("os_abandoned_pages_lock")
+            && os_abandoned_rs.contains("pub(super) unsafe fn push_front(")
+            && os_abandoned_rs.contains("pub(super) unsafe fn remove(")
+            && os_abandoned_rs.contains("pub(super) unsafe fn first_snapshot(")
+            && os_abandoned_rs.contains("pub(super) unsafe fn is_empty("),
+        "heap OS abandoned-page list head and link mutation should stay in the private helper"
     );
 }

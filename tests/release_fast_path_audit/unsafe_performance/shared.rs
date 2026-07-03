@@ -94,6 +94,7 @@ impl UnsafePerformanceSources {
                     "src/allocator/arena.rs",
                     "src/allocator/arena/abandoned.rs",
                     "src/allocator/arena/geometry.rs",
+                    "src/allocator/arena/os_abandoned.rs",
                 ],
             ),
             arena_debug_rs: read_source(root, "src/allocator/arena/debug.rs"),
@@ -178,7 +179,6 @@ impl UnsafePerformanceSources {
         }
     }
 }
-
 fn read_source(root: &Path, rel: &str) -> String {
     fs::read_to_string(root.join(rel)).unwrap_or_else(|err| panic!("read {rel}: {err}"))
 }

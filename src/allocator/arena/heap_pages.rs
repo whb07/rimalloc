@@ -173,26 +173,15 @@ unsafe fn _mi_heap_visit_blocks_internal(
         return false;
     }
 
-    // SAFETY[AUDIT:arena-heap-abandoned-visit-boundary]: the heap prefix owns the
-    // abandoned-page list and its lock while the local snapshot is taken.
-    let page = unsafe {
-        mi_lock_acquire(ptr::addr_of_mut!(
-            (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
-        ));
-        let page = (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages;
-        mi_lock_release(ptr::addr_of_mut!(
-            (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
-        ));
-        page
-    };
+    // SAFETY[AUDIT:arena-heap-abandoned-visit-boundary]: the helper snapshots the
+    // abandoned-page list head while holding the heap abandoned-page lock.
+    let page = unsafe { super::os_abandoned::first_snapshot(HeapPtr::new_unchecked(heap)) };
     let mut page = page;
-    while ok && !page.is_null() {
+    while let Some(current) = page.filter(|_| ok) {
         // SAFETY[AUDIT:arena-heap-abandoned-visit-boundary]: abandoned pages are linked
         // through allocator-owned page metadata during this traversal.
-        let next = unsafe { (*page).next };
-        ok = unsafe {
-            mi_heap_visit_page(PagePtr::new_unchecked(page), ptr::addr_of_mut!(visit_info))
-        };
+        let next = unsafe { super::os_abandoned::page_next(current) };
+        ok = unsafe { mi_heap_visit_page(current, ptr::addr_of_mut!(visit_info)) };
         page = next;
     }
 
@@ -438,25 +427,11 @@ unsafe fn mi_heap_delete_pages(heap: OwnedHeap, heap_target: *mut mi_heap_t) {
                 });
             }
         }
-        // SAFETY[AUDIT:arena-heap-delete-dispatch-boundary]: debug-only abandoned-list
-        // verification reads the heap prefix while holding its lock.
-        unsafe {
-            mi_lock_acquire(ptr::addr_of_mut!(
-                (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
-            ))
-        };
         // SAFETY[AUDIT:arena-heap-delete-dispatch-boundary]: the abandoned-page lock is
         // held while checking that the drained heap has no abandoned pages.
         crate::internal::mi_assert_internal!(unsafe {
-            (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages.is_null()
+            super::os_abandoned::is_empty(HeapPtr::new_unchecked(heap))
         });
-        // SAFETY[AUDIT:arena-heap-delete-dispatch-boundary]: release pairs with the debug
-        // abandoned-page lock acquire above.
-        unsafe {
-            mi_lock_release(ptr::addr_of_mut!(
-                (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
-            ))
-        };
         for i in 0..MI_BIN_COUNT {
             let Some(bin) = crate::core_types::Bin::new(i as u16) else {
                 crate::internal::mi_assert_internal!(false);

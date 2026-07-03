@@ -78,6 +78,9 @@ Per-file review:
 - `src/allocator/arena/heap_pages.rs`: heap page visitors, public heap visit
   callbacks, and heap page move/destroy helpers preserve C ABI traversal while
   keeping page ownership transfer inside the arena module boundary.
+- `src/allocator/arena/os_abandoned.rs`: heap-owned OS abandoned-page list
+  helpers own the lock-protected head pointer and page `next`/`prev` links for
+  non-arena abandoned pages.
 - `src/allocator/arena/prefix.rs`: arena, heap, and sub-process prefix layouts
   remain private to `allocator::arena`; accessors require typed heap/subproc
   witnesses or checked arena/bin indexes before returning typed atomic fields.
@@ -829,8 +832,12 @@ Operation IDs:
   arena/heap abandoned bitmaps, owner-id words, heap lists, and stat updates
   while preserving mapped-abandoned visibility and thread ownership release.
 - `SAFETY[AUDIT:arena-page-abandon-os-list-boundary]`:
-  `src/allocator/arena.rs` owns non-arena OS-abandoned page list linking under
-  the owning heap lock.
+  `src/allocator/arena.rs` routes non-arena OS-abandoned page publication
+  through the private heap abandoned-list helper.
+- `SAFETY[AUDIT:arena-os-abandoned-list-boundary]`:
+  `src/allocator/arena/os_abandoned.rs` owns the heap OS abandoned-page list.
+  Unsafe operations are limited to lock-protected head reads/writes and page
+  `next`/`prev` link mutation for non-arena abandoned pages.
 - `SAFETY[AUDIT:arena-page-reabandon-boundary]`:
   `src/allocator/arena.rs` owns page reabandon. Unsafe operations are limited to
   owned-abandoned page witnesses, arena memid classification, associated
@@ -1885,7 +1892,7 @@ Operation IDs:
   visit callbacks.
 - `SAFETY[AUDIT:arena-heap-abandoned-visit-boundary]`:
   `src/allocator/arena/heap_pages.rs` owns abandoned-page visit wrappers and
-  lock-protected abandoned list traversal.
+  abandoned-list traversal via the private heap OS abandoned-list helper.
 - `SAFETY[AUDIT:arena-heap-delete-boundary]`:
   `src/allocator/arena/heap_pages.rs` owns delete callback page claiming,
   unlinking, empty-page release, and non-empty page destruction setup.

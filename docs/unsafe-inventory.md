@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5919 |
-| `unsafe_blocks` | 3480 |
-| `unsafe_fns` | 2005 |
+| `unsafe_mentions` | 5935 |
+| `unsafe_blocks` | 3485 |
+| `unsafe_fns` | 2016 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -47,12 +47,13 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/arena/abandoned.rs` | 47 | 40 | 6 | 0 | 0 | 0 | 0 |
 | `src/allocator/arena/debug.rs` | 53 | 41 | 10 | 0 | 0 | 2 | 0 |
 | `src/allocator/arena/geometry.rs` | 62 | 41 | 17 | 0 | 0 | 4 | 0 |
-| `src/allocator/arena/heap_pages.rs` | 81 | 66 | 13 | 0 | 0 | 2 | 0 |
+| `src/allocator/arena/heap_pages.rs` | 79 | 64 | 13 | 0 | 0 | 2 | 0 |
 | `src/allocator/arena/ids.rs` | 33 | 18 | 14 | 0 | 0 | 0 | 0 |
+| `src/allocator/arena/os_abandoned.rs` | 22 | 11 | 11 | 0 | 0 | 0 | 0 |
 | `src/allocator/arena/os_memory.rs` | 57 | 36 | 12 | 0 | 0 | 9 | 0 |
 | `src/allocator/arena/prefix.rs` | 11 | 6 | 5 | 0 | 0 | 0 | 0 |
 | `src/allocator/arena/purge.rs` | 58 | 47 | 11 | 0 | 0 | 0 | 0 |
-| `src/allocator/arena.rs` | 390 | 328 | 52 | 2 | 0 | 0 | 0 |
+| `src/allocator/arena.rs` | 386 | 324 | 52 | 2 | 0 | 0 | 0 |
 | `src/allocator/arena_meta.rs` | 22 | 13 | 9 | 0 | 0 | 0 | 0 |
 | `src/allocator/bench_diagnostics.rs` | 14 | 9 | 2 | 0 | 0 | 3 | 0 |
 | `src/allocator/free/abandoned.rs` | 13 | 6 | 7 | 0 | 0 | 0 | 0 |

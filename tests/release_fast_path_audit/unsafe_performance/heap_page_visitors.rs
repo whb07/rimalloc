@@ -16,7 +16,7 @@ pub(super) fn assert_heap_page_visitor_boundaries(sources: HeapPageVisitorSource
         ("arena-heap-abandoned-visit-boundary", 5),
         ("arena-heap-delete-boundary", 8),
         ("arena-heap-transfer-boundary", 12),
-        ("arena-heap-delete-dispatch-boundary", 9),
+        ("arena-heap-delete-dispatch-boundary", 7),
         ("arena-heap-move-boundary", 5),
         ("arena-heap-destroy-boundary", 5),
     ];
@@ -52,6 +52,13 @@ pub(super) fn assert_heap_page_visitor_boundaries(sources: HeapPageVisitorSource
             && arena_heap_pages_rs.contains("crate::internal::mi_assert_internal!(false);\n                                break;")
             && arena_heap_pages_rs.contains("mi_heap_abandoned_count(heap, typed_bin).load_relaxed() > 0")
             && arena_heap_pages_rs.contains("mi_heap_abandoned_count(heap, bin).load_relaxed() == 0")
+            && arena_heap_pages_rs
+                .contains("super::os_abandoned::first_snapshot(HeapPtr::new_unchecked(heap))")
+            && arena_heap_pages_rs.contains("super::os_abandoned::page_next(current)")
+            && arena_heap_pages_rs
+                .contains("super::os_abandoned::is_empty(HeapPtr::new_unchecked(heap))")
+            && !arena_heap_pages_rs.contains("os_abandoned_pages")
+            && !arena_heap_pages_rs.contains("os_abandoned_pages_lock")
             && arena_heap_pages_rs
                 .matches("mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire()")
                 .count()

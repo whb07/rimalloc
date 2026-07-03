@@ -50,6 +50,8 @@ arena-heap-page-iteration-boundary	test	tests/release_fast_path_audit/unsafe_per
 arena-heap-page-iteration-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap page iteration unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-heap-abandoned-visit-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks abandoned-page visit wrapper coverage and lock-protected abandoned-list traversal shape.
 arena-heap-abandoned-visit-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap abandoned visit unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-os-abandoned-list-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks private heap OS abandoned-list helper marker coverage and source aggregation.
+arena-os-abandoned-list-boundary	script	scripts/check-unsafe-audit.py	Checks heap OS abandoned-list unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-heap-delete-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap page delete callback marker coverage, page claiming, unlink, release, and destroy setup.
 arena-heap-delete-boundary	script	scripts/check-unsafe-audit.py	Checks arena heap delete unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-heap-transfer-boundary	test	tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs	Checks heap page transfer marker coverage, arena bitmap movement, stats, and abandon publication.

@@ -116,6 +116,7 @@ mod debug;
 mod geometry;
 mod heap_pages;
 mod ids;
+mod os_abandoned;
 mod os_memory;
 mod prefix;
 mod purge;
@@ -2458,25 +2459,9 @@ unsafe fn _mi_arenas_page_abandon_internal(
         if !unsafe { mi_page_memid_is_arena(page) }
             && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
         {
-            unsafe {
-                mi_lock_acquire(ptr::addr_of_mut!(
-                    (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
-                ))
-            };
             // SAFETY[AUDIT:arena-page-abandon-os-list-boundary]: arena page abandon links non-arena pages into the owning heap OS-abandoned list under its lock.
             unsafe {
-                (*page).prev = ptr::null_mut();
-                (*page).next = (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages;
-                if !(*page).next.is_null() {
-                    (*(*page).next).prev = page;
-                }
-                (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages = page;
-            }
-            // SAFETY[AUDIT:arena-page-abandon-os-list-boundary]: arena page abandon links non-arena pages into the owning heap OS-abandoned list under its lock.
-            unsafe {
-                mi_lock_release(ptr::addr_of_mut!(
-                    (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
-                ))
+                os_abandoned::push_front(HeapPtr::new_unchecked(heap), PagePtr::new_unchecked(page))
             };
         }
         // SAFETY[AUDIT:arena-page-abandon-boundary]: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
@@ -2653,31 +2638,8 @@ unsafe fn _mi_arenas_page_unabandon_internal(
     } else if !unsafe { mi_page_memid_is_arena(page) }
         && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
     {
-        unsafe {
-            mi_lock_acquire(ptr::addr_of_mut!(
-                (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
-            ))
-        };
         // SAFETY[AUDIT:arena-page-unabandon-os-list-boundary]: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
-        unsafe {
-            if !(*page).prev.is_null() {
-                (*(*page).prev).next = (*page).next;
-            }
-            if !(*page).next.is_null() {
-                (*(*page).next).prev = (*page).prev;
-            }
-            if (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages == page {
-                (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages = (*page).next;
-            }
-            (*page).next = ptr::null_mut();
-            (*page).prev = ptr::null_mut();
-        };
-        // SAFETY[AUDIT:arena-page-unabandon-os-list-boundary]: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
-        unsafe {
-            mi_lock_release(ptr::addr_of_mut!(
-                (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
-            ))
-        };
+        unsafe { os_abandoned::remove(HeapPtr::new_unchecked(heap), PagePtr::new_unchecked(page)) };
     }
 
     if !current_theapx.is_null() {

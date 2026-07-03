@@ -25,8 +25,8 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5983 |
-| `unsafe_blocks` | 3509 |
+| `unsafe_mentions` | 5984 |
+| `unsafe_blocks` | 3510 |
 | `unsafe_fns` | 2040 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
@@ -53,7 +53,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/arena/os_memory.rs` | 57 | 36 | 12 | 0 | 0 | 9 | 0 |
 | `src/allocator/arena/prefix.rs` | 11 | 6 | 5 | 0 | 0 | 0 | 0 |
 | `src/allocator/arena/purge.rs` | 58 | 47 | 11 | 0 | 0 | 0 | 0 |
-| `src/allocator/arena.rs` | 386 | 324 | 52 | 2 | 0 | 0 | 0 |
+| `src/allocator/arena.rs` | 387 | 325 | 52 | 2 | 0 | 0 | 0 |
 | `src/allocator/arena_meta/pages.rs` | 4 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `src/allocator/arena_meta.rs` | 20 | 12 | 8 | 0 | 0 | 0 | 0 |
 | `src/allocator/bench_diagnostics.rs` | 14 | 9 | 2 | 0 | 0 | 3 | 0 |

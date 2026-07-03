@@ -2173,7 +2173,8 @@ unsafe fn _mi_arenas_page_free_internal<S>(
     page_wrapper: &crate::core_types::AllFreePage<S>,
     current_theap: Option<crate::core_types::ThreadHeapLocal>,
 ) {
-    let page = page_wrapper.page().as_ptr();
+    let page_ptr = page_wrapper.page();
+    let page = page_ptr.as_ptr();
     let current_theapx = current_theap
         .map(|theap| theap.ptr().as_ptr())
         .unwrap_or(ptr::null_mut());
@@ -2190,7 +2191,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
     crate::internal::mi_assert_internal!(unsafe { mi_page_all_free(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(unsafe {
-        (*page).next.is_null() && (*page).prev.is_null()
+        page_ptr.queue_next().is_none() && page_ptr.queue_prev().is_none()
     });
 
     // SAFETY[AUDIT:arena-page-free-stats-boundary]: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
@@ -2391,8 +2392,11 @@ unsafe fn _mi_arenas_page_abandon_internal(
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
+    // SAFETY[AUDIT:arena-page-abandon-boundary]: `page` came from the typed
+    // page-for-abandon wrapper above.
+    let page_ptr = unsafe { PagePtr::new_unchecked(page) };
     crate::internal::mi_assert_internal!(unsafe {
-        (*page).next.is_null() && (*page).prev.is_null()
+        page_ptr.queue_next().is_none() && page_ptr.queue_prev().is_none()
     });
 
     // SAFETY[AUDIT:arena-page-abandon-boundary]: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.

@@ -244,11 +244,12 @@ unsafe fn mi_theap_area_visit_blocks_typed(
         if area.is_null() {
             return true;
         }
-        let page = page.as_ptr();
+        let page_ptr = page;
+        let page = page_ptr.as_ptr();
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.as_ptr());
 
         _mi_page_free_collect(page, true);
-        crate::internal::mi_assert_internal!((*page).local_free.is_null());
+        crate::internal::mi_assert_internal!(page_ptr.local_free().is_empty());
         let used = crate::page::mi_page_used_count(page);
         if used.get() == 0 {
             return true;
@@ -262,7 +263,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
 
         let capacity = crate::page::mi_page_capacity_count(page);
         if capacity.get() == 1 {
-            crate::internal::mi_assert_internal!(used.get() == 1 && (*page).free.is_null());
+            crate::internal::mi_assert_internal!(used.get() == 1 && page_ptr.free().is_empty());
             return visitor.invoke(heap, area, pstart.cast::<c_void>(), ubsize.get(), arg);
         }
         crate::internal::mi_assert_internal!(u32::try_from(bsize).is_ok());
@@ -290,7 +291,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
         mi_get_fast_divisor(bsize, &mut magic, &mut shift);
 
         let mut free_count = 0usize;
-        let mut free = (*page).free;
+        let mut free = page_ptr.free().as_raw();
         while !free.is_null() {
             free_count += 1;
             let block = free;

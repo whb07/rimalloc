@@ -92,6 +92,9 @@ Per-file review:
   expiration updates together with OS decommit handoff.
 - `src/allocator/arena_meta.rs`: arena metadata page stack operations publish
   and reclaim metadata pages through the audited atomic stack discipline.
+- `src/allocator/arena_meta/pages.rs`: private arena metadata page-stack
+  helpers own the global published meta-page head, next link traversal, and
+  release/acquire CAS publication.
 - `src/allocator/free/abandoned.rs`: abandoned-page remote-free collection keeps
   temporary ownership, reclaim, reabandon, and ownership-release decisions
   behind typed abandoned-page and remote-free-list witnesses.
@@ -1870,9 +1873,12 @@ Operation IDs:
 - `SAFETY[AUDIT:arena-meta-allocator]`: `src/allocator/arena_meta.rs` owns
   arena metadata block allocation and free. Unsafe operations are limited to
   checked meta block-count construction, typed `MemId::<MetaMem>` packaging,
-  meta-page pointer arithmetic, bitmap allocation/free updates, acquire/release
-  meta-page stack publication and traversal, arena/OS fallback calls, and debug
-  meta-page classification.
+  meta-page pointer arithmetic, bitmap allocation/free updates, arena/OS
+  fallback calls, and debug meta-page classification.
+- `SAFETY[AUDIT:arena-meta-page-stack]`:
+  `src/allocator/arena_meta/pages.rs` owns the published meta-page stack.
+  Unsafe operations are limited to reading a live meta-page `next` link and
+  publishing a fully initialized meta page with release/acquire CAS ordering.
 - `SAFETY[AUDIT:bench-diagnostics-ffi]`:
   `src/allocator/bench_diagnostics.rs` owns benchmark-only C ABI diagnostic
   counters and JSON export helpers. Unsafe operations are limited to exported

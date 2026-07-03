@@ -122,11 +122,16 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
         arena_meta_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_meta_is_meta_page(")
             && arena_meta_rs.contains("SAFETY[AUDIT:arena-meta-allocator]")
+            && arena_meta_rs.contains("SAFETY[AUDIT:arena-meta-page-stack]")
             && arena_meta_rs.contains("static MI_META_IS_META_PAGE_KEEP")
-            && arena_meta_rs.contains("mi_meta_pages.load(Ordering::Acquire)")
+            && arena_meta_rs.contains("mod pages;")
+            && arena_meta_rs.contains("static MI_META_PAGES: AtomicPtr<mi_meta_page_t>")
+            && arena_meta_rs.contains("MI_META_PAGES.load(Ordering::Acquire)")
+            && arena_meta_rs.contains("let mut mpage = mi_meta_page_list_head();")
+            && arena_meta_rs.contains("mi_meta_page_publish(mpage)")
             && arena_meta_rs.contains("mpage = unsafe { mi_meta_page_next(mpage) };")
             && arena_debug_rs.contains("} else if unsafe { _mi_meta_is_meta_page(start) }"),
-        "meta page debug classification should keep C's _mi_meta_is_meta_page helper boundary"
+        "meta page stack and debug classification should stay behind local helper boundaries"
     );
     assert!(
         deferred_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_deferred_free(")

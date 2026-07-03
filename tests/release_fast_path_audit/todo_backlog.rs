@@ -81,7 +81,7 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`src/raw/macros.rs`/`usize` with 23",
         "next useful usize file/domain cap is 23 entries",
         "release-audit root harness is 247 lines under a 300-line root cap",
-        "release-audit module-size guard discovers 185 module files recursively and\n  enforces a 190-line cap",
+        "release-audit module-size guard discovers 186 module files recursively and\n  enforces a 190-line cap",
         "`unsafe_performance/raw_facade/raw_override/os_random.rs` at 190 lines",
         "`todo_backlog.rs` at 190 lines",
         "`unsafe_performance/os_memory/platform_helpers.rs` at 189 lines",

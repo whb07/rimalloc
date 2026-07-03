@@ -1,4 +1,8 @@
 use super::*;
+#[path = "shared/readers.rs"]
+mod readers;
+
+use readers::{read_pair, read_source, read_sources};
 
 pub(super) struct UnsafePerformanceSources {
     pub(super) unsafe_allowlist: String,
@@ -59,12 +63,10 @@ impl UnsafePerformanceSources {
     pub(super) fn load(root: &Path) -> Self {
         Self {
             unsafe_allowlist: read_source(root, "docs/unsafe-migration-allowlist.tsv"),
-            page_map: read_sources(
+            page_map: read_pair(
                 root,
-                &[
-                    "src/allocator/page_map.rs",
-                    "src/allocator/page_map/lookup.rs",
-                ],
+                "src/allocator/page_map.rs",
+                "src/allocator/page_map/lookup.rs",
             ),
             internal: read_sources(
                 root,
@@ -103,7 +105,11 @@ impl UnsafePerformanceSources {
             arena_os_memory_rs: read_source(root, "src/allocator/arena/os_memory.rs"),
             arena_prefix_rs: read_source(root, "src/allocator/arena/prefix.rs"),
             arena_purge_rs: read_source(root, "src/allocator/arena/purge.rs"),
-            arena_meta_rs: read_source(root, "src/allocator/arena_meta.rs"),
+            arena_meta_rs: read_pair(
+                root,
+                "src/allocator/arena_meta.rs",
+                "src/allocator/arena_meta/pages.rs",
+            ),
             atomic_rs: read_source(root, "src/internal/atomic.rs"),
             bitmap_rs: read_sources(
                 root,
@@ -113,9 +119,10 @@ impl UnsafePerformanceSources {
                 ],
             ),
             bitmap_chunkmap_rs: read_source(root, "src/internal/bitmap/chunkmap.rs"),
-            free_rs: read_sources(
+            free_rs: read_pair(
                 root,
-                &["src/allocator/free.rs", "src/allocator/free/abandoned.rs"],
+                "src/allocator/free.rs",
+                "src/allocator/free/abandoned.rs",
             ),
             libc_rs: read_source(root, "src/ffi/libc.rs"),
             memid_rs: read_source(root, "src/types/memid.rs"),
@@ -157,10 +164,7 @@ impl UnsafePerformanceSources {
             page_stats_bin_rs: read_source(root, "src/allocator/page/stats_bin.rs"),
             page_validation_rs: read_source(root, "src/allocator/page/validation.rs"),
             random_rs: read_source(root, "src/internal/random.rs"),
-            raw_macros_rs: read_sources(
-                root,
-                &["src/raw/macros.rs", "src/raw/macros/linux_libc.rs"],
-            ),
+            raw_macros_rs: read_pair(root, "src/raw/macros.rs", "src/raw/macros/linux_libc.rs"),
             raw_header_forwarding_rs: read_source(root, "src/raw/macros/header_forwarding.rs"),
             stats_rs: read_source(root, "src/allocator/stats.rs"),
             theap_rs: read_source(root, "src/allocator/thread_heap.rs"),
@@ -178,13 +182,4 @@ impl UnsafePerformanceSources {
             prim_unix_rs: read_source(root, "src/platform/unix.rs"),
         }
     }
-}
-fn read_source(root: &Path, rel: &str) -> String {
-    fs::read_to_string(root.join(rel)).unwrap_or_else(|err| panic!("read {rel}: {err}"))
-}
-fn read_sources(root: &Path, rels: &[&str]) -> String {
-    rels.iter()
-        .map(|rel| read_source(root, rel))
-        .collect::<Vec<_>>()
-        .join("\n")
 }

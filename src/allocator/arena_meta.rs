@@ -8,7 +8,6 @@ use core::ffi::c_void;
 use core::mem::offset_of;
 use core::num::NonZeroU32;
 use core::ptr;
-use core::sync::atomic::{AtomicPtr, Ordering};
 
 use crate::arena::{MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE, MI_META_PAGE_SIZE};
 use crate::bitmap::{
@@ -25,6 +24,12 @@ use crate::mimalloc::mi_heap_main;
 use crate::os::{
     _mi_os_secure_guard_page_set_at, _mi_os_secure_guard_page_set_before,
     _mi_os_secure_guard_page_size,
+};
+
+mod pages;
+use pages::{
+    mi_meta_page_list_changed_since, mi_meta_page_list_head, mi_meta_page_next,
+    mi_meta_page_publish,
 };
 
 pub const MI_META_BLOCK_SIZE: usize = 1 << (16 - MI_BFIELD_BITS_SHIFT);
@@ -75,8 +80,6 @@ unsafe fn mi_meta_memid(
     }
 }
 
-static mi_meta_pages: AtomicPtr<mi_meta_page_t> = AtomicPtr::new(ptr::null_mut());
-
 /// # Safety
 ///
 /// `p` must point inside a meta allocation managed by the arena-meta allocator.
@@ -100,16 +103,6 @@ pub unsafe fn mi_meta_page_of_ptr(p: *mut c_void, block_idx: *mut usize) -> *mut
         }
     }
     mpage
-}
-
-/// # Safety
-///
-/// `mpage` must point to a live meta page.
-#[inline]
-pub unsafe fn mi_meta_page_next(mpage: *mut mi_meta_page_t) -> *mut mi_meta_page_t {
-    // SAFETY[AUDIT:arena-meta-allocator]: callers provide a live meta-page
-    // header from the published meta-page stack.
-    unsafe { (*mpage).next }
 }
 
 /// # Safety
@@ -203,19 +196,7 @@ unsafe fn mi_meta_page_zalloc() -> *mut mi_meta_page_t {
             MI_META_BLOCKS_PER_PAGE - info_blocks - 2 * guard_blocks,
         );
 
-        let mut old = mi_meta_pages.load(Ordering::Acquire);
-        loop {
-            (*mpage).next = old;
-            match mi_meta_pages.compare_exchange_weak(
-                old,
-                mpage,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => return mpage,
-                Err(actual) => old = actual,
-            }
-        }
+        mi_meta_page_publish(mpage)
     }
 }
 
@@ -243,7 +224,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
         crate::internal::mi_assert_internal!(block_count > 0 && block_count < MI_BCHUNK_BITS);
         let meta_block_count = meta_block_count(block_count);
 
-        let mpage0 = mi_meta_pages.load(Ordering::Acquire);
+        let mpage0 = mi_meta_page_list_head();
         let mut mpage = mpage0;
         while !mpage.is_null() {
             let mut block_idx = 0usize;
@@ -260,7 +241,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
             mpage = mi_meta_page_next(mpage);
         }
 
-        if mi_meta_pages.load(Ordering::Acquire) != mpage0 {
+        if mi_meta_page_list_changed_since(mpage0) {
             return _mi_meta_zalloc(size, pmemid);
         }
 
@@ -335,7 +316,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid
 // acquire-loaded meta-page stack and compares header identity.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
-    let mut mpage = mi_meta_pages.load(Ordering::Acquire);
+    let mut mpage = mi_meta_page_list_head();
     while !mpage.is_null() {
         if mpage.cast::<c_void>() == p {
             return true;

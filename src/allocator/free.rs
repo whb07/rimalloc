@@ -1151,9 +1151,9 @@ pub unsafe extern "C" fn mi_free_small(p: *mut c_void) {
 mod tests {
     use super::*;
     use crate::core_types::{
-        BlockPtr, FreePathKind, PageFlags, PageFreeOwner, PageOwnerId, PagePtr, PageThreadId,
-        PointerInvalidReason, PointerLocation, PointerLookup, ThreadFreeOwner, ThreadFreeWord,
-        ThreadId, UserPtr,
+        AvailableFreeList, BlockPtr, FreePathKind, LocalFreeList, PageFlags, PageFreeOwner,
+        PageOwnerId, PagePtr, PageThreadId, PointerInvalidReason, PointerLocation, PointerLookup,
+        ThreadFreeOwner, ThreadFreeWord, ThreadId, UserPtr,
     };
     use crate::init::_mi_thread_id;
     use crate::types::{mi_block_t, mi_page_t};
@@ -1181,15 +1181,16 @@ mod tests {
             // SAFETY[AUDIT:free-validation-fixtures]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
             unsafe {
                 let page = fixture.page.as_mut_ptr();
+                let page_ptr = PagePtr::new_unchecked(page);
                 ptr::addr_of_mut!((*page).xthread_id)
                     .write(PageThreadId::from_parts(owner, flags).raw());
-                ptr::addr_of_mut!((*page).free).write(ptr::null_mut());
+                page_ptr.set_free(AvailableFreeList::from_raw(ptr::null_mut()));
                 ptr::addr_of_mut!((*page).used).write(2);
                 ptr::addr_of_mut!((*page).capacity).write(2);
                 ptr::addr_of_mut!((*page).reserved).write(2);
                 ptr::addr_of_mut!((*page).retire_expire).write(1);
                 ptr::addr_of_mut!((*page).free_is_zero).write(false);
-                ptr::addr_of_mut!((*page).local_free).write(ptr::null_mut());
+                page_ptr.set_local_free(LocalFreeList::empty());
                 ptr::addr_of_mut!((*page).xthread_free)
                     .write(ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned).raw());
                 ptr::addr_of_mut!((*page).block_size).write(2 * core::mem::size_of::<mi_block_t>());
@@ -1423,7 +1424,7 @@ mod tests {
         unsafe {
             let page = fixture.page().as_ptr();
             let block = fixture.block(0).as_ptr();
-            (*page).free = block;
+            PagePtr::new_unchecked(page).set_free(AvailableFreeList::from_head(fixture.block(0)));
             assert!(mi_check_is_double_freex(page, block));
         }
     }

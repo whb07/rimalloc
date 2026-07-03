@@ -22,10 +22,11 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && atomic_types.contains("pub(crate) unsafe fn load(self) -> PageThreadId")
         && atomic_types.contains("pub(crate) unsafe fn store_owner(self, owner: PageOwnerId)")
         && atomic_types.contains("pub(crate) unsafe fn compare_exchange_owner(\n        self,\n        expected: &mut PageThreadId,")
-        && internal_page_boundary.contains("let atomic_tid = crate::core_types::AtomicPageThreadId::from_field(\n            crate::core_types::AtomicUsizeField::from_raw(")
+        && internal_page_boundary.contains("let atomic_tid = page.thread_id_cell();")
         && internal_page_boundary.contains("atomic_tid.load().raw()")
         && internal_page_boundary.contains("let mut old = atomic_tid.load();")
         && internal_page_boundary.contains("atomic_tid.compare_exchange_owner(&mut old, new)")
+        && !internal_page_boundary.contains("AtomicPageThreadId::from_field(")
         && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);")
         && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);")
         && page_flags_rs

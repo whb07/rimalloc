@@ -1,5 +1,3 @@
-use core::ptr;
-
 use crate::types::{mi_block_t, mi_page_flags_t, mi_page_t, mi_threadid_t};
 
 /// # Safety
@@ -8,11 +6,8 @@ use crate::types::{mi_block_t, mi_page_flags_t, mi_page_t, mi_threadid_t};
 pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
     // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
-        let atomic_tid = crate::core_types::AtomicPageThreadId::from_field(
-            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!(
-                (*(page as *mut mi_page_t)).xthread_id
-            )),
-        );
+        let page = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
+        let atomic_tid = page.thread_id_cell();
         atomic_tid.load().raw()
     }
 }

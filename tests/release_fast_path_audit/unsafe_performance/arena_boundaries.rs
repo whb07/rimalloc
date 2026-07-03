@@ -81,7 +81,7 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
             && arena_rs.contains("mi_heap_arena_page_cell(heap, arena_idx)")
             && arena_rs.contains(".store_release(arena_pages.cast())")
             && arena_rs.contains("page.free_to_arena(owner)")
-            && arena_rs.contains("crate::core_types::AtomicPageThreadId")
+            && arena_rs.contains("unsafe { PagePtr::new_unchecked(page).thread_id_cell() };")
             && arena_rs.contains("crate::core_types::PageOwnerId::AbandonedMapped")
             && arena_rs.contains("mi_bitmap_set((*arena_pages).pages_abandoned[bin.as_usize()]"),
         "arena page lifecycle handoff should preserve page state, memid ownership, and C ABI shims"

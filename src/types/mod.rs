@@ -129,9 +129,8 @@ pub(crate) mod atomic;
 mod heap;
 
 pub(crate) use atomic::{
-    AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicI64Field, AtomicPageThreadId,
-    AtomicPtrField, AtomicUsizeField, MemoryOrder, MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr,
-    RemoteFreeList,
+    AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicI64Field, AtomicPtrField,
+    AtomicUsizeField, MemoryOrder, MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr, RemoteFreeList,
 };
 mod padding;
 

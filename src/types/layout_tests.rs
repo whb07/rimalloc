@@ -187,7 +187,7 @@ fn packed_and_atomic_wrappers_match_raw_layout() {
     assert_layout!(atomic::AtomicUsizeField, *mut usize);
     assert_layout!(atomic::AtomicI64Field, *mut i64);
     assert_layout!(atomic::AtomicPtrField<u8>, *mut *mut u8);
-    assert_layout!(AtomicPageThreadId, *mut usize);
+    assert_layout!(atomic::AtomicPageThreadId, *mut usize);
     assert_layout!(atomic::AtomicThreadFree, *mut usize);
     assert_layout!(atomic::AtomicThreadHeapRefcount, *mut usize);
     assert_layout!(atomic::AtomicAbandonedCount, *mut usize);

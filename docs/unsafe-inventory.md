@@ -64,11 +64,12 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/flags.rs` | 20 | 10 | 10 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/lifecycle.rs` | 32 | 16 | 16 | 0 | 0 | 0 | 0 |
-| `src/allocator/page/queues.rs` | 10 | 5 | 5 | 0 | 0 | 0 | 0 |
+| `src/allocator/page/queues.rs` | 41 | 20 | 21 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/stats_bin.rs` | 8 | 4 | 4 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/validation.rs` | 10 | 5 | 5 | 0 | 0 | 0 | 0 |
-| `src/allocator/page.rs` | 146 | 66 | 80 | 0 | 0 | 0 | 0 |
-| `src/allocator/page_map.rs` | 186 | 144 | 38 | 0 | 0 | 2 | 0 |
+| `src/allocator/page.rs` | 115 | 51 | 64 | 0 | 0 | 0 | 0 |
+| `src/allocator/page_map/lookup.rs` | 25 | 17 | 6 | 0 | 0 | 2 | 0 |
+| `src/allocator/page_map.rs` | 161 | 127 | 32 | 0 | 0 | 0 | 0 |
 | `src/allocator/stats.rs` | 198 | 124 | 51 | 0 | 0 | 22 | 0 |
 | `src/allocator/thread_heap.rs` | 120 | 56 | 58 | 0 | 0 | 6 | 0 |
 | `src/allocator/threadlocal.rs` | 43 | 37 | 4 | 1 | 1 | 0 | 0 |

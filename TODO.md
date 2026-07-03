@@ -11,7 +11,7 @@ production module cap.
 
 Current review evidence:
 
-- `scripts/check-unsafe-audit.py` covers 99 source files, 5,898 unsafe
+- `scripts/check-unsafe-audit.py` covers 101 source files, 5,899 unsafe
   mentions, and 540 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 540 operation IDs with
   1,155 automated evidence rows.
@@ -70,16 +70,17 @@ Current review evidence:
   `src/raw/macros.rs`/`usize` with 23. The active usize file/domain cap is 24
   entries; the next useful usize file/domain cap is 23 entries.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 183 module files recursively and
+  release-audit module-size guard discovers 184 module files recursively and
   enforces a 190-line cap. The largest release-audit modules are:
-  `unsafe_performance/shared.rs` at 190 lines,
   `unsafe_performance/raw_facade/raw_override/os_random.rs` at 190 lines,
   `todo_backlog.rs` at 190 lines,
   `unsafe_performance/os_memory/platform_helpers.rs` at 189 lines,
   `unsafe_performance/page_lifecycle.rs` at 186 lines,
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs` at 185 lines,
   `datatype_acceptance/strict_type_allowlist_inventory.rs` at 183 lines,
-  `strict_policy.rs` at 182 lines. No release-audit module currently exceeds
+  `strict_policy.rs` at 182 lines,
+  `unsafe_performance/raw_facade/bootstrap_query.rs` at 181 lines, and
+  `unsafe_performance/allocation_free/marker_counts.rs` at 180 lines. No release-audit module currently exceeds
   190 lines; the next useful recursive module cap would be 180 lines.
 - Production source module size remains dominated by translated-C-shaped files:
   `src/allocator/arena.rs` at 2,711 lines, `src/allocator/init.rs` at 2,612,

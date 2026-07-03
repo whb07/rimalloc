@@ -59,7 +59,13 @@ impl UnsafePerformanceSources {
     pub(super) fn load(root: &Path) -> Self {
         Self {
             unsafe_allowlist: read_source(root, "docs/unsafe-migration-allowlist.tsv"),
-            page_map: read_source(root, "src/allocator/page_map.rs"),
+            page_map: read_sources(
+                root,
+                &[
+                    "src/allocator/page_map.rs",
+                    "src/allocator/page_map/lookup.rs",
+                ],
+            ),
             internal: read_sources(
                 root,
                 &[
@@ -161,30 +167,9 @@ impl UnsafePerformanceSources {
 fn read_source(root: &Path, rel: &str) -> String {
     fs::read_to_string(root.join(rel)).unwrap_or_else(|err| panic!("read {rel}: {err}"))
 }
-
 fn read_sources(root: &Path, rels: &[&str]) -> String {
     rels.iter()
         .map(|rel| read_source(root, rel))
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-pub(super) fn source_has_inline_never_function(source: &str, signature: &str) -> bool {
-    let mut saw_inline_never = false;
-
-    for line in source.lines().map(str::trim_start) {
-        if line == "#[inline(never)]" {
-            saw_inline_never = true;
-            continue;
-        }
-        if saw_inline_never && line.starts_with("//") {
-            continue;
-        }
-        if saw_inline_never && line.starts_with(signature) {
-            return true;
-        }
-        saw_inline_never = false;
-    }
-
-    false
 }

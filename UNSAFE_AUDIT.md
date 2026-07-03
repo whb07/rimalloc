@@ -184,8 +184,12 @@ Per-file review:
 - `src/allocator/page/stats_bin.rs`: page bin and stats-bin compatibility shims
   project caller-proven page metadata into typed bin domains before returning
   C-compatible `usize` values.
-- `src/page_map.rs`: page-map submap publication and lookup bounds-check indexes
+- `src/allocator/page_map.rs`: page-map bootstrap, registration,
+  unregistration, submap publication, and range mutation bounds-check indexes
   against the C page-map layout and uses audited atomics for concurrent install.
+- `src/allocator/page_map/lookup.rs`: page-map arbitrary-pointer lookup and
+  heap-region query convert nullable caller input into registered page-range
+  witnesses or null/none without mutating page-map state.
 - `src/prim.rs`: primitive facade forwards to platform implementations through
   C-compatible signatures.
 - `src/prim/emscripten.rs`: Emscripten primitive calls preserve C ABI contracts
@@ -1746,13 +1750,15 @@ Operation IDs:
   `src/allocator/page_map.rs` owns non-32-bit range set/clear primitives.
   Unsafe operations are limited to typed top-level/sub-index witnesses, submap
   slot writes/clears, and bounded advancement across submap boundaries.
-- `SAFETY[AUDIT:page-map-lookup32-boundary]`: `src/allocator/page_map.rs` owns
-  32-bit arbitrary-pointer page lookup and heap-region queries. Unsafe
+- `SAFETY[AUDIT:page-map-lookup32-boundary]`:
+  `src/allocator/page_map/lookup.rs` owns 32-bit arbitrary-pointer page lookup
+  and heap-region queries. Unsafe
   operations are limited to nullable input handling, committed bitmap checks,
   byte-map reads, and page metadata projection while preserving safe lookup for
   invalid pointers.
-- `SAFETY[AUDIT:page-map-lookup64-boundary]`: `src/allocator/page_map.rs` owns
-  non-32-bit arbitrary-pointer page lookup and heap-region queries. Unsafe
+- `SAFETY[AUDIT:page-map-lookup64-boundary]`:
+  `src/allocator/page_map/lookup.rs` owns non-32-bit arbitrary-pointer page
+  lookup and heap-region queries. Unsafe
   operations are limited to nullable input handling, committed top-level index
   checks, submap reads, and page metadata projection while preserving safe
   lookup for invalid pointers.

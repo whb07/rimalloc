@@ -7,6 +7,8 @@ mod arena_boundaries;
 mod bitmap_boundaries;
 #[path = "unsafe_performance/heap_page_visitors.rs"]
 mod heap_page_visitors;
+#[path = "unsafe_performance/inline_never.rs"]
+mod inline_never;
 #[path = "unsafe_performance/lifecycle_boundaries.rs"]
 mod lifecycle_boundaries;
 #[path = "unsafe_performance/local_boundaries.rs"]
@@ -32,7 +34,8 @@ mod thread_stats;
 #[path = "unsafe_performance/threadlocal_boundaries.rs"]
 mod threadlocal_boundaries;
 
-use shared::{UnsafePerformanceSources, source_has_inline_never_function};
+use inline_never::source_has_inline_never_function;
+use shared::UnsafePerformanceSources;
 
 #[test]
 fn free_path_internals_are_not_dynamic_exports() {

@@ -62,7 +62,7 @@ pub(super) fn assert_arena_helper_boundaries(
         .find("unsafe fn mi_arena_try_claim_abandoned_at(")
         .expect("find mi_arena_try_claim_abandoned_at");
     let claim_end = arena_rs[claim_start..]
-        .find("\n}\n\nunsafe extern \"C\" fn mi_arena_try_claim_abandoned(")
+        .find("\n}\n\npub(super) unsafe extern \"C\" fn mi_arena_try_claim_abandoned(")
         .map(|offset| claim_start + offset)
         .expect("find end of mi_arena_try_claim_abandoned_at");
     let claim_body = &arena_rs[claim_start..claim_end];

@@ -83,7 +83,11 @@ impl UnsafePerformanceSources {
             alloc_string_path_rs: read_source(root, "src/allocator/alloc/string_path.rs"),
             arena_rs: read_sources(
                 root,
-                &["src/allocator/arena.rs", "src/allocator/arena/geometry.rs"],
+                &[
+                    "src/allocator/arena.rs",
+                    "src/allocator/arena/abandoned.rs",
+                    "src/allocator/arena/geometry.rs",
+                ],
             ),
             arena_debug_rs: read_source(root, "src/allocator/arena/debug.rs"),
             arena_heap_pages_rs: read_source(root, "src/allocator/arena/heap_pages.rs"),

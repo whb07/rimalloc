@@ -65,6 +65,9 @@ Per-file review:
 - `src/arena.rs`: arena metadata pointers are derived from registered arena
   ranges and bitmap/page ownership checks. Slice allocation, purge, commit, and
   free paths update shared state through audited atomics and locks.
+- `src/allocator/arena/abandoned.rs`: abandoned-page claim/reclaim, bitmap
+  claim callbacks, local-full checks, and lazy heap arena-page table publication
+  stay grouped with the typed page/heap witnesses used for ownership transfer.
 - `src/allocator/arena/debug.rs`: arena diagnostics read allocator-owned arena,
   page, bitmap, and memid metadata selected from the current sub-process arena
   registry and write only stack-local render buffers before sending text to the
@@ -765,15 +768,16 @@ Operation IDs:
   operations are limited to NUMA normalization, huge-page OS allocation,
   memid publication, arena registration, and OS release on failure while
   preserving timeout, interleave, and reserved-page reporting semantics.
-- `SAFETY[AUDIT:arena-abandoned-boundary]`: `src/allocator/arena.rs` owns
-  abandoned-page ownership claim/release and thread-local abandoned-page claim
-  callbacks. Unsafe operations are limited to typed abandoned-page witnesses,
-  remote-free collection, and callback ABI arguments while preserving page
-  ownership transfer and abandoned-count semantics.
+- `SAFETY[AUDIT:arena-abandoned-boundary]`:
+  `src/allocator/arena/abandoned.rs` owns abandoned-page ownership
+  claim/release and thread-local abandoned-page claim callbacks. Unsafe
+  operations are limited to typed abandoned-page witnesses, remote-free
+  collection, and callback ABI arguments while preserving page ownership
+  transfer and abandoned-count semantics.
 - `SAFETY[AUDIT:arena-abandoned-page-table-boundary]`:
-  `src/allocator/arena.rs` owns heap arena-page table lookup, lazy table
-  allocation, publication, and main-heap table assertions used by abandoned-page
-  search.
+  `src/allocator/arena/abandoned.rs` owns heap arena-page table lookup, lazy
+  table allocation, publication, and main-heap table assertions used by
+  abandoned-page search.
 - `SAFETY[AUDIT:arena-page-fresh-boundary]`:
   `src/allocator/arena.rs` owns fresh arena-backed page memory reservation,
   arena memid projection, and OS fallback handoff. Unsafe operations are limited
@@ -840,10 +844,11 @@ Operation IDs:
   arena memid projection, bitmap set/rollback, and allocation cleanup while
   preserving visibility only after arena page metadata exists.
 - `SAFETY[AUDIT:arena-page-ownership-transition-boundary]`:
-  `src/allocator/arena.rs` owns arena page owner-word and page-map visibility
-  transitions. Unsafe operations are limited to page metadata owner fields,
-  thread-free ownership words, and page-map registration while preserving page
-  metadata invariants before ownership becomes visible.
+  `src/allocator/arena.rs` and `src/allocator/arena/abandoned.rs` own arena
+  page owner-word and page-map visibility transitions. Unsafe operations are
+  limited to page metadata owner fields, thread-free ownership words, and
+  page-map registration while preserving page metadata invariants before
+  ownership becomes visible.
 - `SAFETY[AUDIT:arena-purge-schedule-boundary]`:
   `src/allocator/arena/purge.rs` owns delayed purge scheduling. Unsafe
   operations update arena/subproc purge clocks and purge bitmaps after

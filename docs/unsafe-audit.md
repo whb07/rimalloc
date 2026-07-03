@@ -367,11 +367,11 @@ file:
   APIs, NUMA normalization, registration, and release-on-failure handling in
   `src/allocator/arena/os_memory.rs`.
 - `SAFETY[AUDIT:arena-abandoned-boundary]`: abandoned-page claim/reclaim in
-  `src/allocator/arena.rs`. The boundary covers abandoned ownership transfer,
-  remote-free collection, and thread-local claim callbacks.
+  `src/allocator/arena/abandoned.rs`. The boundary covers abandoned ownership
+  transfer, remote-free collection, and thread-local claim callbacks.
 - `SAFETY[AUDIT:arena-abandoned-page-table-boundary]`: heap arena-page table
   lookup, lazy allocation, and publication for abandoned-page search in
-  `src/allocator/arena.rs`.
+  `src/allocator/arena/abandoned.rs`.
 - `SAFETY[AUDIT:arena-page-fresh-boundary]`: fresh arena-backed page
   reservation, memid projection, and OS fallback in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-fresh-metadata-boundary]`: fresh page metadata
@@ -407,7 +407,8 @@ file:
 - `SAFETY[AUDIT:arena-heap-page-publication-boundary]`: heap arena-page bitmap
   publication and rollback during page allocation in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-ownership-transition-boundary]`: owner-word and
-  page-map visibility transitions in `src/allocator/arena.rs`.
+  page-map visibility transitions in `src/allocator/arena.rs` and
+  `src/allocator/arena/abandoned.rs`.
 - `SAFETY[AUDIT:arena-purge-schedule-boundary]`: delayed purge scheduling and
   purge bitmap publication in `src/allocator/arena/purge.rs`.
 - `SAFETY[AUDIT:arena-purge-free-dispatch-boundary]`: arena free dispatch into

@@ -133,6 +133,9 @@ Per-file review:
   blocks, encoded free-list links, memids, and memcpy/memset wrappers. Callers
   are responsible for passing allocator-owned pointers; helpers are small and
   C-invariant preserving.
+- `src/internal/block_link.rs`: encoded free-list link helpers keep page/null
+  sentinel, encoding-key, tracking-visibility, and same-page corruption checks
+  grouped around the raw block-link word.
 - `src/internal/memid.rs`: raw memory-origin identifiers keep the C-compatible
   `mi_memid_t` layout and route construction/classification through
   `crate::core_types::MemId` typed views.
@@ -962,10 +965,10 @@ Operation IDs:
   `src/internal/page_flags.rs` own thread-free ownership-word helpers. Unsafe
   operations are limited to typed atomic thread-free loads and ownership claims
   while preserving encoded head and ownership bits.
-- `SAFETY[AUDIT:internal-block-link-boundary]`: `src/internal/mod.rs` owns
-  encoded free-list block links. Unsafe operations preserve pointer provenance,
-  tracking gates, page keys, encoded/unencoded link reads and writes, and
-  same-page corruption checks.
+- `SAFETY[AUDIT:internal-block-link-boundary]`:
+  `src/internal/block_link.rs` owns encoded free-list block links. Unsafe
+  operations preserve pointer provenance, tracking gates, page keys,
+  encoded/unencoded link reads and writes, and same-page corruption checks.
 - `SAFETY[AUDIT:free-raw-export-boundary]`: `src/allocator/free.rs` owns raw
   C ABI free, free-size, aligned-free, usable-size, and fast assembly alias
   shims. Unsafe operations are limited to symbol-preserving entry points and

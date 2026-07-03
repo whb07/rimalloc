@@ -6,7 +6,7 @@ pub(super) fn assert_pointer_provenance_boundaries(audit_sources: &DatatypeAccep
     let ptr_core_rs = audit_sources.source("src/types/ptr.rs");
     let freelist_rs = audit_sources.source("src/types/freelist.rs");
     let freelist_wrappers_rs = audit_sources.source("src/types/freelist_wrappers.rs");
-    let internal_rs = audit_sources.source("src/internal/mod.rs");
+    let block_link_rs = audit_sources.source("src/internal/block_link.rs");
 
     assert!(
         ptr_core_rs.contains("pub(crate) fn ptr_exposed_addr<T>(ptr: *const T) -> usize")
@@ -40,16 +40,16 @@ pub(super) fn assert_pointer_provenance_boundaries(audit_sources: &DatatypeAccep
             && freelist_wrappers_rs.contains("let word = ptr_exposed_addr(block);")
             && freelist_wrappers_rs.contains("crate::provenance::remember_address(word, block);")
             && freelist_wrappers_rs.contains("word as *mut mi_block_t")
-            && internal_rs.contains("pub(crate) fn mi_ptr_decode(")
-            && internal_rs.contains(
+            && block_link_rs.contains("pub(crate) fn mi_ptr_decode(")
+            && block_link_rs.contains(
                 "let decoded_addr = mi_rotr(x.get().wrapping_sub(keys[0]), keys[0]) ^ keys[1];"
             )
-            && internal_rs.contains("crate::provenance::resolve_encoded(x.get(), null, keys)")
-            && internal_rs.contains("let p = decoded_addr as *mut c_void;")
-            && internal_rs.contains("pub(crate) fn mi_ptr_encode(")
-            && internal_rs.contains("crate::core_types::ptr_exposed_addr(null)")
-            && internal_rs.contains("crate::core_types::ptr_exposed_addr(p)")
-            && internal_rs
+            && block_link_rs.contains("crate::provenance::resolve_encoded(x.get(), null, keys)")
+            && block_link_rs.contains("let p = decoded_addr as *mut c_void;")
+            && block_link_rs.contains("pub(crate) fn mi_ptr_encode(")
+            && block_link_rs.contains("crate::core_types::ptr_exposed_addr(null)")
+            && block_link_rs.contains("crate::core_types::ptr_exposed_addr(p)")
+            && block_link_rs
                 .contains("crate::provenance::remember_encoded(word.get(), null, keys, p);")
             && strict_check_rs.contains("PTR_USIZE_RE = re.compile")
             && strict_check_rs.contains("ALLOWED_PTR_USIZE = {")
@@ -62,6 +62,7 @@ pub(super) fn assert_pointer_provenance_boundaries(audit_sources: &DatatypeAccep
             && !allowlist_rs.contains(
                 "pointer-usize-roundtrip|src/types/freelist_wrappers.rs|*|encoded-pointer|"
             )
+            && !allowlist_rs.contains("pointer-usize-roundtrip|src/internal/block_link.rs|*|")
             && !allowlist_rs.contains("pointer-usize-roundtrip|src/internal/mod.rs|*|")
             && allowlist_rs.contains(
                 "pointer-usize-roundtrip|src/internal/page_location.rs|mi_page_slice_offset_of|packed-pointer|"

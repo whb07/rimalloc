@@ -111,8 +111,8 @@ upstream allocator call shapes before typed helpers take over: `mi_theap_t` has
 109 entries, `mi_page_t` has 110 entries, and `mi_heap_t` has 67 entries. The
 largest file hotspots are `src/allocator/aligned.rs` (36),
 `src/internal/bitmap.rs` (35), `src/allocator/alloc.rs` (30),
-`src/internal/mod.rs` (26), `src/allocator/page.rs` (26), and
-`src/allocator/thread_heap.rs` (25); the release fast-path audit caps every
+`src/allocator/page.rs` (26), `src/allocator/thread_heap.rs` (25), and
+`src/allocator/free.rs` (24); the release fast-path audit caps every
 strict-type file at 40 active entries so new growth must be intentional.
 
 Kind/file caps are guarded separately. No kind/file pair exceeds 25 active

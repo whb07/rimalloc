@@ -478,7 +478,7 @@ file:
 - `SAFETY[AUDIT:internal-thread-free-boundary]`: thread-free ownership-word
   helpers in `src/internal/mod.rs`.
 - `SAFETY[AUDIT:internal-block-link-boundary]`: encoded free-list link helpers
-  in `src/internal/mod.rs`.
+  in `src/internal/block_link.rs`.
 - `SAFETY[AUDIT:unix-file-syscall-boundary]`,
   `SAFETY[AUDIT:unix-mmap-primitive-boundary]`,
   `SAFETY[AUDIT:unix-memory-alloc-boundary]`,

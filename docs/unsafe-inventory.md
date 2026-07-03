@@ -82,9 +82,10 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/internal/atomic.rs` | 135 | 72 | 62 | 1 | 0 | 0 | 0 |
 | `src/internal/bitmap/chunkmap.rs` | 7 | 6 | 1 | 0 | 0 | 0 | 0 |
 | `src/internal/bitmap.rs` | 140 | 61 | 79 | 0 | 0 | 0 | 0 |
+| `src/internal/block_link.rs` | 35 | 26 | 9 | 0 | 0 | 0 | 0 |
 | `src/internal/guarded.rs` | 2 | 1 | 1 | 0 | 0 | 0 | 0 |
 | `src/internal/memid.rs` | 2 | 0 | 2 | 0 | 0 | 0 | 0 |
-| `src/internal/mod.rs` | 103 | 58 | 44 | 1 | 0 | 0 | 0 |
+| `src/internal/mod.rs` | 68 | 32 | 35 | 1 | 0 | 0 | 0 |
 | `src/internal/page_flags.rs` | 16 | 8 | 8 | 0 | 0 | 0 | 0 |
 | `src/internal/page_location.rs` | 14 | 7 | 7 | 0 | 0 | 0 | 0 |
 | `src/internal/page_metadata.rs` | 30 | 15 | 15 | 0 | 0 | 0 | 0 |

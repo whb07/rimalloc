@@ -44,7 +44,7 @@ fn rust_idiom_backlog_tracks_current_work() {
         "permanent reason groups at\n32 entries",
         "`src/allocator/page.rs` is split below the 2,800-line production\nmodule cap",
         "`src/allocator/arena.rs` is split below the 3,000-line\nproduction module cap",
-        "covers 102 source files, 5,899 unsafe\n  mentions, and 540 operation IDs",
+        "covers 103 source files, 5,899 unsafe\n  mentions, and 540 operation IDs",
         "covers those 540 operation IDs with\n  1,155 automated evidence rows",
         "No source audit operation ID has more than 16 source markers",
         "Fourteen IDs\n  sit at the 16-marker cap",

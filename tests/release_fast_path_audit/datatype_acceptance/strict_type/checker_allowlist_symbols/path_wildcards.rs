@@ -13,6 +13,7 @@ pub(super) fn assert_no_path_wide_allowlist_entries(allowlist_rs: &str) {
         "src/allocator/arena.rs",
         "src/allocator/tracking.rs",
         "src/internal/mod.rs",
+        "src/internal/block_link.rs",
         "src/internal/atomic.rs",
         "src/allocator/stats.rs",
         "src/allocator/thread_heap.rs",

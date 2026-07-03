@@ -100,7 +100,7 @@ pub(super) fn assert_strict_checker_and_allowlist_symbols(
         "pointer-usize-roundtrip|src/allocator/aligned.rs|mi_theap_realloc_zero_aligned_at_req|alignment/provenance|",
         "raw-pointer-parameter|src/internal/mod.rs|_mi_malloc_generic|mi_theap_t|",
         "raw-pointer-parameter|src/internal/page_metadata.rs|mi_page_block_size|mi_page_t|",
-        "raw-pointer-parameter|src/internal/mod.rs|mi_block_nextx|mi_block_t|",
+        "raw-pointer-parameter|src/internal/block_link.rs|mi_block_nextx|mi_block_t|",
         "pointer-usize-roundtrip|src/internal/page_location.rs|mi_page_slice_offset_of|packed-pointer|",
         "raw-pointer-parameter|src/allocator/stats.rs|mi_stats_merge_theap_to_heap|mi_theap_t|",
         "raw-pointer-parameter|src/allocator/stats.rs|mi_heap_stats_get_json|mi_heap_t|",

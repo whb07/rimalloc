@@ -11,7 +11,7 @@ production module cap.
 
 Current review evidence:
 
-- `scripts/check-unsafe-audit.py` covers 102 source files, 5,899 unsafe
+- `scripts/check-unsafe-audit.py` covers 103 source files, 5,899 unsafe
   mentions, and 540 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 540 operation IDs with
   1,155 automated evidence rows.
@@ -35,7 +35,7 @@ Current review evidence:
 - The largest strict-type allowlist file hotspots are `src/allocator/aligned.rs`
   with 36 active entries, `src/internal/bitmap.rs` with 35,
   `src/allocator/alloc.rs` with 30, `src/allocator/page.rs` with 26,
-  `src/internal/mod.rs` with 26, and `src/allocator/thread_heap.rs` with 25.
+  `src/allocator/thread_heap.rs` with 25, and `src/allocator/free.rs` with 24.
   The active file hotspot cap is 40 active entries; the next useful file
   hotspot cap is 35 active entries.
 - The largest strict-type kind/file hotspots are `bare-domain-usize` in

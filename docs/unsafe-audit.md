@@ -162,8 +162,9 @@ file:
   lock initialization, and registry insertion in `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-subproc-metadata-destroy-boundary]`: subproc lock teardown
   and metadata free in `src/allocator/init.rs`.
-- `SAFETY[AUDIT:init-subproc-list-unlink-boundary]`: lock-serialized subproc
-  list unlinking in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-registry-list-boundary]`: lock-serialized subproc
+  registry insertion, unlinking, and traversal in
+  `src/allocator/init/subproc_registry.rs`.
 - `SAFETY[AUDIT:init-subproc-destroy-loop-boundary]`: subproc heap, arena, and
   page-map destruction ordering in `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-subproc-registry-teardown-boundary]`: full registry

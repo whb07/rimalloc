@@ -4,6 +4,8 @@
 // specific platform startup paths.
 #![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
+mod subproc_registry;
+
 #[cfg(any(
     miri,
     not(all(
@@ -719,22 +721,6 @@ fn mi_subproc_main_init() {
     }
 }
 
-unsafe fn mi_subproc_unlink_locked(subproc: *mut MiSubprocPrefix) {
-    // SAFETY[AUDIT:init-subproc-list-unlink-boundary]: subproc list unlinking is serialized by the subproc registry lock.
-    unsafe {
-        if !(*subproc).next.is_null() {
-            (*mi_subproc_prefix((*subproc).next)).prev = (*subproc).prev;
-        }
-        if !(*subproc).prev.is_null() {
-            (*mi_subproc_prefix((*subproc).prev)).next = (*subproc).next;
-        } else {
-            subprocs = (*subproc).next;
-        }
-        (*subproc).next = ptr::null_mut();
-        (*subproc).prev = ptr::null_mut();
-    }
-}
-
 unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs_lock: bool) {
     let Some(subproc) = SubprocPtr::new(subproc) else {
         return;
@@ -756,8 +742,8 @@ unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_
         // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         unsafe { mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock)) };
     }
-    // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-    unsafe { mi_subproc_unlink_locked(subproc_prefix) };
+    // SAFETY[AUDIT:init-subproc-registry-list-boundary]: registry membership rewires only the lock-protected subproc head and prev/next links.
+    unsafe { subproc_registry::unlink_locked(subproc) };
     if acquire_subprocs_lock {
         // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         unsafe { mi_lock_release(ptr::addr_of_mut!(subprocs_lock)) };
@@ -820,11 +806,11 @@ unsafe fn mi_subprocs_unsafe_destroy_all() {
             let lock =
                 MiLockPtr::from_nonnull(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
             let _lock = MiLockGuard::acquire(lock);
-            let mut subproc = subprocs;
-            while !subproc.is_null() {
-                let next = (*mi_subproc_prefix(subproc)).next;
-                if !ptr::eq(subproc, main_subproc) {
-                    mi_subproc_unsafe_destroy(subproc, false);
+            let mut subproc = subproc_registry::head_locked();
+            while let Some(current) = subproc {
+                let next = subproc_registry::next_locked(current);
+                if !ptr::eq(current.as_ptr(), main_subproc) {
+                    mi_subproc_unsafe_destroy(current.as_ptr(), false);
                 }
                 subproc = next;
             }
@@ -2324,11 +2310,9 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
         let lock =
             MiLockPtr::from_nonnull(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
         let _lock = MiLockGuard::acquire(lock);
-        (*subproc_ptr).next = subprocs;
-        if !subprocs.is_null() {
-            (*mi_subproc_prefix(subprocs)).prev = subproc_ptr.cast::<mi_subproc_t>();
-        }
-        subprocs = subproc_ptr.cast::<mi_subproc_t>();
+        subproc_registry::push_front_locked(SubprocPtr::new_unchecked(
+            subproc_ptr.cast::<mi_subproc_t>(),
+        ));
         _mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>())
     }
 }

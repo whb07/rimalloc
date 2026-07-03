@@ -2,7 +2,9 @@
 mod inventory;
 
 pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist: &str) {
-    inventory::assert_init_marker_inventory(init_rs, unsafe_allowlist);
+    let subproc_registry_rs = include_str!("../../../../../src/allocator/init/subproc_registry.rs");
+    let init_lifecycle_rs = format!("{init_rs}\n{subproc_registry_rs}");
+    inventory::assert_init_marker_inventory(&init_lifecycle_rs, unsafe_allowlist);
     assert!(
         init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_main")
             && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_current")
@@ -13,6 +15,22 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
             && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_is_heap_main")
             && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_is_theap_main"),
         "subproc identity, registry, stats, and main-heap lookup markers should stay reviewable independently"
+    );
+    assert!(
+        init_rs.contains("mod subproc_registry;")
+            && init_rs.contains("subproc_registry::push_front_locked(")
+            && init_rs.contains("subproc_registry::unlink_locked(")
+            && init_rs.contains("subproc_registry::head_locked()")
+            && init_rs.contains("subproc_registry::next_locked(current)")
+            && !init_rs.contains("unsafe fn mi_subproc_unlink_locked")
+            && !init_rs.contains("(*subproc_ptr).next = subprocs")
+            && subproc_registry_rs.contains("pub(super) unsafe fn push_front_locked(")
+            && subproc_registry_rs.contains("pub(super) unsafe fn unlink_locked(")
+            && subproc_registry_rs.contains("pub(super) unsafe fn head_locked()")
+            && subproc_registry_rs.contains("pub(super) unsafe fn next_locked(")
+            && subproc_registry_rs.contains("(*prefix).next = subprocs")
+            && subproc_registry_rs.contains("(*prefix).prev = ptr::null_mut()"),
+        "subproc registry head and prev/next membership rewiring should stay in the private registry helper"
     );
     assert!(
         init_rs

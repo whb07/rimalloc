@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5971 |
-| `unsafe_blocks` | 3503 |
-| `unsafe_fns` | 2034 |
+| `unsafe_mentions` | 5977 |
+| `unsafe_blocks` | 3506 |
+| `unsafe_fns` | 2037 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -60,7 +60,8 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/free.rs` | 108 | 54 | 47 | 0 | 0 | 3 | 2 |
 | `src/allocator/heap/subproc_heaps.rs` | 12 | 6 | 6 | 0 | 0 | 0 | 0 |
 | `src/allocator/heap.rs` | 93 | 46 | 34 | 0 | 0 | 11 | 0 |
-| `src/allocator/init.rs` | 333 | 230 | 79 | 3 | 0 | 18 | 3 |
+| `src/allocator/init/subproc_registry.rs` | 8 | 4 | 4 | 0 | 0 | 0 | 0 |
+| `src/allocator/init.rs` | 331 | 229 | 78 | 3 | 0 | 18 | 3 |
 | `src/allocator/options.rs` | 79 | 46 | 9 | 4 | 3 | 15 | 0 |
 | `src/allocator/page/bins.rs` | 3 | 2 | 0 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/counts.rs` | 44 | 22 | 22 | 0 | 0 | 0 | 0 |

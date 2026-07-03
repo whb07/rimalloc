@@ -132,6 +132,9 @@ Per-file review:
 - `src/init.rs`: global and thread-local initialization uses explicit once/lock
   state before publishing allocator globals. Destructor paths tolerate partial
   initialization as in C.
+- `src/allocator/init/subproc_registry.rs`: process-global subproc registry
+  helpers own the lock-protected registry head and subproc prefix `next`/`prev`
+  membership links.
 - `src/internal.rs`: low-level helpers implement C layout arithmetic for pages,
   blocks, encoded free-list links, memids, and memcpy/memset wrappers. Callers
   are responsible for passing allocator-owned pointers; helpers are small and
@@ -425,8 +428,9 @@ Operation IDs:
 - `SAFETY[AUDIT:init-subproc-metadata-destroy-boundary]`:
   `src/allocator/init.rs` owns subproc metadata teardown after the destroy path
   has removed live heap/arena/page-map state.
-- `SAFETY[AUDIT:init-subproc-list-unlink-boundary]`: `src/allocator/init.rs`
-  owns lock-protected subproc list unlinking and prev/next pointer clearing.
+- `SAFETY[AUDIT:init-subproc-registry-list-boundary]`:
+  `src/allocator/init/subproc_registry.rs` owns lock-protected subproc registry
+  insertion, unlinking, traversal head reads, and next-link reads.
 - `SAFETY[AUDIT:init-subproc-destroy-loop-boundary]`: `src/allocator/init.rs`
   owns subproc destruction ordering across heap draining, arena teardown, main
   page-map destruction, and metadata handoff.

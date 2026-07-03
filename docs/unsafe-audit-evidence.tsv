@@ -146,8 +146,8 @@ init-subproc-create-boundary	test	tests/release_fast_path_audit/unsafe_performan
 init-subproc-create-boundary	script	scripts/check-unsafe-audit.py	Checks subproc creation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-subproc-metadata-destroy-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks subproc metadata lock teardown and metadata free marker coverage.
 init-subproc-metadata-destroy-boundary	script	scripts/check-unsafe-audit.py	Checks subproc metadata destroy unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-list-unlink-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks lock-protected subproc list unlinking and prev/next clearing marker coverage.
-init-subproc-list-unlink-boundary	script	scripts/check-unsafe-audit.py	Checks subproc list unlink unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-registry-list-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks lock-protected subproc registry insertion, unlinking, and traversal helper marker coverage.
+init-subproc-registry-list-boundary	script	scripts/check-unsafe-audit.py	Checks subproc registry list unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-subproc-destroy-loop-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks heap draining, arena teardown, page-map destruction, and metadata handoff shape.
 init-subproc-destroy-loop-boundary	script	scripts/check-unsafe-audit.py	Checks subproc destroy-loop unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-subproc-registry-teardown-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/init_markers.rs	Checks process-shutdown subproc registry traversal under the registry lock.

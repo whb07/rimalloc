@@ -21,12 +21,13 @@ dynamic TLS storage follows the C baseline's `mi_rezalloc`,
   does not allocate through Rust's global allocator.
 - `src/allocator/page.rs`, `src/allocator/page/deferred.rs`,
   `src/allocator/page/flags.rs`, `src/allocator/page/queues.rs`, `src/arena.rs`,
-  `src/allocator/arena/os_memory.rs`, `src/allocator/arena/purge.rs`, and
-  `src/arena_meta.rs`: page extension, free-list, deferred-free callback, page
-  flag/owner access, queue link mutation/validation, arena reserve/manage-memory,
-  purge/free dispatch, huge-object, and metadata allocation paths use OS, arena,
-  or mimalloc metadata helpers. They do not use `Box`, `Vec`, `String`,
-  `format!`, `CString`, or `std::alloc`.
+  `src/allocator/arena/geometry.rs`, `src/allocator/arena/os_memory.rs`,
+  `src/allocator/arena/purge.rs`, and `src/arena_meta.rs`: page extension,
+  free-list, deferred-free callback, page flag/owner access, queue link
+  mutation/validation, arena slice geometry/page-table lookups, arena
+  reserve/manage-memory, purge/free dispatch, huge-object, and metadata
+  allocation paths use OS, arena, or mimalloc metadata helpers. They do not use
+  `Box`, `Vec`, `String`, `format!`, `CString`, or `std::alloc`.
 - `src/heap.rs`, `src/theap.rs`, `src/init.rs`, and `src/threadlocal.rs`: heap,
   theap, subprocess, process/thread, and dynamic TLS metadata now avoid Rust
   heap allocation. Dynamic subprocess metadata uses `_mi_meta_zalloc` and
@@ -80,5 +81,5 @@ audit is:
 
 ```sh
 python3 scripts/check-no-allocation-audit.py
-cargo test --test no_allocation_critical_paths
+cargo test --all-features --test no_allocation_critical_paths
 ```

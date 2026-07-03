@@ -673,14 +673,14 @@ Operation IDs:
   count/bin witnesses, usable-size out-pointers, and ABI flag decoding while
   preserving public null/failure semantics and typed metadata invariants.
 - `SAFETY[AUDIT:arena-slice-geometry-boundary]`:
-  `src/allocator/arena.rs` owns arena slice geometry, address projection, and
-  typed slice/page helper routing. Unsafe operations are limited to
-  caller-proven arena pointers and bounded `SliceIndex`/`SliceRange`
+  `src/allocator/arena/geometry.rs` owns arena slice geometry, address
+  projection, and typed slice/page helper routing. Unsafe operations are
+  limited to caller-proven arena pointers and bounded `SliceIndex`/`SliceRange`
   witnesses while preserving arena bounds and slice alignment.
 - `SAFETY[AUDIT:arena-slice-containment-boundary]`:
-  `src/allocator/arena.rs` owns arena area queries and containment checks.
-  Unsafe operations perform bounded address arithmetic and metadata reads
-  without mutating arena ownership state.
+  `src/allocator/arena/geometry.rs` owns arena area queries and containment
+  checks. Unsafe operations perform bounded address arithmetic and metadata
+  reads without mutating arena ownership state.
 - `SAFETY[AUDIT:arena-slice-layout-boundary]`:
   `src/allocator/arena.rs` owns arena info-slice sizing and bitmap layout.
   Unsafe operations project typed metadata slices from validated arena layout
@@ -691,9 +691,9 @@ Operation IDs:
   converting caller indexes into `ArenaIndex`, and loading typed arena table
   cells.
 - `SAFETY[AUDIT:arena-heap-page-table-boundary]`:
-  `src/allocator/arena.rs` owns heap arena-page table lookup for page metadata
-  queries. Unsafe operations are limited to typed heap/page/arena pointers,
-  arena index lookup, and bitmap ownership checks.
+  `src/allocator/arena/geometry.rs` owns heap arena-page table lookup for page
+  metadata queries. Unsafe operations are limited to typed heap/page/arena
+  pointers, arena index lookup, and bitmap ownership checks.
 - `SAFETY[AUDIT:arena-registry-start-index-boundary]`:
   `src/allocator/arena.rs` owns arena iteration start-index selection. Unsafe
   operations are limited to reading heap/subproc sequence fields and creating

@@ -324,14 +324,14 @@ file:
   C-shaped page helpers, and generic allocation entry shims in
   `src/allocator/page.rs`.
 - `SAFETY[AUDIT:arena-slice-geometry-boundary]`,
-  `SAFETY[AUDIT:arena-slice-containment-boundary]`, and
-  `SAFETY[AUDIT:arena-slice-layout-boundary]`: arena slice geometry,
-  containment queries, info-slice sizing, and bitmap layout in
-  `src/allocator/arena.rs`.
+  `SAFETY[AUDIT:arena-slice-containment-boundary]`: arena slice geometry and
+  containment queries in `src/allocator/arena/geometry.rs`.
+- `SAFETY[AUDIT:arena-slice-layout-boundary]`: info-slice sizing and bitmap
+  layout in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-registry-count-index-boundary]`: arena count/index lookup
   and C ABI registry shims in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-heap-page-table-boundary]`: heap arena-page table lookup
-  and bitmap ownership checks in `src/allocator/arena.rs`.
+  and bitmap ownership checks in `src/allocator/arena/geometry.rs`.
 - `SAFETY[AUDIT:arena-registry-start-index-boundary]`: bounded arena iteration
   start-index selection in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-registry-suitability-boundary]`: pinned, requested-arena,

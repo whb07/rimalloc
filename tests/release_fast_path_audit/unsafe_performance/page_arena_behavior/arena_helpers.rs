@@ -5,8 +5,8 @@ pub(super) fn assert_arena_helper_boundaries(
     arena_types: &str,
 ) {
     for marker in [
-        "#[inline(never)]\nunsafe fn mi_arena_slice_start(",
-        "#[inline(never)]\nunsafe fn mi_arena_page_at_slice(",
+        "#[inline(never)]\npub(super) unsafe fn mi_arena_slice_start(",
+        "#[inline(never)]\npub(super) unsafe fn mi_arena_page_at_slice(",
         "#[inline(never)]\nunsafe fn mi_arenas_page_singleton_alloc(",
         "static MI_ARENA_SLICE_START_KEEP",
         "static MI_ARENA_PAGE_AT_SLICE_KEEP",
@@ -80,9 +80,9 @@ pub(super) fn assert_arena_helper_boundaries(
     );
     assert!(
         arena_rs.contains(
-            "unsafe fn mi_arena_slice_start(\n    arena: ArenaPtr,\n    slice_index: crate::core_types::SliceIndex,"
+            "pub(super) unsafe fn mi_arena_slice_start(\n    arena: ArenaPtr,\n    slice_index: crate::core_types::SliceIndex,"
         ) && arena_rs.contains(
-            "unsafe fn mi_arena_page_at_slice(\n    arena: ArenaPtr,\n    slice_index: crate::core_types::SliceIndex,"
+            "pub(super) unsafe fn mi_arena_page_at_slice(\n    arena: ArenaPtr,\n    slice_index: crate::core_types::SliceIndex,"
         ) && arena_rs.contains("unsafe fn mi_arena_try_claim_abandoned_at(\n    slice_index: SliceIndex,")
             && arena_debug_rs.contains("    slice_index: SliceIndex,\n    pbit_of_page:")
             && arena_rs.contains(

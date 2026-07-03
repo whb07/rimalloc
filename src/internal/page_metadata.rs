@@ -115,7 +115,9 @@ pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
     // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
-        !(*page).free.is_null()
+        !crate::core_types::PagePtr::new_unchecked(page.cast_mut())
+            .free()
+            .is_empty()
     }
 }
 
@@ -141,7 +143,8 @@ pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
     unsafe {
         let full = crate::page::mi_page_reserved_count(page).get()
             == crate::page::mi_page_used_count(page).get();
-        crate::internal::mi_assert_internal!(!full || (*page).free.is_null());
+        let page_ptr = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
+        crate::internal::mi_assert_internal!(!full || page_ptr.free().is_empty());
         full
     }
 }

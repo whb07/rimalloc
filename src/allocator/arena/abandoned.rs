@@ -201,6 +201,12 @@ pub(super) unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
         crate::page::mi_page_reserved_count(page).get()
             == crate::page::mi_page_used_count(page).get()
     };
-    crate::internal::mi_assert_internal!(!full || unsafe { (*page).free.is_null() });
+    // SAFETY[AUDIT:arena-page-ownership-transition-boundary]: arena page ownership transitions update owner words, page maps, and visibility only after page metadata invariants hold.
+    let free_is_empty = unsafe {
+        crate::core_types::PagePtr::new_unchecked(page.cast_mut())
+            .free()
+            .is_empty()
+    };
+    crate::internal::mi_assert_internal!(!full || free_is_empty);
     full
 }

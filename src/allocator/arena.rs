@@ -1957,7 +1957,9 @@ unsafe fn mi_arenas_page_alloc_fresh(
     unsafe { (*page).memid = memid };
     unsafe { (*page).free_is_zero = memid.initially_zero };
     // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
-    crate::internal::mi_assert_internal!(unsafe { (*page).free.is_null() });
+    let page_ptr = unsafe { PagePtr::new_unchecked(page) };
+    // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
+    crate::internal::mi_assert_internal!(unsafe { page_ptr.free().is_empty() });
     crate::internal::mi_assert_internal!(
         page_meta_is_separate == unsafe { mi_page_meta_is_separated(page) }
     );
@@ -1972,7 +1974,6 @@ unsafe fn mi_arenas_page_alloc_fresh(
         .raw()
     };
     // SAFETY[AUDIT:arena-page-ownership-transition-boundary]: arena page ownership transitions update owner words, page maps, and visibility only after page metadata invariants hold.
-    let page_ptr = unsafe { PagePtr::new_unchecked(page) };
     let claimed = unsafe { page_ptr.thread_free_cell().claim_acq_rel() };
     crate::internal::mi_assert_internal!(claimed);
     if !unsafe { _mi_page_map_register(page) } {

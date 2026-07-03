@@ -88,7 +88,7 @@ pub(crate) unsafe fn mi_page_list_is_valid(page: PagePtr, mut p: *mut mi_block_t
         }
         if MI_DEBUG > 3 && (*page).free_is_zero {
             let ubsize = mi_page_usable_block_size(page);
-            let mut block = (*page).free;
+            let mut block = page_ptr.free().as_raw();
             while !block.is_null() {
                 crate::internal::mi_assert_expensive!(mi_mem_is_zero(
                     block.add(1).cast(),
@@ -117,12 +117,14 @@ pub(crate) unsafe fn mi_page_is_valid_init(page: PagePtr) -> bool {
         let reserved = mi_page_reserved_count(page);
         crate::internal::mi_assert_internal!(used.get() <= capacity.get());
         crate::internal::mi_assert_internal!(capacity.get() <= reserved.get());
-        crate::internal::mi_assert_internal!(mi_page_list_is_valid(page_ptr, (*page).free));
-        crate::internal::mi_assert_internal!(mi_page_list_is_valid(page_ptr, (*page).local_free));
+        let available = page_ptr.free();
+        let local = page_ptr.local_free();
+        crate::internal::mi_assert_internal!(mi_page_list_is_valid(page_ptr, available.as_raw()));
+        crate::internal::mi_assert_internal!(mi_page_list_is_valid(page_ptr, local.as_raw()));
 
         if MI_DEBUG > 3 && (*page).free_is_zero {
             let ubsize = mi_page_usable_block_size(page);
-            let mut block = (*page).free;
+            let mut block = available.as_raw();
             while !block.is_null() {
                 crate::internal::mi_assert_expensive!(mi_mem_is_zero(
                     block.add(1).cast(),
@@ -137,8 +139,8 @@ pub(crate) unsafe fn mi_page_is_valid_init(page: PagePtr) -> bool {
             crate::internal::mi_assert_internal!(mi_page_list_is_valid(page_ptr, tfree));
         }
 
-        let free_count = mi_page_list_count(page_ptr, (*page).free)
-            + mi_page_list_count(page_ptr, (*page).local_free);
+        let free_count = mi_page_list_count(page_ptr, available.as_raw())
+            + mi_page_list_count(page_ptr, local.as_raw());
         crate::internal::mi_assert_internal!(
             mi_page_used_count(page).as_usize() + free_count == capacity.as_usize()
         );

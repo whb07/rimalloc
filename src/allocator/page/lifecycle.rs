@@ -248,28 +248,20 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
 
         mi_page_thread_free_collect(page);
 
-        if !(*page).local_free.is_null() {
-            if (*page).free.is_null() {
-                (*page).free = (*page).local_free;
-                (*page).local_free = ptr::null_mut();
+        let page_ptr = PagePtr::new_unchecked(page);
+        let local_page = LocalPage::new_unchecked(page_ptr);
+        let local = page_ptr.local_free();
+        if !local.is_empty() {
+            let available = page_ptr.free();
+            if available.is_empty() || force {
+                #[cfg(feature = "bench-diagnostics")]
+                let appended = !available.is_empty();
+                let new_available = local.prepend_to_available(local_page, available);
+                page_ptr.set_free(new_available);
+                page_ptr.set_local_free(LocalFreeList::empty());
                 (*page).free_is_zero = false;
                 #[cfg(feature = "bench-diagnostics")]
-                crate::bench_diagnostics::page_free_collect_moved_to_free(false);
-            } else if force {
-                let mut tail = (*page).local_free;
-                loop {
-                    let next = mi_block_next(page, tail);
-                    if next.is_null() {
-                        break;
-                    }
-                    tail = next;
-                }
-                mi_block_set_next(page, tail, (*page).free);
-                (*page).free = (*page).local_free;
-                (*page).local_free = ptr::null_mut();
-                (*page).free_is_zero = false;
-                #[cfg(feature = "bench-diagnostics")]
-                crate::bench_diagnostics::page_free_collect_moved_to_free(true);
+                crate::bench_diagnostics::page_free_collect_moved_to_free(appended);
             } else {
                 #[cfg(feature = "bench-diagnostics")]
                 crate::bench_diagnostics::page_free_collect_noop_local_blocked();
@@ -342,6 +334,69 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             #[cfg(feature = "bench-diagnostics")]
             crate::bench_diagnostics::page_free_collect_partly_final_collect();
             _mi_page_free_collect(page, false);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_prepend_to_available_splices_tail_to_existing_available_list() {
+        let mut blocks = [ptr::null_mut::<mi_block_t>(); 16];
+        // SAFETY[AUDIT:page-free-list-collect-boundary]: this allocates real
+        // allocator-owned blocks so encoded free-list link checks see
+        // registered same-page pointers while exercising only the typed splice.
+        unsafe {
+            for block in &mut blocks {
+                *block = crate::mimalloc::mi_malloc(core::mem::size_of::<mi_block_t>()).cast();
+                assert!(!(*block).is_null());
+            }
+
+            let mut chosen = None;
+            'outer: for i in 0..blocks.len() {
+                let page = crate::internal::_mi_ptr_page(blocks[i].cast());
+                if page.is_null() {
+                    continue;
+                }
+                for j in (i + 1)..blocks.len() {
+                    if crate::internal::_mi_ptr_page(blocks[j].cast()) != page {
+                        continue;
+                    }
+                    for k in (j + 1)..blocks.len() {
+                        if crate::internal::_mi_ptr_page(blocks[k].cast()) == page {
+                            chosen = Some((page, blocks[i], blocks[j], blocks[k]));
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+            let Some((raw_page, local_head, local_tail, available_head)) = chosen else {
+                for block in blocks {
+                    crate::mimalloc::mi_free(block.cast());
+                }
+                panic!("expected three same-page small allocations for free-list splice fixture");
+            };
+
+            let page_ptr = PagePtr::new_unchecked(raw_page);
+            let local_page = LocalPage::new_unchecked(page_ptr);
+            mi_block_set_next(raw_page, local_head, local_tail);
+            mi_block_set_next(raw_page, local_tail, ptr::null());
+            mi_block_set_next(raw_page, available_head, ptr::null());
+
+            let local = LocalFreeList::from_raw(local_head);
+            let available = AvailableFreeList::from_raw(available_head);
+            let spliced = local.prepend_to_available(local_page, available);
+
+            assert_eq!(spliced.as_raw(), local_head);
+            assert_eq!(mi_block_next(raw_page, local_head), local_tail);
+            assert_eq!(mi_block_next(raw_page, local_tail), available_head);
+            assert!(mi_block_next(raw_page, available_head).is_null());
+
+            for block in blocks {
+                crate::mimalloc::mi_free(block.cast());
+            }
         }
     }
 }

@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5900 |
-| `unsafe_blocks` | 3467 |
-| `unsafe_fns` | 1999 |
+| `unsafe_mentions` | 5904 |
+| `unsafe_blocks` | 3470 |
+| `unsafe_fns` | 2000 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -64,7 +64,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/page/counts.rs` | 44 | 22 | 22 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/flags.rs` | 20 | 10 | 10 | 0 | 0 | 0 | 0 |
-| `src/allocator/page/lifecycle.rs` | 32 | 16 | 16 | 0 | 0 | 0 | 0 |
+| `src/allocator/page/lifecycle.rs` | 33 | 17 | 16 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/queues.rs` | 41 | 20 | 21 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/stats_bin.rs` | 8 | 4 | 4 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/validation.rs` | 10 | 5 | 5 | 0 | 0 | 0 | 0 |
@@ -124,7 +124,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/types/freelist/tests.rs` | 5 | 5 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/freelist.rs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/freelist_wrappers/tests.rs` | 5 | 5 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/freelist_wrappers.rs` | 46 | 24 | 22 | 0 | 0 | 0 | 0 |
+| `src/types/freelist_wrappers.rs` | 49 | 26 | 23 | 0 | 0 | 0 | 0 |
 | `src/types/heap/tests.rs` | 56 | 56 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/heap.rs` | 43 | 15 | 28 | 0 | 0 | 0 | 0 |
 | `src/types/layout/tests.rs` | 9 | 9 | 0 | 0 | 0 | 0 | 0 |

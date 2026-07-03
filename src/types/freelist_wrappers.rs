@@ -467,6 +467,45 @@ impl LocalFreeList {
         Self(Some(unsafe { BlockPtr::new_unchecked(block_raw) }))
     }
 
+    /// Prepend this local free list to the available free list, returning the
+    /// new available-list head.
+    ///
+    /// # Safety
+    /// `page` must be the local owner for both lists, and `self` must describe
+    /// the current `page.local_free` chain. The caller remains responsible for
+    /// storing the returned available head and clearing `page.local_free`.
+    #[inline]
+    pub(crate) unsafe fn prepend_to_available(
+        self,
+        page: LocalPage,
+        available: AvailableFreeList,
+    ) -> AvailableFreeList {
+        let Some(head) = self.0 else {
+            return available;
+        };
+        if available.is_empty() {
+            return AvailableFreeList::from_head(head);
+        }
+
+        let raw_page = page.page().as_ptr();
+        let mut tail = head.as_ptr();
+        loop {
+            // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: `self` is the
+            // page's local free-list chain, so walking encoded next links until
+            // the null tail stays within the page-local free-list domain.
+            let next = unsafe { mi_block_next(raw_page, tail) };
+            if next.is_null() {
+                break;
+            }
+            tail = next;
+        }
+        // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: `tail` is the null
+        // terminator block of the local list and `available` is the current
+        // page.free head, so linking them preserves page-local encoding.
+        unsafe { mi_block_set_next(raw_page, tail, available.as_raw()) };
+        AvailableFreeList::from_head(head)
+    }
+
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).local_free`).
     #[inline(always)]
     pub(crate) unsafe fn from_raw(head: *mut mi_block_t) -> Self {

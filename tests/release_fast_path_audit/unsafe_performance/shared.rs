@@ -130,6 +130,7 @@ impl UnsafePerformanceSources {
                     "src/types/atomic/arena_cells.rs",
                     "src/types/atomic/guards.rs",
                     "src/types/atomic/page_thread.rs",
+                    "src/types/atomic/thread_heap_refcount.rs",
                     "src/types/atomic/thread_free.rs",
                 ],
             ),

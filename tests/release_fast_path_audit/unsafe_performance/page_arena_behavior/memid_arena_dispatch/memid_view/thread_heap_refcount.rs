@@ -32,9 +32,12 @@ pub(super) fn assert_thread_heap_refcount_dispatch(sources: &PageArenaBehaviorSo
             && sources
                 .theap_rs
                 .contains("mi_memid_is_refcounted((*theap.as_ptr()).memid)")
-            && sources.atomic_types.contains(
-                "pub(crate) struct AtomicThreadHeapRefcount(pub(crate) AtomicUsizeField);"
-            )
+            && sources
+                .atomic_types
+                .contains("pub(crate) struct AtomicThreadHeapRefcount(AtomicUsizeField);")
+            && sources
+                .atomic_types
+                .contains("pub(crate) fn from_field(field: AtomicUsizeField) -> Self")
             && sources
                 .atomic_types
                 .contains("pub(crate) unsafe fn incref_acq_rel(self) -> usize")
@@ -44,6 +47,9 @@ pub(super) fn assert_thread_heap_refcount_dispatch(sources: &PageArenaBehaviorSo
             && sources
                 .ptr_rs
                 .contains("pub(crate) unsafe fn refcount_cell(self) -> AtomicThreadHeapRefcount")
+            && sources
+                .ptr_rs
+                .contains("AtomicThreadHeapRefcount::from_field(AtomicUsizeField(")
             && sources.theap_rs.matches(".refcount_cell()").count() == 3
             && sources.theap_rs.contains(".incref_acq_rel();")
             && sources.theap_rs.contains(".decref_acq_rel()")

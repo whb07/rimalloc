@@ -33,6 +33,7 @@ fn strict_type_modules_remain_no_std_no_heap_alloc_no_std_sync() {
         "src/types/atomic/arena_cells.rs",
         "src/types/atomic/guards.rs",
         "src/types/atomic/page_thread.rs",
+        "src/types/atomic/thread_heap_refcount.rs",
         "src/types/atomic/thread_free.rs",
         "src/types/constants.rs",
         "src/types/ptr.rs",

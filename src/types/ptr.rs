@@ -614,7 +614,7 @@ impl ThreadHeapPtr {
     #[inline(always)]
     pub(crate) unsafe fn refcount_cell(self) -> AtomicThreadHeapRefcount {
         let raw = self.as_ptr();
-        AtomicThreadHeapRefcount(AtomicUsizeField(unsafe {
+        AtomicThreadHeapRefcount::from_field(AtomicUsizeField(unsafe {
             ptr::addr_of_mut!((*raw).refcount)
         }))
     }

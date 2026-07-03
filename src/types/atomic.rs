@@ -10,10 +10,12 @@ mod arena_cells;
 mod guards;
 mod page_thread;
 mod thread_free;
+mod thread_heap_refcount;
 pub(crate) use arena_cells::{AtomicAbandonedCount, AtomicArenaPage};
 pub(crate) use guards::{AtomicGuard, MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr};
 pub(crate) use page_thread::AtomicPageThreadId;
 pub(crate) use thread_free::{AtomicThreadFree, RemoteFreeList, RemotePushOutcome};
+pub(crate) use thread_heap_refcount::AtomicThreadHeapRefcount;
 
 pub(crate) type MemoryOrder = Ordering;
 
@@ -261,30 +263,6 @@ impl<T> AtomicPtrField<T> {
                 false
             }
         }
-    }
-}
-
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub(crate) struct AtomicThreadHeapRefcount(pub(crate) AtomicUsizeField);
-
-impl AtomicThreadHeapRefcount {
-    pub(crate) unsafe fn store_seq_cst(self, value: usize) {
-        // SAFETY[AUDIT:typed-atomic-thread-heap-refcount]: the caller provides a valid thread
-        // heap refcount field and preserves the existing SeqCst store.
-        unsafe { self.0.store(value, Ordering::SeqCst) }
-    }
-
-    pub(crate) unsafe fn incref_acq_rel(self) -> usize {
-        // SAFETY[AUDIT:typed-atomic-thread-heap-refcount]: the caller provides a valid thread
-        // heap refcount field and preserves the existing AcqRel increment.
-        unsafe { self.0.fetch_add(1, Ordering::AcqRel) }
-    }
-
-    pub(crate) unsafe fn decref_acq_rel(self) -> usize {
-        // SAFETY[AUDIT:typed-atomic-thread-heap-refcount]: the caller provides a valid thread
-        // heap refcount field and preserves the existing AcqRel decrement.
-        unsafe { self.0.fetch_sub(1, Ordering::AcqRel) }
     }
 }
 

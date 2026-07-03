@@ -286,7 +286,7 @@ fn atomic_abandoned_count_uses_relaxed_cell_operations() {
 #[test]
 fn atomic_thread_heap_refcount_uses_acq_rel_operations() {
     let atomic = AtomicUsize::new(0);
-    let refcount = AtomicThreadHeapRefcount(AtomicUsizeField(
+    let refcount = AtomicThreadHeapRefcount::from_field(AtomicUsizeField(
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 

@@ -110,10 +110,11 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/safe/tests.rs` | 60 | 39 | 2 | 0 | 0 | 0 | 0 |
 | `src/types/arena/tests.rs` | 11 | 11 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/arena.rs` | 13 | 7 | 6 | 0 | 0 | 0 | 0 |
+| `src/types/atomic/guards.rs` | 9 | 6 | 3 | 0 | 0 | 0 | 0 |
 | `src/types/atomic/page_thread.rs` | 16 | 9 | 7 | 0 | 0 | 0 | 0 |
 | `src/types/atomic/tests.rs` | 16 | 16 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/atomic/thread_free.rs` | 20 | 12 | 8 | 0 | 0 | 0 | 0 |
-| `src/types/atomic.rs` | 65 | 31 | 34 | 0 | 0 | 0 | 0 |
+| `src/types/atomic.rs` | 56 | 25 | 31 | 0 | 0 | 0 | 0 |
 | `src/types/callbacks/tests.rs` | 22 | 13 | 9 | 0 | 0 | 0 | 0 |
 | `src/types/callbacks.rs` | 16 | 8 | 8 | 0 | 0 | 0 | 0 |
 | `src/types/constants.rs` | 10 | 0 | 8 | 0 | 2 | 0 | 0 |

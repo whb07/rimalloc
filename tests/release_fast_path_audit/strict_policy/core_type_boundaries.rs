@@ -30,6 +30,7 @@ fn strict_type_modules_remain_no_std_no_heap_alloc_no_std_sync() {
     let allowed_core_atomic_modules = BTreeSet::from([
         "src/types/arena.rs",
         "src/types/atomic.rs",
+        "src/types/atomic/guards.rs",
         "src/types/atomic/page_thread.rs",
         "src/types/atomic/thread_free.rs",
         "src/types/constants.rs",

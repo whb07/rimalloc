@@ -8,7 +8,7 @@ use crate::core_types::{
 use crate::types::{mi_block_t, mi_page_t};
 use core::{
     mem::MaybeUninit,
-    ptr,
+    ptr::{self, NonNull},
     sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize},
 };
 

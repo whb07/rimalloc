@@ -2019,8 +2019,8 @@ Operation IDs:
   thread-heap refcount store/increment/decrement helpers.
 - `SAFETY[AUDIT:typed-atomic-arena-page]`: `src/types/atomic.rs` owns arena
   page-table pointer atomic load/store helpers.
-- `SAFETY[AUDIT:typed-atomic-guard-once-lock]`: `src/types/atomic.rs` owns
-  RAII guard wrappers for atomic guards, once state, and mimalloc locks.
+- `SAFETY[AUDIT:typed-atomic-guard-once-lock]`: `src/types/atomic/guards.rs`
+  owns RAII guard wrappers for atomic guards, once state, and mimalloc locks.
 - `SAFETY[AUDIT:typed-arena-test-fixtures]`: `src/types/arena/tests.rs`
   builds stack-local arena metadata to exercise slice-range and arena-role
   constructors. The fixtures do not register with allocator globals and are

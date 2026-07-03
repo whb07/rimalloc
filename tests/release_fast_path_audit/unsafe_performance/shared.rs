@@ -127,6 +127,7 @@ impl UnsafePerformanceSources {
                 root,
                 &[
                     "src/types/atomic.rs",
+                    "src/types/atomic/guards.rs",
                     "src/types/atomic/page_thread.rs",
                     "src/types/atomic/thread_free.rs",
                 ],

@@ -1,5 +1,7 @@
 //! Heap algorithms
 
+mod subproc_heaps;
+
 use core::ffi::c_void;
 use core::ptr;
 use core::sync::atomic::Ordering;
@@ -8,15 +10,12 @@ use crate::arena::_mi_arena_from_id;
 use crate::arena::{_mi_heap_destroy_pages, _mi_heap_move_pages};
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
 use crate::core_types::{
-    BorrowedHeap, Errno, HeapPtr, MainHeap, OwnedHeap, PagePtr, ThreadHeapPtr,
+    BorrowedHeap, Errno, HeapPtr, MainHeap, OwnedHeap, PagePtr, SubprocPtr, ThreadHeapPtr,
 };
 use crate::init::{
     _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_empty_wrong, mi_heap_main,
 };
-use crate::internal::{
-    __mi_stat_counter_increase_mt, __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_is_heap_main,
-    mi_page_heap,
-};
+use crate::internal::{__mi_stat_counter_increase_mt, _mi_is_heap_main, mi_page_heap};
 use crate::mimalloc::{mi_free, mi_heap_zalloc};
 use crate::options::{_mi_error_message_fmt, _mi_warning_message_fmt};
 use crate::os::_mi_os_numa_node_count;
@@ -188,19 +187,8 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
         mi_lock_init(ptr::addr_of_mut!((*heap).os_abandoned_pages_lock));
         mi_lock_init(ptr::addr_of_mut!((*heap).arena_pages_lock));
 
-        let subproc = (*heap).subproc;
-        mi_lock_acquire(ptr::addr_of_mut!((*subproc).heaps_lock));
-        let heap_head = (*subproc).heaps;
-        (*heap).prev = ptr::null_mut();
-        (*heap).next = heap_head;
-        if !heap_head.is_null() {
-            (*heap_head).prev = heap;
-        }
-        (*subproc).heaps = heap;
-        mi_lock_release(ptr::addr_of_mut!((*subproc).heaps_lock));
-
-        (*subproc).heap_count.fetch_add(1, Ordering::Relaxed);
-        __mi_stat_increase_mt(&mut (*subproc).stats.heaps, 1);
+        let subproc = SubprocPtr::new_unchecked((*heap).subproc);
+        subproc_heaps::push_front(subproc, HeapPtr::new_unchecked(heap));
     }
     heap
 }
@@ -281,20 +269,8 @@ unsafe fn mi_heap_free(heap: OwnedHeap) {
             ptr::addr_of_mut!((*heap).stats),
         );
 
-        let subproc = (*heap).subproc;
-        (*subproc).heap_count.fetch_sub(1, Ordering::Relaxed);
-        __mi_stat_decrease_mt(&mut (*subproc).stats.heaps, 1);
-
-        mi_lock_acquire(ptr::addr_of_mut!((*subproc).heaps_lock));
-        if !(*heap).next.is_null() {
-            (*(*heap).next).prev = (*heap).prev;
-        }
-        if !(*heap).prev.is_null() {
-            (*(*heap).prev).next = (*heap).next;
-        } else {
-            (*subproc).heaps = (*heap).next;
-        }
-        mi_lock_release(ptr::addr_of_mut!((*subproc).heaps_lock));
+        let subproc = SubprocPtr::new_unchecked((*heap).subproc);
+        subproc_heaps::remove(subproc, HeapPtr::new_unchecked(heap));
 
         _mi_thread_local_free((*heap).theap);
         mi_lock_done(ptr::addr_of_mut!((*heap).theaps_lock));

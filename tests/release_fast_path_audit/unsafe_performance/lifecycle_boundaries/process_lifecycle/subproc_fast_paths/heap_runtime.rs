@@ -7,22 +7,21 @@ pub(super) fn assert_heap_runtime_fast_paths(heap_rs: &str, free_rs: &str, page_
                 "unsafe { mi_heap_zalloc(heap_main, core::mem::size_of::<mi_heap_t>()) }"
             )
             && heap_rs.contains("let theap_slot = _mi_thread_local_create();")
-            && heap_rs.contains("mi_lock_acquire(ptr::addr_of_mut!((*subproc).heaps_lock));")
-            && heap_rs.contains("(*subproc).heaps = heap;")
-            && heap_rs.contains("(*subproc).heap_count.fetch_add(1, Ordering::Relaxed);")
-            && heap_rs.contains("__mi_stat_increase_mt(&mut (*subproc).stats.heaps, 1);"),
-        "heap creation should keep initialization, TLS slot creation, and lock-protected subproc registration"
+            && heap_rs.contains("let subproc = SubprocPtr::new_unchecked((*heap).subproc);")
+            && heap_rs
+                .contains("subproc_heaps::push_front(subproc, HeapPtr::new_unchecked(heap));"),
+        "heap creation should keep initialization, TLS slot creation, and helper-owned subproc registration"
     );
     assert!(
         heap_rs.contains("unsafe fn mi_heap_free(heap: OwnedHeap)")
             && heap_rs.contains("arena_pages.swap(ptr::null_mut(), Ordering::Relaxed)")
             && heap_rs.contains("_mi_stats_merge_into(")
-            && heap_rs.contains("(*subproc).heap_count.fetch_sub(1, Ordering::Relaxed);")
-            && heap_rs.contains("mi_lock_acquire(ptr::addr_of_mut!((*subproc).heaps_lock));")
+            && heap_rs.contains("let subproc = SubprocPtr::new_unchecked((*heap).subproc);")
+            && heap_rs.contains("subproc_heaps::remove(subproc, HeapPtr::new_unchecked(heap));")
             && heap_rs.contains("_mi_thread_local_free((*heap).theap);")
             && heap_rs.contains("mi_lock_done(ptr::addr_of_mut!((*heap).theaps_lock));")
             && heap_rs.contains("mi_free(heap.cast::<c_void>());"),
-        "owned heap cleanup should keep arena-page free, stats merge, locked unlink, TLS free, and lock teardown"
+        "owned heap cleanup should keep arena-page free, stats merge, helper-owned unlink, TLS free, and lock teardown"
     );
     assert!(
         heap_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_init_theap")

@@ -110,6 +110,8 @@ heap-stats-merge-boundary	test	tests/lifecycle_stats_exports.rs	Exercises heap s
 heap-stats-merge-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks heap stats merge marker coverage and borrowed heap witness routing.
 heap-creation-boundary	test	tests/no_allocation_critical_paths.rs	Checks heap creation critical paths do not route through Rust's global allocator.
 heap-creation-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks heap creation marker coverage, subproc registration, and TLS slot creation.
+heap-subproc-list-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks private subproc heap-list helper marker coverage and source shape.
+heap-subproc-list-boundary	script	scripts/check-unsafe-audit.py	Checks subproc heap-list unsafe operations retain operation-level SAFETY markers and source audit coverage.
 heap-nonmain-cleanup-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks non-main heap cleanup marker coverage, owned thread-heap cleanup, list unlink, and metadata free shape.
 heap-nonmain-lifecycle-boundary	test	tests/release_fast_path_audit/datatype_acceptance/heap_lifecycle.rs	Checks heap delete/destroy helpers retain typed owned-heap witnesses and main-heap rejection.
 heap-nonmain-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/process_lifecycle/heap_boundaries.rs	Checks non-main heap delete/destroy marker coverage and page move/destroy handoff shape.

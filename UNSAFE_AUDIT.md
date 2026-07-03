@@ -331,11 +331,17 @@ Operation IDs:
 - `SAFETY[AUDIT:heap-creation-boundary]`: `src/allocator/heap.rs` owns public
   heap creation. Unsafe operations initialize the allocator thread state,
   allocate zeroed heap metadata from the main heap, create a thread-local slot,
-  and link the heap into the subproc list under its lock.
+  and publish the heap through the private subproc heap-list helper.
+- `SAFETY[AUDIT:heap-subproc-list-boundary]`:
+  `src/allocator/heap/subproc_heaps.rs` owns subprocess heap-list membership.
+  Unsafe operations are limited to lock-protected `mi_subproc_t::heaps`
+  head updates, `mi_heap_t::next/prev` link mutation, heap count accounting, and
+  heap stat reconciliation.
 - `SAFETY[AUDIT:heap-nonmain-cleanup-boundary]`: `src/allocator/heap.rs` owns
   final non-main heap cleanup. Unsafe operations walk and free heap-local
-  thread heaps, release arena page tables and thread-local slots, unlink the
-  heap from its subproc, tear down locks, and free heap metadata.
+  thread heaps, release arena page tables and thread-local slots, route subproc
+  unlinking through the private heap-list helper, tear down locks, and free heap
+  metadata.
 - `SAFETY[AUDIT:heap-nonmain-lifecycle-boundary]`: `src/allocator/heap.rs`
   owns non-main heap delete and destroy entry points. Unsafe operations reject
   main heaps, move or destroy owned pages as required, and delegate final

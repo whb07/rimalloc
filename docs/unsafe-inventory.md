@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5935 |
-| `unsafe_blocks` | 3485 |
-| `unsafe_fns` | 2016 |
+| `unsafe_mentions` | 5947 |
+| `unsafe_blocks` | 3491 |
+| `unsafe_fns` | 2022 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -58,6 +58,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/bench_diagnostics.rs` | 14 | 9 | 2 | 0 | 0 | 3 | 0 |
 | `src/allocator/free/abandoned.rs` | 13 | 6 | 7 | 0 | 0 | 0 | 0 |
 | `src/allocator/free.rs` | 108 | 54 | 47 | 0 | 0 | 3 | 2 |
+| `src/allocator/heap/subproc_heaps.rs` | 12 | 6 | 6 | 0 | 0 | 0 | 0 |
 | `src/allocator/heap.rs` | 93 | 46 | 34 | 0 | 0 | 11 | 0 |
 | `src/allocator/init.rs` | 333 | 230 | 79 | 3 | 0 | 18 | 3 |
 | `src/allocator/options.rs` | 79 | 46 | 9 | 4 | 3 | 15 | 0 |

@@ -79,6 +79,7 @@ const POOL_SIZE: usize = 4096;
 ///   4096 — large page (different page-queue path)
 ///   32768 — direct/large allocation (OS-backed)
 const HOT_SIZES: &[usize] = &[16, 64, 256, 1024, 4096, 32768];
+const HOT_ALIGNED_CASES: &[(usize, usize)] = &[(64, 64), (256, 64)];
 
 fn env_usize(name: &str, default: usize, min: usize) -> usize {
     env::var(name)
@@ -155,6 +156,14 @@ fn fill<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PtrPool) {
 
 fn paired_alloc_free<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PtrPool) -> usize {
     let layout = Layout::from_size_align(size, 8).unwrap();
+    paired_alloc_free_layout(alloc, layout, pool)
+}
+
+fn paired_alloc_free_layout<A: GlobalAlloc>(
+    alloc: &A,
+    layout: Layout,
+    pool: &mut PtrPool,
+) -> usize {
     for i in 0..POOL_SIZE {
         let p = unsafe { alloc.alloc(layout) };
         *pool.slot(i) = (p, layout);
@@ -187,6 +196,34 @@ fn bench_paired_alloc_free(c: &mut Criterion) {
             BenchmarkId::new("mechanical_mimalloc", size),
             &size,
             |b, &size| b.iter(|| black_box(paired_alloc_free(&MECH, size, &mut pool))),
+        );
+    }
+    group.finish();
+}
+
+fn bench_aligned_paired_alloc_free(c: &mut Criterion) {
+    let mut group = c.benchmark_group("hotpath/aligned_paired_alloc_free");
+    group.sample_size(hotpath_sample_size(120));
+    group.measurement_time(hotpath_measurement_time(8));
+    group.warm_up_time(hotpath_warmup_time());
+    group.noise_threshold(0.02);
+    group.nresamples(hotpath_nresamples(200_000));
+
+    for &(size, align) in HOT_ALIGNED_CASES {
+        group.throughput(Throughput::Elements(POOL_SIZE as u64));
+        let layout = Layout::from_size_align(size, align).unwrap();
+        let mut pool = PtrPool::new();
+        let case = format!("{size}/align{align}");
+
+        #[cfg(feature = "compare")]
+        group.bench_with_input(BenchmarkId::new("system", &case), &layout, |b, &layout| {
+            b.iter(|| black_box(paired_alloc_free_layout(&SYS, layout, &mut pool)))
+        });
+
+        group.bench_with_input(
+            BenchmarkId::new("mechanical_mimalloc", case),
+            &layout,
+            |b, &layout| b.iter(|| black_box(paired_alloc_free_layout(&MECH, layout, &mut pool))),
         );
     }
     group.finish();
@@ -413,9 +450,17 @@ fn bench_single_reuse(c: &mut Criterion) {
 }
 
 criterion_group!(g_paired, bench_paired_alloc_free);
+criterion_group!(g_aligned_paired, bench_aligned_paired_alloc_free);
 criterion_group!(g_free_only, bench_free_only);
 criterion_group!(g_remote_free, bench_remote_free);
 criterion_group!(g_lifo, bench_lifo_stack);
 criterion_group!(g_reuse, bench_single_reuse);
 
-criterion_main!(g_paired, g_free_only, g_remote_free, g_lifo, g_reuse);
+criterion_main!(
+    g_paired,
+    g_aligned_paired,
+    g_free_only,
+    g_remote_free,
+    g_lifo,
+    g_reuse
+);

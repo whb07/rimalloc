@@ -684,14 +684,14 @@ pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::Pag
 
 #[inline]
 pub(crate) fn mi_tf_block(tf: mi_thread_free_t) -> *mut mi_block_t {
-    crate::core_types::ThreadFreeWord(tf).head_raw()
+    crate::core_types::ThreadFreeWord::from_raw(tf).head_raw()
 }
 
 const _: fn(mi_thread_free_t) -> *mut mi_block_t = mi_tf_block;
 
 #[inline]
 pub(crate) const fn mi_tf_is_owned(tf: mi_thread_free_t) -> bool {
-    crate::core_types::ThreadFreeWord(tf).is_owned()
+    crate::core_types::ThreadFreeWord::from_raw(tf).is_owned()
 }
 
 const _: fn(mi_thread_free_t) -> bool = mi_tf_is_owned;

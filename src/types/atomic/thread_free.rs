@@ -84,7 +84,7 @@ impl AtomicThreadFree {
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord {
         // SAFETY[AUDIT:typed-atomic-thread-free]: `AtomicThreadFree` is constructed
         // only for valid `xthread_free` atomic fields and preserves relaxed load.
-        ThreadFreeWord(unsafe { self.field().load(Ordering::Relaxed) })
+        ThreadFreeWord::from_raw(unsafe { self.field().load(Ordering::Relaxed) })
     }
 
     pub(crate) fn push_remote_acq_rel(
@@ -106,7 +106,7 @@ impl AtomicThreadFree {
         } {
             Ok(new_tf)
         } else {
-            *old = ThreadFreeWord(expected);
+            *old = ThreadFreeWord::from_raw(expected);
             Err(*old)
         }
     }
@@ -145,7 +145,7 @@ impl AtomicThreadFree {
         } {
             true
         } else {
-            *expected = ThreadFreeWord(raw_expected);
+            *expected = ThreadFreeWord::from_raw(raw_expected);
             false
         }
     }
@@ -172,7 +172,7 @@ impl AtomicThreadFree {
     pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList {
         // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
         // `xthread_free` field; relaxed load mirrors the C collect loop pre-read.
-        let mut old = ThreadFreeWord(unsafe { self.field().load(Ordering::Relaxed) });
+        let mut old = ThreadFreeWord::from_raw(unsafe { self.field().load(Ordering::Relaxed) });
         loop {
             let head = old.head();
             if head.is_none() {
@@ -192,7 +192,7 @@ impl AtomicThreadFree {
             } {
                 return RemoteFreeList::from_detached_thread_free_head(head);
             }
-            old = ThreadFreeWord(raw_old);
+            old = ThreadFreeWord::from_raw(raw_old);
         }
     }
 
@@ -244,7 +244,7 @@ impl AtomicThreadFree {
             // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
             // `xthread_free` field; acquire load observes concurrent list updates.
             let current = unsafe { self.field().load(Ordering::Acquire) };
-            let current_word = ThreadFreeWord(current);
+            let current_word = ThreadFreeWord::from_raw(current);
             let new = current_word.with_owner(ThreadFreeOwner::Unowned).raw();
             let mut expected = current;
             // SAFETY[AUDIT:typed-atomic-thread-free]: the CAS clears only the

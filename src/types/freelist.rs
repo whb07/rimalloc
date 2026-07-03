@@ -14,10 +14,20 @@ pub(crate) enum ThreadFreeOwner {
 /// Packs a block pointer (aligned) and an ownership bit.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct ThreadFreeWord(pub(crate) usize);
+pub(crate) struct ThreadFreeWord(usize);
 
 impl ThreadFreeWord {
     pub(crate) const OWNED_BIT: usize = 1;
+
+    /// Rebuild a packed thread-free word from raw atomic storage.
+    ///
+    /// This is for C layout and atomic load/CAS boundaries. New words should
+    /// use `from_parts` so block provenance and owner-bit alignment stay in one
+    /// place.
+    #[inline(always)]
+    pub(crate) const fn from_raw(raw: usize) -> Self {
+        Self(raw)
+    }
 
     #[inline(always)]
     pub(crate) const fn raw(self) -> usize {

@@ -38,7 +38,8 @@ pub(super) fn assert_page_thread_and_free_bit_domains(
     );
     let freelist_rs = audit_sources.source("src/types/freelist.rs");
     assert!(
-        freelist_rs.contains("pub(crate) struct ThreadFreeWord(pub(crate) usize);")
+        freelist_rs.contains("pub(crate) struct ThreadFreeWord(usize);")
+            && freelist_rs.contains("pub(crate) const fn from_raw(raw: usize) -> Self")
             && freelist_rs.contains("pub(crate) const OWNED_BIT: usize = 1;")
             && freelist_rs.contains("let ptr_val = self.0 & !Self::OWNED_BIT;")
             && freelist_rs.contains("use super::constants::mi_block_t;")
@@ -51,6 +52,7 @@ pub(super) fn assert_page_thread_and_free_bit_domains(
             && freelist_rs
                 .contains("crate::internal::mi_assert_internal!((val & Self::OWNED_BIT) == 0);")
             && freelist_rs.contains("Self(ptr_val | bit)")
+            && atomic_thread_free_rs.contains("ThreadFreeWord::from_raw(")
             && atomic_thread_free_rs
                 .contains("pub(crate) struct AtomicThreadFree(AtomicUsizeField);")
             && atomic_thread_free_rs

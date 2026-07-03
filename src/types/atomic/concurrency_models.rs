@@ -10,10 +10,10 @@ fn head_bits(raw: usize) -> usize {
 }
 
 fn push_remote_word(cell: &LoomAtomicUsize, next: &LoomAtomicUsize, head: usize) {
-    let mut old = ThreadFreeWord(cell.load(LoomOrdering::Acquire));
+    let mut old = ThreadFreeWord::from_raw(cell.load(LoomOrdering::Acquire));
     loop {
         next.store(head_bits(old.raw()), LoomOrdering::Relaxed);
-        let new = ThreadFreeWord(head | ThreadFreeWord::OWNED_BIT);
+        let new = ThreadFreeWord::from_raw(head | ThreadFreeWord::OWNED_BIT);
         match cell.compare_exchange_weak(
             old.raw(),
             new.raw(),
@@ -21,13 +21,13 @@ fn push_remote_word(cell: &LoomAtomicUsize, next: &LoomAtomicUsize, head: usize)
             LoomOrdering::Acquire,
         ) {
             Ok(_) => return,
-            Err(actual) => old = ThreadFreeWord(actual),
+            Err(actual) => old = ThreadFreeWord::from_raw(actual),
         }
     }
 }
 
 fn collect_word(cell: &LoomAtomicUsize) -> usize {
-    let mut old = ThreadFreeWord(cell.load(LoomOrdering::Relaxed));
+    let mut old = ThreadFreeWord::from_raw(cell.load(LoomOrdering::Relaxed));
     loop {
         let head = head_bits(old.raw());
         if head == 0 {
@@ -41,7 +41,7 @@ fn collect_word(cell: &LoomAtomicUsize) -> usize {
             LoomOrdering::Acquire,
         ) {
             Ok(_) => return head,
-            Err(actual) => old = ThreadFreeWord(actual),
+            Err(actual) => old = ThreadFreeWord::from_raw(actual),
         }
     }
 }
@@ -54,7 +54,7 @@ fn claim_word(cell: &LoomAtomicUsize) -> bool {
 fn release_ownership_word(cell: &LoomAtomicUsize) -> bool {
     loop {
         let current = cell.load(LoomOrdering::Acquire);
-        let current_word = ThreadFreeWord(current);
+        let current_word = ThreadFreeWord::from_raw(current);
         let new = current_word.with_owner(ThreadFreeOwner::Unowned).raw();
         if cell
             .compare_exchange_weak(current, new, LoomOrdering::AcqRel, LoomOrdering::Acquire)
@@ -119,7 +119,7 @@ fn concurrent_remote_pushes_keep_both_nodes_reachable() {
         push_a.join().expect("push A thread failed");
         push_b.join().expect("push B thread failed");
 
-        let final_word = ThreadFreeWord(cell.load(LoomOrdering::Acquire));
+        let final_word = ThreadFreeWord::from_raw(cell.load(LoomOrdering::Acquire));
         assert!(final_word.is_owned());
 
         let mut seen = [false; 2];
@@ -152,7 +152,7 @@ fn collect_racing_with_push_does_not_drop_nodes() {
         collect.join().expect("collect thread failed");
         push.join().expect("push thread failed");
 
-        let final_word = ThreadFreeWord(cell.load(LoomOrdering::Acquire));
+        let final_word = ThreadFreeWord::from_raw(cell.load(LoomOrdering::Acquire));
         assert!(final_word.is_owned());
 
         let mut seen = [false; 2];
@@ -225,7 +225,7 @@ fn release_ownership_racing_with_push_preserves_heads() {
         release.join().expect("release thread failed");
         push.join().expect("push thread failed");
 
-        let final_word = ThreadFreeWord(cell.load(LoomOrdering::Acquire));
+        let final_word = ThreadFreeWord::from_raw(cell.load(LoomOrdering::Acquire));
         let mut seen = [false; 2];
         mark_reachable(head_bits(final_word.raw()), &next_a, &next_b, &mut seen);
         assert_eq!(seen, [true, true]);

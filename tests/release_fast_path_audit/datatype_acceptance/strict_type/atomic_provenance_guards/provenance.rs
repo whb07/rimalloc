@@ -26,7 +26,8 @@ pub(super) fn assert_pointer_provenance_boundaries(audit_sources: &DatatypeAccep
             && ptr_core_rs.contains(
                 "crate::internal::_mi_align_down(ptr_exposed_addr(ptr), alignment) as *mut c_void"
             )
-            && freelist_rs.contains("pub(crate) struct ThreadFreeWord(pub(crate) usize);")
+            && freelist_rs.contains("pub(crate) struct ThreadFreeWord(usize);")
+            && freelist_rs.contains("pub(crate) const fn from_raw(raw: usize) -> Self")
             && freelist_rs.contains("use super::constants::mi_block_t;")
             && freelist_rs.contains("use super::ptr::{BlockPtr, ptr_exposed_addr};")
             && freelist_rs.contains("pub(crate) fn head_raw(self) -> *mut mi_block_t")

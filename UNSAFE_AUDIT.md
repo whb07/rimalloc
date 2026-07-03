@@ -2145,6 +2145,10 @@ Operation IDs:
 - `SAFETY[AUDIT:typed-page-free-list-accessors]`: `src/types/ptr.rs` owns
   `PagePtr` free-list head accessors. Unsafe operations read and write local
   and available free-list heads through typed free-list wrappers.
+- `SAFETY[AUDIT:typed-page-queue-link-accessors]`: `src/types/ptr.rs` owns
+  `PagePtr` queue-link accessors. Unsafe operations read and write page
+  `next`/`prev` links through typed page wrappers so queue membership mutation
+  stays isolated to the page-queue protocol.
 - `SAFETY[AUDIT:typed-page-atomic-accessors]`: `src/types/ptr.rs` owns
   `PagePtr` atomic owner/free and key accessors. Unsafe operations project page
   thread-id cells, thread-free cells, and debug/secure keys through typed
@@ -2215,8 +2219,8 @@ Operation IDs:
   invariants.
 - `SAFETY[AUDIT:typed-page-pointer-test-fixtures]`:
   `src/types/ptr/tests.rs` builds stack-local page metadata to exercise
-  `PagePtr` field, free-list head, atomic ownership, remote-free, and key
-  accessors without registering the page with allocator globals.
+  `PagePtr` field, free-list head, queue-link, atomic ownership, remote-free,
+  and key accessors without registering the page with allocator globals.
 - `SAFETY[AUDIT:typed-block-pointer-test-fixtures]`:
   `src/types/ptr/tests.rs` builds stack-local block and page-key fixtures to
   exercise `BlockPtr` encoded-link read, write, clear, and next-pointer helper

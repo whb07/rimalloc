@@ -12,17 +12,24 @@ pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const m
             .first()
             .map(crate::core_types::PagePtr::as_ptr)
             .unwrap_or(ptr::null_mut());
-        while !list.is_null() {
+        while let Some(list_ptr) = crate::core_types::PagePtr::new(list) {
             crate::internal::mi_assert_internal!(
-                (*list).next.is_null() || (*(*list).next).prev == list
+                list_ptr
+                    .queue_next()
+                    .is_none_or(|next| next.queue_prev() == Some(list_ptr))
             );
             crate::internal::mi_assert_internal!(
-                (*list).prev.is_null() || (*(*list).prev).next == list
+                list_ptr
+                    .queue_prev()
+                    .is_none_or(|prev| prev.queue_next() == Some(list_ptr))
             );
             if ptr::eq(list, page.cast_mut()) {
                 break;
             }
-            list = (*list).next;
+            list = list_ptr
+                .queue_next()
+                .map(crate::core_types::PagePtr::as_ptr)
+                .unwrap_or(ptr::null_mut());
         }
         ptr::eq(list, page.cast_mut())
     }
@@ -60,6 +67,7 @@ pub(crate) unsafe fn mi_page_queue_remove_typed(queue: PageQueuePtr, page: PageP
     unsafe {
         let queue_ptr = queue;
         let queue = queue.as_ptr();
+        let page_ptr = page;
         let page = page.as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_expensive!(mi_page_queue_contains(queue, page));
@@ -71,30 +79,32 @@ pub(crate) unsafe fn mi_page_queue_remove_typed(queue: PageQueuePtr, page: PageP
                 || (super::mi_page_is_in_full(page) && super::mi_page_queue_is_full(queue))
         );
         let theap = super::mi_page_theap(page);
-        if !(*page).prev.is_null() {
-            (*(*page).prev).next = (*page).next;
+        let prev = page_ptr.queue_prev();
+        let next = page_ptr.queue_next();
+        if let Some(prev) = prev {
+            prev.set_queue_next(next);
         }
-        if !(*page).next.is_null() {
-            (*(*page).next).prev = (*page).prev;
+        if let Some(next) = next {
+            next.set_queue_prev(prev);
         }
         if queue_ptr
             .last()
             .is_some_and(|last| ptr::eq(page, last.as_ptr()))
         {
-            queue_ptr.set_last(PagePtr::new((*page).prev));
+            queue_ptr.set_last(prev);
         }
         if queue_ptr
             .first()
             .is_some_and(|first| ptr::eq(page, first.as_ptr()))
         {
-            queue_ptr.set_first(PagePtr::new((*page).next));
+            queue_ptr.set_first(next);
             crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, queue));
             super::mi_theap_queue_first_update(theap, queue);
         }
         (*theap).page_count -= 1;
         super::counts::mi_page_queue_decrement_count(queue);
-        (*page).next = ptr::null_mut();
-        (*page).prev = ptr::null_mut();
+        page_ptr.set_queue_next(None);
+        page_ptr.set_queue_prev(None);
         super::mi_page_set_in_full(page, false);
     }
 }
@@ -144,14 +154,11 @@ unsafe fn mi_page_queue_push_internal(
 
         mi_page_set_in_full(page_raw, mi_page_queue_is_full(queue_raw));
 
-        (*page_raw).next = queue
-            .first()
-            .map(PagePtr::as_ptr)
-            .unwrap_or(ptr::null_mut());
-        (*page_raw).prev = ptr::null_mut();
+        page.set_queue_next(queue.first());
+        page.set_queue_prev(None);
         if let Some(first) = queue.first() {
-            crate::internal::mi_assert_internal!((*first.as_ptr()).prev.is_null());
-            (*first.as_ptr()).prev = page_raw;
+            crate::internal::mi_assert_internal!(first.queue_prev().is_none());
+            first.set_queue_prev(Some(page));
             queue.set_first(PagePtr::new(page_raw));
         } else {
             queue.set_first(PagePtr::new(page_raw));
@@ -208,11 +215,11 @@ unsafe fn mi_page_queue_push_at_end_internal(
 
         mi_page_set_in_full(page_raw, mi_page_queue_is_full(queue_raw));
 
-        (*page_raw).prev = queue.last().map(PagePtr::as_ptr).unwrap_or(ptr::null_mut());
-        (*page_raw).next = ptr::null_mut();
+        page.set_queue_prev(queue.last());
+        page.set_queue_next(None);
         if let Some(last) = queue.last() {
-            crate::internal::mi_assert_internal!((*last.as_ptr()).next.is_null());
-            (*last.as_ptr()).next = page_raw;
+            crate::internal::mi_assert_internal!(last.queue_next().is_none());
+            last.set_queue_next(Some(page));
             queue.set_last(PagePtr::new(page_raw));
         } else {
             queue.set_first(PagePtr::new(page_raw));
@@ -296,6 +303,7 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_raw(
         let from_ptr = from;
         let to = to.as_ptr();
         let from = from.as_ptr();
+        let page_ptr = page;
         let page = page.as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_internal!(mi_page_queue_count_typed(from).get() >= 1);
@@ -313,23 +321,25 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_raw(
 
         let theap = mi_page_theap(page);
 
-        if !(*page).prev.is_null() {
-            (*(*page).prev).next = (*page).next;
+        let prev = page_ptr.queue_prev();
+        let next = page_ptr.queue_next();
+        if let Some(prev) = prev {
+            prev.set_queue_next(next);
         }
-        if !(*page).next.is_null() {
-            (*(*page).next).prev = (*page).prev;
+        if let Some(next) = next {
+            next.set_queue_prev(prev);
         }
         if from_ptr
             .last()
             .is_some_and(|last| ptr::eq(page, last.as_ptr()))
         {
-            from_ptr.set_last(PagePtr::new((*page).prev));
+            from_ptr.set_last(prev);
         }
         if from_ptr
             .first()
             .is_some_and(|first| ptr::eq(page, first.as_ptr()))
         {
-            from_ptr.set_first(PagePtr::new((*page).next));
+            from_ptr.set_first(next);
             crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, from));
             mi_theap_queue_first_update(theap, from);
         }
@@ -337,14 +347,11 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_raw(
 
         mi_page_queue_increment_count(to);
         if enqueue_at_end {
-            (*page).prev = to_ptr
-                .last()
-                .map(PagePtr::as_ptr)
-                .unwrap_or(ptr::null_mut());
-            (*page).next = ptr::null_mut();
+            page_ptr.set_queue_prev(to_ptr.last());
+            page_ptr.set_queue_next(None);
             if let Some(last) = to_ptr.last() {
                 crate::internal::mi_assert_internal!(theap == mi_page_theap(last.as_ptr()));
-                (*last.as_ptr()).next = page;
+                last.set_queue_next(Some(page_ptr));
                 to_ptr.set_last(PagePtr::new(page));
             } else {
                 to_ptr.set_first(PagePtr::new(page));
@@ -353,18 +360,18 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_raw(
             }
         } else if let Some(first) = to_ptr.first() {
             crate::internal::mi_assert_internal!(theap == mi_page_theap(first.as_ptr()));
-            let next = (*first.as_ptr()).next;
-            (*page).prev = first.as_ptr();
-            (*page).next = next;
-            (*first.as_ptr()).next = page;
-            if !next.is_null() {
-                (*next).prev = page;
+            let next = first.queue_next();
+            page_ptr.set_queue_prev(Some(first));
+            page_ptr.set_queue_next(next);
+            first.set_queue_next(Some(page_ptr));
+            if let Some(next) = next {
+                next.set_queue_prev(Some(page_ptr));
             } else {
                 to_ptr.set_last(PagePtr::new(page));
             }
         } else {
-            (*page).prev = ptr::null_mut();
-            (*page).next = ptr::null_mut();
+            page_ptr.set_queue_prev(None);
+            page_ptr.set_queue_next(None);
             to_ptr.set_first(PagePtr::new(page));
             to_ptr.set_last(PagePtr::new(page));
             mi_theap_queue_first_update(theap, to);
@@ -481,10 +488,13 @@ unsafe fn mi_page_queue_append_typed(
             .first()
             .map(PagePtr::as_ptr)
             .unwrap_or(ptr::null_mut());
-        while !page.is_null() {
+        while let Some(page_ptr) = PagePtr::new(page) {
             mi_page_set_theap(page, theap.ptr().as_ptr());
             count += 1;
-            page = (*page).next;
+            page = page_ptr
+                .queue_next()
+                .map(PagePtr::as_ptr)
+                .unwrap_or(ptr::null_mut());
         }
         let append_count = append_queue.count();
         crate::internal::mi_assert_internal!(count == append_count.get());
@@ -505,8 +515,8 @@ unsafe fn mi_page_queue_append_typed(
                 crate::internal::mi_assert_internal!(false);
                 return count;
             };
-            (*last.as_ptr()).next = append_first.as_ptr();
-            (*append_first.as_ptr()).prev = last.as_ptr();
+            last.set_queue_next(Some(append_first));
+            append_first.set_queue_prev(Some(last));
             queue.set_last(append_queue.last());
         }
         queue.set_count(queue.count().add(append_count));

@@ -1,3 +1,5 @@
+#[path = "page_lifecycle/queue_links.rs"]
+mod queue_links;
 #[path = "page_lifecycle/release_abandon.rs"]
 mod release_abandon;
 #[path = "page_lifecycle/sources.rs"]
@@ -31,6 +33,7 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
         arena_rs,
         theap_rs,
     );
+    queue_links::assert_page_queue_impl_uses_typed_links();
     assert!(
         page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_free_collect(")
             && page_rs.contains(

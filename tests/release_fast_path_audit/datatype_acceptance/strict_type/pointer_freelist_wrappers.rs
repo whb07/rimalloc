@@ -35,6 +35,7 @@ pub(super) fn assert_pointer_and_freelist_wrappers(audit_sources: &DatatypeAccep
         ("typed-pointer-constructor-boundary", 5),
         ("typed-page-scalar-accessors", 14),
         ("typed-page-free-list-accessors", 4),
+        ("typed-page-queue-link-accessors", 4),
         ("typed-page-atomic-accessors", 6),
         ("typed-page-fixture-touch-accessors", 1),
         ("typed-block-accessors", 6),

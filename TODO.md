@@ -70,13 +70,13 @@ Current review evidence:
   `src/raw/macros.rs`/`usize` with 23. The active usize file/domain cap is 24
   entries; the next useful usize file/domain cap is 23 entries.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 184 module files recursively and
+  release-audit module-size guard discovers 185 module files recursively and
   enforces a 190-line cap. The largest release-audit modules are:
   `unsafe_performance/raw_facade/raw_override/os_random.rs` at 190 lines,
   `todo_backlog.rs` at 190 lines,
   `unsafe_performance/os_memory/platform_helpers.rs` at 189 lines,
   `unsafe_performance/shared.rs` at 190 lines,
-  `unsafe_performance/page_lifecycle.rs` at 187 lines,
+  `unsafe_performance/page_lifecycle.rs` at 190 lines,
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs` at 185 lines,
   `datatype_acceptance/strict_type_allowlist_inventory.rs` at 183 lines,
   `strict_policy.rs` at 182 lines,

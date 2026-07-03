@@ -1030,6 +1030,10 @@ typed-page-scalar-accessors	script	scripts/check-unsafe-audit.py	Checks typed pa
 typed-page-free-list-accessors	test	src/types/ptr/tests.rs	Exercises PagePtr available and local free-list accessors.
 typed-page-free-list-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks PagePtr free-list accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
 typed-page-free-list-accessors	script	scripts/check-unsafe-audit.py	Checks typed page free-list unsafe operations retain operation-level SAFETY markers and source audit coverage.
+typed-page-queue-link-accessors	test	src/types/ptr/tests.rs	Exercises PagePtr queue next/prev link accessors.
+typed-page-queue-link-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks PagePtr queue-link accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
+typed-page-queue-link-accessors	test	tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs	Checks allocator page queues use typed queue-link helpers instead of direct page next/prev dereferences.
+typed-page-queue-link-accessors	script	scripts/check-unsafe-audit.py	Checks typed page queue-link unsafe operations retain operation-level SAFETY markers and source audit coverage.
 typed-page-atomic-accessors	test	src/types/ptr/tests.rs	Exercises PagePtr thread-id, thread-free, and key accessors.
 typed-page-atomic-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks PagePtr atomic/key accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
 typed-page-atomic-accessors	script	scripts/check-unsafe-audit.py	Checks typed page atomic/key unsafe operations retain operation-level SAFETY markers and source audit coverage.

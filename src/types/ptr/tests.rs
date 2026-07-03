@@ -60,6 +60,30 @@ fn page_ptr_field_helpers_read_and_write_hot_fields() {
         assert!(page.local_free().is_empty());
     }
 
+    let mut next_page = MaybeUninit::<mi_page_t>::zeroed();
+    let mut prev_page = MaybeUninit::<mi_page_t>::zeroed();
+    // SAFETY[AUDIT:typed-page-pointer-test-fixtures]: both page wrappers point at
+    // stack-local page storage that remains live through the queue-link assertions.
+    let (next, prev) = unsafe {
+        (
+            PagePtr::new_unchecked(next_page.as_mut_ptr()),
+            PagePtr::new_unchecked(prev_page.as_mut_ptr()),
+        )
+    };
+
+    // SAFETY[AUDIT:typed-page-pointer-test-fixtures]: queue-link operations mutate
+    // only the stack-local page fixture and store live stack-local page pointers.
+    unsafe {
+        page.set_queue_next(Some(next));
+        page.set_queue_prev(Some(prev));
+        assert_eq!(page.queue_next(), Some(next));
+        assert_eq!(page.queue_prev(), Some(prev));
+        page.set_queue_next(None);
+        page.set_queue_prev(None);
+        assert!(page.queue_next().is_none());
+        assert!(page.queue_prev().is_none());
+    }
+
     // SAFETY[AUDIT:typed-page-pointer-test-fixtures]: writes target the stack-local
     // page fixture to exercise typed atomic field accessors.
     unsafe {

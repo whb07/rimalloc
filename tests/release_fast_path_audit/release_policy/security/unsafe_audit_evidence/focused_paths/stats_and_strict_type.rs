@@ -116,6 +116,7 @@ pub(super) fn assert_stats_and_strict_type_focused_evidence(evidence: &str) {
         ),
         ("typed-page-scalar-accessors", STRICT_TYPE_FOCUSED_PATH),
         ("typed-page-free-list-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-page-queue-link-accessors", STRICT_TYPE_FOCUSED_PATH),
         ("typed-page-atomic-accessors", STRICT_TYPE_FOCUSED_PATH),
         (
             "typed-page-fixture-touch-accessors",

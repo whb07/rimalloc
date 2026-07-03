@@ -252,6 +252,48 @@ impl PagePtr {
     }
 
     /// # Safety
+    /// The page pointer must refer to initialized page metadata whose queue
+    /// links may be inspected by the page-queue protocol.
+    // SAFETY[AUDIT:typed-page-queue-link-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    #[inline(always)]
+    pub(crate) unsafe fn queue_next(self) -> Option<PagePtr> {
+        let raw = self.as_ptr();
+        PagePtr::new(unsafe { ptr::read(ptr::addr_of!((*raw).next)) })
+    }
+
+    /// # Safety
+    /// The page pointer must refer to writable page metadata whose queue links
+    /// are owned by the current page-queue mutation.
+    // SAFETY[AUDIT:typed-page-queue-link-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    #[inline(always)]
+    pub(crate) unsafe fn set_queue_next(self, next: Option<PagePtr>) {
+        let raw = self.as_ptr();
+        let next = next.map(PagePtr::as_ptr).unwrap_or(ptr::null_mut());
+        unsafe { ptr::write(ptr::addr_of_mut!((*raw).next), next) };
+    }
+
+    /// # Safety
+    /// The page pointer must refer to initialized page metadata whose queue
+    /// links may be inspected by the page-queue protocol.
+    // SAFETY[AUDIT:typed-page-queue-link-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    #[inline(always)]
+    pub(crate) unsafe fn queue_prev(self) -> Option<PagePtr> {
+        let raw = self.as_ptr();
+        PagePtr::new(unsafe { ptr::read(ptr::addr_of!((*raw).prev)) })
+    }
+
+    /// # Safety
+    /// The page pointer must refer to writable page metadata whose queue links
+    /// are owned by the current page-queue mutation.
+    // SAFETY[AUDIT:typed-page-queue-link-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    #[inline(always)]
+    pub(crate) unsafe fn set_queue_prev(self, prev: Option<PagePtr>) {
+        let raw = self.as_ptr();
+        let prev = prev.map(PagePtr::as_ptr).unwrap_or(ptr::null_mut());
+        unsafe { ptr::write(ptr::addr_of_mut!((*raw).prev), prev) };
+    }
+
+    /// # Safety
     /// The page pointer must refer to page metadata whose `xthread_id` field can
     /// be accessed through the allocator's atomic field protocol.
     // SAFETY[AUDIT:typed-page-atomic-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.

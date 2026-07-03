@@ -7,9 +7,49 @@ use super::scalar::{SliceCount, SliceIndex};
 
 #[derive(Clone, Copy)]
 pub(crate) struct ArenaAllocation {
-    pub(crate) arena: ArenaPtr,
-    pub(crate) range: SliceRange,
-    pub(crate) memid: crate::internal::mi_memid_t,
+    arena: ArenaPtr,
+    range: SliceRange,
+    memid: crate::internal::mi_memid_t,
+}
+
+impl ArenaAllocation {
+    #[inline(always)]
+    pub(crate) const fn new(
+        arena: ArenaPtr,
+        range: SliceRange,
+        memid: crate::internal::mi_memid_t,
+    ) -> Self {
+        Self {
+            arena,
+            range,
+            memid,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn arena(self) -> ArenaPtr {
+        self.arena
+    }
+
+    #[inline(always)]
+    pub(crate) fn range(self) -> SliceRange {
+        self.range
+    }
+
+    #[inline(always)]
+    pub(crate) fn memid_mut(&mut self) -> &mut crate::internal::mi_memid_t {
+        &mut self.memid
+    }
+
+    #[inline(always)]
+    pub(crate) fn memid(self) -> crate::internal::mi_memid_t {
+        self.memid
+    }
+
+    #[inline(always)]
+    pub(crate) fn into_memid(self) -> crate::internal::mi_memid_t {
+        self.memid
+    }
 }
 
 /// Error when creating an arena slice range.

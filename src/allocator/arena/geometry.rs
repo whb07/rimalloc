@@ -83,7 +83,7 @@ pub(super) unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page:
             a.arena.as_ptr() == arena
                 && !arena_pages.is_null()
                 // SAFETY[AUDIT:arena-heap-page-table-boundary]: heap arena-page table access validates arena indexes and bitmap ownership for page metadata lookup.
-                && unsafe { mi_bitmap_is_setN((*arena_pages).pages, a.range.start().0, 1) }
+                && unsafe { mi_bitmap_is_setN((*arena_pages).pages, a.range.start_usize(), 1) }
         }
         _ => false,
     }

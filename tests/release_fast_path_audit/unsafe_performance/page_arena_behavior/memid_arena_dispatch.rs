@@ -10,7 +10,10 @@ pub(super) fn assert_memid_and_arena_dispatch_boundaries(sources: &PageArenaBeha
             "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> mi_memid_t"
         ) && sources
             .arena_rs
-            .contains("memid: unsafe { mi_memid_create_arena(arena, range) },")
+            .contains("let mut allocation = crate::core_types::ArenaAllocation::new(")
+            && sources
+                .arena_rs
+                .contains("unsafe { mi_memid_create_arena(arena, range) }")
             && sources
                 .arena_ids_rs
                 .contains("let Some((arena, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else")

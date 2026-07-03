@@ -8,14 +8,28 @@ pub(super) fn assert_typed_arena_allocation_helpers(sources: &PageArenaBehaviorS
             .arena_rs
             .contains(") -> Option<(*mut c_void, crate::core_types::ArenaAllocation)>")
             && sources.arena_types.contains(
-                "pub(crate) struct ArenaAllocation {\n    pub(crate) arena: ArenaPtr,\n    pub(crate) range: SliceRange,\n    pub(crate) memid: crate::internal::mi_memid_t,\n}"
+                "pub(crate) struct ArenaAllocation {\n    arena: ArenaPtr,\n    range: SliceRange,\n    memid: crate::internal::mi_memid_t,\n}"
             )
+            && sources.arena_types.contains("impl ArenaAllocation")
+            && sources.arena_types.contains("pub(crate) const fn new(")
+            && sources.arena_types.contains("pub(crate) fn arena(self) -> ArenaPtr")
+            && sources.arena_types.contains("pub(crate) fn range(self) -> SliceRange")
+            && sources
+                .arena_types
+                .contains("pub(crate) fn into_memid(self) -> crate::internal::mi_memid_t")
+            && !sources.arena_types.contains("pub(crate) arena: ArenaPtr")
+            && !sources.arena_types.contains("pub(crate) range: SliceRange")
+            && !sources
+                .arena_types
+                .contains("pub(crate) memid: crate::internal::mi_memid_t")
             && sources
                 .arena_rs
-                .contains("let mut allocation = crate::core_types::ArenaAllocation {")
+                .contains("let mut allocation = crate::core_types::ArenaAllocation::new(")
             && sources
                 .arena_rs
-                .contains("unsafe { *memid = allocation.assume_init().memid };")
+                .contains("unsafe { *memid = allocation.assume_init().into_memid() };")
+            && !sources.arena_rs.contains("allocation.range.start_usize()")
+            && !sources.arena_rs.contains("allocation.memid.initially_committed")
             && sources
                 .arena_rs
                 .contains("mi_arena_try_alloc_at(arena, slice_count, commit, tseq)")

@@ -389,7 +389,12 @@ Operation IDs:
 - `SAFETY[AUDIT:thread-heap-create-boundary]`:
   `src/allocator/thread_heap.rs` owns thread-heap init and create paths. Unsafe
   operations allocate metadata, initialize random/options/guarded state, set
-  refcounts and heap/TLD links, and publish list nodes under heap and TLD locks.
+  refcounts and heap/TLD links, and publish list nodes through the private
+  thread-heap list helper.
+- `SAFETY[AUDIT:thread-heap-list-boundary]`:
+  `src/allocator/thread_heap/lists.rs` owns initialized thread-heap membership
+  in heap-local and TLD-local intrusive lists. Unsafe operations are limited to
+  lock-protected head updates and `hnext`/`hprev`/`tnext`/`tprev` link mutation.
 - `SAFETY[AUDIT:thread-heap-random-boundary]`:
   `src/allocator/thread_heap.rs` owns thread-heap random-number helper access.
   Unsafe operations read initialized thread-heap random state through typed
@@ -401,8 +406,9 @@ Operation IDs:
   backend only when the final reference is released.
 - `SAFETY[AUDIT:thread-heap-delete-boundary]`:
   `src/allocator/thread_heap.rs` owns thread-heap free/delete. Unsafe
-  operations exchange heap ownership, merge stats, unlink heap/TLD list nodes
-  under the requested locks, abandon pages, and clear metadata before decref.
+  operations exchange heap ownership, merge stats, route heap/TLD list unlinking
+  through the private thread-heap list helper, abandon pages, and clear metadata
+  before decref.
 - `SAFETY[AUDIT:init-subproc-identity-boundary]`: `src/allocator/init.rs` owns
   subproc ID conversion and current/main subproc lookup. Unsafe operations are
   limited to caller-proven subproc IDs, typed subproc witness construction, raw

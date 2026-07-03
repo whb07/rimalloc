@@ -4,10 +4,11 @@
 // paths and upstream parity checks.
 #![allow(dead_code, non_camel_case_types)]
 
+mod lists;
+
 use core::{ffi::c_void, mem::size_of, ptr};
 
 use crate::arena::_mi_arenas_collect;
-use crate::atomic::{mi_lock_acquire, mi_lock_release};
 use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::core_types::{
     BlockVisitCallback, BlockVisitCallbackArg, BorrowedHeap, Errno, HeapPtr, PagePtr, PageQueuePtr,
@@ -913,7 +914,6 @@ pub(crate) unsafe extern "C" fn _mi_theap_init(
 #[inline]
 unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr) {
     let theap_raw = theap.as_ptr();
-    let heap_raw = heap.as_ptr();
     let tld_raw = tld.as_ptr();
     // SAFETY[AUDIT:thread-heap-create-boundary]: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
     unsafe {
@@ -936,40 +936,24 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
             (*theap_raw).page_full_retain /= 4;
         }
 
-        mi_lock_acquire(ptr::addr_of_mut!((*tld_raw).theaps_lock));
-        let tld_theaps_head: *mut mi_theap_t = (*tld_raw).theaps;
-        (*theap_raw).tprev = ptr::null_mut();
-        (*theap_raw).tnext = tld_theaps_head;
-        if !tld_theaps_head.is_null() {
-            (*tld_theaps_head).tprev = theap_raw;
-        }
-        (*tld_raw).theaps = theap_raw;
-        mi_lock_release(ptr::addr_of_mut!((*tld_raw).theaps_lock));
+        let tld_theaps_head = lists::push_tld_front(tld, theap);
 
-        if tld_theaps_head.is_null() {
+        if let Some(tld_theaps_head) = tld_theaps_head {
+            _mi_random_split(
+                ptr::addr_of_mut!((*tld_theaps_head.as_ptr()).random),
+                ptr::addr_of_mut!((*theap_raw).random),
+            );
+        } else {
             #[cfg(any(target_os = "macos", windows))]
             crate::internal::_mi_random_init_weak(ptr::addr_of_mut!((*theap_raw).random));
             #[cfg(not(any(target_os = "macos", windows)))]
             _mi_random_init(ptr::addr_of_mut!((*theap_raw).random));
-        } else {
-            _mi_random_split(
-                ptr::addr_of_mut!((*tld_theaps_head).random),
-                ptr::addr_of_mut!((*theap_raw).random),
-            );
         }
         (*theap_raw).cookie = _mi_random_next(ptr::addr_of_mut!((*theap_raw).random)) | 1;
         _mi_theap_guarded_init(theap_raw);
         __mi_stat_increase_mt(&mut (*_mi_subproc()).stats.theaps, 1);
 
-        mi_lock_acquire(ptr::addr_of_mut!((*heap_raw).theaps_lock));
-        let heap_theaps_head = (*heap_raw).theaps;
-        (*theap_raw).hprev = ptr::null_mut();
-        (*theap_raw).hnext = heap_theaps_head;
-        if !heap_theaps_head.is_null() {
-            (*heap_theaps_head).hprev = theap_raw;
-        }
-        (*heap_raw).theaps = theap_raw;
-        mi_lock_release(ptr::addr_of_mut!((*heap_raw).theaps_lock));
+        lists::push_heap_front(heap, theap);
     }
 }
 
@@ -1242,44 +1226,20 @@ unsafe fn _mi_theap_free_typed(
             ptr::addr_of_mut!((*theap).stats),
         );
 
-        if acquire_heap_theaps_lock {
-            mi_lock_acquire(ptr::addr_of_mut!((*heap).theaps_lock));
-        }
-        if !(*theap).hnext.is_null() {
-            (*(*theap).hnext).hprev = (*theap).hprev;
-        }
-        if !(*theap).hprev.is_null() {
-            (*(*theap).hprev).hnext = (*theap).hnext;
-        } else {
-            crate::internal::mi_assert_internal!((*heap).theaps == theap);
-            (*heap).theaps = (*theap).hnext;
-        }
-        (*theap).hnext = ptr::null_mut();
-        (*theap).hprev = ptr::null_mut();
-        if acquire_heap_theaps_lock {
-            mi_lock_release(ptr::addr_of_mut!((*heap).theaps_lock));
-        }
+        let theap_ptr = ThreadHeapPtr::new_unchecked(theap);
+        lists::remove_from_heap(
+            HeapPtr::new_unchecked(heap),
+            theap_ptr,
+            acquire_heap_theaps_lock,
+        );
+        lists::remove_from_tld(
+            TldPtr::new_unchecked((*theap).tld),
+            theap_ptr,
+            acquire_tld_theaps_lock,
+        );
 
-        if acquire_tld_theaps_lock {
-            mi_lock_acquire(ptr::addr_of_mut!((*(*theap).tld).theaps_lock));
-        }
-        if !(*theap).tnext.is_null() {
-            (*(*theap).tnext).tprev = (*theap).tprev;
-        }
-        if !(*theap).tprev.is_null() {
-            (*(*theap).tprev).tnext = (*theap).tnext;
-        } else {
-            crate::internal::mi_assert_internal!((*(*theap).tld).theaps == theap);
-            (*(*theap).tld).theaps = (*theap).tnext;
-        }
-        (*theap).tnext = ptr::null_mut();
-        (*theap).tprev = ptr::null_mut();
-        if acquire_tld_theaps_lock {
-            mi_lock_release(ptr::addr_of_mut!((*(*theap).tld).theaps_lock));
-        }
-
-        (*theap).tld = ptr::null_mut();
-        mi_theap_decref_inline(ThreadHeapPtr::new_unchecked(theap));
+        theap_ptr.set_tld(None);
+        mi_theap_decref_inline(theap_ptr);
         true
     }
 }

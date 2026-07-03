@@ -132,6 +132,8 @@ thread-heap-collect-boundary	test	tests/release_fast_path_audit/unsafe_performan
 thread-heap-default-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw default thread-heap switching.
 thread-heap-default-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks default thread-heap marker coverage and initialized TLS ownership shape.
 thread-heap-create-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap init/create marker coverage, metadata allocation, random initialization, and heap/TLD list linking.
+thread-heap-list-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks private thread-heap list helper marker coverage and source shape.
+thread-heap-list-boundary	script	scripts/check-unsafe-audit.py	Checks thread-heap list unsafe operations retain operation-level SAFETY markers and source audit coverage.
 thread-heap-random-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap random marker coverage and typed local thread-heap access.
 thread-heap-refcount-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap refcount marker coverage, memid classification, and backing metadata release.
 thread-heap-delete-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks thread-heap free/delete marker coverage, list unlink, page abandon, and final decref handoff.

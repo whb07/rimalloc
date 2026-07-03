@@ -3,6 +3,8 @@ pub(super) fn assert_thread_heap_runtime_boundaries(
     stats_rs: &str,
     theap_rs: &str,
 ) {
+    let theap_lists_rs = include_str!("../../../../../src/allocator/thread_heap/lists.rs");
+    let theap_lifecycle_rs = format!("{theap_rs}\n{theap_lists_rs}");
     assert!(
     stats_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_print_visitor")
         && stats_rs
@@ -21,7 +23,7 @@ pub(super) fn assert_thread_heap_runtime_boundaries(
         && theap_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_decref")
         && theap_rs.contains("#[inline(always)]\nunsafe fn mi_theap_decref_inline(theap: ThreadHeapPtr)")
-        && theap_rs.contains("mi_theap_decref_inline(ThreadHeapPtr::new_unchecked(theap));\n        true")
+        && theap_rs.contains("mi_theap_decref_inline(theap_ptr);\n        true")
         && theap_rs.contains("unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: bool)")
         && theap_rs.contains("match theap.state()")
         && theap_rs.contains("ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap)")
@@ -55,17 +57,37 @@ pub(super) fn assert_thread_heap_runtime_boundaries(
         ("thread-heap-collect-boundary", 15),
         ("thread-heap-default-boundary", 3),
         ("thread-heap-create-boundary", 7),
+        ("thread-heap-list-boundary", 12),
         ("thread-heap-random-boundary", 2),
         ("thread-heap-refcount-boundary", 9),
         ("thread-heap-delete-boundary", 7),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
-        let count = theap_rs.matches(&marker).count();
+        let count = theap_lifecycle_rs.matches(&marker).count();
         assert!(
             count >= minimum,
             "thread-heap unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
         );
     }
+    assert!(
+        theap_rs.contains("let tld_theaps_head = lists::push_tld_front(tld, theap);")
+            && theap_rs.contains("lists::push_heap_front(heap, theap);")
+            && theap_rs.contains("lists::remove_from_heap(")
+            && theap_rs.contains("lists::remove_from_tld(")
+            && !theap_rs.contains("(*theap).hnext")
+            && !theap_rs.contains("(*theap).hprev")
+            && !theap_rs.contains("(*theap).tnext")
+            && !theap_rs.contains("(*theap).tprev")
+            && theap_lists_rs.contains("pub(super) unsafe fn push_tld_front(")
+            && theap_lists_rs.contains("pub(super) unsafe fn push_heap_front(")
+            && theap_lists_rs.contains("pub(super) unsafe fn remove_from_heap(")
+            && theap_lists_rs.contains("pub(super) unsafe fn remove_from_tld(")
+            && theap_lists_rs.contains("(*theap.as_ptr()).hnext")
+            && theap_lists_rs.contains("(*theap.as_ptr()).hprev")
+            && theap_lists_rs.contains("(*theap.as_ptr()).tnext")
+            && theap_lists_rs.contains("(*theap.as_ptr()).tprev"),
+        "thread-heap heap/TLD list links should stay in the private list helper"
+    );
     assert!(
         !theap_rs.contains("SAFETY[AUDIT:thread-heap-visit-boundary]"),
         "thread-heap visitation markers should stay split by callback, area/block, and page-walk responsibility"

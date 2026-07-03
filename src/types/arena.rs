@@ -128,7 +128,7 @@ impl SliceRange {
 }
 
 #[repr(transparent)]
-pub(crate) struct SharedArena(pub(crate) ArenaPtr);
+pub(crate) struct SharedArena(ArenaPtr);
 
 impl SharedArena {
     /// # Safety
@@ -152,7 +152,7 @@ impl SharedArena {
 }
 
 #[repr(transparent)]
-pub(crate) struct ExclusiveArena(pub(crate) ArenaPtr);
+pub(crate) struct ExclusiveArena(ArenaPtr);
 
 impl ExclusiveArena {
     /// # Safety
@@ -177,7 +177,7 @@ impl ExclusiveArena {
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct MatchNuma(pub(crate) bool);
+pub(crate) struct MatchNuma(bool);
 
 impl MatchNuma {
     #[inline(always)]
@@ -193,7 +193,7 @@ impl MatchNuma {
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AllowPinned(pub(crate) bool);
+pub(crate) struct AllowPinned(bool);
 
 impl AllowPinned {
     #[inline(always)]
@@ -209,7 +209,7 @@ impl AllowPinned {
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct Exclusive(pub(crate) bool);
+pub(crate) struct Exclusive(bool);
 
 impl Exclusive {
     #[inline(always)]
@@ -224,7 +224,7 @@ impl Exclusive {
 }
 
 #[repr(transparent)]
-pub(crate) struct ParentArena(pub(crate) ArenaPtr);
+pub(crate) struct ParentArena(ArenaPtr);
 
 impl ParentArena {
     /// # Safety
@@ -252,13 +252,13 @@ use core::ptr::NonNull;
 use core::sync::atomic::{AtomicPtr, AtomicUsize};
 
 #[repr(transparent)]
-pub(crate) struct ArenaPageTablePtr(pub(crate) NonNull<crate::types::mi_arena_pages_t>);
+pub(crate) struct ArenaPageTablePtr(NonNull<crate::types::mi_arena_pages_t>);
 
 #[repr(transparent)]
-pub(crate) struct AbandonedCountCell(pub(crate) *const AtomicUsize);
+pub(crate) struct AbandonedCountCell(*const AtomicUsize);
 
 #[repr(transparent)]
-pub(crate) struct ArenaPageCell(pub(crate) *const AtomicPtr<c_void>);
+pub(crate) struct ArenaPageCell(*const AtomicPtr<c_void>);
 
 pub(super) fn __lint_touch() {
     let _ = core::mem::size_of::<SharedArena>();

@@ -10,13 +10,16 @@ pub(super) fn assert_arena_page_allocation_boundaries(sources: &PageArenaBehavio
     assert!(
         sources
             .arena_types
-            .contains("#[repr(transparent)]\npub(crate) struct SharedArena(pub(crate) ArenaPtr);")
+            .contains("#[repr(transparent)]\npub(crate) struct SharedArena(ArenaPtr);")
             && sources
                 .arena_types
-                .contains("#[repr(transparent)]\npub(crate) struct ExclusiveArena(pub(crate) ArenaPtr);")
+                .contains("#[repr(transparent)]\npub(crate) struct ExclusiveArena(ArenaPtr);")
             && sources
                 .arena_types
-                .contains("#[repr(transparent)]\npub(crate) struct ParentArena(pub(crate) ArenaPtr);")
+                .contains("#[repr(transparent)]\npub(crate) struct ParentArena(ArenaPtr);")
+            && !sources.arena_types.contains("SharedArena(pub(crate)")
+            && !sources.arena_types.contains("ExclusiveArena(pub(crate)")
+            && !sources.arena_types.contains("ParentArena(pub(crate)")
             && sources
                 .arena_types
                 .matches("SAFETY[AUDIT:typed-arena-domain]")

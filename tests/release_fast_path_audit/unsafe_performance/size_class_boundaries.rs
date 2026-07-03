@@ -74,7 +74,10 @@ pub(super) fn assert_size_class_boundaries(sources: SizeClassSources<'_>) {
             && page_rs.contains("let bin = mi_page_bin_typed(page).as_usize();")
             && page_stats_bin_rs.contains("let bin = _mi_page_stats_bin_typed(page).as_usize();")
             && page_rs.contains("let bin = mi_bin_from_block_size(block_size).as_usize();")
-            && page_rs.contains("== mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(\n                    mi_page_queue_block_size_raw(prev),")
+            && page_rs.contains(
+                "== mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked("
+            )
+            && page_rs.contains("mi_page_queue_block_size_raw(prev),")
             && !page_rs.contains("pub(crate) fn _mi_bin_typed(size: usize)")
             && !alloc_rs.contains("_mi_bin_typed(")
             && !free_rs.contains("_mi_bin_typed(")

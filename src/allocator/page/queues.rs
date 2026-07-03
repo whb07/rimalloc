@@ -549,3 +549,54 @@ pub(super) unsafe fn mi_theap_contains_queue(
         queue >= start && queue <= end
     }
 }
+
+/// # Safety
+/// `queue` must point into `theap`'s page queue table.
+#[inline]
+pub(super) unsafe fn mi_theap_queue_index(
+    theap: crate::core_types::ThreadHeapPtr,
+    queue: PageQueuePtr,
+) -> usize {
+    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+    unsafe {
+        queue
+            .as_ptr()
+            .offset_from(ptr::addr_of!((*theap.as_ptr()).pages[0])) as usize
+    }
+}
+
+/// # Safety
+/// `queue` must be a normal queue inside `theap`, and `direct_idx` must be the
+/// direct-page index for `block_size`.
+#[inline]
+pub(super) unsafe fn mi_theap_direct_cache_start(
+    theap: crate::core_types::ThreadHeapPtr,
+    queue: crate::core_types::NormalPageQueue,
+    block_size: crate::core_types::BlockSize,
+    direct_idx: crate::core_types::DirectBin,
+) -> usize {
+    // SAFETY[AUDIT:page-queue-direct-cache-boundary]: direct-page cache updates mirror normal queue fronts for small pages.
+    unsafe {
+        let idx = direct_idx.as_usize();
+        if idx <= 1 {
+            return 0;
+        }
+
+        let start_queue = ptr::addr_of_mut!((*theap.as_ptr()).pages[0]);
+        let pq = queue.ptr().as_ptr();
+        crate::internal::mi_assert_internal!(pq > start_queue);
+        let bin = mi_bin_from_block_size(block_size).as_usize();
+        let mut prev = pq.sub(1);
+        while bin
+            == mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
+                mi_page_queue_block_size_raw(prev),
+            ))
+            .as_usize()
+            && prev > start_queue
+        {
+            prev = prev.sub(1);
+        }
+        let start = 1 + _mi_wsize_from_size(mi_page_queue_block_size_raw(prev));
+        start.min(idx)
+    }
+}

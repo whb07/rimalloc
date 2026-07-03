@@ -1130,6 +1130,8 @@ typed-page-full-transition-boundary	test	src/types/page_states/tests.rs	Exercise
 typed-page-full-transition-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks full page transitions remain separate from active transitions.
 typed-page-available-pop-boundary	test	src/types/page_states/tests.rs	Exercises available free-list pop state updates.
 typed-page-available-pop-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks available-page pop transitions remain typed and private.
+typed-page-local-free-push-boundary	test	src/types/page_states/tests.rs	Exercises local free-list push state updates.
+typed-page-local-free-push-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks local free-list push transitions remain typed and private.
 typed-page-retire-destroy-boundary	test	src/types/page_states/tests.rs	Exercises all-free retire and retired expire/destroyed transitions.
 typed-page-retire-destroy-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks retire/destroy typestate transitions remain explicit.
 typed-page-abandoned-claim-boundary	test	src/types/page_states/tests.rs	Exercises abandoned page ownership claims.

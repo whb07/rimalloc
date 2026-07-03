@@ -291,6 +291,33 @@ impl AvailablePage {
     }
 }
 
+impl LocalPage {
+    #[inline(always)]
+    pub(crate) unsafe fn push_free_block(
+        self,
+        block: crate::core_types::validation_extra::FreeBlock,
+    ) -> crate::core_types::UsedBlockCount {
+        let page = self.page();
+        // SAFETY[AUDIT:typed-page-local-free-push-boundary]: `LocalPage`
+        // proves current-thread ownership, and the caller supplies a free-block
+        // witness for this page's local free-list domain.
+        let local = unsafe { page.local_free() };
+        // SAFETY[AUDIT:typed-page-local-free-push-boundary]: pushing the block
+        // updates only the page-local encoded free-list link for this local
+        // page.
+        let new_local = unsafe { local.push(self, block) };
+        // SAFETY[AUDIT:typed-page-local-free-push-boundary]: after pushing one
+        // block to the local free list, local_free and used are updated
+        // together to preserve page accounting.
+        unsafe {
+            page.set_local_free(new_local);
+            let used = page.used().decrement();
+            page.set_used(used);
+            used
+        }
+    }
+}
+
 impl AllFreePage<Active> {
     #[inline(always)]
     pub(crate) fn retire(self) -> RetiredPage {

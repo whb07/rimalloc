@@ -2298,6 +2298,8 @@ Operation IDs:
   `src/types/page_states.rs` owns full page all-free classification.
 - `SAFETY[AUDIT:typed-page-available-pop-boundary]`:
   `src/types/page_states.rs` owns available free-list pop state updates.
+- `SAFETY[AUDIT:typed-page-local-free-push-boundary]`:
+  `src/types/page_states.rs` owns local free-list push state updates.
 - `SAFETY[AUDIT:typed-page-retire-destroy-boundary]`:
   `src/types/page_states.rs` owns all-free retire and retired expire/destroyed
   transitions.

@@ -14,6 +14,7 @@ pub(super) fn assert_padding_and_page_state_acceptance(
         ("typed-page-active-transition-boundary", 6),
         ("typed-page-full-transition-boundary", 2),
         ("typed-page-available-pop-boundary", 3),
+        ("typed-page-local-free-push-boundary", 3),
         ("typed-page-retire-destroy-boundary", 2),
         ("typed-page-abandoned-claim-boundary", 2),
         ("typed-page-remote-free-classification-boundary", 2),

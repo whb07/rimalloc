@@ -100,7 +100,7 @@ pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut m
 
         let page_ptr = PagePtr::new_unchecked(page);
         let remote = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(head));
-        let local = LocalFreeList::from_raw((*page).local_free);
+        let local = page_ptr.local_free();
         let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
         let _ = mi_page_thread_collect_to_local_typed(owned_page, remote, local);
     }
@@ -151,7 +151,7 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
 
         mi_block_set_next(page, last, local.as_raw());
         let new_local = LocalFreeList::from_head(head_block);
-        (*page).local_free = new_local.as_raw();
+        page_ptr.set_local_free(new_local);
 
         crate::internal::mi_assert_internal!(u16::try_from(count).is_ok());
         crate::internal::mi_assert_internal!(used.get() >= count as u16);
@@ -187,8 +187,7 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = page.page();
-        let page = page_ptr.as_ptr();
-        let local = LocalFreeList::from_raw((*page).local_free);
+        let local = page_ptr.local_free();
         let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
         mi_page_thread_collect_to_local_typed(owned_page, remote, local)
     }
@@ -202,8 +201,8 @@ pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = LocalPage::new_unchecked(page_ptr);
-        let available = AvailableFreeList::from_raw((*page).free);
-        let local = LocalFreeList::from_raw((*page).local_free);
+        let available = page_ptr.free();
+        let local = page_ptr.local_free();
         mi_page_free_quick_collect_typed(local_page, available, local)
     }
 }
@@ -224,11 +223,12 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
         if local.is_empty() {
             return false;
         }
-        let page = page.page().as_ptr();
+        let page_ptr = page.page();
+        let page = page_ptr.as_ptr();
         let new_available = local.into_available();
         let new_local = LocalFreeList::empty();
-        (*page).free = new_available.as_raw();
-        (*page).local_free = new_local.as_raw();
+        page_ptr.set_free(new_available);
+        page_ptr.set_local_free(new_local);
         (*page).free_is_zero = false;
         true
     }
@@ -269,7 +269,7 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
             crate::bench_diagnostics::page_free_collect_local_empty();
         }
 
-        crate::internal::mi_assert_internal!(!force || (*page).local_free.is_null());
+        crate::internal::mi_assert_internal!(!force || page_ptr.local_free().is_empty());
     }
 }
 
@@ -312,12 +312,12 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             crate::bench_diagnostics::page_free_collect_partly_detached();
             mi_block_set_next(page, head, ptr::null());
             let remote_tail = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(next));
-            let local = LocalFreeList::from_raw((*page).local_free);
+            let local = page_ptr.local_free();
             let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
             let _ = mi_page_thread_collect_to_local_typed(owned_page, remote_tail, local);
-            if !(*page).local_free.is_null() && (*page).free.is_null() {
-                let available = AvailableFreeList::from_raw((*page).free);
-                let local = LocalFreeList::from_raw((*page).local_free);
+            if !page_ptr.local_free().is_empty() && page_ptr.free().is_empty() {
+                let available = page_ptr.free();
+                let local = page_ptr.local_free();
                 let _ = mi_page_free_quick_collect_typed(local_page, available, local);
             }
         }

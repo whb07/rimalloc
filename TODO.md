@@ -73,7 +73,7 @@ Current review evidence:
   release-audit module-size guard discovers 186 module files recursively and
   enforces a 190-line cap. The largest release-audit modules are:
   `unsafe_performance/raw_facade/raw_override/os_random.rs` at 190 lines,
-  `unsafe_performance/page_lifecycle.rs` at 190 lines,
+  `unsafe_performance/page_lifecycle.rs` at 189 lines,
   `todo_backlog.rs` at 190 lines,
   `unsafe_performance/os_memory/platform_helpers.rs` at 189 lines,
   `unsafe_performance/shared.rs` at 185 lines,

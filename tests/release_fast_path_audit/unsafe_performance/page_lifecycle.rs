@@ -113,8 +113,7 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && !alloc_aligned_rs.contains("(*block).next = MI_BLOCK_TAG_ALIGNED")
             && !free_rs.contains("(*block).next == MI_BLOCK_TAG_GUARDED")
             && !internal.contains("(*block.cast_mut()).next == MI_BLOCK_TAG_GUARDED")
-            && page_rs
-                .contains("crate::internal::mi_assert_internal!(!force || (*page).local_free.is_null());")
+            && page_rs.contains("crate::internal::mi_assert_internal!(!force || page_ptr.local_free().is_empty());")
             && page_rs.contains("unsafe fn mi_page_move_to_full_typed(")
             && page_rs.contains("unsafe fn mi_page_unfull_typed(")
             && page_rs.contains(

@@ -11,8 +11,8 @@ use core::{ffi::c_void, mem::size_of, ptr};
 use crate::arena::_mi_arenas_collect;
 use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::core_types::{
-    BlockVisitCallback, BlockVisitCallbackArg, BorrowedHeap, Errno, HeapPtr, PagePtr, PageQueuePtr,
-    ThreadHeapLocal, ThreadHeapPtr, ThreadHeapState, TldPtr,
+    Bin, BlockVisitCallback, BlockVisitCallbackArg, BorrowedHeap, Errno, HeapPtr, PagePtr,
+    PageQueuePtr, ThreadHeapLocal, ThreadHeapPtr, ThreadHeapState, TldPtr,
 };
 use crate::internal::{
     _mi_align_up, _mi_arenas_alloc, _mi_arenas_free, _mi_deferred_free, _mi_divide_up,
@@ -518,12 +518,12 @@ unsafe fn mi_theap_visit_pages_typed(
         };
 
         for i in 0..=max_bin {
-            let pq = core::ptr::addr_of_mut!((*theap_ptr).pages[i]);
-            let queue = PageQueuePtr::new_unchecked(pq);
+            let bin = Bin::new_unchecked(i as u16);
+            let queue = theap.page_queue(bin);
             let mut page = queue.first();
             while let Some(current) = page {
                 let current_ptr = current.as_ptr();
-                let next = PagePtr::new((*current_ptr).next);
+                let next = current.queue_next();
                 crate::internal::mi_assert_internal!(mi_page_theap(current_ptr) == theap_ptr);
                 if crate::internal::MI_DEBUG > 1 {
                     count += 1;
@@ -665,15 +665,15 @@ unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
         };
         mi_theap_visit_pages_typed(theap, true, state);
         let theap_wrapper = ThreadHeapLocal::new_unchecked(theap);
-        let theap = theap.as_ptr();
-        for bin in 0..MI_BIN_COUNT {
-            let queue = PageQueuePtr::new_unchecked(core::ptr::addr_of_mut!((*theap).pages[bin]));
-            let is_valid = if bin == MI_BIN_FULL {
+        for bin_index in 0..MI_BIN_COUNT {
+            let bin = Bin::new_unchecked(bin_index as u16);
+            let queue = theap.page_queue(bin);
+            let is_valid = if bin_index == MI_BIN_FULL {
                 mi_full_page_queue_is_valid(
                     theap_wrapper,
                     crate::core_types::FullPageQueue::new_unchecked(queue),
                 )
-            } else if bin == MI_BIN_HUGE {
+            } else if bin_index == MI_BIN_HUGE {
                 mi_huge_page_queue_is_valid(
                     theap_wrapper,
                     crate::core_types::HugePageQueue::new_unchecked(queue),

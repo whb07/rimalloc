@@ -92,4 +92,12 @@ pub(super) fn assert_thread_heap_runtime_boundaries(
         !theap_rs.contains("SAFETY[AUDIT:thread-heap-visit-boundary]"),
         "thread-heap visitation markers should stay split by callback, area/block, and page-walk responsibility"
     );
+    assert!(
+        theap_rs.contains("let queue = theap.page_queue(bin);")
+            && theap_rs.contains("let next = current.queue_next();")
+            && !theap_rs.contains("core::ptr::addr_of_mut!((*theap_ptr).pages[i])")
+            && !theap_rs.contains("(*current_ptr).next")
+            && !theap_rs.contains("core::ptr::addr_of_mut!((*theap).pages[bin])"),
+        "thread-heap page visitation and validation should use typed page-queue accessors instead of raw page queue fields"
+    );
 }

@@ -2009,9 +2009,9 @@ Operation IDs:
   temporary `AtomicPtr` views over caller-proven raw pointer fields.
 - `SAFETY[AUDIT:typed-atomic-page-thread-id]`: `src/types/atomic.rs` owns typed
   page `xthread_id` load, flag, owner-store, and owner-CAS protocols.
-- `SAFETY[AUDIT:typed-atomic-thread-free]`: `src/types/atomic.rs` owns typed
-  `xthread_free` remote-list head and ownership bit protocols, including
-  remote-list collection handoff fixtures.
+- `SAFETY[AUDIT:typed-atomic-thread-free]`: `src/types/atomic/thread_free.rs`
+  owns typed `xthread_free` remote-list head and ownership bit protocols,
+  including remote-list collection handoff fixtures.
 - `SAFETY[AUDIT:typed-atomic-abandoned-count]`: `src/types/atomic.rs` owns
   abandoned-count atomic load/increment/decrement helpers.
 - `SAFETY[AUDIT:typed-atomic-thread-heap-refcount]`: `src/types/atomic.rs` owns

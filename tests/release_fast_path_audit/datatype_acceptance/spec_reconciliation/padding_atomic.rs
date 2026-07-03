@@ -4,7 +4,7 @@ pub(super) fn assert_padding_and_atomic_reconciliation(
     audit_sources: &DatatypeAcceptanceSources<'_>,
 ) {
     let types_spec = audit_sources.types_spec;
-    let atomic = audit_sources.source("src/types/atomic.rs");
+    let atomic_thread_free = audit_sources.source("src/types/atomic/thread_free.rs");
     let padding_rs = audit_sources.source("src/types/padding.rs");
     let alloc_rs = audit_sources.source("src/allocator/alloc.rs");
     let free_rs = audit_sources.source("src/allocator/free.rs");
@@ -32,8 +32,10 @@ pub(super) fn assert_padding_and_atomic_reconciliation(
         "padding metadata should construct canaries from typed PagePtr/BlockPtr plus PageKeys and deltas with the usable-size bound"
     );
     assert!(
-        atomic.contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
-            && !atomic.contains("pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);"),
+        atomic_thread_free
+            .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
+            && !atomic_thread_free
+                .contains("pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);"),
         "AtomicThreadFree should be backed by AtomicUsizeField, matching TYPES_SPEC.md"
     );
     assert!(

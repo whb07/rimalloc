@@ -98,6 +98,7 @@ ALLOWED_XTHREAD_ID = {
 ALLOWED_XTHREAD_FREE = {
     "src/types/freelist.rs",
     "src/types/atomic.rs",
+    "src/types/atomic/thread_free.rs",
     "src/types/constants.rs",
 }
 

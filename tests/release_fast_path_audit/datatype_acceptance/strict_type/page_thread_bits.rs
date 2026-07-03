@@ -5,6 +5,7 @@ pub(super) fn assert_page_thread_and_free_bit_domains(
 ) {
     let page_core_rs = audit_sources.source("src/types/page.rs");
     let atomic_rs = audit_sources.source("src/types/atomic.rs");
+    let atomic_thread_free_rs = audit_sources.source("src/types/atomic/thread_free.rs");
     let strict_check_rs = audit_sources.strict_type_checker;
     assert!(
         page_core_rs.contains("pub(crate) struct PageFlags(usize);")
@@ -46,18 +47,20 @@ pub(super) fn assert_page_thread_and_free_bit_domains(
             && freelist_rs
                 .contains("crate::internal::mi_assert_internal!((val & Self::OWNED_BIT) == 0);")
             && freelist_rs.contains("Self(ptr_val | bit)")
-            && atomic_rs
+            && atomic_thread_free_rs
                 .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
-            && atomic_rs.contains("pub(crate) fn load_relaxed(self) -> ThreadFreeWord")
-            && atomic_rs.contains("pub(crate) fn push_remote_acq_rel(")
-            && atomic_rs.contains(
+            && atomic_thread_free_rs.contains("pub(crate) fn load_relaxed(self) -> ThreadFreeWord")
+            && atomic_thread_free_rs.contains("pub(crate) fn push_remote_acq_rel(")
+            && atomic_thread_free_rs.contains(
                 "pub(crate) unsafe fn release_acq_rel(self, expected: &mut ThreadFreeWord) -> bool"
             )
-            && atomic_rs.contains("pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList")
-            && atomic_rs.contains("pub(crate) unsafe fn claim_acq_rel(self) -> bool")
+            && atomic_thread_free_rs
+                .contains("pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList")
+            && atomic_thread_free_rs.contains("pub(crate) unsafe fn claim_acq_rel(self) -> bool")
             && strict_check_rs.contains("ALLOWED_XTHREAD_FREE = {")
             && strict_check_rs.contains("\"src/types/freelist.rs\"")
             && strict_check_rs.contains("\"src/types/atomic.rs\"")
+            && strict_check_rs.contains("\"src/types/atomic/thread_free.rs\"")
             && strict_check_rs.contains("kind=\"xthread-free-bitop\"")
             && strict_check_rs
                 .contains("message=\"direct xthread_free bit operation outside typed helpers\""),

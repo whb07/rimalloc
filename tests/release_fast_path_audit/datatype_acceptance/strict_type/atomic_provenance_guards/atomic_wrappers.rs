@@ -2,9 +2,11 @@ use super::DatatypeAcceptanceSources;
 
 pub(super) fn assert_atomic_wrapper_guards(audit_sources: &DatatypeAcceptanceSources<'_>) {
     let atomic_rs = audit_sources.source("src/types/atomic.rs");
+    let atomic_thread_free_rs = audit_sources.source("src/types/atomic/thread_free.rs");
     let strict_check_rs = audit_sources.strict_type_checker;
     let allowlist_rs = audit_sources.strict_type_allowlist;
-    let atomic_marker_count = |marker| atomic_rs.matches(marker).count();
+    let atomic_marker_count =
+        |marker| atomic_rs.matches(marker).count() + atomic_thread_free_rs.matches(marker).count();
 
     assert!(
         atomic_rs.contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")

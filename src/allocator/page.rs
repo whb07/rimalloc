@@ -1021,8 +1021,9 @@ unsafe fn _mi_page_init_typed(
         crate::internal::mi_assert_internal!(page_size / mi_page_block_size(page) < (1usize << 16));
         crate::internal::mi_assert_internal!(mi_page_reserved_count(page).get() > 0);
 
+        let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
         mi_page_set_keys(
-            PagePtr::new_unchecked(page),
+            page_ptr,
             PageKeys::from_raw([_mi_theap_random_next(theap), _mi_theap_random_next(theap)]),
         );
 
@@ -1038,10 +1039,9 @@ unsafe fn _mi_page_init_typed(
         crate::internal::mi_assert_internal!(!(*page).theap.is_null());
         crate::internal::mi_assert_internal!((*page).theap == mi_page_theap(page));
         crate::internal::mi_assert_internal!(mi_page_capacity_count(page).get() == 0);
-        crate::internal::mi_assert_internal!((*page).free.is_null());
+        crate::internal::mi_assert_internal!(page_ptr.free().is_empty());
         crate::internal::mi_assert_internal!(mi_page_used_count(page).get() == 0);
         crate::internal::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
-        let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
         let thread_free = page_ptr.thread_free_cell().load_relaxed();
         crate::internal::mi_assert_internal!(
             thread_free
@@ -1150,7 +1150,7 @@ pub(crate) unsafe fn try_reclaim_abandoned(
         let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
         let atomic_tf = page_ptr.thread_free_cell();
         let remote = atomic_tf.collect_acq_rel();
-        let local = crate::core_types::LocalFreeList::from_raw((*page).local_free);
+        let local = page_ptr.local_free();
         remote.collect_into_local(page_wrapper, local);
 
         _mi_page_free_collect(page, false);

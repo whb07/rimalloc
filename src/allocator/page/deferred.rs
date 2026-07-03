@@ -49,7 +49,7 @@ pub(crate) unsafe extern "C" fn _mi_deferred_free(theap: *mut mi_theap_t, force:
     // process-global atomics; `theap` is converted once into a local heap witness.
     unsafe {
         let heartbeat = mi_theap_increment_heartbeat(theap);
-        let fun_ptr = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
+        let fun_ptr = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_free))
             .load(crate::core_types::MemoryOrder::Acquire);
         let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
@@ -76,7 +76,7 @@ unsafe fn mi_deferred_free_typed(
         let theap_raw = theap.ptr().as_ptr();
         if callback.is_some() && !(*(*theap_raw).tld).recurse {
             (*(*theap_raw).tld).recurse = true;
-            let arg = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
+            let arg = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_arg))
                 .load(crate::core_types::MemoryOrder::Acquire);
             let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);
             callback.invoke(force, heartbeat, arg);
@@ -101,10 +101,10 @@ pub unsafe extern "C" fn mi_register_deferred_free(
     unsafe {
         let callback = crate::core_types::DeferredFreeCallback::new(fn_);
         let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);
-        crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
+        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_arg))
             .store(arg.as_ptr(), crate::core_types::MemoryOrder::Release);
         let f = callback.storage_ptr();
-        crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
+        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_free))
             .store(f, crate::core_types::MemoryOrder::Release);
     }
 }
@@ -117,10 +117,10 @@ pub(crate) unsafe fn registered_deferred_free_callback()
     // SAFETY[AUDIT:deferred-free-callback-state]: the snapshot observes the same
     // atomic callback slots used by registration and dispatch.
     unsafe {
-        let fun_ptr = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
+        let fun_ptr = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_free))
             .load(crate::core_types::MemoryOrder::Acquire);
         let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);
-        let arg = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
+        let arg = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_arg))
             .load(crate::core_types::MemoryOrder::Acquire);
         (callback.raw(), arg)
     }

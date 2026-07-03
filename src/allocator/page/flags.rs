@@ -125,7 +125,7 @@ pub unsafe fn mi_page_is_abandoned(page: *const mi_page_t) -> bool {
     // page metadata; the owner word is read through AtomicPageThreadId.
     unsafe {
         let atomic_tid =
-            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField::from_raw(
                 ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_id),
             ));
         let tid = atomic_tid.load();

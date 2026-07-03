@@ -43,7 +43,7 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
     let mut expire0 = 0i64;
     // SAFETY[AUDIT:arena-purge-schedule-boundary]: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
     if unsafe {
-        crate::core_types::AtomicI64Field(
+        crate::core_types::AtomicI64Field::from_raw(
             ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
         )
         .compare_exchange_acq_rel(&mut expire0, expire)
@@ -52,7 +52,7 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
         // SAFETY[AUDIT:arena-purge-schedule-boundary]: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
         let subproc = unsafe { (*arena.cast::<MiArenaPrefix>()).subproc };
         unsafe {
-            crate::core_types::AtomicI64Field(
+            crate::core_types::AtomicI64Field::from_raw(
                 ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast::<i64>(),
             )
             .compare_exchange_acq_rel(&mut expire0, expire)
@@ -313,7 +313,7 @@ unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c
     }
 
     let expire = unsafe {
-        crate::core_types::AtomicI64Field(
+        crate::core_types::AtomicI64Field::from_raw(
             ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
         )
         .load(crate::core_types::MemoryOrder::Relaxed)
@@ -329,7 +329,7 @@ unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c
 
     // SAFETY[AUDIT:arena-purge-expire-policy-boundary]: purge expiration policy reads and clears delayed purge clocks while accounting purge attempts.
     unsafe {
-        crate::core_types::AtomicI64Field(
+        crate::core_types::AtomicI64Field::from_raw(
             ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
         )
         .store(0, crate::core_types::MemoryOrder::Release)
@@ -385,7 +385,7 @@ unsafe fn mi_arenas_try_purge(
     let now = crate::stats::_mi_clock_now();
     // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
     let arenas_expire = unsafe {
-        crate::core_types::AtomicI64Field(
+        crate::core_types::AtomicI64Field::from_raw(
             ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast::<i64>(),
         )
         .load(crate::core_types::MemoryOrder::Acquire)
@@ -405,7 +405,7 @@ unsafe fn mi_arenas_try_purge(
         if arenas_expire > now {
             // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
             unsafe {
-                crate::core_types::AtomicI64Field(
+                crate::core_types::AtomicI64Field::from_raw(
                     ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
                         .cast::<i64>(),
                 )
@@ -452,7 +452,7 @@ unsafe fn mi_arenas_try_purge(
         if all_visited && !any_purged {
             // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
             unsafe {
-                crate::core_types::AtomicI64Field(
+                crate::core_types::AtomicI64Field::from_raw(
                     ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
                         .cast::<i64>(),
                 )

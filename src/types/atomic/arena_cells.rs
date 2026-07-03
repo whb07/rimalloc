@@ -22,7 +22,7 @@ impl AtomicAbandonedCount {
 
     #[inline(always)]
     fn field(self) -> AtomicUsizeField {
-        AtomicUsizeField(self.0.cast_mut().cast::<usize>())
+        AtomicUsizeField::from_raw(self.0.cast_mut().cast::<usize>())
     }
 
     pub(crate) unsafe fn load_relaxed(self) -> usize {

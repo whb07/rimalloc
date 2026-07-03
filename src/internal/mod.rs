@@ -457,7 +457,7 @@ pub unsafe fn mi_count_size_overflow(count: usize, size: usize, total: &mut usiz
 pub unsafe fn _mi_theap_heap(theap: *const mi_theap_t) -> *mut mi_heap_t {
     // SAFETY[AUDIT:internal-thread-heap-shim-boundary]: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     unsafe {
-        crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())
+        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of!((*theap).heap).cast_mut())
             .load(crate::core_types::MemoryOrder::Acquire)
     }
 }
@@ -509,7 +509,7 @@ pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize
 pub unsafe fn _mi_page_map_at(idx: usize) -> mi_submap_t {
     // SAFETY[AUDIT:internal-page-map-lookup-boundary]: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
-        crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))
+        crate::core_types::AtomicPtrField::from_raw(_mi_page_map_base().add(idx))
             .load(crate::core_types::MemoryOrder::Acquire)
     }
 }
@@ -667,9 +667,10 @@ pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::Pag
     // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_is_abandoned_mapped(page.as_ptr()));
-        let atomic_tid = crate::core_types::AtomicPageThreadId(
-            crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*page.as_ptr()).xthread_id)),
-        );
+        let atomic_tid =
+            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField::from_raw(
+                ptr::addr_of_mut!((*page.as_ptr()).xthread_id),
+            ));
         let mut old = atomic_tid.load();
         loop {
             let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);
@@ -720,9 +721,9 @@ pub(crate) unsafe fn mi_page_claim_ownership(
     unsafe {
         let page_ptr = page.page();
         let page = page_ptr.as_ptr();
-        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-            ptr::addr_of_mut!((*page).xthread_free),
-        ));
+        let atomic_tf = crate::core_types::AtomicThreadFree(
+            crate::core_types::AtomicUsizeField::from_raw(ptr::addr_of_mut!((*page).xthread_free)),
+        );
         if atomic_tf.claim_acq_rel() {
             Some(crate::core_types::OwnedAbandonedPage::new_unchecked(
                 page_ptr,

@@ -31,7 +31,8 @@ fn linux_mi_lock_matches_pthread_mutex_layout() {
 #[test]
 fn atomic_usize_field_updates_stack_atomic_word() {
     let atomic = AtomicUsize::new(4);
-    let field = AtomicUsizeField((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
+    let field =
+        AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
 
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
     // stack-local `AtomicUsize`; all accesses in this fixture use atomic
@@ -58,7 +59,8 @@ fn atomic_usize_field_updates_stack_atomic_word() {
 #[test]
 fn atomic_usize_field_weak_cas_updates_expected_on_failure() {
     let atomic = AtomicUsize::new(33);
-    let field = AtomicUsizeField((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
+    let field =
+        AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
 
     let mut expected = 11;
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` aliases only the
@@ -84,7 +86,7 @@ fn atomic_usize_field_weak_cas_updates_expected_on_failure() {
 #[test]
 fn atomic_i64_field_updates_expected_on_cas_failure() {
     let atomic = AtomicI64::new(-4);
-    let field = AtomicI64Field((&atomic as *const AtomicI64).cast_mut().cast::<i64>());
+    let field = AtomicI64Field::from_raw((&atomic as *const AtomicI64).cast_mut().cast::<i64>());
 
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
     // stack-local `AtomicI64`; the fixture uses atomic operations only and the
@@ -110,8 +112,9 @@ fn atomic_ptr_field_round_trips_pointer_values() {
     let first_ptr = (&mut first as *mut u8).cast::<c_void>();
     let second_ptr = (&mut second as *mut u8).cast::<c_void>();
     let atomic = AtomicPtr::new(first_ptr);
-    let field =
-        || AtomicPtrField::<c_void>((&atomic as *const AtomicPtr<c_void>).cast_mut().cast());
+    let field = || {
+        AtomicPtrField::<c_void>::from_raw((&atomic as *const AtomicPtr<c_void>).cast_mut().cast())
+    };
 
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: each `field()` wrapper points
     // at the stack-local `AtomicPtr`; the raw values are stack-local pointer
@@ -152,7 +155,7 @@ fn atomic_page_thread_id_updates_owner_and_flags() {
     let initial =
         PageThreadId::from_parts(PageOwnerId::Abandoned, PageFlags::HAS_INTERIOR_POINTERS);
     let atomic = AtomicUsize::new(initial.raw());
-    let field = AtomicPageThreadId(AtomicUsizeField(
+    let field = AtomicPageThreadId(AtomicUsizeField::from_raw(
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
@@ -192,7 +195,7 @@ fn atomic_page_thread_id_updates_owner_and_flags() {
 #[test]
 fn atomic_thread_free_claims_and_releases_ownership_bit() {
     let atomic = AtomicUsize::new(0);
-    let field = AtomicThreadFree(AtomicUsizeField(
+    let field = AtomicThreadFree(AtomicUsizeField::from_raw(
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
@@ -222,7 +225,7 @@ fn atomic_thread_free_take_head_preserves_owner_bit() {
     let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
     let word = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
     let atomic = AtomicUsize::new(word.raw());
-    let field = AtomicThreadFree(AtomicUsizeField(
+    let field = AtomicThreadFree(AtomicUsizeField::from_raw(
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
@@ -250,7 +253,7 @@ fn empty_remote_free_list_collects_through_detached_atomic_path() {
         ptr::addr_of_mut!((*raw_page).local_free).write(ptr::addr_of_mut!(local));
 
         let page_ptr = PagePtr::new_unchecked(raw_page);
-        let atomic = AtomicThreadFree(AtomicUsizeField(ptr::addr_of_mut!(
+        let atomic = AtomicThreadFree(AtomicUsizeField::from_raw(ptr::addr_of_mut!(
             (*raw_page).xthread_free
         )));
         let remote = atomic.collect_acq_rel();
@@ -286,7 +289,7 @@ fn atomic_abandoned_count_uses_relaxed_cell_operations() {
 #[test]
 fn atomic_thread_heap_refcount_uses_acq_rel_operations() {
     let atomic = AtomicUsize::new(0);
-    let refcount = AtomicThreadHeapRefcount::from_field(AtomicUsizeField(
+    let refcount = AtomicThreadHeapRefcount::from_field(AtomicUsizeField::from_raw(
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
@@ -305,7 +308,8 @@ fn atomic_thread_heap_refcount_uses_acq_rel_operations() {
 #[test]
 fn atomic_guard_acquires_once_and_releases_on_drop() {
     let atomic = AtomicUsize::new(0);
-    let field = AtomicUsizeField((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
+    let field =
+        AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
 
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at a stack-local
     // guard word and the guard owns the successful acquire until it is dropped.

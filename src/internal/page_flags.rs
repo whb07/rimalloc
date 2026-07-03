@@ -9,7 +9,7 @@ pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
     // SAFETY[AUDIT:internal-page-flag-owner-boundary]: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
         let atomic_tid =
-            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField::from_raw(
                 ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_id),
             ));
         atomic_tid.load().raw()
@@ -57,9 +57,10 @@ pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
 pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
     // SAFETY[AUDIT:internal-thread-free-boundary]: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
-        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-            ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
-        ));
+        let atomic_tf =
+            crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField::from_raw(
+                ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
+            ));
         atomic_tf.load_relaxed().head_raw()
     }
 }
@@ -84,9 +85,10 @@ pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
 pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
     // SAFETY[AUDIT:internal-thread-free-boundary]: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
-        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-            ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
-        ));
+        let atomic_tf =
+            crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField::from_raw(
+                ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
+            ));
         atomic_tf.load_relaxed().is_owned()
     }
 }

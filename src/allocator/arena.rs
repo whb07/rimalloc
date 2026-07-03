@@ -853,7 +853,7 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
     let mut expected = arena_count;
     // SAFETY[AUDIT:arena-registry-destroy-boundary]: unsafe arena teardown clears subproc table cells and arena counts while preserving OS-owned arena release rules.
     let _ = unsafe {
-        crate::core_types::AtomicUsizeField(
+        crate::core_types::AtomicUsizeField::from_raw(
             ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
         )
         .compare_exchange_acq_rel(&mut expected, 0)
@@ -918,7 +918,7 @@ unsafe fn mi_arenas_add(
         let next_count = count + 1;
         // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
         if unsafe {
-            crate::core_types::AtomicUsizeField(
+            crate::core_types::AtomicUsizeField::from_raw(
                 ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
             )
             .compare_exchange_acq_rel(&mut count, next_count)
@@ -2444,7 +2444,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
 
         let atomic_tid =
             // SAFETY[AUDIT:arena-page-abandon-boundary]: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
-            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(unsafe {
+            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField::from_raw(unsafe {
                 ptr::addr_of_mut!((*page).xthread_id)
             }));
         unsafe { atomic_tid.store_owner(crate::core_types::PageOwnerId::AbandonedMapped) };

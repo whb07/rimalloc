@@ -3,6 +3,7 @@ use super::DatatypeAcceptanceSources;
 pub(super) fn assert_atomic_wrapper_guards(audit_sources: &DatatypeAcceptanceSources<'_>) {
     let atomic_rs = audit_sources.source("src/types/atomic.rs");
     let atomic_arena_cells_rs = audit_sources.source("src/types/atomic/arena_cells.rs");
+    let atomic_fields_rs = audit_sources.source("src/types/atomic/fields.rs");
     let atomic_guards_rs = audit_sources.source("src/types/atomic/guards.rs");
     let atomic_page_thread_rs = audit_sources.source("src/types/atomic/page_thread.rs");
     let atomic_thread_heap_refcount_rs =
@@ -13,6 +14,7 @@ pub(super) fn assert_atomic_wrapper_guards(audit_sources: &DatatypeAcceptanceSou
     let atomic_marker_count = |marker| {
         atomic_rs.matches(marker).count()
             + atomic_arena_cells_rs.matches(marker).count()
+            + atomic_fields_rs.matches(marker).count()
             + atomic_guards_rs.matches(marker).count()
             + atomic_page_thread_rs.matches(marker).count()
             + atomic_thread_heap_refcount_rs.matches(marker).count()
@@ -20,20 +22,26 @@ pub(super) fn assert_atomic_wrapper_guards(audit_sources: &DatatypeAcceptanceSou
     };
 
     assert!(
-        atomic_rs.contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")
-            && atomic_rs.contains("pub(crate) struct AtomicI64Field(pub(crate) *mut i64);")
-            && atomic_rs.contains("pub(crate) struct AtomicPtrField<T>(pub(crate) *mut *mut T);")
-            && atomic_rs.contains("let atomic = unsafe { AtomicUsize::from_ptr(self.0) };")
-            && atomic_rs.contains("let atomic = unsafe { AtomicI64::from_ptr(self.0) };")
-            && atomic_rs.contains("let atomic = unsafe { AtomicPtr::from_ptr(self.0) };")
-            && atomic_rs.contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize")
-            && atomic_rs
+        atomic_fields_rs.contains("pub(crate) struct AtomicUsizeField(*mut usize);")
+            && atomic_fields_rs.contains("pub(crate) struct AtomicI64Field(*mut i64);")
+            && atomic_fields_rs.contains("pub(crate) struct AtomicPtrField<T>(*mut *mut T);")
+            && atomic_fields_rs.contains("pub(crate) fn from_raw(field: *mut usize) -> Self")
+            && atomic_fields_rs.contains("pub(crate) fn from_raw(field: *mut i64) -> Self")
+            && atomic_fields_rs.contains("pub(crate) fn from_raw(field: *mut *mut T) -> Self")
+            && atomic_fields_rs.contains("let atomic = unsafe { AtomicUsize::from_ptr(self.0) };")
+            && atomic_fields_rs.contains("let atomic = unsafe { AtomicI64::from_ptr(self.0) };")
+            && atomic_fields_rs.contains("let atomic = unsafe { AtomicPtr::from_ptr(self.0) };")
+            && atomic_fields_rs
+                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize")
+            && atomic_fields_rs
                 .contains("pub(crate) unsafe fn store(self, value: usize, order: MemoryOrder)")
-            && atomic_rs.contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> i64")
-            && atomic_rs
+            && atomic_fields_rs
+                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> i64")
+            && atomic_fields_rs
                 .contains("pub(crate) unsafe fn store(self, value: i64, order: MemoryOrder)")
-            && atomic_rs.contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T")
-            && atomic_rs
+            && atomic_fields_rs
+                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T")
+            && atomic_fields_rs
                 .contains("pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder)")
             && !atomic_rs.contains("SAFETY[AUDIT:typed-atomic-domain]")
             && atomic_marker_count("SAFETY[AUDIT:typed-atomic-usize-field]") >= 8

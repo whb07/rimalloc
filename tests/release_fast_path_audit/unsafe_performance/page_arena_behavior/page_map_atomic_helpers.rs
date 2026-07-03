@@ -4,13 +4,13 @@ pub(super) fn assert_page_map_atomic_helpers(sources: &PageArenaBehaviorSources<
     assert!(
         sources
             .atomic_types
-            .contains("pub(crate) struct AtomicPtrField<T>(pub(crate) *mut *mut T);")
+            .contains("pub(crate) struct AtomicPtrField<T>(*mut *mut T);")
             && sources
                 .atomic_types
                 .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T")
             && sources.atomic_types.contains("expected: &mut *mut T,")
             && sources.page_map.contains(
-                "crate::core_types::AtomicPtrField(unsafe { _mi_page_map.add(idx.get()) });"
+                "crate::core_types::AtomicPtrField::from_raw(unsafe { _mi_page_map.add(idx.get()) });"
             )
             && sources
                 .page_map
@@ -28,9 +28,9 @@ pub(super) fn assert_page_map_atomic_helpers(sources: &PageArenaBehaviorSources<
     );
     assert!(
         sources.internal.contains(
-            "crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())\n            .load(crate::core_types::MemoryOrder::Acquire)"
+            "crate::core_types::AtomicPtrField::from_raw(ptr::addr_of!((*theap).heap).cast_mut())\n            .load(crate::core_types::MemoryOrder::Acquire)"
         ) && sources.internal.contains(
-            "crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))\n            .load(crate::core_types::MemoryOrder::Acquire)"
+            "crate::core_types::AtomicPtrField::from_raw(_mi_page_map_base().add(idx))\n            .load(crate::core_types::MemoryOrder::Acquire)"
         ) && !sources
             .internal
             .contains("crate::atomic::mi_atomic_load_ptr_acquire(&(*theap).heap)")

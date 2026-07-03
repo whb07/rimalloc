@@ -2001,12 +2001,13 @@ Operation IDs:
   limited to reading initialized arena metadata, constructing non-zero
   `SliceCount` values after checked bounds, and packaging shared, exclusive, or
   parent arena role proofs into transparent wrappers.
-- `SAFETY[AUDIT:typed-atomic-usize-field]`: `src/types/atomic.rs` owns
-  temporary `AtomicUsize` views over caller-proven raw `usize` fields.
-- `SAFETY[AUDIT:typed-atomic-i64-field]`: `src/types/atomic.rs` owns
-  temporary `AtomicI64` views over caller-proven raw `i64` fields.
-- `SAFETY[AUDIT:typed-atomic-pointer-field]`: `src/types/atomic.rs` owns
-  temporary `AtomicPtr` views over caller-proven raw pointer fields.
+- `SAFETY[AUDIT:typed-atomic-usize-field]`: `src/types/atomic/fields.rs`
+  owns temporary `AtomicUsize` views over caller-proven raw `usize` fields.
+- `SAFETY[AUDIT:typed-atomic-i64-field]`: `src/types/atomic/fields.rs`
+  owns temporary `AtomicI64` views over caller-proven raw `i64` fields.
+- `SAFETY[AUDIT:typed-atomic-pointer-field]`:
+  `src/types/atomic/fields.rs` owns temporary `AtomicPtr` views over
+  caller-proven raw pointer fields.
 - `SAFETY[AUDIT:typed-atomic-page-thread-id]`: `src/types/atomic/page_thread.rs`
   owns typed page `xthread_id` load, flag, owner-store, and owner-CAS
   protocols.

@@ -871,7 +871,7 @@ unsafe fn mi_page_map_ensure_submap_at(
         // SAFETY[AUDIT:page-map-submap-publication-boundary]: typed index bounds the top-level slot
         // reinterpreted as an audited atomic pointer field.
         let atomic_submap =
-            crate::core_types::AtomicPtrField(unsafe { _mi_page_map.add(idx.get()) });
+            crate::core_types::AtomicPtrField::from_raw(unsafe { _mi_page_map.add(idx.get()) });
         // SAFETY[AUDIT:page-map-submap-publication-boundary]: acquire load observes any submap
         // published for this top-level slot.
         sub = unsafe { atomic_submap.load(crate::core_types::MemoryOrder::Acquire) };

@@ -258,7 +258,7 @@ impl PagePtr {
     #[inline(always)]
     pub(crate) unsafe fn thread_id_cell(self) -> AtomicPageThreadId {
         let raw = self.as_ptr();
-        AtomicPageThreadId(AtomicUsizeField(unsafe {
+        AtomicPageThreadId(AtomicUsizeField::from_raw(unsafe {
             ptr::addr_of_mut!((*raw).xthread_id)
         }))
     }
@@ -270,7 +270,7 @@ impl PagePtr {
     #[inline(always)]
     pub(crate) unsafe fn thread_free_cell(self) -> AtomicThreadFree {
         let raw = self.as_ptr();
-        AtomicThreadFree(AtomicUsizeField(unsafe {
+        AtomicThreadFree(AtomicUsizeField::from_raw(unsafe {
             ptr::addr_of_mut!((*raw).xthread_free)
         }))
     }
@@ -604,7 +604,7 @@ impl ThreadHeapPtr {
     #[inline(always)]
     pub(crate) unsafe fn heap_cell(self) -> AtomicPtrField<mi_heap_t> {
         let raw = self.as_ptr();
-        AtomicPtrField(unsafe { ptr::addr_of_mut!((*raw).heap) })
+        AtomicPtrField::from_raw(unsafe { ptr::addr_of_mut!((*raw).heap) })
     }
 
     /// # Safety
@@ -614,7 +614,7 @@ impl ThreadHeapPtr {
     #[inline(always)]
     pub(crate) unsafe fn refcount_cell(self) -> AtomicThreadHeapRefcount {
         let raw = self.as_ptr();
-        AtomicThreadHeapRefcount::from_field(AtomicUsizeField(unsafe {
+        AtomicThreadHeapRefcount::from_field(AtomicUsizeField::from_raw(unsafe {
             ptr::addr_of_mut!((*raw).refcount)
         }))
     }
@@ -1031,7 +1031,7 @@ impl ArenaPtr {
     #[inline(always)]
     pub(crate) unsafe fn purge_expire_cell(self) -> AtomicI64Field {
         let raw = self.as_ptr();
-        AtomicI64Field(unsafe { ptr::addr_of_mut!((*raw).purge_expire).cast::<i64>() })
+        AtomicI64Field::from_raw(unsafe { ptr::addr_of_mut!((*raw).purge_expire).cast::<i64>() })
     }
 
     /// # Safety
@@ -1144,7 +1144,7 @@ impl SubprocPtr {
     #[inline(always)]
     pub(crate) unsafe fn arena_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
-        AtomicUsizeField(unsafe { ptr::addr_of_mut!((*raw).arena_count).cast::<usize>() })
+        AtomicUsizeField::from_raw(unsafe { ptr::addr_of_mut!((*raw).arena_count).cast::<usize>() })
     }
 
     /// # Safety
@@ -1202,7 +1202,7 @@ impl SubprocPtr {
     #[inline(always)]
     pub(crate) unsafe fn purge_expire_cell(self) -> AtomicI64Field {
         let raw = self.as_ptr();
-        AtomicI64Field(unsafe { ptr::addr_of_mut!((*raw).purge_expire).cast::<i64>() })
+        AtomicI64Field::from_raw(unsafe { ptr::addr_of_mut!((*raw).purge_expire).cast::<i64>() })
     }
 
     /// # Safety
@@ -1258,7 +1258,9 @@ impl SubprocPtr {
     #[inline(always)]
     pub(crate) unsafe fn thread_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
-        AtomicUsizeField(unsafe { ptr::addr_of_mut!((*raw).thread_count).cast::<usize>() })
+        AtomicUsizeField::from_raw(unsafe {
+            ptr::addr_of_mut!((*raw).thread_count).cast::<usize>()
+        })
     }
 
     /// # Safety
@@ -1283,7 +1285,9 @@ impl SubprocPtr {
     #[inline(always)]
     pub(crate) unsafe fn thread_total_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
-        AtomicUsizeField(unsafe { ptr::addr_of_mut!((*raw).thread_total_count).cast::<usize>() })
+        AtomicUsizeField::from_raw(unsafe {
+            ptr::addr_of_mut!((*raw).thread_total_count).cast::<usize>()
+        })
     }
 
     /// # Safety
@@ -1308,7 +1312,7 @@ impl SubprocPtr {
     #[inline(always)]
     pub(crate) unsafe fn heap_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
-        AtomicUsizeField(unsafe { ptr::addr_of_mut!((*raw).heap_count).cast::<usize>() })
+        AtomicUsizeField::from_raw(unsafe { ptr::addr_of_mut!((*raw).heap_count).cast::<usize>() })
     }
 
     /// # Safety
@@ -1333,7 +1337,9 @@ impl SubprocPtr {
     #[inline(always)]
     pub(crate) unsafe fn heap_total_count_cell(self) -> AtomicUsizeField {
         let raw = self.as_ptr();
-        AtomicUsizeField(unsafe { ptr::addr_of_mut!((*raw).heap_total_count).cast::<usize>() })
+        AtomicUsizeField::from_raw(unsafe {
+            ptr::addr_of_mut!((*raw).heap_total_count).cast::<usize>()
+        })
     }
 
     /// # Safety

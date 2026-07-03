@@ -88,7 +88,7 @@ pub(super) unsafe fn mi_subproc_arena_cell(
     // SAFETY[AUDIT:arena-prefix-accessors]: the subproc prefix owns the arena
     // table and `arena_idx` has already been checked for the table domain.
     unsafe {
-        crate::core_types::AtomicPtrField(ptr::addr_of_mut!(
+        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(
             (*subproc.cast::<MiSubprocPrefix>()).arenas[arena_idx.get() as usize]
         ))
     }

@@ -50,7 +50,7 @@ pub(super) fn assert_page_map_marker_inventory(page_map: &str, unsafe_allowlist:
             && page_map.contains("static mut mi_page_map_memid")
             && page_map.contains("static mut mi_page_map_lock")
             && page_map.contains(
-                "crate::core_types::AtomicPtrField(unsafe { _mi_page_map.add(idx.get()) });"
+                "crate::core_types::AtomicPtrField::from_raw(unsafe { _mi_page_map.add(idx.get()) });"
             )
             && page_map
                 .contains("RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count)")

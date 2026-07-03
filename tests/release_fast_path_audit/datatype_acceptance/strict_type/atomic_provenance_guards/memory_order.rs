@@ -2,6 +2,7 @@ use super::DatatypeAcceptanceSources;
 
 pub(super) fn assert_memory_order_boundaries(audit_sources: &DatatypeAcceptanceSources<'_>) {
     let atomic_rs = audit_sources.source("src/types/atomic.rs");
+    let atomic_fields_rs = audit_sources.source("src/types/atomic/fields.rs");
     let internal_atomic_rs = audit_sources.source("src/internal/atomic.rs");
     let ptr_core_rs = audit_sources.source("src/types/ptr.rs");
 
@@ -16,7 +17,7 @@ pub(super) fn assert_memory_order_boundaries(audit_sources: &DatatypeAcceptanceS
             && internal_atomic_rs.contains("pub unsafe extern \"C\" fn mi_atomic_load_explicit(p: *const usize, mo: mi_memory_order_e) -> usize")
             && internal_atomic_rs.contains("pub unsafe extern \"C\" fn mi_atomic_store_explicit(p: *mut usize, x: usize, mo: mi_memory_order_e)")
             && atomic_rs.contains("pub(crate) type MemoryOrder = Ordering;")
-            && atomic_rs
+            && atomic_fields_rs
                 .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize")
             && ptr_core_rs
                 .contains("pub(crate) unsafe fn arena_count(self, order: MemoryOrder) -> ArenaCount")

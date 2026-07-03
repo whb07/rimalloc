@@ -89,7 +89,7 @@ pub(super) fn assert_padding_and_page_state_acceptance(
             }
         }
 
-        if rel != "src/types/atomic.rs" {
+        if rel != "src/types/atomic.rs" && rel != "src/types/atomic/fields.rs" {
             for atomic_cast in [
                 "AtomicUsize::from_ptr",
                 "cast::<AtomicUsize>",

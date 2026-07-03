@@ -1231,7 +1231,7 @@ unsafe fn _mi_theap_free_typed(
             ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return false,
         };
 
-        let heap = crate::core_types::AtomicPtrField(ptr::addr_of_mut!((*theap).heap))
+        let heap = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!((*theap).heap))
             .exchange_acq_rel(ptr::null_mut());
         if heap.is_null() {
             return false;

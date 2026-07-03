@@ -108,7 +108,7 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
         atomic_types.contains(
             "pub(crate) unsafe fn exchange_acq_rel(self, value: *mut T) -> *mut T"
         ) && theap_rs.contains(
-            "crate::core_types::AtomicPtrField(ptr::addr_of_mut!((*theap).heap))\n            .exchange_acq_rel(ptr::null_mut())"
+            "crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!((*theap).heap))\n            .exchange_acq_rel(ptr::null_mut())"
         ) && !theap_rs.contains("mi_atomic_exchange_ptr_acq_rel"),
         "_mi_theap_free should clear the heap pointer through AtomicPtrField"
     );

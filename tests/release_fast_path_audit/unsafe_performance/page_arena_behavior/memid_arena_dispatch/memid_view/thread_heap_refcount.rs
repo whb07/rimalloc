@@ -49,13 +49,13 @@ pub(super) fn assert_thread_heap_refcount_dispatch(sources: &PageArenaBehaviorSo
                 .contains("pub(crate) unsafe fn refcount_cell(self) -> AtomicThreadHeapRefcount")
             && sources
                 .ptr_rs
-                .contains("AtomicThreadHeapRefcount::from_field(AtomicUsizeField(")
+                .contains("AtomicThreadHeapRefcount::from_field(AtomicUsizeField::from_raw(")
             && sources.theap_rs.matches(".refcount_cell()").count() == 3
             && sources.theap_rs.contains(".incref_acq_rel();")
             && sources.theap_rs.contains(".decref_acq_rel()")
             && !sources
                 .theap_rs
-                .contains("AtomicUsizeField(ptr::addr_of_mut!((*theap).refcount))")
+                .contains("AtomicUsizeField::from_raw(ptr::addr_of_mut!((*theap).refcount))")
             && !sources
                 .theap_rs
                 .contains("mi_atomic_increment_acq_rel(ptr::addr_of_mut!((*theap).refcount))")

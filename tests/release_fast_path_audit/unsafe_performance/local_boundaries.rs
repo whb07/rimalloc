@@ -131,16 +131,16 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
     assert!(
         deferred_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_deferred_free(")
             && deferred_rs.contains("let heartbeat = mi_theap_increment_heartbeat(theap);")
-            && deferred_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .load(crate::core_types::MemoryOrder::Acquire);")
+            && deferred_rs.contains("crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_free))\n            .load(crate::core_types::MemoryOrder::Acquire);")
             && deferred_rs.contains(
                 "let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);"
             )
-            && deferred_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n                .load(crate::core_types::MemoryOrder::Acquire);")
+            && deferred_rs.contains("crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_arg))\n                .load(crate::core_types::MemoryOrder::Acquire);")
             && deferred_rs
                 .contains("let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);")
             && deferred_rs.contains(".store(arg.as_ptr(), crate::core_types::MemoryOrder::Release);")
             && deferred_rs.contains("let f = callback.storage_ptr();")
-            && deferred_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .store(f, crate::core_types::MemoryOrder::Release);")
+            && deferred_rs.contains("crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_free))\n            .store(f, crate::core_types::MemoryOrder::Release);")
             && !deferred_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free))")
             && !deferred_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_arg))")
             && !deferred_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_arg)")

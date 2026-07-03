@@ -262,7 +262,10 @@ fn thread_heap_ptr_field_helpers_read_and_write_thread_heap_fields() {
         assert_eq!(theap.heap().map(HeapPtr::as_ptr), Some(heap.as_ptr()));
         assert_eq!(theap.heartbeat().get(), 23);
         assert_eq!((*raw_theap).refcount, 1);
-        assert_eq!(theap.heap_cell().0, ptr::addr_of_mut!((*raw_theap).heap));
+        assert_eq!(
+            theap.heap_cell().raw_field(),
+            ptr::addr_of_mut!((*raw_theap).heap)
+        );
     }
 
     let mut raw_page = MaybeUninit::<mi_page_t>::zeroed();
@@ -364,7 +367,7 @@ fn tld_ptr_field_helpers_read_and_write_thread_local_fields() {
         );
         assert_eq!(tld.stats(), Some(ptr::addr_of_mut!((*raw_subproc).stats)));
         assert_eq!(
-            tld.arena_count_cell().map(|cell| cell.0),
+            tld.arena_count_cell().map(|cell| cell.raw_field()),
             Some(ptr::addr_of_mut!((*raw_subproc).arena_count).cast::<usize>())
         );
         assert_eq!(
@@ -513,7 +516,7 @@ fn arena_ptr_field_helpers_read_and_write_arena_fields() {
         assert_eq!(arena.slices_purge(), slices_purge.as_mut_ptr());
         assert_eq!(arena.memid_ptr(), ptr::addr_of_mut!((*raw_arena).memid));
         assert_eq!(
-            arena.purge_expire_cell().0,
+            arena.purge_expire_cell().raw_field(),
             ptr::addr_of_mut!((*raw_arena).purge_expire).cast::<i64>()
         );
         assert_eq!(
@@ -592,27 +595,27 @@ fn subproc_ptr_field_helpers_read_and_write_subproc_fields() {
         );
         assert_eq!(subproc.heaps().map(HeapPtr::as_ptr), Some(heap.as_ptr()));
         assert_eq!(
-            subproc.arena_count_cell().0,
+            subproc.arena_count_cell().raw_field(),
             ptr::addr_of_mut!((*raw_subproc).arena_count).cast::<usize>()
         );
         assert_eq!(
-            subproc.thread_count_cell().0,
+            subproc.thread_count_cell().raw_field(),
             ptr::addr_of_mut!((*raw_subproc).thread_count).cast::<usize>()
         );
         assert_eq!(
-            subproc.thread_total_count_cell().0,
+            subproc.thread_total_count_cell().raw_field(),
             ptr::addr_of_mut!((*raw_subproc).thread_total_count).cast::<usize>()
         );
         assert_eq!(
-            subproc.heap_count_cell().0,
+            subproc.heap_count_cell().raw_field(),
             ptr::addr_of_mut!((*raw_subproc).heap_count).cast::<usize>()
         );
         assert_eq!(
-            subproc.heap_total_count_cell().0,
+            subproc.heap_total_count_cell().raw_field(),
             ptr::addr_of_mut!((*raw_subproc).heap_total_count).cast::<usize>()
         );
         assert_eq!(
-            subproc.purge_expire_cell().0,
+            subproc.purge_expire_cell().raw_field(),
             ptr::addr_of_mut!((*raw_subproc).purge_expire).cast::<i64>()
         );
         assert_eq!(

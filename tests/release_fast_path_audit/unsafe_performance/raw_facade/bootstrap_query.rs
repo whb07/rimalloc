@@ -78,10 +78,10 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && internal.contains("pub(crate) fn mi_ptr_encode(")
             && internal.contains("crate::provenance::remember_encoded(word.get(), null, keys, p);")
             && internal.contains(
-                "crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())"
+                "crate::core_types::AtomicPtrField::from_raw(ptr::addr_of!((*theap).heap).cast_mut())"
             )
             && internal_boundary.contains(
-                "crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField("
+                "crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField::from_raw("
             )
             && internal.contains("unsafe fn mi_cpu_movsb_max() -> usize")
             && internal.contains("unsafe fn mi_cpu_stosb_max() -> usize")

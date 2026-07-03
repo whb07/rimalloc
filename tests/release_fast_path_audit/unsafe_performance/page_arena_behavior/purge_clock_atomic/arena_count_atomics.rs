@@ -4,13 +4,13 @@ pub(super) fn assert_arena_count_atomic_boundaries(sources: &PageArenaBehaviorSo
     assert!(
         sources
             .atomic_types
-            .contains("pub(crate) struct AtomicI64Field(pub(crate) *mut i64);")
+            .contains("pub(crate) struct AtomicI64Field(*mut i64);")
             && sources.atomic_types.contains(
                 "pub(crate) unsafe fn compare_exchange_acq_rel(self, expected: &mut i64, desired: i64) -> bool"
             )
             && sources
                 .arena_purge_rs
-                .matches("crate::core_types::AtomicI64Field(")
+                .matches("crate::core_types::AtomicI64Field::from_raw(")
                 .count()
                 == 7
             && sources
@@ -44,7 +44,7 @@ pub(super) fn assert_arena_count_atomic_boundaries(sources: &PageArenaBehaviorSo
     assert!(
         sources
             .atomic_types
-            .contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")
+            .contains("pub(crate) struct AtomicUsizeField(*mut usize);")
             && sources.atomic_types.contains("desired: usize,")
             && sources.atomic_types.contains(
                 "atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire)"

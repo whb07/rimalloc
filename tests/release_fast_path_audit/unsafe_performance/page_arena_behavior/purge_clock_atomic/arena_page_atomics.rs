@@ -64,7 +64,7 @@ pub(super) fn assert_arena_page_atomic_boundaries(sources: &PageArenaBehaviorSou
                 .contains("pub(crate) unsafe fn compare_exchange_release(")
             && sources
                 .arena_prefix_rs
-                .matches("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(")
+                .matches("crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(")
                 .count()
                 == 1
             && sources.arena_prefix_rs.contains(

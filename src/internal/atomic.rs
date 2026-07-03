@@ -157,7 +157,7 @@ pub struct mi_atomic_once_scope_t {
 pub unsafe fn mi_atomic_guard_enter(
     guard: *mut mi_atomic_guard_t,
 ) -> Option<mi_atomic_guard_scope_t> {
-    let field = crate::core_types::AtomicUsizeField(guard.cast::<usize>());
+    let field = crate::core_types::AtomicUsizeField::from_raw(guard.cast::<usize>());
     // SAFETY[AUDIT:internal-atomic-guard-once-boundary]: callers provide a live atomic guard
     // word and the typed guard wrapper owns release-on-drop.
     unsafe { crate::core_types::AtomicGuard::try_acquire(field) }

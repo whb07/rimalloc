@@ -199,7 +199,7 @@ impl ActivePage {
         let page = self.page();
         // SAFETY[AUDIT:typed-page-active-transition-boundary]: active page metadata is live;
         // a null free head means there is no available block witness.
-        if unsafe { (*page.as_ptr()).free.is_null() } {
+        if unsafe { page.free_raw().is_null() } {
             None
         } else {
             // SAFETY[AUDIT:typed-page-active-transition-boundary]: a non-null free head

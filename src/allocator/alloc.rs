@@ -94,7 +94,8 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
         let page_ptr = available.page();
         let page = page_ptr.as_ptr();
         let size = padded.get();
-        if (*page).block_size != 0 {
+        let block_size = page_ptr.block_size_raw();
+        if block_size != 0 {
             crate::internal::mi_assert_internal!(crate::internal::mi_page_block_size(page) >= size);
             crate::internal::mi_assert_internal!(_mi_is_aligned(
                 mi_page_slice_start(page).cast(),
@@ -114,8 +115,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
         let free = page_ptr.free().as_raw();
         crate::internal::mi_assert_internal!(free.is_null() || _mi_ptr_page(free.cast()) == page);
         crate::internal::mi_assert_internal!(
-            (*page).block_size < MI_MAX_ALIGN_SIZE
-                || _mi_is_aligned(block.cast(), MI_MAX_ALIGN_SIZE)
+            block_size < MI_MAX_ALIGN_SIZE || _mi_is_aligned(block.cast(), MI_MAX_ALIGN_SIZE)
         );
 
         if cfg!(debug_assertions) && (*page).free_is_zero && size > size_of::<mi_block_t>() {

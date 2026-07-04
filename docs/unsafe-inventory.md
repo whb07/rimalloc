@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5985 |
-| `unsafe_blocks` | 3510 |
-| `unsafe_fns` | 2041 |
+| `unsafe_mentions` | 5987 |
+| `unsafe_blocks` | 3511 |
+| `unsafe_fns` | 2042 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -145,7 +145,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/types/page_states/tests.rs` | 10 | 10 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/page_states.rs` | 65 | 44 | 21 | 0 | 0 | 0 | 0 |
 | `src/types/ptr/tests.rs` | 89 | 89 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/ptr.rs` | 372 | 148 | 224 | 0 | 0 | 0 | 0 |
+| `src/types/ptr.rs` | 374 | 149 | 225 | 0 | 0 | 0 | 0 |
 | `src/types/scalar/tests.rs` | 31 | 31 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/scalar.rs` | 33 | 17 | 16 | 0 | 0 | 0 | 0 |
 | `src/types/validation/tests.rs` | 3 | 3 | 0 | 0 | 0 | 0 | 0 |

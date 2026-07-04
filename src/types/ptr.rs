@@ -142,6 +142,16 @@ impl PagePtr {
     }
 
     /// # Safety
+    /// The page pointer must refer to initialized page metadata, or to fresh
+    /// metadata at a boundary where a zero block-size sentinel is valid.
+    // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    #[inline(always)]
+    pub(crate) unsafe fn block_size_raw(self) -> usize {
+        let raw = self.as_ptr();
+        unsafe { ptr::read(ptr::addr_of!((*raw).block_size)) }
+    }
+
+    /// # Safety
     /// The page pointer must refer to writable page metadata.
     // SAFETY[AUDIT:typed-page-scalar-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]

@@ -229,7 +229,7 @@ impl ActivePage {
         let page = self.page();
         // SAFETY[AUDIT:typed-page-active-transition-boundary]: active page metadata is live
         // and the used count determines the all-free witness.
-        let used = unsafe { (*page.as_ptr()).used };
+        let used = unsafe { page.used().get() };
         if used == 0 {
             // SAFETY[AUDIT:typed-page-active-transition-boundary]: zero used blocks proves
             // the active all-free page witness.
@@ -251,7 +251,7 @@ impl FullPage {
         let page = self.page();
         // SAFETY[AUDIT:typed-page-full-transition-boundary]: full page metadata is live
         // and the used count determines the all-free witness.
-        let used = unsafe { (*page.as_ptr()).used };
+        let used = unsafe { page.used().get() };
         if used == 0 {
             // SAFETY[AUDIT:typed-page-full-transition-boundary]: zero used blocks proves
             // the full all-free page witness.

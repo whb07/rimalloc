@@ -5,10 +5,7 @@ pub(crate) unsafe fn mi_page_block_size_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::BlockSize {
     // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        crate::internal::mi_assert_internal!((*page).block_size > 0);
-        crate::core_types::BlockSize::new_unchecked((*page).block_size)
-    }
+    unsafe { crate::core_types::PagePtr::new_unchecked(page.cast_mut()).block_size() }
 }
 
 /// # Safety

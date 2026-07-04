@@ -111,10 +111,11 @@ unsafe fn mi_abandoned_page_try_reclaim(
         #[cfg(feature = "bench-diagnostics")]
         crate::bench_diagnostics::abandoned_reclaim_attempt();
         let page_raw = page.page().as_ptr();
+        let block_size = page.page().block_size_raw();
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
         crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
         crate::internal::mi_assert_internal!(!mi_page_all_free(page_raw));
-        crate::internal::mi_assert_internal!((*page_raw).block_size <= MI_MEDIUM_MAX_OBJ_SIZE);
+        crate::internal::mi_assert_internal!(block_size <= MI_MEDIUM_MAX_OBJ_SIZE);
         crate::internal::mi_assert_internal!(reclaim_on_free.is_enabled());
 
         if !_mi_thread_is_initialized() {
@@ -161,7 +162,7 @@ unsafe fn mi_abandoned_page_try_reclaim(
                 crate::core_types::ThreadHeapLocal::new_unchecked(
                     crate::core_types::ThreadHeapPtr::new_unchecked(theap),
                 ),
-                crate::core_types::BlockSize::new_unchecked((*page_raw).block_size),
+                crate::core_types::BlockSize::new_unchecked(block_size),
                 max_reclaim,
             )
         {
@@ -199,6 +200,7 @@ pub(super) unsafe fn mi_free_try_collect_mt_typed(
     // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
         let page_raw = page.page().as_ptr();
+        let block_size = page.page().block_size_raw();
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
         crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
 
@@ -206,7 +208,7 @@ pub(super) unsafe fn mi_free_try_collect_mt_typed(
             crate::internal::mi_assert_internal!(false);
             return;
         };
-        let expected_thread_free = if (*page_raw).block_size <= MI_SMALL_SIZE_MAX {
+        let expected_thread_free = if block_size <= MI_SMALL_SIZE_MAX {
             crate::internal::mi_assert_internal!(
                 crate::page::mi_page_reserved_count(page_raw).get() >= 16
             );
@@ -237,7 +239,7 @@ pub(super) unsafe fn mi_free_try_collect_mt_typed(
         if mi_abandoned_page_try_free(page) {
             return;
         }
-        if (*page_raw).block_size <= MI_MEDIUM_MAX_OBJ_SIZE
+        if block_size <= MI_MEDIUM_MAX_OBJ_SIZE
             && reclaim_on_free.is_enabled()
             && mi_abandoned_page_try_reclaim(page, reclaim_on_free)
         {

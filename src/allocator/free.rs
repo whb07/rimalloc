@@ -1142,7 +1142,9 @@ pub unsafe extern "C" fn mi_free_small(p: *mut c_void) {
             page.cast::<c_void>()
                 == _mi_align_down_ptr(mi_page_start(page).cast(), MI_SMALL_PAGE_SIZE)
         );
-        crate::internal::mi_assert!((*page).block_size <= MI_SMALL_SIZE_MAX);
+        crate::internal::mi_assert!(
+            crate::core_types::PagePtr::new_unchecked(page).block_size_raw() <= MI_SMALL_SIZE_MAX
+        );
         mi_route_free(p, c"mi_free_small".as_ptr(), ptr::null_mut());
     }
 }

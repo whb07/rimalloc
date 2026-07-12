@@ -50,6 +50,7 @@ def main() -> None:
     parser.add_argument("--artifact-mode", required=True)
     parser.add_argument("--feature", action="append", dest="features", required=True)
     parser.add_argument("--host-profile", required=True)
+    parser.add_argument("--max-median-cv", type=float, default=0.10)
     parser.add_argument("--write-reviewed-baseline", action="store_true")
     args = parser.parse_args()
     if len(args.runs) != 5:
@@ -97,6 +98,12 @@ def main() -> None:
             raise SystemExit(f"baseline runs are incomplete for {benchmark_id}")
         medians = [sample[0] for sample in samples]
         p95s = [sample[1] for sample in samples]
+        median_cv = statistics.stdev(medians) / statistics.mean(medians)
+        if median_cv > args.max_median_cv:
+            raise SystemExit(
+                f"baseline median variation exceeds {args.max_median_cv:.1%} for "
+                f"{benchmark_id}: {median_cv:.1%}"
+            )
         if int(existing.get("schema", 1)) == 1:
             median_limit = float(entry["max_ratio"])
             p95_limit = float(entry["max_ratio"])
@@ -115,6 +122,7 @@ def main() -> None:
             "limits": {"median_ratio": median_limit, "p95_ratio": p95_limit},
             "host_profile": args.host_profile,
             "baseline_commit": next(iter(commits)),
+            "review": {"five_run_median_cv": median_cv},
         })
     document = {
         "schema": 2,

@@ -19,6 +19,7 @@ PROBE_C = r"""
 #include <mimalloc.h>
 
 #include <errno.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -522,6 +523,39 @@ static int trace_seed(uint64_t seed) {
   return ok && live == 0;
 }
 
+struct transition_result {
+  void* ptr;
+  size_t size;
+};
+
+static void* trace_owner_exit(void* raw) {
+  struct transition_result* result = (struct transition_result*)raw;
+  result->ptr = mi_malloc(result->size);
+  if (result->ptr != NULL) trace_fill(result->ptr, result->size, 77);
+  return NULL;
+}
+
+static int trace_transitions(void) {
+  struct transition_result result = {NULL, 4096};
+  pthread_t owner;
+  int started = pthread_create(&owner, NULL, trace_owner_exit, &result) == 0;
+  int joined = started && pthread_join(owner, NULL) == 0;
+  int remote_ok = joined && result.ptr != NULL &&
+                  trace_verify(result.ptr, result.size, 77) &&
+                  mi_check_owned(result.ptr);
+  printf("@@TRACE_TRANSITION name=owner_exit_remote_free started=%d joined=%d ok=%d\n",
+         started, joined, remote_ok);
+  mi_free(result.ptr);
+
+  mi_heap_t* heap = mi_heap_new();
+  void* heap_ptr = heap == NULL ? NULL : mi_heap_malloc(heap, 8192);
+  int destroy_ok = heap != NULL && heap_ptr != NULL && mi_heap_contains(heap, heap_ptr);
+  if (heap != NULL) mi_heap_destroy(heap);
+  printf("@@TRACE_TRANSITION name=heap_destroy ok=%d\n", destroy_ok);
+  mi_collect(true);
+  return remote_ok && destroy_ok;
+}
+
 int main(void) {
   static const uint64_t seeds[] = {
     0x4d595df4d0f33173ULL,
@@ -537,6 +571,7 @@ int main(void) {
   mi_option_set(mi_option_verbose, 0);
 
   ok = trace_edges() && ok;
+  ok = trace_transitions() && ok;
   for (size_t i = 0; i < sizeof(seeds) / sizeof(seeds[0]); i++) {
     ok = trace_seed(seeds[i]) && ok;
   }

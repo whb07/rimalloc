@@ -4,6 +4,17 @@ on:
   workflow_dispatch:
 
 jobs:
+  allocator-fuzz:
+    name: Allocator transition fuzz smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Run real allocator fuzz target
+        run: REQUIRE_REAL_FUZZ=1 scripts/check-fuzz-smoke.sh
+
   address-sanitizer:
     name: AddressSanitizer
     runs-on: ubuntu-24.04

@@ -45,6 +45,44 @@ The hotpath Criterion harness supports:
 - `MIMALLOC_HOTPATH_WARMUP_SECS`
 - `MIMALLOC_HOTPATH_NRESAMPLES`
 
+## Evidence-layer realism
+
+Run the public Rust facade and raw C ABI as separate Criterion groups:
+
+```sh
+cargo bench --features bench --bench evidence
+```
+
+The `workloads`, `hotpath`, and `evidence` harnesses preallocate pointer slots,
+layouts, random schedules, and persistent worker threads before Criterion enters
+the timed closure. Allocator operations and synchronization intrinsic to a
+concurrent workload remain timed; harness construction does not.
+
+Capture allocator and operating-system evidence with:
+
+```sh
+cargo run --release --features "std bench-diagnostics" --example evidence_report
+```
+
+The reporter emits one JSON object. `page_occupancy` is live binned block bytes
+divided by the capacity of live small, medium, and large allocator pages; huge
+allocations are excluded. `page_search_length` is candidates examined per page
+search. Tail latency is sampled separately for paired facade allocation/free
+and remote free. On Linux, RSS values are KiB and come from `getrusage`; both
+the process-lifetime peak and the delta from the pre-workload peak are emitted.
+`live_requested_bytes` is tracked by the reporter's live allocation set instead
+of mimalloc's cumulative requested-byte statistic. Minor and major page faults
+are workload deltas. Diagnostic counters, including
+`remote_free_cas_retries`, are benchmark-only and use relaxed atomics.
+
+The randomized C/Rust differential trace includes ordinary allocation,
+alignment, realloc, heap allocation, owner-exit remote free, heap destruction,
+and forced collection transitions:
+
+```sh
+scripts/check-differential-trace.py
+```
+
 ## Build Mode Comparability
 
 Hotpath results are only comparable when the Cargo feature set and artifact mode

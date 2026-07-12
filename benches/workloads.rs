@@ -21,6 +21,7 @@ use rand::seq::SliceRandom;
 #[cfg(feature = "compare")]
 use std::alloc::System;
 use std::alloc::{GlobalAlloc, Layout};
+use std::sync::mpsc;
 use std::time::Duration;
 
 /// Deterministic seed for reproducible benchmarks.
@@ -117,8 +118,11 @@ unsafe impl Send for SendPtr {}
 // Single-threaded alloc/free loop
 // ---------------------------------------------------------------------------
 
-fn bench_single_thread_workload<A: GlobalAlloc + Sync>(allocator: &A, sizes: &[usize]) -> usize {
-    let mut allocations = Vec::with_capacity(sizes.len());
+fn bench_single_thread_workload<A: GlobalAlloc + Sync>(
+    allocator: &A,
+    sizes: &[usize],
+    allocations: &mut Vec<(SendPtr, Layout)>,
+) -> usize {
     for &size in sizes {
         let layout = Layout::from_size_align(size, 8).unwrap();
         let ptr = unsafe { allocator.alloc(layout) };
@@ -144,11 +148,25 @@ fn run_single_thread(c: &mut Criterion, workload: Workload) {
 
     #[cfg(feature = "compare")]
     group.bench_function("system", |b| {
-        b.iter(|| black_box(bench_single_thread_workload(&SYSTEM, &sizes)))
+        let mut allocations = Vec::with_capacity(sizes.len());
+        b.iter(|| {
+            black_box(bench_single_thread_workload(
+                &SYSTEM,
+                &sizes,
+                &mut allocations,
+            ))
+        })
     });
 
+    let mut allocations = Vec::with_capacity(sizes.len());
     group.bench_function("mechanical_mimalloc", |b| {
-        b.iter(|| black_box(bench_single_thread_workload(&MECH_MIMALLOC, &sizes)))
+        b.iter(|| {
+            black_box(bench_single_thread_workload(
+                &MECH_MIMALLOC,
+                &sizes,
+                &mut allocations,
+            ))
+        })
     });
 
     group.finish();
@@ -158,44 +176,91 @@ fn run_single_thread(c: &mut Criterion, workload: Workload) {
 // Multi-threaded alloc/free loop (contention)
 // ---------------------------------------------------------------------------
 
-fn run_multi_thread_workload<A: GlobalAlloc + Sync + Send>(
-    allocator: &'static A,
-    workload: Workload,
-    threads: usize,
-) {
-    let handles: Vec<_> = (0..threads)
-        .map(|tid| {
-            let wl = workload;
-            std::thread::spawn(move || {
-                let mut rng = StdRng::seed_from_u64(BENCH_SEED.wrapping_add(tid as u64));
-                let mut allocations = Vec::new();
-                for _ in 0..5000 {
-                    let size = match wl {
-                        Workload::RandomSmall => rng.gen_range(8..=1024),
-                        Workload::FixedSize(s) => s,
-                        Workload::Increasing => rng.gen_range(8..=1024),
-                        Workload::HighFragmentation => {
-                            if rng.gen_bool(0.5) {
-                                64
-                            } else {
-                                32
+enum WorkerCommand {
+    Run,
+    Stop,
+}
+
+struct MultiThreadHarness {
+    commands: Vec<mpsc::SyncSender<WorkerCommand>>,
+    done: mpsc::Receiver<()>,
+    workers: Vec<std::thread::JoinHandle<()>>,
+}
+
+impl MultiThreadHarness {
+    fn new<A: GlobalAlloc + Sync + Send + 'static>(
+        allocator: &'static A,
+        workload: Workload,
+        threads: usize,
+    ) -> Self {
+        let (done_tx, done_rx) = mpsc::sync_channel(threads);
+        let mut commands = Vec::with_capacity(threads);
+        let workers = (0..threads)
+            .map(|tid| {
+                let (command_tx, command_rx) = mpsc::sync_channel(1);
+                commands.push(command_tx);
+                let done_tx = done_tx.clone();
+                std::thread::spawn(move || {
+                    let mut rng = StdRng::seed_from_u64(BENCH_SEED.wrapping_add(tid as u64));
+                    let sizes: Vec<_> = (0..5000)
+                        .map(|_| match workload {
+                            Workload::RandomSmall => rng.gen_range(8..=1024),
+                            Workload::FixedSize(s) => s,
+                            Workload::Increasing => rng.gen_range(8..=1024),
+                            Workload::HighFragmentation => {
+                                if rng.gen_bool(0.5) {
+                                    64
+                                } else {
+                                    32
+                                }
+                            }
+                        })
+                        .collect();
+                    let mut allocations = Vec::with_capacity(sizes.len());
+                    while let Ok(command) = command_rx.recv() {
+                        if matches!(command, WorkerCommand::Stop) {
+                            break;
+                        }
+                        for &size in &sizes {
+                            let layout = Layout::from_size_align(size, 8).unwrap();
+                            let ptr = unsafe { allocator.alloc(layout) };
+                            if !ptr.is_null() {
+                                allocations.push((SendPtr(ptr), layout));
                             }
                         }
-                    };
-                    let layout = Layout::from_size_align(size, 8).unwrap();
-                    let ptr = unsafe { allocator.alloc(layout) };
-                    if !ptr.is_null() {
-                        allocations.push((SendPtr(ptr), layout));
+                        for (ptr, layout) in allocations.drain(..) {
+                            unsafe { allocator.dealloc(ptr.0, layout) };
+                        }
+                        done_tx.send(()).unwrap();
                     }
-                }
-                for (ptr, layout) in allocations {
-                    unsafe { allocator.dealloc(ptr.0, layout) };
-                }
+                })
             })
-        })
-        .collect();
-    for h in handles {
-        h.join().unwrap();
+            .collect();
+        Self {
+            commands,
+            done: done_rx,
+            workers,
+        }
+    }
+
+    fn run(&self) {
+        for command in &self.commands {
+            command.send(WorkerCommand::Run).unwrap();
+        }
+        for _ in &self.commands {
+            self.done.recv().unwrap();
+        }
+    }
+}
+
+impl Drop for MultiThreadHarness {
+    fn drop(&mut self) {
+        for command in &self.commands {
+            let _ = command.send(WorkerCommand::Stop);
+        }
+        for worker in self.workers.drain(..) {
+            worker.join().unwrap();
+        }
     }
 }
 
@@ -210,16 +275,20 @@ fn run_multi_thread(c: &mut Criterion, workload: Workload) {
     let num_cpus = logical_cpus();
     for num_threads in [2, 4, 8, 16].into_iter().filter(|&t| t <= num_cpus * 2) {
         #[cfg(feature = "compare")]
-        group.bench_with_input(
-            BenchmarkId::new("system", num_threads),
-            &num_threads,
-            |b, &threads| b.iter(|| run_multi_thread_workload(&SYSTEM, workload, threads)),
-        );
+        {
+            let harness = MultiThreadHarness::new(&SYSTEM, workload, num_threads);
+            group.bench_with_input(
+                BenchmarkId::new("system", num_threads),
+                &num_threads,
+                |b, _| b.iter(|| harness.run()),
+            );
+        }
 
+        let harness = MultiThreadHarness::new(&MECH_MIMALLOC, workload, num_threads);
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc", num_threads),
             &num_threads,
-            |b, &threads| b.iter(|| run_multi_thread_workload(&MECH_MIMALLOC, workload, threads)),
+            |b, _| b.iter(|| harness.run()),
         );
     }
 
@@ -230,23 +299,23 @@ fn run_multi_thread(c: &mut Criterion, workload: Workload) {
 // Fragmentation stress (random free order)
 // ---------------------------------------------------------------------------
 
-fn run_fragmentation<A: GlobalAlloc + Sync>(allocator: &A) -> usize {
-    let object_count = 100_000;
-    let mut rng = StdRng::seed_from_u64(BENCH_SEED);
-    let mut allocations = Vec::with_capacity(object_count);
-    for _ in 0..object_count {
-        let size = rng.gen_range(24..=256);
-        let layout = Layout::from_size_align(size, 8).unwrap();
+fn run_fragmentation<A: GlobalAlloc + Sync>(
+    allocator: &A,
+    layouts: &[Layout],
+    free_order: &[usize],
+    allocations: &mut [*mut u8],
+) -> usize {
+    for (slot, &layout) in allocations.iter_mut().zip(layouts) {
         let ptr = unsafe { allocator.alloc(layout) };
+        *slot = ptr;
+    }
+    for &index in free_order {
+        let ptr = allocations[index];
         if !ptr.is_null() {
-            allocations.push((ptr, layout));
+            unsafe { allocator.dealloc(ptr, layouts[index]) };
         }
     }
-    allocations.shuffle(&mut rng);
-    for (ptr, layout) in allocations.drain(..) {
-        unsafe { allocator.dealloc(ptr, layout) };
-    }
-    object_count
+    layouts.len()
 }
 
 fn bench_fragmentation(c: &mut Criterion) {
@@ -256,14 +325,36 @@ fn bench_fragmentation(c: &mut Criterion) {
     group.noise_threshold(0.025);
     group.nresamples(150_000);
     group.throughput(Throughput::Elements(100_000));
+    let mut rng = StdRng::seed_from_u64(BENCH_SEED);
+    let layouts: Vec<_> = (0..100_000)
+        .map(|_| Layout::from_size_align(rng.gen_range(24..=256), 8).unwrap())
+        .collect();
+    let mut free_order: Vec<_> = (0..layouts.len()).collect();
+    free_order.shuffle(&mut rng);
 
     #[cfg(feature = "compare")]
     group.bench_function("system/random_free_order", |b| {
-        b.iter(|| black_box(run_fragmentation(&SYSTEM)))
+        let mut allocations = vec![std::ptr::null_mut(); layouts.len()];
+        b.iter(|| {
+            black_box(run_fragmentation(
+                &SYSTEM,
+                &layouts,
+                &free_order,
+                &mut allocations,
+            ))
+        })
     });
 
+    let mut allocations = vec![std::ptr::null_mut(); layouts.len()];
     group.bench_function("mechanical_mimalloc/random_free_order", |b| {
-        b.iter(|| black_box(run_fragmentation(&MECH_MIMALLOC)))
+        b.iter(|| {
+            black_box(run_fragmentation(
+                &MECH_MIMALLOC,
+                &layouts,
+                &free_order,
+                &mut allocations,
+            ))
+        })
     });
 
     group.finish();
@@ -273,22 +364,22 @@ fn bench_fragmentation(c: &mut Criterion) {
 // Lifecycle churn: repeated alloc/grow-via-realloc/free
 // ---------------------------------------------------------------------------
 
-fn run_realloc_churn<A: GlobalAlloc + Sync>(allocator: &A) -> usize {
-    let rounds = 4000;
-    let mut rng = StdRng::seed_from_u64(BENCH_SEED);
-    let mut allocations: Vec<(*mut u8, Layout)> = Vec::with_capacity(rounds);
-    for _ in 0..rounds {
-        let size = rng.gen_range(16..=512);
-        let layout = Layout::from_size_align(size, 8).unwrap();
+fn run_realloc_churn<A: GlobalAlloc + Sync>(
+    allocator: &A,
+    initial_layouts: &[Layout],
+    growth: &[[usize; 3]],
+    allocations: &mut Vec<(*mut u8, Layout)>,
+) -> usize {
+    for &layout in initial_layouts {
         let ptr = unsafe { allocator.alloc(layout) };
         if !ptr.is_null() {
             allocations.push((ptr, layout));
         }
     }
     // Grow each allocation a few times.
-    for (ptr, layout) in allocations.iter_mut() {
-        for _ in 0..3 {
-            let new_size = layout.size() + rng.gen_range(16..=128);
+    for ((ptr, layout), increments) in allocations.iter_mut().zip(growth) {
+        for increment in increments {
+            let new_size = layout.size() + increment;
             let np = unsafe { allocator.realloc(*ptr, *layout, new_size) };
             if !np.is_null() {
                 *ptr = np;
@@ -299,7 +390,7 @@ fn run_realloc_churn<A: GlobalAlloc + Sync>(allocator: &A) -> usize {
     for (ptr, layout) in allocations.drain(..) {
         unsafe { allocator.dealloc(ptr, layout) };
     }
-    rounds
+    initial_layouts.len()
 }
 
 fn bench_realloc_churn(c: &mut Criterion) {
@@ -308,14 +399,43 @@ fn bench_realloc_churn(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(10));
     group.noise_threshold(0.025);
     group.nresamples(150_000);
+    let mut rng = StdRng::seed_from_u64(BENCH_SEED);
+    let initial_layouts: Vec<_> = (0..4000)
+        .map(|_| Layout::from_size_align(rng.gen_range(16..=512), 8).unwrap())
+        .collect();
+    let growth: Vec<_> = (0..4000)
+        .map(|_| {
+            [
+                rng.gen_range(16..=128),
+                rng.gen_range(16..=128),
+                rng.gen_range(16..=128),
+            ]
+        })
+        .collect();
 
     #[cfg(feature = "compare")]
     group.bench_function("system", |b| {
-        b.iter(|| black_box(run_realloc_churn(&SYSTEM)))
+        let mut allocations = Vec::with_capacity(initial_layouts.len());
+        b.iter(|| {
+            black_box(run_realloc_churn(
+                &SYSTEM,
+                &initial_layouts,
+                &growth,
+                &mut allocations,
+            ))
+        })
     });
 
+    let mut allocations = Vec::with_capacity(initial_layouts.len());
     group.bench_function("mechanical_mimalloc", |b| {
-        b.iter(|| black_box(run_realloc_churn(&MECH_MIMALLOC)))
+        b.iter(|| {
+            black_box(run_realloc_churn(
+                &MECH_MIMALLOC,
+                &initial_layouts,
+                &growth,
+                &mut allocations,
+            ))
+        })
     });
 
     group.finish();

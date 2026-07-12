@@ -240,8 +240,8 @@ pub(crate) use types as core_types;
 pub use safe::{
     AllocError, Allocation, GlobalOptions, Heap, HeapAllocation, HeapError, HeapRef,
     InitializedAllocation, InitializedHeapAllocation, LayoutError, MainHeap, OptionError,
-    OptionKey, ProcessInfo, ResizeError, ResizeErrorKind, StatCount, StatTotal, StatsError,
-    StatsSnapshot, TryAllocError,
+    OptionKey, PageOccupancy, ProcessInfo, ResizeError, ResizeErrorKind, StatCount, StatTotal,
+    StatsError, StatsSnapshot, TryAllocError,
 };
 
 /// Rust [`GlobalAlloc`](core::alloc::GlobalAlloc) facade backed by the crate's

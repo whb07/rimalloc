@@ -106,6 +106,8 @@ impl AtomicThreadFree {
         } {
             Ok(new_tf)
         } else {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::remote_free_cas_retry();
             *old = ThreadFreeWord::from_raw(expected);
             Err(*old)
         }

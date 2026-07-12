@@ -19,7 +19,11 @@ pub const MI_BCHUNK_BITS_SHIFT: usize = crate::bits::MI_SIZE_SHIFT + 6;
 
 pub const MI_SECURE: usize = crate::internal::MI_SECURE;
 const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
-pub const MI_STAT: usize = if MI_DEBUG > 0 { 2 } else { 0 };
+pub const MI_STAT: usize = if MI_DEBUG > 0 || cfg!(feature = "bench-diagnostics") {
+    2
+} else {
+    0
+};
 pub const MI_GUARDED: usize = crate::internal::MI_GUARDED;
 pub const MI_PADDING: usize = if cfg!(feature = "secure")
     || MI_DEBUG >= 1

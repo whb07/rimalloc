@@ -8,7 +8,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::options::mi_option_t;
 
-const COUNTER_COUNT: usize = 36;
+const COUNTER_COUNT: usize = 37;
 
 #[repr(usize)]
 #[derive(Clone, Copy)]
@@ -49,6 +49,7 @@ enum Counter {
     OptionReadsPageMaxReclaim,
     OptionReadsPageCrossThreadMaxReclaim,
     OptionReadsPageMaxCandidates,
+    RemoteFreeCasRetries,
 }
 
 const COUNTER_NAMES: [&str; COUNTER_COUNT] = [
@@ -88,6 +89,7 @@ const COUNTER_NAMES: [&str; COUNTER_COUNT] = [
     "option_reads_page_max_reclaim",
     "option_reads_page_cross_thread_max_reclaim",
     "option_reads_page_max_candidates",
+    "remote_free_cas_retries",
 ];
 
 static COUNTERS: [AtomicU64; COUNTER_COUNT] = [const { AtomicU64::new(0) }; COUNTER_COUNT];
@@ -220,6 +222,11 @@ pub(crate) fn page_queue_search(candidates_scanned: usize, success: bool, failed
     if failed_extend {
         inc(Counter::PageQueueFailedExtend, 1);
     }
+}
+
+#[inline(always)]
+pub(crate) fn remote_free_cas_retry() {
+    inc(Counter::RemoteFreeCasRetries, 1);
 }
 
 #[inline(always)]
@@ -398,6 +405,21 @@ mod tests {
         assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
         assert!(snapshot.values[counter as usize] >= sentinel as c_ulonglong);
 
+        mi_bench_diagnostics_reset();
+    }
+
+    #[test]
+    fn remote_free_retry_counter_is_reported() {
+        let _guard = test_lock();
+        mi_bench_diagnostics_reset();
+        remote_free_cas_retry();
+        let mut snapshot = mi_bench_diagnostics_snapshot_t {
+            values: [0; COUNTER_COUNT],
+        };
+        // SAFETY[AUDIT:bench-diagnostics-ffi]: `snapshot` is writable storage
+        // for exactly one diagnostic snapshot.
+        assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
+        assert_eq!(snapshot.values[Counter::RemoteFreeCasRetries as usize], 1);
         mi_bench_diagnostics_reset();
     }
 

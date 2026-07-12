@@ -4,9 +4,20 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
+[package.metadata]
+cargo-fuzz = true
+
 [dependencies]
+libfuzzer-sys = "0.4"
 mechanical_mimalloc = { path = "..", features = ["std"] }
 
 [[bin]]
 name = "alloc_sequences"
 path = "fuzz_targets/alloc_sequences.rs"
+
+[[bin]]
+name = "allocator_transitions"
+path = "fuzz_targets/allocator_transitions.rs"
+test = false
+doc = false
+bench = false

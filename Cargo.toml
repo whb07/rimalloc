@@ -182,6 +182,12 @@ path = "benches/mimalloc_bench.rs"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "evidence"
+path = "benches/evidence.rs"
+harness = false
+required-features = ["bench"]
+
 [[example]]
 name = "aligned"
 path = "examples/aligned.rs"
@@ -195,6 +201,11 @@ required-features = ["std"]
 [[example]]
 name = "ffi"
 path = "examples/ffi.rs"
+required-features = ["std"]
+
+[[example]]
+name = "evidence_report"
+path = "examples/evidence_report.rs"
 required-features = ["std"]
 
 [[example]]

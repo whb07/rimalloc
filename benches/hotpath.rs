@@ -294,38 +294,64 @@ fn bench_free_only(c: &mut Criterion) {
 // spawn or channel synchronization in the measured duration.
 // ---------------------------------------------------------------------------
 
-fn remote_free_once<A: GlobalAlloc + Sync + 'static>(alloc: &'static A, size: usize) -> Duration {
-    let (pool_tx, pool_rx) = mpsc::sync_channel(0);
-    let (done_tx, done_rx) = mpsc::sync_channel(0);
-
-    let owner = thread::spawn(move || {
-        let mut pool = PtrPool::new();
-        fill(alloc, size, &mut pool);
-        pool_tx.send(pool).expect("send remote-free pool");
-        done_rx.recv().expect("wait for remote-free completion");
-    });
-
-    let mut pool = pool_rx.recv().expect("receive remote-free pool");
-    let started = Instant::now();
-    let freed = free_routine(alloc, &mut pool);
-    let elapsed = started.elapsed();
-    hint_black_box(freed);
-
-    done_tx.send(()).expect("signal remote-free completion");
-    owner.join().expect("remote-free owner thread");
-    elapsed
+enum OwnerCommand {
+    Fill(usize),
+    Stop,
 }
 
-fn remote_free<A: GlobalAlloc + Sync + 'static>(
-    alloc: &'static A,
-    size: usize,
-    iterations: u64,
-) -> Duration {
-    let mut total = Duration::ZERO;
-    for _ in 0..iterations {
-        total += remote_free_once(alloc, size);
+struct RemoteFreeHarness {
+    commands: mpsc::SyncSender<OwnerCommand>,
+    pools: mpsc::Receiver<PtrPool>,
+    owner: Option<thread::JoinHandle<()>>,
+}
+
+impl RemoteFreeHarness {
+    fn new<A: GlobalAlloc + Sync + 'static>(alloc: &'static A) -> Self {
+        let (command_tx, command_rx) = mpsc::sync_channel(1);
+        let (pool_tx, pool_rx) = mpsc::sync_channel(1);
+        let owner = thread::spawn(move || {
+            while let Ok(command) = command_rx.recv() {
+                match command {
+                    OwnerCommand::Fill(size) => {
+                        let mut pool = PtrPool::new();
+                        fill(alloc, size, &mut pool);
+                        if pool_tx.send(pool).is_err() {
+                            break;
+                        }
+                    }
+                    OwnerCommand::Stop => break,
+                }
+            }
+        });
+        Self {
+            commands: command_tx,
+            pools: pool_rx,
+            owner: Some(owner),
+        }
     }
-    total
+
+    fn run<A: GlobalAlloc>(&self, alloc: &A, size: usize, iterations: u64) -> Duration {
+        let mut total = Duration::ZERO;
+        for _ in 0..iterations {
+            self.commands
+                .send(OwnerCommand::Fill(size))
+                .expect("request owner allocation");
+            let mut pool = self.pools.recv().expect("receive owner allocation");
+            let started = Instant::now();
+            hint_black_box(free_routine(alloc, &mut pool));
+            total += started.elapsed();
+        }
+        total
+    }
+}
+
+impl Drop for RemoteFreeHarness {
+    fn drop(&mut self) {
+        let _ = self.commands.send(OwnerCommand::Stop);
+        if let Some(owner) = self.owner.take() {
+            owner.join().expect("remote-free owner thread");
+        }
+    }
 }
 
 fn bench_remote_free(c: &mut Criterion) {
@@ -340,14 +366,18 @@ fn bench_remote_free(c: &mut Criterion) {
         group.throughput(Throughput::Elements(POOL_SIZE as u64));
 
         #[cfg(feature = "compare")]
-        group.bench_with_input(BenchmarkId::new("system", size), &size, |b, &size| {
-            b.iter_custom(|iterations| remote_free(&SYS, size, iterations))
-        });
+        {
+            let harness = RemoteFreeHarness::new(&SYS);
+            group.bench_with_input(BenchmarkId::new("system", size), &size, |b, &size| {
+                b.iter_custom(|iterations| harness.run(&SYS, size, iterations))
+            });
+        }
 
+        let harness = RemoteFreeHarness::new(&MECH);
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc", size),
             &size,
-            |b, &size| b.iter_custom(|iterations| remote_free(&MECH, size, iterations)),
+            |b, &size| b.iter_custom(|iterations| harness.run(&MECH, size, iterations)),
         );
     }
     group.finish();
@@ -359,17 +389,15 @@ fn bench_remote_free(c: &mut Criterion) {
 // pattern mimalloc's fast path is optimised for.
 // ---------------------------------------------------------------------------
 
-fn lifo_stack<A: GlobalAlloc>(alloc: &A, size: usize, depth: usize) -> usize {
+fn lifo_stack<A: GlobalAlloc>(alloc: &A, size: usize, depth: usize, pool: &mut PtrPool) -> usize {
     let layout = Layout::from_size_align(size, 8).unwrap();
-    // On-stack ring to avoid allocator traffic; depth must be <= POOL_SIZE.
-    let mut stack = vec![std::ptr::null_mut::<u8>(); depth];
     let mut ops = 0usize;
-    for slot in stack.iter_mut() {
-        *slot = unsafe { alloc.alloc(layout) };
+    for i in 0..depth {
+        *pool.slot(i) = (unsafe { alloc.alloc(layout) }, layout);
         ops += 1;
     }
-    for slot in stack.into_iter().rev() {
-        unsafe { alloc.dealloc(slot, layout) };
+    for i in (0..depth).rev() {
+        unsafe { alloc.dealloc(pool.slot(i).0, layout) };
         ops += 1;
     }
     hint_black_box(ops)
@@ -389,18 +417,19 @@ fn bench_lifo_stack(c: &mut Criterion) {
 
     for &(size, depth) in cases {
         group.throughput(Throughput::Elements((depth * 2) as u64));
+        let mut pool = PtrPool::new();
 
         #[cfg(feature = "compare")]
         group.bench_with_input(
             BenchmarkId::new("system", format!("{size}/{depth}")),
             &(size, depth),
-            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&SYS, s, d))),
+            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&SYS, s, d, &mut pool))),
         );
 
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc", format!("{size}/{depth}")),
             &(size, depth),
-            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&MECH, s, d))),
+            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&MECH, s, d, &mut pool))),
         );
     }
     group.finish();

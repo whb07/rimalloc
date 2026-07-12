@@ -3,12 +3,13 @@
 
 //! Allocator workload benchmarks for mechanical_mimalloc.
 //!
-//! Mirrors the workload shape from yet-another-mimalloc-rs, but drives the
-//! allocator through the crate's C-ABI (`mi_malloc`/`mi_free`) via a `GlobalAlloc`
-//! shim, since this crate does not expose a native Rust `GlobalAlloc` impl.
+//! Mirrors the workload shape from yet-another-mimalloc-rs and measures the
+//! crate's public `MiMalloc` `GlobalAlloc` facade.
 //!
 //! Run with: `cargo bench --features bench`
 //! Compare against system: add `--features bench,compare`
+
+mod support;
 
 use criterion::{
     AxisScale, BenchmarkId, Criterion, PlotConfiguration, Throughput, black_box, criterion_group,
@@ -18,55 +19,15 @@ use rand::SeedableRng;
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-#[cfg(feature = "compare")]
-use std::alloc::System;
 use std::alloc::{GlobalAlloc, Layout};
 use std::sync::mpsc;
 use std::time::Duration;
+use support::allocators::PUBLIC_MIMALLOC;
+#[cfg(feature = "compare")]
+use support::allocators::SYSTEM_ALLOCATOR;
 
 /// Deterministic seed for reproducible benchmarks.
 const BENCH_SEED: u64 = 0xDEADBEEF_CAFEBABE;
-
-/// `GlobalAlloc` shim over mechanical_mimalloc's C-ABI entry points.
-struct MechanicalMiMalloc;
-
-unsafe impl GlobalAlloc for MechanicalMiMalloc {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if layout.align() <= 16 {
-            mechanical_mimalloc::raw::mi_malloc(layout.size()).cast()
-        } else {
-            mechanical_mimalloc::raw::mi_malloc_aligned(layout.size(), layout.align()).cast()
-        }
-    }
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        if layout.align() <= 16 {
-            mechanical_mimalloc::raw::mi_calloc(1, layout.size()).cast()
-        } else {
-            // Fall back to alloc + memset for over-aligned zeroed requests.
-            let p = self.alloc(layout);
-            if !p.is_null() {
-                std::ptr::write_bytes(p, 0, layout.size());
-            }
-            p
-        }
-    }
-    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        mechanical_mimalloc::raw::mi_free(ptr.cast());
-    }
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        if layout.align() <= 16 {
-            mechanical_mimalloc::raw::mi_realloc(ptr.cast(), new_size).cast()
-        } else {
-            mechanical_mimalloc::raw::mi_realloc_aligned(ptr.cast(), new_size, layout.align())
-                .cast()
-        }
-    }
-}
-
-static MECH_MIMALLOC: MechanicalMiMalloc = MechanicalMiMalloc;
-
-#[cfg(feature = "compare")]
-static SYSTEM: System = System;
 
 #[inline]
 fn logical_cpus() -> usize {
@@ -151,7 +112,7 @@ fn run_single_thread(c: &mut Criterion, workload: Workload) {
         let mut allocations = Vec::with_capacity(sizes.len());
         b.iter(|| {
             black_box(bench_single_thread_workload(
-                &SYSTEM,
+                &SYSTEM_ALLOCATOR,
                 &sizes,
                 &mut allocations,
             ))
@@ -159,10 +120,10 @@ fn run_single_thread(c: &mut Criterion, workload: Workload) {
     });
 
     let mut allocations = Vec::with_capacity(sizes.len());
-    group.bench_function("mechanical_mimalloc", |b| {
+    group.bench_function("mechanical_mimalloc_public", |b| {
         b.iter(|| {
             black_box(bench_single_thread_workload(
-                &MECH_MIMALLOC,
+                &PUBLIC_MIMALLOC,
                 &sizes,
                 &mut allocations,
             ))
@@ -276,7 +237,7 @@ fn run_multi_thread(c: &mut Criterion, workload: Workload) {
     for num_threads in [2, 4, 8, 16].into_iter().filter(|&t| t <= num_cpus * 2) {
         #[cfg(feature = "compare")]
         {
-            let harness = MultiThreadHarness::new(&SYSTEM, workload, num_threads);
+            let harness = MultiThreadHarness::new(&SYSTEM_ALLOCATOR, workload, num_threads);
             group.bench_with_input(
                 BenchmarkId::new("system", num_threads),
                 &num_threads,
@@ -284,9 +245,9 @@ fn run_multi_thread(c: &mut Criterion, workload: Workload) {
             );
         }
 
-        let harness = MultiThreadHarness::new(&MECH_MIMALLOC, workload, num_threads);
+        let harness = MultiThreadHarness::new(&PUBLIC_MIMALLOC, workload, num_threads);
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc", num_threads),
+            BenchmarkId::new("mechanical_mimalloc_public", num_threads),
             &num_threads,
             |b, _| b.iter(|| harness.run()),
         );
@@ -337,7 +298,7 @@ fn bench_fragmentation(c: &mut Criterion) {
         let mut allocations = vec![std::ptr::null_mut(); layouts.len()];
         b.iter(|| {
             black_box(run_fragmentation(
-                &SYSTEM,
+                &SYSTEM_ALLOCATOR,
                 &layouts,
                 &free_order,
                 &mut allocations,
@@ -346,10 +307,10 @@ fn bench_fragmentation(c: &mut Criterion) {
     });
 
     let mut allocations = vec![std::ptr::null_mut(); layouts.len()];
-    group.bench_function("mechanical_mimalloc/random_free_order", |b| {
+    group.bench_function("mechanical_mimalloc_public/random_free_order", |b| {
         b.iter(|| {
             black_box(run_fragmentation(
-                &MECH_MIMALLOC,
+                &PUBLIC_MIMALLOC,
                 &layouts,
                 &free_order,
                 &mut allocations,
@@ -418,7 +379,7 @@ fn bench_realloc_churn(c: &mut Criterion) {
         let mut allocations = Vec::with_capacity(initial_layouts.len());
         b.iter(|| {
             black_box(run_realloc_churn(
-                &SYSTEM,
+                &SYSTEM_ALLOCATOR,
                 &initial_layouts,
                 &growth,
                 &mut allocations,
@@ -427,10 +388,10 @@ fn bench_realloc_churn(c: &mut Criterion) {
     });
 
     let mut allocations = Vec::with_capacity(initial_layouts.len());
-    group.bench_function("mechanical_mimalloc", |b| {
+    group.bench_function("mechanical_mimalloc_public", |b| {
         b.iter(|| {
             black_box(run_realloc_churn(
-                &MECH_MIMALLOC,
+                &PUBLIC_MIMALLOC,
                 &initial_layouts,
                 &growth,
                 &mut allocations,

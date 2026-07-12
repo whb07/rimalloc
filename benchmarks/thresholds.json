@@ -7,7 +7,7 @@
   ],
   "thresholds": [
     {
-      "id": "hotpath/paired_alloc_free/mechanical_mimalloc/16",
+      "id": "hotpath/paired_alloc_free/mechanical_mimalloc_public/16",
       "category": "hot-path allocation",
       "baseline_median_ns": 40000.0,
       "max_ratio": 1.25

@@ -15,6 +15,8 @@ export MIMALLOC_BENCH_ALLOCATORS="${MIMALLOC_BENCH_ALLOCATORS:-rust,c}"
 default_target_dir="${MIMALLOC_BENCH_DEFAULT_TARGET_DIR:-target/bench-full/default-rust}"
 interpose_target_dir="${MIMALLOC_BENCH_INTERPOSE_TARGET_DIR:-target/bench-full/interpose}"
 
+run scripts/run-bench-clean.sh "$default_target_dir" "$interpose_target_dir"
+
 run env CARGO_TARGET_DIR="$default_target_dir" cargo check --benches --features "bench compare"
 run env CARGO_TARGET_DIR="$interpose_target_dir" cargo check --benches --features "bench interpose"
 run scripts/check-bench-thresholds.py --self-test

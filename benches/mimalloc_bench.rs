@@ -296,8 +296,22 @@ fn find_mimalloc_shared_lib(build_dir: &Path) -> Option<PathBuf> {
     None
 }
 
+fn cargo_target_dir(root: &Path) -> PathBuf {
+    env::var_os("CARGO_TARGET_DIR").map_or_else(
+        || root.join("target"),
+        |value| {
+            let path = PathBuf::from(value);
+            if path.is_absolute() {
+                path
+            } else {
+                root.join(path)
+            }
+        },
+    )
+}
+
 fn find_rust_mimalloc_shared_lib(root: &Path) -> Option<PathBuf> {
-    let release_dir = root.join("target/release");
+    let release_dir = cargo_target_dir(root).join("release");
     let root_artifact = release_dir.join("libmechanical_mimalloc.so");
     if root_artifact.exists() {
         return Some(root_artifact);
@@ -339,7 +353,7 @@ fn ensure_rust_mimalloc(root: &Path) -> PathBuf {
         return path;
     }
 
-    let lib = root.join("target/release/libmechanical_mimalloc.so");
+    let lib = cargo_target_dir(root).join("release/libmechanical_mimalloc.so");
     if !skip_build() {
         let mut command = Command::new("cargo");
         command
@@ -359,7 +373,7 @@ fn ensure_rust_mimalloc(root: &Path) -> PathBuf {
     }
     find_rust_mimalloc_shared_lib(root).unwrap_or_else(|| {
         panic!(
-            "missing Rust mimalloc cdylib at {} or target/release/deps/libmechanical_mimalloc-*.so; run `cargo rustc --features interpose --lib --release -- --crate-type cdylib` or set MIMALLOC_RUST_LIB",
+            "missing Rust mimalloc cdylib at {} or its release/deps directory; run `cargo rustc --features interpose --lib --release -- --crate-type cdylib` or set MIMALLOC_RUST_LIB",
             lib.display()
         )
     })

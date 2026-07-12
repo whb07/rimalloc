@@ -12,7 +12,7 @@
 //!
 //! Useful environment variables:
 //!   MIMALLOC_BENCH_SCENARIOS=glibc-simple,mleak10,xmalloc-testN
-//!   MIMALLOC_BENCH_ALLOCATORS=rust,c
+//!   MIMALLOC_BENCH_ALLOCATORS=mechanical_mimalloc_raw,c-mimalloc-3.3.2
 //!   MIMALLOC_RUST_LIB=/path/to/libmechanical_mimalloc.so
 //!   MIMALLOC_C_LIB=/path/to/libmimalloc.so
 //!   MIMALLOC_BENCH_SKIP_BUILD=1
@@ -68,7 +68,7 @@ enum BenchAllocator {
 impl BenchAllocator {
     fn name(self) -> &'static str {
         match self {
-            BenchAllocator::Rust(_) => "rust",
+            BenchAllocator::Rust(_) => "mechanical_mimalloc_raw",
             BenchAllocator::C(_) => "c-mimalloc-3.3.2",
         }
     }
@@ -584,7 +584,10 @@ fn c_allocator(root: &Path) -> &'static DylibAllocator {
 fn allocators(root: &Path) -> Vec<BenchAllocator> {
     let selected = csv_env("MIMALLOC_BENCH_ALLOCATORS");
     let selected = if selected.is_empty() {
-        vec!["rust".to_owned(), "c".to_owned()]
+        vec![
+            "mechanical_mimalloc_raw".to_owned(),
+            "c-mimalloc-3.3.2".to_owned(),
+        ]
     } else {
         selected
     };
@@ -592,7 +595,7 @@ fn allocators(root: &Path) -> Vec<BenchAllocator> {
     selected
         .into_iter()
         .map(|name| match name.as_str() {
-            "rust" => BenchAllocator::Rust(rust_allocator(root)),
+            "rust" | "mechanical_mimalloc_raw" => BenchAllocator::Rust(rust_allocator(root)),
             "c" | "c-mimalloc" | "c-mimalloc-3.3.2" => BenchAllocator::C(c_allocator(root)),
             other => panic!("unknown MIMALLOC_BENCH_ALLOCATORS entry `{other}`"),
         })

@@ -10,7 +10,7 @@ cd_repo_root
 export MIMALLOC_BENCH_SAMPLE_SIZE
 export MIMALLOC_BENCH_MEASUREMENT_SECS
 export MIMALLOC_BENCH_WARMUP_SECS
-export MIMALLOC_BENCH_ALLOCATORS="${MIMALLOC_BENCH_ALLOCATORS:-rust,c}"
+export MIMALLOC_BENCH_ALLOCATORS="${MIMALLOC_BENCH_ALLOCATORS:-mechanical_mimalloc_raw,c-mimalloc-3.3.2}"
 
 default_target_dir="${MIMALLOC_BENCH_DEFAULT_TARGET_DIR:-target/bench-full/default-rust}"
 interpose_target_dir="${MIMALLOC_BENCH_INTERPOSE_TARGET_DIR:-target/bench-full/interpose}"

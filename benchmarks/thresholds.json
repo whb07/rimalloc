@@ -13,25 +13,25 @@
       "max_ratio": 1.25
     },
     {
-      "id": "mimalloc-bench-native/glibc-thread-per-1M-malloc-free-pairs/rust",
+      "id": "mimalloc-bench-native/glibc-thread-per-1M-malloc-free-pairs/mechanical_mimalloc_raw",
       "category": "multithreaded workload",
       "baseline_median_ns": 25000000.0,
       "max_ratio": 1.30
     },
     {
-      "id": "mimalloc-bench-native/malloc-large-per-workload/rust",
+      "id": "mimalloc-bench-native/malloc-large-per-workload/mechanical_mimalloc_raw",
       "category": "hot-path large allocation",
       "baseline_median_ns": 25000000.0,
       "max_ratio": 1.30
     },
     {
-      "id": "mimalloc-bench-native/cache-scratchN-per-workload/rust",
+      "id": "mimalloc-bench-native/cache-scratchN-per-workload/mechanical_mimalloc_raw",
       "category": "aligned/cache workload",
       "baseline_median_ns": 104000000.0,
       "max_ratio": 1.30
     },
     {
-      "id": "mimalloc-bench-native/xmalloc-testN-per-1M-frees/rust",
+      "id": "mimalloc-bench-native/xmalloc-testN-per-1M-frees/mechanical_mimalloc_raw",
       "category": "realloc/free workload",
       "baseline_median_ns": 25000000.0,
       "max_ratio": 1.30

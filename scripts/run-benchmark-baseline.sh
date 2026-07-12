@@ -40,7 +40,7 @@ EOF
   run env \
     CARGO_TARGET_DIR="$artifact_dir" \
     MIMALLOC_BENCH_SCENARIOS="glibc-thread,malloc-large,cache-scratchN,xmalloc-testN" \
-    MIMALLOC_BENCH_ALLOCATORS="rust,c" \
+    MIMALLOC_BENCH_ALLOCATORS="mechanical_mimalloc_raw,c-mimalloc-3.3.2" \
     MIMALLOC_BENCH_SAMPLE_SIZE="$sample_size" \
     MIMALLOC_BENCH_MEASUREMENT_SECS="$measurement_secs" \
     MIMALLOC_BENCH_WARMUP_SECS="$warmup_secs" \

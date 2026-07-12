@@ -76,7 +76,7 @@ pub(super) fn assert_strict_type_allowlist_inventory(
     assert_eq!(
         entries.len(),
         632,
-        "strict-type allowlist active entry count should match TODO.md"
+        "strict-type allowlist active entry count should stay measured"
     );
 
     let mut by_kind = BTreeMap::new();
@@ -119,7 +119,7 @@ pub(super) fn assert_strict_type_allowlist_inventory(
             ("src/allocator/thread_heap.rs", 25),
             ("src/allocator/free.rs", 24),
         ],
-        "strict-type allowlist file hotspots should match TODO.md"
+        "strict-type allowlist file hotspots should stay measured"
     );
     assert_eq!(
         top_pair_counts(&by_kind_file, 6),
@@ -153,31 +153,4 @@ pub(super) fn assert_strict_type_allowlist_inventory(
         BTreeMap::new(),
         "strict-type wildcard count should stay at zero"
     );
-
-    for required in [
-        "strict-type-allowlist.txt` has 632 active entries: 330",
-        "220 bare-domain-usize entries, 40\n  metadata-reference entries",
-        "23 pointer-usize-roundtrip entries, 14 atomic-cast\n  entries, and 5 heap-allocating-type entries",
-        "largest strict-type allowlist file hotspots are `src/allocator/aligned.rs`\n  with 36 active entries",
-        "`src/internal/bitmap.rs` with 35",
-        "`src/allocator/alloc.rs` with 30",
-        "`src/allocator/page.rs` with 26",
-        "`src/allocator/thread_heap.rs` with 25",
-        "`src/allocator/free.rs` with 24",
-        "`bare-domain-usize` in\n  `src/types/scalar.rs` with 24 active entries",
-        "`raw-pointer-parameter` in\n  `src/allocator/alloc.rs` with 24",
-        "`raw-pointer-parameter` in\n  `src/allocator/thread_heap.rs` with 24",
-        "`bare-domain-usize` in `src/internal/bitmap.rs` with 23",
-        "`bare-domain-usize` in `src/raw/macros.rs` with 23",
-        "`raw-pointer-parameter` in `src/allocator/aligned.rs` with 23",
-        "raw-pointer domains are `mi_page_t` with 110 entries",
-        "`mi_theap_t` with 109",
-        "`mi_heap_t` with 67",
-        "Strict-type wildcard guard: total=0; none.",
-    ] {
-        assert!(
-            audit_sources.todo.contains(required),
-            "TODO.md should record measured strict-type allowlist evidence `{required}`"
-        );
-    }
 }

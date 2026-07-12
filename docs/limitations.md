@@ -22,6 +22,9 @@ Production status:
   safe Rust abstraction.
 - Benchmark results are hardware and workload dependent; noisy scenarios must
   be repeated according to `docs/performance.md`.
+- Process commit accounting is platform-dependent, and system-allocator records
+  cannot report mimalloc-internal committed bytes. Unavailable resource fields
+  are emitted as `null`, not inferred.
 - `secure` and `guarded` are hardening aids, not complete protection against
   arbitrary memory corruption or malicious unsafe callers.
 - When `track-valgrind` and `track-asan` are both enabled, Valgrind mode takes

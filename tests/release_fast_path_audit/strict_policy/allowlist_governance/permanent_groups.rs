@@ -4,7 +4,6 @@ use super::*;
 fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let entries = read_allowlist(root);
-    let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
     let strict_docs =
         fs::read_to_string(root.join("docs/strict-types.md")).expect("read strict type docs");
 
@@ -71,25 +70,6 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         "strict-type allowlist has a new raw-pointer file/domain hotspot above the documented cap"
     );
 
-    assert_doc_snippets(
-        "TODO.md",
-        &todo,
-        &[
-            "No strict-type permanent reason group exceeds 32 entries",
-            "C/platform ABI forwarding boundary with 32 entries",
-            "C ABI parity or\n  translated-C source shape with 32 entries",
-            "internal page metadata helper boundary with 26\n  entries",
-            "aligned allocation compatibility\n  boundary with 30 entries",
-            "thread-heap compatibility boundary with 24 entries",
-            "scalar domain\n  constructor boundary with 24 entries",
-            "largest strict-type raw-pointer file/domain hotspots are\n  `src/allocator/thread_heap.rs`/`mi_theap_t` with 20 entries",
-            "`src/allocator/thread_heap.rs`/`mi_theap_t` with 20",
-            "`src/allocator/free.rs`/`mi_page_t` with 19",
-            "`src/allocator/alloc.rs`/`mi_theap_t` with 18",
-            "`src/allocator/page.rs`/`mi_theap_t` with 15",
-            "`src/internal/page_metadata.rs`/`mi_page_t` with 15",
-        ],
-    );
     assert_doc_snippets(
         "docs/strict-types.md",
         &strict_docs,

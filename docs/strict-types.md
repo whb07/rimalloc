@@ -100,6 +100,8 @@ boundary.
 
 ## Strict-Type Allowlist Governance
 
+Strict-type wildcard guard: total=0; none.
+
 The current `strict-type-allowlist.txt` snapshot has 632 active entries: 330 raw-pointer-parameter,
 220 bare-domain-usize, 40 metadata-reference, 23 pointer-usize-roundtrip, 14
 atomic-cast, and 5 heap-allocating-type entries. It has zero wildcard entries
@@ -220,10 +222,12 @@ C arithmetic without changing public ABI or allocation hot-path behavior.
   value types. The release fast-path audit rejects `Deref` and `DerefMut`
   implementations under `src/types/`, so callers must use explicit field,
   conversion, or witness methods instead of implicit references.
-- Hot strict-type wrappers stay zero-cost: pointer wrappers, copied page/queue
-  witnesses, free-list wrappers, packed words, and atomic field wrappers are
-  `#[repr(transparent)]`, derive `Copy` where duplication does not weaken the
-  witness, expose inline constructors/accessors, and are covered by
+- Hot strict-type wrappers stay zero-cost: identity wrappers may remain `Copy`
+  when duplication cannot authorize a state transition. Validation tokens,
+  page-state capabilities, detached-list ownership, and abandoned-page
+  dispositions are linear capabilities and must be consumed rather than
+  copied. Both kinds remain representation-transparent where applicable,
+  expose inline constructors/accessors, and are covered by
   size/alignment plus `Option<Wrapper>` niche tests.
 - Raw layout compatibility is checked by the core layout tests and release
   fast-path audit in the default build and with executable feature sets

@@ -1,5 +1,26 @@
 # Mimalloc Rust vs C Benchmark Results
 
+## Stage 0 Reviewed Baseline (2026-07-12)
+
+The current release gate is schema 2 in `benchmarks/thresholds.json`, captured
+from five complete clean runs of commit
+`2140b758f59424188387498bb194acfc3e17ad50` on host profile
+`release-linux-x86_64-primary`. All accepted median coefficients of variation
+were at most 3.81%. A partial fifth run collected under unrelated 21-core host
+load was rejected and rerun after the host became idle.
+
+The gate covers the public `MiMalloc` paired allocation/free facade and a
+separate raw-C-ABI native workload group. The noisy 32-worker
+`cache-scratchN` case remains available for exploratory evidence; the release
+gate uses `cache-scratch1`, whose five-run median CV was 0.61%, so scheduler
+placement does not dominate the allocator signal.
+
+Each full artifact directory now contains `manifest.json`, `environment.txt`,
+`commands.txt`, `criterion/`, `resource-results.jsonl`, and
+`threshold-results.csv`. Default Rust and interpose directories remain
+isolated; the latter reports default-mode thresholds as inapplicable until a
+separate interpose baseline is reviewed.
+
 ## Release Candidate Artifact-Mode Evidence
 
 For a release candidate, collect performance evidence with:
@@ -14,8 +35,8 @@ The full benchmark script intentionally writes default Rust-library and
 
 | Artifact mode | Feature set | Criterion directory | Threshold CSV |
 |---|---|---|---|
-| default Rust library | `bench` / `bench compare` | `target/bench-full/default-rust/criterion` | `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` |
-| interpose hot path | `bench interpose` | `target/bench-full/interpose/criterion` | `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv` |
+| default Rust library | `bench` | `target/bench-full/default-rust/criterion` | `target/bench-full/default-rust/threshold-results.csv` |
+| interpose hot path | `bench interpose` | `target/bench-full/interpose/criterion` | `target/bench-full/interpose/threshold-results.csv` |
 
 Do not reuse Criterion baselines across artifact modes. Report each artifact
 mode under a separate heading with the exact command line and feature set. The

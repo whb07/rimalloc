@@ -1,4 +1,11 @@
-Below is a data-types-only refinement for the PRD. It is scoped to the repository’s actual shape: the crate currently exposes all modules publicly from lib.rs, including types, internal, page, free, heap, arena, atomic, and mimalloc; it conditionally uses no_std for optimized Linux non-test builds.  The manifest confirms Rust 2024, rlib/cdylib, the current feature flags, panic-abort, fat LTO, and codegen-units = 1.  The current type layer still has C aliases such as mi_threadid_t = usize, mi_page_flags_t = usize, mi_thread_free_t = usize, mi_encoded_t = usize, and raw mi_page_t/mi_block_t/mi_heap_t aliases.  The main page metadata struct currently contains raw ownership, free-list, queue, heap, thread-heap, size, page-start, and memid fields directly.
+This document is both the normative strict-type design and a historical record
+of its original target. Statements under “original design target” describe the
+repository before the migration and are not claims about the current tree.
+The current as-built architecture keeps implementation modules private, exposes
+the explicit `raw` compatibility facade, and implements semantic wrappers in
+`src/types/`. `src/lib.rs` aliases that module internally as `core_types`, so
+older design names such as `core_types::page` still describe the logical layer,
+not a current `src/core_types/` directory.
 
 Refined PRD section: Data-type model for type-safe, zero-cost mechanical_mimalloc
 
@@ -41,9 +48,9 @@ Required rule:
 *mut raw::mi_block_t
 usize // as raw flags, bins, sizes, encoded pointers, thread-free words
 
-2.2 core_types module: semantic newtypes
+2.2 Original design target: core_types semantic newtypes
 
-core_types owns all new internal data types. It should be split by domain:
+The original target called this layer `core_types` and proposed this layout:
 
 src/core_types/
   mod.rs
@@ -58,6 +65,10 @@ src/core_types/
   memid.rs         // memid discriminator + union-safe views
   atomic.rs        // typed atomic field wrappers
   callbacks.rs     // typed callback wrappers
+
+The current as-built location is `src/types/` with the corresponding modules.
+The crate-private `core_types` name is an internal alias retained for call-site
+clarity; it is not a filesystem path or a public module.
 
 core_types may use raw pointers internally for field access, but it must not expose raw C aliases as its public API. It must also avoid Deref and DerefMut for allocator metadata, because producing Rust references from aliasable allocator metadata is often harder to prove than using raw pointer field access directly.
 

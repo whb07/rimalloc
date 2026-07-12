@@ -5,6 +5,10 @@ entry points, or allocator metadata structs. This audit is for the supported
 default parity matrix documented in `PARITY.md`; debug, secure, guarded, and
 platform-specific override gaps remain tracked by their own TODO items.
 
+Audit names under `src/core_types/` are stable logical aliases mapped by the
+audit scripts to the current `src/types/` implementation; they are not a
+filesystem path.
+
 The Rust port is an allocator replacement and necessarily keeps the C layout and
 pointer-oriented control flow. The unsafe surface is acceptable under these
 shared invariants:

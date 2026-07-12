@@ -52,6 +52,10 @@ All notable changes to this repository should be recorded here.
 
 ### Performance
 
+- Repair the benchmark evidence layer with preallocated timed-region scratch,
+  persistent remote-free topologies, explicit public/raw facade labels,
+  fresh-process resource records, provenance manifests, and a reviewed
+  artifact-aware median/p95 baseline.
 - No allocator hotpath behavior is intentionally changed by the safe API/raw
   facade split.
 - Benchmark and profiling policy is documented in `docs/performance.md` and

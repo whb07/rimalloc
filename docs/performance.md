@@ -9,11 +9,10 @@ performance relative to C mimalloc 3.3.2.
   may affect allocator hot paths.
 - Use `scripts/check-bench-full.sh` before treating allocator-wide results as
   authoritative.
-- Before a release candidate, run `scripts/check-bench-full.sh`, capture
-  `scripts/env-info.sh`, preserve the default
-  `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` and
-  interpose `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv`
-  threshold reports, and update `BENCHMARK_RESULTS.md` with the exact command
+- Before a release candidate, run `scripts/check-bench-full.sh` and preserve
+  each mode's `manifest.json`, `environment.txt`, `commands.txt`, `criterion/`,
+  `resource-results.jsonl`, and `threshold-results.csv`. Update
+  `BENCHMARK_RESULTS.md` with the exact command
   lines, feature flags, artifact modes, Rust/C ratios, and noisy benchmark notes
   for the release commit.
 - Capture `scripts/env-info.sh` output with any committed full benchmark report.
@@ -58,13 +57,18 @@ layouts, random schedules, and persistent worker threads before Criterion enters
 the timed closure. Allocator operations and synchronization intrinsic to a
 concurrent workload remain timed; harness construction does not.
 
-Capture allocator and operating-system evidence with:
+Capture fresh-process allocator and operating-system evidence with:
 
 ```sh
-cargo run --release --features "std bench-diagnostics" --example evidence_report
+scripts/run-bench-resources.py --artifact-dir target/bench-full/default-rust \
+  --artifact-mode default-rust --feature bench
 ```
 
-The reporter emits one JSON object. `page_occupancy` is live binned block bytes
+The runner invokes `benchmark_probe` once per allocator/scenario/repetition and
+emits JSON Lines. Records include start/end/peak RSS and commit, logical live
+and peak-live requested bytes, allocator current/peak committed bytes, page
+occupancy, page-search length, remote CAS retries, minor/major faults, and
+sampled p99/p999 latency where applicable. `page_occupancy` is live binned block bytes
 divided by the capacity of live small, medium, and large allocator pages; huge
 allocations are excluded. `page_search_length` is candidates examined per page
 search. Tail latency is sampled separately for paired facade allocation/free
@@ -99,10 +103,9 @@ be measured explicitly:
 cargo bench --features "std bench interpose" --bench hotpath
 ```
 
-Do not compare Criterion's saved baseline across those two modes. Criterion
-benchmark IDs do not encode Cargo features, so use a fresh `CARGO_TARGET_DIR`,
-clear `target/criterion`, or save separate external reports when switching
-between default and interposition measurements.
+Do not compare Criterion's saved baseline across those two modes. Use the
+artifact-specific clean directories created by `run-bench-clean.sh`; never
+copy or reuse `criterion/` data between default and interposition measurements.
 
 The native mimalloc-bench Criterion ports support:
 
@@ -124,6 +127,14 @@ with two different paths. Release reports must label each section with the
 artifact mode and feature set. Rust-vs-C ratios come from the native scenario
 benchmarks in the default Rust library mode, while interpose hot-path evidence
 is reported separately.
+
+`benchmarks/thresholds.json` schema 2 keys each baseline by artifact mode and
+feature set and gates both sample median and p95. A release baseline is the
+median of five clean-run medians and the median of five clean-run p95 values
+from one commit and one documented host profile. Generate a proposal with
+`scripts/run-benchmark-baseline.sh`; promotion requires manual outlier review
+and the explicit `--write-reviewed-baseline` capture flag. Schema-1 parsing is
+retained for one migration cycle only.
 
 ## Regression Budgets
 

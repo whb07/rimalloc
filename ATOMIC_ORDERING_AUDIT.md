@@ -4,6 +4,18 @@ Scope: Rust sources in `src/` that use `core::sync::atomic` or `std::sync::atomi
 directly, compared with mimalloc 3.3.2's `include/mimalloc/atomic.h` and the
 corresponding C call sites.
 
+Audit names under `src/core_types/` are stable logical aliases mapped by the
+audit scripts to the current `src/types/` implementation; they are not a
+filesystem path.
+
+Current split-module inventory also includes
+`src/allocator/alloc/string_path.rs`, `src/allocator/arena_meta/pages.rs`,
+`src/allocator/heap/subproc_heaps.rs`, `src/internal/bitmap/chunkmap.rs`,
+`src/types/atomic/arena_cells.rs`, `src/types/atomic/fields.rs`,
+`src/types/atomic/guards.rs`, `src/types/atomic/page_thread.rs`,
+`src/types/atomic/thread_free.rs`, and
+`src/types/atomic/thread_heap_refcount.rs`.
+
 The Rust port uses the same or stronger orderings as the C implementation for the
 supported default matrix:
 

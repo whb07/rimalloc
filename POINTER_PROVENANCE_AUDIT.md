@@ -4,6 +4,22 @@ Scope: Rust sources in `src/` that perform pointer arithmetic, pointer/integer
 casts, wrapping arithmetic, checked arithmetic, or alignment calculations. This
 audit covers the supported default parity matrix documented in `PARITY.md`.
 
+Audit names under `src/core_types/` are stable logical aliases mapped by the
+audit scripts to the current `src/types/` implementation; they are not a
+filesystem path.
+
+Current split-module inventory also includes
+`src/allocator/aligned/thread_heap.rs`, `src/allocator/alloc/string_path.rs`,
+`src/allocator/arena/abandoned.rs`, `src/allocator/arena/debug.rs`,
+`src/allocator/arena/geometry.rs`, `src/allocator/arena/heap_pages.rs`,
+`src/allocator/arena/ids.rs`, `src/allocator/arena/os_memory.rs`,
+`src/allocator/arena/prefix.rs`, `src/allocator/page/bins.rs`,
+`src/allocator/page/counts.rs`, `src/allocator/page/queues.rs`,
+`src/allocator/page/validation.rs`, `src/allocator/page_map/lookup.rs`,
+`src/internal/bitmap/bfield.rs`, `src/internal/bitmap/chunkmap.rs`,
+`src/internal/block_link.rs`, `src/internal/page_location.rs`, and
+`src/safe/tests.rs`.
+
 Miri was checked for this toolchain but is not available:
 `cargo miri --version` reports that the `miri` component is unavailable for
 `stable-x86_64-unknown-linux-gnu`. The UB-oriented validation available here is

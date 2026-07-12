@@ -4,7 +4,6 @@ use super::*;
 fn strict_type_allowlist_inventory_stays_measured_by_concern() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let entries = read_allowlist(root);
-    let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
     let strict_docs =
         fs::read_to_string(root.join("docs/strict-types.md")).expect("read strict type docs");
 
@@ -41,16 +40,6 @@ fn strict_type_allowlist_inventory_stays_measured_by_concern() {
         "strict-type wildcard entries should not silently return"
     );
 
-    assert_doc_snippets(
-        "TODO.md",
-        &todo,
-        &[
-            "has 632 active entries: 330\n  raw-pointer-parameter entries, 220 bare-domain-usize entries, 40\n  metadata-reference entries",
-            "23 pointer-usize-roundtrip entries, 14 atomic-cast\n  entries, and 5 heap-allocating-type entries",
-            "It has no retained wildcard\n  entries",
-            "Strict-type wildcard guard: total=0; none.",
-        ],
-    );
     assert_doc_snippets(
         "docs/strict-types.md",
         &strict_docs,

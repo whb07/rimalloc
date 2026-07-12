@@ -10,7 +10,7 @@ pub(super) fn assert_strict_checker_and_allowlist_symbols(
     let allowlist_rs = audit_sources.strict_type_allowlist;
     assert!(
         strict_check_rs.contains("class ItemContext:")
-            && strict_check_rs.contains("TODO = ROOT / \"TODO.md\"")
+            && strict_check_rs.contains("STRICT_TYPES_DOC = ROOT / \"docs\" / \"strict-types.md\"")
             && strict_check_rs
                 .contains("def item_contexts_by_line(text: str) -> dict[int, ItemContext]:")
             && strict_check_rs.contains("def wildcard_counts(entries: Iterable[AllowEntry])")

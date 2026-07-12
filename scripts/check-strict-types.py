@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ALLOWLIST = ROOT / "strict-type-allowlist.txt"
-TODO = ROOT / "TODO.md"
+STRICT_TYPES_DOC = ROOT / "docs" / "strict-types.md"
 REMOVE_ENTRY_CAP = 0
 
 RAW_BOUNDARY_FILES = {
@@ -446,12 +446,12 @@ def wildcard_summary(counts: dict[str, int]) -> str:
 def verify_wildcard_counts_documented(entries: Iterable[AllowEntry]) -> None:
     expected = wildcard_summary(wildcard_counts(entries))
     try:
-        todo = TODO.read_text()
+        strict_types_doc = STRICT_TYPES_DOC.read_text()
     except FileNotFoundError as err:
-        raise AssertionError("missing TODO.md for strict-type wildcard guard") from err
-    if expected not in todo:
+        raise AssertionError("missing docs/strict-types.md for strict-type wildcard guard") from err
+    if expected not in strict_types_doc:
         raise AssertionError(
-            "TODO.md must record the current strict-type wildcard counts with:\n"
+            "docs/strict-types.md must record the current strict-type wildcard counts with:\n"
             f"{expected}"
         )
 

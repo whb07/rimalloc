@@ -211,7 +211,7 @@ required-features = ["std"]
 [[example]]
 name = "benchmark_probe"
 path = "examples/benchmark_probe.rs"
-required-features = ["bench"]
+required-features = ["std"]
 
 [[example]]
 name = "global_allocator"

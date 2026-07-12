@@ -396,7 +396,7 @@ fn ensure_c_mimalloc(root: &Path) -> PathBuf {
         "missing mimalloc-3.3.2 source directory at {}",
         source_dir.display()
     );
-    let build_dir = root.join("target/c-mimalloc-3.3.2");
+    let build_dir = cargo_target_dir(root).join("c-mimalloc-3.3.2");
     if find_mimalloc_shared_lib(&build_dir).is_none() && !skip_build() {
         let mut configure = Command::new("cmake");
         configure

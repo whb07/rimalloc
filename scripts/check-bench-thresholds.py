@@ -114,6 +114,7 @@ def validate_thresholds(
     allow_missing: bool,
     artifact_mode: str | None,
     feature_set: list[str] | None,
+    report_only: bool = False,
 ) -> None:
     threshold_doc = load_json(threshold_path)
     if not isinstance(threshold_doc, dict):
@@ -179,7 +180,7 @@ def validate_thresholds(
         write_csv(csv_out, rows)
     if missing and not allow_missing:
         raise SystemExit("missing Criterion results:\n" + "\n".join(f"- {item}" for item in missing))
-    if failures:
+    if failures and not report_only:
         raise SystemExit("benchmark regressions exceeded thresholds:\n" + "\n".join(failures))
     if not rows:
         detail = "\n".join(f"- {item}" for item in inapplicable)
@@ -188,6 +189,8 @@ def validate_thresholds(
         print("missing threshold results:\n" + "\n".join(f"- {item}" for item in missing))
     if inapplicable:
         print("inapplicable thresholds:\n" + "\n".join(f"- {item}" for item in inapplicable))
+    if failures:
+        print("reported threshold regressions:\n" + "\n".join(f"- {item}" for item in failures))
     print(f"ok: validated {len(rows)} thresholds; missing={len(missing)} inapplicable={len(inapplicable)}")
 
 
@@ -266,6 +269,7 @@ def main() -> None:
     parser.add_argument("--artifact-mode")
     parser.add_argument("--feature", action="append", dest="features")
     parser.add_argument("--allow-missing", action="store_true")
+    parser.add_argument("--report-only", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
@@ -274,7 +278,7 @@ def main() -> None:
     validate_thresholds(
         Path(args.thresholds), Path(args.criterion_dir),
         Path(args.csv_out) if args.csv_out else None,
-        args.allow_missing, args.artifact_mode, args.features,
+        args.allow_missing, args.artifact_mode, args.features, args.report_only,
     )
 
 

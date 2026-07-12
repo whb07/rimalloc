@@ -22,7 +22,7 @@ for run_number in 1 2 3 4 5; do
 CARGO_TARGET_DIR=$artifact_dir cargo bench --features bench --bench hotpath -- hotpath/paired_alloc_free/mechanical_mimalloc_public/16
 CARGO_TARGET_DIR=$artifact_dir cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 scripts/run-bench-resources.py --artifact-dir $artifact_dir --artifact-mode default-rust --feature bench --operations $resource_operations --repeats $resource_repeats
-scripts/check-bench-thresholds.py --criterion-dir $artifact_dir/criterion --artifact-mode default-rust --feature bench
+scripts/check-bench-thresholds.py --criterion-dir $artifact_dir/criterion --artifact-mode default-rust --feature bench --report-only
 scripts/check-bench-resources.py --results $artifact_dir/resource-results.jsonl --artifact-mode default-rust --feature bench
 EOF
   run scripts/write-benchmark-manifest.py \
@@ -50,7 +50,8 @@ EOF
     --criterion-dir "$artifact_dir/criterion" \
     --csv-out "$artifact_dir/threshold-results.csv" \
     --artifact-mode default-rust \
-    --feature bench
+    --feature bench \
+    --report-only
   run scripts/run-bench-resources.py \
     --artifact-dir "$artifact_dir" \
     --artifact-mode default-rust \

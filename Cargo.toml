@@ -209,6 +209,11 @@ path = "examples/evidence_report.rs"
 required-features = ["std"]
 
 [[example]]
+name = "benchmark_probe"
+path = "examples/benchmark_probe.rs"
+required-features = ["bench"]
+
+[[example]]
 name = "global_allocator"
 path = "examples/global_allocator.rs"
 required-features = ["std"]

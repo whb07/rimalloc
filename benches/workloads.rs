@@ -21,10 +21,12 @@ use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use std::alloc::{GlobalAlloc, Layout};
 use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 use support::allocators::PUBLIC_MIMALLOC;
 #[cfg(feature = "compare")]
 use support::allocators::SYSTEM_ALLOCATOR;
+use support::pool::PointerPool;
 
 /// Deterministic seed for reproducible benchmarks.
 const BENCH_SEED: u64 = 0xDEADBEEF_CAFEBABE;
@@ -403,6 +405,309 @@ fn bench_realloc_churn(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
+// Ownership-transfer topologies. Steady-state cases retain all worker threads
+// across samples; lifecycle churn is intentionally reported in a separate
+// group because thread creation and teardown are part of that workload.
+// ---------------------------------------------------------------------------
+
+const TOPOLOGY_BATCH: usize = 1024;
+const TOPOLOGY_SIZE: usize = 64;
+
+fn fill_pool<A: GlobalAlloc>(allocator: &A, layout: Layout, pool: &mut PointerPool) {
+    for index in 0..pool.len() {
+        let pointer = unsafe { allocator.alloc(layout) };
+        assert!(!pointer.is_null(), "topology benchmark allocation failed");
+        *pool.slot(index) = (pointer, layout);
+    }
+}
+
+fn free_pool<A: GlobalAlloc>(allocator: &A, pool: &mut PointerPool) {
+    for index in 0..pool.len() {
+        let (pointer, layout) = *pool.slot(index);
+        unsafe { allocator.dealloc(pointer, layout) };
+        *pool.slot(index) = (std::ptr::null_mut(), layout);
+    }
+}
+
+enum PoolCommand {
+    Process(PointerPool),
+    Stop,
+}
+
+struct FanInHarness<A: GlobalAlloc + Sync + 'static> {
+    allocator: &'static A,
+    commands: Vec<mpsc::SyncSender<PoolCommand>>,
+    replies: Vec<mpsc::Receiver<PointerPool>>,
+    pools: Vec<Option<PointerPool>>,
+    workers: Vec<thread::JoinHandle<()>>,
+}
+
+impl<A: GlobalAlloc + Sync + 'static> FanInHarness<A> {
+    fn new(allocator: &'static A, owners: usize, layout: Layout) -> Self {
+        let mut commands = Vec::with_capacity(owners);
+        let mut replies = Vec::with_capacity(owners);
+        let mut workers = Vec::with_capacity(owners);
+        for _ in 0..owners {
+            let (command_tx, command_rx) = mpsc::sync_channel(1);
+            let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+            commands.push(command_tx);
+            replies.push(reply_rx);
+            workers.push(thread::spawn(move || {
+                while let Ok(PoolCommand::Process(mut pool)) = command_rx.recv() {
+                    fill_pool(allocator, layout, &mut pool);
+                    if reply_tx.send(pool).is_err() {
+                        break;
+                    }
+                }
+            }));
+        }
+        Self {
+            allocator,
+            commands,
+            replies,
+            pools: (0..owners)
+                .map(|_| Some(PointerPool::new(TOPOLOGY_BATCH)))
+                .collect(),
+            workers,
+        }
+    }
+
+    fn run(&mut self) {
+        for (command, pool) in self.commands.iter().zip(&mut self.pools) {
+            command
+                .send(PoolCommand::Process(pool.take().expect("fan-in pool")))
+                .expect("prepare fan-in pool");
+        }
+        for (reply, slot) in self.replies.iter().zip(&mut self.pools) {
+            let mut pool = reply.recv().expect("receive fan-in pool");
+            free_pool(self.allocator, &mut pool);
+            *slot = Some(pool);
+        }
+    }
+}
+
+impl<A: GlobalAlloc + Sync + 'static> Drop for FanInHarness<A> {
+    fn drop(&mut self) {
+        for command in &self.commands {
+            let _ = command.send(PoolCommand::Stop);
+        }
+        for worker in self.workers.drain(..) {
+            worker.join().expect("fan-in owner thread");
+        }
+        assert!(
+            self.pools
+                .iter()
+                .all(|pool| pool.as_ref().is_some_and(PointerPool::all_empty))
+        );
+    }
+}
+
+struct FanOutHarness<A: GlobalAlloc + Sync + 'static> {
+    allocator: &'static A,
+    layout: Layout,
+    commands: Vec<mpsc::SyncSender<PoolCommand>>,
+    replies: Vec<mpsc::Receiver<PointerPool>>,
+    pools: Vec<Option<PointerPool>>,
+    workers: Vec<thread::JoinHandle<()>>,
+}
+
+impl<A: GlobalAlloc + Sync + 'static> FanOutHarness<A> {
+    fn new(allocator: &'static A, free_workers: usize, layout: Layout) -> Self {
+        let mut commands = Vec::with_capacity(free_workers);
+        let mut replies = Vec::with_capacity(free_workers);
+        let mut workers = Vec::with_capacity(free_workers);
+        for _ in 0..free_workers {
+            let (command_tx, command_rx) = mpsc::sync_channel(1);
+            let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+            commands.push(command_tx);
+            replies.push(reply_rx);
+            workers.push(thread::spawn(move || {
+                while let Ok(PoolCommand::Process(mut pool)) = command_rx.recv() {
+                    free_pool(allocator, &mut pool);
+                    if reply_tx.send(pool).is_err() {
+                        break;
+                    }
+                }
+            }));
+        }
+        Self {
+            allocator,
+            layout,
+            commands,
+            replies,
+            pools: (0..free_workers)
+                .map(|_| Some(PointerPool::new(TOPOLOGY_BATCH)))
+                .collect(),
+            workers,
+        }
+    }
+
+    fn run(&mut self) {
+        for (command, pool) in self.commands.iter().zip(&mut self.pools) {
+            let mut pool = pool.take().expect("fan-out pool");
+            fill_pool(self.allocator, self.layout, &mut pool);
+            command
+                .send(PoolCommand::Process(pool))
+                .expect("send fan-out pool");
+        }
+        for (reply, slot) in self.replies.iter().zip(&mut self.pools) {
+            *slot = Some(reply.recv().expect("receive empty fan-out pool"));
+        }
+    }
+}
+
+impl<A: GlobalAlloc + Sync + 'static> Drop for FanOutHarness<A> {
+    fn drop(&mut self) {
+        for command in &self.commands {
+            let _ = command.send(PoolCommand::Stop);
+        }
+        for worker in self.workers.drain(..) {
+            worker.join().expect("fan-out free thread");
+        }
+        assert!(
+            self.pools
+                .iter()
+                .all(|pool| pool.as_ref().is_some_and(PointerPool::all_empty))
+        );
+    }
+}
+
+struct CycleHarness<A: GlobalAlloc + Sync + 'static> {
+    allocator: &'static A,
+    layout: Layout,
+    entry: Option<mpsc::SyncSender<PointerPool>>,
+    exit: mpsc::Receiver<PointerPool>,
+    pool: Option<PointerPool>,
+    workers: Vec<thread::JoinHandle<()>>,
+}
+
+impl<A: GlobalAlloc + Sync + 'static> CycleHarness<A> {
+    fn new(allocator: &'static A, layout: Layout) -> Self {
+        let (entry, first_rx) = mpsc::sync_channel(1);
+        let (first_tx, second_rx) = mpsc::sync_channel(1);
+        let (second_tx, third_rx) = mpsc::sync_channel(1);
+        let (third_tx, exit) = mpsc::sync_channel(1);
+        let first = thread::spawn(move || {
+            while let Ok(pool) = first_rx.recv() {
+                if first_tx.send(pool).is_err() {
+                    break;
+                }
+            }
+        });
+        let second = thread::spawn(move || {
+            while let Ok(pool) = second_rx.recv() {
+                if second_tx.send(pool).is_err() {
+                    break;
+                }
+            }
+        });
+        let third = thread::spawn(move || {
+            while let Ok(mut pool) = third_rx.recv() {
+                free_pool(allocator, &mut pool);
+                if third_tx.send(pool).is_err() {
+                    break;
+                }
+            }
+        });
+        Self {
+            allocator,
+            layout,
+            entry: Some(entry),
+            exit,
+            pool: Some(PointerPool::new(TOPOLOGY_BATCH)),
+            workers: vec![first, second, third],
+        }
+    }
+
+    fn run(&mut self) {
+        let mut pool = self.pool.take().expect("cycle pool");
+        fill_pool(self.allocator, self.layout, &mut pool);
+        self.entry
+            .as_ref()
+            .expect("cycle entry")
+            .send(pool)
+            .expect("begin ownership cycle");
+        self.pool = Some(self.exit.recv().expect("complete ownership cycle"));
+    }
+}
+
+impl<A: GlobalAlloc + Sync + 'static> Drop for CycleHarness<A> {
+    fn drop(&mut self) {
+        drop(self.entry.take());
+        for worker in self.workers.drain(..) {
+            worker.join().expect("cycle transfer thread");
+        }
+        assert!(self.pool.as_ref().is_some_and(PointerPool::all_empty));
+    }
+}
+
+fn bench_remote_topologies(c: &mut Criterion) {
+    let layout = Layout::from_size_align(TOPOLOGY_SIZE, 8).unwrap();
+    let cpu_limit = logical_cpus();
+    let mut steady = c.benchmark_group("ownership_transfer/steady_state");
+    steady.throughput(Throughput::Elements(TOPOLOGY_BATCH as u64));
+    for workers in [2, 4, 8].into_iter().filter(|count| *count <= cpu_limit) {
+        steady.throughput(Throughput::Elements((TOPOLOGY_BATCH * workers) as u64));
+        let mut fan_in = FanInHarness::new(&PUBLIC_MIMALLOC, workers, layout);
+        steady.bench_function(
+            format!("fan_in/mechanical_mimalloc_public/{workers}"),
+            |b| b.iter(|| fan_in.run()),
+        );
+        let mut fan_out = FanOutHarness::new(&PUBLIC_MIMALLOC, workers, layout);
+        steady.bench_function(
+            format!("fan_out/mechanical_mimalloc_public/{workers}"),
+            |b| b.iter(|| fan_out.run()),
+        );
+    }
+    steady.throughput(Throughput::Elements(TOPOLOGY_BATCH as u64));
+    let mut cycle = CycleHarness::new(&PUBLIC_MIMALLOC, layout);
+    steady.bench_function("cyclic/mechanical_mimalloc_public/3", |b| {
+        b.iter(|| cycle.run())
+    });
+    let oversubscribed_workers = logical_cpus().saturating_mul(2).max(2);
+    steady.throughput(Throughput::Elements(
+        (TOPOLOGY_BATCH * oversubscribed_workers) as u64,
+    ));
+    let mut oversubscribed = FanOutHarness::new(&PUBLIC_MIMALLOC, oversubscribed_workers, layout);
+    steady.bench_function(
+        format!("oversubscribed/mechanical_mimalloc_public/{oversubscribed_workers}"),
+        |b| b.iter(|| oversubscribed.run()),
+    );
+    steady.finish();
+}
+
+fn owner_exit_once(layout: Layout) {
+    let owner = thread::spawn(move || {
+        let mut pool = PointerPool::new(TOPOLOGY_BATCH);
+        fill_pool(&PUBLIC_MIMALLOC, layout, &mut pool);
+        pool
+    });
+    let mut pool = owner.join().expect("owner exit thread");
+    free_pool(&PUBLIC_MIMALLOC, &mut pool);
+}
+
+fn thread_churn_once(layout: Layout) {
+    for _ in 0..8 {
+        owner_exit_once(layout);
+    }
+}
+
+fn bench_remote_lifecycle(c: &mut Criterion) {
+    let layout = Layout::from_size_align(TOPOLOGY_SIZE, 8).unwrap();
+    let mut lifecycle = c.benchmark_group("ownership_transfer/lifecycle_churn");
+    lifecycle.throughput(Throughput::Elements(TOPOLOGY_BATCH as u64));
+    lifecycle.bench_function(
+        "owner_exit_after_publication/mechanical_mimalloc_public",
+        |b| b.iter(|| owner_exit_once(layout)),
+    );
+    lifecycle.throughput(Throughput::Elements((TOPOLOGY_BATCH * 8) as u64));
+    lifecycle.bench_function("thread_churn/mechanical_mimalloc_public", |b| {
+        b.iter(|| thread_churn_once(layout))
+    });
+    lifecycle.finish();
+}
+
+// ---------------------------------------------------------------------------
 // Entry points
 // ---------------------------------------------------------------------------
 
@@ -443,10 +748,16 @@ criterion_group!(
 );
 criterion_group!(fragmentation_benches, bench_fragmentation);
 criterion_group!(realloc_benches, bench_realloc_churn);
+criterion_group!(
+    topology_benches,
+    bench_remote_topologies,
+    bench_remote_lifecycle
+);
 
 criterion_main!(
     single_thread_benches,
     multi_thread_benches,
     fragmentation_benches,
-    realloc_benches
+    realloc_benches,
+    topology_benches
 );

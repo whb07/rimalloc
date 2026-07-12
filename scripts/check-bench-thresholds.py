@@ -115,6 +115,7 @@ def validate_thresholds(
     artifact_mode: str | None,
     feature_set: list[str] | None,
     report_only: bool = False,
+    allow_no_applicable: bool = False,
 ) -> None:
     threshold_doc = load_json(threshold_path)
     if not isinstance(threshold_doc, dict):
@@ -184,7 +185,14 @@ def validate_thresholds(
         raise SystemExit("benchmark regressions exceeded thresholds:\n" + "\n".join(failures))
     if not rows:
         detail = "\n".join(f"- {item}" for item in inapplicable)
-        raise SystemExit("no applicable thresholded Criterion results were validated" + (f"\n{detail}" if detail else ""))
+        message = "no applicable thresholded Criterion results were validated" + (
+            f"\n{detail}" if detail else ""
+        )
+        if not allow_no_applicable:
+            raise SystemExit(message)
+        print(message)
+        print(f"ok: validated 0 thresholds; missing={len(missing)} inapplicable={len(inapplicable)}")
+        return
     if missing:
         print("missing threshold results:\n" + "\n".join(f"- {item}" for item in missing))
     if inapplicable:
@@ -236,6 +244,16 @@ def self_test() -> None:
                 if expected is not None:
                     raise SystemExit(f"self-test {name!r} unexpectedly passed")
 
+        validate_thresholds(
+            thresholds,
+            root / "wrong artifact" / "criterion",
+            None,
+            False,
+            "interpose",
+            ["bench"],
+            allow_no_applicable=True,
+        )
+
         malformed = dict(base_entry)
         malformed["baseline"] = {"median_ns": 100.0}
         thresholds.write_text(json.dumps({"schema": 2, "thresholds": [malformed]}), encoding="utf-8")
@@ -269,6 +287,7 @@ def main() -> None:
     parser.add_argument("--artifact-mode")
     parser.add_argument("--feature", action="append", dest="features")
     parser.add_argument("--allow-missing", action="store_true")
+    parser.add_argument("--allow-no-applicable", action="store_true")
     parser.add_argument("--report-only", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -279,6 +298,7 @@ def main() -> None:
         Path(args.thresholds), Path(args.criterion_dir),
         Path(args.csv_out) if args.csv_out else None,
         args.allow_missing, args.artifact_mode, args.features, args.report_only,
+        args.allow_no_applicable,
     )
 
 

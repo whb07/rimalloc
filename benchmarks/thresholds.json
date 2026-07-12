@@ -1,46 +1,135 @@
 {
-  "schema": 1,
+  "schema": 2,
   "notes": [
-    "Criterion medians are nanoseconds per measured iteration.",
-    "max_ratio is the allowed current_median_ns / baseline_median_ns ratio.",
-    "Baselines are intentionally release-gate data, not correctness tests; update them only from a reviewed release benchmark run on the documented benchmark host."
+    "Baseline values are the median of five run medians and five run p95 values.",
+    "Updates require manual review and --write-reviewed-baseline."
   ],
   "thresholds": [
     {
       "id": "hotpath/paired_alloc_free/mechanical_mimalloc_public/16",
+      "artifact_mode": "default-rust",
+      "feature_set": [
+        "bench"
+      ],
       "category": "hot-path allocation",
-      "baseline_median_ns": 40000.0,
-      "max_ratio": 1.25
+      "baseline": {
+        "median_ns": 35945.311563677504,
+        "p95_ns": 36666.84844708589
+      },
+      "limits": {
+        "median_ratio": 1.08,
+        "p95_ratio": 1.1
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "2140b758f59424188387498bb194acfc3e17ad50",
+      "review": {
+        "five_run_median_cv": 0.013861808749416128
+      }
     },
     {
       "id": "mimalloc-bench-native/glibc-thread-per-1M-malloc-free-pairs/mechanical_mimalloc_raw",
+      "artifact_mode": "default-rust",
+      "feature_set": [
+        "bench"
+      ],
       "category": "multithreaded workload",
-      "baseline_median_ns": 25000000.0,
-      "max_ratio": 1.30
+      "baseline": {
+        "median_ns": 968887.0,
+        "p95_ns": 996200.0
+      },
+      "limits": {
+        "median_ratio": 1.12,
+        "p95_ratio": 1.2
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "2140b758f59424188387498bb194acfc3e17ad50",
+      "review": {
+        "five_run_median_cv": 0.03805256306091655
+      }
     },
     {
       "id": "mimalloc-bench-native/malloc-large-per-workload/mechanical_mimalloc_raw",
+      "artifact_mode": "default-rust",
+      "feature_set": [
+        "bench"
+      ],
       "category": "hot-path large allocation",
-      "baseline_median_ns": 25000000.0,
-      "max_ratio": 1.30
+      "baseline": {
+        "median_ns": 1007700.220164609,
+        "p95_ns": 1025295.621399177
+      },
+      "limits": {
+        "median_ratio": 1.08,
+        "p95_ratio": 1.08
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "2140b758f59424188387498bb194acfc3e17ad50",
+      "review": {
+        "five_run_median_cv": 0.012178305443040365
+      }
     },
     {
-      "id": "mimalloc-bench-native/cache-scratchN-per-workload/mechanical_mimalloc_raw",
-      "category": "aligned/cache workload",
-      "baseline_median_ns": 104000000.0,
-      "max_ratio": 1.30
+      "id": "mimalloc-bench-native/cache-scratch1-per-workload/mechanical_mimalloc_raw",
+      "artifact_mode": "default-rust",
+      "feature_set": [
+        "bench"
+      ],
+      "category": "single-worker cache workload",
+      "baseline": {
+        "median_ns": 2097261377.5,
+        "p95_ns": 2168994228.0
+      },
+      "limits": {
+        "median_ratio": 1.05,
+        "p95_ratio": 1.3
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "2140b758f59424188387498bb194acfc3e17ad50",
+      "review": {
+        "five_run_median_cv": 0.0060546997875779145
+      }
     },
     {
       "id": "mimalloc-bench-native/xmalloc-testN-per-1M-frees/mechanical_mimalloc_raw",
+      "artifact_mode": "default-rust",
+      "feature_set": [
+        "bench"
+      ],
       "category": "realloc/free workload",
-      "baseline_median_ns": 25000000.0,
-      "max_ratio": 1.30
+      "baseline": {
+        "median_ns": 2139561.0,
+        "p95_ns": 2191487.0
+      },
+      "limits": {
+        "median_ratio": 1.08,
+        "p95_ratio": 1.15
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "2140b758f59424188387498bb194acfc3e17ad50",
+      "review": {
+        "five_run_median_cv": 0.010272778137551144
+      }
     },
     {
       "id": "mimalloc-bench-native/glibc-thread-per-1M-malloc-free-pairs/c-mimalloc-3.3.2",
+      "artifact_mode": "default-rust",
+      "feature_set": [
+        "bench"
+      ],
       "category": "upstream mimalloc comparison",
-      "baseline_median_ns": 25000000.0,
-      "max_ratio": 1.30
+      "baseline": {
+        "median_ns": 984961.0,
+        "p95_ns": 1012073.0
+      },
+      "limits": {
+        "median_ratio": 1.1,
+        "p95_ratio": 1.12
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "2140b758f59424188387498bb194acfc3e17ad50",
+      "review": {
+        "five_run_median_cv": 0.025375438866447667
+      }
     }
   ]
 }

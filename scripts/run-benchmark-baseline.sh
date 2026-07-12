@@ -12,7 +12,7 @@ warmup_secs="${MIMALLOC_BASELINE_WARMUP_SECS:-2}"
 resource_operations="${MIMALLOC_BASELINE_RESOURCE_OPERATIONS:-100000}"
 resource_repeats="${MIMALLOC_BASELINE_RESOURCE_REPEATS:-3}"
 host_profile="${MIMALLOC_BASELINE_HOST_PROFILE:-release-linux-x86_64-primary}"
-scenarios="${MIMALLOC_BASELINE_SCENARIOS:-glibc-thread,malloc-large,cache-scratchN,xmalloc-testN}"
+scenarios="${MIMALLOC_BASELINE_SCENARIOS:-glibc-thread,malloc-large,cache-scratch1,xmalloc-testN}"
 thresholds="${MIMALLOC_BASELINE_THRESHOLDS:-benchmarks/thresholds.json}"
 runs=()
 

@@ -74,7 +74,7 @@ run scripts/check-bench-thresholds.py \
   --artifact-mode interpose \
   --feature bench \
   --feature interpose \
-  --allow-missing
+  --allow-no-applicable
 run scripts/run-bench-resources.py \
   --artifact-dir "$interpose_target_dir" \
   --artifact-mode interpose \

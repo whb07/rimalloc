@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "name": "release-linux-x86_64-primary",
+  "baseline_commit": "2140b758f59424188387498bb194acfc3e17ad50",
+  "host": {
+    "cpu_model": "AMD Ryzen 9 5950X 16-Core Processor",
+    "physical_cores": 16,
+    "logical_cpus": 32,
+    "numa_nodes": 1,
+    "governor": "performance",
+    "turbo": "unknown",
+    "kernel": "6.17.0-35-generic",
+    "target": "x86_64-unknown-linux-gnu",
+    "rustc": "rustc 1.92.0 (ded5c06cf 2025-12-08)",
+    "llvm": "21.1.3",
+    "c_compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "protocol": {
+    "complete_runs": 5,
+    "criterion_sample_size": 20,
+    "measurement_seconds": 5,
+    "warmup_seconds": 2,
+    "resource_operations": 100000,
+    "resource_repeats": 3,
+    "artifact_mode": "default-rust",
+    "feature_set": [
+      "bench"
+    ],
+    "scenarios": [
+      "glibc-thread",
+      "malloc-large",
+      "cache-scratch1",
+      "xmalloc-testN"
+    ],
+    "allocators": [
+      "mechanical_mimalloc_raw",
+      "c-mimalloc-3.3.2"
+    ]
+  },
+  "review": {
+    "maximum_five_run_median_cv": 0.03805256306091655,
+    "rejected_samples": [
+      "A partial fifth run was discarded after unrelated host load raised the hot-path median to 51 microseconds; the clean replacement measured 35.8 microseconds."
+    ]
+  }
+}

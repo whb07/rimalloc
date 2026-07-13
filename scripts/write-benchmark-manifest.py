@@ -63,6 +63,21 @@ def turbo() -> str:
         return "unknown"
 
 
+def env_int(name: str, default: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except ValueError as error:
+        raise SystemExit(f"{name} must be an integer") from error
+    if value <= 0:
+        raise SystemExit(f"{name} must be positive")
+    return value
+
+
+def env_list(name: str, default: str) -> list[str]:
+    values = [value.strip() for value in os.environ.get(name, default).split(",")]
+    return [value for value in values if value]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--artifact-dir", required=True)
@@ -117,6 +132,24 @@ def main() -> None:
         "turbo": turbo(),
         "started_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "command_digest": hashlib.sha256(commands_bytes).hexdigest(),
+        "controls": {
+            "hotpath_sample_size": env_int("MIMALLOC_HOTPATH_SAMPLE_SIZE", 100),
+            "hotpath_measurement_secs": env_int("MIMALLOC_HOTPATH_MEASUREMENT_SECS", 10),
+            "hotpath_warmup_secs": env_int("MIMALLOC_HOTPATH_WARMUP_SECS", 1),
+            "native_sample_size": env_int("MIMALLOC_BENCH_SAMPLE_SIZE", 100),
+            "native_measurement_secs": env_int("MIMALLOC_BENCH_MEASUREMENT_SECS", 10),
+            "native_warmup_secs": env_int("MIMALLOC_BENCH_WARMUP_SECS", 1),
+            "native_scenarios": env_list(
+                "MIMALLOC_BENCH_SCENARIOS",
+                "glibc-thread,malloc-large,cache-scratch1,xmalloc-testN",
+            ),
+            "native_allocators": env_list(
+                "MIMALLOC_BENCH_ALLOCATORS",
+                "mechanical_mimalloc_raw,c-mimalloc-3.3.2",
+            ),
+            "resource_operations": env_int("MIMALLOC_BENCH_RESOURCE_OPERATIONS", 100000),
+            "resource_repeats": env_int("MIMALLOC_BENCH_RESOURCE_REPEATS", 3),
+        },
     }
     (artifact_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"

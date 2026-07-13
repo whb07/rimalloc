@@ -46,6 +46,11 @@ Rust-vs-C ratios emitted by `scripts/summarize-criterion.py`; the linked-feature
 and preload sections must remain separate and must not be compared against
 default-mode saved baselines.
 
+Record each Criterion mode's `benchmark-review.json` status and attach the
+checksummed `stages-0-3-evidence-<commit>.tar.zst` bundle plus
+`evidence-index.json`. The bundle must contain all three artifact modes and the
+matching release assembly capture.
+
 ## Per-Release Performance Summary Template
 
 Each release entry must include:

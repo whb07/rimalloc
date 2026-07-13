@@ -12,8 +12,11 @@ performance relative to C mimalloc 3.3.2.
 - Before a release candidate, run `scripts/check-bench-full.sh` and preserve
   each mode's `manifest.json`, `environment.txt`, `commands.txt`, and
   `resource-results.jsonl`; preserve `criterion/` and `threshold-results.csv`
-  for the two Criterion modes, plus the default mode's `evidence-report.json`.
-  Update
+  for the two Criterion modes, their `benchmark-review.json` status, plus the
+  default mode's `evidence-report.json`. Attach the generated
+  `stages-0-3-evidence-<commit>.tar.zst`, its `.sha256` sidecar, and
+  `evidence-index.json`; the index records the commit, host profiles, all three
+  artifact modes, and assembly manifest. Update
   `BENCHMARK_RESULTS.md` with the exact command
   lines, feature flags, artifact modes, Rust/C ratios, and noisy benchmark notes
   for the release commit.
@@ -168,6 +171,19 @@ from one commit and one documented host profile. Generate a proposal with
 and the explicit `--write-reviewed-baseline` capture flag. Schema-1 parsing is
 retained for one migration cycle only.
 
+The per-entry median and p95 limits are hard infrastructure ceilings intended
+to tolerate host noise. They do not replace the stricter investigation budgets
+below. `scripts/check-bench-thresholds.py` records both decisions in
+`threshold-results.csv` and writes `benchmark-review.json`; the selected
+current/baseline median geomean above 1.01, or an individual result above its
+2%/3% budget, produces a mandatory `review-required` status even when the hard
+ceiling still passes.
+
+Every full-run manifest records the resolved sample size, measurement and
+warmup durations, selected native scenarios and allocators, resource operation
+count, and repeat count under `controls`. `commands.txt` repeats those resolved
+values in the actual command lines.
+
 ## Regression Budgets
 
 Treat any of these as requiring investigation before merge or release:
@@ -188,6 +204,13 @@ Treat any of these as requiring investigation before merge or release:
 Small single-run deltas are not authoritative when the scenario is explicitly
 classified noisy. Re-run noisy cases with more samples or a longer measurement
 window before changing code or claiming a regression.
+
+`benchmarks/resource-thresholds.json` applies scenario-specific hard ceilings
+to peak committed/logical bytes, end-minus-start committed bytes, peak
+RSS/logical bytes, and page faults per million operations for both `alloc_free`
+and `remote_free_1x1`. The full gate applies these to every required allocator
+surface and to `preloaded-libc`; resource validation is therefore a memory and
+fault regression gate, not only a schema/noise check.
 
 ## Scenario Classification
 

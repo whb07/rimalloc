@@ -12,5 +12,18 @@
     "mechanical_mimalloc_raw",
     "system"
   ],
-  "scenario_limits": []
+  "scenario_limits": {
+    "alloc_free": {
+      "peak_commit_per_logical_peak_byte": 128.0,
+      "max_commit_end_minus_start_bytes": 67108864,
+      "peak_rss_per_logical_peak_byte": 128.0,
+      "page_faults_per_million_operations": 100000.0
+    },
+    "remote_free_1x1": {
+      "peak_commit_per_logical_peak_byte": 256.0,
+      "max_commit_end_minus_start_bytes": 134217728,
+      "peak_rss_per_logical_peak_byte": 256.0,
+      "page_faults_per_million_operations": 200000.0
+    }
+  }
 }

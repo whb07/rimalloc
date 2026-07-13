@@ -63,7 +63,7 @@ def main() -> None:
         run = Path(run_value)
         required = [
             "environment.txt", "manifest.json", "commands.txt", "criterion",
-            "resource-results.jsonl", "threshold-results.csv",
+            "resource-results.jsonl", "threshold-results.csv", "benchmark-review.json",
         ]
         if args.artifact_mode == "default-rust":
             required.append("evidence-report.json")
@@ -82,6 +82,11 @@ def main() -> None:
     commits = {str(manifest["commit"]) for manifest in manifests}
     if len(commits) != 1:
         raise SystemExit("all baseline runs must use the same commit")
+    if any(not isinstance(manifest.get("controls"), dict) for manifest in manifests):
+        raise SystemExit("all baseline runs must record structured controls")
+    controls = {json.dumps(manifest["controls"], sort_keys=True) for manifest in manifests}
+    if len(controls) != 1:
+        raise SystemExit("all baseline runs must record the same structured controls")
 
     existing = load(Path(args.thresholds))
     entries = existing.get("thresholds", [])
@@ -128,10 +133,12 @@ def main() -> None:
         })
     document = {
         "schema": 2,
-        "notes": [
-            "Baseline values are the median of five run medians and five run p95 values.",
-            "Updates require manual review and --write-reviewed-baseline.",
-        ],
+        "notes": existing.get("notes", []),
+        "investigation_budgets": existing.get("investigation_budgets", {
+            "hot_path_median_ratio": 1.02,
+            "workload_median_ratio": 1.03,
+            "overall_geomean_ratio": 1.01,
+        }),
         "thresholds": retained + proposed,
     }
     destination = Path(args.thresholds) if args.write_reviewed_baseline else Path(args.output)

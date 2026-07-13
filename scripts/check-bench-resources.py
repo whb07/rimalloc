@@ -19,6 +19,15 @@ MANDATORY = {
     "allocator_committed_current_end", "allocator_committed_peak_end",
     "allocator_pages_current_end", "allocator_pages_abandoned_end", "exit_status",
     "wall_time_coefficient_of_variation",
+    "peak_commit_per_logical_peak_byte", "commit_end_minus_start",
+    "peak_rss_per_logical_peak_byte", "page_faults_per_million_operations",
+}
+
+LIMIT_FIELDS = {
+    "peak_commit_per_logical_peak_byte": "peak_commit_per_logical_peak_byte",
+    "max_commit_end_minus_start_bytes": "commit_end_minus_start",
+    "peak_rss_per_logical_peak_byte": "peak_rss_per_logical_peak_byte",
+    "page_faults_per_million_operations": "page_faults_per_million_operations",
 }
 
 
@@ -42,6 +51,9 @@ def main() -> None:
     args = parser.parse_args()
     thresholds = json.loads(Path(args.thresholds).read_text(encoding="utf-8"))
     max_cv = float(thresholds["initial_gates"]["max_wall_time_coefficient_of_variation"])
+    scenario_limits = thresholds.get("scenario_limits")
+    if not isinstance(scenario_limits, dict):
+        raise SystemExit("resource thresholds must define scenario_limits by scenario")
     records = [
         json.loads(line)
         for line in Path(args.results).read_text(encoding="utf-8").splitlines()
@@ -78,6 +90,21 @@ def main() -> None:
             )
             if float(record["wall_time_coefficient_of_variation"]) > max_cv:
                 raise ValueError(f"record {index} wall-time variation exceeds {max_cv}")
+            limits = scenario_limits.get(str(record["scenario"]))
+            if not isinstance(limits, dict):
+                raise ValueError(f"record {index} has no scenario-specific resource limits")
+            for limit_name, record_name in LIMIT_FIELDS.items():
+                limit = limits.get(limit_name)
+                value = record[record_name]
+                if not isinstance(limit, (int, float)) or limit < 0:
+                    raise ValueError(f"invalid limit {limit_name} for {record['scenario']}")
+                if value is None:
+                    raise ValueError(f"record {index} cannot enforce {record_name}")
+                measured = max(0.0, float(value))
+                if measured > float(limit):
+                    raise ValueError(
+                        f"record {index} {record_name}={measured} exceeds {limit}"
+                    )
             seen.add((str(record["scenario"]), str(record["allocator"])))
     except ValueError as error:
         raise SystemExit(f"resource validation failed: {error}") from error

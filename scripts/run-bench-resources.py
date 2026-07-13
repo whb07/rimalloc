@@ -68,6 +68,8 @@ def build_ld_preload_probe(artifact_dir: Path) -> tuple[Path, Path]:
     if not libraries:
         raise SystemExit("release interpose cdylib was not produced")
     library = max(libraries, key=lambda path: path.stat().st_mtime)
+    deployed_library = artifact_dir / "interpose-cdylib.so"
+    shutil.copy2(library, deployed_library)
     executable = artifact_dir / "release" / "ld_preload_resource_probe"
     subprocess.run(
         [
@@ -79,7 +81,7 @@ def build_ld_preload_probe(artifact_dir: Path) -> tuple[Path, Path]:
         check=True,
         cwd=ROOT,
     )
-    return executable, library
+    return executable, deployed_library
 
 
 def main() -> None:

@@ -24,10 +24,23 @@ for run_number in 1 2 3 4 5; do
 MIMALLOC_HOTPATH_SAMPLE_SIZE=$sample_size MIMALLOC_HOTPATH_MEASUREMENT_SECS=$measurement_secs MIMALLOC_HOTPATH_WARMUP_SECS=$warmup_secs CARGO_TARGET_DIR=$artifact_dir cargo bench --features bench --bench hotpath -- hotpath/paired_alloc_free/mechanical_mimalloc_public/16
 MIMALLOC_BENCH_SCENARIOS=$scenarios MIMALLOC_BENCH_ALLOCATORS=mechanical_mimalloc_raw,c-mimalloc-3.3.2 MIMALLOC_BENCH_SAMPLE_SIZE=$sample_size MIMALLOC_BENCH_MEASUREMENT_SECS=$measurement_secs MIMALLOC_BENCH_WARMUP_SECS=$warmup_secs CARGO_TARGET_DIR=$artifact_dir cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 scripts/run-bench-resources.py --artifact-dir $artifact_dir --artifact-mode default-rust --feature bench --operations $resource_operations --repeats $resource_repeats
-scripts/check-bench-thresholds.py --thresholds $thresholds --criterion-dir $artifact_dir/criterion --artifact-mode default-rust --feature bench --report-only
+scripts/run-evidence-report.py --artifact-dir $artifact_dir
+scripts/check-evidence-report.py --report $artifact_dir/evidence-report.json
+scripts/check-bench-thresholds.py --thresholds $thresholds --criterion-dir $artifact_dir/criterion --csv-out $artifact_dir/threshold-results.csv --review-out $artifact_dir/benchmark-review.json --artifact-mode default-rust --feature bench --report-only
 scripts/check-bench-resources.py --results $artifact_dir/resource-results.jsonl --artifact-mode default-rust --feature bench
 EOF
-  run scripts/write-benchmark-manifest.py \
+  run env \
+    MIMALLOC_HOTPATH_SAMPLE_SIZE="$sample_size" \
+    MIMALLOC_HOTPATH_MEASUREMENT_SECS="$measurement_secs" \
+    MIMALLOC_HOTPATH_WARMUP_SECS="$warmup_secs" \
+    MIMALLOC_BENCH_SAMPLE_SIZE="$sample_size" \
+    MIMALLOC_BENCH_MEASUREMENT_SECS="$measurement_secs" \
+    MIMALLOC_BENCH_WARMUP_SECS="$warmup_secs" \
+    MIMALLOC_BENCH_SCENARIOS="$scenarios" \
+    MIMALLOC_BENCH_ALLOCATORS="mechanical_mimalloc_raw,c-mimalloc-3.3.2" \
+    MIMALLOC_BENCH_RESOURCE_OPERATIONS="$resource_operations" \
+    MIMALLOC_BENCH_RESOURCE_REPEATS="$resource_repeats" \
+    scripts/write-benchmark-manifest.py \
     --artifact-dir "$artifact_dir" \
     --artifact-mode default-rust \
     --feature bench \
@@ -51,9 +64,12 @@ EOF
     --thresholds "$thresholds" \
     --criterion-dir "$artifact_dir/criterion" \
     --csv-out "$artifact_dir/threshold-results.csv" \
+    --review-out "$artifact_dir/benchmark-review.json" \
     --artifact-mode default-rust \
     --feature bench \
     --report-only
+  run scripts/run-evidence-report.py --artifact-dir "$artifact_dir"
+  run scripts/check-evidence-report.py --report "$artifact_dir/evidence-report.json"
   run scripts/run-bench-resources.py \
     --artifact-dir "$artifact_dir" \
     --artifact-mode default-rust \

@@ -94,6 +94,7 @@ def normalize_entry(entry: dict[str, object], schema: int) -> dict[str, object]:
 CSV_FIELDS = [
     "id", "category", "artifact_mode", "feature_set", "status",
     "baseline_median_ns", "current_median_ns", "median_ratio", "median_ratio_limit",
+    "investigation_ratio_limit", "review_required",
     "baseline_p95_ns", "current_p95_ns", "p95_ratio", "p95_ratio_limit",
     "current_mean_ns", "current_min_ns", "current_max_ns", "passed",
 ]
@@ -116,6 +117,7 @@ def validate_thresholds(
     feature_set: list[str] | None,
     report_only: bool = False,
     allow_no_applicable: bool = False,
+    review_out: Path | None = None,
 ) -> None:
     threshold_doc = load_json(threshold_path)
     if not isinstance(threshold_doc, dict):
@@ -124,6 +126,15 @@ def validate_thresholds(
     entries = threshold_doc.get("thresholds", [])
     if not isinstance(entries, list) or not entries:
         raise SystemExit("threshold file must contain a non-empty `thresholds` array")
+    budgets = threshold_doc.get("investigation_budgets", {})
+    try:
+        hot_path_budget = float(budgets.get("hot_path_median_ratio", 1.02))
+        workload_budget = float(budgets.get("workload_median_ratio", 1.03))
+        geomean_budget = float(budgets.get("overall_geomean_ratio", 1.01))
+    except (TypeError, ValueError) as error:
+        raise SystemExit("investigation budgets must be numeric") from error
+    if min(hot_path_budget, workload_budget, geomean_budget) < 1.0:
+        raise SystemExit("investigation budgets must be ratios of at least 1.0")
     active_features = sorted(feature_set) if feature_set else None
     results = collect_criterion(criterion_dir)
     rows: list[dict[str, object]] = []
@@ -156,12 +167,26 @@ def validate_thresholds(
         passed = median_ratio <= float(entry["median_ratio_limit"]) and (
             p95_ratio is None or p95_ratio <= float(entry["p95_ratio_limit"])
         )
+        investigation_limit = (
+            hot_path_budget
+            if full_id.startswith("hotpath/") or "hot-path" in str(entry["category"])
+            else workload_budget
+        )
+        review_required = median_ratio > investigation_limit
+        if not passed:
+            row_status = "regression"
+        elif review_required:
+            row_status = "review-required"
+        else:
+            row_status = "pass"
         row = {
             **entry,
             "feature_set": ",".join(entry["feature_set"] or []),
-            "status": "pass" if passed else "regression",
+            "status": row_status,
             "current_median_ns": result["median_ns"],
             "median_ratio": median_ratio,
+            "investigation_ratio_limit": investigation_limit,
+            "review_required": review_required,
             "current_p95_ns": result["p95_ns"],
             "p95_ratio": p95_ratio,
             "current_mean_ns": result["mean_ns"],
@@ -179,6 +204,47 @@ def validate_thresholds(
 
     if csv_out is not None:
         write_csv(csv_out, rows)
+    selected_rows = [
+        row for row in rows if str(row["category"]) != "upstream mimalloc comparison"
+    ]
+    ratios = [
+        float(row["median_ratio"])
+        for row in selected_rows
+        if float(row["median_ratio"]) > 0.0
+    ]
+    geomean_ratio = (
+        math.exp(sum(math.log(value) for value in ratios) / len(ratios))
+        if ratios
+        else None
+    )
+    geomean_review = geomean_ratio is not None and geomean_ratio > geomean_budget
+    review_items = [str(row["id"]) for row in rows if row["review_required"]]
+    if failures:
+        review_status = "hard-failure"
+    elif not rows:
+        review_status = "not-applicable"
+    elif review_items or geomean_review:
+        review_status = "review-required"
+    else:
+        review_status = "pass"
+    review_document = {
+        "schema": 1,
+        "artifact_mode": artifact_mode,
+        "feature_set": active_features or [],
+        "status": review_status,
+        "selected_workload_geomean_ratio": geomean_ratio,
+        "selected_workloads": [str(row["id"]) for row in selected_rows],
+        "overall_geomean_investigation_limit": geomean_budget,
+        "geomean_review_required": geomean_review,
+        "benchmark_review_required": review_items,
+        "hard_ceiling_failures": failures,
+    }
+    if review_out is not None:
+        review_out.parent.mkdir(parents=True, exist_ok=True)
+        review_out.write_text(
+            json.dumps(review_document, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if missing and not allow_missing:
         raise SystemExit("missing Criterion results:\n" + "\n".join(f"- {item}" for item in missing))
     if failures and not report_only:
@@ -254,6 +320,22 @@ def self_test() -> None:
             allow_no_applicable=True,
         )
 
+        review_dir = root / "review"
+        write_synthetic_result(review_dir, "synthetic/case", [104.0] * 20)
+        review_out = review_dir / "benchmark-review.json"
+        validate_thresholds(
+            thresholds,
+            review_dir / "criterion",
+            None,
+            False,
+            "default-rust",
+            ["bench"],
+            review_out=review_out,
+        )
+        review = load_json(review_out)
+        if not isinstance(review, dict) or review.get("status") != "review-required":
+            raise SystemExit("self-test investigation budget did not require review")
+
         malformed = dict(base_entry)
         malformed["baseline"] = {"median_ns": 100.0}
         thresholds.write_text(json.dumps({"schema": 2, "thresholds": [malformed]}), encoding="utf-8")
@@ -289,6 +371,7 @@ def main() -> None:
     parser.add_argument("--allow-missing", action="store_true")
     parser.add_argument("--allow-no-applicable", action="store_true")
     parser.add_argument("--report-only", action="store_true")
+    parser.add_argument("--review-out")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
@@ -299,6 +382,7 @@ def main() -> None:
         Path(args.csv_out) if args.csv_out else None,
         args.allow_missing, args.artifact_mode, args.features, args.report_only,
         args.allow_no_applicable,
+        Path(args.review_out) if args.review_out else None,
     )
 
 

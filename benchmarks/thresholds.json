@@ -2,8 +2,14 @@
   "schema": 2,
   "notes": [
     "Baseline values are the median of five run medians and five run p95 values.",
-    "Updates require manual review and --write-reviewed-baseline."
+    "Updates require manual review and --write-reviewed-baseline.",
+    "Per-benchmark limits are hard infrastructure ceilings; investigation budgets are stricter review triggers."
   ],
+  "investigation_budgets": {
+    "hot_path_median_ratio": 1.02,
+    "workload_median_ratio": 1.03,
+    "overall_geomean_ratio": 1.01
+  },
   "thresholds": [
     {
       "id": "hotpath/paired_alloc_free/mechanical_mimalloc_public/16",

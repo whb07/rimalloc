@@ -23,6 +23,8 @@ CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench hotpat
 CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench workloads
 CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench evidence
 CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
+scripts/run-evidence-report.py --artifact-dir $default_target_dir
+scripts/check-evidence-report.py --report $default_target_dir/evidence-report.json
 scripts/run-bench-resources.py --artifact-dir $default_target_dir --artifact-mode default-rust --feature bench
 EOF
 cat >"$interpose_target_dir/commands.txt" <<EOF
@@ -50,6 +52,8 @@ run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --be
 run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench workloads
 run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench evidence
 run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
+run scripts/run-evidence-report.py --artifact-dir "$default_target_dir"
+run scripts/check-evidence-report.py --report "$default_target_dir/evidence-report.json"
 run scripts/check-bench-thresholds.py \
   --thresholds benchmarks/thresholds.json \
   --criterion-dir "$default_target_dir/criterion" \

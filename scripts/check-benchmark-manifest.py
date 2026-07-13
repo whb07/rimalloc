@@ -26,6 +26,8 @@ def main() -> None:
     if artifact_dir.name != args.artifact_mode:
         raise SystemExit("artifact directory name and artifact mode disagree")
     missing = [name for name in REQUIRED if not (artifact_dir / name).exists()]
+    if args.artifact_mode == "default-rust" and not (artifact_dir / "evidence-report.json").exists():
+        missing.append("evidence-report.json")
     if missing:
         raise SystemExit("missing benchmark artifacts: " + ", ".join(missing))
     manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))

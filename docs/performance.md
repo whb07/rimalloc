@@ -11,7 +11,8 @@ performance relative to C mimalloc 3.3.2.
   authoritative.
 - Before a release candidate, run `scripts/check-bench-full.sh` and preserve
   each mode's `manifest.json`, `environment.txt`, `commands.txt`, `criterion/`,
-  `resource-results.jsonl`, and `threshold-results.csv`. Update
+  `resource-results.jsonl`, and `threshold-results.csv`, plus the default mode's
+  `evidence-report.json`. Update
   `BENCHMARK_RESULTS.md` with the exact command
   lines, feature flags, artifact modes, Rust/C ratios, and noisy benchmark notes
   for the release commit.
@@ -70,20 +71,22 @@ scripts/run-bench-resources.py --artifact-dir target/bench-full/default-rust \
   --artifact-mode default-rust --feature bench
 ```
 
-The runner invokes `benchmark_probe` once per allocator/scenario/repetition and
-emits JSON Lines. Records include start/end/peak RSS and commit, logical live
-and peak-live requested bytes, allocator current/peak committed bytes, page
-occupancy, page-search length, remote CAS retries, minor/major faults, and
-sampled p99/p999 latency where applicable. `page_occupancy` is live binned block bytes
-divided by the capacity of live small, medium, and large allocator pages; huge
-allocations are excluded. `page_search_length` is candidates examined per page
-search. Tail latency is sampled separately for paired facade allocation/free
-and remote free. On Linux, RSS values are KiB and come from `getrusage`; both
-the process-lifetime peak and the delta from the pre-workload peak are emitted.
-`live_requested_bytes` is tracked by the reporter's live allocation set instead
-of mimalloc's cumulative requested-byte statistic. Minor and major page faults
-are workload deltas. Diagnostic counters, including
-`remote_free_cas_retries`, are benchmark-only and use relaxed atomics.
+The resource runner invokes `benchmark_probe` once per
+allocator/scenario/repetition and writes `resource-results.jsonl`. Those records
+contain process/resource consistency fields: start/end/peak RSS and commit,
+logical live and peak-live requested bytes, allocator current/peak committed
+bytes, combined page-fault deltas, normalized ratios, and timing variation.
+
+The full gate separately runs `evidence_report`, preserves
+`evidence-report.json`, and validates its schema. That report contains page
+occupancy, page-search length, relaxed diagnostic counters such as
+`remote_free_cas_retries`, separate minor/major fault deltas, and sampled
+p99/p999 allocation and remote-free latency. `page_occupancy` is live binned
+block bytes divided by the capacity of live small, medium, and large allocator
+pages; huge allocations are excluded. `page_search_length` is candidates
+examined per page search. On Linux, the report's RSS values are KiB from
+`getrusage`; `live_requested_bytes` is tracked from the reporter's live set
+instead of mimalloc's cumulative requested-byte statistic.
 
 The randomized C/Rust differential trace includes ordinary allocation,
 alignment, realloc, heap allocation, owner-exit remote free, heap destruction,

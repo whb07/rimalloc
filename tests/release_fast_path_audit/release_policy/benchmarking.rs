@@ -19,6 +19,7 @@ fn release_candidates_require_full_benchmark_evidence() {
         "Before a release candidate, run `scripts/check-bench-full.sh`",
         "capture\n   `scripts/env-info.sh`",
         "resource-results.jsonl",
+        "evidence-report.json",
         "threshold-results.csv",
         "artifact modes, Rust/C ratios, and noisy-benchmark notes",
     ] {
@@ -32,6 +33,7 @@ fn release_candidates_require_full_benchmark_evidence() {
         "Before a release candidate, run `scripts/check-bench-full.sh`",
         "manifest.json",
         "resource-results.jsonl",
+        "evidence-report.json",
         "threshold-results.csv",
         "Rust-vs-C ratios come from the native scenario\nbenchmarks in the default Rust library mode",
     ] {
@@ -45,6 +47,7 @@ fn release_candidates_require_full_benchmark_evidence() {
         "CARGO_TARGET_DIR=\"$default_target_dir\"",
         "CARGO_TARGET_DIR=\"$interpose_target_dir\"",
         "--csv-out \"$default_target_dir/threshold-results.csv\"",
+        "scripts/check-evidence-report.py --report \"$default_target_dir/evidence-report.json\"",
         "--csv-out \"$interpose_target_dir/threshold-results.csv\"",
         "cargo bench --features \"bench interpose\" --bench hotpath",
         "--allow-no-applicable",

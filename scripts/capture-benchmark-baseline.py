@@ -65,6 +65,8 @@ def main() -> None:
             "environment.txt", "manifest.json", "commands.txt", "criterion",
             "resource-results.jsonl", "threshold-results.csv",
         ]
+        if args.artifact_mode == "default-rust":
+            required.append("evidence-report.json")
         missing = [name for name in required if not (run / name).exists()]
         if missing:
             raise SystemExit(f"baseline run is incomplete ({run}): {', '.join(missing)}")

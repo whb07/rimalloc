@@ -341,7 +341,8 @@ Before publishing or tagging a release:
 31. Before a release candidate, run `scripts/check-bench-full.sh`, capture
    `scripts/env-info.sh`, preserve each mode's `manifest.json`,
    `environment.txt`, `commands.txt`, `criterion/`, `resource-results.jsonl`,
-   and `threshold-results.csv`, and
+   and `threshold-results.csv`, preserve the default mode's
+   `evidence-report.json`, and
    update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,
    artifact modes, Rust/C ratios, and noisy-benchmark notes for the release
    commit.

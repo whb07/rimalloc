@@ -151,7 +151,7 @@ fn main() {
     let concurrent_remote_p99 = percentile(&mut concurrent_remote_samples, 99, 100);
     let concurrent_remote_p999 = percentile(&mut concurrent_remote_samples, 999, 1000);
     println!(
-        "{{\"peak_rss_kib\":{},\"baseline_peak_rss_kib\":{},\"peak_rss_delta_kib\":{},\"committed_bytes\":{},\"live_requested_bytes\":{},\"page_occupancy\":{},\"page_occupied_bytes\":{},\"page_capacity_bytes\":{},\"page_search_length\":{},\"minor_page_faults\":{},\"major_page_faults\":{},\"sampled_alloc_free_p99_ns\":{},\"sampled_alloc_free_p999_ns\":{},\"sampled_remote_free_p99_ns\":{},\"sampled_remote_free_p999_ns\":{},\"sampled_concurrent_remote_free_p99_ns\":{},\"sampled_concurrent_remote_free_p999_ns\":{},\"allocator\":{}}}",
+        "{{\"schema\":1,\"artifact_mode\":\"default-rust\",\"peak_rss_kib\":{},\"baseline_peak_rss_kib\":{},\"peak_rss_delta_kib\":{},\"committed_bytes\":{},\"live_requested_bytes\":{},\"page_occupancy\":{},\"page_occupied_bytes\":{},\"page_capacity_bytes\":{},\"page_search_length\":{},\"minor_page_faults\":{},\"major_page_faults\":{},\"sampled_alloc_free_p99_ns\":{},\"sampled_alloc_free_p999_ns\":{},\"sampled_remote_free_p99_ns\":{},\"sampled_remote_free_p999_ns\":{},\"sampled_concurrent_remote_free_p99_ns\":{},\"sampled_concurrent_remote_free_p999_ns\":{},\"allocator\":{}}}",
         usage_after.ru_maxrss,
         usage_before.ru_maxrss,
         usage_after.ru_maxrss.saturating_sub(usage_before.ru_maxrss),

@@ -668,3 +668,21 @@ were identical:
 Capturing `mi_route_free` and `mi_free_block_local` makes the inlined local-free
 and remote-CAS paths explicit; the exported `mi_free` symbol itself is only a
 tail jump to the route function in this release build.
+
+## Final Stages 0–3 Signoff
+
+The clean full benchmark gate completed for separate `default-rust` and
+`interpose` artifacts. All six applicable default thresholds passed; the
+interposition artifact has no applicable stored timing thresholds. Both
+artifact manifests contain the required commands, Criterion data, resource
+records, and validation outputs.
+
+Each resource mode produced and validated 18 records across six
+scenario/allocator tuples with zero live requested bytes at process exit and
+zero page faults per million measured operations. The maximum wall-time
+coefficient of variation was 0.055 for `default-rust` and 0.183 for
+`interpose`, below the 0.35 initial gate. Peak committed/logical-live ratios
+were 33.0 and 33.25 respectively. One initial interposition probe was retried
+after a single `system/alloc_free` scheduling outlier produced a 0.58
+coefficient; the isolated clean rerun passed all records without code or
+threshold changes.

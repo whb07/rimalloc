@@ -10,6 +10,7 @@ pub(crate) mod freelist_wrappers;
 pub(crate) mod layout;
 pub(crate) mod memid;
 pub(crate) mod page;
+pub(crate) mod page_batch;
 pub(crate) mod page_queues;
 pub(crate) mod page_states;
 pub(crate) mod ptr;
@@ -27,11 +28,12 @@ pub(crate) use ptr::{
 };
 
 pub(crate) use scalar::{
-    Alignment, AlignmentOffset, ArenaIndex, Bin, BlockSize, DirectBin, EffectiveSize, Errno,
-    FullBlockSize, GoodSize, HeapSeq, Heartbeat, MaybeAlignment, NumaNode, OsPageSize, PaddedSize,
-    PageCapacity, PageMapIndex, PageMapSubIndex, PageQueueCount, PageReclaimLimit,
-    PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire, SliceCount, SliceIndex,
-    StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount, WordCount,
+    Alignment, AlignmentOffset, ArenaIndex, BatchLen, BatchLimit, Bin, BlockSize, DirectBin,
+    EffectiveSize, Errno, FullBlockSize, GoodSize, HeapSeq, Heartbeat, MaybeAlignment, NumaNode,
+    OsPageSize, PaddedSize, PageCapacity, PageMapIndex, PageMapSubIndex, PageQueueCount,
+    PageReclaimLimit, PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire,
+    SliceCount, SliceIndex, StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount,
+    WordCount,
 };
 
 // Keep staged Phase 1 re-exports exercised in non-test builds without lint allowances.
@@ -62,6 +64,12 @@ const _: usize = core::mem::size_of::<(
     HeapVisitCallback,
     BlockVisitCallback,
     ThreadLocalClaimCallback,
+    BatchValidationError,
+    RemoteFreeBatch,
+    LocalFreeBatch,
+    LeasedBatch,
+    BatchLen,
+    BatchLimit,
 )>();
 
 pub(crate) use layout::{
@@ -92,6 +100,8 @@ pub(crate) use page_states::{
     OwnedAbandonedPage, Page, PageAbandonOutcome, PageForAbandon, PageFreeOwner, ThreadHeapLocal,
     Uninit,
 };
+
+pub(crate) use page_batch::{BatchValidationError, LeasedBatch, LocalFreeBatch, RemoteFreeBatch};
 
 pub(crate) use validation_extra::FreeBlock;
 
@@ -151,6 +161,7 @@ fn __lint_touch() {
     layout::__lint_touch();
     memid::__lint_touch();
     page::__lint_touch();
+    page_batch::__lint_touch();
     page_queues::__lint_touch();
     page_states::__lint_touch();
     ptr::__lint_touch();

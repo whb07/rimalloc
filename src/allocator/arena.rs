@@ -2554,6 +2554,8 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     page: *mut mi_page_t,
     current_theapx: *mut mi_theap_t,
 ) {
+    // SAFETY[AUDIT:arena-page-unabandon-entry-boundary]: the raw compatibility
+    // entry requires a claimed owned-abandoned page.
     let page =
         unsafe { crate::core_types::assume_owned_abandoned_page(PagePtr::new_unchecked(page)) };
     let current_theap = if current_theapx.is_null() {

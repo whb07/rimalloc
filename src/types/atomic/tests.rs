@@ -242,12 +242,20 @@ fn atomic_thread_free_take_head_preserves_owner_bit() {
 #[test]
 fn remote_push_publishes_head_and_atomic_detach_owns_it() {
     let mut block = mi_block_t::default();
+    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the stack-local block
+    // remains live throughout publication and detachment.
     let block = unsafe { BlockPtr::new_unchecked(ptr::addr_of_mut!(block)) };
     let initial = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned);
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let raw_page = page.as_mut_ptr();
+    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the page storage remains
+    // live and its atomic word is initialized before typed access.
     unsafe { ptr::addr_of_mut!((*raw_page).xthread_free).write(initial.raw()) };
+    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: raw_page is non-null,
+    // aligned, initialized stack-local metadata for this test.
     let page = unsafe { PagePtr::new_unchecked(raw_page) };
+    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the initialized page owns
+    // the xthread_free field for the fixture lifetime.
     let field = unsafe { page.thread_free_cell() };
 
     let published = loop {
@@ -278,13 +286,21 @@ fn remote_push_publishes_head_and_atomic_detach_owns_it() {
 #[test]
 fn remote_push_retry_returns_observation_without_consuming_block() {
     let mut raw_block = mi_block_t::default();
+    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: stack-local block storage
+    // remains live throughout the failed publication attempt.
     let block = unsafe { BlockPtr::new_unchecked(ptr::addr_of_mut!(raw_block)) };
     let live = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned);
     let stale = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Unowned);
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let raw_page = page.as_mut_ptr();
+    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: initialize the live
+    // stack-local atomic word before creating typed page access.
     unsafe { ptr::addr_of_mut!((*raw_page).xthread_free).write(live.raw()) };
+    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: raw_page is live, non-null,
+    // aligned stack-local metadata for the duration of this test.
     let page = unsafe { PagePtr::new_unchecked(raw_page) };
+    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the initialized page owns
+    // its xthread_free field for the fixture lifetime.
     let field = unsafe { page.thread_free_cell() };
 
     match field.try_push(stale, block) {

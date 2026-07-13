@@ -29,9 +29,9 @@ macro_rules! raw_page_bridge {
         #[inline(always)]
         #[doc = $marker]
         pub(crate) unsafe fn $name(page: PagePtr) -> $output {
-            // SAFETY: this module is the sole allocator-facing constructor
-            // bridge; the function-specific contract is established by its
-            // audited ingress caller.
+            // SAFETY[AUDIT:raw-bridge-page-witness]: this module is the sole
+            // allocator-facing constructor bridge; the function-specific
+            // contract is established by its audited ingress caller.
             unsafe { <$output>::new_unchecked(page) }
         }
     };

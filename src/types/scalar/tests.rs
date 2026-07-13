@@ -225,6 +225,45 @@ fn scalar_constructor_boundaries_cover_overflow_and_limits() {
 }
 
 #[test]
+fn batch_scalar_boundaries_and_used_accounting_are_checked() {
+    assert!(BatchLen::new(0).is_none());
+    assert_eq!(BatchLen::new(1).map(BatchLen::get), Some(1));
+    assert_eq!(
+        BatchLen::new(u16::MAX).map(BatchLen::as_usize),
+        Some(u16::MAX as usize)
+    );
+    assert!(BatchLimit::new(0).is_none());
+
+    let limit = BatchLimit::new(8).expect("non-zero batch limit");
+    assert_eq!(limit.clamp_to_remaining(20).map(BatchLimit::get), Some(8));
+    assert_eq!(limit.clamp_to_remaining(3).map(BatchLimit::get), Some(3));
+    assert!(limit.clamp_to_remaining(0).is_none());
+
+    let len = BatchLen::new(4).expect("non-empty batch");
+    // SAFETY[AUDIT:typed-page-batch-scalars]: ten is a valid standalone test
+    // capacity and is not published to page metadata.
+    let capacity = unsafe { PageCapacity::new_unchecked(10) };
+    assert_eq!(
+        UsedBlockCount::new(6)
+            .checked_add_batch(len, capacity)
+            .map(UsedBlockCount::get),
+        Some(10)
+    );
+    assert!(
+        UsedBlockCount::new(7)
+            .checked_add_batch(len, capacity)
+            .is_none()
+    );
+    assert_eq!(
+        UsedBlockCount::new(4)
+            .checked_sub_batch(len)
+            .map(UsedBlockCount::get),
+        Some(0)
+    );
+    assert!(UsedBlockCount::new(3).checked_sub_batch(len).is_none());
+}
+
+#[test]
 fn block_size_usable_subtracts_padding_domain() {
     let raw = crate::types::MI_PADDING_SIZE + 64;
     // SAFETY[AUDIT:typed-scalar-padding-test-fixtures]: `raw` includes the padding

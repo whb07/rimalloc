@@ -256,6 +256,8 @@ unsafe fn mi_page_free_quick_collect_raw(
     available: AvailableFreeList,
     local: LocalFreeList,
 ) -> bool {
+    // SAFETY[AUDIT:page-free-list-collect-boundary]: typed page/list witnesses
+    // preserve the raw quick-collection invariants.
     unsafe {
         if !available.is_empty() {
             return true;

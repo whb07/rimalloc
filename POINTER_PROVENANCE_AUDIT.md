@@ -16,9 +16,11 @@ Current split-module inventory also includes
 `src/allocator/arena/prefix.rs`, `src/allocator/page/bins.rs`,
 `src/allocator/page/counts.rs`, `src/allocator/page/queues.rs`,
 `src/allocator/page/validation.rs`, `src/allocator/page_map/lookup.rs`,
+`src/allocator/policy/compat.rs`, `src/allocator/policy/reference.rs`,
 `src/internal/bitmap/bfield.rs`, `src/internal/bitmap/chunkmap.rs`,
 `src/internal/block_link.rs`, `src/internal/page_location.rs`, and
-`src/safe/tests.rs`.
+`src/safe/tests.rs`, `src/types/page_batch.rs`, and
+`src/page_batch_tests/tests.rs`.
 
 Miri was checked for this toolchain but is not available:
 `cargo miri --version` reports that the `miri` component is unavailable for
@@ -68,6 +70,9 @@ Per-file review:
   allocator-owned atomic fields; ordering is covered by `ATOMIC_ORDERING_AUDIT.md`.
 - `src/bench_diagnostics.rs`: diagnostic pointer and integer markers are limited
   to test/benchmark instrumentation and do not feed allocator ownership.
+- `src/allocator/policy/compat.rs` and `src/allocator/policy/reference.rs`:
+  checked count arithmetic implements pure compatibility decisions over bounded
+  scalar metadata and does not create or transform pointer provenance.
 - `src/bitmap.rs`: bit indexes are converted to bitmap word indexes with bounded
   counts; scan and claim loops stay within the caller-provided bitmap storage.
 - `src/bits.rs`: bit-scan, rotate, and power-of-two helpers use integer-only
@@ -89,6 +94,13 @@ Per-file review:
   `src/core_types/padding/tests.rs`,
   `src/core_types/ptr/tests.rs`, and
   `src/core_types/scalar/tests.rs`.
+- `src/types/page_batch.rs`: block addresses are compared as integers only to
+  prove a candidate is aligned within the owning page's capacity-bounded block
+  range before any encoded-link dereference; checked multiplication bounds the
+  committed block extent.
+- `src/page_batch_tests/tests.rs`: pointer addition constructs an intentionally
+  misaligned interior candidate that is encoded only to verify rejection and is
+  never dereferenced.
 - `src/free.rs`: free paths compute block starts, padding locations, and guarded
   page addresses only after page lookup/ownership checks.
 - `src/headers.rs`: macro casts preserve C header API types and forward to the

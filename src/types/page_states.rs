@@ -632,6 +632,8 @@ pub(super) fn __lint_touch() {
     // witness is used only to keep remote-free and function-item APIs live.
     let _ = AbandonedPageType::try_claim_ownership
         as unsafe fn(AbandonedPageType) -> Result<OwnedAbandonedPage, AbandonedPageType>;
+    // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic abandoned
+    // witness is used only for enum-field reachability and is not dereferenced.
     let abandoned = unsafe { AbandonedPageType::new_unchecked(page) };
     let _ = abandoned.remote_free_page();
     // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic mapped
@@ -657,6 +659,8 @@ pub(super) fn __lint_touch() {
     {
         let _ = foreign.page();
     }
+    // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic abandoned
+    // witness is used only for enum-field reachability and is not dereferenced.
     let abandoned = unsafe { AbandonedPageType::new_unchecked(page) };
     if let PageAbandonOutcome::Abandoned(abandoned) = PageAbandonOutcome::Abandoned(abandoned) {
         let _ = abandoned.page();

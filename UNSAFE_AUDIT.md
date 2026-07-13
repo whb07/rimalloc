@@ -108,6 +108,9 @@ Per-file review:
 - `src/allocator/bench_diagnostics.rs`: unsafe diagnostic hooks are
   test/benchmark support and do not mutate allocator metadata outside the
   measured path.
+- `src/allocator/policy/tests.rs`: compatibility-policy reference fixtures use
+  caller-proven nonzero block sizes while exhaustively comparing extracted
+  decisions with the pre-extraction formulas.
 - `src/bitmap.rs`: bitmap word pointers are derived from caller-provided bitmap
   storage and bounded by bit counts; set/clear/claim transitions use atomic word
   operations equivalent to C.
@@ -125,6 +128,15 @@ Per-file review:
   `src/core_types/validation_extra.rs`: typed newtypes and validation helpers
   confine raw metadata, page, heap, callback, freelist, and scalar invariants to
   small wrappers used by the translated allocator paths.
+- `src/types/raw_bridge.rs`: audited allocator ingress helpers construct linear
+  page-state witnesses only after callers establish their state-specific raw
+  metadata invariants.
+- `src/types/page_batch.rs`: detached batch scanning validates page membership,
+  alignment, encoded links, capacity bounds, and nonzero length before creating
+  linear batch ownership values.
+- `src/page_batch_tests/tests.rs`: live allocator-owned block fixtures exercise
+  encoded batch traversal, capacity boundaries, cycles, and invalid or foreign
+  links without publishing synthetic metadata.
 - `src/types/padding.rs`: padding metadata pointer arithmetic and field access
   are confined to `PaddingPtr`, `PaddingCanary`, and `PaddingDelta`; callers
   supply allocator-owned block padding boundaries and receive typed values.
@@ -1818,6 +1830,12 @@ Operation IDs:
   lint-touch fixtures for scalar wrappers. Unsafe operations use known-valid
   scalar values solely to keep methods typechecked without publishing allocator
   state.
+- `SAFETY[AUDIT:typed-page-batch-scalars]`: `src/types/scalar.rs` owns
+  nonzero batch length and limit construction. Unchecked construction is
+  restricted to callers that have already proved a non-empty batch or limit.
+- `SAFETY[AUDIT:policy-reference-test-fixtures]`:
+  `src/allocator/policy/tests.rs` constructs only table-proven nonzero block
+  sizes for exhaustive compatibility-policy reference comparisons.
 - `SAFETY[AUDIT:random-context-boundaries]`: `src/internal/random.rs`
   confines random context raw pointers and primitive entropy/clock calls to
   the allocator's C-compatible random boundary. The shims convert live context
@@ -2370,6 +2388,65 @@ Operation IDs:
   witnesses to exercise page typestate transitions, ownership classification,
   and abandoned-page claiming. The fixtures are not registered with allocator
   globals and are used only while the local records are live.
+- `SAFETY[AUDIT:raw-bridge-page-witness]`: `src/types/raw_bridge.rs` centralizes
+  raw page-pointer to typestate-witness construction behind state-specific
+  caller contracts and performs no metadata access or mutation itself.
+- `SAFETY[AUDIT:raw-bridge-uninit-page]`: `src/types/raw_bridge.rs` constructs an
+  uninitialized page witness only for exclusively held initialization ingress.
+- `SAFETY[AUDIT:raw-bridge-active-page]`: `src/types/raw_bridge.rs` constructs an
+  active page witness only after allocation/page ingress proves local active
+  state.
+- `SAFETY[AUDIT:raw-bridge-all-free-abandoned-page]`:
+  `src/types/raw_bridge.rs` constructs an all-free abandoned witness only after
+  arena classification proves abandonment and zero used blocks.
+- `SAFETY[AUDIT:raw-bridge-full-page]`: `src/types/raw_bridge.rs` constructs a
+  full-page witness only after queue or page ingress proves full membership.
+- `SAFETY[AUDIT:raw-bridge-local-page]`: `src/types/raw_bridge.rs` constructs a
+  local-page witness only after current-thread ownership is established.
+- `SAFETY[AUDIT:raw-bridge-foreign-page]`: `src/types/raw_bridge.rs` constructs a
+  foreign-page witness only after free-path classification proves nonlocal
+  ownership.
+- `SAFETY[AUDIT:raw-bridge-abandoned-page]`: `src/types/raw_bridge.rs` constructs
+  an abandoned-page witness only after arena or abandon ingress proves the page
+  is unowned by a live heap.
+- `SAFETY[AUDIT:raw-bridge-owned-abandoned-page]`:
+  `src/types/raw_bridge.rs` constructs an owned-abandoned witness only after the
+  caller has claimed the atomic remote-free ownership protocol.
+- `SAFETY[AUDIT:typed-page-batch-scan]`: `src/types/page_batch.rs` bounds every
+  detached-chain traversal by page capacity, validates exact page-block
+  membership before dereference, and uses only page-local encoded-link helpers.
+- `SAFETY[AUDIT:typed-page-batch-lint-fixture]`:
+  `src/types/page_batch.rs` uses a known-valid nonzero length solely to keep the
+  staged batch error and accessors typechecked before all production consumers
+  are wired.
+- `SAFETY[AUDIT:typed-page-batch-test-fixtures]`:
+  `src/page_batch_tests/tests.rs` keeps allocator-returned blocks live while
+  exercising bounded encoded traversal and frees every allocation exactly once.
+- `SAFETY[AUDIT:page-free-list-local-detached-collect]`:
+  `src/allocator/page/lifecycle.rs` collects a uniquely detached remote chain
+  only while a local-page witness proves current-thread ownership.
+- `SAFETY[AUDIT:page-free-list-abandoned-detached-collect]`:
+  `src/allocator/page/lifecycle.rs` collects a uniquely detached remote chain
+  only while an owned-abandoned witness proves exclusive collection rights.
+- `SAFETY[AUDIT:page-remote-list-tail-fixture]`:
+  `src/allocator/page/lifecycle.rs` keeps real allocator-owned same-page blocks
+  live while testing published-head tail detachment.
+- `SAFETY[AUDIT:typed-atomic-remote-push-fixture]`:
+  `src/types/atomic/tests.rs` uses stack-local live atomic and block storage to
+  exercise typed remote publication and unique detachment.
+- `SAFETY[AUDIT:typed-atomic-thread-free-published-tail]`:
+  `src/types/atomic/thread_free.rs` severs only the encoded tail link while an
+  owned-abandoned witness excludes competing collectors and the head remains
+  atomically published.
+- `SAFETY[AUDIT:typed-page-abandoned-release-boundary]`:
+  `src/types/page_states.rs` consumes owned-abandoned capability only after the
+  atomic ownership protocol has been released.
+- `SAFETY[AUDIT:typed-page-abandoned-destroy-boundary]`:
+  `src/types/page_states.rs` creates terminal destroyed state only after the
+  all-free abandoned page has been released to its arena.
+- `SAFETY[AUDIT:typed-page-queue-enqueue-transition]`:
+  `src/types/page_queues.rs` creates queued-page ownership only after the raw
+  enqueue mutation has linked the page into the destination queue.
 - `SAFETY[AUDIT:typed-free-validation]`: `src/types/validation.rs` converts
   validated pointer-lookup results into free-list witnesses, and
   `src/types/validation/tests.rs` builds stack-local page/block/user fixtures

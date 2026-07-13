@@ -100,6 +100,8 @@ fn scalar_wrappers_match_raw_layout() {
     assert_layout!(PageReclaimOnFree, core::ffi::c_long);
     assert_layout!(PageReclaimLimit, core::ffi::c_long);
     assert_layout!(UsedBlockCount, u16);
+    assert_layout!(BatchLen, core::num::NonZeroU16);
+    assert_layout!(BatchLimit, core::num::NonZeroU16);
     assert_layout!(PageCapacity, u16);
     assert_layout!(ReservedBlockCount, u16);
     assert_layout!(RetireExpire, u8);

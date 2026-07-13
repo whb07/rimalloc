@@ -1168,3 +1168,25 @@ unsafe-deferred-callback-test-fixtures	test	src/safe/tests.rs	Exercises unsafe d
 unsafe-deferred-callback-test-fixtures	test	tests/release_fast_path_audit/release_policy/callbacks.rs	Checks deferred callback guard fixture docs, namespace, no-unwind, and registration boundaries.
 unsafe-callback-address-test-fixtures	test	src/safe/tests.rs	Exercises callback function pointer address equality fixtures.
 unsafe-callback-address-test-fixtures	test	tests/release_fast_path_audit/release_policy/callbacks.rs	Checks callback address fixture docs and no-unwind boundaries.
+policy-reference-test-fixtures	test	src/allocator/policy/tests.rs	Exhaustively compares extracted compatibility decisions with reference formulas using nonzero block-size fixtures.
+typed-page-batch-scalars	test	src/types/scalar/tests.rs	Covers zero, one, maximum, clamp, overflow, capacity, and subtraction boundaries for batch scalars.
+typed-page-batch-scan	test	src/page_batch_tests/tests.rs	Exercises encoded detached-chain scans at representative and capacity boundary lengths plus cycles and invalid links.
+typed-page-batch-lint-fixture	script	scripts/check-unsafe-audit.py	Checks the staged lint fixture remains tagged and documented while batch consumers are wired.
+typed-page-batch-test-fixtures	test	src/page_batch_tests/tests.rs	Exercises live allocator-owned same-page and foreign-page block fixtures under secure encoded links.
+raw-bridge-page-witness	test	tests/release_fast_path_audit/capability_linearity.rs	Checks raw page witness construction remains centralized in the audited bridge.
+raw-bridge-uninit-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks the uninitialized page ingress constructor remains in the raw bridge.
+raw-bridge-active-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks active page raw ingress is centralized and capability based.
+raw-bridge-all-free-abandoned-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks all-free abandoned witness construction remains centralized.
+raw-bridge-full-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks full page raw ingress remains centralized and capability based.
+raw-bridge-local-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks local page raw ingress remains centralized and capability based.
+raw-bridge-foreign-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks foreign page raw ingress remains centralized and capability based.
+raw-bridge-abandoned-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks abandoned page raw ingress remains centralized and capability based.
+raw-bridge-owned-abandoned-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks owned abandoned page raw ingress remains centralized and capability based.
+page-free-list-local-detached-collect	test	src/allocator/page/lifecycle.rs	Exercises local-page detached remote collection through the typed lifecycle boundary.
+page-free-list-abandoned-detached-collect	test	src/allocator/page/lifecycle.rs	Exercises owned-abandoned detached remote collection through the typed lifecycle boundary.
+page-remote-list-tail-fixture	test	src/allocator/page/lifecycle.rs	Exercises published-head tail detachment with live same-page allocator blocks.
+typed-atomic-remote-push-fixture	test	src/types/atomic/tests.rs	Exercises typed remote push publication and unique detach using live stack-local storage.
+typed-atomic-thread-free-published-tail	test	tests/release_fast_path_audit/datatype_acceptance/strict_type/atomic_provenance_guards/atomic_wrappers.rs	Checks published-head tail detachment remains typed and distinct from detached ownership.
+typed-page-abandoned-release-boundary	test	tests/release_fast_path_audit/capability_linearity.rs	Checks owned abandoned capability release is consuming and centralized.
+typed-page-abandoned-destroy-boundary	test	tests/release_fast_path_audit/capability_linearity.rs	Checks all-free abandoned destruction is a consuming terminal transition.
+typed-page-queue-enqueue-transition	test	tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs	Checks raw queue mutation returns typed queued ownership at the enqueue boundary.

@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5993 |
-| `unsafe_blocks` | 3515 |
-| `unsafe_fns` | 2043 |
+| `unsafe_mentions` | 6046 |
+| `unsafe_blocks` | 3559 |
+| `unsafe_fns` | 2052 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 232 |
@@ -44,7 +44,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/alloc/string_path.rs` | 46 | 18 | 18 | 3 | 0 | 6 | 0 |
 | `src/allocator/alloc/zeroed.rs` | 28 | 11 | 11 | 0 | 0 | 5 | 0 |
 | `src/allocator/alloc.rs` | 171 | 75 | 74 | 0 | 0 | 20 | 0 |
-| `src/allocator/arena/abandoned.rs` | 47 | 40 | 6 | 0 | 0 | 0 | 0 |
+| `src/allocator/arena/abandoned.rs` | 48 | 41 | 6 | 0 | 0 | 0 | 0 |
 | `src/allocator/arena/debug.rs` | 53 | 41 | 10 | 0 | 0 | 2 | 0 |
 | `src/allocator/arena/geometry.rs` | 62 | 41 | 17 | 0 | 0 | 4 | 0 |
 | `src/allocator/arena/heap_pages.rs` | 79 | 64 | 13 | 0 | 0 | 2 | 0 |
@@ -68,13 +68,14 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/page/counts.rs` | 44 | 22 | 22 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/flags.rs` | 20 | 10 | 10 | 0 | 0 | 0 | 0 |
-| `src/allocator/page/lifecycle.rs` | 33 | 17 | 16 | 0 | 0 | 0 | 0 |
+| `src/allocator/page/lifecycle.rs` | 40 | 21 | 19 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/queues.rs` | 45 | 22 | 23 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/stats_bin.rs` | 8 | 4 | 4 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/validation.rs` | 10 | 5 | 5 | 0 | 0 | 0 | 0 |
 | `src/allocator/page.rs` | 115 | 51 | 64 | 0 | 0 | 0 | 0 |
 | `src/allocator/page_map/lookup.rs` | 25 | 17 | 6 | 0 | 0 | 2 | 0 |
 | `src/allocator/page_map.rs` | 161 | 127 | 32 | 0 | 0 | 0 | 0 |
+| `src/allocator/policy/tests.rs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `src/allocator/stats.rs` | 198 | 124 | 51 | 0 | 0 | 22 | 0 |
 | `src/allocator/thread_heap/lists.rs` | 24 | 12 | 12 | 0 | 0 | 0 | 0 |
 | `src/allocator/thread_heap.rs` | 120 | 56 | 58 | 0 | 0 | 6 | 0 |
@@ -97,6 +98,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/internal/provenance.rs` | 2 | 0 | 0 | 0 | 2 | 0 | 0 |
 | `src/internal/random.rs` | 13 | 8 | 5 | 0 | 0 | 0 | 0 |
 | `src/lib.rs` | 21 | 8 | 4 | 1 | 1 | 1 | 0 |
+| `src/page_batch_tests/tests.rs` | 10 | 10 | 0 | 0 | 0 | 0 | 0 |
 | `src/platform/emscripten.rs` | 48 | 25 | 22 | 1 | 0 | 0 | 0 |
 | `src/platform/macos.rs` | 97 | 46 | 45 | 1 | 0 | 5 | 0 |
 | `src/platform/mod.rs` | 75 | 47 | 22 | 4 | 0 | 2 | 2 |
@@ -119,10 +121,10 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/types/atomic/fields.rs` | 32 | 16 | 16 | 0 | 0 | 0 | 0 |
 | `src/types/atomic/guards.rs` | 9 | 6 | 3 | 0 | 0 | 0 | 0 |
 | `src/types/atomic/page_thread.rs` | 16 | 9 | 7 | 0 | 0 | 0 | 0 |
-| `src/types/atomic/tests.rs` | 16 | 16 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/atomic/thread_free.rs` | 20 | 12 | 8 | 0 | 0 | 0 | 0 |
+| `src/types/atomic/tests.rs` | 25 | 25 | 0 | 0 | 0 | 0 | 0 |
+| `src/types/atomic/thread_free.rs` | 17 | 10 | 7 | 0 | 0 | 0 | 0 |
 | `src/types/atomic/thread_heap_refcount.rs` | 6 | 3 | 3 | 0 | 0 | 0 | 0 |
-| `src/types/atomic.rs` | 8 | 1 | 7 | 0 | 0 | 0 | 0 |
+| `src/types/atomic.rs` | 4 | 0 | 4 | 0 | 0 | 0 | 0 |
 | `src/types/callbacks/tests.rs` | 22 | 13 | 9 | 0 | 0 | 0 | 0 |
 | `src/types/callbacks.rs` | 16 | 8 | 8 | 0 | 0 | 0 | 0 |
 | `src/types/constants.rs` | 10 | 0 | 8 | 0 | 2 | 0 | 0 |
@@ -140,14 +142,16 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/types/padding.rs` | 12 | 7 | 5 | 0 | 0 | 0 | 0 |
 | `src/types/page/tests.rs` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/page.rs` | 5 | 3 | 2 | 0 | 0 | 0 | 0 |
+| `src/types/page_batch.rs` | 12 | 8 | 4 | 0 | 0 | 0 | 0 |
 | `src/types/page_queues/tests.rs` | 42 | 42 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/page_queues.rs` | 32 | 10 | 22 | 0 | 0 | 0 | 0 |
+| `src/types/page_queues.rs` | 35 | 12 | 23 | 0 | 0 | 0 | 0 |
 | `src/types/page_states/tests.rs` | 10 | 10 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/page_states.rs` | 65 | 44 | 21 | 0 | 0 | 0 | 0 |
+| `src/types/page_states.rs` | 68 | 47 | 21 | 0 | 0 | 0 | 0 |
 | `src/types/ptr/tests.rs` | 89 | 89 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/ptr.rs` | 374 | 149 | 225 | 0 | 0 | 0 | 0 |
-| `src/types/scalar/tests.rs` | 31 | 31 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/scalar.rs` | 33 | 17 | 16 | 0 | 0 | 0 | 0 |
+| `src/types/raw_bridge.rs` | 6 | 3 | 3 | 0 | 0 | 0 | 0 |
+| `src/types/scalar/tests.rs` | 32 | 32 | 0 | 0 | 0 | 0 | 0 |
+| `src/types/scalar.rs` | 40 | 22 | 18 | 0 | 0 | 0 | 0 |
 | `src/types/validation/tests.rs` | 3 | 3 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/validation.rs` | 2 | 1 | 1 | 0 | 0 | 0 | 0 |
 | `src/types/validation_extra.rs` | 2 | 0 | 2 | 0 | 0 | 0 | 0 |

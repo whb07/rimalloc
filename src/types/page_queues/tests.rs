@@ -163,6 +163,8 @@ fn queued_normal_page_requires_page_linked_in_normal_queue() {
         // stack-local huge-page edge-case fixture above.
         let active = unsafe { crate::core_types::ActivePage::new_unchecked(page) };
         let normal = unsafe { NormalPageQueue::new_unchecked(queue) };
+        // SAFETY[AUDIT:typed-page-queue-membership-test-fixtures]: the active
+        // page and sentinel queue witnesses remain live for the transition.
         let queued =
             unsafe { QueuedPage::<NormalQueue>::try_queue(active, normal) }.expect("huge page");
         assert_eq!(queued.page().as_ptr(), page.as_ptr());

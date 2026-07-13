@@ -6,7 +6,7 @@
 
 use core::{
     ffi::{c_int, c_long},
-    num::{NonZeroU32, NonZeroUsize},
+    num::{NonZeroU16, NonZeroU32, NonZeroUsize},
 };
 
 /// Domain-specific error for allocation size overflows.
@@ -544,6 +544,98 @@ impl UsedBlockCount {
     pub(crate) fn subtract(self, count: u16) -> Self {
         crate::internal::mi_debug_assert!(self.0 >= count);
         Self(self.0 - count)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn checked_add_batch(
+        self,
+        len: BatchLen,
+        capacity: PageCapacity,
+    ) -> Option<Self> {
+        match self.0.checked_add(len.get()) {
+            Some(used) if used <= capacity.get() => Some(Self(used)),
+            _ => None,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) const fn checked_sub_batch(self, len: BatchLen) -> Option<Self> {
+        match self.0.checked_sub(len.get()) {
+            Some(used) => Some(Self(used)),
+            None => None,
+        }
+    }
+}
+
+/// Non-empty number of blocks owned by a page-homogeneous batch.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub(crate) struct BatchLen(NonZeroU16);
+
+impl BatchLen {
+    #[inline(always)]
+    pub(crate) const fn new(value: u16) -> Option<Self> {
+        match NonZeroU16::new(value) {
+            Some(value) => Some(Self(value)),
+            None => None,
+        }
+    }
+
+    /// # Safety
+    /// `value` must be non-zero.
+    #[inline(always)]
+    pub(crate) const unsafe fn new_unchecked(value: u16) -> Self {
+        // SAFETY[AUDIT:typed-page-batch-scalars]: the caller proves the batch is non-empty.
+        Self(unsafe { NonZeroU16::new_unchecked(value) })
+    }
+
+    #[inline(always)]
+    pub(crate) const fn get(self) -> u16 {
+        self.0.get()
+    }
+
+    #[inline(always)]
+    pub(crate) const fn as_usize(self) -> usize {
+        self.get() as usize
+    }
+}
+
+/// Non-zero upper bound on the number of blocks leased from a page.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub(crate) struct BatchLimit(NonZeroU16);
+
+impl BatchLimit {
+    #[inline(always)]
+    pub(crate) const fn new(value: u16) -> Option<Self> {
+        match NonZeroU16::new(value) {
+            Some(value) => Some(Self(value)),
+            None => None,
+        }
+    }
+
+    /// # Safety
+    /// `value` must be non-zero.
+    #[inline(always)]
+    pub(crate) const unsafe fn new_unchecked(value: u16) -> Self {
+        // SAFETY[AUDIT:typed-page-batch-scalars]: the caller proves the limit is non-zero.
+        Self(unsafe { NonZeroU16::new_unchecked(value) })
+    }
+
+    #[inline(always)]
+    pub(crate) const fn get(self) -> u16 {
+        self.0.get()
+    }
+
+    #[inline(always)]
+    pub(crate) const fn as_usize(self) -> usize {
+        self.get() as usize
+    }
+
+    #[inline(always)]
+    pub(crate) fn clamp_to_remaining(self, remaining: usize) -> Option<Self> {
+        let remaining = u16::try_from(remaining).unwrap_or(u16::MAX);
+        Self::new(self.get().min(remaining))
     }
 }
 
@@ -1102,6 +1194,21 @@ impl GoodSize {
 }
 
 pub(super) fn __lint_touch() {
+    // SAFETY[AUDIT:typed-page-batch-scalars]: one is a valid non-zero lint fixture.
+    let batch_limit = unsafe { BatchLimit::new_unchecked(1) };
+    let _ = batch_limit.as_usize();
+    let _ = BatchLimit::new(1);
+    let _ = batch_limit.clamp_to_remaining(1);
+    let _ = BatchLen::new(1);
+    // SAFETY[AUDIT:typed-page-batch-scalars]: one is a valid non-zero lint fixture.
+    let batch_len = unsafe { BatchLen::new_unchecked(1) };
+    let _ = batch_len.as_usize();
+    let used = UsedBlockCount::new(1);
+    // SAFETY[AUDIT:typed-page-batch-scalars]: one satisfies the standalone
+    // capacity fixture and is never published to page metadata.
+    let capacity = unsafe { PageCapacity::new_unchecked(1) };
+    let _ = UsedBlockCount::new(0).checked_add_batch(batch_len, capacity);
+    let _ = used.checked_sub_batch(batch_len);
     let requested = RequestedSize::new(1);
     let _ = requested.checked_add(1);
     let _ = requested.checked_mul(1);

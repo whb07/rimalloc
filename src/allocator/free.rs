@@ -23,9 +23,9 @@ use crate::internal::{
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
-    _mi_page_free_collect, _mi_page_retire_internal, _mi_page_unfull_internal,
-    _mi_theap_page_reclaim, MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned,
-    mi_page_is_huge, mi_page_queue_count_typed,
+    _mi_page_retire_internal, _mi_page_unfull_internal, _mi_theap_page_reclaim,
+    MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned, mi_page_is_huge,
+    mi_page_queue_count_typed,
 };
 use crate::prim::{
     _mi_page_associated_theap_peek, _mi_prim_thread_id, _mi_theap_default,

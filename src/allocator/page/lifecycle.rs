@@ -121,6 +121,83 @@ fn report_remote_list_corruption(error: BatchValidationError) -> BatchValidation
     error
 }
 
+#[inline]
+fn report_local_list_corruption(error: BatchValidationError) -> BatchValidationError {
+    let message = match error {
+        BatchValidationError::ExceedsUsed { .. } => {
+            format_args!("corrupted meta-data in local free list\n")
+        }
+        _ => format_args!("corrupted local free list\n"),
+    };
+    _mi_error_message_fmt(Errno::EFAULT, message);
+    error
+}
+
+enum PageCollectOwner<'a> {
+    Local(&'a LocalPage),
+    Abandoned(&'a OwnedAbandonedPage),
+}
+
+impl PageCollectOwner<'_> {
+    #[inline(always)]
+    fn page(&self) -> PagePtr {
+        match self {
+            Self::Local(owner) => owner.page(),
+            Self::Abandoned(owner) => owner.page(),
+        }
+    }
+
+    #[inline]
+    unsafe fn collect_remote(
+        &self,
+        detached: DetachedRemoteList,
+        local: LocalFreeList,
+    ) -> Result<LocalFreeList, BatchValidationError> {
+        match self {
+            // SAFETY[AUDIT:page-free-list-owner-variant]: each enum variant
+            // retains the concrete proof required by its monomorphic collector.
+            Self::Local(owner) => unsafe { collect_remote_for_local_page(owner, detached, local) },
+            // SAFETY[AUDIT:page-free-list-owner-variant]: each enum variant
+            // retains the concrete proof required by its monomorphic collector.
+            Self::Abandoned(owner) => unsafe {
+                collect_remote_for_owned_abandoned_page(owner, detached, local)
+            },
+        }
+    }
+
+    #[inline]
+    unsafe fn detach_local_free_batch(
+        &self,
+    ) -> Result<Option<crate::core_types::LocalFreeBatch>, BatchValidationError> {
+        match self {
+            // SAFETY[AUDIT:page-free-list-owner-variant]: the variant carries
+            // the exact owner proof required for local-list detachment.
+            Self::Local(owner) => unsafe { owner.detach_local_free_batch() },
+            // SAFETY[AUDIT:page-free-list-owner-variant]: the variant carries
+            // the exact owner proof required for abandoned-list detachment.
+            Self::Abandoned(owner) => unsafe { owner.detach_local_free_batch() },
+        }
+    }
+
+    #[inline]
+    unsafe fn prepend_to_available(
+        &self,
+        batch: crate::core_types::LocalFreeBatch,
+        available: AvailableFreeList,
+    ) -> AvailableFreeList {
+        match self {
+            // SAFETY[AUDIT:page-free-list-owner-variant]: the batch and
+            // concrete owner proof refer to the same page.
+            Self::Local(owner) => unsafe { batch.prepend_to_available(owner, available) },
+            // SAFETY[AUDIT:page-free-list-owner-variant]: the batch and
+            // concrete owner proof refer to the same claimed abandoned page.
+            Self::Abandoned(owner) => unsafe {
+                batch.prepend_to_owned_abandoned_page(owner, available)
+            },
+        }
+    }
+}
+
 /// # Safety
 /// `detached` must be a uniquely detached chain for this local page.
 #[inline]
@@ -156,7 +233,7 @@ pub(crate) unsafe fn collect_remote_for_owned_abandoned_page(
 }
 
 /// # Safety
-/// `page` must point to page metadata owned by the current allocator state.
+/// `page` must point to page metadata owned by the current thread heap.
 #[inline]
 pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
@@ -188,6 +265,91 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
             Err(_) => page_ptr.local_free(),
         }
     }
+}
+
+#[inline]
+unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
+    let page_ptr = owner.page();
+    let page = page_ptr.as_ptr();
+    // SAFETY[AUDIT:page-free-list-owner-dispatch]: either concrete owner proof
+    // grants exclusive collection access to the atomic thread-free head.
+    let remote = unsafe { page_ptr.thread_free_cell().detach_head() };
+    if !remote.is_empty() {
+        // SAFETY[AUDIT:page-free-list-owner-dispatch]: the detached head and
+        // current local list belong to the proven owner page.
+        let local = unsafe { page_ptr.local_free() };
+        let _ = unsafe { owner.collect_remote(remote, local) };
+    }
+
+    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the owner proof grants
+    // exclusive access to the page-local list fields.
+    let local = unsafe { page_ptr.local_free() };
+    if !local.is_empty() {
+        // SAFETY[AUDIT:page-free-list-owner-dispatch]: the owner proof grants
+        // exclusive access to the available-list field.
+        let available = unsafe { page_ptr.free() };
+        if available.is_empty() || force {
+            #[cfg(feature = "bench-diagnostics")]
+            let appended = !available.is_empty();
+            // SAFETY[AUDIT:page-free-list-owner-dispatch]: dispatch retains the
+            // concrete owner proof while detaching and moving the local batch.
+            match unsafe { owner.detach_local_free_batch() } {
+                Ok(Some(batch)) => {
+                    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the batch was
+                    // detached from this owner immediately above.
+                    let new_available = unsafe { owner.prepend_to_available(batch, available) };
+                    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the splice
+                    // result is now the owner's unique available-list head.
+                    unsafe { page_ptr.set_free(new_available) };
+                    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the owner
+                    // grants writable access to this page metadata flag.
+                    unsafe { (*page).free_is_zero = false };
+                    #[cfg(feature = "bench-diagnostics")]
+                    crate::bench_diagnostics::page_free_collect_moved_to_free(appended);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    let _ = report_local_list_corruption(error);
+                }
+            }
+        } else {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::page_free_collect_noop_local_blocked();
+        }
+    } else {
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::page_free_collect_local_empty();
+    }
+
+    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the same owner proof remains
+    // live through the final forced-collection invariant check.
+    crate::internal::mi_assert_internal!(!force || unsafe { page_ptr.local_free() }.is_empty());
+}
+
+/// Collect free lists for a page owned by the current thread heap.
+///
+/// # Safety
+/// `page` must remain the unique local collection owner for the call.
+#[inline]
+pub(crate) unsafe fn collect_page_free_lists_local(page: &LocalPage, force: bool) {
+    #[cfg(feature = "bench-diagnostics")]
+    crate::bench_diagnostics::page_free_collect_call(force);
+    // SAFETY[AUDIT:page-free-list-owner-dispatch]: LocalPage is preserved in
+    // the owner enum rather than reconstructed from a raw pointer.
+    unsafe { collect_page_free_lists(PageCollectOwner::Local(page), force) };
+}
+
+/// Collect free lists for a page whose abandoned ownership bit is claimed.
+///
+/// # Safety
+/// `page` must remain the unique abandoned collection owner for the call.
+#[inline]
+pub(crate) unsafe fn collect_page_free_lists_abandoned(page: &OwnedAbandonedPage, force: bool) {
+    #[cfg(feature = "bench-diagnostics")]
+    crate::bench_diagnostics::page_free_collect_call(force);
+    // SAFETY[AUDIT:page-free-list-owner-dispatch]: OwnedAbandonedPage is
+    // preserved in the owner enum rather than weakened to LocalPage.
+    unsafe { collect_page_free_lists(PageCollectOwner::Abandoned(page), force) };
 }
 
 /// # Safety
@@ -242,53 +404,23 @@ unsafe fn mi_page_free_quick_collect_raw(
 }
 
 /// # Safety
-/// `page` must point to page metadata owned by this allocator.
+/// `page` must point to page metadata owned by the current thread heap. Owned
+/// abandoned pages must use `collect_page_free_lists_abandoned` instead.
 // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
-        #[cfg(feature = "bench-diagnostics")]
-        crate::bench_diagnostics::page_free_collect_call(force);
-
-        mi_page_thread_free_collect(page);
-
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = crate::core_types::assume_local_page(page_ptr);
-        let local = page_ptr.local_free();
-        if !local.is_empty() {
-            let available = page_ptr.free();
-            if available.is_empty() || force {
-                #[cfg(feature = "bench-diagnostics")]
-                let appended = !available.is_empty();
-                match local_page.detach_local_free_batch() {
-                    Ok(Some(batch)) => {
-                        let new_available = batch.prepend_to_available(&local_page, available);
-                        page_ptr.set_free(new_available);
-                        (*page).free_is_zero = false;
-                        #[cfg(feature = "bench-diagnostics")]
-                        crate::bench_diagnostics::page_free_collect_moved_to_free(appended);
-                    }
-                    Ok(None) => {}
-                    Err(error) => {
-                        let _ = report_remote_list_corruption(error);
-                    }
-                }
-            } else {
-                #[cfg(feature = "bench-diagnostics")]
-                crate::bench_diagnostics::page_free_collect_noop_local_blocked();
-            }
-        } else {
-            #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::page_free_collect_local_empty();
-        }
-
-        crate::internal::mi_assert_internal!(!force || page_ptr.local_free().is_empty());
+        collect_page_free_lists_local(&local_page, force);
     }
 }
 
 /// # Safety
-/// `page` must be valid, and `head` must be null or a detached block list belonging to `page`.
+/// `page` must be valid, its atomic thread-free ownership bit must already be
+/// claimed by the caller, and `head` must be null or the still-published head
+/// belonging to `page`.
 // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
@@ -337,7 +469,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             crate::internal::mi_assert_internal!(mi_block_next(page, head).is_null());
             #[cfg(feature = "bench-diagnostics")]
             crate::bench_diagnostics::page_free_collect_partly_final_collect();
-            _mi_page_free_collect(page, false);
+            collect_page_free_lists_abandoned(owned_page, false);
         }
     }
 }

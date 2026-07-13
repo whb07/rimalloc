@@ -594,6 +594,36 @@ fn local_batch_splices_destinations_without_changing_used() {
 }
 
 #[test]
+fn abandoned_owner_detaches_and_splices_local_batch_without_local_proof() {
+    let mut fixture = SyntheticPage::new(4);
+    fixture.initialize();
+    // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: this fixture models a
+    // uniquely claimed abandoned page; its local and available chains are
+    // page-homogeneous and no other collector can observe them.
+    unsafe {
+        fixture.link(&[0, 1, 2]);
+        fixture.link(&[3, 4]);
+        fixture
+            .page()
+            .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+        let available = AvailableFreeList::from_head(fixture.block(3));
+        let owner = OwnedAbandonedPage::new_unchecked(fixture.page());
+        let batch = owner
+            .detach_local_free_batch()
+            .expect("valid abandoned local chain")
+            .expect("nonempty abandoned local chain");
+        let available = batch.prepend_to_owned_abandoned_page(&owner, available);
+
+        assert!(fixture.page().local_free().is_empty());
+        assert_eq!(
+            fixture.order_from(available.head()),
+            ListOrder::from_slices(&[0, 1, 2], &[3, 4])
+        );
+        assert_eq!(fixture.page().used().get(), 4);
+    }
+}
+
+#[test]
 fn lease_take_and_return_preserve_counted_allocations() {
     let mut fixture = SyntheticPage::new(2);
     fixture.initialize();
@@ -623,10 +653,7 @@ fn lease_take_and_return_preserve_counted_allocations() {
         assert_eq!(fixture.page().used().get(), 6);
 
         let owner = LocalPage::new_unchecked(active.page());
-        let current = fixture.page().free();
-        let (available, used) = remaining.return_to_available(&owner, current);
-        fixture.page().set_free(available);
-        fixture.page().set_used(used);
+        remaining.return_to_page(&owner);
         assert_eq!(fixture.page().used().get(), 4);
         assert_eq!(
             fixture.order_from(fixture.page().free().head()),

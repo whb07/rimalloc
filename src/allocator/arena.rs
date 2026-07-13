@@ -46,9 +46,9 @@ use crate::os::{
     _mi_os_minimal_purge_size, _mi_os_numa_node_count,
 };
 use crate::page::{
-    _mi_page_free_collect, _mi_page_stats_bin, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE,
-    MI_MEDIUM_MAX_OBJ_SIZE, MI_MEDIUM_PAGE_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2,
-    MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE, mi_bin_from_block_size, mi_page_set_theap,
+    _mi_page_stats_bin, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE,
+    MI_MEDIUM_PAGE_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE,
+    mi_bin_from_block_size, mi_page_set_theap,
 };
 use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page};
 use crate::prim::_mi_page_associated_theap_peek;
@@ -1607,7 +1607,8 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                         ptr::addr_of_mut!((*theap).stats.pages_abandoned),
                         1,
                     );
-                    _mi_page_free_collect(page_raw, false);
+                    let owned_page = crate::core_types::assume_owned_abandoned_page(page);
+                    crate::page::collect_page_free_lists_abandoned(&owned_page, false);
                     crate::internal::mi_assert_internal!(mi_bbitmap_is_clearN(
                         (*arena_raw.cast::<MiArenaPrefix>()).slices_free,
                         slice_index.get(),

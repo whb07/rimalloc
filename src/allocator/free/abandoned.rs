@@ -71,7 +71,7 @@ unsafe fn release_abandoned_ownership(
         while !atomic_tf.release_acq_rel(&mut tf_expect) {
             crate::internal::mi_assert_internal!(tf_expect.is_owned());
             while tf_expect.head().is_some() {
-                _mi_page_free_collect(page_raw, false);
+                crate::page::collect_page_free_lists_abandoned(&page, false);
                 page = match try_free_abandoned(page) {
                     Ok(page) => return crate::core_types::AbandonedDisposition::Destroyed(page),
                     Err(page) => page,
@@ -227,7 +227,7 @@ pub(super) unsafe fn collect_after_remote_free(
             }
             crate::allocator::policy::RemoteCollectMode::FullDetach => {
                 published.leave_published();
-                _mi_page_free_collect(page_raw, false);
+                crate::page::collect_page_free_lists_abandoned(&page, false);
                 crate::core_types::ThreadFreeWord::from_parts(
                     None,
                     crate::core_types::ThreadFreeOwner::Owned,

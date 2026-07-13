@@ -70,9 +70,10 @@ pub use lifecycle::{
     mi_page_is_full, mi_page_thread_collect_to_local, mi_page_thread_free_collect,
 };
 pub(crate) use lifecycle::{
-    _mi_page_free_collect_partly_typed, collect_remote_for_owned_abandoned_page,
-    mi_page_decrement_retire_expire, mi_page_reset_retire_expire, mi_page_retire_expire,
-    mi_page_set_retire_expire, mi_page_set_slice_committed, mi_page_slice_committed,
+    _mi_page_free_collect_partly_typed, collect_page_free_lists_abandoned,
+    collect_remote_for_owned_abandoned_page, mi_page_decrement_retire_expire,
+    mi_page_reset_retire_expire, mi_page_retire_expire, mi_page_set_retire_expire,
+    mi_page_set_slice_committed, mi_page_slice_committed,
 };
 pub use queues::_mi_page_queue_append;
 pub use queues::{mi_page_queue_contains, mi_page_queue_of};
@@ -1095,13 +1096,7 @@ pub(crate) unsafe fn try_reclaim_abandoned(
 
         mi_page_set_theap(page, theap);
 
-        let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
-        let atomic_tf = page_ptr.thread_free_cell();
-        let remote = atomic_tf.detach_head();
-        let local = page_ptr.local_free();
-        let _ = collect_remote_for_owned_abandoned_page(&page_wrapper, remote, local);
-
-        _mi_page_free_collect(page, false);
+        collect_page_free_lists_abandoned(&page_wrapper, false);
         let pq = mi_theap_page_queue_of(theap, page);
         let queued = mi_page_queue_push_at_end_typed(
             crate::core_types::ThreadHeapLocal::new_unchecked(

@@ -25,9 +25,7 @@ use crate::internal::{
     mi_page_set_has_interior_pointers, mi_page_set_keys, mi_page_slice_offset_of,
     mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_theap_is_initialized,
 };
-use crate::options::{
-    _mi_error_message_fmt, _mi_option_get_fast, mi_option_get_clamp, mi_option_t,
-};
+use crate::options::_mi_error_message_fmt;
 use crate::stats::MI_BIN_HUGE;
 use crate::track::{
     MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
@@ -101,8 +99,6 @@ pub const MI_LARGE_PAGE_SIZE: usize = MI_SIZE_SIZE * MI_MEDIUM_PAGE_SIZE;
 pub const MI_IN_PAGE_C: () = ();
 pub const MI_MAX_SLICE_SHIFT: usize = 6;
 pub const MI_MIN_SLICES: usize = 2;
-pub const MI_MAX_EXTEND_SIZE: usize = 4 * 1024;
-pub const MI_MIN_EXTEND: usize = if MI_SECURE != 0 { 8 * MI_SECURE } else { 1 };
 pub const MI_PAGE_OSPAGE_BLOCK_ALIGN2: usize = 4 * MI_KiB;
 pub const MI_SMALL_MAX_OBJ_SIZE: usize = (MI_SMALL_PAGE_SIZE - MI_PAGE_OSPAGE_BLOCK_ALIGN2) / 6;
 pub const MI_MEDIUM_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {
@@ -323,8 +319,6 @@ unsafe fn _mi_page_free_after_remove<S>(
     }
 }
 
-const MI_RETIRE_CYCLES: u8 = 16;
-
 // SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     unsafe {
@@ -367,16 +361,12 @@ pub(crate) unsafe fn _mi_page_retire_internal(
             if MI_STAT > 0 {
                 __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);
             }
+            let block_size = page_wrapper.page().block_size();
             let retired = page_wrapper.into_retired();
             crate::internal::mi_assert_internal!(ptr::eq(retired.page().as_ptr(), page));
-            let bsize = mi_page_block_size(page);
             mi_page_set_retire_expire(
                 page,
-                crate::core_types::RetireExpire::new(if bsize <= MI_SMALL_MAX_OBJ_SIZE {
-                    MI_RETIRE_CYCLES
-                } else {
-                    MI_RETIRE_CYCLES / 4
-                }),
+                crate::allocator::policy::ActivePolicy::retire_expire(block_size),
             );
             let index = mi_theap_queue_index(
                 ThreadHeapPtr::new_unchecked(theap),
@@ -643,22 +633,14 @@ unsafe fn mi_page_extend_free_typed(
             return true;
         }
 
-        let bsize = page_ptr.block_size().get();
-        let mut extend = reserved.as_usize() - capacity.as_usize();
-        crate::internal::mi_assert_internal!(extend > 0);
-
-        let mut max_extend = if bsize >= MI_MAX_EXTEND_SIZE {
-            MI_MIN_EXTEND
-        } else {
-            MI_MAX_EXTEND_SIZE / bsize
+        let block_size = page_ptr.block_size();
+        let bsize = block_size.get();
+        let Some(extend) = crate::allocator::policy::ActivePolicy::page_extend_count(
+            block_size, capacity, reserved,
+        ) else {
+            return true;
         };
-        if max_extend < MI_MIN_EXTEND {
-            max_extend = MI_MIN_EXTEND;
-        }
-        crate::internal::mi_assert_internal!(max_extend > 0);
-        if extend > max_extend {
-            extend = max_extend;
-        }
+        let extend = usize::from(extend.get());
 
         crate::internal::mi_assert_internal!(extend > 0);
         crate::internal::mi_assert_internal!(extend + capacity.as_usize() <= reserved.as_usize());
@@ -1425,11 +1407,15 @@ unsafe fn mi_page_queue_find_free_ex_typed(
         let pq = queue.ptr().as_ptr();
         let mut count = crate::core_types::PageQueueCount::new(0);
         let mut candidate_limit = crate::core_types::PageReclaimLimit::new(0);
-        let mut page_full_retain = if block_size.get() > MI_SMALL_MAX_OBJ_SIZE {
-            crate::core_types::PageReclaimLimit::new(0)
-        } else {
-            crate::core_types::PageReclaimLimit::new((*theap_raw).page_full_retain)
-        };
+        let configured = crate::allocator::policy::ThreadHeapPolicy::from_fields(
+            (*theap_raw).allow_page_reclaim,
+            (*theap_raw).allow_page_abandon,
+            (*theap_raw).page_full_retain,
+        );
+        let mut page_full_retain = crate::allocator::policy::ActivePolicy::initial_full_retain(
+            block_size,
+            configured.page_full_retain(),
+        );
         let mut page_candidate = ptr::null_mut::<mi_page_t>();
         let mut page = queue
             .ptr()
@@ -1461,9 +1447,8 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             } else {
                 if page_candidate.is_null() {
                     page_candidate = page;
-                    candidate_limit = crate::core_types::PageReclaimLimit::new(
-                        _mi_option_get_fast(mi_option_t::mi_option_page_max_candidates),
-                    );
+                    candidate_limit =
+                        crate::allocator::policy::ActivePolicy::page_candidate_limit();
                 } else if mi_page_all_free(page_candidate) {
                     let active = crate::core_types::assume_active_page(
                         crate::core_types::PagePtr::new_unchecked(page_candidate),
@@ -1835,15 +1820,16 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
         };
 
         (*theap).generic_count += 1;
-        if (*theap).generic_count >= 1000 {
+        if (*theap).generic_count
+            >= crate::allocator::policy::ActivePolicy::generic_maintenance_interval().get()
+        {
             (*theap).generic_collect_count += (*theap).generic_count;
             (*theap).generic_count = 0;
             _mi_deferred_free(theap, false);
             _mi_theap_collect_retired(theap, false);
 
-            let generic_collect =
-                mi_option_get_clamp(mi_option_t::mi_option_generic_collect, 1, 1_000_000);
-            if (*theap).generic_collect_count >= generic_collect {
+            let generic_collect = crate::allocator::policy::ActivePolicy::generic_collect_limit();
+            if generic_collect.reached_by((*theap).generic_collect_count) {
                 (*theap).generic_collect_count = 0;
                 crate::mimalloc::mi_theap_collect(theap, false);
             }

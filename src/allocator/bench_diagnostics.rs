@@ -261,6 +261,27 @@ pub(crate) fn option_read(option: mi_option_t) {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn option_read_counts_for_tests() -> (u64, u64, u64, u64, u64) {
+    let load = |counter: Counter| COUNTERS[counter as usize].load(Ordering::Relaxed);
+    (
+        load(Counter::OptionReadsTotal),
+        load(Counter::OptionReadsPageReclaimOnFree),
+        load(Counter::OptionReadsPageMaxReclaim),
+        load(Counter::OptionReadsPageCrossThreadMaxReclaim),
+        load(Counter::OptionReadsPageMaxCandidates),
+    )
+}
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    pub(crate) fn lock() -> std::sync::MutexGuard<'static, ()> {
+        LOCK.lock().expect("bench diagnostics test lock")
+    }
+}
+
 #[repr(C)]
 pub struct mi_bench_diagnostics_snapshot_t {
     pub values: [c_ulonglong; COUNTER_COUNT],
@@ -425,12 +446,9 @@ pub unsafe extern "C" fn mi_bench_diagnostics_json(buf: *mut c_char, buf_len: us
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, MutexGuard};
 
-    static TEST_LOCK: Mutex<()> = Mutex::new(());
-
-    fn test_lock() -> MutexGuard<'static, ()> {
-        TEST_LOCK.lock().expect("bench diagnostics test lock")
+    fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+        test_support::lock()
     }
 
     #[test]

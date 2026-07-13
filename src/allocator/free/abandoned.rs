@@ -103,10 +103,11 @@ unsafe fn mi_page_queue_len_is_atmost(
 
 unsafe fn try_reclaim_abandoned(
     page: crate::core_types::OwnedAbandonedPage,
-    reclaim_on_free: crate::core_types::PageReclaimOnFree,
+    decision: crate::allocator::policy::ReclaimDecision,
 ) -> Result<crate::core_types::ActivePage, crate::core_types::OwnedAbandonedPage> {
     // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
+        let reclaim_on_free = decision.reclaim_on_free();
         #[cfg(feature = "bench-diagnostics")]
         crate::bench_diagnostics::abandoned_reclaim_attempt();
         let page_raw = page.page().as_ptr();
@@ -137,12 +138,12 @@ unsafe fn try_reclaim_abandoned(
 
         let mut max_reclaim = crate::core_types::PageReclaimLimit::new(0);
         if theap == (*page_raw).theap {
-            let max_reclaim_raw = if (*(*theap).tld).is_in_threadpool {
-                _mi_option_get_fast(mi_option_t::mi_option_page_cross_thread_max_reclaim)
+            let context = if (*(*theap).tld).is_in_threadpool {
+                crate::allocator::policy::ReclaimContext::ThreadPool
             } else {
-                _mi_option_get_fast(mi_option_t::mi_option_page_max_reclaim)
+                crate::allocator::policy::ReclaimContext::SameThreadHeap
             };
-            max_reclaim = crate::core_types::PageReclaimLimit::new(max_reclaim_raw);
+            max_reclaim = crate::allocator::policy::ActivePolicy::reclaim_limit(context);
         } else if reclaim_on_free.is_cross_thread_allowed()
             && !(*(*theap).tld).is_in_threadpool
             && !mi_page_is_mostly_used(page_raw)
@@ -151,12 +152,16 @@ unsafe fn try_reclaim_abandoned(
                 (*_mi_theap_heap(theap)).exclusive_arena,
             )
         {
-            let max_reclaim_raw =
-                _mi_option_get_fast(mi_option_t::mi_option_page_cross_thread_max_reclaim);
-            max_reclaim = crate::core_types::PageReclaimLimit::new(max_reclaim_raw);
+            max_reclaim = crate::allocator::policy::ActivePolicy::reclaim_limit(
+                crate::allocator::policy::ReclaimContext::CrossThreadHeap,
+            );
         }
 
-        if let Some(max_reclaim) = max_reclaim.as_queue_count()
+        let decision = crate::allocator::policy::ReclaimDecision::new(
+            reclaim_on_free,
+            max_reclaim.as_queue_count(),
+        );
+        if let Some(max_reclaim) = decision.max_queue_count()
             && !mi_page_queue_len_is_atmost(
                 crate::core_types::ThreadHeapLocal::new_unchecked(
                     crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -187,7 +192,7 @@ unsafe fn try_reclaim_abandoned(
 #[used]
 static MI_ABANDONED_PAGE_TRY_RECLAIM_KEEP: unsafe fn(
     crate::core_types::OwnedAbandonedPage,
-    crate::core_types::PageReclaimOnFree,
+    crate::allocator::policy::ReclaimDecision,
 ) -> Result<
     crate::core_types::ActivePage,
     crate::core_types::OwnedAbandonedPage,
@@ -207,26 +212,30 @@ pub(super) unsafe fn collect_after_remote_free(
         crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
 
         let mt_free = published.head();
-        let expected_thread_free = if block_size <= MI_SMALL_SIZE_MAX {
-            crate::internal::mi_assert_internal!(
-                crate::page::mi_page_reserved_count(page_raw).get() >= 16
-            );
-            crate::page::_mi_page_free_collect_partly_typed(&page, published);
-            crate::core_types::ThreadFreeWord::from_parts(
-                Some(mt_free),
-                crate::core_types::ThreadFreeOwner::Owned,
-            )
-        } else {
-            published.leave_published();
-            _mi_page_free_collect(page_raw, false);
-            crate::core_types::ThreadFreeWord::from_parts(
-                None,
-                crate::core_types::ThreadFreeOwner::Owned,
-            )
+        let expected_thread_free = match crate::allocator::policy::ActivePolicy::remote_collect_mode(
+            page.page().block_size(),
+        ) {
+            crate::allocator::policy::RemoteCollectMode::PartialKeepPublishedHead => {
+                crate::internal::mi_assert_internal!(
+                    crate::page::mi_page_reserved_count(page_raw).get() >= 16
+                );
+                crate::page::_mi_page_free_collect_partly_typed(&page, published);
+                crate::core_types::ThreadFreeWord::from_parts(
+                    Some(mt_free),
+                    crate::core_types::ThreadFreeOwner::Owned,
+                )
+            }
+            crate::allocator::policy::RemoteCollectMode::FullDetach => {
+                published.leave_published();
+                _mi_page_free_collect(page_raw, false);
+                crate::core_types::ThreadFreeWord::from_parts(
+                    None,
+                    crate::core_types::ThreadFreeOwner::Owned,
+                )
+            }
         };
 
-        let reclaim_on_free_raw = _mi_option_get_fast(mi_option_t::mi_option_page_reclaim_on_free);
-        let reclaim_on_free = crate::core_types::PageReclaimOnFree::new(reclaim_on_free_raw);
+        let reclaim_on_free = crate::allocator::policy::ActivePolicy::reclaim_on_free_mode();
         if MI_DEBUG > 1 {
             if mi_page_is_singleton(page_raw) {
                 crate::internal::mi_assert_internal!(mi_page_all_free(page_raw));
@@ -241,7 +250,8 @@ pub(super) unsafe fn collect_after_remote_free(
             Err(page) => page,
         };
         if block_size <= MI_MEDIUM_MAX_OBJ_SIZE && reclaim_on_free.is_enabled() {
-            page = match try_reclaim_abandoned(page, reclaim_on_free) {
+            let decision = crate::allocator::policy::ReclaimDecision::new(reclaim_on_free, None);
+            page = match try_reclaim_abandoned(page, decision) {
                 Ok(page) => return crate::core_types::AbandonedDisposition::Reclaimed(page),
                 Err(page) => page,
             };

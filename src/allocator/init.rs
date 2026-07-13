@@ -16,7 +16,9 @@ mod subproc_registry;
     ))
 ))]
 use core::cell::Cell;
-use core::ffi::{c_char, c_long, c_void};
+#[cfg(feature = "guarded")]
+use core::ffi::c_long;
+use core::ffi::{c_char, c_void};
 use core::mem::size_of;
 use core::ptr;
 use core::ptr::NonNull;
@@ -41,9 +43,11 @@ use crate::heap::{_mi_heap_force_destroy, mi_heap_destroy};
 use crate::internal::{
     _mi_allocator_done, _mi_allocator_init, _mi_meta_free, _mi_meta_zalloc, mi_memid_t,
 };
+#[cfg(feature = "guarded")]
+use crate::options::mi_option_get_clamp;
 use crate::options::{
     _mi_error_message_fmt, _mi_fputs, _mi_options_init, _mi_options_post_init, _mi_verbose_message,
-    _mi_warning_message_fmt, mi_option_get, mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
+    _mi_warning_message_fmt, mi_option_get, mi_option_is_enabled, mi_option_t,
 };
 use crate::stats::{
     __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into, mi_stat_count_t,
@@ -1302,14 +1306,10 @@ unsafe fn _mi_theap_options_init_typed(theap: ThreadHeapLocal) {
     let theap = theap.ptr().as_ptr();
     // SAFETY[AUDIT:init-options-guarded-boundary]: guarded allocation and option setup mutate only validated thread-heap configuration.
     unsafe {
-        (*theap).allow_page_reclaim =
-            mi_option_get(mi_option_t::mi_option_page_reclaim_on_free) >= 0;
-        (*theap).allow_page_abandon = mi_option_get(mi_option_t::mi_option_page_full_retain) >= 0;
-        (*theap).page_full_retain = mi_option_get_clamp(
-            mi_option_t::mi_option_page_full_retain,
-            -1,
-            c_long::from(32),
-        );
+        let policy = crate::allocator::policy::ActivePolicy::thread_heap_policy();
+        (*theap).allow_page_reclaim = policy.allow_page_reclaim();
+        (*theap).allow_page_abandon = policy.allow_page_abandon();
+        (*theap).page_full_retain = policy.page_full_retain().get();
     }
 }
 

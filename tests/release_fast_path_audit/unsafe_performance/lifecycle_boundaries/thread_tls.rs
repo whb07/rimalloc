@@ -86,7 +86,7 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
             "#[inline(never)]\npub unsafe extern \"C\" fn mi_page_usable_aligned_size_of"
         ) && free_rs.contains("static MI_ABANDONED_PAGE_TRY_RECLAIM_KEEP")
             && free_rs.contains("static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP")
-            && free_rs.contains("page = match try_reclaim_abandoned(page, reclaim_on_free)")
+            && free_rs.contains("page = match try_reclaim_abandoned(page, decision)")
             && free_rs.contains("let active = _mi_theap_page_reclaim(")
             && free_rs.contains("crate::core_types::assume_owned_abandoned_page")
             && free_rs.contains("pub(super) unsafe fn collect_after_remote_free")

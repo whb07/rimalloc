@@ -241,6 +241,8 @@ mod benchmark_hygiene;
 mod capability_linearity;
 #[path = "release_fast_path_audit/interposition_exports.rs"]
 mod interposition_exports;
+#[path = "release_fast_path_audit/policy_boundaries.rs"]
+mod policy_boundaries;
 #[path = "release_fast_path_audit/primitive_options.rs"]
 mod primitive_options;
 #[path = "release_fast_path_audit/public_facade.rs"]

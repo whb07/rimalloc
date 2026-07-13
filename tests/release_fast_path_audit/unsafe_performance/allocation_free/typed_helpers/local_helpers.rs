@@ -10,10 +10,10 @@ pub(super) fn assert_local_helper_boundaries(
             "#[inline(never)]\npub(crate) extern \"C\" fn _mi_option_get_fast(option: mi_option_t) -> c_long"
         ) && options_rs.contains("mi_option_get_fast_impl(option)")
             && options_rs.contains("option_value_load(idx)")
-            && free_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_reclaim_on_free)")
-            && free_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_cross_thread_max_reclaim)")
-            && page_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_max_candidates)"),
-        "fast option reads should keep C's local _mi_option_get_fast helper boundary on free/page policy paths"
+            && !free_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_reclaim_on_free)")
+            && !free_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_cross_thread_max_reclaim)")
+            && !page_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_max_candidates)"),
+        "fast option reads should keep the local helper boundary while scoped decisions move out of mechanism code"
     );
     assert!(
         heap_rs.contains(

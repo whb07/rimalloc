@@ -933,8 +933,15 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
         );
 
         _mi_theap_options_init(theap_raw);
-        if (*tld_raw).is_in_threadpool && (*theap_raw).page_full_retain > 0 {
-            (*theap_raw).page_full_retain /= 4;
+        if (*tld_raw).is_in_threadpool {
+            let configured = crate::allocator::policy::ThreadHeapPolicy::from_fields(
+                (*theap_raw).allow_page_reclaim,
+                (*theap_raw).allow_page_abandon,
+                (*theap_raw).page_full_retain,
+            );
+            let adjusted =
+                crate::allocator::policy::ActivePolicy::adjust_for_thread_pool(configured);
+            (*theap_raw).page_full_retain = adjusted.page_full_retain().get();
         }
 
         let tld_theaps_head = lists::push_tld_front(tld, theap);

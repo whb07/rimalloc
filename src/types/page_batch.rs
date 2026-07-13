@@ -346,9 +346,9 @@ impl AvailablePage {
             tail,
             len,
         });
-        // SAFETY[AUDIT:typed-page-batch-lease]: leasing changes only free/used;
-        // the page remains initialized and active.
-        (batch, unsafe { ActivePage::new_unchecked(page) })
+        // Leasing changes only free/used, so consuming the available witness
+        // returns the same initialized page in its active state.
+        (batch, self.into_active())
     }
 }
 

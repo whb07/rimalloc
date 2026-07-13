@@ -106,9 +106,9 @@ boundary.
 
 Strict-type wildcard guard: total=0; none.
 
-The current `strict-type-allowlist.txt` snapshot has 632 active entries: 330 raw-pointer-parameter,
+The current `strict-type-allowlist.txt` snapshot has 634 active entries: 330 raw-pointer-parameter,
 220 bare-domain-usize, 40 metadata-reference, 23 pointer-usize-roundtrip, 14
-atomic-cast, and 5 heap-allocating-type entries. It has zero wildcard entries
+atomic-cast, and 7 heap-allocating-type entries. It has zero wildcard entries
 and zero removable entries; all current entries are classified as `permanent:`
 compatibility or proof boundaries.
 

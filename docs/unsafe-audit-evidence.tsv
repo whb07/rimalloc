@@ -1174,6 +1174,7 @@ typed-page-batch-scan	test	src/page_batch_tests/tests.rs	Exercises encoded detac
 typed-page-batch-lint-fixture	script	scripts/check-unsafe-audit.py	Checks the staged lint fixture remains tagged and documented while batch consumers are wired.
 typed-page-batch-test-fixtures	test	src/page_batch_tests/tests.rs	Exercises live allocator-owned same-page and foreign-page block fixtures under secure encoded links.
 typed-page-batch-synthetic-fixtures	test	src/page_batch_tests/tests.rs	Exercises isolated synthetic page metadata for destination ordering, accounting, and lease transitions.
+typed-page-batch-differential-fixtures	test	src/page_batch_tests/tests.rs	Compares old reference list algorithms with typed batch transitions across 256 fixed-seed randomized topologies.
 typed-page-batch-remote-collect	test	src/page_batch_tests/tests.rs	Covers empty, singleton, and multi-block destinations plus exact remote used-count subtraction.
 typed-page-batch-local-detach	test	src/page_batch_tests/tests.rs	Checks successful local detachment clears the page field only after bounded validation.
 typed-page-batch-local-collect	test	src/page_batch_tests/tests.rs	Covers empty, singleton, and multi-block available destinations without changing used count.

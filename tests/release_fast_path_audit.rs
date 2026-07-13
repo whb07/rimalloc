@@ -235,6 +235,8 @@ mod unsafe_performance;
 mod allocation_contracts;
 #[path = "release_fast_path_audit/allowance_inventory.rs"]
 mod allowance_inventory;
+#[path = "release_fast_path_audit/batch_capability_linearity.rs"]
+mod batch_capability_linearity;
 #[path = "release_fast_path_audit/benchmark_hygiene.rs"]
 mod benchmark_hygiene;
 #[path = "release_fast_path_audit/capability_linearity.rs"]

@@ -2423,9 +2423,13 @@ Operation IDs:
   `src/page_batch_tests/tests.rs` keeps allocator-returned blocks live while
   exercising bounded encoded traversal and frees every allocation exactly once.
 - `SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]`:
-  `src/page_batch_tests/tests.rs` initializes stable boxed page and block
-  metadata for isolated splice, accounting, and lease tests without mutating
-  live allocator pages.
+  `src/page_batch_tests/tests.rs` initializes stable allocator-backed page and
+  block metadata for isolated splice, accounting, and lease tests without
+  mutating live allocator pages.
+- `SAFETY[AUDIT:typed-page-batch-differential-fixtures]`:
+  `src/page_batch_tests/tests.rs` runs old reference list operations and typed
+  batch transitions over independent, identically seeded synthetic page
+  topologies with bounded traversal and page-local encoded links.
 - `SAFETY[AUDIT:typed-page-batch-remote-collect]`:
   `src/types/page_batch.rs` consumes a validated detached remote batch, splices
   its known tail once, and subtracts its checked length from page used count.

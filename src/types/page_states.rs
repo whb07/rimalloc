@@ -290,6 +290,14 @@ impl FullPage {
 
 impl AvailablePage {
     #[inline(always)]
+    pub(in crate::types) fn into_active(self) -> ActivePage {
+        // SAFETY[AUDIT:typed-page-available-pop-boundary]: an available page is
+        // an active page with a proven nonempty available free list; consuming
+        // the stronger witness preserves initialized active-page ownership.
+        unsafe { ActivePage::new_unchecked(self.page()) }
+    }
+
+    #[inline(always)]
     pub(crate) unsafe fn pop_free_block(
         self,
     ) -> (

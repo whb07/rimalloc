@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 6097 |
-| `unsafe_blocks` | 3595 |
-| `unsafe_fns` | 2067 |
+| `unsafe_mentions` | 6114 |
+| `unsafe_blocks` | 3608 |
+| `unsafe_fns` | 2071 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 232 |
@@ -98,7 +98,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/internal/provenance.rs` | 2 | 0 | 0 | 0 | 2 | 0 | 0 |
 | `src/internal/random.rs` | 13 | 8 | 5 | 0 | 0 | 0 | 0 |
 | `src/lib.rs` | 21 | 8 | 4 | 1 | 1 | 1 | 0 |
-| `src/page_batch_tests/tests.rs` | 22 | 20 | 2 | 0 | 0 | 0 | 0 |
+| `src/page_batch_tests/tests.rs` | 39 | 33 | 6 | 0 | 0 | 0 | 0 |
 | `src/platform/emscripten.rs` | 48 | 25 | 22 | 1 | 0 | 0 | 0 |
 | `src/platform/macos.rs` | 97 | 46 | 45 | 1 | 0 | 5 | 0 |
 | `src/platform/mod.rs` | 75 | 47 | 22 | 4 | 0 | 2 | 2 |
@@ -142,11 +142,11 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/types/padding.rs` | 12 | 7 | 5 | 0 | 0 | 0 | 0 |
 | `src/types/page/tests.rs` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/page.rs` | 5 | 3 | 2 | 0 | 0 | 0 | 0 |
-| `src/types/page_batch.rs` | 48 | 32 | 16 | 0 | 0 | 0 | 0 |
+| `src/types/page_batch.rs` | 47 | 31 | 16 | 0 | 0 | 0 | 0 |
 | `src/types/page_queues/tests.rs` | 42 | 42 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/page_queues.rs` | 35 | 12 | 23 | 0 | 0 | 0 | 0 |
 | `src/types/page_states/tests.rs` | 10 | 10 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/page_states.rs` | 68 | 47 | 21 | 0 | 0 | 0 | 0 |
+| `src/types/page_states.rs` | 69 | 48 | 21 | 0 | 0 | 0 | 0 |
 | `src/types/ptr/tests.rs` | 89 | 89 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/ptr.rs` | 374 | 149 | 225 | 0 | 0 | 0 | 0 |
 | `src/types/raw_bridge.rs` | 6 | 3 | 3 | 0 | 0 | 0 | 0 |

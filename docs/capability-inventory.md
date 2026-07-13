@@ -40,6 +40,7 @@ ownership of the chain whose address it observes.
 | `freelist_wrappers` | linear capability | `AvailableFreeList`, `LocalFreeList`, `EncodedFreeList` |
 | `atomic::thread_free` | linear capability | `PublishedRemoteHead`, `DetachedRemoteList` |
 | `atomic::thread_free` | mechanism/result | `AtomicThreadFree`, `RemotePushResult` |
+| `page_batch` | linear capability | `RemoteFreeBatch`, `LocalFreeBatch`, `LeasedBatch` |
 | `free_actions` | value | `LocalFreeMode` |
 
 `ValidatedFreeParts` is a one-time destructuring result and therefore follows

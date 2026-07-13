@@ -22,7 +22,7 @@ fn strict_type_allowlist_inventory_stays_measured_by_concern() {
 
     assert_eq!(
         entries.len(),
-        632,
+        634,
         "strict-type allowlist active entry count drifted"
     );
     assert_eq!(kind_counts.get("raw-pointer-parameter"), Some(&330));
@@ -30,7 +30,7 @@ fn strict_type_allowlist_inventory_stays_measured_by_concern() {
     assert_eq!(kind_counts.get("metadata-reference"), Some(&40));
     assert_eq!(kind_counts.get("pointer-usize-roundtrip"), Some(&23));
     assert_eq!(kind_counts.get("atomic-cast"), Some(&14));
-    assert_eq!(kind_counts.get("heap-allocating-type"), Some(&5));
+    assert_eq!(kind_counts.get("heap-allocating-type"), Some(&7));
     assert_eq!(
         removable_entries, 0,
         "removable strict-type entries should be explicitly introduced and documented"
@@ -45,7 +45,7 @@ fn strict_type_allowlist_inventory_stays_measured_by_concern() {
         &strict_docs,
         &[
             "## Strict-Type Allowlist Governance",
-            "632 active entries",
+            "634 active entries",
             "330 raw-pointer-parameter",
             "zero wildcard entries",
             "zero removable entries",

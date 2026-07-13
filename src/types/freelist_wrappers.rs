@@ -339,6 +339,7 @@ impl BlockLink {
 /// stored value is bit-identical to the raw `mi_block_t*` it replaces.
 #[repr(transparent)]
 #[derive(Debug)]
+#[must_use = "available free-list ownership must be stored or consumed"]
 pub(crate) struct AvailableFreeList(Option<BlockPtr>);
 
 impl AvailableFreeList {
@@ -422,6 +423,7 @@ impl AvailableFreeList {
 /// that freed blocks from the owning thread are pushed onto.
 #[repr(transparent)]
 #[derive(Debug)]
+#[must_use = "local free-list ownership must be stored or consumed"]
 pub(crate) struct LocalFreeList(Option<BlockPtr>);
 
 impl LocalFreeList {

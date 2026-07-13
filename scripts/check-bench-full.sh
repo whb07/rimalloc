@@ -27,8 +27,15 @@ export MIMALLOC_BENCH_ALLOCATORS="${MIMALLOC_BENCH_ALLOCATORS:-mechanical_mimall
 default_target_dir="${MIMALLOC_BENCH_DEFAULT_TARGET_DIR:-target/bench-full/default-rust}"
 interpose_target_dir="${MIMALLOC_BENCH_INTERPOSE_TARGET_DIR:-target/bench-full/interpose-feature-linked}"
 preload_target_dir="${MIMALLOC_BENCH_PRELOAD_TARGET_DIR:-target/bench-full/ld-preload-interpose}"
+page_batch_plain_target_dir="${MIMALLOC_BENCH_PAGE_BATCH_PLAIN_TARGET_DIR:-target/bench-full/page-batch-plain}"
+page_batch_secure_target_dir="${MIMALLOC_BENCH_PAGE_BATCH_SECURE_TARGET_DIR:-target/bench-full/page-batch-secure}"
 
-run scripts/run-bench-clean.sh "$default_target_dir" "$interpose_target_dir" "$preload_target_dir"
+run scripts/run-bench-clean.sh \
+  "$default_target_dir" \
+  "$interpose_target_dir" \
+  "$preload_target_dir" \
+  "$page_batch_plain_target_dir" \
+  "$page_batch_secure_target_dir"
 
 cat >"$default_target_dir/commands.txt" <<EOF
 CARGO_TARGET_DIR=$default_target_dir cargo check --benches --features bench
@@ -50,6 +57,14 @@ EOF
 cat >"$preload_target_dir/commands.txt" <<EOF
 scripts/run-bench-resources.py --artifact-dir $preload_target_dir --artifact-mode ld-preload-interpose --feature interpose --ld-preload --operations $MIMALLOC_BENCH_RESOURCE_OPERATIONS --repeats $MIMALLOC_BENCH_RESOURCE_REPEATS
 EOF
+cat >"$page_batch_plain_target_dir/commands.txt" <<EOF
+MIMALLOC_HOTPATH_SAMPLE_SIZE=$MIMALLOC_HOTPATH_SAMPLE_SIZE MIMALLOC_HOTPATH_MEASUREMENT_SECS=$MIMALLOC_HOTPATH_MEASUREMENT_SECS MIMALLOC_HOTPATH_WARMUP_SECS=$MIMALLOC_HOTPATH_WARMUP_SECS CARGO_TARGET_DIR=$page_batch_plain_target_dir cargo bench --features "bench bench-diagnostics" --bench page_batch
+scripts/check-bench-thresholds.py --thresholds benchmarks/thresholds.json --criterion-dir $page_batch_plain_target_dir/criterion --csv-out $page_batch_plain_target_dir/threshold-results.csv --review-out $page_batch_plain_target_dir/benchmark-review.json --artifact-mode page-batch-plain --feature bench --feature bench-diagnostics --report-only --allow-no-applicable
+EOF
+cat >"$page_batch_secure_target_dir/commands.txt" <<EOF
+MIMALLOC_HOTPATH_SAMPLE_SIZE=$MIMALLOC_HOTPATH_SAMPLE_SIZE MIMALLOC_HOTPATH_MEASUREMENT_SECS=$MIMALLOC_HOTPATH_MEASUREMENT_SECS MIMALLOC_HOTPATH_WARMUP_SECS=$MIMALLOC_HOTPATH_WARMUP_SECS CARGO_TARGET_DIR=$page_batch_secure_target_dir cargo bench --features "bench bench-diagnostics secure" --bench page_batch
+scripts/check-bench-thresholds.py --thresholds benchmarks/thresholds.json --criterion-dir $page_batch_secure_target_dir/criterion --csv-out $page_batch_secure_target_dir/threshold-results.csv --review-out $page_batch_secure_target_dir/benchmark-review.json --artifact-mode page-batch-secure --feature bench --feature bench-diagnostics --feature secure --report-only --allow-no-applicable
+EOF
 
 run scripts/write-benchmark-manifest.py \
   --artifact-dir "$default_target_dir" \
@@ -67,6 +82,19 @@ run scripts/write-benchmark-manifest.py \
   --artifact-mode ld-preload-interpose \
   --feature interpose \
   --commands "$preload_target_dir/commands.txt"
+run scripts/write-benchmark-manifest.py \
+  --artifact-dir "$page_batch_plain_target_dir" \
+  --artifact-mode page-batch-plain \
+  --feature bench \
+  --feature bench-diagnostics \
+  --commands "$page_batch_plain_target_dir/commands.txt"
+run scripts/write-benchmark-manifest.py \
+  --artifact-dir "$page_batch_secure_target_dir" \
+  --artifact-mode page-batch-secure \
+  --feature bench \
+  --feature bench-diagnostics \
+  --feature secure \
+  --commands "$page_batch_secure_target_dir/commands.txt"
 
 run env CARGO_TARGET_DIR="$default_target_dir" cargo check --benches --features bench
 run env CARGO_TARGET_DIR="$interpose_target_dir" cargo check --benches --features "bench interpose"
@@ -128,6 +156,31 @@ run scripts/check-bench-resources.py \
   --artifact-mode ld-preload-interpose \
   --feature interpose \
   --required-allocator preloaded-libc
+run env CARGO_TARGET_DIR="$page_batch_plain_target_dir" \
+  cargo bench --features "bench bench-diagnostics" --bench page_batch
+run scripts/check-bench-thresholds.py \
+  --thresholds benchmarks/thresholds.json \
+  --criterion-dir "$page_batch_plain_target_dir/criterion" \
+  --csv-out "$page_batch_plain_target_dir/threshold-results.csv" \
+  --review-out "$page_batch_plain_target_dir/benchmark-review.json" \
+  --artifact-mode page-batch-plain \
+  --feature bench \
+  --feature bench-diagnostics \
+  --report-only \
+  --allow-no-applicable
+run env CARGO_TARGET_DIR="$page_batch_secure_target_dir" \
+  cargo bench --features "bench bench-diagnostics secure" --bench page_batch
+run scripts/check-bench-thresholds.py \
+  --thresholds benchmarks/thresholds.json \
+  --criterion-dir "$page_batch_secure_target_dir/criterion" \
+  --csv-out "$page_batch_secure_target_dir/threshold-results.csv" \
+  --review-out "$page_batch_secure_target_dir/benchmark-review.json" \
+  --artifact-mode page-batch-secure \
+  --feature bench \
+  --feature bench-diagnostics \
+  --feature secure \
+  --report-only \
+  --allow-no-applicable
 run scripts/check-benchmark-manifest.py \
   --artifact-dir "$default_target_dir" \
   --artifact-mode default-rust \
@@ -141,9 +194,22 @@ run scripts/check-benchmark-manifest.py \
   --artifact-dir "$preload_target_dir" \
   --artifact-mode ld-preload-interpose \
   --feature interpose
+run scripts/check-benchmark-manifest.py \
+  --artifact-dir "$page_batch_plain_target_dir" \
+  --artifact-mode page-batch-plain \
+  --feature bench \
+  --feature bench-diagnostics
+run scripts/check-benchmark-manifest.py \
+  --artifact-dir "$page_batch_secure_target_dir" \
+  --artifact-mode page-batch-secure \
+  --feature bench \
+  --feature bench-diagnostics \
+  --feature secure
 run scripts/capture-release-assembly.sh
 run scripts/archive-benchmark-evidence.py \
   --artifact-dir "$default_target_dir" \
   --artifact-dir "$interpose_target_dir" \
   --artifact-dir "$preload_target_dir" \
+  --artifact-dir "$page_batch_plain_target_dir" \
+  --artifact-dir "$page_batch_secure_target_dir" \
   --assembly-dir "${MIMALLOC_ASM_OUT_DIR:-target/strict-type-assembly}"

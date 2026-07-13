@@ -31,13 +31,15 @@ scripts/env-info.sh > target/bench-full/environment.txt
 ```
 
 The full benchmark script intentionally separates default Rust-library,
-feature-linked interposition, and deployed preload evidence:
+feature-linked interposition, deployed preload, and page-batch evidence:
 
 | Artifact mode | Feature set | Evidence path |
 |---|---|---|
 | default Rust library | `bench` | `target/bench-full/default-rust/criterion` and `resource-results.jsonl` |
 | interpose feature-linked hot path | `bench interpose` | `target/bench-full/interpose-feature-linked/criterion` and `resource-results.jsonl` |
 | LD_PRELOAD interpose | `interpose` | `target/bench-full/ld-preload-interpose/resource-results.jsonl` |
+| page batch, plain links | `bench bench-diagnostics` | `target/bench-full/page-batch-plain/criterion` |
+| page batch, secure encoded links | `bench bench-diagnostics secure` | `target/bench-full/page-batch-secure/criterion` |
 
 Do not reuse Criterion baselines across artifact modes. Report each artifact
 mode under a separate heading with the exact command line and feature set. The
@@ -48,7 +50,7 @@ default-mode saved baselines.
 
 Record each Criterion mode's `benchmark-review.json` status and attach the
 checksummed `stages-0-3-evidence-<commit>.tar.zst` bundle plus
-`evidence-index.json`. The bundle must contain all three artifact modes and the
+`evidence-index.json`. The bundle must contain all five artifact modes and the
 matching release assembly capture.
 
 ## Per-Release Performance Summary Template

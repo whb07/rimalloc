@@ -341,8 +341,8 @@ Before publishing or tagging a release:
 31. Before a release candidate, run `scripts/check-bench-full.sh`, capture
    `scripts/env-info.sh`, preserve each mode's `manifest.json`,
    `environment.txt`, `commands.txt`, and `resource-results.jsonl`, preserve
-   `criterion/`, `threshold-results.csv`, and `benchmark-review.json` for the
-   two Criterion modes, preserve the default mode's `evidence-report.json`,
+   `criterion/`, `threshold-results.csv`, and `benchmark-review.json` for all
+   four Criterion modes, preserve the default mode's `evidence-report.json`,
    attach `stages-0-3-evidence-<commit>.tar.zst`, its SHA-256 sidecar, and
    `evidence-index.json`, and
    update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,

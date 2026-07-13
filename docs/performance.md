@@ -12,10 +12,10 @@ performance relative to C mimalloc 3.3.2.
 - Before a release candidate, run `scripts/check-bench-full.sh` and preserve
   each mode's `manifest.json`, `environment.txt`, `commands.txt`, and
   `resource-results.jsonl`; preserve `criterion/` and `threshold-results.csv`
-  for the two Criterion modes, their `benchmark-review.json` status, plus the
+  for all four Criterion modes, their `benchmark-review.json` status, plus the
   default mode's `evidence-report.json`. Attach the generated
   `stages-0-3-evidence-<commit>.tar.zst`, its `.sha256` sidecar, and
-  `evidence-index.json`; the index records the commit, host profiles, all three
+  `evidence-index.json`; the index records the commit, host profiles, all five
   artifact modes, and assembly manifest. Update
   `BENCHMARK_RESULTS.md` with the exact command
   lines, feature flags, artifact modes, Rust/C ratios, and noisy benchmark notes
@@ -133,6 +133,8 @@ remote collection at lengths 1, 8, 32, and 128, and empty/nonempty destination
 lists. The forced-collector case includes the feature's fixed relaxed-counter
 update, so compare it only against runs with the same feature set; production
 fast-path equivalence is established separately by release assembly capture.
+The full release gate preserves these report-only results in distinct
+`page-batch-plain` and `page-batch-secure` artifact modes.
 
 The native mimalloc-bench Criterion ports support:
 
@@ -141,6 +143,11 @@ The native mimalloc-bench Criterion ports support:
 - `MIMALLOC_BENCH_SAMPLE_SIZE`
 - `MIMALLOC_BENCH_MEASUREMENT_SECS`
 - `MIMALLOC_BENCH_WARMUP_SECS`
+
+The full `workloads` run also preserves measured persistent fan-in, fan-out,
+cyclic transfer, owner-exit, thread-churn, and oversubscribed ownership
+topologies in the default-mode Criterion artifact. These are performance
+scenarios in addition to the matching correctness tests.
 
 `scripts/check-bench-full.sh` keeps release-candidate measurements separate by
 artifact mode:
@@ -155,13 +162,19 @@ artifact mode:
   interposition cdylib, and reaches it through `LD_PRELOAD` and libc allocation
   calls. Its allocator label is `preloaded-libc`; no independent system control
   is claimed inside the preloaded process.
+- Plain page-batch diagnostics use `target/bench-full/page-batch-plain`.
+- Secure encoded-link page-batch diagnostics use
+  `target/bench-full/page-batch-secure`.
 
 Keep those target directories separate, or override
 `MIMALLOC_BENCH_DEFAULT_TARGET_DIR`, `MIMALLOC_BENCH_INTERPOSE_TARGET_DIR`, and
-`MIMALLOC_BENCH_PRELOAD_TARGET_DIR` with three different paths. Release reports
-must label each section with the artifact mode and feature set. Rust-vs-C ratios
-come from the native scenario benchmarks in the default Rust library mode,
-while linked-feature and deployed-preload evidence are reported separately.
+`MIMALLOC_BENCH_PRELOAD_TARGET_DIR`,
+`MIMALLOC_BENCH_PAGE_BATCH_PLAIN_TARGET_DIR`, and
+`MIMALLOC_BENCH_PAGE_BATCH_SECURE_TARGET_DIR` with distinct paths. Release
+reports must label each section with the artifact mode and feature set.
+Rust-vs-C ratios come from the native scenario benchmarks in the default Rust
+library mode, while linked-feature, deployed-preload, and diagnostic page-batch
+evidence are reported separately.
 
 `benchmarks/thresholds.json` schema 2 keys each baseline by artifact mode and
 feature set and gates both sample median and p95. A release baseline is the

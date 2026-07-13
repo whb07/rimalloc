@@ -8,12 +8,37 @@ use mechanical_mimalloc::raw::{
     mi_bench_page_batch_fixture_destroy, mi_bench_page_batch_fixture_new,
     mi_bench_page_batch_fixture_prepare, mi_bench_page_batch_fixture_run,
 };
+use std::env;
 use std::time::{Duration, Instant};
 
 const FORCE: u8 = 0;
 const LOCAL: u8 = 1;
 const REMOTE: u8 = 2;
 const LENGTHS: &[usize] = &[1, 8, 32, 128];
+
+fn configured_sample_size() -> usize {
+    env::var("MIMALLOC_HOTPATH_SAMPLE_SIZE")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(100)
+        .max(10)
+}
+
+fn configured_duration(name: &str, default: u64) -> Duration {
+    Duration::from_secs(
+        env::var(name)
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(default)
+            .max(1),
+    )
+}
+
+fn configure_group(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>) {
+    group.sample_size(configured_sample_size());
+    group.measurement_time(configured_duration("MIMALLOC_HOTPATH_MEASUREMENT_SECS", 10));
+    group.warm_up_time(configured_duration("MIMALLOC_HOTPATH_WARMUP_SECS", 1));
+}
 
 struct Fixture(*mut c_void);
 
@@ -61,6 +86,7 @@ fn benchmark_page_batches(c: &mut Criterion) {
     };
 
     let mut forced = c.benchmark_group(format!("page_batch/{encoding}/forced_page_free_collect"));
+    configure_group(&mut forced);
     forced.throughput(Throughput::Elements(128));
     let mut fixture = Fixture::new(FORCE, 128, 3);
     forced.bench_function("len128/nonempty_destination", |b| {
@@ -70,6 +96,7 @@ fn benchmark_page_batches(c: &mut Criterion) {
 
     for (name, kind) in [("local_to_available", LOCAL), ("detached_remote", REMOTE)] {
         let mut group = c.benchmark_group(format!("page_batch/{encoding}/{name}"));
+        configure_group(&mut group);
         for &len in LENGTHS {
             group.throughput(Throughput::Elements(len as u64));
             for (destination, destination_len) in [("empty", 0), ("nonempty", 3)] {

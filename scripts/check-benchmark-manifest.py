@@ -10,9 +10,13 @@ import os
 from pathlib import Path
 
 
-CRITERION_REQUIRED = [
+FULL_CRITERION_REQUIRED = [
     "environment.txt", "manifest.json", "commands.txt", "criterion",
     "resource-results.jsonl", "threshold-results.csv", "benchmark-review.json",
+]
+PAGE_BATCH_REQUIRED = [
+    "environment.txt", "manifest.json", "commands.txt", "criterion",
+    "threshold-results.csv", "benchmark-review.json",
 ]
 PRELOAD_REQUIRED = [
     "environment.txt", "manifest.json", "commands.txt", "resource-results.jsonl",
@@ -31,6 +35,13 @@ CONTROL_FIELDS = {
     "resource_repeats",
 }
 NUMERIC_CONTROL_FIELDS = CONTROL_FIELDS - {"native_scenarios", "native_allocators"}
+MODE_FEATURES = {
+    "default-rust": ["bench"],
+    "interpose-feature-linked": ["bench", "interpose"],
+    "ld-preload-interpose": ["interpose"],
+    "page-batch-plain": ["bench", "bench-diagnostics"],
+    "page-batch-secure": ["bench", "bench-diagnostics", "secure"],
+}
 
 
 def main() -> None:
@@ -42,18 +53,23 @@ def main() -> None:
     artifact_dir = Path(args.artifact_dir)
     if artifact_dir.name != args.artifact_mode:
         raise SystemExit("artifact directory name and artifact mode disagree")
-    required = (
-        PRELOAD_REQUIRED
-        if args.artifact_mode == "ld-preload-interpose"
-        else CRITERION_REQUIRED
-    )
+    expected_features = MODE_FEATURES.get(args.artifact_mode)
+    if expected_features is None:
+        raise SystemExit(f"unknown benchmark artifact mode: {args.artifact_mode}")
+    if sorted(args.features) != expected_features:
+        raise SystemExit("command-line feature set does not match the artifact mode")
+    if args.artifact_mode == "ld-preload-interpose":
+        required = PRELOAD_REQUIRED
+    elif args.artifact_mode in {"page-batch-plain", "page-batch-secure"}:
+        required = PAGE_BATCH_REQUIRED
+    else:
+        required = FULL_CRITERION_REQUIRED
     missing = [name for name in required if not (artifact_dir / name).exists()]
     if args.artifact_mode == "default-rust" and not (artifact_dir / "evidence-report.json").exists():
         missing.append("evidence-report.json")
     if missing:
         raise SystemExit("missing benchmark artifacts: " + ", ".join(missing))
     manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
-    expected_features = sorted(args.features)
     if manifest.get("schema") != 1 or manifest.get("artifact_mode") != args.artifact_mode:
         raise SystemExit("manifest schema or artifact mode mismatch")
     if manifest.get("features") != expected_features:
@@ -79,16 +95,18 @@ def main() -> None:
     digest = hashlib.sha256((artifact_dir / "commands.txt").read_bytes()).hexdigest()
     if manifest.get("command_digest") != digest:
         raise SystemExit("manifest command digest mismatch")
-    for line_number, line in enumerate(
-        (artifact_dir / "resource-results.jsonl").read_text(encoding="utf-8").splitlines(), 1
-    ):
-        if not line.strip():
-            continue
-        record = json.loads(line)
-        if record.get("artifact_mode") != args.artifact_mode:
-            raise SystemExit(f"resource record {line_number} artifact mode mismatch")
-        if sorted(record.get("features", [])) != expected_features:
-            raise SystemExit(f"resource record {line_number} feature set mismatch")
+    resource_results = artifact_dir / "resource-results.jsonl"
+    if resource_results.exists():
+        for line_number, line in enumerate(
+            resource_results.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if record.get("artifact_mode") != args.artifact_mode:
+                raise SystemExit(f"resource record {line_number} artifact mode mismatch")
+            if sorted(record.get("features", [])) != expected_features:
+                raise SystemExit(f"resource record {line_number} feature set mismatch")
     if args.artifact_mode != "ld-preload-interpose":
         review = json.loads((artifact_dir / "benchmark-review.json").read_text(encoding="utf-8"))
         if (

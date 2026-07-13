@@ -71,7 +71,7 @@ fn release_candidates_require_full_benchmark_evidence() {
         "threshold-results.csv",
         "benchmark-review.json",
         "evidence-index.json",
-        "Rust-vs-C ratios\ncome from the native scenario benchmarks in the default Rust library mode",
+        "Rust-vs-C ratios come from the native scenario benchmarks in the default Rust\nlibrary mode",
     ] {
         assert!(
             performance_md.contains(required),

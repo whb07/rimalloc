@@ -13,19 +13,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_MODES = {
     "default-rust": {
+        "resource-results.jsonl",
         "criterion",
         "threshold-results.csv",
         "benchmark-review.json",
         "evidence-report.json",
     },
     "interpose-feature-linked": {
+        "resource-results.jsonl",
         "criterion",
         "threshold-results.csv",
         "benchmark-review.json",
     },
-    "ld-preload-interpose": {"interpose-cdylib.so"},
+    "ld-preload-interpose": {"resource-results.jsonl", "interpose-cdylib.so"},
+    "page-batch-plain": {
+        "criterion",
+        "threshold-results.csv",
+        "benchmark-review.json",
+    },
+    "page-batch-secure": {
+        "criterion",
+        "threshold-results.csv",
+        "benchmark-review.json",
+    },
 }
-COMMON_FILES = {"manifest.json", "environment.txt", "commands.txt", "resource-results.jsonl"}
+COMMON_FILES = {"manifest.json", "environment.txt", "commands.txt"}
 ASSEMBLY_SYMBOLS = {
     "mi_malloc.asm",
     "mi_malloc_small.asm",

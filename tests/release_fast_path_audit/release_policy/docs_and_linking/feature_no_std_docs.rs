@@ -30,11 +30,19 @@ fn feature_no_std_validation_covers_std_examples() {
         .collect::<BTreeSet<_>>();
 
     for name in &example_names {
-        let expected_stanza = format!(
-            "[[example]]\nname = \"{name}\"\npath = \"examples/{name}.rs\"\nrequired-features = [\"std\"]"
-        );
+        let stanza_start = format!("[[example]]\nname = \"{name}\"");
+        let start = manifest
+            .find(&stanza_start)
+            .unwrap_or_else(|| panic!("manifest should declare Rust example {name}"));
+        let remainder = &manifest[start..];
+        let end = remainder[stanza_start.len()..]
+            .find("[[example]]")
+            .map_or(remainder.len(), |offset| stanza_start.len() + offset);
+        let stanza = &remainder[..end];
         assert!(
-            manifest.contains(&expected_stanza),
+            stanza.contains(&format!("path = \"examples/{name}.rs\""))
+                && stanza.contains("required-features = [")
+                && stanza.contains("\"std\""),
             "Rust example {name} should be explicitly gated as std-only"
         );
     }

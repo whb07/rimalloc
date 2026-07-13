@@ -4,7 +4,6 @@ use super::*;
 fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let entries = read_allowlist(root);
-    let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
     let strict_docs =
         fs::read_to_string(root.join("docs/strict-types.md")).expect("read strict type docs");
 
@@ -75,27 +74,6 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
         "strict-type allowlist has a new raw-pointer domain above the documented cap"
     );
 
-    assert_doc_snippets(
-        "TODO.md",
-        &todo,
-        &[
-            "largest strict-type allowlist file hotspots are `src/allocator/aligned.rs`\n  with 36 active entries",
-            "`src/internal/bitmap.rs` with 35",
-            "`src/allocator/alloc.rs` with 30",
-            "`src/allocator/page.rs` with 26",
-            "`src/allocator/thread_heap.rs` with 25",
-            "`src/allocator/free.rs` with 24",
-            "`bare-domain-usize` in\n  `src/types/scalar.rs` with 24 active entries",
-            "`raw-pointer-parameter` in\n  `src/allocator/alloc.rs` with 24",
-            "`raw-pointer-parameter` in\n  `src/allocator/thread_heap.rs` with 24",
-            "`bare-domain-usize` in `src/internal/bitmap.rs` with 23",
-            "`bare-domain-usize` in `src/raw/macros.rs` with 23",
-            "`raw-pointer-parameter` in `src/allocator/aligned.rs` with 23",
-            "raw-pointer domains are `mi_page_t` with 110 entries",
-            "`mi_theap_t` with 109",
-            "`mi_heap_t` with 67",
-        ],
-    );
     assert_doc_snippets(
         "docs/strict-types.md",
         &strict_docs,

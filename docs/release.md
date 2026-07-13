@@ -339,9 +339,9 @@ Before publishing or tagging a release:
    scripts/check-sanitizers.sh`.
 30. Run `scripts/check-valgrind-tracking-parity.py`.
 31. Before a release candidate, run `scripts/check-bench-full.sh`, capture
-   `scripts/env-info.sh`, preserve
-   `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` and
-   `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv`, and
+   `scripts/env-info.sh`, preserve each mode's `manifest.json`,
+   `environment.txt`, `commands.txt`, `criterion/`, `resource-results.jsonl`,
+   and `threshold-results.csv`, and
    update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,
    artifact modes, Rust/C ratios, and noisy-benchmark notes for the release
    commit.

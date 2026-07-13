@@ -4,7 +4,6 @@ pub(super) struct DatatypeAcceptanceSources<'a> {
     pub(super) unsafe_migration_allowlist: &'a str,
     pub(super) strict_type_allowlist: &'a str,
     pub(super) strict_type_checker: &'a str,
-    pub(super) todo: &'a str,
 }
 
 impl<'a> DatatypeAcceptanceSources<'a> {

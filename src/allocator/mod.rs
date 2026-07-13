@@ -11,6 +11,7 @@ pub(crate) mod memory;
 pub(crate) mod options;
 pub(crate) mod page;
 pub(crate) mod page_map;
+pub(crate) mod policy;
 pub(crate) mod static_alloc;
 pub(crate) mod stats;
 pub(crate) mod thread_heap;

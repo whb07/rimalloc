@@ -108,42 +108,6 @@ impl StatTotal {
     }
 }
 
-/// Occupancy of allocator pages represented in a statistics snapshot.
-///
-/// Huge allocations are excluded because they do not use fixed-capacity
-/// small, medium, or large pages.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[must_use]
-pub struct PageOccupancy {
-    used_bytes: StatTotal,
-    capacity_bytes: StatTotal,
-}
-
-impl PageOccupancy {
-    /// Returns bytes occupied by live blocks in fixed-capacity pages.
-    #[inline]
-    pub const fn used_bytes(self) -> StatTotal {
-        self.used_bytes
-    }
-
-    /// Returns the total capacity of the corresponding live pages.
-    #[inline]
-    pub const fn capacity_bytes(self) -> StatTotal {
-        self.capacity_bytes
-    }
-
-    /// Returns occupancy in the inclusive range `0.0..=1.0`.
-    #[inline]
-    #[must_use]
-    pub fn ratio(self) -> f64 {
-        if self.capacity_bytes.get() == 0 {
-            0.0
-        } else {
-            (self.used_bytes.get() as f64 / self.capacity_bytes.get() as f64).clamp(0.0, 1.0)
-        }
-    }
-}
-
 /// Non-printing snapshot of mimalloc statistics.
 ///
 /// ```rust
@@ -238,35 +202,6 @@ impl StatsSnapshot {
     #[inline]
     pub fn page_search_count(&self) -> StatTotal {
         StatTotal::from_i64(self.raw.page_searches_count.total)
-    }
-
-    /// Returns fixed-page occupancy derived from live block and page-bin
-    /// counters. Returns `None` when detailed bin statistics are unavailable.
-    #[inline]
-    #[must_use]
-    pub fn page_occupancy(&self) -> Option<PageOccupancy> {
-        let mut used_bytes = 0usize;
-        let mut capacity_bytes = 0usize;
-        for bin in 0..crate::types::MI_BIN_HUGE {
-            let block_size = crate::stats::mi_stats_get_bin_size(bin);
-            let page_size = if block_size <= crate::page::MI_SMALL_MAX_OBJ_SIZE {
-                crate::types::MI_SMALL_PAGE_SIZE
-            } else if block_size <= crate::page::MI_MEDIUM_MAX_OBJ_SIZE {
-                crate::types::MI_MEDIUM_PAGE_SIZE
-            } else if block_size <= crate::page::MI_LARGE_MAX_OBJ_SIZE {
-                crate::types::MI_LARGE_PAGE_SIZE
-            } else {
-                0
-            };
-            let blocks = StatTotal::from_i64(self.raw.malloc_bins[bin].current).get();
-            let pages = StatTotal::from_i64(self.raw.page_bins[bin].current).get();
-            used_bytes = used_bytes.saturating_add(blocks.saturating_mul(block_size));
-            capacity_bytes = capacity_bytes.saturating_add(pages.saturating_mul(page_size));
-        }
-        (capacity_bytes != 0).then_some(PageOccupancy {
-            used_bytes: StatTotal::new(used_bytes.min(capacity_bytes)),
-            capacity_bytes: StatTotal::new(capacity_bytes),
-        })
     }
 
     /// Returns current reserved bytes from the snapshot.
@@ -558,8 +493,6 @@ mod tests {
         raw.pages.current = 8;
         raw.pages_abandoned.current = 9;
         raw.page_committed.current = 10;
-        raw.malloc_bins[1].current = 2;
-        raw.page_bins[1].current = 1;
 
         let snapshot = StatsSnapshot { raw };
 
@@ -569,16 +502,6 @@ mod tests {
         );
         assert_eq!(snapshot.page_searches_total().get(), 21);
         assert_eq!(snapshot.page_search_count().get(), 3);
-        let occupancy = snapshot.page_occupancy().expect("detailed bin statistics");
-        assert_eq!(
-            occupancy.used_bytes().get(),
-            2 * crate::stats::mi_stats_get_bin_size(1)
-        );
-        assert_eq!(
-            occupancy.capacity_bytes().get(),
-            crate::types::MI_SMALL_PAGE_SIZE
-        );
-        assert!(occupancy.ratio() > 0.0 && occupancy.ratio() <= 1.0);
         assert_eq!(
             snapshot.reserved_current().get(),
             raw.reserved.current as usize

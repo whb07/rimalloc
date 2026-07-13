@@ -34,7 +34,7 @@ pub use allocation::{Allocation, InitializedAllocation};
 pub use error::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError};
 pub use heap::{Heap, HeapAllocation, HeapError, HeapRef, InitializedHeapAllocation, MainHeap};
 pub use options::{GlobalOptions, OptionError, OptionKey};
-pub use stats::{PageOccupancy, ProcessInfo, StatCount, StatTotal, StatsError, StatsSnapshot};
+pub use stats::{ProcessInfo, StatCount, StatTotal, StatsError, StatsSnapshot};
 
 #[cfg(test)]
 mod tests;

@@ -611,18 +611,18 @@ unsafe fn mi_theap_page_collect_typed(
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_page_is_valid_typed(theap.ptr(), page));
 
-        let local_page = crate::core_types::LocalPage::new_unchecked(page);
+        let local_page = crate::core_types::assume_local_page(page);
         let page = local_page.page().as_ptr();
         let pq = queue.as_ptr();
         _mi_page_free_collect(page, collect as i32 >= mi_collect_t::MI_FORCE as i32);
 
         if mi_page_all_free(page) {
             if crate::page::mi_page_is_in_full(page) {
-                let full_page = crate::core_types::FullPage::new_unchecked(local_page.page());
-                crate::internal::mi_assert_internal!(full_page.mark_all_free().is_some());
+                let full_page = crate::core_types::assume_full_page(local_page.page());
+                crate::internal::mi_assert_internal!(full_page.try_mark_all_free().is_ok());
             } else {
-                let active_page = crate::core_types::ActivePage::new_unchecked(local_page.page());
-                crate::internal::mi_assert_internal!(active_page.mark_all_free().is_some());
+                let active_page = crate::core_types::assume_active_page(local_page.page());
+                crate::internal::mi_assert_internal!(active_page.try_mark_all_free().is_ok());
             }
             if collect as i32 >= mi_collect_t::MI_FORCE as i32
                 || crate::page::mi_page_retire_expire(page).is_zero()
@@ -631,9 +631,9 @@ unsafe fn mi_theap_page_collect_typed(
             }
         } else if collect == mi_collect_t::MI_ABANDON {
             let _page_for_abandon = if crate::page::mi_page_is_in_full(page) {
-                crate::core_types::FullPage::new_unchecked(local_page.page()).for_abandon()
+                crate::core_types::assume_full_page(local_page.page()).into_abandon_candidate()
             } else {
-                crate::core_types::ActivePage::new_unchecked(local_page.page()).for_abandon()
+                crate::core_types::assume_active_page(local_page.page()).into_abandon_candidate()
             };
             _mi_page_abandon(page, pq);
         }
@@ -933,8 +933,15 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
         );
 
         _mi_theap_options_init(theap_raw);
-        if (*tld_raw).is_in_threadpool && (*theap_raw).page_full_retain > 0 {
-            (*theap_raw).page_full_retain /= 4;
+        if (*tld_raw).is_in_threadpool {
+            let configured = crate::allocator::policy::ThreadHeapPolicy::from_fields(
+                (*theap_raw).allow_page_reclaim,
+                (*theap_raw).allow_page_abandon,
+                (*theap_raw).page_full_retain,
+            );
+            let adjusted =
+                crate::allocator::policy::ActivePolicy::adjust_for_thread_pool(configured);
+            (*theap_raw).page_full_retain = adjusted.page_full_retain().get();
         }
 
         let tld_theaps_head = lists::push_tld_front(tld, theap);

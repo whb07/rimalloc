@@ -4,6 +4,24 @@ Scope: Rust sources in `src/` that perform pointer arithmetic, pointer/integer
 casts, wrapping arithmetic, checked arithmetic, or alignment calculations. This
 audit covers the supported default parity matrix documented in `PARITY.md`.
 
+Audit names under `src/core_types/` are stable logical aliases mapped by the
+audit scripts to the current `src/types/` implementation; they are not a
+filesystem path.
+
+Current split-module inventory also includes
+`src/allocator/aligned/thread_heap.rs`, `src/allocator/alloc/string_path.rs`,
+`src/allocator/arena/abandoned.rs`, `src/allocator/arena/debug.rs`,
+`src/allocator/arena/geometry.rs`, `src/allocator/arena/heap_pages.rs`,
+`src/allocator/arena/ids.rs`, `src/allocator/arena/os_memory.rs`,
+`src/allocator/arena/prefix.rs`, `src/allocator/page/bins.rs`,
+`src/allocator/page/counts.rs`, `src/allocator/page/queues.rs`,
+`src/allocator/page/validation.rs`, `src/allocator/page_map/lookup.rs`,
+`src/allocator/policy/compat.rs`, `src/allocator/policy/reference.rs`,
+`src/internal/bitmap/bfield.rs`, `src/internal/bitmap/chunkmap.rs`,
+`src/internal/block_link.rs`, `src/internal/page_location.rs`, and
+`src/safe/tests.rs`, `src/types/page_batch.rs`, and
+`src/page_batch_tests/tests.rs`.
+
 Miri was checked for this toolchain but is not available:
 `cargo miri --version` reports that the `miri` component is unavailable for
 `stable-x86_64-unknown-linux-gnu`. The UB-oriented validation available here is
@@ -52,6 +70,9 @@ Per-file review:
   allocator-owned atomic fields; ordering is covered by `ATOMIC_ORDERING_AUDIT.md`.
 - `src/bench_diagnostics.rs`: diagnostic pointer and integer markers are limited
   to test/benchmark instrumentation and do not feed allocator ownership.
+- `src/allocator/policy/compat.rs` and `src/allocator/policy/reference.rs`:
+  checked count arithmetic implements pure compatibility decisions over bounded
+  scalar metadata and does not create or transform pointer provenance.
 - `src/bitmap.rs`: bit indexes are converted to bitmap word indexes with bounded
   counts; scan and claim loops stay within the caller-provided bitmap storage.
 - `src/bits.rs`: bit-scan, rotate, and power-of-two helpers use integer-only
@@ -73,6 +94,13 @@ Per-file review:
   `src/core_types/padding/tests.rs`,
   `src/core_types/ptr/tests.rs`, and
   `src/core_types/scalar/tests.rs`.
+- `src/types/page_batch.rs`: block addresses are compared as integers only to
+  prove a candidate is aligned within the owning page's capacity-bounded block
+  range before any encoded-link dereference; checked multiplication bounds the
+  committed block extent.
+- `src/page_batch_tests/tests.rs`: pointer addition constructs an intentionally
+  misaligned interior candidate that is encoded only to verify rejection and is
+  never dereferenced.
 - `src/free.rs`: free paths compute block starts, padding locations, and guarded
   page addresses only after page lookup/ownership checks.
 - `src/headers.rs`: macro casts preserve C header API types and forward to the

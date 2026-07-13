@@ -12,7 +12,7 @@
 //!
 //! Useful environment variables:
 //!   MIMALLOC_BENCH_SCENARIOS=glibc-simple,mleak10,xmalloc-testN
-//!   MIMALLOC_BENCH_ALLOCATORS=rust,c
+//!   MIMALLOC_BENCH_ALLOCATORS=mechanical_mimalloc_raw,c-mimalloc-3.3.2
 //!   MIMALLOC_RUST_LIB=/path/to/libmechanical_mimalloc.so
 //!   MIMALLOC_C_LIB=/path/to/libmimalloc.so
 //!   MIMALLOC_BENCH_SKIP_BUILD=1
@@ -68,7 +68,7 @@ enum BenchAllocator {
 impl BenchAllocator {
     fn name(self) -> &'static str {
         match self {
-            BenchAllocator::Rust(_) => "rust",
+            BenchAllocator::Rust(_) => "mechanical_mimalloc_raw",
             BenchAllocator::C(_) => "c-mimalloc-3.3.2",
         }
     }
@@ -296,8 +296,22 @@ fn find_mimalloc_shared_lib(build_dir: &Path) -> Option<PathBuf> {
     None
 }
 
+fn cargo_target_dir(root: &Path) -> PathBuf {
+    env::var_os("CARGO_TARGET_DIR").map_or_else(
+        || root.join("target"),
+        |value| {
+            let path = PathBuf::from(value);
+            if path.is_absolute() {
+                path
+            } else {
+                root.join(path)
+            }
+        },
+    )
+}
+
 fn find_rust_mimalloc_shared_lib(root: &Path) -> Option<PathBuf> {
-    let release_dir = root.join("target/release");
+    let release_dir = cargo_target_dir(root).join("release");
     let root_artifact = release_dir.join("libmechanical_mimalloc.so");
     if root_artifact.exists() {
         return Some(root_artifact);
@@ -339,7 +353,7 @@ fn ensure_rust_mimalloc(root: &Path) -> PathBuf {
         return path;
     }
 
-    let lib = root.join("target/release/libmechanical_mimalloc.so");
+    let lib = cargo_target_dir(root).join("release/libmechanical_mimalloc.so");
     if !skip_build() {
         let mut command = Command::new("cargo");
         command
@@ -359,7 +373,7 @@ fn ensure_rust_mimalloc(root: &Path) -> PathBuf {
     }
     find_rust_mimalloc_shared_lib(root).unwrap_or_else(|| {
         panic!(
-            "missing Rust mimalloc cdylib at {} or target/release/deps/libmechanical_mimalloc-*.so; run `cargo rustc --features interpose --lib --release -- --crate-type cdylib` or set MIMALLOC_RUST_LIB",
+            "missing Rust mimalloc cdylib at {} or its release/deps directory; run `cargo rustc --features interpose --lib --release -- --crate-type cdylib` or set MIMALLOC_RUST_LIB",
             lib.display()
         )
     })
@@ -382,7 +396,7 @@ fn ensure_c_mimalloc(root: &Path) -> PathBuf {
         "missing mimalloc-3.3.2 source directory at {}",
         source_dir.display()
     );
-    let build_dir = root.join("target/c-mimalloc-3.3.2");
+    let build_dir = cargo_target_dir(root).join("c-mimalloc-3.3.2");
     if find_mimalloc_shared_lib(&build_dir).is_none() && !skip_build() {
         let mut configure = Command::new("cmake");
         configure
@@ -570,7 +584,10 @@ fn c_allocator(root: &Path) -> &'static DylibAllocator {
 fn allocators(root: &Path) -> Vec<BenchAllocator> {
     let selected = csv_env("MIMALLOC_BENCH_ALLOCATORS");
     let selected = if selected.is_empty() {
-        vec!["rust".to_owned(), "c".to_owned()]
+        vec![
+            "mechanical_mimalloc_raw".to_owned(),
+            "c-mimalloc-3.3.2".to_owned(),
+        ]
     } else {
         selected
     };
@@ -578,7 +595,7 @@ fn allocators(root: &Path) -> Vec<BenchAllocator> {
     selected
         .into_iter()
         .map(|name| match name.as_str() {
-            "rust" => BenchAllocator::Rust(rust_allocator(root)),
+            "rust" | "mechanical_mimalloc_raw" => BenchAllocator::Rust(rust_allocator(root)),
             "c" | "c-mimalloc" | "c-mimalloc-3.3.2" => BenchAllocator::C(c_allocator(root)),
             other => panic!("unknown MIMALLOC_BENCH_ALLOCATORS entry `{other}`"),
         })

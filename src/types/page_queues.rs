@@ -5,12 +5,15 @@ use super::ptr::{PagePtr, PageQueuePtr};
 use core::marker::PhantomData;
 use core::mem::size_of;
 
+#[derive(Debug)]
 pub(crate) enum NormalQueue {}
+#[derive(Debug)]
 pub(crate) enum HugeQueue {}
+#[derive(Debug)]
 pub(crate) enum FullQueue {}
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct PageQueue<K> {
     ptr: PageQueuePtr,
     _kind: PhantomData<K>,
@@ -139,6 +142,8 @@ impl FullPageQueue {
 }
 
 /// Witness that a page is currently inside a specific queue.
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct QueuedPage<K> {
     page: PagePtr,
     queue: PageQueue<K>,
@@ -157,13 +162,20 @@ impl<K> QueuedPage<K> {
 }
 
 impl QueuedPage<NormalQueue> {
+    #[inline(always)]
+    pub(crate) fn into_active(self) -> crate::core_types::ActivePage {
+        // SAFETY[AUDIT:typed-page-queue-domain]: forgetting the more specific
+        // normal-queue membership proof preserves the page's active state.
+        unsafe { crate::core_types::ActivePage::new_unchecked(self.page) }
+    }
+
     /// # Safety
     /// `page` and `queue` must belong to the same initialized heap metadata.
     #[inline(always)]
-    pub(crate) unsafe fn new(
+    pub(crate) unsafe fn try_queue(
         page: crate::core_types::ActivePage,
         queue: NormalPageQueue,
-    ) -> Option<Self> {
+    ) -> Result<Self, crate::core_types::ActivePage> {
         let queue_ptr = queue.ptr().as_ptr();
         let page_ptr = page.page().as_ptr();
         // SAFETY[AUDIT:typed-page-queue-domain]: callers provide page and
@@ -181,12 +193,12 @@ impl QueuedPage<NormalQueue> {
                     || (crate::page::mi_page_is_huge(page_ptr)
                         && crate::page::mi_page_queue_is_huge(queue_ptr)))
         } {
-            Some(Self {
+            Ok(Self {
                 page: page.page(),
                 queue: PageQueue::normal(queue),
             })
         } else {
-            None
+            Err(page)
         }
     }
 
@@ -194,7 +206,7 @@ impl QueuedPage<NormalQueue> {
     /// `page` must be known to be currently linked in `queue`, not marked full,
     /// and have a block size compatible with `queue`.
     #[inline(always)]
-    pub(crate) unsafe fn new_unchecked(
+    pub(in crate::types) unsafe fn new_unchecked(
         page: crate::core_types::ActivePage,
         queue: NormalPageQueue,
     ) -> Self {
@@ -202,6 +214,18 @@ impl QueuedPage<NormalQueue> {
             page: page.page(),
             queue: PageQueue::normal(queue),
         }
+    }
+
+    /// # Safety
+    /// `page` must have just been linked into `queue` by the caller.
+    #[inline(always)]
+    pub(crate) unsafe fn from_enqueued(
+        page: crate::core_types::ActivePage,
+        queue: NormalPageQueue,
+    ) -> Self {
+        // SAFETY[AUDIT:typed-page-queue-enqueue-transition]: queue mutation
+        // completed immediately before this consuming transition.
+        unsafe { Self::new_unchecked(page, queue) }
     }
 
     #[inline(always)]
@@ -232,10 +256,10 @@ impl QueuedPage<FullQueue> {
     /// # Safety
     /// `page` and `queue` must belong to the same initialized heap metadata.
     #[inline(always)]
-    pub(crate) unsafe fn new(
+    pub(crate) unsafe fn try_queue_full(
         page: crate::core_types::FullPage,
         queue: FullPageQueue,
-    ) -> Option<Self> {
+    ) -> Result<Self, crate::core_types::FullPage> {
         // SAFETY[AUDIT:typed-page-queue-domain]: callers provide page and
         // queue metadata from the same initialized heap; this constructor
         // accepts the full-queue witness only when the page is linked in the
@@ -244,12 +268,12 @@ impl QueuedPage<FullQueue> {
             crate::page::mi_page_queue_contains(queue.ptr().as_ptr(), page.page().as_ptr())
                 && crate::page::mi_page_is_in_full(page.page().as_ptr())
         } {
-            Some(Self {
+            Ok(Self {
                 page: page.page(),
                 queue: PageQueue::full(queue),
             })
         } else {
-            None
+            Err(page)
         }
     }
 
@@ -279,6 +303,7 @@ impl QueuedPage<FullQueue> {
 }
 
 /// Witness that a page is definitively *not* in any queue.
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct UnqueuedPage<S> {
     page: Page<S>,
 }
@@ -309,9 +334,13 @@ const _: unsafe fn(PageQueuePtr) -> Option<FullPageQueue> = FullPageQueue::new;
 const _: unsafe fn(
     crate::core_types::ActivePage,
     NormalPageQueue,
-) -> Option<QueuedPage<NormalQueue>> = QueuedPage::<NormalQueue>::new;
-const _: unsafe fn(crate::core_types::FullPage, FullPageQueue) -> Option<QueuedPage<FullQueue>> =
-    QueuedPage::<FullQueue>::new;
+) -> Result<QueuedPage<NormalQueue>, crate::core_types::ActivePage> =
+    QueuedPage::<NormalQueue>::try_queue;
+const _: unsafe fn(
+    crate::core_types::FullPage,
+    FullPageQueue,
+) -> Result<QueuedPage<FullQueue>, crate::core_types::FullPage> =
+    QueuedPage::<FullQueue>::try_queue_full;
 const _: unsafe fn(QueuedPage<FullQueue>, NormalPageQueue) -> crate::core_types::ActivePage =
     QueuedPage::<FullQueue>::unfull;
 const _: unsafe fn(QueuedPage<FullQueue>) -> crate::core_types::ActivePage =

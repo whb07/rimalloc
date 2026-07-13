@@ -63,7 +63,7 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
             && arena_rs.contains("unsafe fn mi_heap_ensure_arena_pages(")
             && arena_rs.contains("unsafe fn mi_arenas_page_try_find_abandoned(")
             && arena_rs.contains("ThreadLocalClaimCallback::new(mi_arena_try_claim_abandoned)")
-            && arena_rs.contains("crate::core_types::AbandonedPage::new_unchecked")
+            && arena_rs.contains("crate::core_types::assume_abandoned_page")
             && arena_rs.contains("mi_page_claim_ownership(abandoned)")
             && arena_rs.contains("mi_heap_abandoned_count(heap, bin).load_relaxed()"),
         "arena abandoned-page boundaries should preserve claim/reclaim ownership and callback ABI shape"

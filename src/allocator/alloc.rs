@@ -111,7 +111,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
 
         let (allocated, _) = available.pop_free_block();
-        let block = allocated.block().as_ptr();
+        let block = allocated.into_ptr().as_ptr();
         let free = page_ptr.free().as_raw();
         crate::internal::mi_assert_internal!(free.is_null() || _mi_ptr_page(free.cast()) == page);
         crate::internal::mi_assert_internal!(
@@ -230,10 +230,9 @@ pub(crate) unsafe extern "C" fn _mi_page_malloc_zero(
     unsafe {
         let zeroed = crate::core_types::Zeroed::from_bool(zero);
         let padded = crate::core_types::PaddedSize::new_unchecked(size);
-        let active = crate::core_types::ActivePage::new_unchecked(
-            crate::core_types::PagePtr::new_unchecked(page),
-        );
-        let Some(available) = active.available() else {
+        let active =
+            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
+        let Ok(available) = active.try_available() else {
             return mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, ptr::null_mut());
         };
         _mi_page_malloc_zero_typed(theap, available, padded, zeroed, ptr::null_mut())
@@ -280,10 +279,9 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
         // normalized to non-zero above, so the sum cannot overflow or yield zero.
         let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
         let page = _mi_theap_get_free_small_page_typed(local_theap, padded);
-        let active = crate::core_types::ActivePage::new_unchecked(
-            crate::core_types::PagePtr::new_unchecked(page),
-        );
-        let p = if let Some(available) = active.available() {
+        let active =
+            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
+        let p = if let Ok(available) = active.try_available() {
             _mi_page_malloc_zero_typed(theap, available, padded, zeroed, usable)
         } else {
             mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, usable)
@@ -913,9 +911,7 @@ unsafe fn mi_realloc_old_allocation(
     unsafe {
         match mi_validate_ptr_page(p, msg) {
             crate::core_types::PointerLookup::Valid(valid) => {
-                let user = valid.user();
-                let page = valid.page();
-                let location = valid.location();
+                let (user, page, location) = valid.into_parts();
                 let block = location.block();
                 let usable = crate::free::mi_usable_size_from_validated_location(page, location);
                 // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and

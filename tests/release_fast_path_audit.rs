@@ -235,8 +235,16 @@ mod unsafe_performance;
 mod allocation_contracts;
 #[path = "release_fast_path_audit/allowance_inventory.rs"]
 mod allowance_inventory;
+#[path = "release_fast_path_audit/batch_capability_linearity.rs"]
+mod batch_capability_linearity;
+#[path = "release_fast_path_audit/benchmark_hygiene.rs"]
+mod benchmark_hygiene;
+#[path = "release_fast_path_audit/capability_linearity.rs"]
+mod capability_linearity;
 #[path = "release_fast_path_audit/interposition_exports.rs"]
 mod interposition_exports;
+#[path = "release_fast_path_audit/policy_boundaries.rs"]
+mod policy_boundaries;
 #[path = "release_fast_path_audit/primitive_options.rs"]
 mod primitive_options;
 #[path = "release_fast_path_audit/public_facade.rs"]

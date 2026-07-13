@@ -129,7 +129,7 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             && page_rs.contains("unsafe fn mi_huge_page_alloc_typed(")
             && page_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_page_retire(")
             && page_boundary_rs.contains("pub unsafe extern \"C\" fn _mi_page_stats_bin(")
-            && page_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_max_candidates)")
+            && page_rs.contains("crate::allocator::policy::ActivePolicy::page_candidate_limit()")
             && page_rs.contains("__mi_stat_counter_increase("),
         "page allocation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );

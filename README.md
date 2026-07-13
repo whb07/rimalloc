@@ -217,6 +217,11 @@ are documented in `docs/performance.md`. Performance-sensitive changes should
 include fresh results for the changed benchmark set and a full report when hot
 paths or allocator-wide behavior can move.
 
+Release evidence uses clean, artifact-specific target directories and records
+provenance, Criterion median/p95 gates, and fresh-process resource metrics. The
+public `MiMalloc` facade and raw C-shaped facade are labeled and measured
+separately; results from default and interpose modes are never cross-compared.
+
 Additional policy documents live under `docs/`, including API inventory, ABI,
 safe API policy, Rust style, assembly and platform intrinsics, compatibility,
 features, memory ordering, performance, release, Rust safety model, testing and

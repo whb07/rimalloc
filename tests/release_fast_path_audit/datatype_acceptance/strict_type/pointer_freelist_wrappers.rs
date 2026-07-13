@@ -16,20 +16,20 @@ pub(super) fn assert_pointer_and_freelist_wrappers(audit_sources: &DatatypeAccep
             && ptr_core_rs.contains("#[inline(always)]\n            pub(crate) unsafe fn new_unchecked(ptr: *mut $raw_type) -> Self")
             && ptr_core_rs.contains("#[inline(always)]\n            pub(crate) fn as_ptr(self) -> *mut $raw_type")
             && ptr_core_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]\npub(crate) struct PageConstPtr(NonNull<mi_page_t>);")
-            && page_states_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct LocalPage(PagePtr);")
-            && page_states_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct OwnedAbandonedPage(PagePtr);")
+            && page_states_rs.contains("#[repr(transparent)]\n#[derive(Debug)]\n#[must_use = \"allocator state capabilities must be consumed or explicitly returned\"]\npub(crate) struct LocalPage(PagePtr);")
+            && page_states_rs.contains("#[repr(transparent)]\n#[derive(Debug)]\n#[must_use = \"allocator state capabilities must be consumed or explicitly returned\"]\npub(crate) struct OwnedAbandonedPage(PagePtr);")
             && page_queues_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct NormalPageQueue(PageQueuePtr);")
             && page_queues_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct FullPageQueue(PageQueuePtr);")
-            && validation_extra_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct FreeBlock(BlockPtr);")
-            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct AvailableFreeList(Option<BlockPtr>);")
-            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct LocalFreeList(Option<BlockPtr>);")
+            && validation_extra_rs.contains("#[repr(transparent)]\n#[must_use = \"allocator state capabilities must be consumed or explicitly returned\"]\npub(crate) struct FreeBlock(BlockPtr);")
+            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Debug)]\n#[must_use = \"available free-list ownership must be stored or consumed\"]\npub(crate) struct AvailableFreeList(Option<BlockPtr>);")
+            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Debug)]\n#[must_use = \"local free-list ownership must be stored or consumed\"]\npub(crate) struct LocalFreeList(Option<BlockPtr>);")
             && core_types_layout_tests_rs.contains("fn pointer_wrappers_match_nonnull_layout()")
             && core_types_layout_tests_rs.contains("fn optional_pointer_wrappers_are_pointer_sized()")
             && core_types_layout_tests_rs.contains("fn witness_wrappers_match_pointer_layout()")
             && core_types_layout_tests_rs
                 .contains("fn packed_and_atomic_wrappers_match_raw_layout()")
             && !unsafe_migration_allowlist.contains("src/types/ptr.rs"),
-        "hot strict-type wrappers should stay transparent, copyable where they carry copyable fast-path witnesses, inlineable, and covered by layout/niche tests"
+        "hot strict-type wrappers should stay transparent, linear where they carry list ownership, copyable for identities, inlineable, and covered by layout/niche tests"
     );
     for (audit_id, min_count) in [
         ("typed-pointer-constructor-boundary", 5),
@@ -106,7 +106,7 @@ pub(super) fn assert_pointer_and_freelist_wrappers(audit_sources: &DatatypeAccep
             && freelist_wrappers_rs
                 .contains("pub(crate) struct AvailableFreeList(Option<BlockPtr>);")
             && freelist_wrappers_rs.contains("pub(crate) fn from_head(head: BlockPtr) -> Self")
-            && freelist_wrappers_rs.contains("pub(crate) fn head(self) -> Option<BlockPtr>")
+            && freelist_wrappers_rs.contains("pub(crate) fn head(&self) -> Option<BlockPtr>")
             && freelist_wrappers_rs
                 .contains("pub(crate) struct LocalFreeList(Option<BlockPtr>);")
             && freelist_wrappers_rs.contains(

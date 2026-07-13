@@ -80,11 +80,11 @@ pub(super) fn assert_memid_and_arena_dispatch_boundaries(sources: &PageArenaBeha
                 .contains("crate::core_types::MemIdView::Arena(arena_memid)")
             && !sources.arena_rs.contains("(*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA")
             && !sources.arena_rs.contains("(*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA")
-            && sources.arena_rs.contains("_mi_page_associated_theap_peek(crate::core_types::PagePtr::new_unchecked(page))")
-            && sources.arena_rs.contains("_mi_arenas_page_abandon(page, theap)")
-            && !reabandon_arena.contains("mi_page_memid_is_arena(page)")
+            && sources.arena_rs.contains("_mi_page_associated_theap_peek(crate::core_types::PagePtr::new_unchecked(page_raw))")
+            && sources.arena_rs.contains("_mi_arenas_page_abandon(page_raw, theap)")
+            && !reabandon_arena.contains("mi_page_memid_is_arena(page_raw)")
             && !reabandon_arena.contains("MemId::view")
-            && sources.free_rs.contains("crate::core_types::MemId::view((*page).memid)")
+            && sources.free_rs.contains("crate::core_types::MemId::view((*page_raw).memid)")
             && sources
                 .free_rs
                 .contains("crate::core_types::MemIdView::Arena(arena_memid)")

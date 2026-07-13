@@ -719,9 +719,7 @@ pub(crate) unsafe fn mi_page_claim_ownership(
         let page_ptr = page.page();
         let atomic_tf = page_ptr.thread_free_cell();
         if atomic_tf.claim_acq_rel() {
-            Some(crate::core_types::OwnedAbandonedPage::new_unchecked(
-                page_ptr,
-            ))
+            Some(crate::core_types::assume_owned_abandoned_page(page_ptr))
         } else {
             None
         }

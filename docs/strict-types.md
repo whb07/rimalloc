@@ -9,6 +9,10 @@ explicit without changing the raw C ABI or hot-path code shape. Raw C-compatible
 types remain in `src/types/` and C-shaped declarations remain behind
 `mechanical_mimalloc::raw`.
 
+The identity, value, mechanism, raw-ABI, and linear-capability classification
+for every production wrapper is maintained in
+[`capability-inventory.md`](capability-inventory.md).
+
 ## Status Labels
 
 - `live`: used by current allocator paths.
@@ -100,9 +104,11 @@ boundary.
 
 ## Strict-Type Allowlist Governance
 
-The current `strict-type-allowlist.txt` snapshot has 632 active entries: 330 raw-pointer-parameter,
+Strict-type wildcard guard: total=0; none.
+
+The current `strict-type-allowlist.txt` snapshot has 634 active entries: 330 raw-pointer-parameter,
 220 bare-domain-usize, 40 metadata-reference, 23 pointer-usize-roundtrip, 14
-atomic-cast, and 5 heap-allocating-type entries. It has zero wildcard entries
+atomic-cast, and 7 heap-allocating-type entries. It has zero wildcard entries
 and zero removable entries; all current entries are classified as `permanent:`
 compatibility or proof boundaries.
 
@@ -164,18 +170,19 @@ C arithmetic without changing public ABI or allocation hot-path behavior.
 - Remote free enters `mi_free_block_mt` only with a `ForeignPage` plus
   `BlockForFree`. Abandoned and abandoned-mapped page owners are converted
   through their `remote_free_page` witness methods, and remote collection
-  continues through `OwnedAbandonedPage` plus `RemoteFreeList` after the raw
-  compatibility shim.
+  continues through `OwnedAbandonedPage` plus a `PublishedRemoteHead`; only
+  atomically detached chains become `DetachedRemoteList` values.
 - Reclaim below the raw keep shim accepts only `OwnedAbandonedPage` and
   `ThreadHeapLocal`: `try_reclaim_abandoned`, `_mi_theap_page_reclaim`, and
-  `OwnedAbandonedPage::reclaim(ThreadHeapLocal)` preserve that ownership pair
+  `OwnedAbandonedPage::into_reclaimed(ThreadHeapLocal)` preserve that ownership pair
   until the page is returned to the active queue.
 - Full-queue operations use `FullPage`/`FullPageQueue` witnesses below raw
   shims: full append takes typed full queues, full-page freeing rebuilds a
   `QueuedPage<FullQueue>` from `FullPage` plus `FullPageQueue`, and unfull
   consumes `QueuedPage<FullQueue>` before returning an active page.
 - Normal queue operations use `ActivePage` plus `NormalPageQueue` below raw
-  queue helpers. `QueuedPage<NormalQueue>::new` rejects full pages and requires
+  queue helpers. `QueuedPage<NormalQueue>::try_queue` rejects full pages, returns
+  the original `ActivePage` on failure, and requires
   the page block size to match the queue block size before push, move-to-front,
   active-page free, or normal append paths continue.
 - Memid union-arm reads are centralized in `MemId::view` or typed construction
@@ -220,10 +227,12 @@ C arithmetic without changing public ABI or allocation hot-path behavior.
   value types. The release fast-path audit rejects `Deref` and `DerefMut`
   implementations under `src/types/`, so callers must use explicit field,
   conversion, or witness methods instead of implicit references.
-- Hot strict-type wrappers stay zero-cost: pointer wrappers, copied page/queue
-  witnesses, free-list wrappers, packed words, and atomic field wrappers are
-  `#[repr(transparent)]`, derive `Copy` where duplication does not weaken the
-  witness, expose inline constructors/accessors, and are covered by
+- Hot strict-type wrappers stay zero-cost: identity wrappers may remain `Copy`
+  when duplication cannot authorize a state transition. Validation tokens,
+  page-state capabilities, detached-list ownership, and abandoned-page
+  dispositions are linear capabilities and must be consumed rather than
+  copied. Both kinds remain representation-transparent where applicable,
+  expose inline constructors/accessors, and are covered by
   size/alignment plus `Option<Wrapper>` niche tests.
 - Raw layout compatibility is checked by the core layout tests and release
   fast-path audit in the default build and with executable feature sets

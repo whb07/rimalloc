@@ -35,6 +35,10 @@ arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance/page_
 arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks meta-page debug classification keeps the C-shaped helper boundary and published stack traversal.
 arena-meta-page-stack	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks the meta-page global stack head, next link, and CAS publication stay isolated in the private arena_meta/pages.rs module.
 bench-diagnostics-ffi	test	src/allocator/bench_diagnostics.rs	Exercises reset, null snapshot rejection, snapshot copying, JSON size queries, zero-length buffers, truncation, and NUL termination.
+bench-occupancy-ffi	test	src/allocator/bench_diagnostics.rs	Exercises null output rejection and bounded fixed-page occupancy totals for the benchmark-only ABI.
+bench-page-batch-fixture	benchmark	benches/page_batch.rs	Exercises forced collection plus local and detached-remote transitions at lengths 1, 8, 32, and 128 with empty and nonempty destinations.
+bench-page-batch-transition	benchmark	benches/page_batch.rs	Measures prepared production batch transitions in default and secure encoded-link modes.
+bench-page-batch-ffi	test	tests/release_fast_path_audit/benchmark_hygiene.rs	Checks opaque page-batch fixture setup stays outside timed regions and benchmark scenarios remain complete.
 arena-id-raw-shims	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs	Checks arena id raw shims stay in src/allocator/arena/ids.rs while preserving C ABI helper shape.
 arena-id-raw-shims	script	scripts/check-unsafe-audit.py	Checks arena id raw-shim unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-memid-suitability-helpers	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs	Checks arena memid suitability helpers preserve typed MemIdView routing and arena request matching.
@@ -1167,3 +1171,32 @@ unsafe-deferred-callback-test-fixtures	test	src/safe/tests.rs	Exercises unsafe d
 unsafe-deferred-callback-test-fixtures	test	tests/release_fast_path_audit/release_policy/callbacks.rs	Checks deferred callback guard fixture docs, namespace, no-unwind, and registration boundaries.
 unsafe-callback-address-test-fixtures	test	src/safe/tests.rs	Exercises callback function pointer address equality fixtures.
 unsafe-callback-address-test-fixtures	test	tests/release_fast_path_audit/release_policy/callbacks.rs	Checks callback address fixture docs and no-unwind boundaries.
+policy-reference-test-fixtures	test	src/allocator/policy/tests.rs	Exhaustively compares extracted compatibility decisions with reference formulas using nonzero block-size fixtures.
+typed-page-batch-scalars	test	src/types/scalar/tests.rs	Covers zero, one, maximum, clamp, overflow, capacity, and subtraction boundaries for batch scalars.
+typed-page-batch-scan	test	src/page_batch_tests/tests.rs	Exercises encoded detached-chain scans at representative and capacity boundary lengths plus cycles and invalid links.
+typed-page-batch-lint-fixture	script	scripts/check-unsafe-audit.py	Checks the staged lint fixture remains tagged and documented while batch consumers are wired.
+typed-page-batch-test-fixtures	test	src/page_batch_tests/tests.rs	Exercises live allocator-owned same-page and foreign-page block fixtures under secure encoded links.
+typed-page-batch-synthetic-fixtures	test	src/page_batch_tests/tests.rs	Exercises isolated synthetic page metadata for destination ordering, accounting, and lease transitions.
+typed-page-batch-differential-fixtures	test	src/page_batch_tests/tests.rs	Compares old reference list algorithms with typed batch transitions across 256 fixed-seed randomized topologies.
+typed-page-batch-remote-collect	test	src/page_batch_tests/tests.rs	Covers empty, singleton, and multi-block destinations plus exact remote used-count subtraction.
+typed-page-batch-local-detach	test	src/page_batch_tests/tests.rs	Checks successful local detachment clears the page field only after bounded validation.
+typed-page-batch-local-collect	test	src/page_batch_tests/tests.rs	Covers empty, singleton, and multi-block available destinations without changing used count.
+typed-page-batch-lease	test	src/page_batch_tests/tests.rs	Checks lease, take-one, return ordering, and used-count accounting across partial consumption.
+typed-atomic-thread-free-batch-conversion	test	src/types/atomic/tests.rs	Exercises detached atomic ownership conversion and collection through local and claimed-abandoned page witnesses.
+raw-bridge-page-witness	test	tests/release_fast_path_audit/capability_linearity.rs	Checks raw page witness construction remains centralized in the audited bridge.
+raw-bridge-uninit-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks the uninitialized page ingress constructor remains in the raw bridge.
+raw-bridge-active-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks active page raw ingress is centralized and capability based.
+raw-bridge-all-free-abandoned-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks all-free abandoned witness construction remains centralized.
+raw-bridge-full-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks full page raw ingress remains centralized and capability based.
+raw-bridge-local-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks local page raw ingress remains centralized and capability based.
+raw-bridge-foreign-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks foreign page raw ingress remains centralized and capability based.
+raw-bridge-abandoned-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks abandoned page raw ingress remains centralized and capability based.
+raw-bridge-owned-abandoned-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks owned abandoned page raw ingress remains centralized and capability based.
+page-free-list-local-detached-collect	test	src/allocator/page/lifecycle.rs	Exercises local-page detached remote collection through the typed lifecycle boundary.
+page-free-list-abandoned-detached-collect	test	src/allocator/page/lifecycle.rs	Exercises owned-abandoned detached remote collection through the typed lifecycle boundary.
+page-remote-list-tail-fixture	test	src/allocator/page/lifecycle.rs	Exercises published-head tail detachment with live same-page allocator blocks.
+typed-atomic-remote-push-fixture	test	src/types/atomic/tests.rs	Exercises typed remote push publication and unique detach using live stack-local storage.
+typed-atomic-thread-free-published-tail	test	tests/release_fast_path_audit/datatype_acceptance/strict_type/atomic_provenance_guards/atomic_wrappers.rs	Checks published-head tail detachment remains typed and distinct from detached ownership.
+typed-page-abandoned-release-boundary	test	tests/release_fast_path_audit/capability_linearity.rs	Checks owned abandoned capability release is consuming and centralized.
+typed-page-abandoned-destroy-boundary	test	tests/release_fast_path_audit/capability_linearity.rs	Checks all-free abandoned destruction is a consuming terminal transition.
+typed-page-queue-enqueue-transition	test	tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs	Checks raw queue mutation returns typed queued ownership at the enqueue boundary.

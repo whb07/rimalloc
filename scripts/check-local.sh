@@ -4,7 +4,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd_repo_root
 
 run scripts/check-fmt.sh
-run cargo test --quiet
+run cargo test --quiet --features std
 run cargo check --examples --features std
 run scripts/check-api-inventory.py
 run scripts/check-raw-facade.sh

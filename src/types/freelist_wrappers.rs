@@ -338,28 +338,34 @@ impl BlockLink {
 /// `#[repr(transparent)]` over `Option<BlockPtr>` so it stays zero-cost and the
 /// stored value is bit-identical to the raw `mi_block_t*` it replaces.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
+#[must_use = "available free-list ownership must be stored or consumed"]
 pub(crate) struct AvailableFreeList(Option<BlockPtr>);
 
 impl AvailableFreeList {
+    #[inline(always)]
+    pub(crate) const fn empty() -> Self {
+        Self(None)
+    }
+
     #[inline(always)]
     pub(crate) fn from_head(head: BlockPtr) -> Self {
         Self(Some(head))
     }
 
     #[inline(always)]
-    pub(crate) fn is_empty(self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.is_none()
     }
 
     #[inline(always)]
-    pub(crate) fn head(self) -> Option<BlockPtr> {
+    pub(crate) fn head(&self) -> Option<BlockPtr> {
         self.0
     }
 
     /// Return the raw nullable head stored in `(*page).free`.
     #[inline(always)]
-    pub(crate) fn as_raw(self) -> *mut mi_block_t {
+    pub(crate) fn as_raw(&self) -> *mut mi_block_t {
         self.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut())
     }
 
@@ -371,7 +377,7 @@ impl AvailableFreeList {
     /// store the returned list head back into `(*page).free` and increment
     /// `(*page).used`.
     #[inline(always)]
-    pub(crate) unsafe fn pop(page: AvailablePage) -> (AllocatedBlock, AvailableFreeList) {
+    pub(crate) unsafe fn pop_one(page: AvailablePage) -> (AllocatedBlock, AvailableFreeList) {
         let raw_page = page.page().as_ptr();
         // SAFETY[AUDIT:typed-freelist-available-list-wrappers]: `page` proves the page has an
         // available free-list head, so reading the raw `free` field is valid.
@@ -416,7 +422,8 @@ impl AvailableFreeList {
 /// The local free list of a page. This is `page.local_free`: the LIFO stack
 /// that freed blocks from the owning thread are pushed onto.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
+#[must_use = "local free-list ownership must be stored or consumed"]
 pub(crate) struct LocalFreeList(Option<BlockPtr>);
 
 impl LocalFreeList {
@@ -431,7 +438,7 @@ impl LocalFreeList {
     }
 
     #[inline(always)]
-    pub(crate) fn is_empty(self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.is_none()
     }
 
@@ -440,9 +447,14 @@ impl LocalFreeList {
         AvailableFreeList(self.0)
     }
 
+    #[inline(always)]
+    pub(crate) fn head(&self) -> Option<BlockPtr> {
+        self.0
+    }
+
     /// Return the raw nullable head stored in `(*page).local_free`.
     #[inline(always)]
-    pub(crate) fn as_raw(self) -> *mut mi_block_t {
+    pub(crate) fn as_raw(&self) -> *mut mi_block_t {
         self.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut())
     }
 
@@ -454,9 +466,9 @@ impl LocalFreeList {
     /// `self`, and the caller must subsequently store the returned head back
     /// into `(*page).local_free` and decrement `(*page).used`.
     #[inline(always)]
-    pub(crate) unsafe fn push(self, page: LocalPage, block: FreeBlock) -> Self {
+    pub(crate) unsafe fn push(self, page: &LocalPage, block: FreeBlock) -> Self {
         let raw_page = page.page().as_ptr();
-        let block_raw = block.block().as_ptr();
+        let block_raw = block.as_ptr().as_ptr();
         let prev_raw = self.as_raw();
         // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: `block_raw` is a valid block
         // in `page`; `prev_raw` is the current local_free head (null if empty).
@@ -465,45 +477,6 @@ impl LocalFreeList {
         // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: `block_raw` came from a
         // FreeBlock witness and is therefore non-null.
         Self(Some(unsafe { BlockPtr::new_unchecked(block_raw) }))
-    }
-
-    /// Prepend this local free list to the available free list, returning the
-    /// new available-list head.
-    ///
-    /// # Safety
-    /// `page` must be the local owner for both lists, and `self` must describe
-    /// the current `page.local_free` chain. The caller remains responsible for
-    /// storing the returned available head and clearing `page.local_free`.
-    #[inline]
-    pub(crate) unsafe fn prepend_to_available(
-        self,
-        page: LocalPage,
-        available: AvailableFreeList,
-    ) -> AvailableFreeList {
-        let Some(head) = self.0 else {
-            return available;
-        };
-        if available.is_empty() {
-            return AvailableFreeList::from_head(head);
-        }
-
-        let raw_page = page.page().as_ptr();
-        let mut tail = head.as_ptr();
-        loop {
-            // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: `self` is the
-            // page's local free-list chain, so walking encoded next links until
-            // the null tail stays within the page-local free-list domain.
-            let next = unsafe { mi_block_next(raw_page, tail) };
-            if next.is_null() {
-                break;
-            }
-            tail = next;
-        }
-        // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: `tail` is the null
-        // terminator block of the local list and `available` is the current
-        // page.free head, so linking them preserves page-local encoding.
-        unsafe { mi_block_set_next(raw_page, tail, available.as_raw()) };
-        AvailableFreeList::from_head(head)
     }
 
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).local_free`).

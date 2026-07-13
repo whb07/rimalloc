@@ -1,5 +1,26 @@
 # Mimalloc Rust vs C Benchmark Results
 
+## Stage 0 Reviewed Baseline (2026-07-12)
+
+The current release gate is schema 2 in `benchmarks/thresholds.json`, captured
+from five complete clean runs of commit
+`2140b758f59424188387498bb194acfc3e17ad50` on host profile
+`release-linux-x86_64-primary`. All accepted median coefficients of variation
+were at most 3.81%. A partial fifth run collected under unrelated 21-core host
+load was rejected and rerun after the host became idle.
+
+The gate covers the public `MiMalloc` paired allocation/free facade and a
+separate raw-C-ABI native workload group. The noisy 32-worker
+`cache-scratchN` case remains available for exploratory evidence; the release
+gate uses `cache-scratch1`, whose five-run median CV was 0.61%, so scheduler
+placement does not dominate the allocator signal.
+
+Each full artifact directory now contains `manifest.json`, `environment.txt`,
+`commands.txt`, `criterion/`, `resource-results.jsonl`, and
+`threshold-results.csv`. Default Rust and interpose directories remain
+isolated; the latter reports default-mode thresholds as inapplicable until a
+separate interpose baseline is reviewed.
+
 ## Release Candidate Artifact-Mode Evidence
 
 For a release candidate, collect performance evidence with:
@@ -14,8 +35,8 @@ The full benchmark script intentionally writes default Rust-library and
 
 | Artifact mode | Feature set | Criterion directory | Threshold CSV |
 |---|---|---|---|
-| default Rust library | `bench` / `bench compare` | `target/bench-full/default-rust/criterion` | `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` |
-| interpose hot path | `bench interpose` | `target/bench-full/interpose/criterion` | `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv` |
+| default Rust library | `bench` | `target/bench-full/default-rust/criterion` | `target/bench-full/default-rust/threshold-results.csv` |
+| interpose hot path | `bench interpose` | `target/bench-full/interpose/criterion` | `target/bench-full/interpose/threshold-results.csv` |
 
 Do not reuse Criterion baselines across artifact modes. Report each artifact
 mode under a separate heading with the exact command line and feature set. The
@@ -615,3 +636,53 @@ To reduce system noise and ensure statistical significance, each test was execut
 
 ## Conclusion
 The Rust translation continues to demonstrate functional and performance parity with the original C mimalloc. Across the 19 benchmarks (including the newly enabled redis and rocksdb), Rust is faster or within measurement noise in 9 cases and slower in 10, with the largest single gain being a 19 % improvement in `sh6benchN`. All differences remain within a few percent, confirming the mechanical translation preserves the allocator’s extreme performance characteristics.
+
+## Stage 3 Page-Batch Evidence
+
+**Date Generated:** 2026-07-13
+
+**Before Baseline:** Stage 2 commit `e80ba10`
+
+**After Baseline:** Stage 3 working tree
+
+The targeted Criterion smoke suite passed in both default and secure encoded
+free-list modes. It covers forced page-free collection and local/remote batch
+transitions at lengths 1, 8, 32, and 128 with empty and nonempty destinations.
+Fixture preparation and restoration occur before each `Instant::now()` timed
+region.
+
+Release assembly was captured with `scripts/capture-release-assembly.sh` into
+`target/stage3-assembly/{before,after}`. After normalizing only linked image
+addresses and RIP-relative layout displacements, these instruction sequences
+were identical:
+
+| Symbol | Instructions | Result |
+|---|---:|---|
+| `mi_malloc` | 52 | equivalent |
+| `mi_malloc_small` | 49 | equivalent |
+| `mi_free` | 11 | equivalent |
+| `mi_route_free` | 176 | equivalent |
+| `mi_free_block_local` | 65 | equivalent |
+| `_mi_theap_malloc_zero_ex` | 71 | equivalent |
+
+Capturing `mi_route_free` and `mi_free_block_local` makes the inlined local-free
+and remote-CAS paths explicit; the exported `mi_free` symbol itself is only a
+tail jump to the route function in this release build.
+
+## Final Stages 0–3 Signoff
+
+The clean full benchmark gate completed for separate `default-rust` and
+`interpose` artifacts. All six applicable default thresholds passed; the
+interposition artifact has no applicable stored timing thresholds. Both
+artifact manifests contain the required commands, Criterion data, resource
+records, and validation outputs.
+
+Each resource mode produced and validated 18 records across six
+scenario/allocator tuples with zero live requested bytes at process exit and
+zero page faults per million measured operations. The maximum wall-time
+coefficient of variation was 0.055 for `default-rust` and 0.183 for
+`interpose`, below the 0.35 initial gate. Peak committed/logical-live ratios
+were 33.0 and 33.25 respectively. One initial interposition probe was retried
+after a single `system/alloc_free` scheduling outlier produced a 0.58
+coefficient; the isolated clean rerun passed all records without code or
+threshold changes.

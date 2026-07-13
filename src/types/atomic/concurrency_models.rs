@@ -4,6 +4,7 @@ use loom::thread;
 
 const HEAD_A: usize = 0x10;
 const HEAD_B: usize = 0x20;
+const TAIL: usize = 0x30;
 
 fn head_bits(raw: usize) -> usize {
     raw & !ThreadFreeWord::OWNED_BIT
@@ -164,6 +165,83 @@ fn collect_racing_with_push_does_not_drop_nodes() {
         );
         mark_reachable(head_bits(final_word.raw()), &next_a, &next_b, &mut seen);
         assert_eq!(seen, [true, true]);
+    });
+}
+
+#[test]
+fn atomic_detach_grants_batch_conversion_to_only_one_collector() {
+    loom::model(|| {
+        let cell = loom::sync::Arc::new(LoomAtomicUsize::new(HEAD_A | ThreadFreeWord::OWNED_BIT));
+        let first = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+        let second = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+        let conversions = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+
+        let collect_first = {
+            let cell = loom::sync::Arc::clone(&cell);
+            let result = loom::sync::Arc::clone(&first);
+            let conversions = loom::sync::Arc::clone(&conversions);
+            thread::spawn(move || {
+                let detached = collect_word(&cell);
+                result.store(detached, LoomOrdering::Release);
+                if detached != 0 {
+                    conversions.fetch_add(1, LoomOrdering::Relaxed);
+                }
+            })
+        };
+        let collect_second = {
+            let cell = loom::sync::Arc::clone(&cell);
+            let result = loom::sync::Arc::clone(&second);
+            let conversions = loom::sync::Arc::clone(&conversions);
+            thread::spawn(move || {
+                let detached = collect_word(&cell);
+                result.store(detached, LoomOrdering::Release);
+                if detached != 0 {
+                    conversions.fetch_add(1, LoomOrdering::Relaxed);
+                }
+            })
+        };
+
+        collect_first.join().expect("first collector failed");
+        collect_second.join().expect("second collector failed");
+
+        let first = first.load(LoomOrdering::Acquire);
+        let second = second.load(LoomOrdering::Acquire);
+        assert!(matches!((first, second), (HEAD_A, 0) | (0, HEAD_A)));
+        assert_eq!(conversions.load(LoomOrdering::Acquire), 1);
+        assert_eq!(head_bits(cell.load(LoomOrdering::Acquire)), 0);
+    });
+}
+
+#[test]
+fn published_head_remains_visible_while_tail_detaches_and_pushes_race() {
+    loom::model(|| {
+        let cell = loom::sync::Arc::new(LoomAtomicUsize::new(HEAD_A | ThreadFreeWord::OWNED_BIT));
+        let next_a = loom::sync::Arc::new(LoomAtomicUsize::new(TAIL));
+        let next_b = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+        let detached = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+
+        let detach_tail = {
+            let next_a = loom::sync::Arc::clone(&next_a);
+            let detached = loom::sync::Arc::clone(&detached);
+            thread::spawn(move || {
+                let tail = next_a.load(LoomOrdering::Acquire);
+                next_a.store(0, LoomOrdering::Release);
+                detached.store(tail, LoomOrdering::Release);
+            })
+        };
+        let push = {
+            let cell = loom::sync::Arc::clone(&cell);
+            let next_b = loom::sync::Arc::clone(&next_b);
+            thread::spawn(move || push_remote_word(&cell, &next_b, HEAD_B))
+        };
+
+        detach_tail.join().expect("tail detach failed");
+        push.join().expect("concurrent push failed");
+
+        assert_eq!(head_bits(cell.load(LoomOrdering::Acquire)), HEAD_B);
+        assert_eq!(next_b.load(LoomOrdering::Acquire), HEAD_A);
+        assert_eq!(next_a.load(LoomOrdering::Acquire), 0);
+        assert_eq!(detached.load(LoomOrdering::Acquire), TAIL);
     });
 }
 

@@ -58,12 +58,12 @@ pub(super) fn assert_page_thread_and_free_bit_domains(
             && atomic_thread_free_rs
                 .contains("pub(crate) fn from_field(field: AtomicUsizeField) -> Self")
             && atomic_thread_free_rs.contains("pub(crate) fn load_relaxed(self) -> ThreadFreeWord")
-            && atomic_thread_free_rs.contains("pub(crate) fn push_remote_acq_rel(")
+            && atomic_thread_free_rs.contains("pub(crate) fn try_push(")
             && atomic_thread_free_rs.contains(
                 "pub(crate) unsafe fn release_acq_rel(self, expected: &mut ThreadFreeWord) -> bool"
             )
             && atomic_thread_free_rs
-                .contains("pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList")
+                .contains("pub(crate) unsafe fn detach_head(self) -> DetachedRemoteList")
             && atomic_thread_free_rs.contains("pub(crate) unsafe fn claim_acq_rel(self) -> bool")
             && strict_check_rs.contains("ALLOWED_XTHREAD_FREE = {")
             && strict_check_rs.contains("\"src/types/freelist.rs\"")

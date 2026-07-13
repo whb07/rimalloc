@@ -20,7 +20,7 @@ pub(super) unsafe fn mi_abandoned_page_unown(
         _mi_thread_id() == (*(*current_theap).tld).thread_id
     });
     // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
-    let owned_page = unsafe { crate::core_types::OwnedAbandonedPage::new_unchecked(page_ptr) };
+    let owned_page = unsafe { crate::core_types::assume_owned_abandoned_page(page_ptr) };
 
     let atomic_tf = unsafe { page_ptr.thread_free_cell() };
     let mut tf_old = atomic_tf.load_relaxed();
@@ -29,10 +29,16 @@ pub(super) unsafe fn mi_abandoned_page_unown(
         while tf_old.head().is_some() {
             // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
             let local_free = unsafe { page_ptr.local_free() };
+            let detached = unsafe { atomic_tf.detach_head() };
             let local_free = unsafe {
-                atomic_tf
-                    .collect_acq_rel()
-                    .collect_into_local(owned_page, local_free)
+                match crate::page::collect_remote_for_owned_abandoned_page(
+                    &owned_page,
+                    detached,
+                    local_free,
+                ) {
+                    Ok(local_free) => local_free,
+                    Err(_) => page_ptr.local_free(),
+                }
             };
             // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
             if unsafe { page_ptr.free().is_empty() } && !local_free.is_empty() {
@@ -112,7 +118,7 @@ pub(super) unsafe fn mi_arena_try_claim_abandoned_at(
     };
     // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
-    let abandoned = unsafe { crate::core_types::AbandonedPage::new_unchecked(page_ptr) };
+    let abandoned = unsafe { crate::core_types::assume_abandoned_page(page_ptr) };
     if unsafe { mi_page_claim_ownership(abandoned) }.is_none() {
         unsafe { *keep_abandoned = true };
         false

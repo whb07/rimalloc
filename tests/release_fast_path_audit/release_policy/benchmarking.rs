@@ -18,8 +18,8 @@ fn release_candidates_require_full_benchmark_evidence() {
     for required in [
         "Before a release candidate, run `scripts/check-bench-full.sh`",
         "capture\n   `scripts/env-info.sh`",
-        "target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv",
-        "target/bench-full/interpose/criterion/benchmark-thresholds-full.csv",
+        "resource-results.jsonl",
+        "threshold-results.csv",
         "artifact modes, Rust/C ratios, and noisy-benchmark notes",
     ] {
         assert!(
@@ -30,9 +30,9 @@ fn release_candidates_require_full_benchmark_evidence() {
 
     for required in [
         "Before a release candidate, run `scripts/check-bench-full.sh`",
-        "capture\n  `scripts/env-info.sh`",
-        "target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv",
-        "target/bench-full/interpose/criterion/benchmark-thresholds-full.csv",
+        "manifest.json",
+        "resource-results.jsonl",
+        "threshold-results.csv",
         "Rust-vs-C ratios come from the native scenario\nbenchmarks in the default Rust library mode",
     ] {
         assert!(
@@ -44,10 +44,10 @@ fn release_candidates_require_full_benchmark_evidence() {
     for required in [
         "CARGO_TARGET_DIR=\"$default_target_dir\"",
         "CARGO_TARGET_DIR=\"$interpose_target_dir\"",
-        "--csv-out \"$default_target_dir/criterion/benchmark-thresholds-full.csv\"",
-        "--csv-out \"$interpose_target_dir/criterion/benchmark-thresholds-full.csv\"",
+        "--csv-out \"$default_target_dir/threshold-results.csv\"",
+        "--csv-out \"$interpose_target_dir/threshold-results.csv\"",
         "cargo bench --features \"bench interpose\" --bench hotpath",
-        "--allow-missing",
+        "--allow-no-applicable",
     ] {
         assert!(
             check_bench_full.contains(required),

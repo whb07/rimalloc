@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ALLOWLIST = ROOT / "strict-type-allowlist.txt"
-TODO = ROOT / "TODO.md"
+STRICT_TYPES_DOC = ROOT / "docs" / "strict-types.md"
 REMOVE_ENTRY_CAP = 0
 
 RAW_BOUNDARY_FILES = {
@@ -54,6 +54,71 @@ BARE_DOMAIN_PARAM_RE = re.compile(
     re.DOTALL,
 )
 CORE_TYPES_DEAD_CODE_RE = re.compile(r"#\s*!\s*\[\s*allow\s*\(\s*dead_code\s*\)\s*\]")
+LINEAR_CAPABILITY_TYPES = {
+    "AbandonedMappedPageType",
+    "AbandonedDisposition",
+    "AbandonedPageType",
+    "ActivePage",
+    "AllocatedBlock",
+    "AllFreePage",
+    "AvailableFreeList",
+    "AvailablePage",
+    "LeasedBatch",
+    "BlockForFree",
+    "DestroyedPage",
+    "DetachedRemoteList",
+    "ForeignPage",
+    "FreeBlock",
+    "FullPage",
+    "GuardedBlock",
+    "LocalPage",
+    "LocalFreeBatch",
+    "LocalFreeList",
+    "LocatedBlock",
+    "OwnedAbandonedPage",
+    "Page",
+    "PageAbandonOutcome",
+    "PageForAbandon",
+    "PageFreeOwner",
+    "PointerLocation",
+    "PublishedRemoteHead",
+    "QueuedPage",
+    "RetiredPage",
+    "RemotePushResult",
+    "RemoteFreeBatch",
+    "UnqueuedPage",
+    "ValidatedFree",
+    "ValidatedFreeParts",
+    "ValidPointerLookup",
+}
+CAPABILITY_CONSTRUCTOR_TYPES = {
+    "AbandonedMappedPageType",
+    "AbandonedPageType",
+    "ActivePage",
+    "AvailablePage",
+    "DestroyedPage",
+    "ForeignPage",
+    "FullPage",
+    "LocalPage",
+    "OwnedAbandonedPage",
+    "RetiredPage",
+}
+CAPABILITY_CONSTRUCTOR_RE = re.compile(
+    rf"\b(?:(?:{'|'.join(sorted(CAPABILITY_CONSTRUCTOR_TYPES))})|Page(?:::\s*<[^>]+>)?)::new_unchecked\s*\("
+)
+CAPABILITY_CONSTRUCTOR_FILES = {
+    "src/types/page_states.rs",
+    "src/types/page_queues.rs",
+    "src/types/raw_bridge.rs",
+}
+DERIVED_TRAITS_RE = re.compile(
+    r"#\[derive\((?P<traits>[^)]*)\)\](?:\s*#\[[^]]+\])*\s*"
+    r"(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+)
+TYPE_DECL_RE = re.compile(
+    r"(?P<attrs>(?:#\[[^\n]+\]\s*)*)"
+    r"(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+)
 FN_ITEM_RE = re.compile(r"\bfn\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>{}]*>)?\(")
 STATIC_OR_CONST_ITEM_RE = re.compile(
     r"^\s*(?:(?:pub|pub\([^)]*\)|pub\s*\([^)]*\))\s+)?"
@@ -446,12 +511,12 @@ def wildcard_summary(counts: dict[str, int]) -> str:
 def verify_wildcard_counts_documented(entries: Iterable[AllowEntry]) -> None:
     expected = wildcard_summary(wildcard_counts(entries))
     try:
-        todo = TODO.read_text()
+        strict_types_doc = STRICT_TYPES_DOC.read_text()
     except FileNotFoundError as err:
-        raise AssertionError("missing TODO.md for strict-type wildcard guard") from err
-    if expected not in todo:
+        raise AssertionError("missing docs/strict-types.md for strict-type wildcard guard") from err
+    if expected not in strict_types_doc:
         raise AssertionError(
-            "TODO.md must record the current strict-type wildcard counts with:\n"
+            "docs/strict-types.md must record the current strict-type wildcard counts with:\n"
             f"{expected}"
         )
 
@@ -679,6 +744,43 @@ def main() -> int:
         if rel.startswith("src/types/") and CORE_TYPES_DEAD_CODE_RE.search(text):
             offenders.append(f"{rel}: crate-level dead_code allowance in core_types module")
 
+        if rel.startswith("src/types/"):
+            for match in TYPE_DECL_RE.finditer(text):
+                name = match.group("name")
+                if name in LINEAR_CAPABILITY_TYPES and "#[must_use" not in match.group("attrs"):
+                    offenders.append(
+                        f"{rel}: linear capability {name} lacks a must_use annotation"
+                    )
+            for match in DERIVED_TRAITS_RE.finditer(text):
+                name = match.group("name")
+                traits = {trait.strip() for trait in match.group("traits").split(",")}
+                forbidden = traits.intersection({"Clone", "Copy"})
+                if name in LINEAR_CAPABILITY_TYPES and forbidden:
+                    offenders.append(
+                        f"{rel}: linear capability {name} derives "
+                        + ", ".join(sorted(forbidden))
+                    )
+            for name in LINEAR_CAPABILITY_TYPES:
+                if re.search(rf"\bimpl\s+(?:Clone|Copy)\s+for\s+{name}\b", text):
+                    offenders.append(
+                        f"{rel}: linear capability {name} has an explicit Clone/Copy impl"
+                    )
+
+            constructor_fixture = rel.startswith("src/types/") and rel.endswith("/tests.rs")
+            if rel not in CAPABILITY_CONSTRUCTOR_FILES and not constructor_fixture:
+                for match in CAPABILITY_CONSTRUCTOR_RE.finditer(text):
+                    line = text.count("\n", 0, match.start()) + 1
+                    offenders.append(
+                        f"{rel}:{line}: capability new_unchecked construction must use src/types/raw_bridge.rs"
+                    )
+
+            if rel != "src/types/atomic/thread_free.rs" and "DetachedRemoteList(" in text:
+                for match in re.finditer(r"\bDetachedRemoteList\s*\(", text):
+                    line = text.count("\n", 0, match.start()) + 1
+                    offenders.append(
+                        f"{rel}:{line}: detached remote lists must originate in the atomic ownership module"
+                    )
+
         if rel not in RAW_BOUNDARY_FILES:
             item_contexts = item_contexts_by_line(text)
             for match in RAW_POINTER_PARAM_RE.finditer(text):
@@ -831,3 +933,15 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+    "DestroyedPage",
+    "ForeignPage",
+    "FullPage",
+    "LocalPage",
+    "OwnedAbandonedPage",
+    "Page",
+    "PageAbandonOutcome",
+    "PageForAbandon",
+    "PageFreeOwner",
+    "QueuedPage",
+    "RetiredPage",
+    "UnqueuedPage",

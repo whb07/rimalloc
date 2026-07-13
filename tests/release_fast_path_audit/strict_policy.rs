@@ -126,7 +126,8 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
             && free_rs.contains(
                 "unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree,"
             )
-            && free_rs.contains("let owner = validated.page().classify_for_free(current_tid);")
+            && free_rs.contains("let parts = validated.into_parts();")
+            && free_rs.contains("let owner = parts.page.classify_for_free(current_tid);")
             && free_rs.contains("owner: crate::core_types::PageFreeOwner,"),
         "allocation/free hot paths should continue to consume strict-type wrappers under the no-allocation source guard"
     );
@@ -167,7 +168,6 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         .expect("read strict-type allowlist");
     let strict_type_checker = fs::read_to_string(root.join("scripts/check-strict-types.py"))
         .expect("read strict-type checker");
-    let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
 
     datatype_acceptance::assert_datatype_acceptance_criteria_have_cross_cutting_guards(
         datatype_acceptance::DatatypeAcceptanceSources {
@@ -176,7 +176,6 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             unsafe_migration_allowlist: &unsafe_migration_allowlist,
             strict_type_allowlist: &strict_type_allowlist,
             strict_type_checker: &strict_type_checker,
-            todo: &todo,
         },
     );
 }

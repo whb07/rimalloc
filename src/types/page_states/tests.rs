@@ -60,13 +60,18 @@ fn active_available_and_pop_free_block_update_page_state() {
         crate::internal::mi_block_set_next(raw, ptr::addr_of_mut!(block), ptr::null());
 
         let active = ActivePage::new_unchecked(PagePtr::new_unchecked(raw));
-        let available = active.available().expect("non-null free head is available");
+        let available = active
+            .try_available()
+            .expect("non-null free head is available");
         let (allocated, active_again) = available.pop_free_block();
-        assert_eq!(allocated.block().as_ptr(), ptr::addr_of_mut!(block));
+        assert_eq!(allocated.as_ptr().as_ptr(), ptr::addr_of_mut!(block));
         assert_eq!(active_again.page().as_ptr(), raw);
         assert!((*raw).free.is_null());
         assert_eq!((*raw).used, 1);
-        assert!(active_again.available().is_none());
+        let active_again = active_again
+            .try_available()
+            .expect_err("empty free list returns the active capability");
+        assert_eq!(active_again.page().as_ptr(), raw);
     }
 }
 
@@ -108,21 +113,24 @@ fn all_free_retire_expire_and_arena_free_preserve_page_identity() {
     with_page(0, |page| unsafe {
         ptr::addr_of_mut!((*page.as_ptr()).used).write(0);
         let active = ActivePage::new_unchecked(page);
-        let all_free = active.mark_all_free().expect("used == 0");
-        let retired = all_free.retire();
+        let all_free = active.try_mark_all_free().expect("used == 0");
+        let retired = all_free.into_retired();
         assert_eq!(retired.page().as_ptr(), page.as_ptr());
         let destroyed = retired.expire();
         assert_eq!(destroyed.page().as_ptr(), page.as_ptr());
 
         let active = ActivePage::new_unchecked(page);
         let destroyed = active
-            .mark_all_free()
+            .try_mark_all_free()
             .expect("used remains zero")
             .free_to_arena(heap_owner());
         assert_eq!(destroyed.page().as_ptr(), page.as_ptr());
 
         ptr::addr_of_mut!((*page.as_ptr()).used).write(1);
-        assert!(ActivePage::new_unchecked(page).mark_all_free().is_none());
+        let active = ActivePage::new_unchecked(page)
+            .try_mark_all_free()
+            .expect_err("used page remains active");
+        assert_eq!(active.page().as_ptr(), page.as_ptr());
     });
 }
 
@@ -132,11 +140,11 @@ fn abandon_and_reclaim_transitions_preserve_page_identity() {
     // used only as an identity witness while exercising abandon, reclaim, and
     // reabandon typestate transitions.
     with_page(0, |page| unsafe {
-        match ActivePage::new_unchecked(page).for_abandon() {
+        match ActivePage::new_unchecked(page).into_abandon_candidate() {
             PageForAbandon::Active(active) => assert_eq!(active.page().as_ptr(), page.as_ptr()),
             PageForAbandon::Full(_) => panic!("active page became full abandon witness"),
         }
-        match FullPage::new_unchecked(page).for_abandon() {
+        match FullPage::new_unchecked(page).into_abandon_candidate() {
             PageForAbandon::Full(full) => assert_eq!(full.page().as_ptr(), page.as_ptr()),
             PageForAbandon::Active(_) => panic!("full page became active abandon witness"),
         }
@@ -145,17 +153,21 @@ fn abandon_and_reclaim_transitions_preserve_page_identity() {
         ptr::addr_of_mut!((*page.as_ptr()).used).write(0);
         assert_eq!(
             owned
-                .mark_all_free()
+                .try_mark_all_free()
                 .expect("owned abandoned page with used == 0 is all-free")
                 .page()
                 .as_ptr(),
             page.as_ptr()
         );
         ptr::addr_of_mut!((*page.as_ptr()).used).write(1);
-        assert!(owned.mark_all_free().is_none());
-        let reclaimed = owned.reclaim(heap_owner());
+        let owned = OwnedAbandonedPage::new_unchecked(page);
+        let owned = owned
+            .try_mark_all_free()
+            .expect_err("used abandoned page remains owned");
+        let reclaimed = owned.into_reclaimed(heap_owner());
         assert_eq!(reclaimed.page().as_ptr(), page.as_ptr());
-        let mapped = owned.reabandon_to_mapped();
+        let owned = OwnedAbandonedPage::new_unchecked(page);
+        let mapped = owned.into_mapped_abandoned();
         assert_eq!(mapped.page().as_ptr(), page.as_ptr());
     });
 }
@@ -170,10 +182,14 @@ fn abandoned_claim_ownership_uses_thread_free_ownership_bit() {
         ptr::addr_of_mut!((*page.as_ptr()).xthread_free).write(thread_free.raw());
         let abandoned = AbandonedPageType::new_unchecked(page);
         let owned = abandoned
-            .claim_ownership()
+            .try_claim_ownership()
             .expect("unowned abandoned page can be claimed");
         assert_eq!(owned.page().as_ptr(), page.as_ptr());
-        assert!(abandoned.claim_ownership().is_none());
+        let abandoned = AbandonedPageType::new_unchecked(page);
+        let abandoned = abandoned
+            .try_claim_ownership()
+            .expect_err("owned thread-free word returns the abandoned capability");
+        assert_eq!(abandoned.page().as_ptr(), page.as_ptr());
     });
 }
 

@@ -2,7 +2,7 @@
 //!
 //! These isolate the allocator's malloc/free fast paths from surrounding noise
 //! (no `Vec` growth, no size generation, no shuffles inside the timed region).
-//! The pointer pool is a fixed-capacity `Vec` allocated via the *system*
+//! The pointer pool is fixed-capacity scratch allocated via the *system*
 //! allocator once at setup, so the only allocator traffic during measurement is
 //! the allocator under test.
 //!
@@ -28,43 +28,22 @@
 // The GlobalAlloc shim calls unsafe extern "C" fns; bodies are unsafe by intent.
 #![allow(unsafe_op_in_unsafe_fn)]
 
+mod support;
+
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-#[cfg(feature = "compare")]
-use std::alloc::System;
 use std::alloc::{GlobalAlloc, Layout};
 use std::env;
 use std::hint::black_box as hint_black_box;
-use std::sync::mpsc;
-use std::thread;
-use std::time::{Duration, Instant};
-
-/// `GlobalAlloc` shim over mechanical_mimalloc's C-ABI entry points.
-struct MechanicalMiMalloc;
-
-unsafe impl GlobalAlloc for MechanicalMiMalloc {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if layout.align() <= 16 {
-            mechanical_mimalloc::raw::mi_malloc(layout.size()).cast()
-        } else {
-            mechanical_mimalloc::raw::mi_malloc_aligned(layout.size(), layout.align()).cast()
-        }
-    }
-    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        mechanical_mimalloc::raw::mi_free(ptr.cast());
-    }
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        if layout.align() <= 16 {
-            mechanical_mimalloc::raw::mi_realloc(ptr.cast(), new_size).cast()
-        } else {
-            mechanical_mimalloc::raw::mi_realloc_aligned(ptr.cast(), new_size, layout.align())
-                .cast()
-        }
-    }
-}
-
-static MECH: MechanicalMiMalloc = MechanicalMiMalloc;
+use std::time::Duration;
 #[cfg(feature = "compare")]
-static SYS: System = System;
+use support::allocators::SYSTEM_ALLOCATOR;
+use support::allocators::{PUBLIC_MIMALLOC, RAW_MIMALLOC};
+use support::no_alloc::{CountingSystem, assert_no_harness_allocations};
+use support::pool::PointerPool;
+use support::remote_fixture::RemoteFreeFixture;
+
+#[global_allocator]
+static BENCH_HARNESS_ALLOCATOR: CountingSystem = CountingSystem;
 
 /// Maximum live allocations held in a pool. Large enough to defeat per-page
 /// free-list caching dominating the measurement, small enough to keep the
@@ -115,32 +94,7 @@ fn hotpath_warmup_time() -> Duration {
     env_secs("MIMALLOC_HOTPATH_WARMUP_SECS", 3)
 }
 
-/// Fixed-capacity pointer pool, grown once via the system allocator so it never
-/// perturbs the allocator under test. Slots hold `(ptr, layout)`; an empty slot
-/// is `(null, Layout::new::<u8>())`.
-struct PtrPool {
-    slots: Vec<(*mut u8, Layout)>,
-}
-
-// SAFETY: `PtrPool` transfers ownership of live allocation pointers between
-// benchmark setup/free threads. No thread aliases or dereferences those pointers
-// while another thread frees them.
-unsafe impl Send for PtrPool {}
-
-impl PtrPool {
-    fn new() -> Self {
-        let mut slots = Vec::with_capacity(POOL_SIZE);
-        slots.resize(POOL_SIZE, (std::ptr::null_mut(), Layout::new::<u8>()));
-        Self { slots }
-    }
-
-    #[inline(always)]
-    fn slot(&mut self, i: usize) -> &mut (*mut u8, Layout) {
-        &mut self.slots[i]
-    }
-}
-
-fn fill<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PtrPool) {
+fn fill<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PointerPool) {
     let layout = Layout::from_size_align(size, 8).unwrap();
     for i in 0..POOL_SIZE {
         let p = unsafe { alloc.alloc(layout) };
@@ -154,7 +108,7 @@ fn fill<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PtrPool) {
 // total alloc+free ops per second.
 // ---------------------------------------------------------------------------
 
-fn paired_alloc_free<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PtrPool) -> usize {
+fn paired_alloc_free<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PointerPool) -> usize {
     let layout = Layout::from_size_align(size, 8).unwrap();
     paired_alloc_free_layout(alloc, layout, pool)
 }
@@ -162,17 +116,20 @@ fn paired_alloc_free<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PtrPool)
 fn paired_alloc_free_layout<A: GlobalAlloc>(
     alloc: &A,
     layout: Layout,
-    pool: &mut PtrPool,
+    pool: &mut PointerPool,
 ) -> usize {
-    for i in 0..POOL_SIZE {
-        let p = unsafe { alloc.alloc(layout) };
-        *pool.slot(i) = (p, layout);
-    }
-    for i in 0..POOL_SIZE {
-        let (p, l) = *pool.slot(i);
-        unsafe { alloc.dealloc(p, l) };
-    }
-    POOL_SIZE
+    assert_no_harness_allocations(|| {
+        for i in 0..POOL_SIZE {
+            let p = unsafe { alloc.alloc(layout) };
+            *pool.slot(i) = (p, layout);
+        }
+        for i in 0..POOL_SIZE {
+            let (p, l) = *pool.slot(i);
+            unsafe { alloc.dealloc(p, l) };
+            *pool.slot(i) = (std::ptr::null_mut(), l);
+        }
+        POOL_SIZE
+    })
 }
 
 fn bench_paired_alloc_free(c: &mut Criterion) {
@@ -185,17 +142,26 @@ fn bench_paired_alloc_free(c: &mut Criterion) {
 
     for &size in HOT_SIZES {
         group.throughput(Throughput::Elements(POOL_SIZE as u64));
-        let mut pool = PtrPool::new();
+        let mut public_pool = PointerPool::new(POOL_SIZE);
+        let mut raw_pool = PointerPool::new(POOL_SIZE);
 
         #[cfg(feature = "compare")]
         group.bench_with_input(BenchmarkId::new("system", size), &size, |b, &size| {
-            b.iter(|| black_box(paired_alloc_free(&SYS, size, &mut pool)))
+            let mut pool = PointerPool::new(POOL_SIZE);
+            b.iter(|| black_box(paired_alloc_free(&SYSTEM_ALLOCATOR, size, &mut pool)))
         });
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc", size),
+            BenchmarkId::new("mechanical_mimalloc_public", size),
             &size,
-            |b, &size| b.iter(|| black_box(paired_alloc_free(&MECH, size, &mut pool))),
+            |b, &size| {
+                b.iter(|| black_box(paired_alloc_free(&PUBLIC_MIMALLOC, size, &mut public_pool)))
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("mechanical_mimalloc_raw", size),
+            &size,
+            |b, &size| b.iter(|| black_box(paired_alloc_free(&RAW_MIMALLOC, size, &mut raw_pool))),
         );
     }
     group.finish();
@@ -212,18 +178,47 @@ fn bench_aligned_paired_alloc_free(c: &mut Criterion) {
     for &(size, align) in HOT_ALIGNED_CASES {
         group.throughput(Throughput::Elements(POOL_SIZE as u64));
         let layout = Layout::from_size_align(size, align).unwrap();
-        let mut pool = PtrPool::new();
+        let mut public_pool = PointerPool::new(POOL_SIZE);
+        let mut raw_pool = PointerPool::new(POOL_SIZE);
         let case = format!("{size}/align{align}");
 
         #[cfg(feature = "compare")]
         group.bench_with_input(BenchmarkId::new("system", &case), &layout, |b, &layout| {
-            b.iter(|| black_box(paired_alloc_free_layout(&SYS, layout, &mut pool)))
+            let mut pool = PointerPool::new(POOL_SIZE);
+            b.iter(|| {
+                black_box(paired_alloc_free_layout(
+                    &SYSTEM_ALLOCATOR,
+                    layout,
+                    &mut pool,
+                ))
+            })
         });
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc", case),
+            BenchmarkId::new("mechanical_mimalloc_public", &case),
             &layout,
-            |b, &layout| b.iter(|| black_box(paired_alloc_free_layout(&MECH, layout, &mut pool))),
+            |b, &layout| {
+                b.iter(|| {
+                    black_box(paired_alloc_free_layout(
+                        &PUBLIC_MIMALLOC,
+                        layout,
+                        &mut public_pool,
+                    ))
+                })
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("mechanical_mimalloc_raw", case),
+            &layout,
+            |b, &layout| {
+                b.iter(|| {
+                    black_box(paired_alloc_free_layout(
+                        &RAW_MIMALLOC,
+                        layout,
+                        &mut raw_pool,
+                    ))
+                })
+            },
         );
     }
     group.finish();
@@ -235,12 +230,15 @@ fn bench_aligned_paired_alloc_free(c: &mut Criterion) {
 // empty so nothing leaks. Isolates the free fast path.
 // ---------------------------------------------------------------------------
 
-fn free_routine<A: GlobalAlloc>(alloc: &A, pool: &mut PtrPool) -> usize {
-    for i in 0..POOL_SIZE {
-        let (p, l) = *pool.slot(i);
-        unsafe { alloc.dealloc(p, l) };
-    }
-    POOL_SIZE
+fn free_routine<A: GlobalAlloc>(alloc: &A, pool: &mut PointerPool) -> usize {
+    assert_no_harness_allocations(|| {
+        for i in 0..POOL_SIZE {
+            let (p, l) = *pool.slot(i);
+            unsafe { alloc.dealloc(p, l) };
+            *pool.slot(i) = (std::ptr::null_mut(), l);
+        }
+        POOL_SIZE
+    })
 }
 
 fn bench_free_only(c: &mut Criterion) {
@@ -258,26 +256,41 @@ fn bench_free_only(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("system", size), &size, |b, &size| {
             b.iter_batched_ref(
                 || {
-                    let mut p = PtrPool::new();
-                    fill(&SYS, size, &mut p);
+                    let mut p = PointerPool::new(POOL_SIZE);
+                    fill(&SYSTEM_ALLOCATOR, size, &mut p);
                     p
                 },
-                |pool| black_box(free_routine(&SYS, pool)),
+                |pool| black_box(free_routine(&SYSTEM_ALLOCATOR, pool)),
                 criterion::BatchSize::SmallInput,
             )
         });
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc", size),
+            BenchmarkId::new("mechanical_mimalloc_public", size),
             &size,
             |b, &size| {
                 b.iter_batched_ref(
                     || {
-                        let mut p = PtrPool::new();
-                        fill(&MECH, size, &mut p);
+                        let mut p = PointerPool::new(POOL_SIZE);
+                        fill(&PUBLIC_MIMALLOC, size, &mut p);
                         p
                     },
-                    |pool| black_box(free_routine(&MECH, pool)),
+                    |pool| black_box(free_routine(&PUBLIC_MIMALLOC, pool)),
+                    criterion::BatchSize::SmallInput,
+                )
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("mechanical_mimalloc_raw", size),
+            &size,
+            |b, &size| {
+                b.iter_batched_ref(
+                    || {
+                        let mut p = PointerPool::new(POOL_SIZE);
+                        fill(&RAW_MIMALLOC, size, &mut p);
+                        p
+                    },
+                    |pool| black_box(free_routine(&RAW_MIMALLOC, pool)),
                     criterion::BatchSize::SmallInput,
                 )
             },
@@ -294,66 +307,6 @@ fn bench_free_only(c: &mut Criterion) {
 // spawn or channel synchronization in the measured duration.
 // ---------------------------------------------------------------------------
 
-enum OwnerCommand {
-    Fill(usize),
-    Stop,
-}
-
-struct RemoteFreeHarness {
-    commands: mpsc::SyncSender<OwnerCommand>,
-    pools: mpsc::Receiver<PtrPool>,
-    owner: Option<thread::JoinHandle<()>>,
-}
-
-impl RemoteFreeHarness {
-    fn new<A: GlobalAlloc + Sync + 'static>(alloc: &'static A) -> Self {
-        let (command_tx, command_rx) = mpsc::sync_channel(1);
-        let (pool_tx, pool_rx) = mpsc::sync_channel(1);
-        let owner = thread::spawn(move || {
-            while let Ok(command) = command_rx.recv() {
-                match command {
-                    OwnerCommand::Fill(size) => {
-                        let mut pool = PtrPool::new();
-                        fill(alloc, size, &mut pool);
-                        if pool_tx.send(pool).is_err() {
-                            break;
-                        }
-                    }
-                    OwnerCommand::Stop => break,
-                }
-            }
-        });
-        Self {
-            commands: command_tx,
-            pools: pool_rx,
-            owner: Some(owner),
-        }
-    }
-
-    fn run<A: GlobalAlloc>(&self, alloc: &A, size: usize, iterations: u64) -> Duration {
-        let mut total = Duration::ZERO;
-        for _ in 0..iterations {
-            self.commands
-                .send(OwnerCommand::Fill(size))
-                .expect("request owner allocation");
-            let mut pool = self.pools.recv().expect("receive owner allocation");
-            let started = Instant::now();
-            hint_black_box(free_routine(alloc, &mut pool));
-            total += started.elapsed();
-        }
-        total
-    }
-}
-
-impl Drop for RemoteFreeHarness {
-    fn drop(&mut self) {
-        let _ = self.commands.send(OwnerCommand::Stop);
-        if let Some(owner) = self.owner.take() {
-            owner.join().expect("remote-free owner thread");
-        }
-    }
-}
-
 fn bench_remote_free(c: &mut Criterion) {
     let mut group = c.benchmark_group("hotpath/remote_free");
     group.sample_size(hotpath_sample_size(40));
@@ -367,17 +320,25 @@ fn bench_remote_free(c: &mut Criterion) {
 
         #[cfg(feature = "compare")]
         {
-            let harness = RemoteFreeHarness::new(&SYS);
-            group.bench_with_input(BenchmarkId::new("system", size), &size, |b, &size| {
-                b.iter_custom(|iterations| harness.run(&SYS, size, iterations))
+            let layout = Layout::from_size_align(size, 8).unwrap();
+            let mut fixture = RemoteFreeFixture::new(&SYSTEM_ALLOCATOR, layout, POOL_SIZE);
+            group.bench_with_input(BenchmarkId::new("system", size), &size, |b, _| {
+                b.iter_custom(|iterations| fixture.measure_remote_free(iterations))
             });
         }
 
-        let harness = RemoteFreeHarness::new(&MECH);
+        let layout = Layout::from_size_align(size, 8).unwrap();
+        let mut public_fixture = RemoteFreeFixture::new(&PUBLIC_MIMALLOC, layout, POOL_SIZE);
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc", size),
+            BenchmarkId::new("mechanical_mimalloc_public", size),
             &size,
-            |b, &size| b.iter_custom(|iterations| harness.run(&MECH, size, iterations)),
+            |b, _| b.iter_custom(|iterations| public_fixture.measure_remote_free(iterations)),
+        );
+        let mut raw_fixture = RemoteFreeFixture::new(&RAW_MIMALLOC, layout, POOL_SIZE);
+        group.bench_with_input(
+            BenchmarkId::new("mechanical_mimalloc_raw", size),
+            &size,
+            |b, _| b.iter_custom(|iterations| raw_fixture.measure_remote_free(iterations)),
         );
     }
     group.finish();
@@ -389,18 +350,26 @@ fn bench_remote_free(c: &mut Criterion) {
 // pattern mimalloc's fast path is optimised for.
 // ---------------------------------------------------------------------------
 
-fn lifo_stack<A: GlobalAlloc>(alloc: &A, size: usize, depth: usize, pool: &mut PtrPool) -> usize {
+fn lifo_stack<A: GlobalAlloc>(
+    alloc: &A,
+    size: usize,
+    depth: usize,
+    pool: &mut PointerPool,
+) -> usize {
     let layout = Layout::from_size_align(size, 8).unwrap();
-    let mut ops = 0usize;
-    for i in 0..depth {
-        *pool.slot(i) = (unsafe { alloc.alloc(layout) }, layout);
-        ops += 1;
-    }
-    for i in (0..depth).rev() {
-        unsafe { alloc.dealloc(pool.slot(i).0, layout) };
-        ops += 1;
-    }
-    hint_black_box(ops)
+    assert_no_harness_allocations(|| {
+        let mut ops = 0usize;
+        for i in 0..depth {
+            *pool.slot(i) = (unsafe { alloc.alloc(layout) }, layout);
+            ops += 1;
+        }
+        for i in (0..depth).rev() {
+            unsafe { alloc.dealloc(pool.slot(i).0, layout) };
+            *pool.slot(i) = (std::ptr::null_mut(), layout);
+            ops += 1;
+        }
+        hint_black_box(ops)
+    })
 }
 
 fn bench_lifo_stack(c: &mut Criterion) {
@@ -417,19 +386,28 @@ fn bench_lifo_stack(c: &mut Criterion) {
 
     for &(size, depth) in cases {
         group.throughput(Throughput::Elements((depth * 2) as u64));
-        let mut pool = PtrPool::new();
+        let mut public_pool = PointerPool::new(POOL_SIZE);
+        let mut raw_pool = PointerPool::new(POOL_SIZE);
 
         #[cfg(feature = "compare")]
         group.bench_with_input(
             BenchmarkId::new("system", format!("{size}/{depth}")),
             &(size, depth),
-            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&SYS, s, d, &mut pool))),
+            |b, &(s, d)| {
+                let mut pool = PointerPool::new(POOL_SIZE);
+                b.iter(|| black_box(lifo_stack(&SYSTEM_ALLOCATOR, s, d, &mut pool)))
+            },
         );
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc", format!("{size}/{depth}")),
+            BenchmarkId::new("mechanical_mimalloc_public", format!("{size}/{depth}")),
             &(size, depth),
-            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&MECH, s, d, &mut pool))),
+            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&PUBLIC_MIMALLOC, s, d, &mut public_pool))),
+        );
+        group.bench_with_input(
+            BenchmarkId::new("mechanical_mimalloc_raw", format!("{size}/{depth}")),
+            &(size, depth),
+            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&RAW_MIMALLOC, s, d, &mut raw_pool))),
         );
     }
     group.finish();
@@ -443,13 +421,15 @@ fn bench_lifo_stack(c: &mut Criterion) {
 
 fn single_reuse<A: GlobalAlloc>(alloc: &A, size: usize, ops: usize) -> usize {
     let layout = Layout::from_size_align(size, 8).unwrap();
-    let mut p = unsafe { alloc.alloc(layout) };
-    for _ in 0..ops {
+    assert_no_harness_allocations(|| {
+        let mut p = unsafe { alloc.alloc(layout) };
+        for _ in 0..ops {
+            unsafe { alloc.dealloc(p, layout) };
+            p = unsafe { alloc.alloc(layout) };
+        }
         unsafe { alloc.dealloc(p, layout) };
-        p = unsafe { alloc.alloc(layout) };
-    }
-    unsafe { alloc.dealloc(p, layout) };
-    hint_black_box(ops)
+        hint_black_box(ops)
+    })
 }
 
 fn bench_single_reuse(c: &mut Criterion) {
@@ -466,13 +446,18 @@ fn bench_single_reuse(c: &mut Criterion) {
 
         #[cfg(feature = "compare")]
         group.bench_with_input(BenchmarkId::new("system", size), &size, |b, &size| {
-            b.iter(|| black_box(single_reuse(&SYS, size, OPS)))
+            b.iter(|| black_box(single_reuse(&SYSTEM_ALLOCATOR, size, OPS)))
         });
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc", size),
+            BenchmarkId::new("mechanical_mimalloc_public", size),
             &size,
-            |b, &size| b.iter(|| black_box(single_reuse(&MECH, size, OPS))),
+            |b, &size| b.iter(|| black_box(single_reuse(&PUBLIC_MIMALLOC, size, OPS))),
+        );
+        group.bench_with_input(
+            BenchmarkId::new("mechanical_mimalloc_raw", size),
+            &size,
+            |b, &size| b.iter(|| black_box(single_reuse(&RAW_MIMALLOC, size, OPS))),
         );
     }
     group.finish();

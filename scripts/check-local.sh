@@ -11,6 +11,8 @@ run scripts/check-raw-facade.sh
 run scripts/check-safe-boundary.py
 run scripts/check-layer-boundaries.py
 run scripts/check-ffi-boundary.py
+run scripts/check-strict-types.py
+run scripts/check-policy-boundaries.py
 run scripts/check-unsafe-inventory.py
 run scripts/check-unsafe-audit.py
 run scripts/check-unsafe-audit-evidence.py

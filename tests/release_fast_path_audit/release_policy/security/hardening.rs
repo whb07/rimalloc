@@ -8,6 +8,8 @@ fn hardening_threat_model_is_concrete_and_linked_from_security_policy() {
         .expect("read hardening threat model");
     let security = fs::read_to_string(root.join("SECURITY.md")).expect("read SECURITY.md");
     let release = fs::read_to_string(root.join("docs/release.md")).expect("read release");
+    let workflow = fs::read_to_string(root.join(".github/workflows/hardening.yml"))
+        .expect("read hardening workflow");
 
     for required in [
         "Hardening Threat Model",
@@ -38,5 +40,9 @@ fn hardening_threat_model_is_concrete_and_linked_from_security_policy() {
             && security.contains("`secure`, `guarded`, malicious unsafe callers")
             && release.contains("docs/hardening-threat-model.md"),
         "security and release docs should link to hardening threat model"
+    );
+    assert!(
+        workflow.contains("schedule:") && workflow.contains("cron:"),
+        "hardening workflow must run automatically on a bounded cadence"
     );
 }

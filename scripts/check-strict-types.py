@@ -67,6 +67,7 @@ LINEAR_CAPABILITY_TYPES = {
     "BlockForFree",
     "DestroyedPage",
     "DetachedRemoteList",
+    "EncodedFreeList",
     "ForeignPage",
     "FreeBlock",
     "FullPage",
@@ -91,6 +92,7 @@ LINEAR_CAPABILITY_TYPES = {
     "ValidatedFreeParts",
     "ValidPointerLookup",
 }
+MUST_NOT_BE_COPY_TYPES = {"PointerLookup"}
 CAPABILITY_CONSTRUCTOR_TYPES = {
     "AbandonedMappedPageType",
     "AbandonedPageType",
@@ -110,6 +112,64 @@ CAPABILITY_CONSTRUCTOR_FILES = {
     "src/types/page_states.rs",
     "src/types/page_queues.rs",
     "src/types/raw_bridge.rs",
+}
+GUARDED_CONSTRUCTOR_RE = re.compile(r"\bGuardedBlock::after_guarded_detection\s*\(")
+GUARDED_CONSTRUCTOR_FILES = {
+    "src/allocator/alloc.rs",
+    "src/allocator/free.rs",
+}
+RAW_BRIDGE_CALL_RE = re.compile(
+    r"\b(?P<name>assume_(?:uninit_page|active_page|all_free_abandoned|full_page|"
+    r"local_page|foreign_page|abandoned_page|owned_abandoned_page))\s*\("
+)
+RAW_BRIDGE_CALLERS = {
+    "assume_uninit_page": {"src/allocator/page.rs"},
+    "assume_active_page": {
+        "src/allocator/aligned/thread_heap.rs",
+        "src/allocator/alloc.rs",
+        "src/allocator/arena.rs",
+        "src/allocator/free.rs",
+        "src/allocator/page.rs",
+        "src/allocator/thread_heap.rs",
+    },
+    "assume_all_free_abandoned": {"src/allocator/arena.rs"},
+    "assume_full_page": {
+        "src/allocator/arena.rs",
+        "src/allocator/free.rs",
+        "src/allocator/page.rs",
+        "src/allocator/thread_heap.rs",
+    },
+    "assume_local_page": {
+        "src/allocator/bench_diagnostics.rs",
+        "src/allocator/free.rs",
+        "src/allocator/page/lifecycle.rs",
+        "src/allocator/thread_heap.rs",
+    },
+    "assume_foreign_page": {"src/allocator/free.rs"},
+    "assume_abandoned_page": {
+        "src/allocator/arena.rs",
+        "src/allocator/arena/abandoned.rs",
+        "src/allocator/arena/heap_pages.rs",
+        "src/allocator/page.rs",
+    },
+    "assume_owned_abandoned_page": {
+        "src/allocator/arena.rs",
+        "src/allocator/arena/abandoned.rs",
+        "src/allocator/free.rs",
+        "src/allocator/page.rs",
+        "src/allocator/page/lifecycle.rs",
+        "src/internal/mod.rs",
+    },
+}
+RAW_CAPABILITY_CONSTRUCTOR_RE = re.compile(
+    r"\b(?P<type>PublishedRemoteHead|DetachedRemoteList)::from_raw_compat\s*\("
+)
+RAW_CAPABILITY_CONSTRUCTOR_CALLERS = {
+    "PublishedRemoteHead": {
+        "src/allocator/free.rs",
+        "src/allocator/page/lifecycle.rs",
+    },
+    "DetachedRemoteList": {"src/allocator/page/lifecycle.rs"},
 }
 DERIVED_TRAITS_RE = re.compile(
     r"#\[derive\((?P<traits>[^)]*)\)\](?:\s*#\[[^]]+\])*\s*"
@@ -736,6 +796,16 @@ def main() -> int:
     entries = read_allowlist()
     offenders: list[str] = []
     checked_raw_params = 0
+    raw_bridge_text = (ROOT / "src/types/raw_bridge.rs").read_text(encoding="utf-8")
+    declared_raw_bridges = set(re.findall(r"\b(assume_[A-Za-z0-9_]+)\b", raw_bridge_text))
+    inventoried_raw_bridges = set(RAW_BRIDGE_CALLERS)
+    if declared_raw_bridges != inventoried_raw_bridges:
+        missing = sorted(declared_raw_bridges - inventoried_raw_bridges)
+        stale = sorted(inventoried_raw_bridges - declared_raw_bridges)
+        offenders.append(
+            "raw bridge caller inventory mismatch: "
+            f"missing={missing or 'none'}, stale={stale or 'none'}"
+        )
 
     for path in source_files():
         rel = path.relative_to(ROOT).as_posix()
@@ -755,15 +825,26 @@ def main() -> int:
                 name = match.group("name")
                 traits = {trait.strip() for trait in match.group("traits").split(",")}
                 forbidden = traits.intersection({"Clone", "Copy"})
-                if name in LINEAR_CAPABILITY_TYPES and forbidden:
+                if name in LINEAR_CAPABILITY_TYPES | MUST_NOT_BE_COPY_TYPES and forbidden:
+                    classification = (
+                        "linear capability"
+                        if name in LINEAR_CAPABILITY_TYPES
+                        else "nonduplicable result"
+                    )
                     offenders.append(
-                        f"{rel}: linear capability {name} derives "
+                        f"{rel}: {classification} {name} derives "
                         + ", ".join(sorted(forbidden))
                     )
             for name in LINEAR_CAPABILITY_TYPES:
                 if re.search(rf"\bimpl\s+(?:Clone|Copy)\s+for\s+{name}\b", text):
                     offenders.append(
                         f"{rel}: linear capability {name} has an explicit Clone/Copy impl"
+                    )
+
+            for name in MUST_NOT_BE_COPY_TYPES:
+                if re.search(rf"\bimpl\s+(?:Clone|Copy)\s+for\s+{name}\b", text):
+                    offenders.append(
+                        f"{rel}: nonduplicable result {name} has an explicit Clone/Copy impl"
                     )
 
             constructor_fixture = rel.startswith("src/types/") and rel.endswith("/tests.rs")
@@ -780,6 +861,33 @@ def main() -> int:
                     offenders.append(
                         f"{rel}:{line}: detached remote lists must originate in the atomic ownership module"
                     )
+
+        if rel not in GUARDED_CONSTRUCTOR_FILES and not rel.endswith("/tests.rs"):
+            for match in GUARDED_CONSTRUCTOR_RE.finditer(text):
+                line = text.count("\n", 0, match.start()) + 1
+                offenders.append(
+                    f"{rel}:{line}: guarded capability construction is limited to classification modules"
+                )
+
+        if rel != "src/types/raw_bridge.rs":
+            for match in RAW_BRIDGE_CALL_RE.finditer(text):
+                name = match.group("name")
+                if rel in RAW_BRIDGE_CALLERS.get(name, set()):
+                    continue
+                line = text.count("\n", 0, match.start()) + 1
+                offenders.append(
+                    f"{rel}:{line}: raw bridge {name} is not allowed from this caller family"
+                )
+
+        if rel != "src/types/atomic/thread_free.rs" and not rel.endswith("/tests.rs"):
+            for match in RAW_CAPABILITY_CONSTRUCTOR_RE.finditer(text):
+                capability = match.group("type")
+                if rel in RAW_CAPABILITY_CONSTRUCTOR_CALLERS[capability]:
+                    continue
+                line = text.count("\n", 0, match.start()) + 1
+                offenders.append(
+                    f"{rel}:{line}: raw {capability} construction is not allowed from this caller family"
+                )
 
         if rel not in RAW_BOUNDARY_FILES:
             item_contexts = item_contexts_by_line(text)
@@ -933,15 +1041,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-    "DestroyedPage",
-    "ForeignPage",
-    "FullPage",
-    "LocalPage",
-    "OwnedAbandonedPage",
-    "Page",
-    "PageAbandonOutcome",
-    "PageForAbandon",
-    "PageFreeOwner",
-    "QueuedPage",
-    "RetiredPage",
-    "UnqueuedPage",

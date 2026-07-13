@@ -14,7 +14,7 @@ fn guarded_pointer_lookup_prepares_guarded_free_witnesses() {
     let page = unsafe { PagePtr::new_unchecked(raw_page.as_mut_ptr()) };
     let block = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(raw_block)) };
     let user = unsafe { UserPtr::new_unchecked(core::ptr::addr_of_mut!(raw_user).cast()) };
-    let guarded = GuardedBlock::after_guarded_detection(block);
+    let guarded = unsafe { GuardedBlock::after_guarded_detection(block) };
 
     let lookup = PointerLookup::valid(
         user,

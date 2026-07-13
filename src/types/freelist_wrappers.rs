@@ -494,7 +494,8 @@ impl LocalFreeList {
 
 /// Represents an explicitly encoded free list representation.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct EncodedFreeList(Option<BlockPtr>);
 
 pub(super) fn __lint_touch() {

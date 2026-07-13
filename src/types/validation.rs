@@ -29,8 +29,11 @@ pub(crate) enum PointerInvalidReason {
 pub(crate) struct GuardedBlock(BlockPtr);
 
 impl GuardedBlock {
+    /// # Safety
+    /// `block` must have been classified as guarded by the allocator's guarded
+    /// block tag or guarded-pointer predicate.
     #[inline(always)]
-    pub(crate) fn after_guarded_detection(block: BlockPtr) -> Self {
+    pub(crate) unsafe fn after_guarded_detection(block: BlockPtr) -> Self {
         Self(block)
     }
 

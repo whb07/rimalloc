@@ -12,6 +12,10 @@ fn compatibility_policy_is_concrete_pure_and_source_enforced() {
         .expect("read policy decisions");
     let checker = fs::read_to_string(root.join("scripts/check-policy-boundaries.py"))
         .expect("read policy checker");
+    let local_gate =
+        fs::read_to_string(root.join("scripts/check-local.sh")).expect("read local gate");
+    let validation = fs::read_to_string(root.join(".github/workflows/validation.yml"))
+        .expect("read validation workflow");
 
     assert!(
         compat.contains("pub(crate) struct CompatPolicy;")
@@ -45,6 +49,13 @@ fn compatibility_policy_is_concrete_pure_and_source_enforced() {
         assert!(
             checker.contains(option),
             "policy source checker must cover {option}"
+        );
+    }
+    for gate in [&local_gate, &validation] {
+        assert!(
+            gate.contains("scripts/check-strict-types.py")
+                && gate.contains("scripts/check-policy-boundaries.py"),
+            "required local and CI gates must execute both source checkers"
         );
     }
 }

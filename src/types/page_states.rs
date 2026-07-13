@@ -299,7 +299,7 @@ impl AvailablePage {
         let page = self.page();
         // SAFETY[AUDIT:typed-page-available-pop-boundary]: `AvailablePage` proves a
         // non-empty page-local available list to pop from.
-        let (block, next) = unsafe { crate::core_types::AvailableFreeList::pop(self) };
+        let (block, next) = unsafe { crate::core_types::AvailableFreeList::pop_one(self) };
         // SAFETY[AUDIT:typed-page-available-pop-boundary]: after popping one available
         // block, the page free head and used count are updated together.
         unsafe {

@@ -7,7 +7,10 @@
 use core::sync::atomic::Ordering;
 
 use super::{AtomicUsizeField, BlockPtr};
-use crate::core_types::{OwnedAbandonedPage, ThreadFreeOwner, ThreadFreeWord};
+use crate::core_types::{
+    BatchValidationError, LocalPage, OwnedAbandonedPage, RemoteFreeBatch, ThreadFreeOwner,
+    ThreadFreeWord,
+};
 
 #[must_use = "remote push outcomes must be consumed to preserve publication ownership"]
 pub(crate) enum RemotePushResult {
@@ -83,6 +86,7 @@ impl PublishedRemoteHead {
 pub(crate) struct DetachedRemoteList(Option<BlockPtr>);
 
 impl DetachedRemoteList {
+    #[cfg(test)]
     #[inline(always)]
     pub(crate) fn head(&self) -> Option<BlockPtr> {
         self.0
@@ -99,6 +103,46 @@ impl DetachedRemoteList {
     #[inline(always)]
     pub(crate) unsafe fn from_raw_compat(head: Option<BlockPtr>) -> Self {
         Self(head)
+    }
+
+    /// # Safety
+    /// The detached chain must belong to `page` and remain uniquely owned.
+    #[inline]
+    pub(crate) unsafe fn into_batch_for_local(
+        self,
+        page: &LocalPage,
+    ) -> Result<Option<RemoteFreeBatch>, BatchValidationError> {
+        // SAFETY[AUDIT:typed-atomic-thread-free-batch-conversion]: LocalPage
+        // supplies the matching live page metadata for this detached owner.
+        unsafe { self.into_batch(page.page()) }
+    }
+
+    /// # Safety
+    /// The detached chain must belong to `page` and remain uniquely owned.
+    #[inline]
+    pub(crate) unsafe fn into_batch_for_abandoned(
+        self,
+        page: &OwnedAbandonedPage,
+    ) -> Result<Option<RemoteFreeBatch>, BatchValidationError> {
+        // SAFETY[AUDIT:typed-atomic-thread-free-batch-conversion]: claimed
+        // abandoned ownership supplies the matching live page metadata.
+        unsafe { self.into_batch(page.page()) }
+    }
+
+    #[inline]
+    unsafe fn into_batch(
+        self,
+        page: crate::core_types::PagePtr,
+    ) -> Result<Option<RemoteFreeBatch>, BatchValidationError> {
+        let Some(head) = self.0 else {
+            return Ok(None);
+        };
+        // SAFETY[AUDIT:typed-atomic-thread-free-batch-conversion]: the page
+        // witness provides initialized capacity and used metadata.
+        let (capacity, used) = unsafe { (page.capacity(), page.used()) };
+        // SAFETY[AUDIT:typed-atomic-thread-free-batch-conversion]: consuming
+        // DetachedRemoteList transfers unique traversal ownership to the batch.
+        unsafe { RemoteFreeBatch::from_detached(page, head, capacity, used) }.map(Some)
     }
 }
 

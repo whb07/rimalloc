@@ -53,8 +53,7 @@ use counts::{
 };
 pub(crate) use counts::{
     mi_page_capacity_count, mi_page_increment_used_count, mi_page_queue_count_typed,
-    mi_page_reserved_count, mi_page_set_reserved_count, mi_page_set_used_count,
-    mi_page_subtract_used_count, mi_page_used_count,
+    mi_page_reserved_count, mi_page_set_reserved_count, mi_page_set_used_count, mi_page_used_count,
 };
 pub use counts::{mi_page_queue_is_full, mi_page_queue_is_huge, mi_page_queue_is_special};
 pub use deferred::mi_register_deferred_free;

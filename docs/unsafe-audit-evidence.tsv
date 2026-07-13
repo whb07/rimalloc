@@ -1173,6 +1173,12 @@ typed-page-batch-scalars	test	src/types/scalar/tests.rs	Covers zero, one, maximu
 typed-page-batch-scan	test	src/page_batch_tests/tests.rs	Exercises encoded detached-chain scans at representative and capacity boundary lengths plus cycles and invalid links.
 typed-page-batch-lint-fixture	script	scripts/check-unsafe-audit.py	Checks the staged lint fixture remains tagged and documented while batch consumers are wired.
 typed-page-batch-test-fixtures	test	src/page_batch_tests/tests.rs	Exercises live allocator-owned same-page and foreign-page block fixtures under secure encoded links.
+typed-page-batch-synthetic-fixtures	test	src/page_batch_tests/tests.rs	Exercises isolated synthetic page metadata for destination ordering, accounting, and lease transitions.
+typed-page-batch-remote-collect	test	src/page_batch_tests/tests.rs	Covers empty, singleton, and multi-block destinations plus exact remote used-count subtraction.
+typed-page-batch-local-detach	test	src/page_batch_tests/tests.rs	Checks successful local detachment clears the page field only after bounded validation.
+typed-page-batch-local-collect	test	src/page_batch_tests/tests.rs	Covers empty, singleton, and multi-block available destinations without changing used count.
+typed-page-batch-lease	test	src/page_batch_tests/tests.rs	Checks lease, take-one, return ordering, and used-count accounting across partial consumption.
+typed-atomic-thread-free-batch-conversion	test	src/types/atomic/tests.rs	Exercises detached atomic ownership conversion and collection through local and claimed-abandoned page witnesses.
 raw-bridge-page-witness	test	tests/release_fast_path_audit/capability_linearity.rs	Checks raw page witness construction remains centralized in the audited bridge.
 raw-bridge-uninit-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks the uninitialized page ingress constructor remains in the raw bridge.
 raw-bridge-active-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks active page raw ingress is centralized and capability based.

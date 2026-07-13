@@ -2422,6 +2422,25 @@ Operation IDs:
 - `SAFETY[AUDIT:typed-page-batch-test-fixtures]`:
   `src/page_batch_tests/tests.rs` keeps allocator-returned blocks live while
   exercising bounded encoded traversal and frees every allocation exactly once.
+- `SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]`:
+  `src/page_batch_tests/tests.rs` initializes stable boxed page and block
+  metadata for isolated splice, accounting, and lease tests without mutating
+  live allocator pages.
+- `SAFETY[AUDIT:typed-page-batch-remote-collect]`:
+  `src/types/page_batch.rs` consumes a validated detached remote batch, splices
+  its known tail once, and subtracts its checked length from page used count.
+- `SAFETY[AUDIT:typed-page-batch-local-detach]`:
+  `src/types/page_batch.rs` scans the current local chain before clearing its
+  page field, so failed validation leaves published metadata unchanged.
+- `SAFETY[AUDIT:typed-page-batch-local-collect]`:
+  `src/types/page_batch.rs` consumes a validated local batch and links its known
+  tail to the available head without changing used accounting.
+- `SAFETY[AUDIT:typed-page-batch-lease]`: `src/types/page_batch.rs` bounds lease
+  traversal by a nonzero limit, detaches a null-terminated prefix, and performs
+  checked used-count updates while consuming linear lease ownership.
+- `SAFETY[AUDIT:typed-atomic-thread-free-batch-conversion]`:
+  `src/types/atomic/thread_free.rs` consumes unique detached-list ownership only
+  after pairing it with matching live local or claimed-abandoned page metadata.
 - `SAFETY[AUDIT:page-free-list-local-detached-collect]`:
   `src/allocator/page/lifecycle.rs` collects a uniquely detached remote chain
   only while a local-page witness proves current-thread ownership.

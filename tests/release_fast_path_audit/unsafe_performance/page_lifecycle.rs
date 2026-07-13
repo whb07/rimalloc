@@ -71,7 +71,7 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && !free_rs.contains("crate::core_types::FreeBlock::new_unchecked")
             && !free_rs.contains("crate::core_types::FreeBlock(")
             && freelist_types.contains("AllocatedBlock::new_unchecked(head)")
-            && freelist_types.contains("pub(crate) unsafe fn pop(page: AvailablePage)")
+            && freelist_types.contains("pub(crate) unsafe fn pop_one(page: AvailablePage)")
             && freelist_types.contains("let block_raw = block.as_ptr().as_ptr();")
             && !freelist_types.contains("AllocatedBlock(head)")
             && !freelist_types.contains("block.0.as_ptr()")

@@ -31,12 +31,14 @@ pub(super) unsafe fn mi_abandoned_page_unown(
             let local_free = unsafe { page_ptr.local_free() };
             let detached = unsafe { atomic_tf.detach_head() };
             let local_free = unsafe {
-                crate::page::collect_remote_for_owned_abandoned_page(
+                match crate::page::collect_remote_for_owned_abandoned_page(
                     &owned_page,
                     detached,
                     local_free,
-                )
-                .unwrap_or(local_free)
+                ) {
+                    Ok(local_free) => local_free,
+                    Err(_) => page_ptr.local_free(),
+                }
             };
             // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
             if unsafe { page_ptr.free().is_empty() } && !local_free.is_empty() {

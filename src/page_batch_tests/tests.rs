@@ -1,5 +1,83 @@
 use super::*;
 use crate::types::{mi_block_t, mi_page_t};
+use core::mem::MaybeUninit;
+
+const SYNTHETIC_CAPACITY: usize = 8;
+
+struct SyntheticPage {
+    page_storage: Box<MaybeUninit<mi_page_t>>,
+    blocks: Box<[mi_block_t; SYNTHETIC_CAPACITY]>,
+    page: PagePtr,
+}
+
+impl SyntheticPage {
+    fn new(used: u16) -> Self {
+        let mut page_storage = Box::new(MaybeUninit::<mi_page_t>::zeroed());
+        let mut blocks = Box::new([mi_block_t::default(); SYNTHETIC_CAPACITY]);
+        let raw_page = page_storage.as_mut_ptr();
+        // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: the boxed page and block
+        // storage remain stable and live for the complete synthetic fixture.
+        let page = unsafe { PagePtr::new_unchecked(raw_page) };
+        // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: writes initialize the
+        // exact metadata fields read by batch traversal and accounting.
+        unsafe {
+            (*raw_page).used = used;
+            (*raw_page).capacity = SYNTHETIC_CAPACITY as u16;
+            (*raw_page).reserved = SYNTHETIC_CAPACITY as u16;
+            (*raw_page).block_size = core::mem::size_of::<mi_block_t>();
+            (*raw_page).page_start = blocks.as_mut_ptr().cast();
+            page.set_keys(crate::core_types::PageKeys::disabled());
+        }
+        Self {
+            page_storage,
+            blocks,
+            page,
+        }
+    }
+
+    fn block(&mut self, index: usize) -> BlockPtr {
+        // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: the bounded index points
+        // into stable boxed block storage for this synthetic page.
+        unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(self.blocks[index])) }
+    }
+
+    unsafe fn link(&mut self, indexes: &[usize]) {
+        for pair in indexes.windows(2) {
+            // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: both indexes are
+            // blocks in this page and use its disabled fixture keys.
+            unsafe {
+                self.block(pair[0])
+                    .set_next(self.page, Some(self.block(pair[1])))
+            };
+        }
+        if let Some(&tail) = indexes.last() {
+            // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: the selected tail is
+            // writable block storage in this synthetic page.
+            unsafe { self.block(tail).set_next(self.page, None) };
+        }
+    }
+
+    unsafe fn order_from(&self, head: Option<BlockPtr>) -> Vec<usize> {
+        let base = self.blocks.as_ptr() as usize;
+        let stride = core::mem::size_of::<mi_block_t>();
+        let mut order = Vec::new();
+        let mut current = head;
+        while let Some(block) = current {
+            order.push((block.as_ptr() as usize - base) / stride);
+            assert!(order.len() <= SYNTHETIC_CAPACITY);
+            // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: the synthetic list
+            // contains only fixture blocks and is capacity bounded.
+            current = unsafe { block.next(self.page) };
+        }
+        order
+    }
+}
+
+impl Drop for SyntheticPage {
+    fn drop(&mut self) {
+        let _ = (&self.page_storage, &self.blocks);
+    }
+}
 
 struct SamePageBlocks {
     all: Vec<*mut mi_block_t>,
@@ -234,4 +312,135 @@ fn batch_capabilities_are_linear_stack_values() {
         core::mem::size_of::<RemoteFreeBatch>(),
         core::mem::size_of::<(PagePtr, BlockPtr, BlockPtr, BatchLen)>()
     );
+}
+
+#[test]
+fn remote_batch_splices_destinations_and_subtracts_used_once() {
+    for destination in [&[][..], &[3][..], &[3, 4, 5][..]] {
+        let mut fixture = SyntheticPage::new(7);
+        // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: all list indexes belong
+        // to the stable synthetic page and each chain is uniquely owned.
+        unsafe {
+            fixture.link(&[0, 1, 2]);
+            fixture.link(destination);
+            let local = match destination.first() {
+                Some(&head) => LocalFreeList::from_head(fixture.block(head)),
+                None => LocalFreeList::empty(),
+            };
+            fixture.page.set_local_free(match destination.first() {
+                Some(&head) => LocalFreeList::from_head(fixture.block(head)),
+                None => LocalFreeList::empty(),
+            });
+            let capacity = fixture.page.capacity();
+            let used = fixture.page.used();
+            let batch =
+                RemoteFreeBatch::from_detached(fixture.page, fixture.block(0), capacity, used)
+                    .expect("valid synthetic remote batch");
+            let owner = LocalPage::new_unchecked(fixture.page);
+            let collected = batch.collect_into_local_page(&owner, local);
+
+            let mut expected = vec![0, 1, 2];
+            expected.extend_from_slice(destination);
+            assert_eq!(fixture.order_from(collected.head()), expected);
+            assert_eq!(fixture.page.used().get(), 4);
+            assert_eq!(fixture.page.local_free().as_raw(), collected.as_raw());
+        }
+    }
+}
+
+#[test]
+fn local_batch_splices_destinations_without_changing_used() {
+    for destination in [&[][..], &[3][..], &[3, 4, 5][..]] {
+        let mut fixture = SyntheticPage::new(4);
+        // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: all page metadata and
+        // encoded links are confined to the stable synthetic fixture.
+        unsafe {
+            fixture.link(&[0, 1, 2]);
+            fixture.link(destination);
+            fixture
+                .page
+                .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+            let available = match destination.first() {
+                Some(&head) => AvailableFreeList::from_head(fixture.block(head)),
+                None => AvailableFreeList::empty(),
+            };
+            let owner = LocalPage::new_unchecked(fixture.page);
+            let batch = owner
+                .detach_local_free_batch()
+                .expect("valid local chain")
+                .expect("nonempty local chain");
+            assert!(fixture.page.local_free().is_empty());
+            let available = batch.prepend_to_available(&owner, available);
+
+            let mut expected = vec![0, 1, 2];
+            expected.extend_from_slice(destination);
+            assert_eq!(fixture.order_from(available.head()), expected);
+            assert_eq!(fixture.page.used().get(), 4);
+        }
+    }
+}
+
+#[test]
+fn lease_take_and_return_preserve_counted_allocations() {
+    let mut fixture = SyntheticPage::new(2);
+    // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: the available chain and
+    // page accounting are initialized consistently in the synthetic fixture.
+    unsafe {
+        fixture.link(&[0, 1, 2, 3, 4, 5]);
+        fixture
+            .page
+            .set_free(AvailableFreeList::from_head(fixture.block(0)));
+        let available_page = AvailablePage::new_unchecked(fixture.page);
+        let limit = BatchLimit::new(4).expect("nonzero lease limit");
+        let (lease, active) = available_page.lease(limit);
+        assert_eq!(lease.len().get(), 4);
+        assert_eq!(fixture.page.used().get(), 6);
+        assert_eq!(fixture.order_from(fixture.page.free().head()), vec![4, 5]);
+
+        let (first, remaining) = lease.take_one();
+        assert_eq!(first.into_ptr(), fixture.block(0));
+        let (second, remaining) = remaining.expect("three leased blocks remain").take_one();
+        assert_eq!(second.into_ptr(), fixture.block(1));
+        let remaining = remaining.expect("two leased blocks remain");
+        assert_eq!(remaining.len().get(), 2);
+        assert_eq!(fixture.page.used().get(), 6);
+
+        let owner = LocalPage::new_unchecked(active.page());
+        let current = fixture.page.free();
+        let (available, used) = remaining.return_to_available(&owner, current);
+        fixture.page.set_free(available);
+        fixture.page.set_used(used);
+        assert_eq!(fixture.page.used().get(), 4);
+        assert_eq!(
+            fixture.order_from(fixture.page.free().head()),
+            vec![2, 3, 4, 5]
+        );
+    }
+}
+
+#[test]
+fn remote_batch_rejects_length_greater_than_used_without_mutation() {
+    let mut fixture = SyntheticPage::new(2);
+    // SAFETY[AUDIT:typed-page-batch-synthetic-fixtures]: the three-block detached
+    // chain belongs to the fixture page; used is intentionally smaller.
+    unsafe {
+        fixture.link(&[0, 1, 2]);
+        let error = RemoteFreeBatch::from_detached(
+            fixture.page,
+            fixture.block(0),
+            fixture.page.capacity(),
+            fixture.page.used(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            BatchValidationError::ExceedsUsed {
+                len: BatchLen::new(3).expect("nonempty length"),
+                used: UsedBlockCount::new(2),
+            }
+        );
+        assert_eq!(fixture.page.used().get(), 2);
+        let head = fixture.block(0);
+        assert_eq!(fixture.order_from(Some(head)), vec![0, 1, 2]);
+    }
 }

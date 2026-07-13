@@ -96,7 +96,7 @@ fn available_pop_consumes_available_page_witness() {
         let available = active
             .try_available()
             .expect("free head creates available page");
-        let (allocated, next) = AvailableFreeList::pop(available);
+        let (allocated, next) = AvailableFreeList::pop_one(available);
 
         assert_eq!(allocated.as_ptr().as_ptr(), ptr::addr_of_mut!(block));
         assert!(next.is_empty());

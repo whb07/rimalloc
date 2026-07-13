@@ -1,15 +1,17 @@
 use crate::core_types::{
-    AvailableFreeList, BlockPtr, DetachedRemoteList, Errno, LocalFreeList, LocalPage,
-    OwnedAbandonedPage, PagePtr, PublishedRemoteHead,
+    AvailableFreeList, BatchValidationError, BlockPtr, DetachedRemoteList, Errno, LocalFreeList,
+    LocalPage, OwnedAbandonedPage, PagePtr, PublishedRemoteHead,
 };
-use crate::internal::{mi_block_next, mi_block_set_next};
+use crate::internal::mi_block_next;
 use crate::options::_mi_error_message_fmt;
 use crate::types::{mi_block_t, mi_page_t};
 
 #[cfg(test)]
+use crate::internal::mi_block_set_next;
+#[cfg(test)]
 use core::ptr;
 
-use super::{flags, mi_page_capacity_count, mi_page_subtract_used_count, mi_page_used_count};
+use super::{flags, mi_page_used_count};
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
@@ -107,63 +109,16 @@ pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut m
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RemoteListCorruption {
-    ChainTooLong,
-    CountExceedsUsed,
-}
-
-/// # Safety
-/// `page` must be valid, and `remote` must be a detached thread-free list for that page.
 #[inline]
-unsafe fn collect_detached_chain_into_local_raw(
-    page_ptr: PagePtr,
-    remote: DetachedRemoteList,
-    local: LocalFreeList,
-) -> Result<LocalFreeList, RemoteListCorruption> {
-    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let page = page_ptr.as_ptr();
-        let Some(head_block) = remote.head() else {
-            return Ok(local);
-        };
-
-        let capacity = mi_page_capacity_count(page);
-        let max_count = capacity.as_usize();
-        let mut count = 1usize;
-        let head = head_block.as_ptr();
-        let mut last = head;
-        loop {
-            let next = mi_block_next(page, last);
-            if next.is_null() || count > max_count {
-                break;
-            }
-            count += 1;
-            last = next;
+fn report_remote_list_corruption(error: BatchValidationError) -> BatchValidationError {
+    let message = match error {
+        BatchValidationError::ExceedsUsed { .. } => {
+            format_args!("corrupted meta-data in thread-free list\n")
         }
-
-        if count > max_count {
-            _mi_error_message_fmt(Errno::EFAULT, format_args!("corrupted thread-free list\n"));
-            return Err(RemoteListCorruption::ChainTooLong);
-        }
-        let used = mi_page_used_count(page);
-        if count > used.as_usize() {
-            _mi_error_message_fmt(
-                Errno::EFAULT,
-                format_args!("corrupted meta-data in thread-free list\n"),
-            );
-            return Err(RemoteListCorruption::CountExceedsUsed);
-        }
-
-        mi_block_set_next(page, last, local.as_raw());
-        let new_local = LocalFreeList::from_head(head_block);
-        page_ptr.set_local_free(new_local);
-
-        crate::internal::mi_assert_internal!(u16::try_from(count).is_ok());
-        crate::internal::mi_assert_internal!(used.get() >= count as u16);
-        mi_page_subtract_used_count(page, count as u16);
-        Ok(new_local)
-    }
+        _ => format_args!("corrupted thread-free list\n"),
+    };
+    _mi_error_message_fmt(Errno::EFAULT, message);
+    error
 }
 
 /// # Safety
@@ -173,10 +128,14 @@ pub(crate) unsafe fn collect_remote_for_local_page(
     page: &LocalPage,
     detached: DetachedRemoteList,
     local: LocalFreeList,
-) -> Result<LocalFreeList, RemoteListCorruption> {
-    // SAFETY[AUDIT:page-free-list-local-detached-collect]: `LocalPage`
-    // establishes current-thread ownership for the raw collector.
-    unsafe { collect_detached_chain_into_local_raw(page.page(), detached, local) }
+) -> Result<LocalFreeList, BatchValidationError> {
+    // SAFETY[AUDIT:page-free-list-local-detached-collect]: LocalPage and the
+    // detached owner establish page identity and unique collection access.
+    match unsafe { detached.into_batch_for_local(page) } {
+        Ok(None) => Ok(local),
+        Ok(Some(batch)) => Ok(unsafe { batch.collect_into_local_page(page, local) }),
+        Err(error) => Err(report_remote_list_corruption(error)),
+    }
 }
 
 /// # Safety
@@ -186,10 +145,14 @@ pub(crate) unsafe fn collect_remote_for_owned_abandoned_page(
     page: &OwnedAbandonedPage,
     detached: DetachedRemoteList,
     local: LocalFreeList,
-) -> Result<LocalFreeList, RemoteListCorruption> {
-    // SAFETY[AUDIT:page-free-list-abandoned-detached-collect]: owned abandoned
-    // state establishes exclusive collection rights for the raw collector.
-    unsafe { collect_detached_chain_into_local_raw(page.page(), detached, local) }
+) -> Result<LocalFreeList, BatchValidationError> {
+    // SAFETY[AUDIT:page-free-list-abandoned-detached-collect]: claimed
+    // abandoned ownership and the detached owner exclude competing collectors.
+    match unsafe { detached.into_batch_for_abandoned(page) } {
+        Ok(None) => Ok(local),
+        Ok(Some(batch)) => Ok(unsafe { batch.collect_into_owned_abandoned_page(page, local) }),
+        Err(error) => Err(report_remote_list_corruption(error)),
+    }
 }
 
 /// # Safety
@@ -220,7 +183,10 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
     unsafe {
         let page_ptr = page.page();
         let local = page_ptr.local_free();
-        collect_remote_for_local_page(&page, remote, local).unwrap_or(local)
+        match collect_remote_for_local_page(&page, remote, local) {
+            Ok(local) => local,
+            Err(_) => page_ptr.local_free(),
+        }
     }
 }
 
@@ -295,12 +261,19 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
             if available.is_empty() || force {
                 #[cfg(feature = "bench-diagnostics")]
                 let appended = !available.is_empty();
-                let new_available = local.prepend_to_available(local_page, available);
-                page_ptr.set_free(new_available);
-                page_ptr.set_local_free(LocalFreeList::empty());
-                (*page).free_is_zero = false;
-                #[cfg(feature = "bench-diagnostics")]
-                crate::bench_diagnostics::page_free_collect_moved_to_free(appended);
+                match local_page.detach_local_free_batch() {
+                    Ok(Some(batch)) => {
+                        let new_available = batch.prepend_to_available(&local_page, available);
+                        page_ptr.set_free(new_available);
+                        (*page).free_is_zero = false;
+                        #[cfg(feature = "bench-diagnostics")]
+                        crate::bench_diagnostics::page_free_collect_moved_to_free(appended);
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        let _ = report_remote_list_corruption(error);
+                    }
+                }
             } else {
                 #[cfg(feature = "bench-diagnostics")]
                 crate::bench_diagnostics::page_free_collect_noop_local_blocked();
@@ -372,64 +345,6 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn local_prepend_to_available_splices_tail_to_existing_available_list() {
-        let mut blocks = [ptr::null_mut::<mi_block_t>(); 16];
-        // SAFETY[AUDIT:page-free-list-collect-boundary]: this allocates real
-        // allocator-owned blocks so encoded free-list link checks see
-        // registered same-page pointers while exercising only the typed splice.
-        unsafe {
-            for block in &mut blocks {
-                *block = crate::mimalloc::mi_malloc(core::mem::size_of::<mi_block_t>()).cast();
-                assert!(!(*block).is_null());
-            }
-
-            let mut chosen = None;
-            'outer: for i in 0..blocks.len() {
-                let page = crate::internal::_mi_ptr_page(blocks[i].cast());
-                if page.is_null() {
-                    continue;
-                }
-                for j in (i + 1)..blocks.len() {
-                    if crate::internal::_mi_ptr_page(blocks[j].cast()) != page {
-                        continue;
-                    }
-                    for k in (j + 1)..blocks.len() {
-                        if crate::internal::_mi_ptr_page(blocks[k].cast()) == page {
-                            chosen = Some((page, blocks[i], blocks[j], blocks[k]));
-                            break 'outer;
-                        }
-                    }
-                }
-            }
-            let Some((raw_page, local_head, local_tail, available_head)) = chosen else {
-                for block in blocks {
-                    crate::mimalloc::mi_free(block.cast());
-                }
-                panic!("expected three same-page small allocations for free-list splice fixture");
-            };
-
-            let page_ptr = PagePtr::new_unchecked(raw_page);
-            let local_page = crate::core_types::assume_local_page(page_ptr);
-            mi_block_set_next(raw_page, local_head, local_tail);
-            mi_block_set_next(raw_page, local_tail, ptr::null());
-            mi_block_set_next(raw_page, available_head, ptr::null());
-
-            let local = LocalFreeList::from_raw(local_head);
-            let available = AvailableFreeList::from_raw(available_head);
-            let spliced = local.prepend_to_available(local_page, available);
-
-            assert_eq!(spliced.as_raw(), local_head);
-            assert_eq!(mi_block_next(raw_page, local_head), local_tail);
-            assert_eq!(mi_block_next(raw_page, local_tail), available_head);
-            assert!(mi_block_next(raw_page, available_head).is_null());
-
-            for block in blocks {
-                crate::mimalloc::mi_free(block.cast());
-            }
-        }
-    }
 
     #[test]
     fn published_head_detaches_only_its_tail() {

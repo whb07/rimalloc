@@ -6,9 +6,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import statistics
 import subprocess
+import sys
 from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def ratio(numerator: int | None, denominator: int) -> float | None:
@@ -40,6 +45,43 @@ def enrich(record: dict[str, object]) -> None:
     )
 
 
+def build_ld_preload_probe(artifact_dir: Path) -> tuple[Path, Path]:
+    if not sys.platform.startswith("linux"):
+        raise SystemExit("ld-preload-interpose resource evidence requires Linux")
+    cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
+    if cc is None:
+        raise SystemExit("no C compiler found; set CC")
+    environment = {**os.environ, "CARGO_TARGET_DIR": str(artifact_dir)}
+    subprocess.run(
+        [
+            "cargo", "rustc", "--release", "--features", "interpose", "--lib", "--",
+            "--crate-type", "cdylib",
+        ],
+        check=True,
+        cwd=ROOT,
+        env=environment,
+    )
+    libraries = list((artifact_dir / "release").glob("libmechanical_mimalloc*.so"))
+    libraries.extend(
+        (artifact_dir / "release" / "deps").glob("libmechanical_mimalloc*.so")
+    )
+    if not libraries:
+        raise SystemExit("release interpose cdylib was not produced")
+    library = max(libraries, key=lambda path: path.stat().st_mtime)
+    executable = artifact_dir / "release" / "ld_preload_resource_probe"
+    subprocess.run(
+        [
+            cc, "-O2", "-std=c11", "-Wall", "-Wextra", "-Werror", "-pthread",
+            str(ROOT / "benchmarks" / "ld_preload_resource_probe.c"),
+            "-Wl,--no-as-needed", "-lstdc++", "-Wl,--as-needed", "-ldl", "-o",
+            str(executable),
+        ],
+        check=True,
+        cwd=ROOT,
+    )
+    return executable, library
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--artifact-dir", required=True)
@@ -52,18 +94,33 @@ def main() -> None:
     parser.add_argument("--operations", type=int, default=100000)
     parser.add_argument("--live-set", type=int, default=4096)
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--ld-preload", action="store_true")
     args = parser.parse_args()
 
     artifact_dir = Path(args.artifact_dir).resolve()
     target_dir = artifact_dir
     feature_csv = ",".join(sorted(args.features))
-    subprocess.run(
-        ["cargo", "build", "--release", "--features", feature_csv, "--example", "benchmark_probe"],
-        check=True,
-        env={**os.environ, "CARGO_TARGET_DIR": str(target_dir)},
+    preload_library = None
+    if args.ld_preload:
+        if args.artifact_mode != "ld-preload-interpose" or args.features != ["interpose"]:
+            raise SystemExit("--ld-preload requires mode ld-preload-interpose and feature interpose")
+        if args.allocators and args.allocators != ["preloaded-libc"]:
+            raise SystemExit("--ld-preload supports only the preloaded-libc allocator label")
+        executable, preload_library = build_ld_preload_probe(artifact_dir)
+    else:
+        subprocess.run(
+            [
+                "cargo", "build", "--release", "--features", feature_csv,
+                "--example", "benchmark_probe",
+            ],
+            check=True,
+            env={**os.environ, "CARGO_TARGET_DIR": str(target_dir)},
+        )
+        executable = target_dir / "release" / "examples" / "benchmark_probe"
+    allocators = args.allocators or (
+        ["preloaded-libc"] if args.ld_preload else
+        ["mechanical_mimalloc_public", "mechanical_mimalloc_raw", "system"]
     )
-    executable = target_dir / "release" / "examples" / "benchmark_probe"
-    allocators = args.allocators or ["mechanical_mimalloc_public", "mechanical_mimalloc_raw", "system"]
     scenarios = args.scenarios or ["alloc_free", "remote_free_1x1"]
     records: list[dict[str, object]] = []
     for scenario in scenarios:
@@ -82,6 +139,8 @@ def main() -> None:
                     "MIMALLOC_PROBE_THREADS": str(threads),
                     "MIMALLOC_PROBE_LIVE_SET": str(args.live_set),
                 }
+                if preload_library is not None:
+                    environment["LD_PRELOAD"] = str(preload_library)
                 completed = subprocess.run(
                     [str(executable)], check=False, capture_output=True, text=True, env=environment
                 )

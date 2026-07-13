@@ -10,9 +10,10 @@ performance relative to C mimalloc 3.3.2.
 - Use `scripts/check-bench-full.sh` before treating allocator-wide results as
   authoritative.
 - Before a release candidate, run `scripts/check-bench-full.sh` and preserve
-  each mode's `manifest.json`, `environment.txt`, `commands.txt`, `criterion/`,
-  `resource-results.jsonl`, and `threshold-results.csv`, plus the default mode's
-  `evidence-report.json`. Update
+  each mode's `manifest.json`, `environment.txt`, `commands.txt`, and
+  `resource-results.jsonl`; preserve `criterion/` and `threshold-results.csv`
+  for the two Criterion modes, plus the default mode's `evidence-report.json`.
+  Update
   `BENCHMARK_RESULTS.md` with the exact command
   lines, feature flags, artifact modes, Rust/C ratios, and noisy benchmark notes
   for the release commit.
@@ -142,14 +143,22 @@ The native mimalloc-bench Criterion ports support:
 artifact mode:
 
 - Default Rust library mode uses `target/bench-full/default-rust`.
-- `interpose` mode uses `target/bench-full/interpose`.
+- Feature-linked interposition mode uses
+  `target/bench-full/interpose-feature-linked`. This executable directly calls
+  the Rust facade, raw API, and system allocator while the interposition symbols
+  are linked into the process; it is feature-build evidence, not preload evidence.
+- Deployed interposition mode uses `target/bench-full/ld-preload-interpose`. It
+  compiles a neutral C probe that does not link this crate, builds the release
+  interposition cdylib, and reaches it through `LD_PRELOAD` and libc allocation
+  calls. Its allocator label is `preloaded-libc`; no independent system control
+  is claimed inside the preloaded process.
 
 Keep those target directories separate, or override
-`MIMALLOC_BENCH_DEFAULT_TARGET_DIR` and `MIMALLOC_BENCH_INTERPOSE_TARGET_DIR`
-with two different paths. Release reports must label each section with the
-artifact mode and feature set. Rust-vs-C ratios come from the native scenario
-benchmarks in the default Rust library mode, while interpose hot-path evidence
-is reported separately.
+`MIMALLOC_BENCH_DEFAULT_TARGET_DIR`, `MIMALLOC_BENCH_INTERPOSE_TARGET_DIR`, and
+`MIMALLOC_BENCH_PRELOAD_TARGET_DIR` with three different paths. Release reports
+must label each section with the artifact mode and feature set. Rust-vs-C ratios
+come from the native scenario benchmarks in the default Rust library mode,
+while linked-feature and deployed-preload evidence are reported separately.
 
 `benchmarks/thresholds.json` schema 2 keys each baseline by artifact mode and
 feature set and gates both sample median and p95. A release baseline is the

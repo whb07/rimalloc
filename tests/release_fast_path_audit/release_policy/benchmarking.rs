@@ -35,7 +35,7 @@ fn release_candidates_require_full_benchmark_evidence() {
         "resource-results.jsonl",
         "evidence-report.json",
         "threshold-results.csv",
-        "Rust-vs-C ratios come from the native scenario\nbenchmarks in the default Rust library mode",
+        "Rust-vs-C ratios\ncome from the native scenario benchmarks in the default Rust library mode",
     ] {
         assert!(
             performance_md.contains(required),
@@ -46,6 +46,9 @@ fn release_candidates_require_full_benchmark_evidence() {
     for required in [
         "CARGO_TARGET_DIR=\"$default_target_dir\"",
         "CARGO_TARGET_DIR=\"$interpose_target_dir\"",
+        "--artifact-mode ld-preload-interpose",
+        "--ld-preload",
+        "--required-allocator preloaded-libc",
         "--csv-out \"$default_target_dir/threshold-results.csv\"",
         "scripts/check-evidence-report.py --report \"$default_target_dir/evidence-report.json\"",
         "--csv-out \"$interpose_target_dir/threshold-results.csv\"",
@@ -61,7 +64,8 @@ fn release_candidates_require_full_benchmark_evidence() {
     for required in [
         "## Release Candidate Artifact-Mode Evidence",
         "default Rust library",
-        "interpose hot path",
+        "interpose feature-linked hot path",
+        "LD_PRELOAD interpose",
         "Do not reuse Criterion baselines across artifact modes.",
         "Rust-vs-C ratios emitted by `scripts/summarize-criterion.py`",
     ] {

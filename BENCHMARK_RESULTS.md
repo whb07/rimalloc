@@ -30,20 +30,21 @@ scripts/check-bench-full.sh
 scripts/env-info.sh > target/bench-full/environment.txt
 ```
 
-The full benchmark script intentionally writes default Rust-library and
-`interpose` measurements to separate Criterion directories:
+The full benchmark script intentionally separates default Rust-library,
+feature-linked interposition, and deployed preload evidence:
 
-| Artifact mode | Feature set | Criterion directory | Threshold CSV |
-|---|---|---|---|
-| default Rust library | `bench` | `target/bench-full/default-rust/criterion` | `target/bench-full/default-rust/threshold-results.csv` |
-| interpose hot path | `bench interpose` | `target/bench-full/interpose/criterion` | `target/bench-full/interpose/threshold-results.csv` |
+| Artifact mode | Feature set | Evidence path |
+|---|---|---|
+| default Rust library | `bench` | `target/bench-full/default-rust/criterion` and `resource-results.jsonl` |
+| interpose feature-linked hot path | `bench interpose` | `target/bench-full/interpose-feature-linked/criterion` and `resource-results.jsonl` |
+| LD_PRELOAD interpose | `interpose` | `target/bench-full/ld-preload-interpose/resource-results.jsonl` |
 
 Do not reuse Criterion baselines across artifact modes. Report each artifact
 mode under a separate heading with the exact command line and feature set. The
 native scenario section for the default Rust library mode must include the
-Rust-vs-C ratios emitted by `scripts/summarize-criterion.py`; the `interpose`
-section must remain separate and must not be compared against default-mode saved
-baselines.
+Rust-vs-C ratios emitted by `scripts/summarize-criterion.py`; the linked-feature
+and preload sections must remain separate and must not be compared against
+default-mode saved baselines.
 
 ## Per-Release Performance Summary Template
 

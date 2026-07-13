@@ -340,9 +340,9 @@ Before publishing or tagging a release:
 30. Run `scripts/check-valgrind-tracking-parity.py`.
 31. Before a release candidate, run `scripts/check-bench-full.sh`, capture
    `scripts/env-info.sh`, preserve each mode's `manifest.json`,
-   `environment.txt`, `commands.txt`, `criterion/`, `resource-results.jsonl`,
-   and `threshold-results.csv`, preserve the default mode's
-   `evidence-report.json`, and
+   `environment.txt`, `commands.txt`, and `resource-results.jsonl`, preserve
+   `criterion/` and `threshold-results.csv` for the two Criterion modes,
+   preserve the default mode's `evidence-report.json`, and
    update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,
    artifact modes, Rust/C ratios, and noisy-benchmark notes for the release
    commit.

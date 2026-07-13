@@ -13,9 +13,10 @@ export MIMALLOC_BENCH_WARMUP_SECS
 export MIMALLOC_BENCH_ALLOCATORS="${MIMALLOC_BENCH_ALLOCATORS:-mechanical_mimalloc_raw,c-mimalloc-3.3.2}"
 
 default_target_dir="${MIMALLOC_BENCH_DEFAULT_TARGET_DIR:-target/bench-full/default-rust}"
-interpose_target_dir="${MIMALLOC_BENCH_INTERPOSE_TARGET_DIR:-target/bench-full/interpose}"
+interpose_target_dir="${MIMALLOC_BENCH_INTERPOSE_TARGET_DIR:-target/bench-full/interpose-feature-linked}"
+preload_target_dir="${MIMALLOC_BENCH_PRELOAD_TARGET_DIR:-target/bench-full/ld-preload-interpose}"
 
-run scripts/run-bench-clean.sh "$default_target_dir" "$interpose_target_dir"
+run scripts/run-bench-clean.sh "$default_target_dir" "$interpose_target_dir" "$preload_target_dir"
 
 cat >"$default_target_dir/commands.txt" <<EOF
 CARGO_TARGET_DIR=$default_target_dir cargo check --benches --features bench
@@ -30,7 +31,10 @@ EOF
 cat >"$interpose_target_dir/commands.txt" <<EOF
 CARGO_TARGET_DIR=$interpose_target_dir cargo check --benches --features "bench interpose"
 CARGO_TARGET_DIR=$interpose_target_dir cargo bench --features "bench interpose" --bench hotpath
-scripts/run-bench-resources.py --artifact-dir $interpose_target_dir --artifact-mode interpose --feature bench --feature interpose
+scripts/run-bench-resources.py --artifact-dir $interpose_target_dir --artifact-mode interpose-feature-linked --feature bench --feature interpose
+EOF
+cat >"$preload_target_dir/commands.txt" <<EOF
+scripts/run-bench-resources.py --artifact-dir $preload_target_dir --artifact-mode ld-preload-interpose --feature interpose --ld-preload
 EOF
 
 run scripts/write-benchmark-manifest.py \
@@ -40,10 +44,15 @@ run scripts/write-benchmark-manifest.py \
   --commands "$default_target_dir/commands.txt"
 run scripts/write-benchmark-manifest.py \
   --artifact-dir "$interpose_target_dir" \
-  --artifact-mode interpose \
+  --artifact-mode interpose-feature-linked \
   --feature bench \
   --feature interpose \
   --commands "$interpose_target_dir/commands.txt"
+run scripts/write-benchmark-manifest.py \
+  --artifact-dir "$preload_target_dir" \
+  --artifact-mode ld-preload-interpose \
+  --feature interpose \
+  --commands "$preload_target_dir/commands.txt"
 
 run env CARGO_TARGET_DIR="$default_target_dir" cargo check --benches --features bench
 run env CARGO_TARGET_DIR="$interpose_target_dir" cargo check --benches --features "bench interpose"
@@ -75,28 +84,44 @@ run scripts/check-bench-thresholds.py \
   --thresholds benchmarks/thresholds.json \
   --criterion-dir "$interpose_target_dir/criterion" \
   --csv-out "$interpose_target_dir/threshold-results.csv" \
-  --artifact-mode interpose \
+  --artifact-mode interpose-feature-linked \
   --feature bench \
   --feature interpose \
   --allow-no-applicable
 run scripts/run-bench-resources.py \
   --artifact-dir "$interpose_target_dir" \
-  --artifact-mode interpose \
+  --artifact-mode interpose-feature-linked \
   --feature bench \
   --feature interpose \
   --operations "${MIMALLOC_BENCH_RESOURCE_OPERATIONS:-100000}" \
   --repeats "${MIMALLOC_BENCH_RESOURCE_REPEATS:-3}"
 run scripts/check-bench-resources.py \
   --results "$interpose_target_dir/resource-results.jsonl" \
-  --artifact-mode interpose \
+  --artifact-mode interpose-feature-linked \
   --feature bench \
   --feature interpose
+run scripts/run-bench-resources.py \
+  --artifact-dir "$preload_target_dir" \
+  --artifact-mode ld-preload-interpose \
+  --feature interpose \
+  --ld-preload \
+  --operations "${MIMALLOC_BENCH_RESOURCE_OPERATIONS:-100000}" \
+  --repeats "${MIMALLOC_BENCH_RESOURCE_REPEATS:-3}"
+run scripts/check-bench-resources.py \
+  --results "$preload_target_dir/resource-results.jsonl" \
+  --artifact-mode ld-preload-interpose \
+  --feature interpose \
+  --required-allocator preloaded-libc
 run scripts/check-benchmark-manifest.py \
   --artifact-dir "$default_target_dir" \
   --artifact-mode default-rust \
   --feature bench
 run scripts/check-benchmark-manifest.py \
   --artifact-dir "$interpose_target_dir" \
-  --artifact-mode interpose \
+  --artifact-mode interpose-feature-linked \
   --feature bench \
+  --feature interpose
+run scripts/check-benchmark-manifest.py \
+  --artifact-dir "$preload_target_dir" \
+  --artifact-mode ld-preload-interpose \
   --feature interpose

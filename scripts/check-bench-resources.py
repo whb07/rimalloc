@@ -38,6 +38,7 @@ def main() -> None:
     parser.add_argument("--thresholds", default="benchmarks/resource-thresholds.json")
     parser.add_argument("--artifact-mode", required=True)
     parser.add_argument("--feature", action="append", dest="features", required=True)
+    parser.add_argument("--required-allocator", action="append", dest="required_allocators")
     args = parser.parse_args()
     thresholds = json.loads(Path(args.thresholds).read_text(encoding="utf-8"))
     max_cv = float(thresholds["initial_gates"]["max_wall_time_coefficient_of_variation"])
@@ -84,7 +85,7 @@ def main() -> None:
     required = {
         (scenario, allocator)
         for scenario in thresholds["required_scenarios"]
-        for allocator in thresholds["required_allocators"]
+        for allocator in (args.required_allocators or thresholds["required_allocators"])
     }
     missing_records = sorted(required - seen)
     if missing_records:

@@ -10,9 +10,12 @@ import os
 from pathlib import Path
 
 
-REQUIRED = [
+CRITERION_REQUIRED = [
     "environment.txt", "manifest.json", "commands.txt", "criterion",
     "resource-results.jsonl", "threshold-results.csv",
+]
+PRELOAD_REQUIRED = [
+    "environment.txt", "manifest.json", "commands.txt", "resource-results.jsonl",
 ]
 
 
@@ -25,7 +28,12 @@ def main() -> None:
     artifact_dir = Path(args.artifact_dir)
     if artifact_dir.name != args.artifact_mode:
         raise SystemExit("artifact directory name and artifact mode disagree")
-    missing = [name for name in REQUIRED if not (artifact_dir / name).exists()]
+    required = (
+        PRELOAD_REQUIRED
+        if args.artifact_mode == "ld-preload-interpose"
+        else CRITERION_REQUIRED
+    )
+    missing = [name for name in required if not (artifact_dir / name).exists()]
     if args.artifact_mode == "default-rust" and not (artifact_dir / "evidence-report.json").exists():
         missing.append("evidence-report.json")
     if missing:

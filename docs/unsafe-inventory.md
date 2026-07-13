@@ -25,12 +25,12 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 6114 |
-| `unsafe_blocks` | 3608 |
-| `unsafe_fns` | 2071 |
+| `unsafe_mentions` | 6152 |
+| `unsafe_blocks` | 3635 |
+| `unsafe_fns` | 2078 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
-| `unsafe_attrs` | 232 |
+| `unsafe_attrs` | 236 |
 | `global_asm` | 10 |
 
 ## Files
@@ -56,7 +56,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/arena.rs` | 387 | 325 | 52 | 2 | 0 | 0 | 0 |
 | `src/allocator/arena_meta/pages.rs` | 4 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `src/allocator/arena_meta.rs` | 20 | 12 | 8 | 0 | 0 | 0 | 0 |
-| `src/allocator/bench_diagnostics.rs` | 20 | 13 | 3 | 0 | 0 | 4 | 0 |
+| `src/allocator/bench_diagnostics.rs` | 58 | 40 | 10 | 0 | 0 | 8 | 0 |
 | `src/allocator/free/abandoned.rs` | 13 | 6 | 7 | 0 | 0 | 0 | 0 |
 | `src/allocator/free.rs` | 108 | 54 | 47 | 0 | 0 | 3 | 2 |
 | `src/allocator/heap/subproc_heaps.rs` | 12 | 6 | 6 | 0 | 0 | 0 | 0 |

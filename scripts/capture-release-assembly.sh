@@ -117,6 +117,8 @@ capture_symbol() {
 capture_symbol mi_malloc
 capture_symbol mi_malloc_small
 capture_symbol mi_free
+capture_symbol mi_route_free
+capture_symbol mi_free_block_local
 capture_symbol _mi_theap_malloc_zero_ex
 
 printf 'manifest -> %s\n' "$out_dir/manifest.txt"

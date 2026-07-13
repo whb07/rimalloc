@@ -39,6 +39,24 @@ fn benchmark_timed_helpers_do_not_allocate_harness_storage() {
         &remote,
         "fn remote_free_timed_routine<",
     );
+
+    let page_batch =
+        std::fs::read_to_string("benches/page_batch.rs").expect("read page-batch benchmark");
+    assert_timed_helper_has_no_harness_allocation(
+        "benches/page_batch.rs",
+        &page_batch,
+        "fn measure_prepared_transition(",
+    );
+    assert!(
+        page_batch.contains("const LENGTHS: &[usize] = &[1, 8, 32, 128];")
+            && page_batch.contains("[(\"empty\", 0), (\"nonempty\", 3)]")
+            && page_batch.contains("fixture.prepare();\n        let start = Instant::now();")
+            && page_batch.contains("forced_page_free_collect")
+            && page_batch.contains("local_to_available")
+            && page_batch.contains("detached_remote")
+            && page_batch.contains("secure_encoded"),
+        "Stage 3 slow-path cases and out-of-timer preparation must remain explicit"
+    );
 }
 
 #[test]

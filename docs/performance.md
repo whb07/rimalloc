@@ -107,6 +107,20 @@ Do not compare Criterion's saved baseline across those two modes. Use the
 artifact-specific clean directories created by `run-bench-clean.sh`; never
 copy or reuse `criterion/` data between default and interposition measurements.
 
+Stage 3 page-batch slow paths use opaque fixtures whose list setup is excluded
+from timing. Run both default and secure encoded-link modes:
+
+```sh
+cargo bench --features "bench bench-diagnostics" --bench page_batch
+cargo bench --features "bench bench-diagnostics secure" --bench page_batch
+```
+
+The suite covers forced page-free collection, local-to-available and detached
+remote collection at lengths 1, 8, 32, and 128, and empty/nonempty destination
+lists. The forced-collector case includes the feature's fixed relaxed-counter
+update, so compare it only against runs with the same feature set; production
+fast-path equivalence is established separately by release assembly capture.
+
 The native mimalloc-bench Criterion ports support:
 
 - `MIMALLOC_BENCH_SCENARIOS`

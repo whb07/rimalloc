@@ -68,3 +68,14 @@ pub mod mimalloc {
 }
 
 pub use mimalloc::*;
+
+/// Benchmark-only opaque fixture exports. These are excluded from normal
+/// builds and are not part of the supported allocator facade.
+#[cfg(feature = "bench-diagnostics")]
+#[doc(hidden)]
+pub mod bench_diagnostics {
+    pub use crate::allocator::bench_diagnostics::{
+        mi_bench_page_batch_fixture_destroy, mi_bench_page_batch_fixture_new,
+        mi_bench_page_batch_fixture_prepare, mi_bench_page_batch_fixture_run,
+    };
+}

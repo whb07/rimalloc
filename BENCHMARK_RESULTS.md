@@ -636,3 +636,35 @@ To reduce system noise and ensure statistical significance, each test was execut
 
 ## Conclusion
 The Rust translation continues to demonstrate functional and performance parity with the original C mimalloc. Across the 19 benchmarks (including the newly enabled redis and rocksdb), Rust is faster or within measurement noise in 9 cases and slower in 10, with the largest single gain being a 19 % improvement in `sh6benchN`. All differences remain within a few percent, confirming the mechanical translation preserves the allocator’s extreme performance characteristics.
+
+## Stage 3 Page-Batch Evidence
+
+**Date Generated:** 2026-07-13
+
+**Before Baseline:** Stage 2 commit `e80ba10`
+
+**After Baseline:** Stage 3 working tree
+
+The targeted Criterion smoke suite passed in both default and secure encoded
+free-list modes. It covers forced page-free collection and local/remote batch
+transitions at lengths 1, 8, 32, and 128 with empty and nonempty destinations.
+Fixture preparation and restoration occur before each `Instant::now()` timed
+region.
+
+Release assembly was captured with `scripts/capture-release-assembly.sh` into
+`target/stage3-assembly/{before,after}`. After normalizing only linked image
+addresses and RIP-relative layout displacements, these instruction sequences
+were identical:
+
+| Symbol | Instructions | Result |
+|---|---:|---|
+| `mi_malloc` | 52 | equivalent |
+| `mi_malloc_small` | 49 | equivalent |
+| `mi_free` | 11 | equivalent |
+| `mi_route_free` | 176 | equivalent |
+| `mi_free_block_local` | 65 | equivalent |
+| `_mi_theap_malloc_zero_ex` | 71 | equivalent |
+
+Capturing `mi_route_free` and `mi_free_block_local` makes the inlined local-free
+and remote-CAS paths explicit; the exported `mi_free` symbol itself is only a
+tail jump to the route function in this release build.

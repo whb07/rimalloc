@@ -1914,6 +1914,18 @@ Operation IDs:
   into local storage, derive bounded fixed-page used and capacity totals, and
   write those totals to caller-provided storage. Tests cover null rejection and
   valid local outputs while checking that used bytes never exceed capacity.
+- `SAFETY[AUDIT:bench-page-batch-fixture]`:
+  `src/allocator/bench_diagnostics.rs` owns allocator-backed synthetic page and
+  block storage used to prepare bounded local, remote, and forced-collection
+  transitions entirely outside benchmark timed regions.
+- `SAFETY[AUDIT:bench-page-batch-transition]`:
+  `src/allocator/bench_diagnostics.rs` runs prepared forced, local-splice, and
+  detached-remote transitions with exclusive synthetic page ownership and
+  page-local encoded links.
+- `SAFETY[AUDIT:bench-page-batch-ffi]`:
+  `src/allocator/bench_diagnostics.rs` validates constructor scalar bounds,
+  rejects null operation handles, requires live unique handles for non-null
+  operations, and releases each backing allocation exactly once.
 - `SAFETY[AUDIT:arena-id-raw-shims]`: `src/allocator/arena/ids.rs` owns raw
   arena-id ABI shims. Unsafe operations are limited to null arena-id sentinel
   handling, top-level arena checks, C helper retention, and typed arena-id

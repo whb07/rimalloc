@@ -17,6 +17,12 @@ run env \
   CARGO_TARGET_DIR="$target_dir" \
   cargo bench --features bench --bench hotpath -- hotpath/paired_alloc_free/mechanical_mimalloc_public/16
 
+run env CARGO_TARGET_DIR="$target_dir" \
+  cargo bench --features "bench bench-diagnostics" --bench page_batch -- --test
+
+run env CARGO_TARGET_DIR="$target_dir" \
+  cargo bench --features "bench bench-diagnostics secure" --bench page_batch -- --test
+
 run env \
   MIMALLOC_BENCH_SCENARIOS="${MIMALLOC_BENCH_SCENARIOS:-glibc-thread,malloc-large,cache-scratch1,xmalloc-testN}" \
   MIMALLOC_BENCH_ALLOCATORS="${MIMALLOC_BENCH_ALLOCATORS:-mechanical_mimalloc_raw,c-mimalloc-3.3.2}" \

@@ -188,6 +188,12 @@ path = "benches/evidence.rs"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "page_batch"
+path = "benches/page_batch.rs"
+harness = false
+required-features = ["bench", "bench-diagnostics"]
+
 [[example]]
 name = "aligned"
 path = "examples/aligned.rs"

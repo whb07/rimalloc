@@ -34,7 +34,7 @@ pub(super) fn assert_typed_allocation_helpers(sources: &UnsafePerformanceSources
             && alloc_rs.contains("let padded = crate::core_types::PaddedSize::new_unchecked(size);")
             && alloc_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
-            && alloc_rs.contains("let Some(available) = active.available() else {")
+            && alloc_rs.contains("let Ok(available) = active.try_available() else {")
             && alloc_rs.contains("_mi_page_malloc_zero_typed(theap, available, padded, zeroed, ptr::null_mut())")
             && page_rs.contains(
                 "crate::core_types::Zeroed::from_bool(zero),\n            ptr::null_mut(),"
@@ -48,7 +48,7 @@ pub(super) fn assert_typed_allocation_helpers(sources: &UnsafePerformanceSources
                 "let page =\n            unsafe { crate::internal::_mi_theap_get_free_small_page_typed(local_theap, padded) };"
             )
             && alloc_aligned_rs.contains(
-                "let available = unsafe { active.available().unwrap_unchecked() };"
+                "let available = unsafe { active.try_available().unwrap_unchecked() };"
             )
             && alloc_aligned_rs.contains(
                 "_mi_page_malloc_zero_typed(\n                        theap,\n                        available,\n                        padded,"

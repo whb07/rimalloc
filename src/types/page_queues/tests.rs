@@ -110,7 +110,7 @@ fn queued_normal_page_requires_page_linked_in_normal_queue() {
         // SAFETY[AUDIT:typed-page-queue-membership-test-fixtures]: the active page and
         // normal queue witnesses come from the linked stack-local fixture.
         let queued =
-            unsafe { QueuedPage::<NormalQueue>::new(active, normal) }.expect("linked page");
+            unsafe { QueuedPage::<NormalQueue>::try_queue(active, normal) }.expect("linked page");
         assert_eq!(queued.page().as_ptr(), page.as_ptr());
         assert_eq!(queued.queue().ptr.as_ptr(), queue.as_ptr());
     });
@@ -120,7 +120,9 @@ fn queued_normal_page_requires_page_linked_in_normal_queue() {
         // stack-local page unlinked to exercise queued-page rejection.
         let active = unsafe { crate::core_types::ActivePage::new_unchecked(page) };
         let normal = unsafe { NormalPageQueue::new(queue) }.expect("normal queue");
-        assert!(unsafe { QueuedPage::<NormalQueue>::new(active, normal) }.is_none());
+        let active = unsafe { QueuedPage::<NormalQueue>::try_queue(active, normal) }
+            .expect_err("unlinked page is returned");
+        assert_eq!(active.page().as_ptr(), page.as_ptr());
     });
 
     with_page_in_queue(64, true, |page, queue| {
@@ -135,7 +137,7 @@ fn queued_normal_page_requires_page_linked_in_normal_queue() {
         // normal queued-page rejection.
         let active = unsafe { crate::core_types::ActivePage::new_unchecked(page) };
         let normal = unsafe { NormalPageQueue::new(queue) }.expect("normal queue");
-        assert!(unsafe { QueuedPage::<NormalQueue>::new(active, normal) }.is_none());
+        assert!(unsafe { QueuedPage::<NormalQueue>::try_queue(active, normal) }.is_err());
     });
 
     with_page_in_queue_with_page_block_size(64, 128, true, |page, queue| {
@@ -143,7 +145,7 @@ fn queued_normal_page_requires_page_linked_in_normal_queue() {
         // stack-local page whose block size intentionally mismatches the queue.
         let active = unsafe { crate::core_types::ActivePage::new_unchecked(page) };
         let normal = unsafe { NormalPageQueue::new(queue) }.expect("normal queue");
-        assert!(unsafe { QueuedPage::<NormalQueue>::new(active, normal) }.is_none());
+        assert!(unsafe { QueuedPage::<NormalQueue>::try_queue(active, normal) }.is_err());
     });
 
     let huge_size = crate::types::MI_LARGE_MAX_OBJ_SIZE + size_of::<usize>();
@@ -161,7 +163,8 @@ fn queued_normal_page_requires_page_linked_in_normal_queue() {
         // stack-local huge-page edge-case fixture above.
         let active = unsafe { crate::core_types::ActivePage::new_unchecked(page) };
         let normal = unsafe { NormalPageQueue::new_unchecked(queue) };
-        let queued = unsafe { QueuedPage::<NormalQueue>::new(active, normal) }.expect("huge page");
+        let queued =
+            unsafe { QueuedPage::<NormalQueue>::try_queue(active, normal) }.expect("huge page");
         assert_eq!(queued.page().as_ptr(), page.as_ptr());
         assert_eq!(queued.queue().ptr.as_ptr(), queue.as_ptr());
     });
@@ -184,8 +187,8 @@ fn queued_full_page_requires_page_linked_in_full_queue() {
         let full_queue = unsafe { FullPageQueue::new(queue) }.expect("full queue");
         // SAFETY[AUDIT:typed-page-queue-membership-test-fixtures]: the linked full-page
         // and full-queue witnesses satisfy queued full-page construction.
-        let queued =
-            unsafe { QueuedPage::<FullQueue>::new(full_page, full_queue) }.expect("linked page");
+        let queued = unsafe { QueuedPage::<FullQueue>::try_queue_full(full_page, full_queue) }
+            .expect("linked page");
         assert_eq!(queued.page().as_ptr(), page.as_ptr());
         assert_eq!(queued.queue().ptr.as_ptr(), queue.as_ptr());
     });
@@ -201,7 +204,9 @@ fn queued_full_page_requires_page_linked_in_full_queue() {
         // fixture above.
         let full_page = unsafe { crate::core_types::FullPage::new_unchecked(page) };
         let full_queue = unsafe { FullPageQueue::new(queue) }.expect("full queue");
-        assert!(unsafe { QueuedPage::<FullQueue>::new(full_page, full_queue) }.is_none());
+        let full_page = unsafe { QueuedPage::<FullQueue>::try_queue_full(full_page, full_queue) }
+            .expect_err("unlinked full page is returned");
+        assert_eq!(full_page.page().as_ptr(), page.as_ptr());
     });
 
     with_page_in_queue(full_size, true, |page, queue| {
@@ -209,6 +214,6 @@ fn queued_full_page_requires_page_linked_in_full_queue() {
         // page into a full queue but intentionally omits the full-queue flag.
         let full_page = unsafe { crate::core_types::FullPage::new_unchecked(page) };
         let full_queue = unsafe { FullPageQueue::new(queue) }.expect("full queue");
-        assert!(unsafe { QueuedPage::<FullQueue>::new(full_page, full_queue) }.is_none());
+        assert!(unsafe { QueuedPage::<FullQueue>::try_queue_full(full_page, full_queue) }.is_err());
     });
 }

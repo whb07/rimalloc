@@ -102,7 +102,7 @@ pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut m
         let remote = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(head));
         let local = page_ptr.local_free();
         let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
-        let _ = mi_page_thread_collect_to_local_typed(owned_page, remote, local);
+        let _ = mi_page_thread_collect_to_local_typed(&owned_page, remote, local);
     }
 }
 
@@ -110,7 +110,7 @@ pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut m
 /// `page` must be valid, and `remote` must be a detached thread-free list for that page.
 #[inline]
 pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
-    page: OwnedAbandonedPage,
+    page: &OwnedAbandonedPage,
     remote: RemoteFreeList,
     local: LocalFreeList,
 ) -> LocalFreeList {
@@ -189,7 +189,7 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
         let page_ptr = page.page();
         let local = page_ptr.local_free();
         let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
-        mi_page_thread_collect_to_local_typed(owned_page, remote, local)
+        mi_page_thread_collect_to_local_typed(&owned_page, remote, local)
     }
 }
 
@@ -314,7 +314,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             let remote_tail = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(next));
             let local = page_ptr.local_free();
             let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
-            let _ = mi_page_thread_collect_to_local_typed(owned_page, remote_tail, local);
+            let _ = mi_page_thread_collect_to_local_typed(&owned_page, remote_tail, local);
             if !page_ptr.local_free().is_empty() && page_ptr.free().is_empty() {
                 let available = page_ptr.free();
                 let local = page_ptr.local_free();

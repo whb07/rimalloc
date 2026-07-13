@@ -233,7 +233,7 @@ pub(crate) unsafe extern "C" fn _mi_page_malloc_zero(
         let active = crate::core_types::ActivePage::new_unchecked(
             crate::core_types::PagePtr::new_unchecked(page),
         );
-        let Some(available) = active.available() else {
+        let Ok(available) = active.try_available() else {
             return mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, ptr::null_mut());
         };
         _mi_page_malloc_zero_typed(theap, available, padded, zeroed, ptr::null_mut())
@@ -283,7 +283,7 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
         let active = crate::core_types::ActivePage::new_unchecked(
             crate::core_types::PagePtr::new_unchecked(page),
         );
-        let p = if let Some(available) = active.available() {
+        let p = if let Ok(available) = active.try_available() {
             _mi_page_malloc_zero_typed(theap, available, padded, zeroed, usable)
         } else {
             mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, usable)

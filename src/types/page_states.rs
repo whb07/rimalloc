@@ -3,6 +3,8 @@
 use super::ptr::{PagePtr, ThreadHeapPtr};
 use core::marker::PhantomData;
 
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct Page<S> {
     ptr: PagePtr,
     _state: PhantomData<S>,
@@ -38,52 +40,69 @@ impl Page<Uninit> {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum Uninit {}
+#[derive(Debug)]
 pub(crate) enum Active {}
+#[derive(Debug)]
 pub(crate) enum Full {}
+#[derive(Debug)]
 pub(crate) enum Retired {}
+#[derive(Debug)]
 pub(crate) enum Abandoned {}
+#[derive(Debug)]
 pub(crate) enum AbandonedMapped {}
+#[derive(Debug)]
 pub(crate) enum Destroyed {}
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct ActivePage(PagePtr);
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct FullPage(PagePtr);
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct RetiredPage(PagePtr);
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct AvailablePage(PagePtr);
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct LocalPage(PagePtr);
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct ForeignPage(PagePtr);
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct AbandonedPageType(PagePtr);
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct AbandonedMappedPageType(PagePtr);
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct OwnedAbandonedPage(PagePtr);
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct DestroyedPage(PagePtr);
 
 macro_rules! impl_page_witness {
@@ -100,7 +119,7 @@ macro_rules! impl_page_witness {
             }
 
             #[inline(always)]
-            pub(crate) fn page(self) -> PagePtr {
+            pub(crate) fn page(&self) -> PagePtr {
                 self.0
             }
         }
@@ -148,6 +167,8 @@ impl_page_witness!(
     "`page` must have completed the transition to destroyed/free-to-arena state."
 );
 
+#[derive(Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct AllFreePage<S> {
     page: Page<S>,
 }
@@ -195,21 +216,21 @@ impl ActivePage {
     #[inline(always)]
     // SAFETY[AUDIT:typed-page-active-transition-boundary]: callers hold an active page
     // witness and may inspect the page-local free-list head.
-    pub(crate) unsafe fn available(self) -> Option<AvailablePage> {
+    pub(crate) unsafe fn try_available(self) -> Result<AvailablePage, ActivePage> {
         let page = self.page();
         // SAFETY[AUDIT:typed-page-active-transition-boundary]: active page metadata is live;
         // a null free head means there is no available block witness.
         if unsafe { page.free_raw().is_null() } {
-            None
+            Err(self)
         } else {
             // SAFETY[AUDIT:typed-page-active-transition-boundary]: a non-null free head
             // proves at least one available block for this active page.
-            Some(unsafe { AvailablePage::new_unchecked(page) })
+            Ok(unsafe { AvailablePage::new_unchecked(page) })
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn to_full(
+    pub(crate) unsafe fn into_full(
         self,
         from: crate::core_types::NormalPageQueue,
         to: crate::core_types::FullPageQueue,
@@ -225,7 +246,7 @@ impl ActivePage {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn mark_all_free(self) -> Option<AllFreePage<Active>> {
+    pub(crate) unsafe fn try_mark_all_free(self) -> Result<AllFreePage<Active>, ActivePage> {
         let page = self.page();
         // SAFETY[AUDIT:typed-page-active-transition-boundary]: active page metadata is live
         // and the used count determines the all-free witness.
@@ -233,21 +254,21 @@ impl ActivePage {
         if used == 0 {
             // SAFETY[AUDIT:typed-page-active-transition-boundary]: zero used blocks proves
             // the active all-free page witness.
-            Some(unsafe { AllFreePage::active_unchecked(self) })
+            Ok(unsafe { AllFreePage::active_unchecked(self) })
         } else {
-            None
+            Err(self)
         }
     }
 
     #[inline(always)]
-    pub(crate) fn for_abandon(self) -> PageForAbandon {
+    pub(crate) fn into_abandon_candidate(self) -> PageForAbandon {
         PageForAbandon::Active(self)
     }
 }
 
 impl FullPage {
     #[inline(always)]
-    pub(crate) unsafe fn mark_all_free(self) -> Option<AllFreePage<Full>> {
+    pub(crate) unsafe fn try_mark_all_free(self) -> Result<AllFreePage<Full>, FullPage> {
         let page = self.page();
         // SAFETY[AUDIT:typed-page-full-transition-boundary]: full page metadata is live
         // and the used count determines the all-free witness.
@@ -255,14 +276,14 @@ impl FullPage {
         if used == 0 {
             // SAFETY[AUDIT:typed-page-full-transition-boundary]: zero used blocks proves
             // the full all-free page witness.
-            Some(unsafe { AllFreePage::full_unchecked(self) })
+            Ok(unsafe { AllFreePage::full_unchecked(self) })
         } else {
-            None
+            Err(self)
         }
     }
 
     #[inline(always)]
-    pub(crate) fn for_abandon(self) -> PageForAbandon {
+    pub(crate) fn into_abandon_candidate(self) -> PageForAbandon {
         PageForAbandon::Full(self)
     }
 }
@@ -305,7 +326,7 @@ impl LocalPage {
         // SAFETY[AUDIT:typed-page-local-free-push-boundary]: pushing the block
         // updates only the page-local encoded free-list link for this local
         // page.
-        let new_local = unsafe { local.push(self, block) };
+        let new_local = unsafe { local.push(&self, block) };
         // SAFETY[AUDIT:typed-page-local-free-push-boundary]: after pushing one
         // block to the local free list, local_free and used are updated
         // together to preserve page accounting.
@@ -320,7 +341,7 @@ impl LocalPage {
 
 impl AllFreePage<Active> {
     #[inline(always)]
-    pub(crate) fn retire(self) -> RetiredPage {
+    pub(crate) fn into_retired(self) -> RetiredPage {
         // SAFETY[AUDIT:typed-page-retire-destroy-boundary]: an active all-free page can
         // enter the retired countdown state for the same page pointer.
         unsafe { RetiredPage::new_unchecked(self.page()) }
@@ -345,7 +366,9 @@ impl RetiredPage {
 
 impl AbandonedPageType {
     #[inline(always)]
-    pub(crate) unsafe fn claim_ownership(self) -> Option<OwnedAbandonedPage> {
+    pub(crate) unsafe fn try_claim_ownership(
+        self,
+    ) -> Result<OwnedAbandonedPage, AbandonedPageType> {
         let page = self.page();
         // SAFETY[AUDIT:typed-page-abandoned-claim-boundary]: abandoned page metadata is
         // live and owns the atomic thread-free cell used for claiming.
@@ -353,9 +376,9 @@ impl AbandonedPageType {
         if unsafe { atomic.claim_acq_rel() } {
             // SAFETY[AUDIT:typed-page-abandoned-claim-boundary]: a successful claim owns
             // the abandoned page for reclaim or reabandon.
-            Some(unsafe { OwnedAbandonedPage::new_unchecked(page) })
+            Ok(unsafe { OwnedAbandonedPage::new_unchecked(page) })
         } else {
-            None
+            Err(self)
         }
     }
 
@@ -378,31 +401,31 @@ impl AbandonedMappedPageType {
 
 impl OwnedAbandonedPage {
     #[inline(always)]
-    pub(crate) fn mark_all_free(self) -> Option<AllFreePage<Abandoned>> {
+    pub(crate) fn try_mark_all_free(self) -> Result<AllFreePage<Abandoned>, OwnedAbandonedPage> {
         let page = self.page();
         // SAFETY[AUDIT:typed-page-abandoned-reclaim-boundary]: owned abandoned
         // page metadata is live and its used count determines the all-free witness.
         if unsafe { page.used().get() == 0 } {
-            Some(AllFreePage {
+            Ok(AllFreePage {
                 page: Page {
                     ptr: page,
                     _state: PhantomData,
                 },
             })
         } else {
-            None
+            Err(self)
         }
     }
 
     #[inline(always)]
-    pub(crate) fn reclaim(self, _target: ThreadHeapLocal) -> ActivePage {
+    pub(crate) fn into_reclaimed(self, _target: ThreadHeapLocal) -> ActivePage {
         // SAFETY[AUDIT:typed-page-abandoned-reclaim-boundary]: ownership has been claimed
         // and the target local thread heap reclaims this page as active.
         unsafe { ActivePage::new_unchecked(self.page()) }
     }
 
     #[inline(always)]
-    pub(crate) fn reabandon_to_mapped(self) -> AbandonedMappedPageType {
+    pub(crate) fn into_mapped_abandoned(self) -> AbandonedMappedPageType {
         // SAFETY[AUDIT:typed-page-abandoned-reclaim-boundary]: the owned abandoned page is
         // being returned to mapped abandoned state.
         unsafe { AbandonedMappedPageType::new_unchecked(self.page()) }
@@ -425,6 +448,7 @@ impl AllFreePage<Full> {
     }
 }
 
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) enum PageFreeOwner {
     Local(LocalPage),
     Foreign(ForeignPage),
@@ -432,12 +456,13 @@ pub(crate) enum PageFreeOwner {
     AbandonedMapped(AbandonedMappedPageType),
 }
 
-#[derive(Clone, Copy)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) enum PageForAbandon {
     Active(ActivePage),
     Full(FullPage),
 }
 
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) enum PageAbandonOutcome {
     Abandoned(AbandonedPageType),
     Destroyed(DestroyedPage),
@@ -557,9 +582,9 @@ pub(super) fn __lint_touch() {
     let _ = retired.expire();
     // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic abandoned
     // witness is used only to keep remote-free and function-item APIs live.
+    let _ = AbandonedPageType::try_claim_ownership
+        as unsafe fn(AbandonedPageType) -> Result<OwnedAbandonedPage, AbandonedPageType>;
     let abandoned = unsafe { AbandonedPageType::new_unchecked(page) };
-    let _ = AbandonedPageType::claim_ownership
-        as unsafe fn(AbandonedPageType) -> Option<OwnedAbandonedPage>;
     let _ = abandoned.remote_free_page();
     // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic mapped
     // abandoned witness is not dereferenced.
@@ -568,7 +593,7 @@ pub(super) fn __lint_touch() {
     // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic owned
     // abandoned witness is used only for transition API reachability.
     let owned = unsafe { OwnedAbandonedPage::new_unchecked(page) };
-    let _ = owned.reabandon_to_mapped();
+    let _ = owned.into_mapped_abandoned();
 
     if let PageFreeOwner::Local(local) =
         // SAFETY[AUDIT:typed-page-state-lint-fixtures]: the synthetic page is
@@ -584,6 +609,7 @@ pub(super) fn __lint_touch() {
     {
         let _ = foreign.page();
     }
+    let abandoned = unsafe { AbandonedPageType::new_unchecked(page) };
     if let PageAbandonOutcome::Abandoned(abandoned) = PageAbandonOutcome::Abandoned(abandoned) {
         let _ = abandoned.page();
     }

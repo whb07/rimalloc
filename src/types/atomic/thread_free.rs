@@ -56,7 +56,7 @@ impl RemoteFreeList {
     #[inline]
     pub(crate) unsafe fn collect_into_local(
         self,
-        page: OwnedAbandonedPage,
+        page: &OwnedAbandonedPage,
         local: LocalFreeList,
     ) -> LocalFreeList {
         // SAFETY[AUDIT:typed-atomic-thread-free]: the caller supplies the owned

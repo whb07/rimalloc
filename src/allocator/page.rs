@@ -150,12 +150,17 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
         let pq = mi_theap_page_queue_of(theap, page);
         mi_page_set_in_full(page, true);
         let from = crate::core_types::FullPageQueue::new_unchecked(pqfull);
-        let Some(queued) =
-            crate::core_types::QueuedPage::<crate::core_types::FullQueue>::new(page_wrapper, from)
-        else {
-            crate::internal::mi_assert_internal!(false);
-            return crate::core_types::ActivePage::new_unchecked(page_wrapper.page());
-        };
+        let queued =
+            match crate::core_types::QueuedPage::<crate::core_types::FullQueue>::try_queue_full(
+                page_wrapper,
+                from,
+            ) {
+                Ok(queued) => queued,
+                Err(page_wrapper) => {
+                    crate::internal::mi_assert_internal!(false);
+                    return crate::core_types::ActivePage::new_unchecked(page_wrapper.page());
+                }
+            };
         let to = crate::core_types::NormalPageQueue::new_unchecked(
             crate::core_types::PageQueuePtr::new_unchecked(pq),
         );
@@ -177,13 +182,13 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
                 crate::core_types::PagePtr::new_unchecked(page),
             );
             let _ = _mi_page_abandon_internal(
-                active.for_abandon(),
+                active.into_abandon_candidate(),
                 crate::core_types::PageQueuePtr::new_unchecked(pq),
             );
         } else if !mi_page_is_in_full(page) {
             let full = ThreadHeapPtr::new_unchecked(theap)
                 .page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
-            mi_page_move_to_full_typed(
+            let _ = mi_page_move_to_full_typed(
                 crate::core_types::ActivePage::new_unchecked(
                     crate::core_types::PagePtr::new_unchecked(page),
                 ),
@@ -204,7 +209,7 @@ unsafe fn mi_page_move_to_full_typed(
     to: crate::core_types::FullPageQueue,
 ) -> crate::core_types::FullPage {
     // SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
-    unsafe { page.to_full(from, to) }
+    unsafe { page.into_full(from, to) }
 }
 
 #[inline]
@@ -230,7 +235,7 @@ pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_
             let full = crate::core_types::FullPage::new_unchecked(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
-            let Some(all_free) = full.mark_all_free() else {
+            let Ok(all_free) = full.try_mark_all_free() else {
                 crate::internal::mi_assert_internal!(false);
                 return;
             };
@@ -244,34 +249,28 @@ pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_
         let active = crate::core_types::ActivePage::new_unchecked(
             crate::core_types::PagePtr::new_unchecked(page),
         );
-        let Some(queued) =
-            crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new(active, queue)
-        else {
+        let Ok(all_free) = active.try_mark_all_free() else {
             crate::internal::mi_assert_internal!(false);
             return;
         };
-        let Some(all_free) = active.mark_all_free() else {
-            crate::internal::mi_assert_internal!(false);
-            return;
-        };
-        let _ = _mi_page_free_active_internal(all_free, queued);
+        let _ = _mi_page_free_active_internal(all_free, queue);
     }
 }
 
 pub(crate) unsafe fn _mi_page_free_active_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
-    queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
+    queue: crate::core_types::NormalPageQueue,
 ) -> crate::core_types::DestroyedPage {
     // SAFETY[AUDIT:page-queue-free-release-boundary]: all-free pages are removed from queues before arena release.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
-        crate::internal::mi_assert_internal!(queued.page().as_ptr() == page);
+        crate::internal::mi_assert_internal!(mi_page_queue_contains(queue.ptr().as_ptr(), page));
         crate::internal::mi_assert_expensive!(_mi_page_is_valid(page));
         crate::internal::mi_assert_internal!(mi_page_all_free(page));
 
         mi_page_set_has_interior_pointers(page_wrapper.page(), false);
-        let _ = queued.remove();
+        mi_page_queue_remove_raw(queue.ptr().as_ptr(), page);
 
         _mi_page_free_after_remove(page_wrapper)
     }
@@ -292,8 +291,10 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
 
         mi_page_set_has_interior_pointers(page_wrapper.page(), false);
         let full = crate::core_types::FullPage::new_unchecked(page_wrapper.page());
-        let Some(queued) =
-            crate::core_types::QueuedPage::<crate::core_types::FullQueue>::new(full, queue)
+        let Ok(queued) =
+            crate::core_types::QueuedPage::<crate::core_types::FullQueue>::try_queue_full(
+                full, queue,
+            )
         else {
             crate::internal::mi_assert_internal!(false);
             mi_page_queue_remove_raw(pq, page);
@@ -331,7 +332,7 @@ pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
         let active = crate::core_types::ActivePage::new_unchecked(
             crate::core_types::PagePtr::new_unchecked(page),
         );
-        let Some(all_free) = active.mark_all_free() else {
+        let Ok(all_free) = active.try_mark_all_free() else {
             crate::internal::mi_assert_internal!(false);
             return;
         };
@@ -368,7 +369,7 @@ pub(crate) unsafe fn _mi_page_retire_internal(
             if MI_STAT > 0 {
                 __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);
             }
-            let retired = page_wrapper.retire();
+            let retired = page_wrapper.into_retired();
             crate::internal::mi_assert_internal!(ptr::eq(retired.page().as_ptr(), page));
             let bsize = mi_page_block_size(page);
             mi_page_set_retire_expire(
@@ -397,17 +398,7 @@ pub(crate) unsafe fn _mi_page_retire_internal(
         let queue = crate::core_types::NormalPageQueue::new_unchecked(
             crate::core_types::PageQueuePtr::new_unchecked(pq),
         );
-        let active = crate::core_types::ActivePage::new_unchecked(page_wrapper.page());
-        let Some(queued) =
-            crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new(active, queue)
-        else {
-            if mi_page_queue_contains(pq, page) {
-                mi_page_queue_remove_raw(pq, page);
-                let _ = _mi_page_free_after_remove(page_wrapper);
-            }
-            return;
-        };
-        let _ = _mi_page_free_active_internal(page_wrapper, queued);
+        let _ = _mi_page_free_active_internal(page_wrapper, queue);
     }
 }
 
@@ -443,24 +434,14 @@ unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLo
                         let active = crate::core_types::ActivePage::new_unchecked(
                             crate::core_types::PagePtr::new_unchecked(page),
                         );
-                        let Some(all_free) = active.mark_all_free() else {
+                        let Ok(all_free) = active.try_mark_all_free() else {
                             crate::internal::mi_assert_internal!(false);
                             continue;
                         };
                         let queue = crate::core_types::NormalPageQueue::new_unchecked(
                             crate::core_types::PageQueuePtr::new_unchecked(pq),
                         );
-                        let active = crate::core_types::ActivePage::new_unchecked(all_free.page());
-                        let Some(queued) = crate::core_types::QueuedPage::<
-                            crate::core_types::NormalQueue,
-                        >::new(active, queue) else {
-                            if mi_page_queue_contains(pq, page) {
-                                mi_page_queue_remove_raw(pq, page);
-                                let _ = _mi_page_free_after_remove(all_free);
-                            }
-                            continue;
-                        };
-                        let _ = _mi_page_free_active_internal(all_free, queued);
+                        let _ = _mi_page_free_active_internal(all_free, queue);
                     } else {
                         if bin < min {
                             min = bin;
@@ -765,9 +746,9 @@ unsafe fn _mi_page_abandon_typed(
     // SAFETY[AUDIT:page-queue-abandon-boundary]: abandon transitions detach active/full pages before arena abandon publication.
     unsafe {
         let page_wrapper = if mi_page_is_in_full(page_ptr.as_ptr()) {
-            crate::core_types::FullPage::new_unchecked(page_ptr).for_abandon()
+            crate::core_types::FullPage::new_unchecked(page_ptr).into_abandon_candidate()
         } else {
-            crate::core_types::ActivePage::new_unchecked(page_ptr).for_abandon()
+            crate::core_types::ActivePage::new_unchecked(page_ptr).into_abandon_candidate()
         };
         _mi_page_abandon_internal(page_wrapper, queue)
     }
@@ -779,7 +760,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
 ) -> crate::core_types::PageAbandonOutcome {
     // SAFETY[AUDIT:page-queue-abandon-boundary]: abandon transitions detach active/full pages before arena abandon publication.
     unsafe {
-        let page_ptr = match page_wrapper {
+        let page_ptr = match &page_wrapper {
             crate::core_types::PageForAbandon::Active(page) => page.page(),
             crate::core_types::PageForAbandon::Full(page) => page.page(),
         };
@@ -789,7 +770,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
         if mi_page_all_free(page) {
             let destroyed = match page_wrapper {
                 crate::core_types::PageForAbandon::Full(page) => {
-                    let Some(all_free) = page.mark_all_free() else {
+                    let Ok(all_free) = page.try_mark_all_free() else {
                         crate::internal::mi_assert_internal!(false);
                         return crate::core_types::PageAbandonOutcome::Abandoned(
                             crate::core_types::AbandonedPage::new_unchecked(page_ptr),
@@ -799,25 +780,16 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
                     _mi_page_free_full_internal(all_free, queue)
                 }
                 crate::core_types::PageForAbandon::Active(page) => {
-                    let Some(all_free) = page.mark_all_free() else {
+                    let Ok(all_free) = page.try_mark_all_free() else {
                         crate::internal::mi_assert_internal!(false);
                         return crate::core_types::PageAbandonOutcome::Abandoned(
                             crate::core_types::AbandonedPage::new_unchecked(page_ptr),
                         );
                     };
                     if let Some(queue) = crate::core_types::NormalPageQueue::new(queue) {
-                        if let Some(queued) = crate::core_types::QueuedPage::<
-                            crate::core_types::NormalQueue,
-                        >::new(page, queue)
-                        {
-                            _mi_page_free_active_internal(all_free, queued)
-                        } else {
-                            crate::internal::mi_assert_internal!(false);
-                            mi_page_queue_remove_raw(pq, page.page().as_ptr());
-                            _mi_page_free_after_remove(all_free)
-                        }
+                        _mi_page_free_active_internal(all_free, queue)
                     } else {
-                        mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                        mi_page_queue_remove_raw(pq, page_ptr.as_ptr());
                         _mi_page_free_after_remove(all_free)
                     }
                 }
@@ -827,14 +799,14 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
             match page_wrapper {
                 crate::core_types::PageForAbandon::Full(page) => {
                     if let Some(queue) = crate::core_types::FullPageQueue::new(queue) {
-                        if let Some(queued) = crate::core_types::QueuedPage::<
+                        match crate::core_types::QueuedPage::<
                             crate::core_types::FullQueue,
-                        >::new(page, queue)
-                        {
-                            let _ = queued.remove();
-                        } else {
-                            crate::internal::mi_assert_internal!(false);
-                            mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                        >::try_queue_full(page, queue) {
+                            Ok(queued) => { let _ = queued.remove(); }
+                            Err(_page) => {
+                                crate::internal::mi_assert_internal!(false);
+                                mi_page_queue_remove_raw(pq, page_ptr.as_ptr());
+                            }
                         }
                     } else {
                         mi_page_queue_remove_raw(pq, page.page().as_ptr());
@@ -842,14 +814,14 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
                 }
                 crate::core_types::PageForAbandon::Active(page) => {
                     if let Some(queue) = crate::core_types::NormalPageQueue::new(queue) {
-                        if let Some(queued) = crate::core_types::QueuedPage::<
+                        match crate::core_types::QueuedPage::<
                             crate::core_types::NormalQueue,
-                        >::new(page, queue)
-                        {
-                            let _ = queued.remove();
-                        } else {
-                            crate::internal::mi_assert_internal!(false);
-                            mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                        >::try_queue(page, queue) {
+                            Ok(queued) => { let _ = queued.remove(); }
+                            Err(_page) => {
+                                crate::internal::mi_assert_internal!(false);
+                                mi_page_queue_remove_raw(pq, page_ptr.as_ptr());
+                            }
                         }
                     } else {
                         mi_page_queue_remove_raw(pq, page.page().as_ptr());
@@ -945,16 +917,17 @@ unsafe fn mi_page_fresh_alloc_typed(
             );
             if mi_page_queue_is_huge(pq) {
                 mi_page_queue_push_raw(theap, pq, page.page().as_ptr());
+                page
             } else {
-                let _ = mi_page_queue_push_typed(
+                mi_page_queue_push_typed(
                     owner,
                     crate::core_types::NormalPageQueue::new_unchecked(
                         crate::core_types::PageQueuePtr::new_unchecked(pq),
                     ),
                     page,
-                );
+                )
+                .into_active()
             }
-            page
         } else {
             crate::core_types::ActivePage::new_unchecked(crate::core_types::PagePtr::new_unchecked(
                 page,
@@ -1151,21 +1124,21 @@ pub(crate) unsafe fn try_reclaim_abandoned(
         let atomic_tf = page_ptr.thread_free_cell();
         let remote = atomic_tf.collect_acq_rel();
         let local = page_ptr.local_free();
-        remote.collect_into_local(page_wrapper, local);
+        remote.collect_into_local(&page_wrapper, local);
 
         _mi_page_free_collect(page, false);
         let pq = mi_theap_page_queue_of(theap, page);
-        mi_page_queue_push_at_end_typed(
+        let queued = mi_page_queue_push_at_end_typed(
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             ),
             crate::core_types::NormalPageQueue::new_unchecked(
                 crate::core_types::PageQueuePtr::new_unchecked(pq),
             ),
-            page_wrapper.reclaim(target),
+            page_wrapper.into_reclaimed(target),
         );
         crate::internal::mi_assert_expensive!(_mi_page_is_valid(page));
-        page_wrapper.reclaim(target)
+        queued.into_active()
     }
 }
 
@@ -1189,7 +1162,7 @@ unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mu
         let wrapper = crate::core_types::OwnedAbandonedPage::new_unchecked(page_ptr);
         let theap_ptr = crate::core_types::ThreadHeapPtr::new_unchecked(theap);
         let theap_wrapper = crate::core_types::ThreadHeapLocal::new_unchecked(theap_ptr);
-        _mi_theap_page_reclaim(wrapper, theap_wrapper);
+        let _ = _mi_theap_page_reclaim(wrapper, theap_wrapper);
     }
 }
 
@@ -1502,11 +1475,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
                         crate::core_types::PagePtr::new_unchecked(page_candidate),
                     );
                     let all_free = crate::core_types::AllFreePage::active_unchecked(active);
-                    let queued =
-                        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
-                            active, queue,
-                        );
-                    let _ = _mi_page_free_active_internal(all_free, queued);
+                    let _ = _mi_page_free_active_internal(all_free, queue);
                     page_candidate = page;
                 } else if mi_page_used_count(page) >= mi_page_used_count(page_candidate)
                     && !mi_page_is_mostly_used(page)
@@ -1566,7 +1535,8 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             if first_try {
                 let page = mi_page_queue_find_free_ex_typed(theap, queue, block_size, false);
                 crate::internal::mi_assert_internal!(
-                    page.is_none_or(|page| mi_page_immediate_available(page.page().as_ptr()))
+                    page.as_ref()
+                        .is_none_or(|page| mi_page_immediate_available(page.page().as_ptr()))
                 );
                 return page;
             }
@@ -1909,7 +1879,7 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
         crate::internal::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
 
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
-        let available = active.available().unwrap_unchecked();
+        let available = active.try_available().unwrap_unchecked();
         let p = _mi_page_malloc_zero_typed(
             theap,
             available,

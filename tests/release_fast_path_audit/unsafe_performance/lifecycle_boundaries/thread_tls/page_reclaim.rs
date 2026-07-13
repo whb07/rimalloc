@@ -15,7 +15,7 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && page_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_theap_page_reclaim_raw")
         && page_rs.contains("static MI_THEAP_PAGE_RECLAIM_KEEP")
         && page_rs.contains("mi_theap_page_reclaim_raw;")
-        && page_rs.contains("_mi_theap_page_reclaim(wrapper, theap_wrapper);")
+        && page_rs.contains("let _ = _mi_theap_page_reclaim(wrapper, theap_wrapper);")
         && page_rs
             .contains("let wrapper = crate::core_types::OwnedAbandonedPage::new_unchecked(page_ptr);")
         && !page_rs.contains("pub unsafe extern \"C\" fn _mi_theap_page_reclaim")
@@ -49,7 +49,7 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && !arena_rs.contains("MI_THREADID_ABANDONED_MAPPED | flags")
         && page_rs.contains("let atomic_tf = page_ptr.thread_free_cell();")
         && page_rs.contains("let remote = atomic_tf.collect_acq_rel();")
-        && page_rs.contains("remote.collect_into_local(page_wrapper, local);")
+        && page_rs.contains("remote.collect_into_local(&page_wrapper, local);")
         && !page_rs.contains("atomic_tf.take_head_preserving_owner()")
         && !page_rs.contains("AtomicThreadFree::from_field(")
         && !page_rs.contains("addr_of_mut!((*page).xthread_free)")

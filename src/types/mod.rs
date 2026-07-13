@@ -87,8 +87,8 @@ pub(crate) use memid::{
 };
 
 pub(crate) use page_states::{
-    AbandonedPageType as AbandonedPage, Active, ActivePage, AllFreePage, AvailablePage,
-    DestroyedPage, ForeignPage, Full, FullPage, LocalPage, OwnedAbandonedPage, Page,
+    AbandonedMappedPageType, AbandonedPageType as AbandonedPage, Active, ActivePage, AllFreePage,
+    AvailablePage, DestroyedPage, ForeignPage, Full, FullPage, LocalPage, OwnedAbandonedPage, Page,
     PageAbandonOutcome, PageForAbandon, PageFreeOwner, ThreadHeapLocal, Uninit,
 };
 

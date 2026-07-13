@@ -2358,9 +2358,9 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
     // SAFETY[AUDIT:arena-page-abandon-boundary]: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
     let page_wrapper = if unsafe { mi_page_is_full_local(page) } {
-        unsafe { crate::core_types::FullPage::new_unchecked(page_ptr).for_abandon() }
+        unsafe { crate::core_types::FullPage::new_unchecked(page_ptr).into_abandon_candidate() }
     } else {
-        unsafe { crate::core_types::ActivePage::new_unchecked(page_ptr).for_abandon() }
+        unsafe { crate::core_types::ActivePage::new_unchecked(page_ptr).into_abandon_candidate() }
     };
     // SAFETY[AUDIT:arena-page-abandon-boundary]: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
     let current_theap = unsafe {
@@ -2499,41 +2499,43 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
         _ => return false,
     };
     // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-    unsafe { _mi_arenas_page_try_reabandon_to_mapped_arena(page, arena_memid) }
+    unsafe { _mi_arenas_page_try_reabandon_to_mapped_arena(page, arena_memid).is_ok() }
 }
 
 #[inline(never)]
 pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
     page: crate::core_types::OwnedAbandonedPage,
     _arena_memid: crate::core_types::ArenaMemId,
-) -> bool {
-    let page = page.page().as_ptr();
+) -> Result<crate::core_types::AbandonedMappedPageType, crate::core_types::OwnedAbandonedPage> {
+    let page_raw = page.page().as_ptr();
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
         // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-        unsafe { mi_page_slice_start(page) }.cast(),
+        unsafe { mi_page_slice_start(page_raw) }.cast(),
         MI_PAGE_ALIGN
     ));
     crate::internal::mi_assert_internal!(unsafe {
-        crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+        crate::internal::_mi_ptr_page(mi_page_start(page_raw).cast()) == page_raw
     });
     // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
-    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
-    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_abandoned_mapped(page) });
-    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_full_local(page) });
-    crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page_raw) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page_raw) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_abandoned_mapped(page_raw) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_full_local(page_raw) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page_raw) });
     // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page_raw) });
 
-    if unsafe { mi_page_is_full_local(page) } || unsafe { mi_page_is_abandoned_mapped(page) } {
-        return false;
+    if unsafe { mi_page_is_full_local(page_raw) }
+        || unsafe { mi_page_is_abandoned_mapped(page_raw) }
+    {
+        return Err(page);
     }
 
     // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
     let Some(theap) = (unsafe {
-        _mi_page_associated_theap_peek(crate::core_types::PagePtr::new_unchecked(page))
+        _mi_page_associated_theap_peek(crate::core_types::PagePtr::new_unchecked(page_raw))
     }) else {
-        return false;
+        return Err(page);
     };
     let theap = theap.as_ptr();
 
@@ -2542,8 +2544,8 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
         __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reabandon_full), 1)
     };
     unsafe { __mi_stat_adjust_decrease(ptr::addr_of_mut!((*theap).stats.pages_abandoned), 1) };
-    unsafe { _mi_arenas_page_abandon(page, theap) };
-    true
+    unsafe { _mi_arenas_page_abandon(page_raw, theap) };
+    Ok(page.into_mapped_abandoned())
 }
 
 /// # Safety

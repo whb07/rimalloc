@@ -454,7 +454,7 @@ impl LocalFreeList {
     /// `self`, and the caller must subsequently store the returned head back
     /// into `(*page).local_free` and decrement `(*page).used`.
     #[inline(always)]
-    pub(crate) unsafe fn push(self, page: LocalPage, block: FreeBlock) -> Self {
+    pub(crate) unsafe fn push(self, page: &LocalPage, block: FreeBlock) -> Self {
         let raw_page = page.page().as_ptr();
         let block_raw = block.as_ptr().as_ptr();
         let prev_raw = self.as_raw();

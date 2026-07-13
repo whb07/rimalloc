@@ -129,7 +129,7 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && page_queues_rs.contains("impl QueuedPage<NormalQueue>")
             && page_queues_rs.contains("pub(crate) unsafe fn into_full(self, to: FullPageQueue)")
             && page_rs.contains("unsafe { page.unfull(to) }")
-            && page_states_rs.contains("pub(crate) unsafe fn to_full(")
+            && page_states_rs.contains("pub(crate) unsafe fn into_full(")
             && page_queues_rs.contains("impl QueuedPage<FullQueue>")
             && page_queues_rs
                 .contains("pub(crate) unsafe fn unfull(self, to: NormalPageQueue)")
@@ -150,11 +150,11 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && page_rs.contains(
                 "let _ = _mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked("
             )
-            && page_rs.contains("QueuedPage::<crate::core_types::FullQueue>::new")
+            && page_rs.contains("QueuedPage::<crate::core_types::FullQueue>::try_queue_full")
             && page_rs.contains("mi_page_unfull_typed(queued, to)")
             && page_rs
                 .contains("mi_page_move_to_full_typed(\n                crate::core_types::ActivePage")
-            && free_rs.contains("let Some(all_free) = active.mark_all_free() else {")
+            && free_rs.contains("let Ok(all_free) = active.try_mark_all_free() else {")
             && free_rs.contains("_mi_page_retire_internal(all_free);")
             && free_rs
                 .contains("_mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked")

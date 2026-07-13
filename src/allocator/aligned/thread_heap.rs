@@ -93,7 +93,7 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
                 // SAFETY[AUDIT:aligned-page-allocation-boundary]: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
                 let active = unsafe { crate::core_types::ActivePage::new_unchecked(page_ptr) };
                 // SAFETY[AUDIT:aligned-page-allocation-boundary]: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
-                let available = unsafe { active.available().unwrap_unchecked() };
+                let available = unsafe { active.try_available().unwrap_unchecked() };
                 // SAFETY[AUDIT:aligned-page-allocation-boundary]: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
                 let p = unsafe {
                     _mi_page_malloc_zero_typed(

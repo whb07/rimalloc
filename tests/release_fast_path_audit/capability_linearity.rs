@@ -46,6 +46,40 @@ fn validation_and_block_capabilities_are_linear() {
 }
 
 #[test]
+fn page_and_queue_capabilities_are_linear() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let checker = fs::read_to_string(root.join("scripts/check-strict-types.py"))
+        .expect("read strict-type checker");
+    let inventory = fs::read_to_string(root.join("docs/capability-inventory.md"))
+        .expect("read capability inventory");
+
+    for capability in [
+        "ActivePage",
+        "FullPage",
+        "RetiredPage",
+        "AvailablePage",
+        "LocalPage",
+        "ForeignPage",
+        "AbandonedPageType",
+        "AbandonedMappedPageType",
+        "OwnedAbandonedPage",
+        "DestroyedPage",
+        "AllFreePage",
+        "PageForAbandon",
+        "PageAbandonOutcome",
+        "PageFreeOwner",
+        "QueuedPage",
+        "UnqueuedPage",
+    ] {
+        assert!(
+            inventory.contains(&format!("`{capability}"))
+                && checker.contains(&format!("\"{capability}\"")),
+            "{capability} should be inventoried and enforced as a linear capability"
+        );
+    }
+}
+
+#[test]
 fn capability_inventory_records_thread_affinity_and_atomic_snapshot_exceptions() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let inventory = fs::read_to_string(root.join("docs/capability-inventory.md"))

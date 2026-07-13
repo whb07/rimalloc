@@ -48,11 +48,11 @@ pub(super) fn assert_page_queue_and_memid_acceptance(
                 .contains("pub(crate) struct UnqueuedPage<S> {\n    page: Page<S>,")
             && !page_queues_rs.contains("pub(crate) page: Page<S>")
             && page_queues_rs.contains(
-                "pub(crate) unsafe fn new(\n        page: crate::core_types::ActivePage,\n        queue: NormalPageQueue,"
+                "pub(crate) unsafe fn try_queue(\n        page: crate::core_types::ActivePage,\n        queue: NormalPageQueue,"
             )
             && page_queues_rs.contains("impl QueuedPage<FullQueue>")
             && page_queues_rs.contains(
-                "pub(crate) unsafe fn new(\n        page: crate::core_types::FullPage,\n        queue: FullPageQueue,"
+                "pub(crate) unsafe fn try_queue_full(\n        page: crate::core_types::FullPage,\n        queue: FullPageQueue,"
             )
             && page_queues_rs.contains("crate::page::mi_page_queue_contains(queue.ptr().as_ptr(), page.page().as_ptr())")
             && page_queues_rs.contains("queue: PageQueue::normal(queue)")

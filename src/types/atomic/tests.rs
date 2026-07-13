@@ -261,7 +261,7 @@ fn empty_remote_free_list_collects_through_detached_atomic_path() {
 
         let local_before = LocalFreeList::from_raw((*raw_page).local_free);
         let local_after =
-            remote.collect_into_local(OwnedAbandonedPage::new_unchecked(page_ptr), local_before);
+            remote.collect_into_local(&OwnedAbandonedPage::new_unchecked(page_ptr), local_before);
         assert_eq!(local_after.as_raw(), ptr::addr_of_mut!(local));
     }
 }

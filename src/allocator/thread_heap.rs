@@ -619,10 +619,10 @@ unsafe fn mi_theap_page_collect_typed(
         if mi_page_all_free(page) {
             if crate::page::mi_page_is_in_full(page) {
                 let full_page = crate::core_types::FullPage::new_unchecked(local_page.page());
-                crate::internal::mi_assert_internal!(full_page.mark_all_free().is_some());
+                crate::internal::mi_assert_internal!(full_page.try_mark_all_free().is_ok());
             } else {
                 let active_page = crate::core_types::ActivePage::new_unchecked(local_page.page());
-                crate::internal::mi_assert_internal!(active_page.mark_all_free().is_some());
+                crate::internal::mi_assert_internal!(active_page.try_mark_all_free().is_ok());
             }
             if collect as i32 >= mi_collect_t::MI_FORCE as i32
                 || crate::page::mi_page_retire_expire(page).is_zero()
@@ -631,9 +631,11 @@ unsafe fn mi_theap_page_collect_typed(
             }
         } else if collect == mi_collect_t::MI_ABANDON {
             let _page_for_abandon = if crate::page::mi_page_is_in_full(page) {
-                crate::core_types::FullPage::new_unchecked(local_page.page()).for_abandon()
+                crate::core_types::FullPage::new_unchecked(local_page.page())
+                    .into_abandon_candidate()
             } else {
-                crate::core_types::ActivePage::new_unchecked(local_page.page()).for_abandon()
+                crate::core_types::ActivePage::new_unchecked(local_page.page())
+                    .into_abandon_candidate()
             };
             _mi_page_abandon(page, pq);
         }

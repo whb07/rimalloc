@@ -174,14 +174,15 @@ C arithmetic without changing public ABI or allocation hot-path behavior.
   compatibility shim.
 - Reclaim below the raw keep shim accepts only `OwnedAbandonedPage` and
   `ThreadHeapLocal`: `try_reclaim_abandoned`, `_mi_theap_page_reclaim`, and
-  `OwnedAbandonedPage::reclaim(ThreadHeapLocal)` preserve that ownership pair
+  `OwnedAbandonedPage::into_reclaimed(ThreadHeapLocal)` preserve that ownership pair
   until the page is returned to the active queue.
 - Full-queue operations use `FullPage`/`FullPageQueue` witnesses below raw
   shims: full append takes typed full queues, full-page freeing rebuilds a
   `QueuedPage<FullQueue>` from `FullPage` plus `FullPageQueue`, and unfull
   consumes `QueuedPage<FullQueue>` before returning an active page.
 - Normal queue operations use `ActivePage` plus `NormalPageQueue` below raw
-  queue helpers. `QueuedPage<NormalQueue>::new` rejects full pages and requires
+  queue helpers. `QueuedPage<NormalQueue>::try_queue` rejects full pages, returns
+  the original `ActivePage` on failure, and requires
   the page block size to match the queue block size before push, move-to-front,
   active-page free, or normal append paths continue.
 - Memid union-arm reads are centralized in `MemId::view` or typed construction

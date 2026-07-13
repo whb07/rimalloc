@@ -32,7 +32,7 @@ pub(super) unsafe fn mi_abandoned_page_unown(
             let local_free = unsafe {
                 atomic_tf
                     .collect_acq_rel()
-                    .collect_into_local(owned_page, local_free)
+                    .collect_into_local(&owned_page, local_free)
             };
             // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
             if unsafe { page_ptr.free().is_empty() } && !local_free.is_empty() {

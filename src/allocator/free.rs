@@ -420,14 +420,14 @@ pub(crate) unsafe fn mi_free_block_local(
                 let active = crate::core_types::ActivePage::new_unchecked(
                     crate::core_types::PagePtr::new_unchecked(page),
                 );
-                let Some(all_free) = active.mark_all_free() else {
+                let Ok(all_free) = active.try_mark_all_free() else {
                     crate::internal::mi_assert_internal!(false);
                     return;
                 };
                 _mi_page_retire_internal(all_free);
             }
         } else if check_full && crate::page::mi_page_is_in_full(page) {
-            _mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked(
+            let _ = _mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked(
                 crate::core_types::PagePtr::new_unchecked(page),
             ));
         }

@@ -1,7 +1,7 @@
 # Strict-Type Migration Phases
 
 This file records the current implementation status for the strict-type
-migration described by `TYPES_SPEC.md` and tracked in `TODO.md`.
+migration described by `TYPES_SPEC.md`.
 
 The migration is intentionally staged. Raw C ABI shims remain C-shaped while
 internal allocator code is moved toward crate-private wrapper domains.
@@ -16,9 +16,9 @@ internal allocator code is moved toward crate-private wrapper domains.
 | Phase 3: Pointer Domain Completion | Complete | Non-null pointer wrappers own metadata field helpers and avoid broad aliasing references. |
 | Phase 4-19 | Complete | The strict-type TODO checklist is complete; raw C ABI and translated compatibility seams remain documented in the checked allowlist. |
 | Stage 20: Evidence Repair | Complete | Timed scratch allocation, facade labeling, persistent ownership topologies, resource evidence, provenance, and the reviewed schema-2 baseline are implemented. |
-| Stage 21: Linear Capabilities | Planned | Make validation, page-state, remote-list, and abandoned-page transition capabilities non-duplicable. |
-| Stage 22: Compatibility Policy | Planned | Extract allocation policy behind an exactly equivalent `CompatPolicy` implementation and reference model. |
-| Stage 23: Page-Batch Foundation | Planned | Introduce bounded page batches and integrate local and detached-remote batch transitions. |
+| Stage 21: Linear Capabilities | Complete | Validation, page-state, remote-list, and abandoned-page transitions are non-duplicable and source-enforced; see the [capability inventory](docs/capability-inventory.md). |
+| Stage 22: Compatibility Policy | Complete | The concrete [`CompatPolicy` module](src/allocator/policy/) owns the compatibility decisions and reference tests. |
+| Stage 23: Page-Batch Foundation | Complete | [`page_batch.rs`](src/types/page_batch.rs) implements bounded local, remote, and leased batches; performance evidence is recorded in [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md). |
 
 ## Enforcement Status
 

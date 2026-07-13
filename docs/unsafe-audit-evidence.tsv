@@ -1180,6 +1180,7 @@ typed-page-batch-synthetic-fixtures	test	src/page_batch_tests/tests.rs	Exercises
 typed-page-batch-differential-fixtures	test	src/page_batch_tests/tests.rs	Compares old reference list algorithms with typed batch transitions across 256 fixed-seed randomized topologies.
 typed-page-batch-remote-collect	test	src/page_batch_tests/tests.rs	Covers empty, singleton, and multi-block destinations plus exact remote used-count subtraction.
 typed-page-batch-local-detach	test	src/page_batch_tests/tests.rs	Checks successful local detachment clears the page field only after bounded validation.
+typed-page-batch-abandoned-local-detach	test	src/page_batch_tests/tests.rs	Checks claimed abandoned ownership can detach and splice local batches without fabricating a local-page proof.
 typed-page-batch-local-collect	test	src/page_batch_tests/tests.rs	Covers empty, singleton, and multi-block available destinations without changing used count.
 typed-page-batch-lease	test	src/page_batch_tests/tests.rs	Checks lease, take-one, return ordering, and used-count accounting across partial consumption.
 typed-atomic-thread-free-batch-conversion	test	src/types/atomic/tests.rs	Exercises detached atomic ownership conversion and collection through local and claimed-abandoned page witnesses.
@@ -1194,6 +1195,8 @@ raw-bridge-abandoned-page	test	tests/release_fast_path_audit/capability_linearit
 raw-bridge-owned-abandoned-page	test	tests/release_fast_path_audit/capability_linearity.rs	Checks owned abandoned page raw ingress remains centralized and capability based.
 page-free-list-local-detached-collect	test	src/allocator/page/lifecycle.rs	Exercises local-page detached remote collection through the typed lifecycle boundary.
 page-free-list-abandoned-detached-collect	test	src/allocator/page/lifecycle.rs	Exercises owned-abandoned detached remote collection through the typed lifecycle boundary.
+page-free-list-owner-variant	test	src/page_batch_tests/tests.rs	Exercises both local and claimed-abandoned owner variants through batch detachment and collection.
+page-free-list-owner-dispatch	test	src/page_batch_tests/tests.rs	Checks local and abandoned collection dispatch preserves list ordering, page identity, and used-count accounting.
 page-remote-list-tail-fixture	test	src/allocator/page/lifecycle.rs	Exercises published-head tail detachment with live same-page allocator blocks.
 typed-atomic-remote-push-fixture	test	src/types/atomic/tests.rs	Exercises typed remote push publication and unique detach using live stack-local storage.
 typed-atomic-thread-free-published-tail	test	tests/release_fast_path_audit/datatype_acceptance/strict_type/atomic_provenance_guards/atomic_wrappers.rs	Checks published-head tail detachment remains typed and distinct from detached ownership.

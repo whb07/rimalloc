@@ -21,6 +21,7 @@ DOCUMENTS = [
     *(ROOT / "docs").glob("*.md"),
 ]
 BENCHMARK_SOURCES = [ROOT / "benches" / "hotpath.rs", ROOT / "benches" / "workloads.rs"]
+MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\((?P<target>[^)]+)\)")
 
 
 def main() -> None:
@@ -30,6 +31,18 @@ def main() -> None:
         lowered = text.lower()
         normalized = " ".join(lowered.split())
         relative = path.relative_to(ROOT)
+        for match in MARKDOWN_LINK_RE.finditer(text):
+            target = match.group("target").strip().strip("<>").split("#", 1)[0]
+            if not target or "://" in target or target.startswith(("mailto:", "/")):
+                continue
+            linked = (path.parent / target).resolve()
+            try:
+                linked.relative_to(ROOT)
+            except ValueError:
+                failures.append(f"{relative}: repository link escapes the tree: {target}")
+                continue
+            if not linked.exists():
+                failures.append(f"{relative}: broken repository link: {target}")
         for stale in (
             "does not expose a native rust `globalalloc`",
             "does not expose a native rust globalalloc",
@@ -55,6 +68,20 @@ def main() -> None:
                 failures.append(
                     f"{relative}:{line_number}: benchmark command mixes artifact directories"
                 )
+    migration = (ROOT / "MIGRATION_PHASES.md").read_text(encoding="utf-8")
+    for stage in (21, 22, 23):
+        if not re.search(rf"\| Stage {stage}:[^|]+\| Complete \|", migration):
+            failures.append(f"MIGRATION_PHASES.md: Stage {stage} must be Complete")
+    for implementation in (
+        "docs/capability-inventory.md",
+        "src/allocator/policy/",
+        "src/types/page_batch.rs",
+        "BENCHMARK_RESULTS.md",
+    ):
+        if implementation not in migration:
+            failures.append(f"MIGRATION_PHASES.md: missing implementation link {implementation}")
+    if "TODO.md" in migration:
+        failures.append("MIGRATION_PHASES.md: obsolete TODO.md reference")
     if failures:
         raise SystemExit("benchmark documentation claim check failed:\n" + "\n".join(failures))
     print(f"ok: checked benchmark claims in {len(DOCUMENTS)} documents and 2 benchmark sources")

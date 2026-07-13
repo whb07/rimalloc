@@ -376,7 +376,8 @@ The crate denies broken rustdoc links and warns on bare URLs today. A global
 `raw` facade no longer exposes broad mechanical-port internals. Before enabling
 that lint globally:
 
-1. Keep raw internals private according to `TODO.md`.
+1. Keep raw internals private according to [TYPES_SPEC.md](../TYPES_SPEC.md)
+   and [MIGRATION_PHASES.md](../MIGRATION_PHASES.md).
 2. Confirm every Tier S safe Rust item has examples and error/panic notes.
 3. Confirm every public unsafe Tier R item has a `# Safety` section or is kept
    out of the public raw facade.

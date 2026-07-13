@@ -2448,6 +2448,11 @@ Operation IDs:
 - `SAFETY[AUDIT:typed-page-batch-local-detach]`:
   `src/types/page_batch.rs` scans the current local chain before clearing its
   page field, so failed validation leaves published metadata unchanged.
+- `SAFETY[AUDIT:typed-page-batch-abandoned-local-detach]`:
+  `src/types/page_batch.rs` permits local-list detachment from an abandoned page
+  only while `OwnedAbandonedPage` proves the thread-free ownership bit is
+  claimed; page-batch abandoned-owner and randomized transition tests cover the
+  same-page, corruption, and accounting invariants.
 - `SAFETY[AUDIT:typed-page-batch-local-collect]`:
   `src/types/page_batch.rs` consumes a validated local batch and links its known
   tail to the available head without changing used accounting.
@@ -2463,6 +2468,15 @@ Operation IDs:
 - `SAFETY[AUDIT:page-free-list-abandoned-detached-collect]`:
   `src/allocator/page/lifecycle.rs` collects a uniquely detached remote chain
   only while an owned-abandoned witness proves exclusive collection rights.
+- `SAFETY[AUDIT:page-free-list-owner-variant]`:
+  `src/allocator/page/lifecycle.rs` dispatches only through `LocalPage` and
+  `OwnedAbandonedPage` enum variants, retaining the concrete proof required by
+  each monomorphic remote collector and local-batch splice.
+- `SAFETY[AUDIT:page-free-list-owner-dispatch]`:
+  `src/allocator/page/lifecycle.rs` keeps one concrete collection-owner proof
+  live while atomically detaching remote frees and moving validated local
+  batches; local and abandoned entry points never reconstruct one proof as the
+  other, and page-state/page-batch tests cover both paths.
 - `SAFETY[AUDIT:page-remote-list-tail-fixture]`:
   `src/allocator/page/lifecycle.rs` keeps real allocator-owned same-page blocks
   live while testing published-head tail detachment.

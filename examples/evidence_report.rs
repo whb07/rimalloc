@@ -12,6 +12,7 @@ use std::time::Instant;
 unsafe extern "C" {
     fn mi_bench_diagnostics_reset();
     fn mi_bench_diagnostics_json(buf: *mut c_char, len: usize) -> usize;
+    fn mi_bench_page_occupancy(used_bytes: *mut usize, capacity_bytes: *mut usize) -> bool;
 }
 
 fn percentile(samples: &mut [u64], numerator: usize, denominator: usize) -> u64 {
@@ -127,7 +128,16 @@ fn main() {
     };
     #[cfg(not(feature = "bench-diagnostics"))]
     let diagnostics = "{}";
-    let occupancy = stats.page_occupancy();
+    let mut occupied_bytes = 0usize;
+    let mut capacity_bytes = 0usize;
+    // SAFETY: both outputs are valid local `usize` storage.
+    let has_occupancy =
+        unsafe { mi_bench_page_occupancy(&mut occupied_bytes, &mut capacity_bytes) };
+    let occupancy_ratio = if has_occupancy {
+        (occupied_bytes as f64 / capacity_bytes as f64).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     let search_count = stats.page_search_count().get();
     let search_length = if search_count == 0 {
         0.0
@@ -147,9 +157,9 @@ fn main() {
         usage_after.ru_maxrss.saturating_sub(usage_before.ru_maxrss),
         stats.committed_current().get(),
         live_requested_bytes,
-        occupancy.map_or(0.0, |value| value.ratio()),
-        occupancy.map_or(0, |value| value.used_bytes().get()),
-        occupancy.map_or(0, |value| value.capacity_bytes().get()),
+        occupancy_ratio,
+        occupied_bytes,
+        capacity_bytes,
         search_length,
         usage_after.ru_minflt.saturating_sub(usage_before.ru_minflt),
         usage_after.ru_majflt.saturating_sub(usage_before.ru_majflt),

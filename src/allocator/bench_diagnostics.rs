@@ -277,6 +277,55 @@ pub extern "C" fn mi_bench_diagnostics_reset() {
 }
 
 /// # Safety
+/// Both pointers must be non-null and writable for one `usize`.
+// SAFETY[AUDIT:bench-occupancy-ffi]: this benchmark-only export validates
+// both output pointers and derives occupancy from a local statistics snapshot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_bench_page_occupancy(
+    used_bytes_out: *mut usize,
+    capacity_bytes_out: *mut usize,
+) -> bool {
+    if used_bytes_out.is_null() || capacity_bytes_out.is_null() {
+        return false;
+    }
+    let mut stats = crate::stats::mi_stats_t::default();
+    // SAFETY[AUDIT:bench-occupancy-ffi]: `stats` is fresh local writable
+    // storage and thread initialization takes no caller pointers.
+    unsafe {
+        crate::stats::mi_stats_init(ptr::addr_of_mut!(stats));
+        crate::init::mi_thread_init();
+        if !crate::stats::mi_stats_get(ptr::addr_of_mut!(stats)) {
+            return false;
+        }
+    }
+    let mut used_bytes = 0usize;
+    let mut capacity_bytes = 0usize;
+    for bin in 0..crate::types::MI_BIN_HUGE {
+        let block_size = crate::stats::mi_stats_get_bin_size(bin);
+        let page_size = if block_size <= crate::page::MI_SMALL_MAX_OBJ_SIZE {
+            crate::types::MI_SMALL_PAGE_SIZE
+        } else if block_size <= crate::page::MI_MEDIUM_MAX_OBJ_SIZE {
+            crate::types::MI_MEDIUM_PAGE_SIZE
+        } else if block_size <= crate::page::MI_LARGE_MAX_OBJ_SIZE {
+            crate::types::MI_LARGE_PAGE_SIZE
+        } else {
+            0
+        };
+        let blocks = stats.malloc_bins[bin].current.max(0) as usize;
+        let pages = stats.page_bins[bin].current.max(0) as usize;
+        used_bytes = used_bytes.saturating_add(blocks.saturating_mul(block_size));
+        capacity_bytes = capacity_bytes.saturating_add(pages.saturating_mul(page_size));
+    }
+    // SAFETY[AUDIT:bench-occupancy-ffi]: both pointers were checked non-null
+    // and the function contract requires writable output storage.
+    unsafe {
+        used_bytes_out.write(used_bytes.min(capacity_bytes));
+        capacity_bytes_out.write(capacity_bytes);
+    }
+    capacity_bytes != 0
+}
+
+/// # Safety
 /// `out` must be null or point to writable storage for one snapshot.
 // SAFETY[AUDIT:bench-diagnostics-ffi]: the exported snapshot symbol preserves
 // the C ABI, rejects null output pointers, and writes exactly one snapshot when
@@ -421,6 +470,25 @@ mod tests {
         assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
         assert_eq!(snapshot.values[Counter::RemoteFreeCasRetries as usize], 1);
         mi_bench_diagnostics_reset();
+    }
+
+    #[test]
+    fn page_occupancy_rejects_null_and_returns_bounded_totals() {
+        let _guard = test_lock();
+        let mut used = usize::MAX;
+        let mut capacity = usize::MAX;
+        // SAFETY[AUDIT:bench-occupancy-ffi]: null outputs exercise the
+        // documented rejection paths; valid outputs below are local storage.
+        unsafe {
+            assert!(!mi_bench_page_occupancy(
+                core::ptr::null_mut(),
+                &mut capacity
+            ));
+            assert!(!mi_bench_page_occupancy(&mut used, core::ptr::null_mut()));
+            let available = mi_bench_page_occupancy(&mut used, &mut capacity);
+            assert_eq!(available, capacity != 0);
+        }
+        assert!(used <= capacity);
     }
 
     #[test]

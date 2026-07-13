@@ -1890,6 +1890,12 @@ Operation IDs:
   buffer copies, NUL termination for non-empty buffers, and tests that call the
   same C-shaped boundary with valid local storage. Counter updates stay relaxed
   atomics, and the JSON writer remains allocation-free.
+- `SAFETY[AUDIT:bench-occupancy-ffi]`:
+  `src/allocator/bench_diagnostics.rs` owns the benchmark-only page occupancy
+  export. Unsafe operations validate both output pointers, collect statistics
+  into local storage, derive bounded fixed-page used and capacity totals, and
+  write those totals to caller-provided storage. Tests cover null rejection and
+  valid local outputs while checking that used bytes never exceed capacity.
 - `SAFETY[AUDIT:arena-id-raw-shims]`: `src/allocator/arena/ids.rs` owns raw
   arena-id ABI shims. Unsafe operations are limited to null arena-id sentinel
   handling, top-level arena checks, C helper retention, and typed arena-id

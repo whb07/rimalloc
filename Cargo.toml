@@ -59,7 +59,7 @@ bench = ["std"]
 compare = []
 # Enable benchmark-only hotspot counters. This is intended for local profiling
 # builds and is compiled out unless explicitly requested.
-bench-diagnostics = []
+bench-diagnostics = ["std"]
 # Expose Rust macro translations of mimalloc C header convenience macros.
 # These are raw Tier R compatibility helpers, not the default safe Rust API.
 c-header-macros = []
@@ -206,7 +206,7 @@ required-features = ["std"]
 [[example]]
 name = "evidence_report"
 path = "examples/evidence_report.rs"
-required-features = ["std"]
+required-features = ["std", "bench-diagnostics"]
 
 [[example]]
 name = "benchmark_probe"

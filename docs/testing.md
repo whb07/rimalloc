@@ -11,9 +11,9 @@ contracts, public ABI assumptions, and deterministic property-style allocation
 sequences:
 
 ```sh
-cargo test --quiet
-cargo test --quiet --test property_alloc_sequences
-cargo test --quiet --test fuzz_alloc_sequences
+cargo test --quiet --features std
+cargo test --quiet --features std --test property_alloc_sequences
+cargo test --quiet --features std --test fuzz_alloc_sequences
 ```
 
 The property sequence test is intentionally deterministic. It exercises bounded

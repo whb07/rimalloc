@@ -35,6 +35,7 @@ arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance/page_
 arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks meta-page debug classification keeps the C-shaped helper boundary and published stack traversal.
 arena-meta-page-stack	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks the meta-page global stack head, next link, and CAS publication stay isolated in the private arena_meta/pages.rs module.
 bench-diagnostics-ffi	test	src/allocator/bench_diagnostics.rs	Exercises reset, null snapshot rejection, snapshot copying, JSON size queries, zero-length buffers, truncation, and NUL termination.
+bench-occupancy-ffi	test	src/allocator/bench_diagnostics.rs	Exercises null output rejection and bounded fixed-page occupancy totals for the benchmark-only ABI.
 arena-id-raw-shims	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs	Checks arena id raw shims stay in src/allocator/arena/ids.rs while preserving C ABI helper shape.
 arena-id-raw-shims	script	scripts/check-unsafe-audit.py	Checks arena id raw-shim unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-memid-suitability-helpers	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs	Checks arena memid suitability helpers preserve typed MemIdView routing and arena request matching.

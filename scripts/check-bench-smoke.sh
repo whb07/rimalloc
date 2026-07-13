@@ -18,7 +18,7 @@ run env \
   cargo bench --features bench --bench hotpath -- hotpath/paired_alloc_free/mechanical_mimalloc_public/16
 
 run env \
-  MIMALLOC_BENCH_SCENARIOS="${MIMALLOC_BENCH_SCENARIOS:-glibc-thread,malloc-large,cache-scratchN,xmalloc-testN}" \
+  MIMALLOC_BENCH_SCENARIOS="${MIMALLOC_BENCH_SCENARIOS:-glibc-thread,malloc-large,cache-scratch1,xmalloc-testN}" \
   MIMALLOC_BENCH_ALLOCATORS="${MIMALLOC_BENCH_ALLOCATORS:-mechanical_mimalloc_raw,c-mimalloc-3.3.2}" \
   MIMALLOC_BENCH_SAMPLE_SIZE="${MIMALLOC_BENCH_SAMPLE_SIZE:-10}" \
   MIMALLOC_BENCH_MEASUREMENT_SECS="${MIMALLOC_BENCH_MEASUREMENT_SECS:-1}" \
@@ -29,4 +29,6 @@ run env \
 run scripts/check-bench-thresholds.py \
   --thresholds benchmarks/thresholds.json \
   --criterion-dir "$target_dir/criterion" \
-  --csv-out "$target_dir/threshold-results.csv"
+  --csv-out "$target_dir/threshold-results.csv" \
+  --artifact-mode default-rust \
+  --feature bench

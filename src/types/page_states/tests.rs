@@ -62,7 +62,7 @@ fn active_available_and_pop_free_block_update_page_state() {
         let active = ActivePage::new_unchecked(PagePtr::new_unchecked(raw));
         let available = active.available().expect("non-null free head is available");
         let (allocated, active_again) = available.pop_free_block();
-        assert_eq!(allocated.block().as_ptr(), ptr::addr_of_mut!(block));
+        assert_eq!(allocated.as_ptr().as_ptr(), ptr::addr_of_mut!(block));
         assert_eq!(active_again.page().as_ptr(), raw);
         assert!((*raw).free.is_null());
         assert_eq!((*raw).used, 1);

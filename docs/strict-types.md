@@ -9,6 +9,10 @@ explicit without changing the raw C ABI or hot-path code shape. Raw C-compatible
 types remain in `src/types/` and C-shaped declarations remain behind
 `mechanical_mimalloc::raw`.
 
+The identity, value, mechanism, raw-ABI, and linear-capability classification
+for every production wrapper is maintained in
+[`capability-inventory.md`](capability-inventory.md).
+
 ## Status Labels
 
 - `live`: used by current allocator paths.

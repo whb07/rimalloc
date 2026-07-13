@@ -50,7 +50,8 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
             && free_rs.contains(
                 "pub(crate) unsafe fn mi_free_block_local(\n    page_wrapper: crate::core_types::LocalPage,\n    block_wrapper: crate::core_types::BlockForFree,"
             )
-            && free_rs.contains("mi_free_block_local(\n                    local_page,\n                    validated.block(),")
+            && free_rs.contains("let parts = validated.into_parts();")
+            && free_rs.contains("mi_free_block_local(\n                    local_page,\n                    parts.block,")
             && !free_rs.contains("BlockForFree::new")
             && !free_rs.contains("ValidatedFree::new"),
         "mi_free_block_local should accept only LocalPage plus validation-created BlockForFree"
@@ -59,8 +60,8 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
         free_rs.contains(
             "pub(crate) unsafe fn mi_free_block_mt(\n    page_wrapper: crate::core_types::ForeignPage,\n    block_wrapper: crate::core_types::BlockForFree,"
         )
-            && free_rs.contains("mi_free_block_mt(foreign_page, validated.block());")
-            && free_rs.contains("mi_free_block_mt(abandoned_page.remote_free_page(), validated.block());")
+            && free_rs.contains("mi_free_block_mt(foreign_page, block);")
+            && free_rs.contains("mi_free_block_mt(abandoned_page.remote_free_page(), block);")
             && page_states_rs.contains("pub(crate) fn remote_free_page(self) -> ForeignPage")
             && free_abandoned_rs.contains(
                 "unsafe fn mi_free_try_collect_mt_typed(\n    page: crate::core_types::OwnedAbandonedPage,\n    remote_free: crate::core_types::RemoteFreeList,"

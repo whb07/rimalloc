@@ -237,6 +237,8 @@ mod allocation_contracts;
 mod allowance_inventory;
 #[path = "release_fast_path_audit/benchmark_hygiene.rs"]
 mod benchmark_hygiene;
+#[path = "release_fast_path_audit/capability_linearity.rs"]
+mod capability_linearity;
 #[path = "release_fast_path_audit/interposition_exports.rs"]
 mod interposition_exports;
 #[path = "release_fast_path_audit/primitive_options.rs"]

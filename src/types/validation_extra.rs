@@ -2,7 +2,7 @@
 use super::ptr::BlockPtr;
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct AllocatedBlock(BlockPtr);
 
 impl AllocatedBlock {
@@ -14,13 +14,19 @@ impl AllocatedBlock {
     }
 
     #[inline(always)]
-    pub(crate) fn block(self) -> BlockPtr {
+    #[cfg(test)]
+    pub(crate) fn as_ptr(&self) -> BlockPtr {
+        self.0
+    }
+
+    #[inline(always)]
+    pub(crate) fn into_ptr(self) -> BlockPtr {
         self.0
     }
 }
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct FreeBlock(BlockPtr);
 
 impl FreeBlock {
@@ -33,7 +39,7 @@ impl FreeBlock {
     }
 
     #[inline(always)]
-    pub(crate) fn block(self) -> BlockPtr {
+    pub(crate) fn as_ptr(&self) -> BlockPtr {
         self.0
     }
 }

@@ -111,7 +111,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
 
         let (allocated, _) = available.pop_free_block();
-        let block = allocated.block().as_ptr();
+        let block = allocated.into_ptr().as_ptr();
         let free = page_ptr.free().as_raw();
         crate::internal::mi_assert_internal!(free.is_null() || _mi_ptr_page(free.cast()) == page);
         crate::internal::mi_assert_internal!(
@@ -913,9 +913,7 @@ unsafe fn mi_realloc_old_allocation(
     unsafe {
         match mi_validate_ptr_page(p, msg) {
             crate::core_types::PointerLookup::Valid(valid) => {
-                let user = valid.user();
-                let page = valid.page();
-                let location = valid.location();
+                let (user, page, location) = valid.into_parts();
                 let block = location.block();
                 let usable = crate::free::mi_usable_size_from_validated_location(page, location);
                 // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and

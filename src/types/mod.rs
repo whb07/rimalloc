@@ -77,7 +77,7 @@ pub(crate) use freelist::{ThreadFreeOwner, ThreadFreeWord};
 
 pub(crate) use validation::{
     BlockForFree, BlockOffset, GuardedBlock, PointerInvalidReason, PointerLocation, PointerLookup,
-    ValidatedFree, WasGuarded,
+    ValidatedFree, ValidatedFreeParts, WasGuarded,
 };
 
 pub(crate) use memid::{

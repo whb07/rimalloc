@@ -456,7 +456,7 @@ impl LocalFreeList {
     #[inline(always)]
     pub(crate) unsafe fn push(self, page: LocalPage, block: FreeBlock) -> Self {
         let raw_page = page.page().as_ptr();
-        let block_raw = block.block().as_ptr();
+        let block_raw = block.as_ptr().as_ptr();
         let prev_raw = self.as_raw();
         // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: `block_raw` is a valid block
         // in `page`; `prev_raw` is the current local_free head (null if empty).

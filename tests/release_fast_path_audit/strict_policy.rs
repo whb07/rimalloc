@@ -126,7 +126,8 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
             && free_rs.contains(
                 "unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree,"
             )
-            && free_rs.contains("let owner = validated.page().classify_for_free(current_tid);")
+            && free_rs.contains("let parts = validated.into_parts();")
+            && free_rs.contains("let owner = parts.page.classify_for_free(current_tid);")
             && free_rs.contains("owner: crate::core_types::PageFreeOwner,"),
         "allocation/free hot paths should continue to consume strict-type wrappers under the no-allocation source guard"
     );

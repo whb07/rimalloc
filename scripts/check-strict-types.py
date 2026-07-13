@@ -54,6 +54,25 @@ BARE_DOMAIN_PARAM_RE = re.compile(
     re.DOTALL,
 )
 CORE_TYPES_DEAD_CODE_RE = re.compile(r"#\s*!\s*\[\s*allow\s*\(\s*dead_code\s*\)\s*\]")
+LINEAR_CAPABILITY_TYPES = {
+    "AllocatedBlock",
+    "BlockForFree",
+    "FreeBlock",
+    "GuardedBlock",
+    "LocatedBlock",
+    "PointerLocation",
+    "ValidatedFree",
+    "ValidatedFreeParts",
+    "ValidPointerLookup",
+}
+DERIVED_TRAITS_RE = re.compile(
+    r"#\[derive\((?P<traits>[^)]*)\)\](?:\s*#\[[^]]+\])*\s*"
+    r"(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+)
+TYPE_DECL_RE = re.compile(
+    r"(?P<attrs>(?:#\[[^\n]+\]\s*)*)"
+    r"(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+)
 FN_ITEM_RE = re.compile(r"\bfn\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>{}]*>)?\(")
 STATIC_OR_CONST_ITEM_RE = re.compile(
     r"^\s*(?:(?:pub|pub\([^)]*\)|pub\s*\([^)]*\))\s+)?"
@@ -678,6 +697,28 @@ def main() -> int:
 
         if rel.startswith("src/types/") and CORE_TYPES_DEAD_CODE_RE.search(text):
             offenders.append(f"{rel}: crate-level dead_code allowance in core_types module")
+
+        if rel.startswith("src/types/"):
+            for match in TYPE_DECL_RE.finditer(text):
+                name = match.group("name")
+                if name in LINEAR_CAPABILITY_TYPES and "#[must_use" not in match.group("attrs"):
+                    offenders.append(
+                        f"{rel}: linear capability {name} lacks a must_use annotation"
+                    )
+            for match in DERIVED_TRAITS_RE.finditer(text):
+                name = match.group("name")
+                traits = {trait.strip() for trait in match.group("traits").split(",")}
+                forbidden = traits.intersection({"Clone", "Copy"})
+                if name in LINEAR_CAPABILITY_TYPES and forbidden:
+                    offenders.append(
+                        f"{rel}: linear capability {name} derives "
+                        + ", ".join(sorted(forbidden))
+                    )
+            for name in LINEAR_CAPABILITY_TYPES:
+                if re.search(rf"\bimpl\s+(?:Clone|Copy)\s+for\s+{name}\b", text):
+                    offenders.append(
+                        f"{rel}: linear capability {name} has an explicit Clone/Copy impl"
+                    )
 
         if rel not in RAW_BOUNDARY_FILES:
             item_contexts = item_contexts_by_line(text)

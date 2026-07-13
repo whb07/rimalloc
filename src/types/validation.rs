@@ -24,7 +24,8 @@ pub(crate) enum PointerInvalidReason {
 
 /// Represents a guarded block that needs special handling.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct GuardedBlock(BlockPtr);
 
 impl GuardedBlock {
@@ -34,13 +35,13 @@ impl GuardedBlock {
     }
 
     #[inline(always)]
-    pub(crate) fn block(self) -> BlockPtr {
+    pub(crate) fn block(&self) -> BlockPtr {
         self.0
     }
 }
 
 /// Location of a pointer within a block.
-#[derive(Clone, Copy)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) enum PointerLocation {
     BlockStart(BlockPtr),
     Interior {
@@ -54,7 +55,8 @@ pub(crate) enum PointerLocation {
 }
 
 /// Block facts derived from a validated pointer location.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct LocatedBlock {
     block: BlockPtr,
     was_guarded: WasGuarded,
@@ -63,17 +65,17 @@ pub(crate) struct LocatedBlock {
 
 impl LocatedBlock {
     #[inline(always)]
-    pub(crate) fn block(self) -> BlockPtr {
+    pub(crate) fn block(&self) -> BlockPtr {
         self.block
     }
 
     #[inline(always)]
-    pub(crate) fn was_guarded(self) -> WasGuarded {
+    pub(crate) fn was_guarded(&self) -> WasGuarded {
         self.was_guarded
     }
 
     #[inline(always)]
-    pub(crate) fn offset(self) -> BlockOffset {
+    pub(crate) fn offset(&self) -> BlockOffset {
         self.offset
     }
 }
@@ -101,8 +103,11 @@ impl PointerLocation {
     }
 
     #[inline(always)]
-    pub(crate) fn block(self) -> BlockPtr {
-        self.located_block().block()
+    pub(crate) fn block(&self) -> BlockPtr {
+        match self {
+            PointerLocation::BlockStart(block) | PointerLocation::Interior { block, .. } => *block,
+            PointerLocation::Guarded { block, .. } => block.block(),
+        }
     }
 }
 
@@ -116,7 +121,7 @@ pub(crate) enum PointerLookup {
     },
 }
 
-#[derive(Clone, Copy)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct ValidPointerLookup {
     user: UserPtr,
     page: PagePtr,
@@ -125,18 +130,13 @@ pub(crate) struct ValidPointerLookup {
 
 impl ValidPointerLookup {
     #[inline(always)]
-    pub(crate) fn user(self) -> UserPtr {
-        self.user
-    }
-
-    #[inline(always)]
-    pub(crate) fn page(self) -> PagePtr {
+    pub(crate) fn page(&self) -> PagePtr {
         self.page
     }
 
     #[inline(always)]
-    pub(crate) fn location(self) -> PointerLocation {
-        self.location
+    pub(crate) fn into_parts(self) -> (UserPtr, PagePtr, PointerLocation) {
+        (self.user, self.page, self.location)
     }
 }
 
@@ -155,9 +155,7 @@ impl PointerLookup {
         let PointerLookup::Valid(valid) = self else {
             return None;
         };
-        let user = valid.user();
-        let page = valid.page();
-        let location = valid.location();
+        let (user, page, location) = valid.into_parts();
         let located = location.located_block();
         let block = BlockForFree::new(located.block(), located.was_guarded());
         Some(ValidatedFree { user, page, block })
@@ -172,7 +170,7 @@ pub(crate) enum WasGuarded {
 }
 
 /// A block that has been completely validated and is ready for the typed free path.
-#[derive(Clone, Copy)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct BlockForFree {
     block: BlockPtr,
     was_guarded: WasGuarded,
@@ -195,15 +193,15 @@ impl BlockForFree {
         }
     }
 
-    pub(crate) fn block(self) -> BlockPtr {
+    pub(crate) fn block(&self) -> BlockPtr {
         self.block
     }
 
-    pub(crate) fn was_guarded(self) -> WasGuarded {
+    pub(crate) fn was_guarded(&self) -> WasGuarded {
         self.was_guarded
     }
 
-    pub(crate) fn is_guarded(self) -> bool {
+    pub(crate) fn is_guarded(&self) -> bool {
         self.was_guarded == WasGuarded::Yes
     }
 
@@ -217,7 +215,7 @@ impl BlockForFree {
 }
 
 /// A fully validated free request ready to be routed.
-#[derive(Clone, Copy)]
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct ValidatedFree {
     user: UserPtr,
     page: PagePtr,
@@ -225,17 +223,32 @@ pub(crate) struct ValidatedFree {
 }
 
 impl ValidatedFree {
-    pub(crate) fn user(self) -> UserPtr {
+    pub(crate) fn user(&self) -> UserPtr {
         self.user
     }
 
-    pub(crate) fn page(self) -> PagePtr {
+    pub(crate) fn page(&self) -> PagePtr {
         self.page
     }
 
-    pub(crate) fn block(self) -> BlockForFree {
-        self.block
+    pub(crate) fn block(&self) -> &BlockForFree {
+        &self.block
     }
+
+    pub(crate) fn into_parts(self) -> ValidatedFreeParts {
+        ValidatedFreeParts {
+            user: self.user,
+            page: self.page,
+            block: self.block,
+        }
+    }
+}
+
+#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
+pub(crate) struct ValidatedFreeParts {
+    pub(crate) user: UserPtr,
+    pub(crate) page: PagePtr,
+    pub(crate) block: BlockForFree,
 }
 
 pub(super) fn __lint_touch() {

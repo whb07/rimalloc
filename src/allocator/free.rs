@@ -522,7 +522,7 @@ unsafe fn mi_block_unguard(
 /// `page`, `block`, and `p` must describe the same allocated block.
 pub(crate) unsafe fn mi_block_check_unguard(
     page: crate::core_types::PagePtr,
-    block: crate::core_types::BlockForFree,
+    block: &crate::core_types::BlockForFree,
     p: crate::core_types::UserPtr,
 ) -> bool {
     // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
@@ -628,7 +628,14 @@ unsafe fn mi_block_for_free_from_lookup(
     lookup: crate::core_types::PointerLookup,
 ) -> Option<crate::core_types::BlockForFree> {
     // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
-    unsafe { mi_prepare_validated_free(lookup).map(crate::core_types::ValidatedFree::block) }
+    unsafe {
+        mi_prepare_validated_free(lookup).map(|validated| {
+            let parts = validated.into_parts();
+            let _ = parts.user;
+            let _ = parts.page;
+            parts.block
+        })
+    }
 }
 
 const _: unsafe fn(crate::core_types::PointerLookup) -> Option<crate::core_types::BlockForFree> =
@@ -649,11 +656,12 @@ pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *
 
         // SAFETY: The generic dispatch boundary supplies a non-null page/user pair;
         // validation reconstructs the typed free witness.
-        let page_wrapper = crate::core_types::LocalPage::new_unchecked(validated.page());
+        let parts = validated.into_parts();
+        let page_wrapper = crate::core_types::LocalPage::new_unchecked(parts.page);
 
         mi_free_block_local(
             page_wrapper,
-            validated.block(),
+            parts.block,
             crate::core_types::LocalFreeMode::TrackAndCheckFull,
         );
     }
@@ -674,9 +682,10 @@ pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut
 
         // SAFETY: The generic dispatch boundary supplies a non-null page/user pair;
         // validation reconstructs the typed free witness.
-        let page_wrapper = crate::core_types::ForeignPage::new_unchecked(validated.page());
+        let parts = validated.into_parts();
+        let page_wrapper = crate::core_types::ForeignPage::new_unchecked(parts.page);
 
-        mi_free_block_mt(page_wrapper, validated.block());
+        mi_free_block_mt(page_wrapper, parts.block);
     }
 }
 
@@ -769,13 +778,15 @@ unsafe fn mi_prepare_validated_free(
 unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable: *mut usize) {
     // SAFETY[AUDIT:free-pointer-lookup-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
-        let page = validated.page().as_ptr();
+        let parts = validated.into_parts();
+        let _ = parts.user;
+        let page = parts.page.as_ptr();
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
 
         let current_tid = crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id());
-        let page_tid = validated.page().thread_id_cell().load_relaxed();
+        let page_tid = parts.page.thread_id_cell().load_relaxed();
         let path = page_tid.classify_free_path(current_tid);
-        let owner = validated.page().classify_for_free(current_tid);
+        let owner = parts.page.classify_for_free(current_tid);
 
         match (path, owner) {
             (
@@ -784,11 +795,11 @@ unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable:
             ) => {
                 mi_free_block_local(
                     local_page,
-                    validated.block(),
+                    parts.block,
                     crate::core_types::LocalFreeMode::TrackOnly,
                 );
             }
-            (_, owner) => mi_free_ex_slow(validated, owner, path),
+            (_, owner) => mi_free_ex_slow(parts, owner, path),
         }
     }
 }
@@ -847,12 +858,13 @@ unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
 #[cold]
 #[inline(never)]
 pub(crate) unsafe fn mi_free_ex_slow(
-    validated: crate::core_types::ValidatedFree,
+    parts: crate::core_types::ValidatedFreeParts,
     owner: crate::core_types::PageFreeOwner,
     path: crate::core_types::FreePathKind,
 ) {
     // SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
+        let block = parts.block;
         // `validated` was produced by `mi_validate_pointer`, which already derived the
         // interior-corrected block and resolved guard state. Route the typed witness
         // directly to the block free functions instead of re-deriving from the raw
@@ -863,7 +875,7 @@ pub(crate) unsafe fn mi_free_ex_slow(
                 // Local page with flags set (e.g. in the full queue): check for unfull.
                 mi_free_block_local(
                     local_page,
-                    validated.block(),
+                    block,
                     crate::core_types::LocalFreeMode::for_free_path(path),
                 );
             }
@@ -871,13 +883,13 @@ pub(crate) unsafe fn mi_free_ex_slow(
                 // Remote (plain or with flags): push onto the owning thread's free list.
                 // The flag distinction collapses here because validation already resolved
                 // the block; `mi_free_block_mt` does not branch on page flags.
-                mi_free_block_mt(foreign_page, validated.block());
+                mi_free_block_mt(foreign_page, block);
             }
             crate::core_types::PageFreeOwner::Abandoned(abandoned_page) => {
-                mi_free_block_mt(abandoned_page.remote_free_page(), validated.block());
+                mi_free_block_mt(abandoned_page.remote_free_page(), block);
             }
             crate::core_types::PageFreeOwner::AbandonedMapped(abandoned_page) => {
-                mi_free_block_mt(abandoned_page.remote_free_page(), validated.block());
+                mi_free_block_mt(abandoned_page.remote_free_page(), block);
             }
         }
     }
@@ -918,9 +930,10 @@ pub(crate) unsafe fn mi_route_usable_size_typed(
         }
         match mi_validate_pointer(p.cast_mut(), msg) {
             crate::core_types::PointerLookup::Valid(valid) => {
-                let located = valid.location().located_block();
+                let (_, page, location) = valid.into_parts();
+                let located = location.located_block();
                 mi_page_usable_size_of_typed(
-                    valid.page().as_ptr(),
+                    page.as_ptr(),
                     located.block().as_ptr(),
                     located.was_guarded() == crate::core_types::WasGuarded::Yes,
                 )
@@ -1297,7 +1310,7 @@ mod tests {
             let lookup = mi_validate_block_from_ptr(page, user);
 
             match lookup {
-                PointerLookup::Valid(valid) => match valid.location() {
+                PointerLookup::Valid(valid) => match valid.into_parts().2 {
                     PointerLocation::Interior { block, offset } => {
                         assert_eq!(block.as_ptr(), fixture.block(0).as_ptr());
                         assert_eq!(offset.0, 1);
@@ -1328,7 +1341,7 @@ mod tests {
 
             let lookup = mi_validate_block_from_ptr(page, user);
             match lookup {
-                PointerLookup::Valid(valid) => match valid.location() {
+                PointerLookup::Valid(valid) => match valid.into_parts().2 {
                     PointerLocation::Guarded { block, offset } => {
                         assert_eq!(block.block().as_ptr(), fixture.block(0).as_ptr());
                         assert_eq!(offset.0, core::mem::size_of::<mi_block_t>());

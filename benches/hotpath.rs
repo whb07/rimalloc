@@ -30,7 +30,10 @@
 
 mod support;
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::measurement::WallTime;
+use criterion::{
+    Bencher, BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
+};
 use std::alloc::{GlobalAlloc, Layout};
 use std::env;
 use std::hint::black_box as hint_black_box;
@@ -38,7 +41,9 @@ use std::time::Duration;
 #[cfg(feature = "compare")]
 use support::allocators::SYSTEM_ALLOCATOR;
 use support::allocators::{PUBLIC_MIMALLOC, RAW_MIMALLOC};
-use support::no_alloc::{CountingSystem, assert_no_harness_allocations};
+use support::no_alloc::{
+    CountingSystem, assert_no_harness_allocations_enabled, harness_allocation_check_enabled,
+};
 use support::pool::PointerPool;
 use support::remote_fixture::RemoteFreeFixture;
 
@@ -94,10 +99,23 @@ fn hotpath_warmup_time() -> Duration {
     env_secs("MIMALLOC_HOTPATH_WARMUP_SECS", 3)
 }
 
+fn iter_timed<R>(
+    bencher: &mut Bencher<'_, WallTime>,
+    verify_harness: bool,
+    mut timed_body: impl FnMut() -> R,
+) {
+    if verify_harness {
+        bencher.iter(|| black_box(assert_no_harness_allocations_enabled(&mut timed_body)));
+    } else {
+        bencher.iter(|| black_box(timed_body()));
+    }
+}
+
 fn fill<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PointerPool) {
     let layout = Layout::from_size_align(size, 8).unwrap();
     for i in 0..POOL_SIZE {
         let p = unsafe { alloc.alloc(layout) };
+        assert!(!p.is_null(), "hot-path benchmark setup allocation failed");
         *pool.slot(i) = (p, layout);
     }
 }
@@ -118,21 +136,20 @@ fn paired_alloc_free_layout<A: GlobalAlloc>(
     layout: Layout,
     pool: &mut PointerPool,
 ) -> usize {
-    assert_no_harness_allocations(|| {
-        for i in 0..POOL_SIZE {
-            let p = unsafe { alloc.alloc(layout) };
-            *pool.slot(i) = (p, layout);
-        }
-        for i in 0..POOL_SIZE {
-            let (p, l) = *pool.slot(i);
-            unsafe { alloc.dealloc(p, l) };
-            *pool.slot(i) = (std::ptr::null_mut(), l);
-        }
-        POOL_SIZE
-    })
+    for i in 0..POOL_SIZE {
+        let p = unsafe { alloc.alloc(layout) };
+        *pool.slot(i) = (p, layout);
+    }
+    for i in 0..POOL_SIZE {
+        let (p, l) = *pool.slot(i);
+        unsafe { alloc.dealloc(p, l) };
+        *pool.slot(i) = (std::ptr::null_mut(), l);
+    }
+    POOL_SIZE
 }
 
 fn bench_paired_alloc_free(c: &mut Criterion) {
+    let verify_harness = harness_allocation_check_enabled();
     let mut group = c.benchmark_group("hotpath/paired_alloc_free");
     group.sample_size(hotpath_sample_size(120));
     group.measurement_time(hotpath_measurement_time(8));
@@ -148,26 +165,35 @@ fn bench_paired_alloc_free(c: &mut Criterion) {
         #[cfg(feature = "compare")]
         group.bench_with_input(BenchmarkId::new("system", size), &size, |b, &size| {
             let mut pool = PointerPool::new(POOL_SIZE);
-            b.iter(|| black_box(paired_alloc_free(&SYSTEM_ALLOCATOR, size, &mut pool)))
+            iter_timed(b, verify_harness, || {
+                paired_alloc_free(&SYSTEM_ALLOCATOR, size, &mut pool)
+            });
         });
 
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_public", size),
             &size,
             |b, &size| {
-                b.iter(|| black_box(paired_alloc_free(&PUBLIC_MIMALLOC, size, &mut public_pool)))
+                iter_timed(b, verify_harness, || {
+                    paired_alloc_free(&PUBLIC_MIMALLOC, size, &mut public_pool)
+                });
             },
         );
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_raw", size),
             &size,
-            |b, &size| b.iter(|| black_box(paired_alloc_free(&RAW_MIMALLOC, size, &mut raw_pool))),
+            |b, &size| {
+                iter_timed(b, verify_harness, || {
+                    paired_alloc_free(&RAW_MIMALLOC, size, &mut raw_pool)
+                });
+            },
         );
     }
     group.finish();
 }
 
 fn bench_aligned_paired_alloc_free(c: &mut Criterion) {
+    let verify_harness = harness_allocation_check_enabled();
     let mut group = c.benchmark_group("hotpath/aligned_paired_alloc_free");
     group.sample_size(hotpath_sample_size(120));
     group.measurement_time(hotpath_measurement_time(8));
@@ -185,39 +211,27 @@ fn bench_aligned_paired_alloc_free(c: &mut Criterion) {
         #[cfg(feature = "compare")]
         group.bench_with_input(BenchmarkId::new("system", &case), &layout, |b, &layout| {
             let mut pool = PointerPool::new(POOL_SIZE);
-            b.iter(|| {
-                black_box(paired_alloc_free_layout(
-                    &SYSTEM_ALLOCATOR,
-                    layout,
-                    &mut pool,
-                ))
-            })
+            iter_timed(b, verify_harness, || {
+                paired_alloc_free_layout(&SYSTEM_ALLOCATOR, layout, &mut pool)
+            });
         });
 
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_public", &case),
             &layout,
             |b, &layout| {
-                b.iter(|| {
-                    black_box(paired_alloc_free_layout(
-                        &PUBLIC_MIMALLOC,
-                        layout,
-                        &mut public_pool,
-                    ))
-                })
+                iter_timed(b, verify_harness, || {
+                    paired_alloc_free_layout(&PUBLIC_MIMALLOC, layout, &mut public_pool)
+                });
             },
         );
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_raw", case),
             &layout,
             |b, &layout| {
-                b.iter(|| {
-                    black_box(paired_alloc_free_layout(
-                        &RAW_MIMALLOC,
-                        layout,
-                        &mut raw_pool,
-                    ))
-                })
+                iter_timed(b, verify_harness, || {
+                    paired_alloc_free_layout(&RAW_MIMALLOC, layout, &mut raw_pool)
+                });
             },
         );
     }
@@ -231,17 +245,49 @@ fn bench_aligned_paired_alloc_free(c: &mut Criterion) {
 // ---------------------------------------------------------------------------
 
 fn free_routine<A: GlobalAlloc>(alloc: &A, pool: &mut PointerPool) -> usize {
-    assert_no_harness_allocations(|| {
-        for i in 0..POOL_SIZE {
-            let (p, l) = *pool.slot(i);
-            unsafe { alloc.dealloc(p, l) };
-            *pool.slot(i) = (std::ptr::null_mut(), l);
-        }
-        POOL_SIZE
-    })
+    for i in 0..POOL_SIZE {
+        let (p, l) = *pool.slot(i);
+        unsafe { alloc.dealloc(p, l) };
+        *pool.slot(i) = (std::ptr::null_mut(), l);
+    }
+    POOL_SIZE
+}
+
+fn iter_free_only<A: GlobalAlloc>(
+    bencher: &mut Bencher<'_, WallTime>,
+    verify_harness: bool,
+    allocator: &A,
+    size: usize,
+) {
+    if verify_harness {
+        bencher.iter_batched_ref(
+            || {
+                let mut pool = PointerPool::new(POOL_SIZE);
+                fill(allocator, size, &mut pool);
+                pool
+            },
+            |pool| {
+                black_box(assert_no_harness_allocations_enabled(|| {
+                    free_routine(allocator, pool)
+                }))
+            },
+            criterion::BatchSize::SmallInput,
+        );
+    } else {
+        bencher.iter_batched_ref(
+            || {
+                let mut pool = PointerPool::new(POOL_SIZE);
+                fill(allocator, size, &mut pool);
+                pool
+            },
+            |pool| black_box(free_routine(allocator, pool)),
+            criterion::BatchSize::SmallInput,
+        );
+    }
 }
 
 fn bench_free_only(c: &mut Criterion) {
+    let verify_harness = harness_allocation_check_enabled();
     let mut group = c.benchmark_group("hotpath/free_only");
     group.sample_size(hotpath_sample_size(120));
     group.measurement_time(hotpath_measurement_time(8));
@@ -254,45 +300,21 @@ fn bench_free_only(c: &mut Criterion) {
 
         #[cfg(feature = "compare")]
         group.bench_with_input(BenchmarkId::new("system", size), &size, |b, &size| {
-            b.iter_batched_ref(
-                || {
-                    let mut p = PointerPool::new(POOL_SIZE);
-                    fill(&SYSTEM_ALLOCATOR, size, &mut p);
-                    p
-                },
-                |pool| black_box(free_routine(&SYSTEM_ALLOCATOR, pool)),
-                criterion::BatchSize::SmallInput,
-            )
+            iter_free_only(b, verify_harness, &SYSTEM_ALLOCATOR, size);
         });
 
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_public", size),
             &size,
             |b, &size| {
-                b.iter_batched_ref(
-                    || {
-                        let mut p = PointerPool::new(POOL_SIZE);
-                        fill(&PUBLIC_MIMALLOC, size, &mut p);
-                        p
-                    },
-                    |pool| black_box(free_routine(&PUBLIC_MIMALLOC, pool)),
-                    criterion::BatchSize::SmallInput,
-                )
+                iter_free_only(b, verify_harness, &PUBLIC_MIMALLOC, size);
             },
         );
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_raw", size),
             &size,
             |b, &size| {
-                b.iter_batched_ref(
-                    || {
-                        let mut p = PointerPool::new(POOL_SIZE);
-                        fill(&RAW_MIMALLOC, size, &mut p);
-                        p
-                    },
-                    |pool| black_box(free_routine(&RAW_MIMALLOC, pool)),
-                    criterion::BatchSize::SmallInput,
-                )
+                iter_free_only(b, verify_harness, &RAW_MIMALLOC, size);
             },
         );
     }
@@ -308,6 +330,7 @@ fn bench_free_only(c: &mut Criterion) {
 // ---------------------------------------------------------------------------
 
 fn bench_remote_free(c: &mut Criterion) {
+    let verify_harness = harness_allocation_check_enabled();
     let mut group = c.benchmark_group("hotpath/remote_free");
     group.sample_size(hotpath_sample_size(40));
     group.measurement_time(hotpath_measurement_time(5));
@@ -321,20 +344,23 @@ fn bench_remote_free(c: &mut Criterion) {
         #[cfg(feature = "compare")]
         {
             let layout = Layout::from_size_align(size, 8).unwrap();
-            let mut fixture = RemoteFreeFixture::new(&SYSTEM_ALLOCATOR, layout, POOL_SIZE);
+            let mut fixture =
+                RemoteFreeFixture::new(&SYSTEM_ALLOCATOR, layout, POOL_SIZE, verify_harness);
             group.bench_with_input(BenchmarkId::new("system", size), &size, |b, _| {
                 b.iter_custom(|iterations| fixture.measure_remote_free(iterations))
             });
         }
 
         let layout = Layout::from_size_align(size, 8).unwrap();
-        let mut public_fixture = RemoteFreeFixture::new(&PUBLIC_MIMALLOC, layout, POOL_SIZE);
+        let mut public_fixture =
+            RemoteFreeFixture::new(&PUBLIC_MIMALLOC, layout, POOL_SIZE, verify_harness);
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_public", size),
             &size,
             |b, _| b.iter_custom(|iterations| public_fixture.measure_remote_free(iterations)),
         );
-        let mut raw_fixture = RemoteFreeFixture::new(&RAW_MIMALLOC, layout, POOL_SIZE);
+        let mut raw_fixture =
+            RemoteFreeFixture::new(&RAW_MIMALLOC, layout, POOL_SIZE, verify_harness);
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_raw", size),
             &size,
@@ -357,22 +383,21 @@ fn lifo_stack<A: GlobalAlloc>(
     pool: &mut PointerPool,
 ) -> usize {
     let layout = Layout::from_size_align(size, 8).unwrap();
-    assert_no_harness_allocations(|| {
-        let mut ops = 0usize;
-        for i in 0..depth {
-            *pool.slot(i) = (unsafe { alloc.alloc(layout) }, layout);
-            ops += 1;
-        }
-        for i in (0..depth).rev() {
-            unsafe { alloc.dealloc(pool.slot(i).0, layout) };
-            *pool.slot(i) = (std::ptr::null_mut(), layout);
-            ops += 1;
-        }
-        hint_black_box(ops)
-    })
+    let mut ops = 0usize;
+    for i in 0..depth {
+        *pool.slot(i) = (unsafe { alloc.alloc(layout) }, layout);
+        ops += 1;
+    }
+    for i in (0..depth).rev() {
+        unsafe { alloc.dealloc(pool.slot(i).0, layout) };
+        *pool.slot(i) = (std::ptr::null_mut(), layout);
+        ops += 1;
+    }
+    hint_black_box(ops)
 }
 
 fn bench_lifo_stack(c: &mut Criterion) {
+    let verify_harness = harness_allocation_check_enabled();
     let mut group = c.benchmark_group("hotpath/lifo_stack");
     group.sample_size(hotpath_sample_size(150));
     group.measurement_time(hotpath_measurement_time(6));
@@ -395,19 +420,29 @@ fn bench_lifo_stack(c: &mut Criterion) {
             &(size, depth),
             |b, &(s, d)| {
                 let mut pool = PointerPool::new(POOL_SIZE);
-                b.iter(|| black_box(lifo_stack(&SYSTEM_ALLOCATOR, s, d, &mut pool)))
+                iter_timed(b, verify_harness, || {
+                    lifo_stack(&SYSTEM_ALLOCATOR, s, d, &mut pool)
+                });
             },
         );
 
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_public", format!("{size}/{depth}")),
             &(size, depth),
-            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&PUBLIC_MIMALLOC, s, d, &mut public_pool))),
+            |b, &(s, d)| {
+                iter_timed(b, verify_harness, || {
+                    lifo_stack(&PUBLIC_MIMALLOC, s, d, &mut public_pool)
+                });
+            },
         );
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_raw", format!("{size}/{depth}")),
             &(size, depth),
-            |b, &(s, d)| b.iter(|| black_box(lifo_stack(&RAW_MIMALLOC, s, d, &mut raw_pool))),
+            |b, &(s, d)| {
+                iter_timed(b, verify_harness, || {
+                    lifo_stack(&RAW_MIMALLOC, s, d, &mut raw_pool)
+                });
+            },
         );
     }
     group.finish();
@@ -421,18 +456,17 @@ fn bench_lifo_stack(c: &mut Criterion) {
 
 fn single_reuse<A: GlobalAlloc>(alloc: &A, size: usize, ops: usize) -> usize {
     let layout = Layout::from_size_align(size, 8).unwrap();
-    assert_no_harness_allocations(|| {
-        let mut p = unsafe { alloc.alloc(layout) };
-        for _ in 0..ops {
-            unsafe { alloc.dealloc(p, layout) };
-            p = unsafe { alloc.alloc(layout) };
-        }
+    let mut p = unsafe { alloc.alloc(layout) };
+    for _ in 0..ops {
         unsafe { alloc.dealloc(p, layout) };
-        hint_black_box(ops)
-    })
+        p = unsafe { alloc.alloc(layout) };
+    }
+    unsafe { alloc.dealloc(p, layout) };
+    hint_black_box(ops)
 }
 
 fn bench_single_reuse(c: &mut Criterion) {
+    let verify_harness = harness_allocation_check_enabled();
     let mut group = c.benchmark_group("hotpath/single_reuse");
     group.sample_size(hotpath_sample_size(300));
     group.measurement_time(hotpath_measurement_time(6));
@@ -446,18 +480,26 @@ fn bench_single_reuse(c: &mut Criterion) {
 
         #[cfg(feature = "compare")]
         group.bench_with_input(BenchmarkId::new("system", size), &size, |b, &size| {
-            b.iter(|| black_box(single_reuse(&SYSTEM_ALLOCATOR, size, OPS)))
+            iter_timed(b, verify_harness, || {
+                single_reuse(&SYSTEM_ALLOCATOR, size, OPS)
+            });
         });
 
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_public", size),
             &size,
-            |b, &size| b.iter(|| black_box(single_reuse(&PUBLIC_MIMALLOC, size, OPS))),
+            |b, &size| {
+                iter_timed(b, verify_harness, || {
+                    single_reuse(&PUBLIC_MIMALLOC, size, OPS)
+                });
+            },
         );
         group.bench_with_input(
             BenchmarkId::new("mechanical_mimalloc_raw", size),
             &size,
-            |b, &size| b.iter(|| black_box(single_reuse(&RAW_MIMALLOC, size, OPS))),
+            |b, &size| {
+                iter_timed(b, verify_harness, || single_reuse(&RAW_MIMALLOC, size, OPS));
+            },
         );
     }
     group.finish();

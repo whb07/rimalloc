@@ -42,13 +42,14 @@ fn snapshot() -> HarnessAllocationSnapshot {
     }
 }
 
-pub fn assert_no_harness_allocations<F, R>(f: F) -> R
+pub fn harness_allocation_check_enabled() -> bool {
+    std::env::var_os("MIMALLOC_BENCH_ASSERT_NO_HARNESS_ALLOC").is_some()
+}
+
+pub fn assert_no_harness_allocations_enabled<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,
 {
-    if std::env::var_os("MIMALLOC_BENCH_ASSERT_NO_HARNESS_ALLOC").is_none() {
-        return f();
-    }
     let before = snapshot();
     let result = f();
     let after = snapshot();

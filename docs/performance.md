@@ -43,6 +43,12 @@ The hotpath Criterion harness supports:
 - `MIMALLOC_HOTPATH_MEASUREMENT_SECS`
 - `MIMALLOC_HOTPATH_WARMUP_SECS`
 - `MIMALLOC_HOTPATH_NRESAMPLES`
+- `MIMALLOC_BENCH_ASSERT_NO_HARNESS_ALLOC=1` for a diagnostic allocation-count pass
+
+The harness reads the allocation-check switch once while configuring each
+benchmark group. Normal measurements do not inspect the process environment or
+snapshot diagnostic counters inside timed iterations. The smoke gate enables
+the check explicitly; full performance runs leave it disabled.
 
 ## Evidence-layer realism
 

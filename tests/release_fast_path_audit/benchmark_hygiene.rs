@@ -17,6 +17,17 @@ fn assert_timed_helper_has_no_harness_allocation(source_name: &str, source: &str
             "{marker} in {source_name} must keep {forbidden} outside its timed body"
         );
     }
+    for forbidden in [
+        "assert_no_harness_allocations",
+        "harness_allocation_check_enabled",
+        "std::env",
+        "env::",
+    ] {
+        assert!(
+            !item.contains(forbidden),
+            "{marker} in {source_name} must keep {forbidden} outside its timed body"
+        );
+    }
 }
 
 #[test]
@@ -57,23 +68,23 @@ fn benchmark_timed_helpers_do_not_allocate_harness_storage() {
             && page_batch.contains("secure_encoded"),
         "Stage 3 slow-path cases and out-of-timer preparation must remain explicit"
     );
+    assert!(
+        hotpath.contains("hot-path benchmark setup allocation failed")
+            && remote.contains("remote-free benchmark setup allocation failed"),
+        "untimed benchmark setup must reject null allocator results before deallocation"
+    );
 }
 
 #[test]
-fn every_hotpath_timed_helper_uses_the_runtime_allocation_guard() {
+fn benchmark_configuration_hoists_the_runtime_allocation_guard() {
     let hotpath = std::fs::read_to_string("benches/hotpath.rs").expect("read hotpath benchmark");
-    for marker in [
-        "fn paired_alloc_free_layout<",
-        "fn free_routine<",
-        "fn lifo_stack<",
-        "fn single_reuse<",
-    ] {
-        let item = source_item("benches/hotpath.rs", &hotpath, marker);
-        assert!(
-            item.contains("assert_no_harness_allocations"),
-            "{marker} must use the runtime harness-allocation guard"
-        );
-    }
+    let timed_configuration = source_item("benches/hotpath.rs", &hotpath, "fn iter_timed<");
+    assert!(
+        timed_configuration.contains("if verify_harness")
+            && timed_configuration.contains("assert_no_harness_allocations_enabled")
+            && hotpath.contains("let verify_harness = harness_allocation_check_enabled();"),
+        "hot-path configuration must choose diagnostic mode before Criterion iterations"
+    );
 
     let remote = std::fs::read_to_string("benches/support/remote_fixture.rs")
         .expect("read remote-free fixture");
@@ -81,9 +92,30 @@ fn every_hotpath_timed_helper_uses_the_runtime_allocation_guard() {
         source_item(
             "benches/support/remote_fixture.rs",
             &remote,
-            "fn remote_free_timed_routine<",
+            "pub fn measure_remote_free(",
         )
-        .contains("assert_no_harness_allocations"),
-        "remote-free timing must use the runtime harness-allocation guard"
+        .contains("if self.verify_harness"),
+        "remote-free fixture must choose diagnostic mode before its sample loop"
+    );
+
+    let guard = std::fs::read_to_string("benches/support/no_alloc.rs")
+        .expect("read benchmark allocation guard");
+    assert!(
+        source_item(
+            "benches/support/no_alloc.rs",
+            &guard,
+            "pub fn assert_no_harness_allocations_enabled<",
+        )
+        .contains("let before = snapshot();"),
+        "the enabled allocation guard must snapshot without consulting the environment"
+    );
+    assert!(
+        !source_item(
+            "benches/support/no_alloc.rs",
+            &guard,
+            "pub fn assert_no_harness_allocations_enabled<",
+        )
+        .contains("std::env"),
+        "the timed diagnostic guard must not inspect process environment state"
     );
 }

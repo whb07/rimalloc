@@ -4,7 +4,7 @@
 
 use core::ffi::c_void;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use mechanical_mimalloc::raw::bench_diagnostics::{
+use mechanical_mimalloc::raw::{
     mi_bench_page_batch_fixture_destroy, mi_bench_page_batch_fixture_new,
     mi_bench_page_batch_fixture_prepare, mi_bench_page_batch_fixture_run,
 };

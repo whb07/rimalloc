@@ -56,6 +56,7 @@ BARE_DOMAIN_PARAM_RE = re.compile(
 CORE_TYPES_DEAD_CODE_RE = re.compile(r"#\s*!\s*\[\s*allow\s*\(\s*dead_code\s*\)\s*\]")
 LINEAR_CAPABILITY_TYPES = {
     "AbandonedMappedPageType",
+    "AbandonedDisposition",
     "AbandonedPageType",
     "ActivePage",
     "AllocatedBlock",
@@ -63,6 +64,7 @@ LINEAR_CAPABILITY_TYPES = {
     "AvailablePage",
     "BlockForFree",
     "DestroyedPage",
+    "DetachedRemoteList",
     "ForeignPage",
     "FreeBlock",
     "FullPage",
@@ -75,12 +77,34 @@ LINEAR_CAPABILITY_TYPES = {
     "PageForAbandon",
     "PageFreeOwner",
     "PointerLocation",
+    "PublishedRemoteHead",
     "QueuedPage",
     "RetiredPage",
+    "RemotePushResult",
     "UnqueuedPage",
     "ValidatedFree",
     "ValidatedFreeParts",
     "ValidPointerLookup",
+}
+CAPABILITY_CONSTRUCTOR_TYPES = {
+    "AbandonedMappedPageType",
+    "AbandonedPageType",
+    "ActivePage",
+    "AvailablePage",
+    "DestroyedPage",
+    "ForeignPage",
+    "FullPage",
+    "LocalPage",
+    "OwnedAbandonedPage",
+    "RetiredPage",
+}
+CAPABILITY_CONSTRUCTOR_RE = re.compile(
+    rf"\b(?:(?:{'|'.join(sorted(CAPABILITY_CONSTRUCTOR_TYPES))})|Page(?:::\s*<[^>]+>)?)::new_unchecked\s*\("
+)
+CAPABILITY_CONSTRUCTOR_FILES = {
+    "src/types/page_states.rs",
+    "src/types/page_queues.rs",
+    "src/types/raw_bridge.rs",
 }
 DERIVED_TRAITS_RE = re.compile(
     r"#\[derive\((?P<traits>[^)]*)\)\](?:\s*#\[[^]]+\])*\s*"
@@ -735,6 +759,21 @@ def main() -> int:
                 if re.search(rf"\bimpl\s+(?:Clone|Copy)\s+for\s+{name}\b", text):
                     offenders.append(
                         f"{rel}: linear capability {name} has an explicit Clone/Copy impl"
+                    )
+
+            constructor_fixture = rel.startswith("src/types/") and rel.endswith("/tests.rs")
+            if rel not in CAPABILITY_CONSTRUCTOR_FILES and not constructor_fixture:
+                for match in CAPABILITY_CONSTRUCTOR_RE.finditer(text):
+                    line = text.count("\n", 0, match.start()) + 1
+                    offenders.append(
+                        f"{rel}:{line}: capability new_unchecked construction must use src/types/raw_bridge.rs"
+                    )
+
+            if rel != "src/types/atomic/thread_free.rs" and "DetachedRemoteList(" in text:
+                for match in re.finditer(r"\bDetachedRemoteList\s*\(", text):
+                    line = text.count("\n", 0, match.start()) + 1
+                    offenders.append(
+                        f"{rel}:{line}: detached remote lists must originate in the atomic ownership module"
                     )
 
         if rel not in RAW_BOUNDARY_FILES:

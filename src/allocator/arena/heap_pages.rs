@@ -275,7 +275,7 @@ unsafe extern "C" fn mi_heap_delete_page(
     // SAFETY[AUDIT:arena-heap-delete-boundary]: the area reserved page belongs to
     // the heap traversal and is claimed before ownership-sensitive mutation.
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
-    let abandoned = unsafe { crate::core_types::AbandonedPage::new_unchecked(page_ptr) };
+    let abandoned = unsafe { crate::core_types::assume_abandoned_page(page_ptr) };
     let _owned = unsafe { mi_page_claim_ownership(abandoned) };
     if unsafe { mi_page_is_abandoned(page) } {
         // SAFETY[AUDIT:arena-heap-delete-boundary]: owned abandoned pages can be

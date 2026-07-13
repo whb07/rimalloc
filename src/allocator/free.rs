@@ -23,9 +23,9 @@ use crate::internal::{
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
-    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_retire_internal,
-    _mi_page_unfull_internal, _mi_theap_page_reclaim, MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable,
-    mi_page_is_abandoned, mi_page_is_huge, mi_page_queue_count_typed,
+    _mi_page_free_collect, _mi_page_retire_internal, _mi_page_unfull_internal,
+    _mi_theap_page_reclaim, MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned,
+    mi_page_is_huge, mi_page_queue_count_typed,
 };
 use crate::prim::{
     _mi_page_associated_theap_peek, _mi_prim_thread_id, _mi_theap_default,
@@ -37,7 +37,7 @@ use crate::types::{
     MI_SMALL_PAGE_SIZE, MI_SMALL_SIZE_MAX, mi_block_t, mi_page_t, mi_theap_t,
 };
 
-use abandoned::mi_free_try_collect_mt_typed;
+use abandoned::collect_after_remote_free;
 
 // SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 #[cfg(mi_c_malloc_fast)]
@@ -417,7 +417,7 @@ pub(crate) unsafe fn mi_free_block_local(
         let used = page_wrapper.push_free_block(block_wrapper.into_free_block());
         if used.get() == 0 {
             if crate::page::mi_page_retire_expire(page).is_zero() {
-                let active = crate::core_types::ActivePage::new_unchecked(
+                let active = crate::core_types::assume_active_page(
                     crate::core_types::PagePtr::new_unchecked(page),
                 );
                 let Ok(all_free) = active.try_mark_all_free() else {
@@ -427,7 +427,7 @@ pub(crate) unsafe fn mi_free_block_local(
                 _mi_page_retire_internal(all_free);
             }
         } else if check_full && crate::page::mi_page_is_in_full(page) {
-            let _ = _mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked(
+            let _ = _mi_page_unfull_internal(crate::core_types::assume_full_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             ));
         }
@@ -461,23 +461,30 @@ pub(crate) unsafe fn mi_free_block_mt(
 
         let atomic_tf = page_ptr.thread_free_cell();
 
-        let mut tf_old = atomic_tf.load_relaxed();
-        loop {
-            mi_block_set_next_typed(page_ptr, bp, tf_old.head());
-            match atomic_tf.push_remote_acq_rel(&mut tf_old, bp) {
-                Ok(_) => break,
-                Err(_) => continue, // tf_old is updated by the atomic wrapper
+        let mut expected = atomic_tf.load_relaxed();
+        let (previous, published) = loop {
+            mi_block_set_next_typed(page_ptr, bp, expected.head());
+            match atomic_tf.try_push(expected, bp) {
+                crate::core_types::RemotePushResult::Published { previous, head } => {
+                    break (previous, head);
+                }
+                crate::core_types::RemotePushResult::Retry { observed } => {
+                    expected = observed;
+                }
             }
-        }
+        };
 
-        if !tf_old.is_owned() {
+        if !previous.is_owned() {
             crate::internal::mi_assert_internal!(mi_page_is_abandoned(page));
-            mi_free_try_collect_mt_typed(
-                crate::core_types::OwnedAbandonedPage::new_unchecked(
+            collect_after_remote_free(
+                crate::core_types::assume_owned_abandoned_page(
                     crate::core_types::PagePtr::new_unchecked(page),
                 ),
-                crate::core_types::RemoteFreeList::from_detached_head(bp),
-            );
+                published,
+            )
+            .discard();
+        } else {
+            published.leave_published();
         }
     }
 }
@@ -657,7 +664,7 @@ pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *
         // SAFETY: The generic dispatch boundary supplies a non-null page/user pair;
         // validation reconstructs the typed free witness.
         let parts = validated.into_parts();
-        let page_wrapper = crate::core_types::LocalPage::new_unchecked(parts.page);
+        let page_wrapper = crate::core_types::assume_local_page(parts.page);
 
         mi_free_block_local(
             page_wrapper,
@@ -683,7 +690,7 @@ pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut
         // SAFETY: The generic dispatch boundary supplies a non-null page/user pair;
         // validation reconstructs the typed free witness.
         let parts = validated.into_parts();
-        let page_wrapper = crate::core_types::ForeignPage::new_unchecked(parts.page);
+        let page_wrapper = crate::core_types::assume_foreign_page(parts.page);
 
         mi_free_block_mt(page_wrapper, parts.block);
     }
@@ -835,7 +842,7 @@ unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
         match page_tid.classify_free_path(current) {
             crate::core_types::FreePathKind::LocalFast => {
                 mi_free_block_local(
-                    crate::core_types::LocalPage::new_unchecked(page_ptr),
+                    crate::core_types::assume_local_page(page_ptr),
                     block,
                     crate::core_types::LocalFreeMode::TrackOnly,
                 );
@@ -844,10 +851,7 @@ unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
             crate::core_types::FreePathKind::RemotePlain
                 if !page_tid.is_abandoned() && !page_tid.is_abandoned_mapped() =>
             {
-                mi_free_block_mt(
-                    crate::core_types::ForeignPage::new_unchecked(page_ptr),
-                    block,
-                );
+                mi_free_block_mt(crate::core_types::assume_foreign_page(page_ptr), block);
                 true
             }
             _ => false,
@@ -971,14 +975,15 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_internal!(!mt_free.is_null());
-        mi_free_try_collect_mt_typed(
-            crate::core_types::OwnedAbandonedPage::new_unchecked(
+        collect_after_remote_free(
+            crate::core_types::assume_owned_abandoned_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             ),
-            crate::core_types::RemoteFreeList::from_detached_head(
+            crate::core_types::PublishedRemoteHead::from_raw_compat(
                 crate::core_types::BlockPtr::new_unchecked(mt_free),
             ),
-        );
+        )
+        .discard();
     }
 }
 

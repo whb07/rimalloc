@@ -50,10 +50,10 @@ pub(super) fn assert_page_release_and_abandon_boundaries(
             && page_rs.contains("_mi_arenas_page_abandon(page, theap);")
             && page_rs.contains("_mi_arenas_collect(false, false, (*theap).tld);")
             && page_rs.contains("crate::core_types::PageAbandonOutcome::Abandoned")
-            && page_rs.contains("crate::core_types::AbandonedPage::new_unchecked(page_ptr)")
+            && page_rs.contains("crate::core_types::assume_abandoned_page(page_ptr)")
             && page_rs.contains("let page_ptr = crate::core_types::PagePtr::new_unchecked(page);")
-            && page_rs.contains("crate::core_types::FullPage::new_unchecked(page_ptr)")
-            && page_rs.contains("crate::core_types::ActivePage::new_unchecked(page_ptr)")
+            && page_rs.contains("crate::core_types::assume_full_page(page_ptr)")
+            && page_rs.contains("crate::core_types::assume_active_page(page_ptr)")
             && page_rs.contains(".into_abandon_candidate()")
             && theap_rs.contains("_mi_page_abandon(page, pq);"),
         "page abandon should keep C's local helper boundary while using typed active/full abandon witnesses internally"

@@ -44,7 +44,8 @@ pub(super) fn assert_page_state_domain_wrappers(core_mod: &str, page_states_rs: 
         );
     }
     assert!(
-        page_states_rs.contains("pub(crate) unsafe fn new_unchecked(page: PagePtr) -> Self")
+        page_states_rs
+            .contains("pub(in crate::types) unsafe fn new_unchecked(page: PagePtr) -> Self")
             && page_states_rs.contains("pub(crate) fn page(&self) -> PagePtr"),
         "page-state witnesses should expose explicit unchecked constructors and page accessors"
     );

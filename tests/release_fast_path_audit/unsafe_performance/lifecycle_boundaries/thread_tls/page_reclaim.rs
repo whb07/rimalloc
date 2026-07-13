@@ -17,7 +17,7 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && page_rs.contains("mi_theap_page_reclaim_raw;")
         && page_rs.contains("let _ = _mi_theap_page_reclaim(wrapper, theap_wrapper);")
         && page_rs
-            .contains("let wrapper = crate::core_types::OwnedAbandonedPage::new_unchecked(page_ptr);")
+            .contains("let wrapper = crate::core_types::assume_owned_abandoned_page(page_ptr);")
         && !page_rs.contains("pub unsafe extern \"C\" fn _mi_theap_page_reclaim")
         && atomic_types.contains("pub(crate) unsafe fn load(self) -> PageThreadId")
         && atomic_types.contains("pub(crate) unsafe fn store_owner(self, owner: PageOwnerId)")
@@ -48,14 +48,14 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && !page_flags_rs.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
         && !arena_rs.contains("MI_THREADID_ABANDONED_MAPPED | flags")
         && page_rs.contains("let atomic_tf = page_ptr.thread_free_cell();")
-        && page_rs.contains("let remote = atomic_tf.collect_acq_rel();")
-        && page_rs.contains("remote.collect_into_local(&page_wrapper, local);")
+        && page_rs.contains("let remote = atomic_tf.detach_head();")
+        && page_rs.contains("collect_remote_for_owned_abandoned_page(&page_wrapper, remote, local)")
         && !page_rs.contains("atomic_tf.take_head_preserving_owner()")
         && !page_rs.contains("AtomicThreadFree::from_field(")
         && !page_rs.contains("addr_of_mut!((*page).xthread_free)")
-        && atomic_types.contains("pub(crate) fn push_remote_acq_rel(")
+        && atomic_types.contains("pub(crate) fn try_push(")
         && atomic_types.contains(
-            "pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList"
+            "pub(crate) unsafe fn detach_head(self) -> DetachedRemoteList"
         )
         && atomic_types.contains("pub(crate) unsafe fn claim_acq_rel(self) -> bool")
         && atomic_types.contains(
@@ -89,7 +89,7 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && !arena_rs.contains("(*page).xthread_free = 0")
         && free_rs.contains("let atomic_tf = page_ptr.thread_free_cell();")
         && free_rs.contains("let atomic_tf = page.page().thread_free_cell();")
-        && free_rs.contains("match atomic_tf.push_remote_acq_rel(&mut tf_old, bp)")
+        && free_rs.contains("match atomic_tf.try_push(expected, bp)")
         && free_rs.contains("while !atomic_tf.release_acq_rel(&mut tf_expect)")
         && free_rs.contains("tf_expect = atomic_tf.load_relaxed();")
         && !free_rs.contains("atomic_tf.compare_exchange_push(")

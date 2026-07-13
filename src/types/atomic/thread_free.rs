@@ -7,62 +7,98 @@
 use core::sync::atomic::Ordering;
 
 use super::{AtomicUsizeField, BlockPtr};
-use crate::core_types::{LocalFreeList, OwnedAbandonedPage, ThreadFreeOwner, ThreadFreeWord};
+use crate::core_types::{OwnedAbandonedPage, ThreadFreeOwner, ThreadFreeWord};
 
-pub(crate) enum RemotePushOutcome {
-    Success,
-    Failed(BlockPtr),
+#[must_use = "remote push outcomes must be consumed to preserve publication ownership"]
+pub(crate) enum RemotePushResult {
+    Published {
+        previous: ThreadFreeWord,
+        head: PublishedRemoteHead,
+    },
+    Retry {
+        observed: ThreadFreeWord,
+    },
 }
 
-/// The remote free list collected from a thread-free word.
+/// A block head that remains published in the page's atomic thread-free word.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct RemoteFreeList(Option<BlockPtr>);
+#[derive(Debug)]
+#[must_use = "published remote heads remain owned by the atomic thread-free word"]
+pub(crate) struct PublishedRemoteHead(BlockPtr);
 
-impl RemoteFreeList {
+impl PublishedRemoteHead {
+    /// # Safety
+    /// `head` must be the head still published in a valid page's thread-free
+    /// word at a documented raw compatibility ingress.
     #[inline(always)]
-    pub(crate) fn from_detached_thread_free_head(head: Option<BlockPtr>) -> Self {
+    pub(crate) unsafe fn from_raw_compat(head: BlockPtr) -> Self {
         Self(head)
     }
 
     #[inline(always)]
-    pub(crate) fn from_detached_head(head: BlockPtr) -> Self {
-        Self(Some(head))
+    pub(crate) fn head(&self) -> BlockPtr {
+        self.0
     }
 
+    /// Consume the transient publication witness when another owner is
+    /// responsible for collecting the still-published head.
     #[inline(always)]
-    pub(crate) fn head(self) -> Option<BlockPtr> {
+    pub(crate) fn leave_published(self) {
+        let Self(_head) = self;
+    }
+
+    /// Detach only the tail while leaving this head published atomically.
+    ///
+    /// # Safety
+    /// `page` must own the abandoned-page thread-free protocol and `self`
+    /// must be the head currently published for that page.
+    #[inline(always)]
+    pub(crate) unsafe fn detach_tail(
+        self,
+        page: &OwnedAbandonedPage,
+    ) -> (PublishedRemoteHead, Option<DetachedRemoteList>) {
+        let page_raw = page.page().as_ptr();
+        let head_raw = self.0.as_ptr();
+        // SAFETY[AUDIT:typed-atomic-thread-free-published-tail]: owned
+        // abandoned-page protocol excludes another collector while the
+        // published head remains visible to remote pushers.
+        let next = unsafe { crate::internal::mi_block_next(page_raw, head_raw) };
+        if next.is_null() {
+            return (self, None);
+        }
+        // SAFETY[AUDIT:typed-atomic-thread-free-published-tail]: severing the
+        // head link uniquely detaches the old tail without unpublishing head.
+        unsafe { crate::internal::mi_block_set_next(page_raw, head_raw, core::ptr::null_mut()) };
+        // SAFETY[AUDIT:typed-atomic-thread-free-published-tail]: `next` was a
+        // non-null tail link from the published chain and is now detached.
+        let tail = unsafe { BlockPtr::new_unchecked(next) };
+        (self, Some(DetachedRemoteList(Some(tail))))
+    }
+}
+
+/// A remote chain no longer owned by the atomic thread-free word.
+#[repr(transparent)]
+#[derive(Debug)]
+#[must_use = "detached remote lists must be collected or explicitly republished"]
+pub(crate) struct DetachedRemoteList(Option<BlockPtr>);
+
+impl DetachedRemoteList {
+    #[inline(always)]
+    pub(crate) fn head(&self) -> Option<BlockPtr> {
         self.0
     }
 
     #[inline(always)]
-    pub(crate) fn is_empty(self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.is_none()
     }
 
-    /// Collect the remote (thread-free) list into the page's local free list.
-    ///
-    /// Delegates to `mi_page_thread_collect_to_local_typed`, which splices
-    /// `self`'s head into `(*page).local_free`, runs the corruption/length
-    /// checks, and decrements `(*page).used`. Returns the updated local free
-    /// list.
-    ///
-    /// Constrained to `OwnedAbandonedPage` (the reclaim path); regular-page
-    /// collection uses the raw `_mi_page_free_collect` entry point directly.
-    ///
     /// # Safety
-    /// `page` must be a valid owned abandoned page; `self` must be the head
-    /// popped from `(*page).xthread_free` via the ownership CAS protocol.
-    #[inline]
-    pub(crate) unsafe fn collect_into_local(
-        self,
-        page: &OwnedAbandonedPage,
-        local: LocalFreeList,
-    ) -> LocalFreeList {
-        // SAFETY[AUDIT:typed-atomic-thread-free]: the caller supplies the owned
-        // abandoned page and remote-list head produced by the xthread_free CAS
-        // protocol.
-        unsafe { crate::page::mi_page_thread_collect_to_local_typed(page, self, local) }
+    /// `head` must be null or the uniquely detached head accepted at a raw
+    /// compatibility ingress.
+    #[inline(always)]
+    pub(crate) unsafe fn from_raw_compat(head: Option<BlockPtr>) -> Self {
+        Self(head)
     }
 }
 
@@ -87,38 +123,30 @@ impl AtomicThreadFree {
         ThreadFreeWord::from_raw(unsafe { self.field().load(Ordering::Relaxed) })
     }
 
-    pub(crate) fn push_remote_acq_rel(
-        self,
-        old: &mut ThreadFreeWord,
-        block: BlockPtr,
-    ) -> Result<ThreadFreeWord, ThreadFreeWord> {
+    pub(crate) fn try_push(self, expected: ThreadFreeWord, block: BlockPtr) -> RemotePushResult {
         let new_tf = ThreadFreeWord::from_parts(Some(block), ThreadFreeOwner::Owned);
-        let mut expected = old.raw();
+        let mut raw_expected = expected.raw();
         // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
         // `xthread_free` field; failure updates the typed expected word.
         if unsafe {
             self.field().compare_exchange_weak(
-                &mut expected,
+                &mut raw_expected,
                 new_tf.raw(),
                 Ordering::AcqRel,
                 Ordering::Acquire,
             )
         } {
-            Ok(new_tf)
+            RemotePushResult::Published {
+                previous: expected,
+                head: PublishedRemoteHead(block),
+            }
         } else {
             #[cfg(feature = "bench-diagnostics")]
             crate::bench_diagnostics::remote_free_cas_retry();
-            *old = ThreadFreeWord::from_raw(expected);
-            Err(*old)
+            RemotePushResult::Retry {
+                observed: ThreadFreeWord::from_raw(raw_expected),
+            }
         }
-    }
-
-    pub(crate) fn compare_exchange_push(
-        self,
-        old: &mut ThreadFreeWord,
-        block: BlockPtr,
-    ) -> Result<ThreadFreeWord, ThreadFreeWord> {
-        self.push_remote_acq_rel(old, block)
     }
 
     /// Clear the owned bit if `expected` still matches the live thread-free
@@ -165,20 +193,20 @@ impl AtomicThreadFree {
     /// ownership bit in `xthread_free`.
     ///
     /// Mirrors the CAS loop in `mi_page_thread_free_collect`; returning a
-    /// `RemoteFreeList` makes the subsequent abandoned-page collection consume
-    /// the typed free-list wrapper instead of a raw `mi_block_t*`.
+    /// `DetachedRemoteList` makes subsequent collection consume a uniquely
+    /// owned chain instead of a raw `mi_block_t*`.
     ///
     /// # Safety
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]
-    pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList {
+    pub(crate) unsafe fn detach_head(self) -> DetachedRemoteList {
         // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
         // `xthread_free` field; relaxed load mirrors the C collect loop pre-read.
         let mut old = ThreadFreeWord::from_raw(unsafe { self.field().load(Ordering::Relaxed) });
         loop {
             let head = old.head();
             if head.is_none() {
-                return RemoteFreeList::from_detached_thread_free_head(None);
+                return DetachedRemoteList(None);
             }
             let new = old.without_head();
             let mut raw_old = old.raw();
@@ -192,16 +220,10 @@ impl AtomicThreadFree {
                     Ordering::Acquire,
                 )
             } {
-                return RemoteFreeList::from_detached_thread_free_head(head);
+                return DetachedRemoteList(head);
             }
             old = ThreadFreeWord::from_raw(raw_old);
         }
-    }
-
-    pub(crate) unsafe fn take_head_preserving_owner(self) -> RemoteFreeList {
-        // SAFETY[AUDIT:typed-atomic-thread-free]: compatibility shim forwards to the
-        // typed remote-head detach operation with the same xthread_free contract.
-        unsafe { self.collect_acq_rel() }
     }
 
     /// Claim ownership of the page's thread-free list by setting the owned bit
@@ -219,48 +241,5 @@ impl AtomicThreadFree {
         // `xthread_free` field and this RMW sets only the owner bit.
         let old = unsafe { self.field().fetch_or(1, Ordering::AcqRel) };
         (old & 1) == 0
-    }
-
-    pub(crate) unsafe fn claim_ownership(self) -> bool {
-        // SAFETY[AUDIT:typed-atomic-thread-free]: compatibility shim forwards to the
-        // typed ownership-claim RMW with the same xthread_free contract.
-        unsafe { self.claim_acq_rel() }
-    }
-
-    /// Release ownership of the page's thread-free list, preserving the current
-    /// list head. Loops with a weak CAS clearing the owned bit, retrying if the
-    /// head changed concurrently. Returns `true` if the owned bit was cleared
-    /// by this call.
-    ///
-    /// `expected_head`, if provided, is the head the caller believes is current;
-    /// the CAS still validates against the live atomic value, so a mismatch just
-    /// causes a retry rather than UB.
-    ///
-    /// # Safety
-    /// `self` must point to a valid page's `xthread_free` field, and the caller
-    /// must ensure no concurrent collector can leave the list in an inconsistent
-    /// state (see `mi_abandoned_page_unown_from_free` for the full protocol).
-    #[inline]
-    pub(crate) unsafe fn release_ownership(self, _expected_head: Option<BlockPtr>) -> bool {
-        loop {
-            // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
-            // `xthread_free` field; acquire load observes concurrent list updates.
-            let current = unsafe { self.field().load(Ordering::Acquire) };
-            let current_word = ThreadFreeWord::from_raw(current);
-            let new = current_word.with_owner(ThreadFreeOwner::Unowned).raw();
-            let mut expected = current;
-            // SAFETY[AUDIT:typed-atomic-thread-free]: the CAS clears only the
-            // ownership bit while preserving the observed remote-list head.
-            if unsafe {
-                self.field().compare_exchange_weak(
-                    &mut expected,
-                    new,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
-            } {
-                return current_word.is_owned();
-            }
-        }
     }
 }

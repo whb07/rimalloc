@@ -73,9 +73,9 @@ pub use lifecycle::{
     mi_page_is_full, mi_page_thread_collect_to_local, mi_page_thread_free_collect,
 };
 pub(crate) use lifecycle::{
+    _mi_page_free_collect_partly_typed, collect_remote_for_owned_abandoned_page,
     mi_page_decrement_retire_expire, mi_page_reset_retire_expire, mi_page_retire_expire,
     mi_page_set_retire_expire, mi_page_set_slice_committed, mi_page_slice_committed,
-    mi_page_thread_collect_to_local_typed,
 };
 pub use queues::_mi_page_queue_append;
 pub use queues::{mi_page_queue_contains, mi_page_queue_of};
@@ -122,7 +122,7 @@ const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
     unsafe {
-        let _ = _mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked(
+        let _ = _mi_page_unfull_internal(crate::core_types::assume_full_page(
             crate::core_types::PagePtr::new_unchecked(page),
         ));
     }
@@ -140,7 +140,7 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
         crate::internal::mi_assert_internal!(mi_page_is_in_full(page));
         crate::internal::mi_assert_internal!(!(*mi_page_theap(page)).allow_page_abandon);
         if !mi_page_is_in_full(page) {
-            return crate::core_types::ActivePage::new_unchecked(page_wrapper.page());
+            return crate::core_types::assume_active_page(page_wrapper.page());
         }
 
         let theap = mi_page_theap(page);
@@ -158,7 +158,7 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
                 Ok(queued) => queued,
                 Err(page_wrapper) => {
                     crate::internal::mi_assert_internal!(false);
-                    return crate::core_types::ActivePage::new_unchecked(page_wrapper.page());
+                    return crate::core_types::assume_active_page(page_wrapper.page());
                 }
             };
         let to = crate::core_types::NormalPageQueue::new_unchecked(
@@ -178,7 +178,7 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
 
         let theap = mi_page_theap(page);
         if (*theap).allow_page_abandon {
-            let active = crate::core_types::ActivePage::new_unchecked(
+            let active = crate::core_types::assume_active_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
             let _ = _mi_page_abandon_internal(
@@ -189,9 +189,9 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
             let full = ThreadHeapPtr::new_unchecked(theap)
                 .page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
             let _ = mi_page_move_to_full_typed(
-                crate::core_types::ActivePage::new_unchecked(
-                    crate::core_types::PagePtr::new_unchecked(page),
-                ),
+                crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(
+                    page,
+                )),
                 crate::core_types::NormalPageQueue::new_unchecked(
                     crate::core_types::PageQueuePtr::new_unchecked(pq),
                 ),
@@ -232,7 +232,7 @@ pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_
             let queue = crate::core_types::FullPageQueue::new_unchecked(
                 crate::core_types::PageQueuePtr::new_unchecked(pq),
             );
-            let full = crate::core_types::FullPage::new_unchecked(
+            let full = crate::core_types::assume_full_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
             let Ok(all_free) = full.try_mark_all_free() else {
@@ -246,9 +246,8 @@ pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_
         let queue = crate::core_types::NormalPageQueue::new_unchecked(
             crate::core_types::PageQueuePtr::new_unchecked(pq),
         );
-        let active = crate::core_types::ActivePage::new_unchecked(
-            crate::core_types::PagePtr::new_unchecked(page),
-        );
+        let active =
+            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
         let Ok(all_free) = active.try_mark_all_free() else {
             crate::internal::mi_assert_internal!(false);
             return;
@@ -290,7 +289,7 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
         crate::internal::mi_assert_internal!(mi_page_all_free(page));
 
         mi_page_set_has_interior_pointers(page_wrapper.page(), false);
-        let full = crate::core_types::FullPage::new_unchecked(page_wrapper.page());
+        let full = crate::core_types::assume_full_page(page_wrapper.page());
         let Ok(queued) =
             crate::core_types::QueuedPage::<crate::core_types::FullQueue>::try_queue_full(
                 full, queue,
@@ -329,9 +328,8 @@ const MI_RETIRE_CYCLES: u8 = 16;
 // SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     unsafe {
-        let active = crate::core_types::ActivePage::new_unchecked(
-            crate::core_types::PagePtr::new_unchecked(page),
-        );
+        let active =
+            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
         let Ok(all_free) = active.try_mark_all_free() else {
             crate::internal::mi_assert_internal!(false);
             return;
@@ -431,7 +429,7 @@ unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLo
                 if mi_page_all_free(page) {
                     let expire = mi_page_decrement_retire_expire(page);
                     if expire.is_zero() || force {
-                        let active = crate::core_types::ActivePage::new_unchecked(
+                        let active = crate::core_types::assume_active_page(
                             crate::core_types::PagePtr::new_unchecked(page),
                         );
                         let Ok(all_free) = active.try_mark_all_free() else {
@@ -746,9 +744,9 @@ unsafe fn _mi_page_abandon_typed(
     // SAFETY[AUDIT:page-queue-abandon-boundary]: abandon transitions detach active/full pages before arena abandon publication.
     unsafe {
         let page_wrapper = if mi_page_is_in_full(page_ptr.as_ptr()) {
-            crate::core_types::FullPage::new_unchecked(page_ptr).into_abandon_candidate()
+            crate::core_types::assume_full_page(page_ptr).into_abandon_candidate()
         } else {
-            crate::core_types::ActivePage::new_unchecked(page_ptr).into_abandon_candidate()
+            crate::core_types::assume_active_page(page_ptr).into_abandon_candidate()
         };
         _mi_page_abandon_internal(page_wrapper, queue)
     }
@@ -773,7 +771,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
                     let Ok(all_free) = page.try_mark_all_free() else {
                         crate::internal::mi_assert_internal!(false);
                         return crate::core_types::PageAbandonOutcome::Abandoned(
-                            crate::core_types::AbandonedPage::new_unchecked(page_ptr),
+                            crate::core_types::assume_abandoned_page(page_ptr),
                         );
                     };
                     let queue = crate::core_types::FullPageQueue::new_unchecked(queue);
@@ -783,7 +781,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
                     let Ok(all_free) = page.try_mark_all_free() else {
                         crate::internal::mi_assert_internal!(false);
                         return crate::core_types::PageAbandonOutcome::Abandoned(
-                            crate::core_types::AbandonedPage::new_unchecked(page_ptr),
+                            crate::core_types::assume_abandoned_page(page_ptr),
                         );
                     };
                     if let Some(queue) = crate::core_types::NormalPageQueue::new(queue) {
@@ -835,7 +833,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
             _mi_arenas_page_abandon(page, theap);
             _mi_arenas_collect(false, false, (*theap).tld);
             crate::core_types::PageAbandonOutcome::Abandoned(
-                crate::core_types::AbandonedPage::new_unchecked(page_ptr),
+                crate::core_types::assume_abandoned_page(page_ptr),
             )
         }
     }
@@ -895,7 +893,7 @@ unsafe fn mi_page_fresh_alloc_typed(
         }
         let page = if mi_page_is_abandoned(page) {
             let page = _mi_theap_page_reclaim(
-                crate::core_types::OwnedAbandonedPage::new_unchecked(
+                crate::core_types::assume_owned_abandoned_page(
                     crate::core_types::PagePtr::new_unchecked(page),
                 ),
                 owner,
@@ -912,7 +910,7 @@ unsafe fn mi_page_fresh_alloc_typed(
             }
             page
         } else if !pq.is_null() {
-            let page = crate::core_types::ActivePage::new_unchecked(
+            let page = crate::core_types::assume_active_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
             if mi_page_queue_is_huge(pq) {
@@ -929,9 +927,7 @@ unsafe fn mi_page_fresh_alloc_typed(
                 .into_active()
             }
         } else {
-            crate::core_types::ActivePage::new_unchecked(crate::core_types::PagePtr::new_unchecked(
-                page,
-            ))
+            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page))
         };
         crate::internal::mi_assert_internal!(
             pq.is_null() || mi_page_block_size(page.page().as_ptr()) >= block_size
@@ -964,9 +960,7 @@ pub(crate) unsafe extern "C" fn _mi_page_init(
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             ),
-            crate::core_types::Page::<crate::core_types::Uninit>::new_unchecked(
-                crate::core_types::PagePtr::new_unchecked(page),
-            ),
+            crate::core_types::assume_uninit_page(crate::core_types::PagePtr::new_unchecked(page)),
         )
     }
 }
@@ -1095,7 +1089,7 @@ unsafe fn mi_page_fresh_typed(
         }
         crate::internal::mi_assert_internal!(block_size == mi_page_block_size(page));
         crate::internal::mi_assert_internal!(pq == mi_theap_page_queue_of(theap, page));
-        Some(crate::core_types::ActivePage::new_unchecked(
+        Some(crate::core_types::assume_active_page(
             crate::core_types::PagePtr::new_unchecked(page),
         ))
     }
@@ -1122,9 +1116,9 @@ pub(crate) unsafe fn try_reclaim_abandoned(
 
         let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
         let atomic_tf = page_ptr.thread_free_cell();
-        let remote = atomic_tf.collect_acq_rel();
+        let remote = atomic_tf.detach_head();
         let local = page_ptr.local_free();
-        remote.collect_into_local(&page_wrapper, local);
+        let _ = collect_remote_for_owned_abandoned_page(&page_wrapper, remote, local);
 
         _mi_page_free_collect(page, false);
         let pq = mi_theap_page_queue_of(theap, page);
@@ -1159,7 +1153,7 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
 unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mut mi_page_t) {
     unsafe {
         let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
-        let wrapper = crate::core_types::OwnedAbandonedPage::new_unchecked(page_ptr);
+        let wrapper = crate::core_types::assume_owned_abandoned_page(page_ptr);
         let theap_ptr = crate::core_types::ThreadHeapPtr::new_unchecked(theap);
         let theap_wrapper = crate::core_types::ThreadHeapLocal::new_unchecked(theap_ptr);
         let _ = _mi_theap_page_reclaim(wrapper, theap_wrapper);
@@ -1471,10 +1465,10 @@ unsafe fn mi_page_queue_find_free_ex_typed(
                         _mi_option_get_fast(mi_option_t::mi_option_page_max_candidates),
                     );
                 } else if mi_page_all_free(page_candidate) {
-                    let active = crate::core_types::ActivePage::new_unchecked(
+                    let active = crate::core_types::assume_active_page(
                         crate::core_types::PagePtr::new_unchecked(page_candidate),
                     );
-                    let all_free = crate::core_types::AllFreePage::active_unchecked(active);
+                    let all_free = active.try_mark_all_free().unwrap_unchecked();
                     let _ = _mi_page_free_active_internal(all_free, queue);
                     page_candidate = page;
                 } else if mi_page_used_count(page) >= mi_page_used_count(page_candidate)
@@ -1542,13 +1536,14 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             }
         } else {
             crate::internal::mi_assert_internal!(mi_page_immediate_available(page));
-            let active = crate::core_types::ActivePage::new_unchecked(
+            let active = crate::core_types::assume_active_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
             let queued =
-                crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
+                crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::try_queue(
                     active, queue,
-                );
+                )
+                .unwrap_unchecked();
             let _ = mi_page_queue_move_to_front_typed(theap, queue, queued);
             mi_page_reset_retire_expire(page);
             #[cfg(feature = "bench-diagnostics")]
@@ -1557,7 +1552,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
         crate::internal::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
 
         crate::core_types::PagePtr::new(page)
-            .map(|page| crate::core_types::ActivePage::new_unchecked(page))
+            .map(|page| crate::core_types::assume_active_page(page))
     }
 }
 
@@ -1603,7 +1598,7 @@ unsafe fn mi_find_free_page_typed(
                 crate::internal::mi_assert_internal!(mi_page_immediate_available(page_raw));
             }
             mi_page_reset_retire_expire(page_raw);
-            Some(crate::core_types::ActivePage::new_unchecked(page))
+            Some(crate::core_types::assume_active_page(page))
         } else {
             mi_page_queue_find_free_ex_typed(theap, queue, block_size, true)
         }
@@ -1672,7 +1667,7 @@ unsafe fn mi_huge_page_alloc_typed(
             }
         }
         crate::core_types::PagePtr::new(page)
-            .map(|page| crate::core_types::ActivePage::new_unchecked(page))
+            .map(|page| crate::core_types::assume_active_page(page))
     }
 }
 

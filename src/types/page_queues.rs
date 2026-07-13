@@ -206,7 +206,7 @@ impl QueuedPage<NormalQueue> {
     /// `page` must be known to be currently linked in `queue`, not marked full,
     /// and have a block size compatible with `queue`.
     #[inline(always)]
-    pub(crate) unsafe fn new_unchecked(
+    pub(in crate::types) unsafe fn new_unchecked(
         page: crate::core_types::ActivePage,
         queue: NormalPageQueue,
     ) -> Self {
@@ -214,6 +214,18 @@ impl QueuedPage<NormalQueue> {
             page: page.page(),
             queue: PageQueue::normal(queue),
         }
+    }
+
+    /// # Safety
+    /// `page` must have just been linked into `queue` by the caller.
+    #[inline(always)]
+    pub(crate) unsafe fn from_enqueued(
+        page: crate::core_types::ActivePage,
+        queue: NormalPageQueue,
+    ) -> Self {
+        // SAFETY[AUDIT:typed-page-queue-enqueue-transition]: queue mutation
+        // completed immediately before this consuming transition.
+        unsafe { Self::new_unchecked(page, queue) }
     }
 
     #[inline(always)]

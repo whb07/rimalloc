@@ -231,12 +231,68 @@ fn atomic_thread_free_take_head_preserves_owner_bit() {
 
     // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
     // stack-local thread-free word initialized with the stack-local block head.
-    let list = unsafe { field.collect_acq_rel() };
+    let list = unsafe { field.detach_head() };
     assert_eq!(list.head().map(BlockPtr::as_ptr), Some(head.as_ptr()));
 
     let remaining = field.load_relaxed();
     assert!(remaining.is_owned());
     assert!(remaining.head().is_none());
+}
+
+#[test]
+fn remote_push_publishes_head_and_atomic_detach_owns_it() {
+    let mut block = mi_block_t::default();
+    let block = unsafe { BlockPtr::new_unchecked(ptr::addr_of_mut!(block)) };
+    let initial = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned);
+    let mut page = MaybeUninit::<mi_page_t>::uninit();
+    let raw_page = page.as_mut_ptr();
+    unsafe { ptr::addr_of_mut!((*raw_page).xthread_free).write(initial.raw()) };
+    let page = unsafe { PagePtr::new_unchecked(raw_page) };
+    let field = unsafe { page.thread_free_cell() };
+
+    let published = loop {
+        match field.try_push(initial, block) {
+            RemotePushResult::Published { previous, head } => {
+                assert_eq!(previous.raw(), initial.raw());
+                assert_eq!(head.head().as_ptr(), block.as_ptr());
+                break head;
+            }
+            RemotePushResult::Retry { observed } => {
+                assert_eq!(
+                    observed.raw(),
+                    initial.raw(),
+                    "only a weak-CAS retry is valid"
+                )
+            }
+        }
+    };
+    published.leave_published();
+
+    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the stack-local atomic word
+    // contains only the stack-local block head and remains live for the detach.
+    let detached = unsafe { field.detach_head() };
+    assert_eq!(detached.head().map(BlockPtr::as_ptr), Some(block.as_ptr()));
+    assert!(field.load_relaxed().head().is_none());
+}
+
+#[test]
+fn remote_push_retry_returns_observation_without_consuming_block() {
+    let mut raw_block = mi_block_t::default();
+    let block = unsafe { BlockPtr::new_unchecked(ptr::addr_of_mut!(raw_block)) };
+    let live = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned);
+    let stale = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Unowned);
+    let mut page = MaybeUninit::<mi_page_t>::uninit();
+    let raw_page = page.as_mut_ptr();
+    unsafe { ptr::addr_of_mut!((*raw_page).xthread_free).write(live.raw()) };
+    let page = unsafe { PagePtr::new_unchecked(raw_page) };
+    let field = unsafe { page.thread_free_cell() };
+
+    match field.try_push(stale, block) {
+        RemotePushResult::Retry { observed } => assert_eq!(observed.raw(), live.raw()),
+        RemotePushResult::Published { .. } => panic!("stale CAS must retry"),
+    }
+    assert_eq!(block.as_ptr(), ptr::addr_of_mut!(raw_block));
+    assert_eq!(field.load_relaxed().raw(), live.raw());
 }
 
 #[test]
@@ -256,12 +312,14 @@ fn empty_remote_free_list_collects_through_detached_atomic_path() {
         let atomic = AtomicThreadFree::from_field(AtomicUsizeField::from_raw(ptr::addr_of_mut!(
             (*raw_page).xthread_free
         )));
-        let remote = atomic.collect_acq_rel();
+        let remote = atomic.detach_head();
         assert!(remote.head().is_none());
 
         let local_before = LocalFreeList::from_raw((*raw_page).local_free);
+        let owned = OwnedAbandonedPage::new_unchecked(page_ptr);
         let local_after =
-            remote.collect_into_local(&OwnedAbandonedPage::new_unchecked(page_ptr), local_before);
+            crate::page::collect_remote_for_owned_abandoned_page(&owned, remote, local_before)
+                .expect("empty detached list is valid");
         assert_eq!(local_after.as_raw(), ptr::addr_of_mut!(local));
     }
 }

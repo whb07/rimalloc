@@ -246,7 +246,7 @@ pub(super) unsafe fn mi_page_queue_push_at_end_typed(
     // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         mi_page_queue_push_at_end_internal(theap, queue.ptr(), page.page());
-        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(page, queue)
+        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::from_enqueued(page, queue)
     }
 }
 
@@ -259,7 +259,7 @@ pub(super) unsafe fn mi_page_queue_push_typed(
     // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         mi_page_queue_push_internal(theap, queue.ptr(), page.page());
-        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(page, queue)
+        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::from_enqueued(page, queue)
     }
 }
 

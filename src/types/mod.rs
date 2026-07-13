@@ -87,9 +87,10 @@ pub(crate) use memid::{
 };
 
 pub(crate) use page_states::{
-    AbandonedMappedPageType, AbandonedPageType as AbandonedPage, Active, ActivePage, AllFreePage,
-    AvailablePage, DestroyedPage, ForeignPage, Full, FullPage, LocalPage, OwnedAbandonedPage, Page,
-    PageAbandonOutcome, PageForAbandon, PageFreeOwner, ThreadHeapLocal, Uninit,
+    AbandonedDisposition, AbandonedMappedPageType, AbandonedPageType as AbandonedPage, Active,
+    ActivePage, AllFreePage, AvailablePage, DestroyedPage, ForeignPage, Full, FullPage, LocalPage,
+    OwnedAbandonedPage, Page, PageAbandonOutcome, PageForAbandon, PageFreeOwner, ThreadHeapLocal,
+    Uninit,
 };
 
 pub(crate) use validation_extra::FreeBlock;
@@ -130,11 +131,14 @@ mod heap;
 
 pub(crate) use atomic::{
     AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicI64Field, AtomicPtrField,
-    AtomicUsizeField, MemoryOrder, MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr, RemoteFreeList,
+    AtomicUsizeField, DetachedRemoteList, MemoryOrder, MiLockGuard, MiLockPtr, OnceGuard,
+    OnceStatePtr, PublishedRemoteHead, RemotePushResult,
 };
 mod padding;
+mod raw_bridge;
 
 pub(crate) use padding::{Padding, PaddingCanary, PaddingDelta, PaddingPtr};
+pub(crate) use raw_bridge::*;
 
 fn __lint_touch() {
     arena::__lint_touch();

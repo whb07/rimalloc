@@ -170,8 +170,8 @@ C arithmetic without changing public ABI or allocation hot-path behavior.
 - Remote free enters `mi_free_block_mt` only with a `ForeignPage` plus
   `BlockForFree`. Abandoned and abandoned-mapped page owners are converted
   through their `remote_free_page` witness methods, and remote collection
-  continues through `OwnedAbandonedPage` plus `RemoteFreeList` after the raw
-  compatibility shim.
+  continues through `OwnedAbandonedPage` plus a `PublishedRemoteHead`; only
+  atomically detached chains become `DetachedRemoteList` values.
 - Reclaim below the raw keep shim accepts only `OwnedAbandonedPage` and
   `ThreadHeapLocal`: `try_reclaim_abandoned`, `_mi_theap_page_reclaim`, and
   `OwnedAbandonedPage::into_reclaimed(ThreadHeapLocal)` preserve that ownership pair

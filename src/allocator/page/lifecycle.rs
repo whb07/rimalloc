@@ -1,12 +1,13 @@
-use core::ptr;
-
 use crate::core_types::{
-    AvailableFreeList, BlockPtr, Errno, LocalFreeList, LocalPage, OwnedAbandonedPage, PagePtr,
-    RemoteFreeList,
+    AvailableFreeList, BlockPtr, DetachedRemoteList, Errno, LocalFreeList, LocalPage,
+    OwnedAbandonedPage, PagePtr, PublishedRemoteHead,
 };
 use crate::internal::{mi_block_next, mi_block_set_next};
 use crate::options::_mi_error_message_fmt;
 use crate::types::{mi_block_t, mi_page_t};
+
+#[cfg(test)]
+use core::ptr;
 
 use super::{flags, mi_page_capacity_count, mi_page_subtract_used_count, mi_page_used_count};
 
@@ -99,27 +100,32 @@ pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut m
         }
 
         let page_ptr = PagePtr::new_unchecked(page);
-        let remote = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(head));
+        let remote = DetachedRemoteList::from_raw_compat(Some(BlockPtr::new_unchecked(head)));
         let local = page_ptr.local_free();
-        let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
-        let _ = mi_page_thread_collect_to_local_typed(&owned_page, remote, local);
+        let local_page = crate::core_types::assume_local_page(page_ptr);
+        let _ = collect_remote_for_local_page(&local_page, remote, local);
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RemoteListCorruption {
+    ChainTooLong,
+    CountExceedsUsed,
 }
 
 /// # Safety
 /// `page` must be valid, and `remote` must be a detached thread-free list for that page.
 #[inline]
-pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
-    page: &OwnedAbandonedPage,
-    remote: RemoteFreeList,
+unsafe fn collect_detached_chain_into_local_raw(
+    page_ptr: PagePtr,
+    remote: DetachedRemoteList,
     local: LocalFreeList,
-) -> LocalFreeList {
+) -> Result<LocalFreeList, RemoteListCorruption> {
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
-        let page_ptr = page.page();
         let page = page_ptr.as_ptr();
         let Some(head_block) = remote.head() else {
-            return local;
+            return Ok(local);
         };
 
         let capacity = mi_page_capacity_count(page);
@@ -138,7 +144,7 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
 
         if count > max_count {
             _mi_error_message_fmt(Errno::EFAULT, format_args!("corrupted thread-free list\n"));
-            return local;
+            return Err(RemoteListCorruption::ChainTooLong);
         }
         let used = mi_page_used_count(page);
         if count > used.as_usize() {
@@ -146,7 +152,7 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
                 Errno::EFAULT,
                 format_args!("corrupted meta-data in thread-free list\n"),
             );
-            return local;
+            return Err(RemoteListCorruption::CountExceedsUsed);
         }
 
         mi_block_set_next(page, last, local.as_raw());
@@ -156,8 +162,34 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
         crate::internal::mi_assert_internal!(u16::try_from(count).is_ok());
         crate::internal::mi_assert_internal!(used.get() >= count as u16);
         mi_page_subtract_used_count(page, count as u16);
-        new_local
+        Ok(new_local)
     }
+}
+
+/// # Safety
+/// `detached` must be a uniquely detached chain for this local page.
+#[inline]
+pub(crate) unsafe fn collect_remote_for_local_page(
+    page: &LocalPage,
+    detached: DetachedRemoteList,
+    local: LocalFreeList,
+) -> Result<LocalFreeList, RemoteListCorruption> {
+    // SAFETY[AUDIT:page-free-list-local-detached-collect]: `LocalPage`
+    // establishes current-thread ownership for the raw collector.
+    unsafe { collect_detached_chain_into_local_raw(page.page(), detached, local) }
+}
+
+/// # Safety
+/// `detached` must be a uniquely detached chain for this owned abandoned page.
+#[inline]
+pub(crate) unsafe fn collect_remote_for_owned_abandoned_page(
+    page: &OwnedAbandonedPage,
+    detached: DetachedRemoteList,
+    local: LocalFreeList,
+) -> Result<LocalFreeList, RemoteListCorruption> {
+    // SAFETY[AUDIT:page-free-list-abandoned-detached-collect]: owned abandoned
+    // state establishes exclusive collection rights for the raw collector.
+    unsafe { collect_detached_chain_into_local_raw(page.page(), detached, local) }
 }
 
 /// # Safety
@@ -167,9 +199,9 @@ pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
-        let local_page = LocalPage::new_unchecked(page_ptr);
+        let local_page = crate::core_types::assume_local_page(page_ptr);
         let atomic_tf = page_ptr.thread_free_cell();
-        let remote = atomic_tf.collect_acq_rel();
+        let remote = atomic_tf.detach_head();
         if remote.is_empty() {
             return;
         }
@@ -182,14 +214,13 @@ pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
 #[inline]
 pub(crate) unsafe fn mi_page_thread_free_collect_typed(
     page: LocalPage,
-    remote: RemoteFreeList,
+    remote: DetachedRemoteList,
 ) -> LocalFreeList {
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = page.page();
         let local = page_ptr.local_free();
-        let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
-        mi_page_thread_collect_to_local_typed(&owned_page, remote, local)
+        collect_remote_for_local_page(&page, remote, local).unwrap_or(local)
     }
 }
 
@@ -200,7 +231,7 @@ pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
-        let local_page = LocalPage::new_unchecked(page_ptr);
+        let local_page = crate::core_types::assume_local_page(page_ptr);
         let available = page_ptr.free();
         let local = page_ptr.local_free();
         mi_page_free_quick_collect_typed(local_page, available, local)
@@ -216,6 +247,15 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
     local: LocalFreeList,
 ) -> bool {
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    unsafe { mi_page_free_quick_collect_raw(page.page(), available, local) }
+}
+
+#[inline(always)]
+unsafe fn mi_page_free_quick_collect_raw(
+    page_ptr: PagePtr,
+    available: AvailableFreeList,
+    local: LocalFreeList,
+) -> bool {
     unsafe {
         if !available.is_empty() {
             return true;
@@ -223,7 +263,6 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
         if local.is_empty() {
             return false;
         }
-        let page_ptr = page.page();
         let page = page_ptr.as_ptr();
         let new_available = local.into_available();
         let new_local = LocalFreeList::empty();
@@ -247,7 +286,7 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
         mi_page_thread_free_collect(page);
 
         let page_ptr = PagePtr::new_unchecked(page);
-        let local_page = LocalPage::new_unchecked(page_ptr);
+        let local_page = crate::core_types::assume_local_page(page_ptr);
         let local = page_ptr.local_free();
         if !local.is_empty() {
             let available = page_ptr.free();
@@ -285,42 +324,38 @@ pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head
             return;
         }
         let page_ptr = PagePtr::new_unchecked(page);
-        let local_page = LocalPage::new_unchecked(page_ptr);
-        let remote_head = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(head));
-        _mi_page_free_collect_partly_typed(local_page, remote_head);
+        let owned_page = crate::core_types::assume_owned_abandoned_page(page_ptr);
+        let remote_head = PublishedRemoteHead::from_raw_compat(BlockPtr::new_unchecked(head));
+        _mi_page_free_collect_partly_typed(&owned_page, remote_head);
     }
 }
 
 /// # Safety
-/// `page` must be valid, and `remote_head` must be a detached remote-free head for `page`.
+/// `page` must be valid, and `remote_head` must remain published for `page`.
 #[inline]
 pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
-    local_page: LocalPage,
-    remote_head: RemoteFreeList,
+    owned_page: &OwnedAbandonedPage,
+    remote_head: PublishedRemoteHead,
 ) {
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
-        let page_ptr = local_page.page();
+        let page_ptr = owned_page.page();
         let page = page_ptr.as_ptr();
-        let Some(head_block) = remote_head.head() else {
-            return;
-        };
+        let head_block = remote_head.head();
         let head = head_block.as_ptr();
-        let next = mi_block_next(page, head);
-        if !next.is_null() {
+        let (remote_head, remote_tail) = remote_head.detach_tail(owned_page);
+        if let Some(remote_tail) = remote_tail {
             #[cfg(feature = "bench-diagnostics")]
             crate::bench_diagnostics::page_free_collect_partly_detached();
-            mi_block_set_next(page, head, ptr::null());
-            let remote_tail = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(next));
             let local = page_ptr.local_free();
-            let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
-            let _ = mi_page_thread_collect_to_local_typed(&owned_page, remote_tail, local);
+            let _ = collect_remote_for_owned_abandoned_page(owned_page, remote_tail, local);
             if !page_ptr.local_free().is_empty() && page_ptr.free().is_empty() {
                 let available = page_ptr.free();
                 let local = page_ptr.local_free();
-                let _ = mi_page_free_quick_collect_typed(local_page, available, local);
+                let _ = mi_page_free_quick_collect_raw(page_ptr, available, local);
             }
         }
+        remote_head.leave_published();
         if mi_page_used_count(page).get() == 1 {
             let atomic_tf = page_ptr.thread_free_cell();
             crate::internal::mi_assert_internal!(atomic_tf.load_relaxed().head_raw() == head);
@@ -374,7 +409,7 @@ mod tests {
             };
 
             let page_ptr = PagePtr::new_unchecked(raw_page);
-            let local_page = LocalPage::new_unchecked(page_ptr);
+            let local_page = crate::core_types::assume_local_page(page_ptr);
             mi_block_set_next(raw_page, local_head, local_tail);
             mi_block_set_next(raw_page, local_tail, ptr::null());
             mi_block_set_next(raw_page, available_head, ptr::null());
@@ -388,6 +423,49 @@ mod tests {
             assert_eq!(mi_block_next(raw_page, local_tail), available_head);
             assert!(mi_block_next(raw_page, available_head).is_null());
 
+            for block in blocks {
+                crate::mimalloc::mi_free(block.cast());
+            }
+        }
+    }
+
+    #[test]
+    fn published_head_detaches_only_its_tail() {
+        let mut blocks = [ptr::null_mut::<mi_block_t>(); 16];
+        // SAFETY[AUDIT:page-remote-list-tail-fixture]: real allocator-owned
+        // blocks keep encoded-link validation within one registered page.
+        unsafe {
+            for block in &mut blocks {
+                *block = crate::mimalloc::mi_malloc(core::mem::size_of::<mi_block_t>()).cast();
+                assert!(!block.is_null());
+            }
+            let mut chosen = None;
+            'outer: for i in 0..blocks.len() {
+                let page = crate::internal::_mi_ptr_page(blocks[i].cast());
+                for j in (i + 1)..blocks.len() {
+                    if crate::internal::_mi_ptr_page(blocks[j].cast()) == page {
+                        chosen = Some((page, blocks[i], blocks[j]));
+                        break 'outer;
+                    }
+                }
+            }
+            let (page, head, tail) = chosen.expect("expected two same-page allocations");
+            let page_ptr = PagePtr::new_unchecked(page);
+            let head_ptr = BlockPtr::new_unchecked(head);
+            let tail_ptr = BlockPtr::new_unchecked(tail);
+            mi_block_set_next(page, head, tail);
+            mi_block_set_next(page, tail, ptr::null_mut());
+
+            let owned = crate::core_types::assume_owned_abandoned_page(page_ptr);
+            let published = PublishedRemoteHead::from_raw_compat(head_ptr);
+            let (published, detached) = published.detach_tail(&owned);
+            assert_eq!(published.head().as_ptr(), head);
+            assert!(mi_block_next(page, head).is_null());
+            assert_eq!(
+                detached.expect("tail").head().map(BlockPtr::as_ptr),
+                Some(tail_ptr.as_ptr())
+            );
+            published.leave_published();
             for block in blocks {
                 crate::mimalloc::mi_free(block.cast());
             }

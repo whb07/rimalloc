@@ -38,8 +38,8 @@ ownership of the chain whose address it observes.
 | `validation` | sum result | `PointerLookup` (not `Copy`; its valid branch owns `ValidPointerLookup`) |
 | `freelist_wrappers` | identity/value | `PageKeys`, `EncodedWord`, `EncodedPtr`, `BlockTag`, `AlignedBlockTag`, `GuardedBlockTag`, `BlockLink` |
 | `freelist_wrappers` | linear capability | `AvailableFreeList`, `LocalFreeList`, `EncodedFreeList` |
-| `atomic::thread_free` | linear capability | current `RemoteFreeList`; replaced during S1.4 by `PublishedRemoteHead` and `DetachedRemoteList` |
-| `atomic::thread_free` | mechanism/result | `AtomicThreadFree`, `RemotePushOutcome` |
+| `atomic::thread_free` | linear capability | `PublishedRemoteHead`, `DetachedRemoteList` |
+| `atomic::thread_free` | mechanism/result | `AtomicThreadFree`, `RemotePushResult` |
 | `free_actions` | value | `LocalFreeMode` |
 
 `ValidatedFreeParts` is a one-time destructuring result and therefore follows

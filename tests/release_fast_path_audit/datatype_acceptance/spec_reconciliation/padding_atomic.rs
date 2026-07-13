@@ -42,7 +42,7 @@ pub(super) fn assert_padding_and_atomic_reconciliation(
             && types_spec
                 .contains("Earlier\nplans used the placeholder name `ThreadFreeCell(*mut usize)`")
             && !types_spec.contains("pub(crate) struct ThreadFreeCell(*mut usize);")
-            && types_spec.contains("pub(crate) fn push_remote_acq_rel(")
+            && types_spec.contains("pub(crate) fn try_push(")
             && types_spec.contains(
                 "pub(crate) unsafe fn release_acq_rel(self, expected: &mut ThreadFreeWord) -> bool;"
             ),

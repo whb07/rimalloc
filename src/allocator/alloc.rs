@@ -230,9 +230,8 @@ pub(crate) unsafe extern "C" fn _mi_page_malloc_zero(
     unsafe {
         let zeroed = crate::core_types::Zeroed::from_bool(zero);
         let padded = crate::core_types::PaddedSize::new_unchecked(size);
-        let active = crate::core_types::ActivePage::new_unchecked(
-            crate::core_types::PagePtr::new_unchecked(page),
-        );
+        let active =
+            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
         let Ok(available) = active.try_available() else {
             return mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, ptr::null_mut());
         };
@@ -280,9 +279,8 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
         // normalized to non-zero above, so the sum cannot overflow or yield zero.
         let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
         let page = _mi_theap_get_free_small_page_typed(local_theap, padded);
-        let active = crate::core_types::ActivePage::new_unchecked(
-            crate::core_types::PagePtr::new_unchecked(page),
-        );
+        let active =
+            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
         let p = if let Ok(available) = active.try_available() {
             _mi_page_malloc_zero_typed(theap, available, padded, zeroed, usable)
         } else {

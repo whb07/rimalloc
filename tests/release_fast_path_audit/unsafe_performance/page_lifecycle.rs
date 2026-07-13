@@ -47,7 +47,7 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && page_rs.contains(
                 "pub(crate) unsafe fn _mi_page_retire_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,"
             )
-            && page_rs.contains("crate::core_types::AllFreePage::active_unchecked")
+            && page_rs.contains("let Ok(all_free) = active.try_mark_all_free() else")
             && page_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_init(")
             && page_rs
@@ -62,7 +62,7 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && page_rs.contains("let atomic_tf = page_ptr.thread_free_cell();")
             && !page_rs.contains("AtomicThreadFree::from_field(")
             && !page_rs.contains("addr_of_mut!((*page).xthread_free)")
-            && page_rs.contains("let remote = atomic_tf.collect_acq_rel();")
+            && page_rs.contains("let remote = atomic_tf.detach_head();")
             && page_rs.contains("if remote.is_empty() {")
             && page_rs.contains("atomic_tf.load_relaxed().head_raw() == head")
             && alloc_rs.contains("let block = allocated.into_ptr().as_ptr();")
@@ -89,12 +89,12 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && freelist_types.contains("pub(crate) unsafe fn read_from_raw(block: *const mi_block_t) -> Self")
             && freelist_types.contains("Self::FreeList(unsafe { EncodedPtr::read_word_from_raw(block) })")
             && freelist_types.contains("pub(crate) unsafe fn write_to(self, block: BlockPtr)")
-            && atomic_types.contains("pub(crate) struct RemoteFreeList(Option<BlockPtr>);")
-            && atomic_types.contains("fn from_detached_thread_free_head(head: Option<BlockPtr>) -> Self")
-            && atomic_types.contains("pub(crate) fn head(self) -> Option<BlockPtr>")
-            && atomic_types.contains("pub(crate) fn is_empty(self) -> bool")
-            && atomic_types.contains("pub(crate) unsafe fn collect_into_local(")
-            && !freelist_types.contains("pub(crate) struct RemoteFreeList(pub(crate) Option<BlockPtr>)")
+            && atomic_types.contains("pub(crate) struct PublishedRemoteHead(BlockPtr);")
+            && atomic_types.contains("pub(crate) struct DetachedRemoteList(Option<BlockPtr>);")
+            && atomic_types.contains("pub(crate) fn head(&self) -> Option<BlockPtr>")
+            && atomic_types.contains("pub(crate) fn is_empty(&self) -> bool")
+            && atomic_types.contains("pub(crate) unsafe fn detach_tail(")
+            && !atomic_types.contains("pub(crate) struct DetachedRemoteList(pub(crate) Option<BlockPtr>)")
             && alloc_rs.contains("crate::core_types::BlockTag::write_aligned_to(")
             && alloc_rs.contains("crate::core_types::BlockTag::write_guarded_to(")
             && alloc_aligned_rs.contains("crate::core_types::BlockTag::write_aligned_to(block)")
@@ -148,18 +148,18 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && page_flags_rs.contains("crate::core_types::MemIdView::Os(os) => os")
             && !page_flags_rs.contains("(*page).memid.mem.os.base")
             && page_rs.contains(
-                "let _ = _mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked("
+                "let _ = _mi_page_unfull_internal(crate::core_types::assume_full_page("
             )
             && page_rs.contains("QueuedPage::<crate::core_types::FullQueue>::try_queue_full")
             && page_rs.contains("mi_page_unfull_typed(queued, to)")
             && page_rs
-                .contains("mi_page_move_to_full_typed(\n                crate::core_types::ActivePage")
+                .contains("mi_page_move_to_full_typed(\n                crate::core_types::assume_active_page")
             && free_rs.contains("let Ok(all_free) = active.try_mark_all_free() else {")
             && free_rs.contains("_mi_page_retire_internal(all_free);")
             && free_rs
-                .contains("_mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked")
+                .contains("_mi_page_unfull_internal(crate::core_types::assume_full_page")
             && free_rs.contains("_mi_page_free_collect(page_raw, false);")
-            && free_rs.contains("_mi_page_free_collect_partly(page_raw, mt_free.as_ptr());")
+            && free_rs.contains("crate::page::_mi_page_free_collect_partly_typed(&page, published);")
             && arena_rs.contains("crate::page::_mi_page_init(theap, page)")
             && arena_rs.contains("_mi_page_free_collect(page_raw, false)")
             && arena_rs.contains("_mi_page_stats_bin(page)")

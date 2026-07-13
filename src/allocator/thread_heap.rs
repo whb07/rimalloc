@@ -611,17 +611,17 @@ unsafe fn mi_theap_page_collect_typed(
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_page_is_valid_typed(theap.ptr(), page));
 
-        let local_page = crate::core_types::LocalPage::new_unchecked(page);
+        let local_page = crate::core_types::assume_local_page(page);
         let page = local_page.page().as_ptr();
         let pq = queue.as_ptr();
         _mi_page_free_collect(page, collect as i32 >= mi_collect_t::MI_FORCE as i32);
 
         if mi_page_all_free(page) {
             if crate::page::mi_page_is_in_full(page) {
-                let full_page = crate::core_types::FullPage::new_unchecked(local_page.page());
+                let full_page = crate::core_types::assume_full_page(local_page.page());
                 crate::internal::mi_assert_internal!(full_page.try_mark_all_free().is_ok());
             } else {
-                let active_page = crate::core_types::ActivePage::new_unchecked(local_page.page());
+                let active_page = crate::core_types::assume_active_page(local_page.page());
                 crate::internal::mi_assert_internal!(active_page.try_mark_all_free().is_ok());
             }
             if collect as i32 >= mi_collect_t::MI_FORCE as i32
@@ -631,11 +631,9 @@ unsafe fn mi_theap_page_collect_typed(
             }
         } else if collect == mi_collect_t::MI_ABANDON {
             let _page_for_abandon = if crate::page::mi_page_is_in_full(page) {
-                crate::core_types::FullPage::new_unchecked(local_page.page())
-                    .into_abandon_candidate()
+                crate::core_types::assume_full_page(local_page.page()).into_abandon_candidate()
             } else {
-                crate::core_types::ActivePage::new_unchecked(local_page.page())
-                    .into_abandon_candidate()
+                crate::core_types::assume_active_page(local_page.page()).into_abandon_candidate()
             };
             _mi_page_abandon(page, pq);
         }

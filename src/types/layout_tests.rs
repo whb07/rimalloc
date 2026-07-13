@@ -180,7 +180,8 @@ fn packed_and_atomic_wrappers_match_raw_layout() {
     assert_layout!(EncodedPtr<mi_block_t>, usize);
     assert_layout!(AvailableFreeList, Option<BlockPtr>);
     assert_layout!(LocalFreeList, Option<BlockPtr>);
-    assert_layout!(atomic::RemoteFreeList, Option<BlockPtr>);
+    assert_layout!(atomic::DetachedRemoteList, Option<BlockPtr>);
+    assert_layout!(atomic::PublishedRemoteHead, BlockPtr);
     assert_layout!(freelist_wrappers::EncodedFreeList, Option<BlockPtr>);
     assert_layout!(PaddingCanary, u32);
     assert_layout!(PaddingDelta, u32);

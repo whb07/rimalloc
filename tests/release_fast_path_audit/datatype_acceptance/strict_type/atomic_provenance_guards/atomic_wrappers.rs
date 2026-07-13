@@ -48,7 +48,8 @@ pub(super) fn assert_atomic_wrapper_guards(audit_sources: &DatatypeAcceptanceSou
             && atomic_marker_count("SAFETY[AUDIT:typed-atomic-i64-field]") >= 3
             && atomic_marker_count("SAFETY[AUDIT:typed-atomic-pointer-field]") >= 5
             && atomic_marker_count("SAFETY[AUDIT:typed-atomic-page-thread-id]") >= 8
-            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-thread-free]") >= 13
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-thread-free]") >= 7
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-thread-free-published-tail]") >= 3
             && atomic_marker_count("SAFETY[AUDIT:typed-atomic-abandoned-count]") >= 3
             && atomic_marker_count("SAFETY[AUDIT:typed-atomic-thread-heap-refcount]") >= 3
             && atomic_marker_count("SAFETY[AUDIT:typed-atomic-arena-page]") >= 2

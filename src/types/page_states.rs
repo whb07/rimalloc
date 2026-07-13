@@ -24,7 +24,7 @@ impl Page<Uninit> {
     #[inline(always)]
     // SAFETY[AUDIT:typed-page-uninit-initialization-boundary]: callers establish exclusive
     // initialization ownership before creating the uninitialized page witness.
-    pub(crate) unsafe fn new_unchecked(ptr: PagePtr) -> Self {
+    pub(in crate::types) unsafe fn new_unchecked(ptr: PagePtr) -> Self {
         Self {
             ptr,
             _state: PhantomData,
@@ -114,7 +114,7 @@ macro_rules! impl_page_witness {
             // SAFETY[AUDIT:typed-page-witness-constructor-boundary]: each transparent page
             // witness is constructed only by callers that establish the
             // state-specific invariant in the generated safety contract.
-            pub(crate) unsafe fn new_unchecked(page: PagePtr) -> Self {
+            pub(in crate::types) unsafe fn new_unchecked(page: PagePtr) -> Self {
                 Self(page)
             }
 
@@ -186,7 +186,7 @@ impl AllFreePage<Active> {
     #[inline(always)]
     // SAFETY[AUDIT:typed-page-all-free-witness-boundary]: callers have already checked that
     // this active page has no used blocks.
-    pub(crate) unsafe fn active_unchecked(page: ActivePage) -> Self {
+    pub(in crate::types) unsafe fn active_unchecked(page: ActivePage) -> Self {
         Self {
             page: Page {
                 ptr: page.page(),
@@ -202,7 +202,7 @@ impl AllFreePage<Abandoned> {
     #[inline(always)]
     // SAFETY[AUDIT:typed-page-all-free-witness-boundary]: callers have already checked that
     // this abandoned page has no used blocks.
-    pub(crate) unsafe fn abandoned_unchecked(page: AbandonedPageType) -> Self {
+    pub(in crate::types) unsafe fn abandoned_unchecked(page: AbandonedPageType) -> Self {
         Self {
             page: Page {
                 ptr: page.page(),
@@ -430,6 +430,13 @@ impl OwnedAbandonedPage {
         // being returned to mapped abandoned state.
         unsafe { AbandonedMappedPageType::new_unchecked(self.page()) }
     }
+
+    #[inline(always)]
+    pub(crate) fn into_abandoned(self) -> AbandonedPageType {
+        // SAFETY[AUDIT:typed-page-abandoned-release-boundary]: the caller has
+        // released atomic ownership while preserving abandoned metadata.
+        unsafe { AbandonedPageType::new_unchecked(self.page()) }
+    }
 }
 
 impl AllFreePage<Full> {
@@ -438,13 +445,24 @@ impl AllFreePage<Full> {
     #[inline(always)]
     // SAFETY[AUDIT:typed-page-all-free-witness-boundary]: callers have already checked that
     // this full page has no used blocks.
-    pub(crate) unsafe fn full_unchecked(page: FullPage) -> Self {
+    pub(in crate::types) unsafe fn full_unchecked(page: FullPage) -> Self {
         Self {
             page: Page {
                 ptr: page.page(),
                 _state: PhantomData,
             },
         }
+    }
+}
+
+impl AllFreePage<Abandoned> {
+    /// Consume the all-free abandoned proof after the arena has released the
+    /// corresponding raw page metadata.
+    #[inline(always)]
+    pub(crate) fn into_destroyed_after_arena_free(self) -> DestroyedPage {
+        // SAFETY[AUDIT:typed-page-abandoned-destroy-boundary]: the caller
+        // performs arena release before invoking this terminal transition.
+        unsafe { DestroyedPage::new_unchecked(self.page()) }
     }
 }
 
@@ -466,6 +484,36 @@ pub(crate) enum PageForAbandon {
 pub(crate) enum PageAbandonOutcome {
     Abandoned(AbandonedPageType),
     Destroyed(DestroyedPage),
+}
+
+#[must_use = "abandoned dispositions must be consumed or explicitly returned"]
+pub(crate) enum AbandonedDisposition {
+    StillAbandoned(AbandonedPageType),
+    Mapped(AbandonedMappedPageType),
+    Reclaimed(ActivePage),
+    Destroyed(DestroyedPage),
+}
+
+impl AbandonedDisposition {
+    /// Explicitly discharge the terminal disposition at a caller that does
+    /// not need to continue with the resulting page state.
+    #[inline(always)]
+    pub(crate) fn discard(self) {
+        match self {
+            Self::StillAbandoned(page) => {
+                let _ = page.page();
+            }
+            Self::Mapped(page) => {
+                let _ = page.page();
+            }
+            Self::Reclaimed(page) => {
+                let _ = page.page();
+            }
+            Self::Destroyed(page) => {
+                let _ = page.page();
+            }
+        }
+    }
 }
 
 /// A local thread heap representation

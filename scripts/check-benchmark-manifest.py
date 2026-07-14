@@ -49,7 +49,14 @@ def main() -> None:
     parser.add_argument("--artifact-dir", required=True)
     parser.add_argument("--artifact-mode", required=True)
     parser.add_argument("--feature", action="append", dest="features", required=True)
+    parser.add_argument(
+        "--allow-hard-failure",
+        action="store_true",
+        help="accept a stale-threshold hard failure while capturing a replacement baseline",
+    )
     args = parser.parse_args()
+    if args.allow_hard_failure and args.artifact_mode != "default-rust":
+        raise SystemExit("hard-failure acceptance is limited to default-Rust baseline refreshes")
     artifact_dir = Path(args.artifact_dir)
     if artifact_dir.name != args.artifact_mode:
         raise SystemExit("artifact directory name and artifact mode disagree")
@@ -109,11 +116,14 @@ def main() -> None:
                 raise SystemExit(f"resource record {line_number} feature set mismatch")
     if args.artifact_mode != "ld-preload-interpose":
         review = json.loads((artifact_dir / "benchmark-review.json").read_text(encoding="utf-8"))
+        accepted_statuses = {"pass", "review-required", "not-applicable"}
+        if args.allow_hard_failure:
+            accepted_statuses.add("hard-failure")
         if (
             review.get("schema") != 1
             or review.get("artifact_mode") != args.artifact_mode
             or review.get("feature_set") != expected_features
-            or review.get("status") not in {"pass", "review-required", "not-applicable"}
+            or review.get("status") not in accepted_statuses
         ):
             raise SystemExit("benchmark review status is missing or malformed")
     print(f"ok: verified benchmark manifest and required outputs in {artifact_dir}")

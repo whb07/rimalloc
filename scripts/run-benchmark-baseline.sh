@@ -28,6 +28,7 @@ scripts/run-evidence-report.py --artifact-dir $artifact_dir
 scripts/check-evidence-report.py --report $artifact_dir/evidence-report.json
 scripts/check-bench-thresholds.py --thresholds $thresholds --criterion-dir $artifact_dir/criterion --csv-out $artifact_dir/threshold-results.csv --review-out $artifact_dir/benchmark-review.json --artifact-mode default-rust --feature bench --report-only
 scripts/check-bench-resources.py --results $artifact_dir/resource-results.jsonl --artifact-mode default-rust --feature bench
+scripts/check-benchmark-manifest.py --artifact-dir $artifact_dir --artifact-mode default-rust --feature bench --allow-hard-failure
 EOF
   run env \
     MIMALLOC_HOTPATH_SAMPLE_SIZE="$sample_size" \
@@ -83,7 +84,8 @@ EOF
   run scripts/check-benchmark-manifest.py \
     --artifact-dir "$artifact_dir" \
     --artifact-mode default-rust \
-    --feature bench
+    --feature bench \
+    --allow-hard-failure
 done
 
 capture_args=()

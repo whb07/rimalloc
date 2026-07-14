@@ -1,7 +1,7 @@
 use super::*;
 
-#[path = "benchmarking/release_notes.rs"]
-mod release_notes;
+#[path = "benchmarking/mod.rs"]
+mod checks;
 
 #[test]
 fn release_candidates_require_full_benchmark_evidence() {

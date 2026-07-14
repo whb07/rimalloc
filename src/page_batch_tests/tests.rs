@@ -308,18 +308,33 @@ impl SamePageBlocks {
     }
 
     fn full_page() -> Self {
-        let mut fixture = Self::new(1);
-        // SAFETY[AUDIT:typed-page-batch-test-fixtures]: each added allocation
-        // stays live, and the assertion checks page identity before creating a
-        // block witness.
+        // SAFETY[AUDIT:typed-page-batch-test-fixtures]: a dedicated heap keeps
+        // unrelated parallel tests from redirecting same-size allocations to
+        // another page before this fixture reaches the reported capacity.
         unsafe {
+            let heap = crate::heap::mi_heap_new();
+            assert!(!heap.is_null());
+            let first = crate::alloc::mi_heap_malloc(heap, 16).cast::<mi_block_t>();
+            assert!(!first.is_null());
+            let page = crate::internal::_mi_ptr_page(first.cast());
+            let mut fixture = Self {
+                all: [core::ptr::null_mut(); MAX_TRACKED_BLOCKS],
+                all_len: 1,
+                page: PagePtr::new_unchecked(page),
+                selected: [None; MAX_PAGE_BLOCKS],
+                selected_len: 1,
+            };
+            fixture.all[0] = first;
+            fixture.selected[0] = Some(BlockPtr::new_unchecked(first));
+
             loop {
                 let capacity = fixture.page.capacity().as_usize();
                 assert!(capacity <= MAX_PAGE_BLOCKS);
                 if fixture.selected_len == capacity {
+                    crate::mimalloc::mi_heap_delete(heap);
                     return fixture;
                 }
-                let block = crate::mimalloc::mi_malloc(16).cast::<mi_block_t>();
+                let block = crate::alloc::mi_heap_malloc(heap, 16).cast::<mi_block_t>();
                 assert!(!block.is_null());
                 assert!(
                     fixture.all_len < MAX_TRACKED_BLOCKS,
@@ -327,8 +342,11 @@ impl SamePageBlocks {
                 );
                 fixture.all[fixture.all_len] = block;
                 fixture.all_len += 1;
-                let page = crate::internal::_mi_ptr_page(block.cast());
-                assert_eq!(page, fixture.page.as_ptr(), "page changed before capacity");
+                assert_eq!(
+                    crate::internal::_mi_ptr_page(block.cast()),
+                    fixture.page.as_ptr(),
+                    "dedicated heap changed page before capacity"
+                );
                 fixture.selected[fixture.selected_len] = Some(BlockPtr::new_unchecked(block));
                 fixture.selected_len += 1;
             }

@@ -182,6 +182,11 @@ baseline is the median of five clean-run medians and the median of five
 clean-run p95 values from one commit and one documented host profile. Generate
 a proposal with `scripts/run-benchmark-baseline.sh`; promotion requires manual
 outlier review and the explicit `--write-reviewed-baseline` capture flag.
+The full gate and baseline runner use identical default controls: 100 samples,
+10 seconds, and a 1-second warmup for hotpath measurements; 20 samples,
+5 seconds, and a 2-second warmup for the longer native workloads. Keep these
+defaults aligned because Criterion's native flat-sampling batch size changes
+with the controls and is part of the benchmark methodology.
 Page-batch baselines use one clean 100-sample Criterion artifact for each
 feature-keyed mode and are proposed or promoted with
 `scripts/capture-page-batch-baseline.py`; the source commit and sample count are

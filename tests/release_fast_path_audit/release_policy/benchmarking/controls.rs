@@ -17,6 +17,7 @@ fn full_gate_and_baseline_controls_stay_methodology_equivalent() {
         "${MIMALLOC_HOTPATH_WARMUP_SECS:=1}",
         "${MIMALLOC_BENCH_COOLDOWN_SECS:=60}",
         "${MIMALLOC_BENCH_CPU:=0}",
+        "${MIMALLOC_BENCH_RESOURCE_OPERATIONS:=5000000}",
     ] {
         assert!(
             full.contains(control),
@@ -32,6 +33,7 @@ fn full_gate_and_baseline_controls_stay_methodology_equivalent() {
         "${MIMALLOC_BASELINE_HOTPATH_WARMUP_SECS:-1}",
         "${MIMALLOC_BASELINE_COOLDOWN_SECS:-60}",
         "${MIMALLOC_BASELINE_CPU:-0}",
+        "${MIMALLOC_BASELINE_RESOURCE_OPERATIONS:-5000000}",
     ] {
         assert!(
             baseline.contains(control),

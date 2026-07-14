@@ -150,7 +150,7 @@ int main(void) {
   const char *features = getenv("MIMALLOC_PROBE_FEATURES");
   size_t size = env_size("MIMALLOC_PROBE_SIZE", 64);
   size_t alignment = env_size("MIMALLOC_PROBE_ALIGNMENT", 8);
-  size_t operations = env_size("MIMALLOC_PROBE_OPERATIONS", 100000);
+  size_t operations = env_size("MIMALLOC_PROBE_OPERATIONS", 5000000);
   size_t live_set = env_size("MIMALLOC_PROBE_LIVE_SET", 4096);
   size_t threads = env_size("MIMALLOC_PROBE_THREADS", 1);
   if (scenario == NULL || artifact_mode == NULL || features == NULL ||

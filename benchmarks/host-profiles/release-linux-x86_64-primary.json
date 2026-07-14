@@ -20,7 +20,7 @@
     "criterion_sample_size": 20,
     "measurement_seconds": 5,
     "warmup_seconds": 2,
-    "resource_operations": 100000,
+    "resource_operations": 5000000,
     "resource_repeats": 3,
     "artifact_mode": "default-rust",
     "feature_set": [

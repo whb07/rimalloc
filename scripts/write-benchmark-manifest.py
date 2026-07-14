@@ -147,7 +147,7 @@ def main() -> None:
                 "MIMALLOC_BENCH_ALLOCATORS",
                 "mechanical_mimalloc_raw,c-mimalloc-3.3.2",
             ),
-            "resource_operations": env_int("MIMALLOC_BENCH_RESOURCE_OPERATIONS", 100000),
+            "resource_operations": env_int("MIMALLOC_BENCH_RESOURCE_OPERATIONS", 5_000_000),
             "resource_repeats": env_int("MIMALLOC_BENCH_RESOURCE_REPEATS", 3),
         },
     }

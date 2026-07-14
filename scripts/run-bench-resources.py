@@ -93,7 +93,7 @@ def main() -> None:
     parser.add_argument("--scenario", action="append", dest="scenarios")
     parser.add_argument("--size", type=int, default=64)
     parser.add_argument("--alignment", type=int, default=8)
-    parser.add_argument("--operations", type=int, default=100000)
+    parser.add_argument("--operations", type=int, default=5_000_000)
     parser.add_argument("--live-set", type=int, default=4096)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--ld-preload", action="store_true")

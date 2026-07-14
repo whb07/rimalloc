@@ -133,8 +133,8 @@ remote collection at lengths 1, 8, 32, and 128, and empty/nonempty destination
 lists. The forced-collector case includes the feature's fixed relaxed-counter
 update, so compare it only against runs with the same feature set; production
 fast-path equivalence is established separately by release assembly capture.
-The full release gate preserves these report-only results in distinct
-`page-batch-plain` and `page-batch-secure` artifact modes.
+The full release gate enforces reviewed thresholds and preserves results in
+distinct `page-batch-plain` and `page-batch-secure` artifact modes.
 
 The native mimalloc-bench Criterion ports support:
 
@@ -177,12 +177,16 @@ library mode, while linked-feature, deployed-preload, and diagnostic page-batch
 evidence are reported separately.
 
 `benchmarks/thresholds.json` schema 2 keys each baseline by artifact mode and
-feature set and gates both sample median and p95. A release baseline is the
-median of five clean-run medians and the median of five clean-run p95 values
-from one commit and one documented host profile. Generate a proposal with
-`scripts/run-benchmark-baseline.sh`; promotion requires manual outlier review
-and the explicit `--write-reviewed-baseline` capture flag. Schema-1 parsing is
-retained for one migration cycle only.
+feature set and gates both sample median and p95. The allocator-wide release
+baseline is the median of five clean-run medians and the median of five
+clean-run p95 values from one commit and one documented host profile. Generate
+a proposal with `scripts/run-benchmark-baseline.sh`; promotion requires manual
+outlier review and the explicit `--write-reviewed-baseline` capture flag.
+Page-batch baselines use one clean 100-sample Criterion artifact for each
+feature-keyed mode and are proposed or promoted with
+`scripts/capture-page-batch-baseline.py`; the source commit and sample count are
+recorded per threshold. Schema-1 parsing is retained for one migration cycle
+only.
 
 The per-entry median and p95 limits are hard infrastructure ceilings intended
 to tolerate host noise. They do not replace the stricter investigation budgets

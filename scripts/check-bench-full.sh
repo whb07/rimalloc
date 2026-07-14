@@ -59,11 +59,11 @@ scripts/run-bench-resources.py --artifact-dir $preload_target_dir --artifact-mod
 EOF
 cat >"$page_batch_plain_target_dir/commands.txt" <<EOF
 MIMALLOC_HOTPATH_SAMPLE_SIZE=$MIMALLOC_HOTPATH_SAMPLE_SIZE MIMALLOC_HOTPATH_MEASUREMENT_SECS=$MIMALLOC_HOTPATH_MEASUREMENT_SECS MIMALLOC_HOTPATH_WARMUP_SECS=$MIMALLOC_HOTPATH_WARMUP_SECS CARGO_TARGET_DIR=$page_batch_plain_target_dir cargo bench --features "bench bench-diagnostics" --bench page_batch
-scripts/check-bench-thresholds.py --thresholds benchmarks/thresholds.json --criterion-dir $page_batch_plain_target_dir/criterion --csv-out $page_batch_plain_target_dir/threshold-results.csv --review-out $page_batch_plain_target_dir/benchmark-review.json --artifact-mode page-batch-plain --feature bench --feature bench-diagnostics --report-only --allow-no-applicable
+scripts/check-bench-thresholds.py --thresholds benchmarks/thresholds.json --criterion-dir $page_batch_plain_target_dir/criterion --csv-out $page_batch_plain_target_dir/threshold-results.csv --review-out $page_batch_plain_target_dir/benchmark-review.json --artifact-mode page-batch-plain --feature bench --feature bench-diagnostics
 EOF
 cat >"$page_batch_secure_target_dir/commands.txt" <<EOF
 MIMALLOC_HOTPATH_SAMPLE_SIZE=$MIMALLOC_HOTPATH_SAMPLE_SIZE MIMALLOC_HOTPATH_MEASUREMENT_SECS=$MIMALLOC_HOTPATH_MEASUREMENT_SECS MIMALLOC_HOTPATH_WARMUP_SECS=$MIMALLOC_HOTPATH_WARMUP_SECS CARGO_TARGET_DIR=$page_batch_secure_target_dir cargo bench --features "bench bench-diagnostics secure" --bench page_batch
-scripts/check-bench-thresholds.py --thresholds benchmarks/thresholds.json --criterion-dir $page_batch_secure_target_dir/criterion --csv-out $page_batch_secure_target_dir/threshold-results.csv --review-out $page_batch_secure_target_dir/benchmark-review.json --artifact-mode page-batch-secure --feature bench --feature bench-diagnostics --feature secure --report-only --allow-no-applicable
+scripts/check-bench-thresholds.py --thresholds benchmarks/thresholds.json --criterion-dir $page_batch_secure_target_dir/criterion --csv-out $page_batch_secure_target_dir/threshold-results.csv --review-out $page_batch_secure_target_dir/benchmark-review.json --artifact-mode page-batch-secure --feature bench --feature bench-diagnostics --feature secure
 EOF
 
 run scripts/write-benchmark-manifest.py \
@@ -165,9 +165,7 @@ run scripts/check-bench-thresholds.py \
   --review-out "$page_batch_plain_target_dir/benchmark-review.json" \
   --artifact-mode page-batch-plain \
   --feature bench \
-  --feature bench-diagnostics \
-  --report-only \
-  --allow-no-applicable
+  --feature bench-diagnostics
 run env CARGO_TARGET_DIR="$page_batch_secure_target_dir" \
   cargo bench --features "bench bench-diagnostics secure" --bench page_batch
 run scripts/check-bench-thresholds.py \
@@ -178,9 +176,7 @@ run scripts/check-bench-thresholds.py \
   --artifact-mode page-batch-secure \
   --feature bench \
   --feature bench-diagnostics \
-  --feature secure \
-  --report-only \
-  --allow-no-applicable
+  --feature secure
 run scripts/check-benchmark-manifest.py \
   --artifact-dir "$default_target_dir" \
   --artifact-mode default-rust \

@@ -136,6 +136,771 @@
       "review": {
         "five_run_median_cv": 0.01359586086947773
       }
+    },
+    {
+      "id": "page_batch/plain_links/detached_remote/empty/1",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 21.15224211443219,
+        "p95_ns": 21.541246649457737
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/detached_remote/empty/128",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 173.44127696307936,
+        "p95_ns": 177.27466166596727
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/detached_remote/empty/32",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 55.0423272401522,
+        "p95_ns": 55.56814270850008
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/detached_remote/empty/8",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 25.12518625678885,
+        "p95_ns": 25.719499561873235
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/detached_remote/nonempty/1",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 21.307719233492428,
+        "p95_ns": 21.611187352166734
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/detached_remote/nonempty/128",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 173.75773725173264,
+        "p95_ns": 177.61656904307304
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/detached_remote/nonempty/32",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 55.51112200916636,
+        "p95_ns": 56.65997355485589
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/detached_remote/nonempty/8",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 25.045684856423055,
+        "p95_ns": 25.873264174391668
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/forced_page_free_collect/len128/nonempty_destination",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 182.0854247850359,
+        "p95_ns": 183.47109516756507
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/local_to_available/empty/1",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 20.58723824283949,
+        "p95_ns": 20.719103790518425
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/local_to_available/empty/128",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 171.45813046351998,
+        "p95_ns": 172.88139224676948
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/local_to_available/empty/32",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 54.41169367387651,
+        "p95_ns": 54.597043197960446
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/local_to_available/empty/8",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 24.717547268032654,
+        "p95_ns": 24.87594277464844
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/local_to_available/nonempty/1",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 20.355980069580497,
+        "p95_ns": 20.896455655376123
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/local_to_available/nonempty/128",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 171.5545878397116,
+        "p95_ns": 175.6548387663753
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/local_to_available/nonempty/32",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 53.91610884395426,
+        "p95_ns": 55.44460873725981
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/plain_links/local_to_available/nonempty/8",
+      "artifact_mode": "page-batch-plain",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 24.724604835102948,
+        "p95_ns": 25.150060459492142
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/detached_remote/empty/1",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 20.882307261944206,
+        "p95_ns": 21.275393421248154
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/detached_remote/empty/128",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 209.61391391463576,
+        "p95_ns": 210.77357192016518
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/detached_remote/empty/32",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 60.61670122536075,
+        "p95_ns": 62.0482138729641
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/detached_remote/empty/8",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 26.599237705840753,
+        "p95_ns": 26.85928245270711
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/detached_remote/nonempty/1",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 21.07801511435318,
+        "p95_ns": 21.238827884161022
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/detached_remote/nonempty/128",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 209.2092245363009,
+        "p95_ns": 210.82753517271368
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/detached_remote/nonempty/32",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 60.797165343712116,
+        "p95_ns": 62.61506455851859
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/detached_remote/nonempty/8",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 26.48697154469287,
+        "p95_ns": 26.965512455715047
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/forced_page_free_collect/len128/nonempty_destination",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 210.28750446031256,
+        "p95_ns": 214.19820181713962
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/local_to_available/empty/1",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 20.669577970616217,
+        "p95_ns": 20.954201996363828
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/local_to_available/empty/128",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 203.68224227729885,
+        "p95_ns": 205.6768899204244
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/local_to_available/empty/32",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 61.8592961269896,
+        "p95_ns": 63.45144538913548
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/local_to_available/empty/8",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 26.74307369677888,
+        "p95_ns": 27.75643240679574
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/local_to_available/nonempty/1",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 20.699765549579368,
+        "p95_ns": 21.333322659028987
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/local_to_available/nonempty/128",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 204.89909202803867,
+        "p95_ns": 206.26015842134518
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/local_to_available/nonempty/32",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 61.56387407142545,
+        "p95_ns": 62.09142999891873
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
+    },
+    {
+      "id": "page_batch/secure_encoded/local_to_available/nonempty/8",
+      "artifact_mode": "page-batch-secure",
+      "feature_set": [
+        "bench",
+        "bench-diagnostics",
+        "secure"
+      ],
+      "category": "page-batch slow path",
+      "baseline": {
+        "median_ns": 26.566839307059567,
+        "p95_ns": 27.113535438302037
+      },
+      "limits": {
+        "median_ratio": 1.15,
+        "p95_ratio": 1.25
+      },
+      "host_profile": "release-linux-x86_64-primary",
+      "baseline_commit": "d868b0e17e5ebb6b2bc124c0895580feedb39875",
+      "review": {
+        "criterion_sample_size": 100
+      }
     }
   ]
 }

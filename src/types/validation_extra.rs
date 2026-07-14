@@ -9,7 +9,7 @@ impl AllocatedBlock {
     /// # Safety
     /// `block` must be a valid block freshly popped from a page available free list.
     #[inline(always)]
-    pub(crate) unsafe fn new_unchecked(block: BlockPtr) -> Self {
+    pub(in crate::types) unsafe fn new_unchecked(block: BlockPtr) -> Self {
         Self(block)
     }
 

@@ -92,7 +92,8 @@ pub(crate) unsafe fn mi_page_decrement_retire_expire(
 }
 
 /// # Safety
-/// `page` must be valid, and `head` must be a detached thread-free list for that page.
+/// `page` must be owned by the current thread, and `head` must be a detached
+/// thread-free list for that page.
 #[inline]
 pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut mi_block_t) {
     // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.

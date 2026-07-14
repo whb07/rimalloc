@@ -40,8 +40,10 @@ fn validation_and_block_capabilities_are_linear() {
     assert!(
         validation.contains("pub(crate) fn block(&self) -> &BlockForFree")
             && validation.contains("pub(crate) fn into_parts(self) -> ValidatedFreeParts")
+            && validation_extra
+                .contains("pub(in crate::types) unsafe fn new_unchecked(block: BlockPtr) -> Self")
             && validation_extra.contains("pub(crate) fn into_ptr(self) -> BlockPtr"),
-        "inspection should borrow capabilities and ownership transfer should consume them"
+        "capability construction should stay in the type layer, inspection should borrow, and ownership transfer should consume"
     );
 }
 
@@ -124,6 +126,9 @@ fn raw_bridge_and_remote_list_ownership_are_enforced() {
     assert!(
         lifecycle.contains("collect_remote_for_local_page(")
             && lifecycle.contains("collect_remote_for_owned_abandoned_page(")
+            && lifecycle.contains(
+                "`page` must be owned by the current thread, and `head` must be a detached"
+            )
             && !lifecycle
                 .split("pub(crate) unsafe fn collect_remote_for_local_page")
                 .nth(1)

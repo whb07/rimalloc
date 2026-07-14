@@ -58,9 +58,10 @@ pub(super) fn assert_padding_and_page_state_acceptance(
         );
     }
     assert!(
-        validation_extra_rs.contains("pub(crate) unsafe fn new_unchecked(block: BlockPtr) -> Self")
-            && validation_extra_rs
-                .contains("pub(in crate::types) unsafe fn new_unchecked(block: BlockPtr) -> Self")
+        validation_extra_rs
+            .matches("pub(in crate::types) unsafe fn new_unchecked(block: BlockPtr) -> Self")
+            .count()
+            == 2
             && validation_extra_rs.contains("pub(crate) fn into_ptr(self) -> BlockPtr")
             && validation_extra_rs.contains("pub(crate) fn as_ptr(&self) -> BlockPtr"),
         "allocated/free block witnesses should expose constructors only at the needed boundary"

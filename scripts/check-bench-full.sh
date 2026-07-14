@@ -10,6 +10,7 @@ cd_repo_root
 : "${MIMALLOC_HOTPATH_MEASUREMENT_SECS:=10}"
 : "${MIMALLOC_HOTPATH_WARMUP_SECS:=1}"
 : "${MIMALLOC_BENCH_COOLDOWN_SECS:=60}"
+: "${MIMALLOC_BENCH_CPU:=0}"
 : "${MIMALLOC_BENCH_RESOURCE_OPERATIONS:=100000}"
 : "${MIMALLOC_BENCH_RESOURCE_REPEATS:=3}"
 : "${MIMALLOC_BENCH_SCENARIOS:=glibc-thread,malloc-large,cache-scratch1,xmalloc-testN}"
@@ -21,6 +22,7 @@ export MIMALLOC_HOTPATH_SAMPLE_SIZE
 export MIMALLOC_HOTPATH_MEASUREMENT_SECS
 export MIMALLOC_HOTPATH_WARMUP_SECS
 export MIMALLOC_BENCH_COOLDOWN_SECS
+export MIMALLOC_BENCH_CPU
 export MIMALLOC_BENCH_RESOURCE_OPERATIONS
 export MIMALLOC_BENCH_RESOURCE_REPEATS
 export MIMALLOC_BENCH_SCENARIOS
@@ -44,6 +46,8 @@ CARGO_TARGET_DIR=$default_target_dir cargo check --benches --features bench
 CARGO_TARGET_DIR=$default_target_dir cargo bench --no-run --features bench --bench hotpath --bench mimalloc_bench
 sleep $MIMALLOC_BENCH_COOLDOWN_SECS
 MIMALLOC_HOTPATH_SAMPLE_SIZE=$MIMALLOC_HOTPATH_SAMPLE_SIZE MIMALLOC_HOTPATH_MEASUREMENT_SECS=$MIMALLOC_HOTPATH_MEASUREMENT_SECS MIMALLOC_HOTPATH_WARMUP_SECS=$MIMALLOC_HOTPATH_WARMUP_SECS CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench hotpath
+sleep $MIMALLOC_BENCH_COOLDOWN_SECS
+MIMALLOC_HOTPATH_SAMPLE_SIZE=$MIMALLOC_HOTPATH_SAMPLE_SIZE MIMALLOC_HOTPATH_MEASUREMENT_SECS=$MIMALLOC_HOTPATH_MEASUREMENT_SECS MIMALLOC_HOTPATH_WARMUP_SECS=$MIMALLOC_HOTPATH_WARMUP_SECS CARGO_TARGET_DIR=$default_target_dir taskset --cpu-list $MIMALLOC_BENCH_CPU cargo bench --features bench --bench hotpath -- hotpath/paired_alloc_free/mechanical_mimalloc_public/16
 sleep $MIMALLOC_BENCH_COOLDOWN_SECS
 MIMALLOC_BENCH_SCENARIOS=$MIMALLOC_BENCH_SCENARIOS MIMALLOC_BENCH_ALLOCATORS=$MIMALLOC_BENCH_ALLOCATORS MIMALLOC_BENCH_SAMPLE_SIZE=$MIMALLOC_BENCH_SAMPLE_SIZE MIMALLOC_BENCH_MEASUREMENT_SECS=$MIMALLOC_BENCH_MEASUREMENT_SECS MIMALLOC_BENCH_WARMUP_SECS=$MIMALLOC_BENCH_WARMUP_SECS CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench workloads
@@ -108,6 +112,10 @@ run env CARGO_TARGET_DIR="$default_target_dir" \
   cargo bench --no-run --features bench --bench hotpath --bench mimalloc_bench
 run sleep "$MIMALLOC_BENCH_COOLDOWN_SECS"
 run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench hotpath
+run sleep "$MIMALLOC_BENCH_COOLDOWN_SECS"
+run env CARGO_TARGET_DIR="$default_target_dir" \
+  taskset --cpu-list "$MIMALLOC_BENCH_CPU" cargo bench --features bench --bench hotpath -- \
+  hotpath/paired_alloc_free/mechanical_mimalloc_public/16
 run sleep "$MIMALLOC_BENCH_COOLDOWN_SECS"
 run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench workloads

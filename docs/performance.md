@@ -191,6 +191,9 @@ Both runners prebuild the thresholded benchmark executables and apply a
 recorded 60-second cooldown before the hotpath group and again before the
 native group. This bounds sustained-load frequency drift without discarding
 individual measurements or selecting favorable runs.
+The selected single-thread hotpath threshold probe is additionally pinned to
+logical CPU 0 in both runners to prevent cross-CCD migration. The full hotpath
+matrix and every multithreaded workload remain unpinned.
 Page-batch baselines use one clean 100-sample Criterion artifact for each
 feature-keyed mode and are proposed or promoted with
 `scripts/capture-page-batch-baseline.py`; the source commit and sample count are

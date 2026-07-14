@@ -16,6 +16,7 @@ fn full_gate_and_baseline_controls_stay_methodology_equivalent() {
         "${MIMALLOC_HOTPATH_MEASUREMENT_SECS:=10}",
         "${MIMALLOC_HOTPATH_WARMUP_SECS:=1}",
         "${MIMALLOC_BENCH_COOLDOWN_SECS:=60}",
+        "${MIMALLOC_BENCH_CPU:=0}",
     ] {
         assert!(
             full.contains(control),
@@ -30,6 +31,7 @@ fn full_gate_and_baseline_controls_stay_methodology_equivalent() {
         "${MIMALLOC_BASELINE_HOTPATH_MEASUREMENT_SECS:-10}",
         "${MIMALLOC_BASELINE_HOTPATH_WARMUP_SECS:-1}",
         "${MIMALLOC_BASELINE_COOLDOWN_SECS:-60}",
+        "${MIMALLOC_BASELINE_CPU:-0}",
     ] {
         assert!(
             baseline.contains(control),
@@ -43,5 +45,13 @@ fn full_gate_and_baseline_controls_stay_methodology_equivalent() {
     assert!(
         baseline.matches("sleep $cooldown_secs").count() >= 2,
         "baseline runner must cool before both thresholded benchmark groups"
+    );
+    assert!(
+        full.contains("taskset --cpu-list $MIMALLOC_BENCH_CPU"),
+        "full gate must pin its selected single-thread threshold probe"
+    );
+    assert!(
+        baseline.contains("taskset --cpu-list $benchmark_cpu"),
+        "baseline runner must pin its selected single-thread threshold probe"
     );
 }

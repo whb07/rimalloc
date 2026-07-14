@@ -187,10 +187,11 @@ The full gate and baseline runner use identical default controls: 100 samples,
 5 seconds, and a 2-second warmup for the longer native workloads. Keep these
 defaults aligned because Criterion's native flat-sampling batch size changes
 with the controls and is part of the benchmark methodology.
-Both runners prebuild the thresholded benchmark executables and apply a
-recorded 60-second cooldown before the hotpath group and again before the
-native group. This bounds sustained-load frequency drift without discarding
-individual measurements or selecting favorable runs.
+Both runners prebuild the thresholded benchmark executables, keep the selected
+single-thread probe in the resulting active CPU state, and apply a recorded
+60-second cooldown before the sustained native group. This bounds all-core
+frequency drift without destabilizing single-core boost, discarding individual
+measurements, or selecting favorable runs.
 The selected single-thread hotpath threshold probe is additionally pinned to
 logical CPU 0 in both runners to prevent cross-CCD migration. The full hotpath
 matrix and every multithreaded workload remain unpinned.

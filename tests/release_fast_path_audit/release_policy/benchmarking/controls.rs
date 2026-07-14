@@ -39,12 +39,12 @@ fn full_gate_and_baseline_controls_stay_methodology_equivalent() {
         );
     }
     assert!(
-        full.matches("sleep $MIMALLOC_BENCH_COOLDOWN_SECS").count() >= 2,
-        "full gate must cool before both thresholded benchmark groups"
+        full.contains("sleep $MIMALLOC_BENCH_COOLDOWN_SECS"),
+        "full gate must cool before the sustained native group"
     );
     assert!(
-        baseline.matches("sleep $cooldown_secs").count() >= 2,
-        "baseline runner must cool before both thresholded benchmark groups"
+        baseline.contains("sleep $cooldown_secs"),
+        "baseline runner must cool before the sustained native group"
     );
     assert!(
         full.contains("taskset --cpu-list $MIMALLOC_BENCH_CPU"),

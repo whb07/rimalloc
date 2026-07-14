@@ -210,6 +210,14 @@ below. `scripts/check-bench-thresholds.py` records both decisions in
 current/baseline median geomean above 1.01, or an individual result above its
 2%/3% budget, produces a mandatory `review-required` status even when the hard
 ceiling still passes.
+Time-based benchmark entries use a deliberately broad catastrophic ceiling on
+this non-isolated host because it exhibits repeatable fast and slow
+memory/cache phases (approximately 1.6x apart) in the identical release binary.
+Crossing the 2% hotpath, 3% workload, or 1% geomean investigation budget still
+requires explicit review against the paired Rust/C workloads and assembly
+evidence. The wider hard ceiling prevents host phase alone from turning that
+review status into a false infrastructure failure; resource budgets and
+assembly equivalence remain independent hard gates.
 
 Every full-run manifest records the resolved sample size, measurement and
 warmup durations, selected native scenarios and allocators, resource operation

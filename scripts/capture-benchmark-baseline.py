@@ -90,14 +90,13 @@ def main() -> None:
 
     existing = load(Path(args.thresholds))
     entries = existing.get("thresholds", [])
-    proposed = []
-    retained = []
+    updated_entries = []
     for entry in entries:
         if int(existing.get("schema", 1)) == 2 and (
             entry.get("artifact_mode") != args.artifact_mode
             or sorted(entry.get("feature_set", [])) != expected_features
         ):
-            retained.append(entry)
+            updated_entries.append(entry)
             continue
         benchmark_id = str(entry["id"])
         samples = [values.get(benchmark_id) for values in run_values]
@@ -117,7 +116,7 @@ def main() -> None:
         else:
             median_limit = float(entry["limits"]["median_ratio"])
             p95_limit = float(entry["limits"]["p95_ratio"])
-        proposed.append({
+        updated_entries.append({
             "id": benchmark_id,
             "artifact_mode": args.artifact_mode,
             "feature_set": expected_features,
@@ -139,7 +138,7 @@ def main() -> None:
             "workload_median_ratio": 1.03,
             "overall_geomean_ratio": 1.01,
         }),
-        "thresholds": retained + proposed,
+        "thresholds": updated_entries,
     }
     destination = Path(args.thresholds) if args.write_reviewed_baseline else Path(args.output)
     destination.parent.mkdir(parents=True, exist_ok=True)

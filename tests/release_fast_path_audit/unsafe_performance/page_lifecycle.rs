@@ -50,6 +50,7 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && page_rs.contains("let Ok(all_free) = active.try_mark_all_free() else")
             && page_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_init(")
+            && page_rs.contains("MI_PADDING != 0 || MI_ENCODE_FREELIST != 0")
             && page_rs
                 .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_queue_is_valid(")
             && page_boundary_rs

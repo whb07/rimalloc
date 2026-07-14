@@ -31,8 +31,9 @@ use crate::track::{
     MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
 };
 use crate::types::{
-    MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_LARGE_MAX_OBJ_WSIZE, MI_PAGE_MIN_COMMIT_SIZE,
-    MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_page_queue_t, mi_page_t, mi_theap_t,
+    MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_ENCODE_FREELIST, MI_LARGE_MAX_OBJ_WSIZE, MI_PADDING,
+    MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_page_queue_t, mi_page_t,
+    mi_theap_t,
 };
 
 pub use crate::types::MI_PADDING_SIZE;
@@ -971,10 +972,12 @@ unsafe fn _mi_page_init_typed(
         crate::internal::mi_assert_internal!(mi_page_reserved_count(page).get() > 0);
 
         let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
-        mi_page_set_keys(
-            page_ptr,
-            PageKeys::from_raw([_mi_theap_random_next(theap), _mi_theap_random_next(theap)]),
-        );
+        if MI_PADDING != 0 || MI_ENCODE_FREELIST != 0 {
+            mi_page_set_keys(
+                page_ptr,
+                PageKeys::from_raw([_mi_theap_random_next(theap), _mi_theap_random_next(theap)]),
+            );
+        }
 
         if MI_DEBUG > 2 && (*page).memid.initially_zero {
             let committed = mi_page_committed_typed(page);

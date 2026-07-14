@@ -694,3 +694,66 @@ were 33.0 and 33.25 respectively. One initial interposition probe was retried
 after a single `system/alloc_free` scheduling outlier produced a 0.58
 coefficient; the isolated clean rerun passed all records without code or
 threshold changes.
+
+## Current-Head Stages 0–3 Evidence Closure
+
+**Date Generated:** 2026-07-14
+
+**Evidence Commit:** `86b1cb96bd9b387097dd28df809463f662b918bd`
+
+The current benchmark methodology has a reviewed five-run default-Rust
+baseline at commit `abd7028dd8fc1b7e7992f7fd807c1982e4068515`. Its six
+selected entries have median coefficients of variation from 1.52% to
+6.02%. The page-batch plain and secure baselines were separately reviewed at
+commit `d868b0e17e5ebb6b2bc124c0895580feedb39875`. These baselines supersede the
+pre-methodology-change baseline for Stage 4 comparisons.
+
+Both `scripts/check-local.sh` and the five-mode
+`scripts/check-bench-full.sh` completed successfully at the evidence commit.
+The full gate recorded these artifact modes and review results:
+
+| Artifact mode | Feature set | Review status |
+|---|---|---|
+| `default-rust` | `bench` | review required; disposition accepted below |
+| `interpose-feature-linked` | `bench,interpose` | not applicable; no stored timing baseline |
+| `ld-preload-interpose` | deployed `interpose` cdylib | resource gate passed |
+| `page-batch-plain` | `bench,bench-diagnostics` | review required; disposition accepted below |
+| `page-batch-secure` | `bench,bench-diagnostics,secure` | pass |
+
+The current native-workload Rust/C median ratios were 1.0008 for
+`cache-scratch1`, 1.0349 for `glibc-thread`, 1.0767 for `malloc-large`, and
+1.0061 for `xmalloc-testN`; their geomean was 1.0292. A ratio above 1 means the
+Rust raw-C-ABI surface took longer than the vendored C allocator.
+
+All 42 resource records passed their scenario-specific committed-memory, RSS,
+retained-memory, page-fault, and variability limits: 18 records each for
+`default-rust` and `interpose-feature-linked`, plus six neutral-program records
+for `ld-preload-interpose`. The largest wall-time coefficient of variation was
+5.22%, and the deployed probe confirmed that the preloaded cdylib owned libc
+allocations.
+
+The release assembly capture contains all six required symbols. After
+normalizing linked image addresses and layout-only symbol displacements, the
+current instruction sequences match the preserved Stage 3 capture exactly:
+52 instructions for `mi_malloc`, 49 for `mi_malloc_small`, 11 for `mi_free`,
+176 for `mi_route_free`, 65 for `mi_free_block_local`, and 71 for
+`_mi_theap_malloc_zero_ex`.
+
+Two investigation signals were reviewed. The default selected-workload
+current/baseline geomean was 1.0111 against the 1.01 investigation budget, but
+no individual benchmark crossed its category budget and no hard ceiling
+failed. The plain page-batch geomean was 1.0111, with only
+`local_to_available/nonempty/8` crossing its 1.03 category budget at 1.0385;
+the other 16 plain cases ranged from 0.9670 to 1.0286, the secure
+geomean was 1.0056, and no hard ceiling failed. These small, isolated signals
+are accepted as measurement variation rather than evidence of a systematic
+regression. The one-time methodology transition is accepted on the combined
+current Rust/C ratios, unchanged normalized release assembly, prior Stage 3
+evidence, and this current full run. Future Stage 4 work uses the new reviewed
+baselines without reopening the superseded absolute comparison.
+
+The durable evidence archive is
+`stages-0-3-evidence-86b1cb96bd9b.tar.zst`, with SHA-256
+`c81de4e2914fe9ebc8fb89bebbb9292e7861a6d233cfed1d0fc6cb2fa615191c`.
+Its evidence index records one clean commit across all five artifact manifests,
+the assembly manifest, and the deployed cdylib digest.

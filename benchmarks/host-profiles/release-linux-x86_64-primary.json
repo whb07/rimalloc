@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "release-linux-x86_64-primary",
-  "baseline_commit": "2140b758f59424188387498bb194acfc3e17ad50",
+  "baseline_commit": "abd7028dd8fc1b7e7992f7fd807c1982e4068515",
   "host": {
     "cpu_model": "AMD Ryzen 9 5950X 16-Core Processor",
     "physical_cores": 16,
@@ -17,9 +17,12 @@
   },
   "protocol": {
     "complete_runs": 5,
-    "criterion_sample_size": 20,
-    "measurement_seconds": 5,
-    "warmup_seconds": 2,
+    "hotpath_sample_size": 100,
+    "hotpath_measurement_seconds": 10,
+    "hotpath_warmup_seconds": 1,
+    "native_sample_size": 20,
+    "native_measurement_seconds": 5,
+    "native_warmup_seconds": 2,
     "resource_operations": 20000000,
     "resource_repeats": 3,
     "artifact_mode": "default-rust",
@@ -38,9 +41,10 @@
     ]
   },
   "review": {
-    "maximum_five_run_median_cv": 0.03805256306091655,
-    "rejected_samples": [
-      "A partial fifth run was discarded after unrelated host load raised the hot-path median to 51 microseconds; the clean replacement measured 35.8 microseconds."
+    "maximum_five_run_median_cv": 0.060196630699313455,
+    "rejected_samples": [],
+    "execution_notes": [
+      "The fifth native-workload process was externally terminated before producing Criterion samples and was resumed before baseline capture; no measured samples were discarded."
     ]
   }
 }

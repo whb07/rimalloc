@@ -9,6 +9,7 @@ cd_repo_root
 : "${MIMALLOC_HOTPATH_SAMPLE_SIZE:=100}"
 : "${MIMALLOC_HOTPATH_MEASUREMENT_SECS:=10}"
 : "${MIMALLOC_HOTPATH_WARMUP_SECS:=1}"
+: "${MIMALLOC_BENCH_COOLDOWN_SECS:=60}"
 : "${MIMALLOC_BENCH_RESOURCE_OPERATIONS:=100000}"
 : "${MIMALLOC_BENCH_RESOURCE_REPEATS:=3}"
 : "${MIMALLOC_BENCH_SCENARIOS:=glibc-thread,malloc-large,cache-scratch1,xmalloc-testN}"
@@ -19,6 +20,7 @@ export MIMALLOC_BENCH_WARMUP_SECS
 export MIMALLOC_HOTPATH_SAMPLE_SIZE
 export MIMALLOC_HOTPATH_MEASUREMENT_SECS
 export MIMALLOC_HOTPATH_WARMUP_SECS
+export MIMALLOC_BENCH_COOLDOWN_SECS
 export MIMALLOC_BENCH_RESOURCE_OPERATIONS
 export MIMALLOC_BENCH_RESOURCE_REPEATS
 export MIMALLOC_BENCH_SCENARIOS
@@ -39,10 +41,13 @@ run scripts/run-bench-clean.sh \
 
 cat >"$default_target_dir/commands.txt" <<EOF
 CARGO_TARGET_DIR=$default_target_dir cargo check --benches --features bench
+CARGO_TARGET_DIR=$default_target_dir cargo bench --no-run --features bench --bench hotpath --bench mimalloc_bench
+sleep $MIMALLOC_BENCH_COOLDOWN_SECS
 MIMALLOC_HOTPATH_SAMPLE_SIZE=$MIMALLOC_HOTPATH_SAMPLE_SIZE MIMALLOC_HOTPATH_MEASUREMENT_SECS=$MIMALLOC_HOTPATH_MEASUREMENT_SECS MIMALLOC_HOTPATH_WARMUP_SECS=$MIMALLOC_HOTPATH_WARMUP_SECS CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench hotpath
+sleep $MIMALLOC_BENCH_COOLDOWN_SECS
+MIMALLOC_BENCH_SCENARIOS=$MIMALLOC_BENCH_SCENARIOS MIMALLOC_BENCH_ALLOCATORS=$MIMALLOC_BENCH_ALLOCATORS MIMALLOC_BENCH_SAMPLE_SIZE=$MIMALLOC_BENCH_SAMPLE_SIZE MIMALLOC_BENCH_MEASUREMENT_SECS=$MIMALLOC_BENCH_MEASUREMENT_SECS MIMALLOC_BENCH_WARMUP_SECS=$MIMALLOC_BENCH_WARMUP_SECS CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench workloads
 CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench evidence
-MIMALLOC_BENCH_SCENARIOS=$MIMALLOC_BENCH_SCENARIOS MIMALLOC_BENCH_ALLOCATORS=$MIMALLOC_BENCH_ALLOCATORS MIMALLOC_BENCH_SAMPLE_SIZE=$MIMALLOC_BENCH_SAMPLE_SIZE MIMALLOC_BENCH_MEASUREMENT_SECS=$MIMALLOC_BENCH_MEASUREMENT_SECS MIMALLOC_BENCH_WARMUP_SECS=$MIMALLOC_BENCH_WARMUP_SECS CARGO_TARGET_DIR=$default_target_dir cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 scripts/run-evidence-report.py --artifact-dir $default_target_dir
 scripts/check-evidence-report.py --report $default_target_dir/evidence-report.json
 scripts/check-bench-thresholds.py --thresholds benchmarks/thresholds.json --criterion-dir $default_target_dir/criterion --csv-out $default_target_dir/threshold-results.csv --review-out $default_target_dir/benchmark-review.json --artifact-mode default-rust --feature bench
@@ -99,10 +104,14 @@ run scripts/write-benchmark-manifest.py \
 run env CARGO_TARGET_DIR="$default_target_dir" cargo check --benches --features bench
 run env CARGO_TARGET_DIR="$interpose_target_dir" cargo check --benches --features "bench interpose"
 run scripts/check-bench-thresholds.py --self-test
+run env CARGO_TARGET_DIR="$default_target_dir" \
+  cargo bench --no-run --features bench --bench hotpath --bench mimalloc_bench
+run sleep "$MIMALLOC_BENCH_COOLDOWN_SECS"
 run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench hotpath
+run sleep "$MIMALLOC_BENCH_COOLDOWN_SECS"
+run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench workloads
 run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench evidence
-run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 run scripts/run-evidence-report.py --artifact-dir "$default_target_dir"
 run scripts/check-evidence-report.py --report "$default_target_dir/evidence-report.json"
 run scripts/check-bench-thresholds.py \

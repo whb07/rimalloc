@@ -12,6 +12,7 @@ hotpath_warmup_secs="${MIMALLOC_BASELINE_HOTPATH_WARMUP_SECS:-1}"
 native_sample_size="${MIMALLOC_BASELINE_NATIVE_SAMPLE_SIZE:-20}"
 native_measurement_secs="${MIMALLOC_BASELINE_NATIVE_MEASUREMENT_SECS:-5}"
 native_warmup_secs="${MIMALLOC_BASELINE_NATIVE_WARMUP_SECS:-2}"
+cooldown_secs="${MIMALLOC_BASELINE_COOLDOWN_SECS:-60}"
 resource_operations="${MIMALLOC_BASELINE_RESOURCE_OPERATIONS:-100000}"
 resource_repeats="${MIMALLOC_BASELINE_RESOURCE_REPEATS:-3}"
 host_profile="${MIMALLOC_BASELINE_HOST_PROFILE:-release-linux-x86_64-primary}"
@@ -24,7 +25,10 @@ for run_number in 1 2 3 4 5; do
   runs+=("$artifact_dir")
   run scripts/run-bench-clean.sh "$artifact_dir"
   cat >"$artifact_dir/commands.txt" <<EOF
+CARGO_TARGET_DIR=$artifact_dir cargo bench --no-run --features bench --bench hotpath --bench mimalloc_bench
+sleep $cooldown_secs
 MIMALLOC_HOTPATH_SAMPLE_SIZE=$hotpath_sample_size MIMALLOC_HOTPATH_MEASUREMENT_SECS=$hotpath_measurement_secs MIMALLOC_HOTPATH_WARMUP_SECS=$hotpath_warmup_secs CARGO_TARGET_DIR=$artifact_dir cargo bench --features bench --bench hotpath -- hotpath/paired_alloc_free/mechanical_mimalloc_public/16
+sleep $cooldown_secs
 MIMALLOC_BENCH_SCENARIOS=$scenarios MIMALLOC_BENCH_ALLOCATORS=mechanical_mimalloc_raw,c-mimalloc-3.3.2 MIMALLOC_BENCH_SAMPLE_SIZE=$native_sample_size MIMALLOC_BENCH_MEASUREMENT_SECS=$native_measurement_secs MIMALLOC_BENCH_WARMUP_SECS=$native_warmup_secs CARGO_TARGET_DIR=$artifact_dir cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 scripts/run-bench-resources.py --artifact-dir $artifact_dir --artifact-mode default-rust --feature bench --operations $resource_operations --repeats $resource_repeats
 scripts/run-evidence-report.py --artifact-dir $artifact_dir
@@ -49,6 +53,9 @@ EOF
     --artifact-mode default-rust \
     --feature bench \
     --commands "$artifact_dir/commands.txt"
+  run env CARGO_TARGET_DIR="$artifact_dir" \
+    cargo bench --no-run --features bench --bench hotpath --bench mimalloc_bench
+  run sleep "$cooldown_secs"
   run env \
     CARGO_TARGET_DIR="$artifact_dir" \
     MIMALLOC_HOTPATH_SAMPLE_SIZE="$hotpath_sample_size" \
@@ -56,6 +63,7 @@ EOF
     MIMALLOC_HOTPATH_WARMUP_SECS="$hotpath_warmup_secs" \
     cargo bench --features bench --bench hotpath -- \
       hotpath/paired_alloc_free/mechanical_mimalloc_public/16
+  run sleep "$cooldown_secs"
   run env \
     CARGO_TARGET_DIR="$artifact_dir" \
     MIMALLOC_BENCH_SCENARIOS="$scenarios" \

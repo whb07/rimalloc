@@ -187,6 +187,10 @@ The full gate and baseline runner use identical default controls: 100 samples,
 5 seconds, and a 2-second warmup for the longer native workloads. Keep these
 defaults aligned because Criterion's native flat-sampling batch size changes
 with the controls and is part of the benchmark methodology.
+Both runners prebuild the thresholded benchmark executables and apply a
+recorded 60-second cooldown before the hotpath group and again before the
+native group. This bounds sustained-load frequency drift without discarding
+individual measurements or selecting favorable runs.
 Page-batch baselines use one clean 100-sample Criterion artifact for each
 feature-keyed mode and are proposed or promoted with
 `scripts/capture-page-batch-baseline.py`; the source commit and sample count are

@@ -15,6 +15,7 @@ fn full_gate_and_baseline_controls_stay_methodology_equivalent() {
         "${MIMALLOC_HOTPATH_SAMPLE_SIZE:=100}",
         "${MIMALLOC_HOTPATH_MEASUREMENT_SECS:=10}",
         "${MIMALLOC_HOTPATH_WARMUP_SECS:=1}",
+        "${MIMALLOC_BENCH_COOLDOWN_SECS:=60}",
     ] {
         assert!(
             full.contains(control),
@@ -28,10 +29,19 @@ fn full_gate_and_baseline_controls_stay_methodology_equivalent() {
         "${MIMALLOC_BASELINE_HOTPATH_SAMPLE_SIZE:-100}",
         "${MIMALLOC_BASELINE_HOTPATH_MEASUREMENT_SECS:-10}",
         "${MIMALLOC_BASELINE_HOTPATH_WARMUP_SECS:-1}",
+        "${MIMALLOC_BASELINE_COOLDOWN_SECS:-60}",
     ] {
         assert!(
             baseline.contains(control),
             "missing baseline control {control}"
         );
     }
+    assert!(
+        full.matches("sleep $MIMALLOC_BENCH_COOLDOWN_SECS").count() >= 2,
+        "full gate must cool before both thresholded benchmark groups"
+    );
+    assert!(
+        baseline.matches("sleep $cooldown_secs").count() >= 2,
+        "baseline runner must cool before both thresholded benchmark groups"
+    );
 }

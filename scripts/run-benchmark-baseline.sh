@@ -55,6 +55,12 @@ EOF
     --commands "$artifact_dir/commands.txt"
   run env CARGO_TARGET_DIR="$artifact_dir" \
     cargo bench --no-run --features bench --bench hotpath --bench mimalloc_bench
+done
+
+# Keep the five fresh-process microbenchmark replicas adjacent. Spreading them
+# across the sustained native and resource workloads turns host phase changes
+# into apparent allocator variance.
+for artifact_dir in "${runs[@]}"; do
   run env \
     CARGO_TARGET_DIR="$artifact_dir" \
     MIMALLOC_HOTPATH_SAMPLE_SIZE="$hotpath_sample_size" \
@@ -62,6 +68,9 @@ EOF
     MIMALLOC_HOTPATH_WARMUP_SECS="$hotpath_warmup_secs" \
     taskset --cpu-list "$benchmark_cpu" cargo bench --features bench --bench hotpath -- \
       hotpath/paired_alloc_free/mechanical_mimalloc_public/16
+done
+
+for artifact_dir in "${runs[@]}"; do
   run sleep "$cooldown_secs"
   run env \
     CARGO_TARGET_DIR="$artifact_dir" \

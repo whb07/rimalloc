@@ -48,6 +48,18 @@ fn full_gate_and_baseline_controls_stay_methodology_equivalent() {
         baseline.contains("sleep $cooldown_secs"),
         "baseline runner must cool before the sustained native group"
     );
+    let adjacent_phase = baseline
+        .split_once("Keep the five fresh-process microbenchmark replicas adjacent")
+        .expect("baseline runner should identify its adjacent hotpath phase")
+        .1
+        .split_once("done\n\nfor artifact_dir")
+        .expect("adjacent hotpath phase should be one complete artifact loop")
+        .0;
+    assert!(
+        !adjacent_phase.contains("mimalloc-bench-native")
+            && !adjacent_phase.contains("run-bench-resources.py"),
+        "baseline runner must not interleave sustained workloads between hotpath replicas"
+    );
     assert!(
         full.contains("taskset --cpu-list $MIMALLOC_BENCH_CPU"),
         "full gate must pin its selected single-thread threshold probe"

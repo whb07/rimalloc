@@ -50,10 +50,10 @@ use support::remote_fixture::RemoteFreeFixture;
 #[global_allocator]
 static BENCH_HARNESS_ALLOCATOR: CountingSystem = CountingSystem;
 
-/// Maximum live allocations held in a pool. Large enough to defeat per-page
-/// free-list caching dominating the measurement, small enough to keep the
-/// pointer array in L1/L2.
-const POOL_SIZE: usize = 4096;
+/// Maximum live allocations held in a pool. Large enough for the smallest size
+/// class to cross multiple page transitions, small enough to keep the pointer
+/// array in L2.
+const POOL_SIZE: usize = 8192;
 
 /// Size classes exercising distinct mimalloc bins:
 ///   16   — smallest small-page bin (tightest fast path)

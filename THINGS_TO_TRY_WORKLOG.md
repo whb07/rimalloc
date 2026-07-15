@@ -32,7 +32,7 @@ predate this worklog and are outside these experiments.
 | 1.3 | Carry collection state instead of publishing/reloading it | Rejected | Narrow local-list carry was 0.65% slower. |
 | 1.4 | Empty-list remote batch direct-to-available path | Rejected: rare | Exact eligible state was 0.098% of detached tails in xmalloc-testN. |
 | 1.5 | Cache reclaim inputs without a spilling context object | Complete: no viable candidate | 99.797% of reclaim attempts exit before cacheable inputs are read. |
-| 1.6 | Revisit abandoned remote-free hot/cold placement | Pending | Compare current, non-cold, and hot-prelude/cold-tail shapes. |
+| 1.6 | Revisit abandoned remote-free hot/cold placement | Rejected: regression | Removing only `#[cold]` was 1.58% slower in immediate xmalloc A/B. |
 | 1.7 | Remote CAS ordering audit | Complete: no change | Existing audit passes; AcqRel/Acquire contract retained. |
 | 2.1–2.2 | Hoist detached-chain invariants and prove bounds once | Pending | First inspect optimized assembly; preserve every validation check. |
 | 2.3 | Cold-split corruption reporting | Rejected: regression | Correct release cold split, but 12.8% slower. |
@@ -168,6 +168,24 @@ logic; 4,431,477 of those then failed the queue limit. Thus the duplicate
 the dominant path and risks spills and a wider internal ABI for a sub-0.21%
 path. The existing scalar loads remain the most performant viable form until a
 workload demonstrates that successful or cross-thread reclaim is material.
+
+### 1.6 — Abandoned remote-free hot/cold placement
+
+**Candidate shape.** Removed only `#[cold]` from
+`collect_after_remote_free`; its `#[inline(never)]` call boundary and every
+collection/reclaim/reabandon operation stayed unchanged. This isolates
+placement from inlining or behavior changes.
+
+**Evidence.** Matching pinned `interpose` cdylibs ran CPU-pinned
+`xmalloc-testN-per-1M-frees` with ten flat Criterion samples. The non-cold
+candidate median was 17.808 ms (95% interval 17.580–22.303 ms; noisy). The
+immediate original-cold baseline was 17.531 ms (17.483–18.582 ms), making the
+candidate 1.58% slower.
+
+**Decision.** Rejected (reverted). The existing cold placement is faster for
+the measured remote-free workload. A future hot-prelude/cold-tail split would
+need a distinct, demonstrated common subpath before it is worth its added
+layout complexity.
 
 ### 1.7 — Remote CAS ordering audit
 

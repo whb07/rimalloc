@@ -39,7 +39,8 @@ predate this worklog and are outside these experiments.
 | 2.4 | Remove surviving `PageCollectOwner` dispatch | Rejected: regression | Static dispatch removed owner-tag tests but regressed xmalloc-testN by 3.6–5.7%. |
 | 2.5 | Use proven non-null block pointers in hot loops | Pending | Restrict to already-proven boundaries; inspect emitted null checks. |
 | 3.1 / 2.5 | Proven-non-null default refill links | Rejected | Focused paired-allocation measurement was slightly slower. |
-| 3.4–3.6 | Refill loop form, unroll factors, and density specialization | Pending | Compare pointer/count and 2/4/8-way candidates independently. |
+| 3.4 | Two-link refill-loop unroll | Rejected: regression | `glibc-simple` was 1.68% slower than the scalar loop. |
+| 3.5–3.6 | Refill loop form and density specialization | Pending | Compare only if a distinct branch or count operation survives release assembly. |
 | 3.7 | Sparse-store `prefetchw` | Unsupported on host | Required L1D store-miss attribution is unavailable. |
 | 3.8 | Keep secure construction separate | Complete: no change | Distinct secure algorithm and ordinary core already preserved. |
 | 4.1 | Preserve direct small lookup | Complete | Explicit non-change: existing assembly gate already protects it. |
@@ -241,6 +242,24 @@ candidate median was 45.734 µs (two mild outliers); immediately rebuilt
 baseline was 45.587 µs. The 0.32% candidate regression is not a win.
 
 **Decision.** Rejected (reverted).
+
+### 3.4 — Two-link ordinary refill unroll
+
+**Candidate shape.** The ordinary (non-secure) refill loop linked two adjacent
+blocks per iteration when at least three blocks remained, then used the
+unchanged scalar tail and final free-head splice. Secure construction was not
+touched.
+
+**Evidence.** All-feature compile and focused page tests passed. On CPU 0,
+the pinned native `glibc-simple` workload used ten flat Criterion samples and
+one-second warm-up/measurement configuration. Candidate median was 946.70 ms
+(944.81–948.93 ms); immediate scalar baseline was 931.08 ms
+(927.37–934.37 ms). Criterion reported the baseline improvement as
+statistically significant (p < 0.05); the unroll regressed 1.68%.
+
+**Decision.** Rejected (reverted). The extra pointer calculation and code size
+cost more than the removed loop branch in the relevant small-allocation
+workload.
 
 ### 3.7 — Sparse-store `prefetchw`
 

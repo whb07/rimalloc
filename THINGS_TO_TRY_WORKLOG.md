@@ -40,7 +40,7 @@ predate this worklog and are outside these experiments.
 | 2.5 | Use proven non-null block pointers in hot loops | Pending | Restrict to already-proven boundaries; inspect emitted null checks. |
 | 3.1 / 2.5 | Proven-non-null default refill links | Rejected | Focused paired-allocation measurement was slightly slower. |
 | 3.4 | Two-link refill-loop unroll | Rejected: regression | `glibc-simple` was 1.68% slower than the scalar loop. |
-| 3.5–3.6 | Refill loop form and density specialization | Pending | Compare only if a distinct branch or count operation survives release assembly. |
+| 3.5–3.6 | Refill loop form and density specialization | Complete: no change | Release loop is already a pointer-only store/increment/compare backedge with no density branch. |
 | 3.7 | Sparse-store `prefetchw` | Unsupported on host | Required L1D store-miss attribution is unavailable. |
 | 3.8 | Keep secure construction separate | Complete: no change | Distinct secure algorithm and ordinary core already preserved. |
 | 4.1 | Preserve direct small lookup | Complete | Explicit non-change: existing assembly gate already protects it. |
@@ -260,6 +260,19 @@ statistically significant (p < 0.05); the unroll regressed 1.68%.
 **Decision.** Rejected (reverted). The extra pointer calculation and code size
 cost more than the removed loop branch in the relevant small-allocation
 workload.
+
+### 3.5–3.6 — Refill loop form and density specialization
+
+**Assembly inspection.** The ordinary release refill loop contains exactly one
+link store, two pointer increments, and one end-pointer comparison per node.
+The capacity/extend arithmetic is completed before the loop; the loop has no
+remaining count decrement, division, modulo, page metadata load, or
+density-dependent branch.
+
+**Decision.** Complete with no source change. A count-form loop would add a
+counter dependency, while a density specialization would add a branch to an
+already branch-minimal scalar loop. The measured two-link unroll is also
+slower, confirming that the current C-shaped form is the best viable one.
 
 ### 3.7 — Sparse-store `prefetchw`
 

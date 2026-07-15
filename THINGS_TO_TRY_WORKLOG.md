@@ -37,8 +37,8 @@ predate this worklog and are outside these experiments.
 | 2.1–2.2 | Hoist detached-chain invariants and prove bounds once | Complete: no change | Release assembly already hoists page geometry and capacity multiplication outside the node loop. |
 | 2.3 | Cold-split corruption reporting | Rejected: regression | Correct release cold split, but 12.8% slower. |
 | 2.4 | Remove surviving `PageCollectOwner` dispatch | Rejected: regression | Static dispatch removed owner-tag tests but regressed xmalloc-testN by 3.6–5.7%. |
-| 2.5 | Use proven non-null block pointers in hot loops | Pending | Restrict to already-proven boundaries; inspect emitted null checks. |
-| 3.1 / 2.5 | Proven-non-null default refill links | Rejected | Focused paired-allocation measurement was slightly slower. |
+| 2.5 / 3.1 | Proven-non-null default refill links | Rejected | Focused paired-allocation measurement was slightly slower. |
+| 3.2 | Preserve nonzero page-extend count at the private refill boundary | Complete: no change | Release wrapper already receives the count directly and emits unchecked decrement arithmetic. |
 | 3.4 | Two-link refill-loop unroll | Rejected: regression | `glibc-simple` was 1.68% slower than the scalar loop. |
 | 3.5–3.6 | Refill loop form and density specialization | Complete: no change | Release loop is already a pointer-only store/increment/compare backedge with no density branch. |
 | 3.7 | Sparse-store `prefetchw` | Unsupported on host | Required L1D store-miss attribution is unavailable. |
@@ -242,6 +242,21 @@ candidate median was 45.734 µs (two mild outliers); immediately rebuilt
 baseline was 45.587 µs. The 0.32% candidate regression is not a win.
 
 **Decision.** Rejected (reverted).
+
+### 3.2 — Nonzero page-extend count boundary
+
+**Inspection.** `ActivePolicy::page_extend_count` returns a
+`PageExtendCount(NonZeroU16)` and the only conversion to `usize` is for address
+arithmetic in `mi_page_extend_free_typed`. The release
+`mi_page_free_list_extend` wrapper receives that value directly; its last-block
+calculation is a plain decrement with no underflow check, and the loop has no
+count-validation branch.
+
+**Decision.** Complete with no source change. A typed private refill core would
+improve only source-level presentation while requiring a new conversion in the
+C-shaped boundary. It cannot remove emitted work; the separate internal-wrapper
+experiment was also non-reproducible, so no performance case exists to retain
+this refactor.
 
 ### 3.4 — Two-link ordinary refill unroll
 

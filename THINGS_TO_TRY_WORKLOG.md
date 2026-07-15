@@ -30,7 +30,7 @@ predate this worklog and are outside these experiments.
 | 1.1 | Reject uninitialized threads before reclaim-option lookup | Rejected: noisy | No reproducible gain on this host. |
 | 1.2 | Private inline option accessor on measured policy paths | Rejected: unmeasured | Candidate compiled and preserved diagnostics, but was reverted pending a valid release A/B run. |
 | 1.3 | Carry collection state instead of publishing/reloading it | Rejected | Narrow local-list carry was 0.65% slower. |
-| 1.4 | Empty-list remote batch direct-to-available path | Pending | Instrument eligibility before changing routing. |
+| 1.4 | Empty-list remote batch direct-to-available path | Rejected: rare | Exact eligible state was 0.098% of detached tails in xmalloc-testN. |
 | 1.5 | Cache reclaim inputs without a spilling context object | Pending | Gate on current assembly/repeated-load evidence. |
 | 1.6 | Revisit abandoned remote-free hot/cold placement | Pending | Compare current, non-cold, and hot-prelude/cold-tail shapes. |
 | 1.7 | Remote CAS ordering audit | Complete: no change | Existing audit passes; AcqRel/Acquire contract retained. |
@@ -126,6 +126,28 @@ ns. Candidate was 0.65% slower.
 
 **Decision.** Rejected (reverted). The larger used-count result-value shape
 remains untried, but this minimal state-carry form is not beneficial.
+
+### 1.4 — Empty-list remote batch direct-to-available path
+
+**Eligibility instrumentation.** A temporary `bench-diagnostics` counter ran
+immediately after tail detachment in the partial collector. It counted only the
+proposed direct-route precondition: nonempty detached tail with both `free`
+and `local_free` empty. The counter and its hot-path condition were removed
+after the measurement; neither is part of the retained allocator.
+
+**Evidence.** CPU-pinned `xmalloc-testN-per-1M-frees` against an isolated
+`interpose,bench-diagnostics` cdylib, ten flat Criterion samples plus the
+warm-up record. Across 11 diagnostic records, there were 2,182,308,142
+detached tails and 2,135,331 eligible direct-to-available states: **0.09785%**
+(about one in 1,022). The records are retained locally at
+`target/things-to-try-direct-available.jsonl` and were generated with a
+pinned diagnostic cdylib; timing from this run is not used as performance
+evidence because diagnostics add relaxed counter traffic.
+
+**Decision.** Rejected before a collector rewrite. The extra branch would run
+for every detached tail to optimize a case that does not cover the relevant
+remote-free volume. It is better represented by the current local-list path
+than by a new product-path specialization.
 
 ### 1.7 — Remote CAS ordering audit
 

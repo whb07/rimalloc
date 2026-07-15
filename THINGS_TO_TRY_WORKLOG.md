@@ -44,15 +44,15 @@ predate this worklog and are outside these experiments.
 | 3.8 | Keep secure construction separate | Complete: no change | Distinct secure algorithm and ordinary core already preserved. |
 | 4.1 | Preserve direct small lookup | Complete | Explicit non-change: existing assembly gate already protects it. |
 | 4.2 | Cache usable size once | Complete: no change | Current allocation boundary already computes it once. |
-| 4.3 | Allocation variants | Pending | Assembly must show surviving work before specializing. |
+| 4.3 | Allocation variants | Complete: no change | Hot public small paths already pass compile-time variants. |
 | 4.4 | Dedicated `mi_free` core | Complete: no change | Export is already a two-instruction wrapper. |
 | 4.5 / 3.3 | Typed page-extend private core | Rejected: noisy | Promising first pair did not reproduce. |
 | 4.6 | Extended assembly gates | Pending | Add gates only for proven hot paths. |
 | 5.1 | Verify page-metadata alignment | Complete: no change | ABI layout/stride proves padding is not a permissible first move. |
 | 5.2–5.3 / 5.5 | Store attribution, c2c, and queue-prefetch evidence | Pending | Measure first; no layout change or prefetch without quantified need. |
 | 5.4 | Avoid wide page-metadata RMW | Complete: no change | Typed transactional stores are already narrower and safer. |
-| 6 | Branch shaping / selective branchless candidates | Pending | Prior broad rewrite was harmful; only assembly-proven small cases. |
-| 7 | Inline/no-inline policy | Pending | Evaluated only as part of a concrete candidate, never blanket-applied. |
+| 6 | Branch shaping / selective branchless candidates | Complete: no change | No concrete surviving branch justified a generic rewrite. |
+| 7 | Inline/no-inline policy | Complete: no change | Existing split matches measured loop/ABI boundaries. |
 | 8.1 | Generic maintenance counter equality | Rejected: near-neutral | Semantically valid, but 0.20% is below the acceptance bar. |
 | 8.2–8.3 | Queue state and rejection order | Pending | Requires generic-workload diagnostics before source change. |
 | 9.4 | Optional CPU-tuned build | Rejected on host | `target-cpu=native` showed no meaningful gain. |
@@ -186,6 +186,16 @@ The shared router must remain generic for `mi_ufree` and other callers.
 specialize a wrapper that has no redundant branch would add code and layout
 risk without an evidenced target.
 
+### 4.3 — Allocation variants
+
+**Inspection.** Public small malloc and calloc wrappers call the typed small
+allocator with compile-time `Zeroed::No`/`Zeroed::Yes` and null usable-output
+constants. The generic page allocator is a slow-path dispatcher shared by
+sized/aligned requests.
+
+**Decision.** Complete with no source change. Duplicating the generic helper
+would create large copies without demonstrating a surviving hot-path branch.
+
 ### 5.1 — Page-metadata alignment
 
 **Inspection.** Layout assertions fix hot fields at offsets 0x08 through 0x30;
@@ -230,6 +240,26 @@ a strong portable result.
 
 **Decision.** Rejected for this host. Generic build remains the only supported
 artifact; any deployment-specific tuning needs its own target-host evidence.
+
+### 6 — Branchless code
+
+**Inspection.** `mi_likely`/`mi_unlikely` are intentional identity helpers;
+small allocator arithmetic already uses branchless invariant-backed operations
+where appropriate. No audited hot branch had a demonstrated misprediction or
+instruction-count target, and prior broad branchless capacity work regressed.
+
+**Decision.** Complete with no source change. Branch shaping remains part of
+individual future candidates, not a global rewrite.
+
+### 7 — Inlining policy
+
+**Inspection.** Page extension, reclaim, and C-shaped wrappers are out of
+line; small typed accessors are `inline(always)`; error paths are cold where
+appropriate. The only mixed hot/cold candidate (`collect_after_remote_free`)
+remains separately tracked as 1.6.
+
+**Decision.** Complete with no source change. Blanket annotation changes would
+alter code layout without a bounded, measured target.
 
 ### 2.4 — `PageCollectOwner` dispatch
 

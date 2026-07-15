@@ -29,7 +29,7 @@ predate this worklog and are outside these experiments.
 | --- | --- | --- | --- |
 | 1.1 | Reject uninitialized threads before reclaim-option lookup | Rejected: noisy | No reproducible gain on this host. |
 | 1.2 | Private inline option accessor on measured policy paths | Rejected: unmeasured | Candidate compiled and preserved diagnostics, but was reverted pending a valid release A/B run. |
-| 1.3 | Carry collection state instead of publishing/reloading it | Pending | Requires partial/full collection and page-batch evidence. |
+| 1.3 | Carry collection state instead of publishing/reloading it | Rejected | Narrow local-list carry was 0.65% slower. |
 | 1.4 | Empty-list remote batch direct-to-available path | Pending | Instrument eligibility before changing routing. |
 | 1.5 | Cache reclaim inputs without a spilling context object | Pending | Gate on current assembly/repeated-load evidence. |
 | 1.6 | Revisit abandoned remote-free hot/cold placement | Pending | Compare current, non-cold, and hot-prelude/cold-tail shapes. |
@@ -107,6 +107,25 @@ command with `bench-diagnostics` cannot link this crate's intentional custom
 for this candidate. No release A/B measurement was completed.
 
 **Decision.** Rejected (reverted), pending a valid release measurement.
+
+### 1.3 — Carry collection state
+
+**Inspection.** `RemoteFreeBatch::collect_into_page` computes the new used
+count and publishes both it and `local_free`, but returns only
+`LocalFreeList`. The partial collector then reloads `local_free`, `free`, and
+later `used` to decide the quick move/full collection.
+
+**Candidate shape.** Carried the returned `LocalFreeList` through the partial
+collector, removing two `local_free` rereads while preserving the error
+fallback. All plain page-batch test-mode cases and `cargo check --all-features`
+passed.
+
+**Evidence.** CPU-pinned forced plain collection (len 128, nonempty
+destination): candidate median 182.90 ns; immediately rebuilt baseline 181.72
+ns. Candidate was 0.65% slower.
+
+**Decision.** Rejected (reverted). The larger used-count result-value shape
+remains untried, but this minimal state-carry form is not beneficial.
 
 ### 1.7 — Remote CAS ordering audit
 

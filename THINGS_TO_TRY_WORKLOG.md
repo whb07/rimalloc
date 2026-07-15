@@ -47,7 +47,7 @@ predate this worklog and are outside these experiments.
 | 4.3 | Allocation variants | Complete: no change | Hot public small paths already pass compile-time variants. |
 | 4.4 | Dedicated `mi_free` core | Complete: no change | Export is already a two-instruction wrapper. |
 | 4.5 / 3.3 | Typed page-extend private core | Rejected: noisy | Promising first pair did not reproduce. |
-| 4.6 | Extended assembly gates | Pending | Add gates only for proven hot paths. |
+| 4.6 | Extended assembly gates | Complete: no change | Existing capture covers every specified public/route hot-path boundary; no retained new core warrants another gate. |
 | 5.1 | Verify page-metadata alignment | Complete: no change | ABI layout/stride proves padding is not a permissible first move. |
 | 5.2–5.3 / 5.5 | Store attribution, c2c, and queue-prefetch evidence | Pending | Measure first; no layout change or prefetch without quantified need. |
 | 5.4 | Avoid wide page-metadata RMW | Complete: no change | Typed transactional stores are already narrower and safer. |
@@ -308,3 +308,16 @@ noisy: median 64.309 µs with 11.738 µs standard deviation. It cannot validate
 the apparent win.
 
 **Decision.** Rejected (reverted) as non-reproducible.
+
+### 4.6 — Extended assembly gates
+
+**Inspection.** `scripts/capture-release-assembly.sh` captures the requested
+public and routing boundaries: `mi_malloc`, `mi_malloc_small`, `mi_free`,
+`mi_route_free`, `mi_free_block_local`, and `_mi_theap_malloc_zero_ex`. The
+release audit verifies the façade symbols required by the strict-wrapper
+policy, while the two route symbols cover the local-free path.
+
+**Decision.** Complete with no source change. None of the experiments so far
+retained a new hot loop or wrapper, so adding a new static assembly requirement
+would not guard a proven optimization. Any retained candidate that introduces
+or changes a hot core must add its exact symbol to this capture before merge.

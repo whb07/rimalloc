@@ -34,7 +34,7 @@ predate this worklog and are outside these experiments.
 | 1.5 | Cache reclaim inputs without a spilling context object | Complete: no viable candidate | 99.797% of reclaim attempts exit before cacheable inputs are read. |
 | 1.6 | Revisit abandoned remote-free hot/cold placement | Rejected: regression | Removing only `#[cold]` was 1.58% slower in immediate xmalloc A/B. |
 | 1.7 | Remote CAS ordering audit | Complete: no change | Existing audit passes; AcqRel/Acquire contract retained. |
-| 2.1–2.2 | Hoist detached-chain invariants and prove bounds once | Pending | First inspect optimized assembly; preserve every validation check. |
+| 2.1–2.2 | Hoist detached-chain invariants and prove bounds once | Complete: no change | Release assembly already hoists page geometry and capacity multiplication outside the node loop. |
 | 2.3 | Cold-split corruption reporting | Rejected: regression | Correct release cold split, but 12.8% slower. |
 | 2.4 | Remove surviving `PageCollectOwner` dispatch | Rejected: regression | Static dispatch removed owner-tag tests but regressed xmalloc-testN by 3.6–5.7%. |
 | 2.5 | Use proven non-null block pointers in hot loops | Pending | Restrict to already-proven boundaries; inspect emitted null checks. |
@@ -212,6 +212,21 @@ the immediately rebuilt baseline was 248.23 ns. This is a 12.8% regression.
 
 **Decision.** Rejected (reverted): the cold call harms this small forced
 collection path despite producing the intended code layout.
+
+### 2.1–2.2 — Detached-chain invariant and overflow hoisting
+
+**Assembly inspection.** In the release collector that inlines
+`scan_detached_chain`, the page capacity, block size, page start, and
+`block_size × capacity` product are loaded/calculated before the traversal
+backedge. The node loop uses those registers for the subtraction, range test,
+and alignment remainder. The checked multiplication's overflow edge is also
+outside that loop.
+
+**Decision.** Complete with no source change. The proposed explicit cache
+would duplicate values LLVM already keeps live, while the remaining per-node
+address/range/alignment validation is necessary before reading each encoded
+link. A power-of-two-only second loop would duplicate a safety-critical scan
+and enlarge hot code without an unhoisted operation to remove.
 
 ### 3.1 / 2.5 — Default refill pointer proof
 

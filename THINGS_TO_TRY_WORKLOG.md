@@ -56,7 +56,7 @@ predate this worklog and are outside these experiments.
 | 7 | Inline/no-inline policy | Complete: no change | Existing split matches measured loop/ABI boundaries. |
 | 8.1 | Generic maintenance counter equality | Rejected: near-neutral | Semantically valid, but 0.20% is below the acceptance bar. |
 | 8.2–8.3 | Queue state and rejection order | Complete: no change | Diagnostics match the existing recovery-before-expansion order; no redundant state derivation survived. |
-| 9.4 | Optional CPU-tuned build | Rejected on host | `target-cpu=native` showed no meaningful gain. |
+| 9.4 | Optional CPU-tuned build | Rejected: reproduced regression | Two pinned 200-sample pairs measured native 0.70–1.43% slower than the generic build. |
 | 9.1–9.3 | PGO, post-link ordering, alignment | Complete: host/toolchain blocked | Profiled interposition `cdylib` cannot resolve `atexit`; BOLT and selective alignment controls are unavailable. |
 | 10 | Explicitly deprioritized ideas | Complete | No implementation: they violate constraints, lack a measured target, or were previously harmful. |
 
@@ -381,11 +381,16 @@ candidate improvement is too small to establish a strong gain.
 **Candidate shape.** Isolated release benchmark build with
 `RUSTFLAGS='-C target-cpu=native'`; no source or distributed artifact change.
 
-**Evidence.** CPU-pinned fixed-64 workload median was 65.138 µs with 7.5%
-outliers. Nearby generic baseline was 65.479 µs; the sub-1% difference is not
-a strong portable result.
+**Evidence.** The earlier fixed-64 run had 7.5% outliers, so it was repeated
+from clean generic/native target directories with 200 samples each and then
+repeated after a 30-second cooldown using the already-built binaries. The
+first pair measured generic 60.373 µs and native 61.236 µs (1.43% slower).
+The confirmation pair measured generic 61.468 µs and native 61.900 µs (0.70%
+slower). Both runs still had host outliers (6.50%/3.50% initially and
+8.50%/2.50% after cooldown), but the regression sign and magnitude remained
+consistent.
 
-**Decision.** Rejected for this host. Generic build remains the only supported
+**Decision.** Rejected (reverted). Generic build remains the only supported
 artifact; any deployment-specific tuning needs its own target-host evidence.
 
 ### 6 — Branchless code

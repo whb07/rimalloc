@@ -28,7 +28,7 @@ predate this worklog and are outside these experiments.
 | ID | Proposal from `THINGS_TO_TRY.md` | Status | Result / evidence |
 | --- | --- | --- | --- |
 | 1.1 | Reject uninitialized threads before reclaim-option lookup | Rejected: noisy | No reproducible gain on this host. |
-| 1.2 | Private inline option accessor on measured policy paths | Rejected: unmeasured | Candidate compiled and preserved diagnostics, but was reverted pending a valid release A/B run. |
+| 1.2 | Private inline option accessor on measured policy paths | Rejected: regression | Valid release xmalloc A/B/B/A reproduced a 0.30–1.24% slowdown. |
 | 1.3 | Carry collection state instead of publishing/reloading it | Rejected | Narrow local-list carry was 0.65% slower. |
 | 1.4 | Empty-list remote batch direct-to-available path | Rejected: rare | Exact eligible state was 0.098% of detached tails in xmalloc-testN. |
 | 1.5 | Cache reclaim inputs without a spilling context object | Complete: no viable candidate | 99.797% of reclaim attempts exit before cacheable inputs are read. |
@@ -50,14 +50,14 @@ predate this worklog and are outside these experiments.
 | 4.5 / 3.3 | Typed page-extend private core | Rejected: noisy | Promising first pair did not reproduce. |
 | 4.6 | Extended assembly gates | Complete: no change | Existing capture covers every specified public/route hot-path boundary; no retained new core warrants another gate. |
 | 5.1 | Verify page-metadata alignment | Complete: no change | ABI layout/stride proves padding is not a permissible first move. |
-| 5.2–5.3 / 5.5 | Store attribution, c2c, and queue-prefetch evidence | Pending | Measure first; no layout change or prefetch without quantified need. |
+| 5.2–5.3 / 5.5 | Store attribution, c2c, and queue-prefetch evidence | Complete: no change | IBS profile lacks usable page-map attribution; measured one-node prefetch was noisy. |
 | 5.4 | Avoid wide page-metadata RMW | Complete: no change | Typed transactional stores are already narrower and safer. |
 | 6 | Branch shaping / selective branchless candidates | Complete: no change | No concrete surviving branch justified a generic rewrite. |
 | 7 | Inline/no-inline policy | Complete: no change | Existing split matches measured loop/ABI boundaries. |
 | 8.1 | Generic maintenance counter equality | Rejected: near-neutral | Semantically valid, but 0.20% is below the acceptance bar. |
-| 8.2–8.3 | Queue state and rejection order | Pending | Requires generic-workload diagnostics before source change. |
+| 8.2–8.3 | Queue state and rejection order | Complete: no change | Diagnostics match the existing recovery-before-expansion order; no redundant state derivation survived. |
 | 9.4 | Optional CPU-tuned build | Rejected on host | `target-cpu=native` showed no meaningful gain. |
-| 9.1–9.3 | PGO, post-link ordering, alignment | Pending | Separate build-only experiments; generic artifact remains the acceptance target. |
+| 9.1–9.3 | PGO, post-link ordering, alignment | Complete: host/toolchain blocked | Profiled interposition `cdylib` cannot resolve `atexit`; BOLT and selective alignment controls are unavailable. |
 | 10 | Explicitly deprioritized ideas | Complete | No implementation: they violate constraints, lack a measured target, or were previously harmful. |
 
 ## Results
@@ -102,12 +102,18 @@ including the existing diagnostics counter, and changed only
 `page_candidate_limit`, `reclaim_on_free_mode`, and `reclaim_limit` to use it;
 the C-compatible `#[inline(never)]` wrapper remained unchanged.
 
-**Evidence.** The diagnostics read-count reference test passed. A wider test
-command with `bench-diagnostics` cannot link this crate's intentional custom
-`panic_impl` into its std integration-test matrix, so it is not valid evidence
-for this candidate. No release A/B measurement was completed.
+**Evidence.** The diagnostics read-count reference test passed. A matching
+release `interpose` cdylib was loaded by the native `xmalloc-testN` benchmark
+with ten flat samples, one-second warm-up/measurement, and the allocator
+library pinned per run. The first pair measured candidate 2.1790 ms versus
+baseline 2.1523 ms (1.24% slower). After a 30-second cooldown, the second
+pair measured baseline 2.1539 ms versus candidate 2.1604 ms (0.30% slower).
+The candidate's final Criterion interval overlapped zero only because the
+within-run samples were noisy; both pair medians remained slower.
 
-**Decision.** Rejected (reverted), pending a valid release measurement.
+**Decision.** Rejected (reverted). The private accessor removes an ABI call in
+assembly but its code placement/register effects make the measured remote-free
+workload slower. The existing out-of-line option boundary is retained.
 
 ### 1.3 — Carry collection state
 
@@ -462,3 +468,98 @@ policy, while the two route symbols cover the local-free path.
 retained a new hot loop or wrapper, so adding a new static assembly requirement
 would not guard a proven optimization. Any retained candidate that introduces
 or changes a hot core must add its exact symbol to this capture before merge.
+
+### 5.2–5.3 — Store attribution and cache-to-cache evidence
+
+**Method.** Recorded the real `xmalloc-testN` native workload with AMD IBS
+through `perf c2c record`, writing the raw `perf.data` under
+`target/things-to-try/`. The run captured 6,639,461 memory-operation samples.
+`perf report --sort symbol,dso` showed the allocator's dominant samples in
+`collect_after_remote_free` (26.06%), `mi_malloc` (10.21%),
+`mi_page_free_list_extend` (6.79%), `try_reclaim_abandoned` (3.64%), and
+`collect_page_free_lists` (2.13%).
+
+**Limitation.** This kernel's IBS data did not permit the required address
+attribution: 66,118 samples were rejected for lack of a page map and 3,840,469
+had an unparseable data source. `perf c2c` therefore reported zero shared cache
+lines, zero local/remote HITM loads, and no attributable store miss despite
+1,264,989 sampled stores. The probe itself succeeds, so this is a kernel
+physical-address-map limitation rather than an unavailable profiler.
+
+**Decision.** Complete with no source change. The profile reconfirms the
+remote-free and refill targets, but it cannot distinguish metadata, queue, and
+user-block store ownership. Reordering fields, adding a direct-to-free path,
+or changing atomic placement without this evidence would be speculative.
+
+### 5.5 — Queue scan depth and one-node prefetch
+
+**Diagnostics.** A temporary `bench-diagnostics` build was loaded by the
+native benchmark, then removed from source after capture. In the stable
+`glibc-simple` sample, there were 50,072 queue searches and 95,066 scanned
+candidates: 1.8986 candidates/search. Six searches (0.012%) scanned no
+candidates, 5,066 (10.117%) scanned one, and 45,000 (89.869%) scanned two or
+more. This made a one-node read prefetch a justified bounded candidate.
+
+**Candidate shape.** On x86-64 only, after reading `page.next`, issue one
+`prefetcht0` for that non-null next metadata pointer before processing the
+current candidate. It neither changed queue order nor prefetched the direct
+small allocation path. A matching diagnostics-enabled baseline used the same
+temporary counters but no prefetch.
+
+**Evidence.** CPU 0, ten flat samples, 1 s warm-up/measurement,
+`glibc-simple`, A/B then a 30 s cool-down followed by B/A: candidate A
+923.67 ms versus baseline A 920.36 ms (0.36% slower); baseline B 930.13 ms
+versus candidate B 923.76 ms (0.68% faster). The two baseline medians drifted
+1.06%, so the sign reverses within host noise.
+
+**Decision.** Rejected (reverted). The source prefetch and temporary counters
+were removed. A linked-list prefetch remains a possible future experiment only
+on a host with lower variance and usable address-level memory attribution.
+
+### 8.2–8.3 — Queue state and rejection ordering
+
+**Inspection.** The queue scan already carries `theap_raw`, queue pointer,
+block size, candidate limit, full-retain policy value, candidate page, and the
+next link as loop-local state. No repeated policy lookup or queue-block-size
+derivation survives in the source loop; its remaining per-page loads establish
+the current page's availability, expansion, and usage facts.
+
+**Diagnostics.** A second temporary diagnostics build counted the actual
+candidate decisions in the same `glibc-simple` workload, then was removed.
+All 95,066 visited candidates needed a collection attempt; none were initially
+available or became available after collection; 50,000 (52.595%) were then
+non-expandable. The stable run also recorded 45,066 successful queue searches
+and zero failed extensions.
+
+**Decision.** Complete with no source change. The measured order is already
+the prescribed cheap-recovery-before-expansion order. Moving expansion ahead
+of collection would skip a necessary remote/local-free recovery opportunity in
+other workloads, while caching more state has no demonstrated redundant load
+to remove.
+
+### 9.1–9.3 — PGO, post-link layout, and selected alignment
+
+**PGO attempt.** The host has `llvm-profdata`, and an instrumented release
+`cdylib` was built with `-Cprofile-generate`. The benchmark loader rejected it
+because the profiling runtime leaves `atexit` unresolved in this
+malloc-interposing shared object. Linking the installed compiler-rt profile
+archive explicitly did not resolve that symbol; `ldd -r` still reports it.
+The ordinary dynamically loaded allocator works, but the instrumented artifact
+cannot be safely trained. Adding an `atexit` shim to the interposition library
+would change the runtime being measured, so it was not accepted as a PGO
+workaround.
+
+**Post-link ordering.** `llvm-bolt` is not installed on this host (only its
+support libraries are present), so no post-link transformation can be executed
+or validated here.
+
+**Selected alignment.** Stable Rust exposes an LLVM all-functions alignment
+knob but no per-function alignment control. Applying the former would violate
+the proposal's explicit instruction not to blanket-align the allocator;
+selective alignment would require function-section/linker-script source and
+build-system changes before there is an alignment diagnosis. No artifact was
+changed.
+
+**Decision.** Complete with no retained build change. PGO and BOLT require a
+benchmark host/toolchain that can produce a runnable profiled interposition
+artifact; selective alignment requires evidence of a fetch-boundary problem.

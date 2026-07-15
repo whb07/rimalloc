@@ -31,7 +31,7 @@ predate this worklog and are outside these experiments.
 | 1.2 | Private inline option accessor on measured policy paths | Rejected: unmeasured | Candidate compiled and preserved diagnostics, but was reverted pending a valid release A/B run. |
 | 1.3 | Carry collection state instead of publishing/reloading it | Rejected | Narrow local-list carry was 0.65% slower. |
 | 1.4 | Empty-list remote batch direct-to-available path | Rejected: rare | Exact eligible state was 0.098% of detached tails in xmalloc-testN. |
-| 1.5 | Cache reclaim inputs without a spilling context object | Pending | Gate on current assembly/repeated-load evidence. |
+| 1.5 | Cache reclaim inputs without a spilling context object | Complete: no viable candidate | 99.797% of reclaim attempts exit before cacheable inputs are read. |
 | 1.6 | Revisit abandoned remote-free hot/cold placement | Pending | Compare current, non-cold, and hot-prelude/cold-tail shapes. |
 | 1.7 | Remote CAS ordering audit | Complete: no change | Existing audit passes; AcqRel/Acquire contract retained. |
 | 2.1–2.2 | Hoist detached-chain invariants and prove bounds once | Pending | First inspect optimized assembly; preserve every validation check. |
@@ -148,6 +148,26 @@ evidence because diagnostics add relaxed counter traffic.
 for every detached tail to optimize a case that does not cover the relevant
 remote-free volume. It is better represented by the current local-list path
 than by a new product-path specialization.
+
+### 1.5 — Cache reclaim inputs
+
+**Assembly and profile inspection.** The cacheable values (`is_in_threadpool`,
+`mostly_used`, page memid, and exclusive arena) occur after the early
+`_mi_thread_is_initialized` check in `try_reclaim_abandoned`. They could only
+be carried to `try_reabandon_mapped` by changing the consuming error result to
+include a context value; that would add a larger return shape and pressure to
+the overwhelmingly common rejection path.
+
+**Evidence.** The 11-record pinned xmalloc diagnostic run counted
+2,182,392,300 reclaim attempts. 2,177,960,821 (99.79694%) failed because the
+thread was not initialized. Only 4,431,479 (0.20306%) reached the later input
+logic; 4,431,477 of those then failed the queue limit. Thus the duplicate
+`mostly_used`/memid work is outside 99.8% of this workload's reclaim attempts.
+
+**Decision.** Complete with no source change. A cache context cannot improve
+the dominant path and risks spills and a wider internal ABI for a sub-0.21%
+path. The existing scalar loads remain the most performant viable form until a
+workload demonstrates that successful or cross-thread reclaim is material.
 
 ### 1.7 — Remote CAS ordering audit
 

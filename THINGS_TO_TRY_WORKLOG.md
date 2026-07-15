@@ -469,6 +469,18 @@ retained a new hot loop or wrapper, so adding a new static assembly requirement
 would not guard a proven optimization. Any retained candidate that introduces
 or changes a hot core must add its exact symbol to this capture before merge.
 
+### 4.1 — Direct small lookup preservation
+
+**Inspection.** The release assembly gate for `mi_malloc_small` and the public
+`mi_malloc` route already records the direct-bin arithmetic, page lookup, and
+local free-list pop. The expected path contains no surviving helper call or
+generic queue search for an eligible small page.
+
+**Decision.** Complete with no source change. The proposal is a guard against
+future regression rather than an optimization opportunity: moving the lookup
+or introducing a new helper would discard an already-verified C-shaped fast
+path without a measured surplus instruction to remove.
+
 ### 5.2–5.3 — Store attribution and cache-to-cache evidence
 
 **Method.** Recorded the real `xmalloc-testN` native workload with AMD IBS
@@ -563,3 +575,38 @@ changed.
 **Decision.** Complete with no retained build change. PGO and BOLT require a
 benchmark host/toolchain that can produce a runnable profiled interposition
 artifact; selective alignment requires evidence of a fetch-boundary problem.
+
+### 10 — Explicitly deprioritized ideas
+
+These are the ten ideas under “Things I would not prioritize” in
+`THINGS_TO_TRY.md`. Each was checked against the stated constraints and the
+measured assembly/profile evidence; none was promoted to an implementation
+experiment because its prerequisite would either violate the project
+contract, lack a target signal, or repeat a rejected class of change:
+
+1. Reordering or padding `mi_page_t` would change its ABI/layout; the 5.1
+   offset/stride audit found no legal padding-only change.
+2. Moving `xthread_free` to another cache line would violate the metadata
+   layout constraint; 5.2–5.3 also lacked physical-address attribution to
+   justify that change.
+3. Weakening atomics has no demonstrated x86 instruction benefit; 1.7's
+   ordering audit retained the AcqRel/Acquire contract.
+4. Blanket `inline(always)` is contradicted by 1.2 and the earlier helper
+   placement regressions; the existing narrow policy remains.
+5. Blanket `inline(never)` is contradicted by the measured small-helper and
+   wrapper boundaries; the existing split remains.
+6. Generic branchless conversions have no branch-miss target and the earlier
+   branchless capacity rewrite regressed; 6 therefore retained branch shaping.
+7. Non-temporal refill stores would bypass cache lines consumed immediately by
+   allocation; no store-attribution evidence supports them.
+8. Prefetching the ordinary small path has no pointer-chasing signal; 5.5
+   tested only the measured queue candidate and rejected it as noisy.
+9. Exact-size custom copy/zero kernels have no allocator-internal size
+   histogram or isolated target; the separate buffer-size report is not
+   evidence for changing allocator internals.
+10. Combining all ideas would confound layout and causality; every viable
+    candidate above was measured independently and rejected or retained on
+    its own evidence.
+
+**Decision.** Complete with no source change. These constraints prevent
+speculative churn while preserving a concrete revisit condition for each idea.

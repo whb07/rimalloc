@@ -36,7 +36,7 @@ predate this worklog and are outside these experiments.
 | 1.7 | Remote CAS ordering audit | Complete: no change | Existing audit passes; AcqRel/Acquire contract retained. |
 | 2.1–2.2 | Hoist detached-chain invariants and prove bounds once | Pending | First inspect optimized assembly; preserve every validation check. |
 | 2.3 | Cold-split corruption reporting | Rejected: regression | Correct release cold split, but 12.8% slower. |
-| 2.4 | Remove surviving `PageCollectOwner` dispatch | In progress | Release assembly retains shared enum collector calls. |
+| 2.4 | Remove surviving `PageCollectOwner` dispatch | Rejected: regression | Static dispatch removed owner-tag tests but regressed xmalloc-testN by 3.6–5.7%. |
 | 2.5 | Use proven non-null block pointers in hot loops | Pending | Restrict to already-proven boundaries; inspect emitted null checks. |
 | 3.1 / 2.5 | Proven-non-null default refill links | Rejected | Focused paired-allocation measurement was slightly slower. |
 | 3.4–3.6 | Refill loop form, unroll factors, and density specialization | Pending | Compare pointer/count and 2/4/8-way candidates independently. |
@@ -304,12 +304,31 @@ alter code layout without a bounded, measured target.
 
 ### 2.4 — `PageCollectOwner` dispatch
 
-**Evidence.** Release assembly contains one shared
-`collect_page_free_lists` symbol called from both local and abandoned paths;
-the enum dispatch did not disappear under LTO.
+**Baseline assembly.** Release assembly contained one shared
+`collect_page_free_lists` body. It preserved the enum tag and executed two
+owner-discriminant tests around remote and local batch operations.
 
-**Decision.** In progress. A candidate will use two small monomorphic entry
-cores without dynamic dispatch and preserve the distinct ownership proofs.
+**Candidate shape.** Replaced the private enum with a private static-dispatch
+trait implemented only by `LocalPage` and `OwnedAbandonedPage`. The common
+collector was generic over that trait; no dynamic dispatch, raw proof
+reconstruction, ownership transition, or public API changed. Release assembly
+then removed the owner-tag tests and reduced the collector prologue, confirming
+that the generic code specialized as intended.
+
+**Evidence.** A detached unmodified `HEAD` worktree and the candidate were
+built as matching pinned `interpose` cdylibs (baseline SHA-256
+`8a987a…e8cf9`, candidate `ddf84f…c642c`). CPU-pinned
+`xmalloc-testN-per-1M-frees` used ten flat Criterion samples and one-second
+warm-up/measurement configuration; the workload itself runs for five seconds
+per sample. Alternating medians were baseline 17.245 and 17.474 ms per million
+frees, candidate 18.234 and 18.095 ms. The first candidate interval was broad
+(17.707–24.089 ms), so the second baseline/candidate pair was run after a
+30-second cool-down. The confirmation remained slower: 18.095 versus 17.474
+ms, a 3.55% regression; the first pair was 5.74% slower.
+
+**Decision.** Rejected (reverted). The eliminated tag tests are outweighed by
+the specialized code's layout and/or instruction-cache cost on the target
+remote-free workload. The existing enum remains the smaller, faster form.
 
 ### 4.5 / 3.3 — Internal ABI-wrapper audit
 

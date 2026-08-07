@@ -218,6 +218,13 @@ mod platform;
 mod safe;
 pub(crate) mod types;
 
+/// Hidden helpers for Criterion benches only. Not part of the public API.
+#[cfg(feature = "bench")]
+#[doc(hidden)]
+pub mod __bench {
+    pub use crate::internal::_mi_memcpy;
+}
+
 // Crate-private compatibility aliases retained for translated mimalloc code.
 // New Rust-facing code should prefer owning-module paths or narrow adapters
 // instead of adding more crate-root aliases.

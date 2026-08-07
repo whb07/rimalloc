@@ -194,6 +194,12 @@ path = "benches/page_batch.rs"
 harness = false
 required-features = ["bench", "bench-diagnostics"]
 
+[[bench]]
+name = "memcpy"
+path = "benches/memcpy.rs"
+harness = false
+required-features = ["bench"]
+
 [[example]]
 name = "aligned"
 path = "examples/aligned.rs"

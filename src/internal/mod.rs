@@ -17,7 +17,11 @@ pub(crate) mod bits;
 mod block_link;
 #[cfg(feature = "guarded")]
 pub(crate) mod guarded;
+#[cfg(target_arch = "x86_64")]
+mod memcpy;
 pub(crate) mod memid;
+#[cfg(target_arch = "x86_64")]
+pub use memcpy::{_mi_memcpy, _mi_memcpy_aligned};
 mod page_flags;
 mod page_location;
 mod page_metadata;
@@ -784,29 +788,6 @@ pub(crate) unsafe fn mi_theap_malloc_use_guarded(
 }
 
 /// # Safety
-/// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges.
-#[inline(always)]
-pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
-    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
-    unsafe {
-        #[cfg(target_arch = "x86_64")]
-        {
-            core::arch::asm!(
-                "rep movsb",
-                inout("rdi") dst => _,
-                inout("rcx") n => _,
-                inout("rsi") src => _,
-                options(nostack, preserves_flags),
-            );
-        }
-        #[cfg(not(target_arch = "x86_64"))]
-        {
-            ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
-        }
-    }
-}
-
-/// # Safety
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
@@ -826,21 +807,6 @@ pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
         {
             ptr::write_bytes(dst.cast::<u8>(), val, n);
         }
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-#[inline(always)]
-unsafe fn mi_rep_movsq(dst: *mut c_void, src: *const c_void, count: usize) {
-    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
-    unsafe {
-        core::arch::asm!(
-            "rep movsq",
-            inout("rdi") dst => _,
-            inout("rcx") count => _,
-            inout("rsi") src => _,
-            options(nostack, preserves_flags),
-        );
     }
 }
 
@@ -887,28 +853,6 @@ pub const fn _mi_random_shuffle(mut x: usize) -> usize {
 
 #[inline]
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-unsafe fn mi_cpu_movsb_max() -> usize {
-    let max: usize;
-    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
-    unsafe {
-        core::arch::asm!(
-            "mov {max}, qword ptr [rip + _mi_cpu_movsb_max]",
-            max = lateout(reg) max,
-            options(nostack, readonly, preserves_flags)
-        );
-    }
-    max
-}
-
-#[inline]
-#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
-unsafe fn mi_cpu_movsb_max() -> usize {
-    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
-    unsafe { crate::init::_mi_cpu_movsb_max }
-}
-
-#[inline]
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 unsafe fn mi_cpu_stosb_max() -> usize {
     let max: usize;
     // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
@@ -931,19 +875,14 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 
 /// # Safety
 /// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges.
+#[cfg(not(target_arch = "x86_64"))]
 #[inline]
-pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
-    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
+pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void {
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy helpers operate on caller-proven byte ranges.
     unsafe {
-        #[cfg(target_arch = "x86_64")]
-        {
-            if n <= mi_cpu_movsb_max() {
-                mi_rep_movsb(dst, src, n);
-                return;
-            }
-        }
         ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
     }
+    dst
 }
 
 /// # Safety
@@ -966,24 +905,14 @@ pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
 /// # Safety
 /// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges aligned as required
 /// by callers of the aligned helper.
+#[cfg(not(target_arch = "x86_64"))]
 #[inline]
-pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize) {
-    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
+pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void {
+    // SAFETY[AUDIT:internal-cpu-memory-boundary]: copy helpers operate on caller-proven byte ranges.
     unsafe {
-        #[cfg(target_arch = "x86_64")]
-        {
-            let movsb_max = mi_cpu_movsb_max();
-            if n > movsb_max && n.is_multiple_of(size_of::<usize>()) {
-                mi_rep_movsq(dst, src, n / size_of::<usize>());
-                return;
-            }
-            if n <= movsb_max {
-                mi_rep_movsb(dst, src, n);
-                return;
-            }
-        }
         ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
     }
+    dst
 }
 
 /// # Safety

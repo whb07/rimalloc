@@ -24,16 +24,14 @@ pub(super) fn assert_thread_heap_and_stats_boundaries(sources: &UnsafePerformanc
     lifecycle_helpers::assert_lifecycle_helper_boundaries(init_rs, options_rs, theap_rs);
     assert!(
         theap_rs.contains("_mi_memcpy_aligned(\n            theap_raw.cast(),")
-            && internal.contains("unsafe fn mi_cpu_movsb_max() -> usize")
-            && internal.contains("\"mov {max}, qword ptr [rip + _mi_cpu_movsb_max]\"")
-            && internal.contains("if n <= mi_cpu_movsb_max()")
-            && internal.contains("\"rep movsb\"")
-            && internal.contains("let movsb_max = mi_cpu_movsb_max();")
-            && internal.contains("if n > movsb_max && n.is_multiple_of(size_of::<usize>())")
-            && internal.contains("if n <= movsb_max")
-            && internal.contains("\"rep movsq\"")
-            && internal.contains("pub unsafe fn _mi_memcpy_aligned"),
-        "_mi_theap_init should copy the empty template through C's _mi_memcpy_aligned path"
+            && internal.contains("pub unsafe fn optimized_memcpy_unified")
+            && internal.contains("if n < 32")
+            && internal.contains("optimized_memcpy_sse_tiny")
+            && internal.contains("optimized_memcpy_avx2_small")
+            && internal.contains("optimized_memcpy_avx2_large")
+            && internal.contains("pub unsafe fn _mi_memcpy_aligned")
+            && !internal.contains("mi_cpu_movsb_max"),
+        "_mi_theap_init should copy the empty template through the optimized _mi_memcpy_aligned path"
     );
     let theap_init_start = theap_rs
         .find("pub(crate) unsafe extern \"C\" fn _mi_theap_init")

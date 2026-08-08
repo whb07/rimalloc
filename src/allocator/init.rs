@@ -67,7 +67,7 @@ use crate::{prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
 core::arch::global_asm!(".hidden _mi_theap_empty");
 // SAFETY[AUDIT:init-platform-hooks-boundary]: platform ABI hooks and link-name shims forward into the bounded init lifecycle.
 #[cfg(target_os = "linux")]
-core::arch::global_asm!(".hidden _mi_cpu_movsb_max", ".hidden _mi_cpu_stosb_max");
+core::arch::global_asm!(".hidden _mi_cpu_stosb_max");
 // SAFETY[AUDIT:init-platform-hooks-boundary]: platform ABI hooks and link-name shims forward into the bounded init lifecycle.
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden subproc_main");
@@ -515,10 +515,6 @@ static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
     arena_pages_lock: mi_lock_t::new(),
     stats: MI_STATS_NULL(),
 };
-
-// SAFETY[AUDIT:init-random-cpu-boundary]: random seeding/reseeding and CPU feature publication use process-local init witnesses.
-#[unsafe(no_mangle)]
-pub(crate) static mut _mi_cpu_movsb_max: usize = 0;
 
 // SAFETY[AUDIT:init-random-cpu-boundary]: random seeding/reseeding and CPU feature publication use process-local init witnesses.
 #[unsafe(no_mangle)]
@@ -1712,9 +1708,6 @@ fn mi_detect_cpu_features() {
         }
         if mi_cpuid(cpu_info.as_mut_ptr(), 1, 0) {
             unsafe { _mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0 }; // SAFETY[AUDIT:init-random-cpu-boundary]: random seeding/reseeding and CPU feature publication use process-local init witnesses.
-        }
-        if fsrm {
-            unsafe { _mi_cpu_movsb_max = 127 }; // SAFETY[AUDIT:init-random-cpu-boundary]: random seeding/reseeding and CPU feature publication use process-local init witnesses.
         }
         if fsrs || (amd && fsrm) {
             unsafe { _mi_cpu_stosb_max = 127 }; // SAFETY[AUDIT:init-random-cpu-boundary]: random seeding/reseeding and CPU feature publication use process-local init witnesses.

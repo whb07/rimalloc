@@ -83,7 +83,8 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && internal_boundary.contains("let atomic_tf = page.thread_free_cell();")
             && internal_boundary.contains("let atomic_tf = page_ptr.thread_free_cell();")
             && !internal_boundary.contains("AtomicThreadFree::from_field(")
-            && internal.contains("unsafe fn mi_cpu_movsb_max() -> usize")
+            && internal.contains("pub unsafe fn optimized_memcpy_unified")
+            && internal.contains("optimized_memcpy_avx2_large")
             && internal.contains("unsafe fn mi_cpu_stosb_max() -> usize")
             && internal.contains("core::arch::asm!("),
         "internal translation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"

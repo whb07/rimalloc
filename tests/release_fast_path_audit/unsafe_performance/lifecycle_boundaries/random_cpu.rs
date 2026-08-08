@@ -6,13 +6,11 @@ pub(super) fn assert_random_and_cpu_boundaries(sources: &UnsafePerformanceSource
     let prim_rs = sources.prim_rs.as_str();
 
     assert!(
-        init_rs.contains(
-            "core::arch::global_asm!(\".hidden _mi_cpu_movsb_max\", \".hidden _mi_cpu_stosb_max\")"
-        ) && init_rs.contains("#[unsafe(no_mangle)]\npub(crate) static mut _mi_cpu_movsb_max")
+        init_rs.contains("core::arch::global_asm!(\".hidden _mi_cpu_stosb_max\")")
             && init_rs.contains("#[unsafe(no_mangle)]\npub(crate) static mut _mi_cpu_stosb_max")
-            && !init_rs.contains("#[unsafe(no_mangle)]\npub static mut _mi_cpu_movsb_max")
+            && !init_rs.contains("_mi_cpu_movsb_max")
             && !init_rs.contains("#[unsafe(no_mangle)]\npub static mut _mi_cpu_stosb_max"),
-        "CPU copy thresholds should use stable hidden C names like C without becoming public dynamic ABI symbols"
+        "the remaining CPU fill threshold should keep a stable hidden C name without becoming a public dynamic ABI symbol"
     );
     assert!(
         init_rs.contains("fn mi_detect_cpu_features()")
@@ -24,11 +22,10 @@ pub(super) fn assert_random_and_cpu_boundaries(sources: &UnsafePerformanceSource
             && init_rs.contains("fsrs = (cpu_info[1] & (1 << 11)) != 0;")
             && init_rs.contains("if mi_cpuid(cpu_info.as_mut_ptr(), 1, 0)")
             && init_rs.contains("_mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0")
-            && init_rs.contains("if fsrm {\n            unsafe { _mi_cpu_movsb_max = 127 };")
             && init_rs.contains(
                 "if fsrs || (amd && fsrm) {\n            unsafe { _mi_cpu_stosb_max = 127 };"
             ),
-        "CPU feature detection should initialize C's popcnt and short rep movsb/stosb thresholds"
+        "CPU feature detection should initialize popcnt and the short fill threshold"
     );
     assert!(
     internal.contains("\"rep stosb\"")
@@ -37,7 +34,6 @@ pub(super) fn assert_random_and_cpu_boundaries(sources: &UnsafePerformanceSource
     "_mi_memset should keep C's CPU-thresholded rep stosb shape instead of always lowering to external memset"
 );
     for internal_static in [
-        "_mi_cpu_movsb_max",
         "_mi_cpu_stosb_max",
         "_mi_theap_default_slot",
         "_mi_theap_default_expansion_slot",
@@ -64,8 +60,7 @@ pub(super) fn assert_random_and_cpu_boundaries(sources: &UnsafePerformanceSource
         "unused fallback TLS globals should not be exported as dynamic storage symbols"
     );
     assert!(
-        !internal.contains("pub static mut _mi_cpu_movsb_max")
-            && !internal.contains("pub static mut _mi_cpu_stosb_max")
+        !internal.contains("pub static mut _mi_cpu_stosb_max")
             && !prim_rs.contains("pub static mut _mi_process_is_initialized")
             && !prim_rs.contains("pub static mut _mi_theap_default_slot")
             && !prim_rs.contains("pub static mut _mi_theap_cached_slot")

@@ -79,11 +79,10 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
         init_rs
             .matches("SAFETY[AUDIT:init-random-cpu-boundary]")
             .count()
-            >= 13
+            >= 11
             && init_rs.contains("fn mi_detect_cpu_features()")
             && init_rs.contains("fn mi_cpuid(")
             && init_rs.contains("_mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0")
-            && init_rs.contains("if fsrm {\n            unsafe { _mi_cpu_movsb_max = 127 };")
             && init_rs.contains(
                 "crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random))"
             ),

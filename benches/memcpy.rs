@@ -35,14 +35,6 @@ fn env_secs(name: &str, default: u64) -> Duration {
     )
 }
 
-fn ensure_mimalloc_cpu_features() {
-    // Triggers process init so `_mi_cpu_movsb_max` is published when FSRM exists.
-    unsafe {
-        let p = mechanical_mimalloc::raw::mi_malloc(1);
-        mechanical_mimalloc::raw::mi_free(p);
-    }
-}
-
 fn alloc_buffers(size: usize) -> (Vec<u8>, Vec<u8>) {
     let mut src = vec![0u8; size];
     let dst = vec![0u8; size];
@@ -53,8 +45,6 @@ fn alloc_buffers(size: usize) -> (Vec<u8>, Vec<u8>) {
 }
 
 fn bench_memcpy(c: &mut Criterion) {
-    ensure_mimalloc_cpu_features();
-
     let mut group = c.benchmark_group("memcpy");
     group.sample_size(env_usize("MIMALLOC_MEMCPY_SAMPLE_SIZE", 50, 10));
     group.measurement_time(env_secs("MIMALLOC_MEMCPY_MEASUREMENT_SECS", 2));

@@ -975,10 +975,14 @@ Operation IDs:
 - `SAFETY[AUDIT:internal-c-abi-shim-boundary]`: `src/internal/mod.rs` owns the
   declaration-only internal C helper surface. The declarations preserve
   translated raw signatures without dereferencing pointers.
-- `SAFETY[AUDIT:internal-cpu-memory-boundary]`: `src/internal/mod.rs` owns
-  copy, fill, zero, and zero-check helpers. Unsafe operations are limited to
-  caller-proven byte ranges, architecture-specific `rep movs/stos` thresholds,
-  and fallback `ptr` copy/fill operations.
+- `SAFETY[AUDIT:internal-cpu-memory-boundary]`: `src/internal/mod.rs` and the
+  adapters and tests in `src/internal/memcpy.rs` own copy, fill, zero, and
+  zero-check helpers. Unsafe operations are limited to caller-proven byte
+  ranges, architecture-specific fill thresholds, and portable `ptr` fallbacks.
+- `SAFETY[AUDIT:internal-memcpy-simd-boundary]`:
+  `src/internal/memcpy.rs` owns the x86-64 copy implementation. Unsafe
+  operations are limited to bounded unaligned GPR/SSE/AVX2 accesses within
+  caller-proven non-overlapping ranges and ordered non-temporal stores.
 - `SAFETY[AUDIT:internal-thread-heap-shim-boundary]`: `src/internal/mod.rs`
   owns thread-heap and allocation helper projections. Unsafe operations load
   heap pointers, direct small-page slots, and guarded-allocation state from

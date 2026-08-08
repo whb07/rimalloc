@@ -22,11 +22,11 @@ fn strict_type_allowlist_inventory_stays_measured_by_concern() {
 
     assert_eq!(
         entries.len(),
-        634,
+        633,
         "strict-type allowlist active entry count drifted"
     );
     assert_eq!(kind_counts.get("raw-pointer-parameter"), Some(&330));
-    assert_eq!(kind_counts.get("bare-domain-usize"), Some(&220));
+    assert_eq!(kind_counts.get("bare-domain-usize"), Some(&219));
     assert_eq!(kind_counts.get("metadata-reference"), Some(&40));
     assert_eq!(kind_counts.get("pointer-usize-roundtrip"), Some(&23));
     assert_eq!(kind_counts.get("atomic-cast"), Some(&14));
@@ -45,7 +45,7 @@ fn strict_type_allowlist_inventory_stays_measured_by_concern() {
         &strict_docs,
         &[
             "## Strict-Type Allowlist Governance",
-            "634 active entries",
+            "633 active entries",
             "330 raw-pointer-parameter",
             "zero wildcard entries",
             "zero removable entries",

@@ -532,7 +532,6 @@ bare-domain-usize|src/internal/mod.rs|mi_direct_bin_from_size|usize|Internal dir
 bare-domain-usize|src/internal/mod.rs|mi_mul_overflow|usize|Internal overflow helper preserves raw count and size arguments for C-compatible product checks.|permanent: translated C overflow helper boundary.
 bare-domain-usize|src/internal/mod.rs|mi_count_size_overflow|usize|Internal overflow helper preserves raw count and size arguments for C-compatible product checks.|permanent: translated C overflow helper boundary.
 bare-domain-usize|src/internal/mod.rs|_mi_page_map_at|usize|Internal page-map helper preserves raw page-map index input before returning translated submap metadata.|permanent: translated C page-map helper boundary.
-bare-domain-usize|src/internal/mod.rs|mi_rep_movsq|usize|Internal copy helper preserves raw word-count input for translated C memory movement.|permanent: translated C memory helper boundary.
 bare-domain-usize|src/internal/mod.rs|mi_slice_count_of_size|usize|Internal arena sizing helper preserves raw byte-size input before deriving a typed slice-count caller value.|permanent: translated C arena sizing helper boundary.
 bare-domain-usize|src/types/arena.rs|new|usize|SliceRange checked constructor accepts raw slice start/count values before validating them against arena bounds.|permanent: typed arena constructor boundary.
 bare-domain-usize|src/types/arena.rs|single_at_offset|usize|SliceRange single-slice constructor accepts a raw offset before checked slice-index addition.|permanent: typed arena constructor boundary.

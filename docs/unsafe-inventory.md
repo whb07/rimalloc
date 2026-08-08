@@ -25,12 +25,12 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 6189 |
-| `unsafe_blocks` | 3661 |
-| `unsafe_fns` | 2089 |
+| `unsafe_mentions` | 6217 |
+| `unsafe_blocks` | 3676 |
+| `unsafe_fns` | 2103 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
-| `unsafe_attrs` | 236 |
+| `unsafe_attrs` | 235 |
 | `global_asm` | 10 |
 
 ## Files
@@ -62,7 +62,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/heap/subproc_heaps.rs` | 12 | 6 | 6 | 0 | 0 | 0 | 0 |
 | `src/allocator/heap.rs` | 93 | 46 | 34 | 0 | 0 | 11 | 0 |
 | `src/allocator/init/subproc_registry.rs` | 8 | 4 | 4 | 0 | 0 | 0 | 0 |
-| `src/allocator/init.rs` | 331 | 229 | 78 | 3 | 0 | 18 | 3 |
+| `src/allocator/init.rs` | 329 | 228 | 78 | 3 | 0 | 17 | 3 |
 | `src/allocator/options.rs` | 79 | 46 | 9 | 4 | 3 | 15 | 0 |
 | `src/allocator/page/bins.rs` | 3 | 2 | 0 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/counts.rs` | 44 | 22 | 22 | 0 | 0 | 0 | 0 |
@@ -90,8 +90,9 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/internal/bitmap.rs` | 140 | 61 | 79 | 0 | 0 | 0 | 0 |
 | `src/internal/block_link.rs` | 35 | 26 | 9 | 0 | 0 | 0 | 0 |
 | `src/internal/guarded.rs` | 2 | 1 | 1 | 0 | 0 | 0 | 0 |
+| `src/internal/memcpy.rs` | 38 | 20 | 18 | 0 | 0 | 0 | 0 |
 | `src/internal/memid.rs` | 2 | 0 | 2 | 0 | 0 | 0 | 0 |
-| `src/internal/mod.rs` | 68 | 32 | 35 | 1 | 0 | 0 | 0 |
+| `src/internal/mod.rs` | 60 | 28 | 31 | 1 | 0 | 0 | 0 |
 | `src/internal/page_flags.rs` | 16 | 8 | 8 | 0 | 0 | 0 | 0 |
 | `src/internal/page_location.rs` | 14 | 7 | 7 | 0 | 0 | 0 | 0 |
 | `src/internal/page_metadata.rs` | 30 | 15 | 15 | 0 | 0 | 0 | 0 |

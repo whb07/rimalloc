@@ -72,6 +72,7 @@ impl UnsafePerformanceSources {
                 root,
                 &[
                     "src/internal/mod.rs",
+                    "src/internal/memcpy.rs",
                     "src/internal/block_link.rs",
                     "src/internal/page_location.rs",
                     "src/internal/page_metadata.rs",

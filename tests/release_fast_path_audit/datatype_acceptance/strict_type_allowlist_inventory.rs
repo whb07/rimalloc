@@ -75,7 +75,7 @@ pub(super) fn assert_strict_type_allowlist_inventory(
     let entries = active_entries(audit_sources.strict_type_allowlist);
     assert_eq!(
         entries.len(),
-        634,
+        633,
         "strict-type allowlist active entry count should stay measured"
     );
 
@@ -101,7 +101,7 @@ pub(super) fn assert_strict_type_allowlist_inventory(
         by_kind,
         BTreeMap::from([
             ("atomic-cast", 14),
-            ("bare-domain-usize", 220),
+            ("bare-domain-usize", 219),
             ("heap-allocating-type", 7),
             ("metadata-reference", 40),
             ("pointer-usize-roundtrip", 23),

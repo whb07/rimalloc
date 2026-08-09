@@ -302,6 +302,7 @@ mod unix_bootstrap {
 }
 
 #[cfg(all(mi_c_malloc_fast, mi_cxx_shim_linked))]
+// SAFETY[AUDIT:raw-macro-fast-override-boundary]: the linked C++ shim provides the throwing slow-allocation helper with this exact C ABI.
 unsafe extern "C" {
     fn mi_cxx_new_slow(size: usize) -> *mut c_void;
 }
@@ -317,12 +318,12 @@ unsafe extern "C" fn mi_cxx_new_fast_slow(
     #[cfg(mi_cxx_shim_linked)]
     {
         let _ = (theap, nothrow);
-        // SAFETY: the C++ slow helper implements the throwing operator-new retry contract.
+        // SAFETY[AUDIT:raw-macro-fast-override-boundary]: the C++ slow helper implements the throwing operator-new retry contract.
         unsafe { mi_cxx_new_slow(size) }
     }
     #[cfg(not(mi_cxx_shim_linked))]
     {
-        // SAFETY: the assembly caller supplies its live thread heap and allocation mode.
+        // SAFETY[AUDIT:raw-macro-fast-override-boundary]: the assembly caller supplies its live thread heap and allocation mode.
         unsafe { crate::alloc::mi_theap_try_new(theap, size, nothrow) }
     }
 }

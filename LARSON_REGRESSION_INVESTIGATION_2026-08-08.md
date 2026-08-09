@@ -2,9 +2,11 @@
 
 **Report timestamp:** 2026-08-08T22:51:26-04:00
 
-**Investigation status:** Major regression commit confirmed; production fix validated; residual gap remains open
+**Investigation status:** Major regression commit confirmed; C++ and page-queue fixes validated; smaller residual gap remains open
 
-**Current benchmarked Rust source:** `8baba5eb6018ea8c56a47de6f1c20a7fa07f39a4`
+**Initial benchmarked Rust source:** `8baba5eb6018ea8c56a47de6f1c20a7fa07f39a4`
+
+**Page-queue follow-up baseline:** `c3ec76a7a6705be779ed9487cec98224e320a88c`
 
 **Historical Rust source:** `c73267593a5f2ddf727b761ccd3705d9f22cd7a8`
 
@@ -22,9 +24,9 @@ over Rust history. This follow-up rebuilt a historical Rust revision and ran it
 against current Rust and the same C artifact to determine whether Rust
 performance changed.
 
-This report preserves the measurements, likely mechanism, caveats, and next
-steps for a later investigation. No allocator source was changed during this
-work.
+This report preserves the measurements, confirmed mechanisms, caveats, and
+follow-up changes. The initial historical-attribution phase changed no allocator
+source; later sections document the validated C++ and page-queue fixes.
 
 ## Why commit `c732675` was selected
 
@@ -253,8 +255,9 @@ longer explained by missing C++ symbols or an unoptimized C++ object.
 
 ## Residual-gap evidence
 
-Throughput-normalized `perf stat -r 3` measurements found fast-new Rust still
-used approximately 5–6% more cycles/instructions per operation and 13–14% more
+Before the page-queue follow-up, throughput-normalized `perf stat -r 3`
+measurements found fast-new Rust still used approximately 5–6% more
+cycles/instructions per operation and 13–14% more
 branches per operation than C, with a much smaller cache-miss difference.
 `perf record` showed the same broad allocator paths in both libraries. Rust's
 `collect_page_free_lists` received 4.39% of flat samples versus 1.70% for C's
@@ -266,6 +269,82 @@ The source-level missing `#[inline(always)]` annotations and extra abandoned
 checks are not immediate fixes: release interposition uses handwritten assembly
 for the common local and remote free paths, bypassing those typed branches and
 helpers. Atomic ordering already matches C and must not be weakened.
+
+## Page-queue control-flow follow-up
+
+**Follow-up timestamp:** 2026-08-09T09:42:50-04:00
+
+Branch-event profiling confirmed that page collection and queue search account for
+a substantial part of Rust's remaining control-flow excess. Per-operation branch
+sampling attributed about 4.9% of Rust branches to `collect_page_free_lists`
+versus 1.1% to C's `_mi_page_free_collect`. Rust's typed queue search accounted
+for about 6.9% versus 6.4% for C, while also containing generic queue-transition
+work that C attributed to separate helpers.
+
+Three source-shape candidates were rejected before the production candidate:
+
+- forcing the 464-byte direct-cache updater inline improved sized Larson by
+  1.47% but slowed unsized Larson by 0.76%;
+- simplifying queue classification was 0.6% slower unsized and 0.4% slower
+  sized;
+- replacing division with a power-of-two membership mask increased code size
+  and was 0.74% slower unsized and 1.47% slower sized.
+
+The retained candidate optimizes the general operation that moves a selected
+page to the front of its existing normal queue. The old typed implementation
+performed a full remove followed by a full insertion. This needlessly cleared
+the already-clear full-queue flag twice with locked atomic operations,
+decremented and restored heap/queue counts, and cleared and rebuilt links
+through generic queue transitions. `QueuedPage<NormalQueue>`
+already proves membership and non-full state, so the new implementation relinks
+the node in place while leaving counts and flags unchanged.
+
+The release queue-search function changed from three locked atomic instructions
+to none. A focused invariant test covers moving both a middle and tail page and
+checks the complete link order, queue count, heap page count, and owner/flag
+words.
+
+A ten-sample reversed-order baseline/candidate comparison measured:
+
+| Benchmark | Baseline | In-place relink | Change |
+|---|---:|---:|---:|
+| `larsonN` | 2.1633s | 2.1181s | 2.09% faster |
+| `larsonN-sized` | 2.1530s | 2.0981s | 2.55% faster |
+
+Two-sample reversed-order `perf stat` measurements also showed the expected
+reduction in retired work:
+
+| Benchmark | Instructions/op | Branches/op | Branch misses/op |
+|---|---:|---:|---:|
+| `larsonN` | 1.24% lower | 1.90% lower | 0.10% lower |
+| `larsonN-sized` | 1.22% lower | 1.84% lower | 0.12% lower |
+
+A final two-sample reversed-order C/Rust counter comparison quantified the
+remaining per-operation excess after the relink:
+
+| Benchmark | Cycles | Instructions | Branches | Branch misses |
+|---|---:|---:|---:|---:|
+| `larsonN` | 1.94% higher | 4.94% higher | 11.77% higher | 18.73% higher |
+| `larsonN-sized` | 0.13% higher | 4.32% higher | 11.24% higher | 18.30% higher |
+
+A broader four-sample balanced screen covered Redis, mstress, rptest,
+alloc-test, sh6bench, sh8bench, xmalloc-test, glibc-simple, and glibc-thread.
+No consistent regression appeared; aggregate changes ranged from 2.88% faster
+to 0.58% slower, with the two small slow readings inside those benchmarks'
+run-to-run variation. A complete `allt` pass in both allocator orders likewise
+found no repeatable regression across the remaining real-world and stress
+workloads.
+
+Finally, a direct ten-sample reversed-order C comparison measured:
+
+| Benchmark | C mimalloc 3.3.2 | Rust with relink | Remaining gap |
+|---|---:|---:|---:|
+| `larsonN` | 2.0613s | 2.1359s | 3.62% slower |
+| `larsonN-sized` | 2.0743s | 2.1112s | 1.78% slower |
+
+This is a general queue-maintenance improvement rather than a Larson-specific
+policy change. No validation, atomic ordering, allocation policy, or benchmark
+behavior was weakened.
 
 ## C++ sized-delete findings
 
@@ -283,11 +362,11 @@ reversed-order comparisons.
 
 ## Recommended next investigation
 
-1. Profile the remaining branch/instruction excess with the fast-new artifact,
-   separating initial cross-thread turnover from steady-state worker-local
-   traffic.
-2. Annotate `collect_page_free_lists` and page queue search assembly before
-   proposing another production change.
+1. Profile the remaining branch/instruction excess with the final relink
+   artifact, separating initial cross-thread turnover from steady-state
+   worker-local traffic.
+2. Focus the next measured hypothesis on collection work that can be removed by
+   an existing ownership invariant, rather than deleting corruption checks.
 3. Preserve remote-list validation and current atomic ordering unless a new
    invariant and correctness evidence replace them.
 4. Validate every candidate with reversed allocator order, C++ semantic tests,
@@ -295,13 +374,17 @@ reversed-order comparisons.
 
 ## Current conclusion
 
-The major Larson regression is now attributed to `4cbb441`: forcing an
-unoptimized C++ operator-new shim into release artifacts and disabling the fast
-`_Znam` path cost about 6.4%. Compiling the shim with `-O3` and restoring a
-semantic fast success path recover most of that loss. Delete-symbol ownership,
-release `mi_free_size` behavior, atomic ordering, and page-batch membership
-checks are not causes. A residual roughly 5% Larson gap remains associated with
-extra instruction and branch volume in allocator slow/collection paths.
+The major Larson regression is attributed to `4cbb441`: forcing an unoptimized
+C++ operator-new shim into release artifacts and disabling the fast `_Znam`
+path cost about 6.4%. Compiling the shim with `-O3` and restoring a semantic
+fast success path recovered most of that loss. Replacing generic normal-queue
+remove/reinsert work with an invariant-preserving in-place relink recovered a
+further 2.09% on unsized Larson and 2.55% on sized Larson while improving the
+broader workload screen. Delete-symbol ownership, release `mi_free_size`
+behavior, atomic ordering, and page-batch membership checks are not causes. The
+remaining measured Rust gap is 3.62% unsized and 1.78% sized and is still
+associated with extra instruction and branch volume in allocator
+slow/collection paths.
 
 ## Local evidence
 
@@ -315,8 +398,9 @@ Generated local evidence at report time:
 - `target/larson-investigation/o3-fast-order-*.csv` — optimized/fast-new A/B;
 - `target/larson-investigation/page-batch-order-*.csv` — discarded membership-check experiment;
 - `target/larson-investigation/perf2-*` and `perf-record-*` — residual counter/profile evidence;
-- `target/larson-investigation/` — ignored worktrees, allocator artifacts, and
-  allocator-list files.
+- `target/queue-investigation/` — queue candidate A/B logs, branch profiles,
+  counter data, complete-suite screens, and disposable artifacts;
+- `target/larson-investigation/` — ignored allocator artifacts and allocator-list files.
 
 The logs and build outputs are untracked local evidence. This tracked report
 preserves their methodology and summarized values.

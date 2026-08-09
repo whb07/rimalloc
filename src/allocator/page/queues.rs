@@ -271,22 +271,39 @@ pub(super) unsafe fn mi_page_queue_move_to_front_typed(
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
     // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
-        let page = queued.page().as_ptr();
+        let page_ptr = queued.page();
+        let page = page_ptr.as_ptr();
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.ptr().as_ptr());
         let queue_ptr = queue.ptr();
-        if queue_ptr
-            .first()
-            .is_some_and(|first| ptr::eq(first.as_ptr(), page))
-        {
+        let Some(first) = queue_ptr.first() else {
+            crate::internal::mi_assert_internal!(false);
+            return queued;
+        };
+        if ptr::eq(first.as_ptr(), page) {
             return queued;
         }
-        let active = queued.remove();
-        let queued = mi_page_queue_push_typed(theap, queue, active);
-        crate::internal::mi_assert_internal!(
-            queue_ptr
-                .first()
-                .is_some_and(|first| ptr::eq(first.as_ptr(), page))
-        );
+
+        // The typed witness proves the page is already in this normal queue,
+        // so relinking preserves its non-full flag and both page counts.
+        let Some(prev) = page_ptr.queue_prev() else {
+            crate::internal::mi_assert_internal!(false);
+            return queued;
+        };
+        let next = page_ptr.queue_next();
+        prev.set_queue_next(next);
+        if let Some(next) = next {
+            next.set_queue_prev(Some(prev));
+        } else {
+            queue_ptr.set_last(Some(prev));
+        }
+
+        page_ptr.set_queue_prev(None);
+        page_ptr.set_queue_next(Some(first));
+        first.set_queue_prev(Some(page_ptr));
+        queue_ptr.set_first(Some(page_ptr));
+        mi_theap_queue_first_update_typed(theap, queue);
+
+        crate::internal::mi_assert_internal!(queue_ptr.first() == Some(page_ptr));
         queued
     }
 }
@@ -598,5 +615,95 @@ pub(super) unsafe fn mi_theap_direct_cache_start(
         }
         let start = 1 + _mi_wsize_from_size(mi_page_queue_block_size_raw(prev));
         start.min(idx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::mem::MaybeUninit;
+
+    #[test]
+    fn move_to_front_relinks_without_changing_counts_or_flags() {
+        let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
+        let mut pages = [const { MaybeUninit::<mi_page_t>::zeroed() }; 3];
+
+        // SAFETY[AUDIT:typed-page-queue-test-fixtures]: the stack-local heap,
+        // queue, and page metadata are initialized for the exact fields read
+        // and written by the typed normal-queue relink operation.
+        unsafe {
+            let theap = theap.as_mut_ptr();
+            (*theap).pages = crate::init::MI_PAGE_QUEUES_EMPTY();
+            (*theap).page_count = 3;
+
+            let block_size = crate::core_types::BlockSize::new_unchecked(64);
+            let thread_id = crate::core_types::ThreadId::new(8)
+                .expect("fixture thread id must not overlap page flag bits")
+                .get();
+            let bin = mi_bin_from_block_size(block_size);
+            let queue = crate::core_types::PageQueuePtr::new_unchecked(ptr::addr_of_mut!(
+                (*theap).pages[bin.as_usize()]
+            ));
+            let page_ptrs = pages.each_mut().map(|page| {
+                let page = page.as_mut_ptr();
+                (*page).theap = theap;
+                (*page).block_size = block_size.get();
+                (*page).xthread_id = thread_id;
+                PagePtr::new_unchecked(page)
+            });
+            let [first, middle, last] = page_ptrs;
+
+            first.set_queue_prev(None);
+            first.set_queue_next(Some(middle));
+            middle.set_queue_prev(Some(first));
+            middle.set_queue_next(Some(last));
+            last.set_queue_prev(Some(middle));
+            last.set_queue_next(None);
+            queue.set_first(Some(first));
+            queue.set_last(Some(last));
+            queue.set_count(crate::core_types::PageQueueCount::new(3));
+
+            let normal = crate::core_types::NormalPageQueue::new_unchecked(queue);
+            let active = crate::core_types::assume_active_page(middle);
+            let queued = crate::core_types::QueuedPage::try_queue(active, normal)
+                .expect("middle page is linked in the normal queue");
+            let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            );
+            let _ = mi_page_queue_move_to_front_typed(owner, normal, queued);
+
+            assert_eq!(queue.first(), Some(middle));
+            assert_eq!(queue.last(), Some(last));
+            assert_eq!(middle.queue_prev(), None);
+            assert_eq!(middle.queue_next(), Some(first));
+            assert_eq!(first.queue_prev(), Some(middle));
+            assert_eq!(first.queue_next(), Some(last));
+            assert_eq!(last.queue_prev(), Some(first));
+            assert_eq!(last.queue_next(), None);
+            assert_eq!(queue.count().get(), 3);
+            assert_eq!((*theap).page_count, 3);
+            assert_eq!((*first.as_ptr()).xthread_id, thread_id);
+            assert_eq!((*middle.as_ptr()).xthread_id, thread_id);
+            assert_eq!((*last.as_ptr()).xthread_id, thread_id);
+
+            let active = crate::core_types::assume_active_page(last);
+            let queued = crate::core_types::QueuedPage::try_queue(active, normal)
+                .expect("last page remains linked in the normal queue");
+            let _ = mi_page_queue_move_to_front_typed(owner, normal, queued);
+
+            assert_eq!(queue.first(), Some(last));
+            assert_eq!(queue.last(), Some(first));
+            assert_eq!(last.queue_prev(), None);
+            assert_eq!(last.queue_next(), Some(middle));
+            assert_eq!(middle.queue_prev(), Some(last));
+            assert_eq!(middle.queue_next(), Some(first));
+            assert_eq!(first.queue_prev(), Some(middle));
+            assert_eq!(first.queue_next(), None);
+            assert_eq!(queue.count().get(), 3);
+            assert_eq!((*theap).page_count, 3);
+            assert_eq!((*first.as_ptr()).xthread_id, thread_id);
+            assert_eq!((*middle.as_ptr()).xthread_id, thread_id);
+            assert_eq!((*last.as_ptr()).xthread_id, thread_id);
+        }
     }
 }

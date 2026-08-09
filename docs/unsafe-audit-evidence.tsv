@@ -1132,6 +1132,7 @@ typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page
 typed-page-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.
 typed-page-queue-domain	test	src/types/page_queues/tests.rs	Exercises normal, huge, full, linked, unlinked, transition, and arena-free page queue witnesses.
 typed-page-queue-test-fixtures	test	src/types/page_queues/tests.rs	Exercises stack-local page and queue metadata for normal, huge, full, linked, unlinked, and mismatched queue/page witnesses.
+typed-page-queue-test-fixtures	test	src/allocator/page/queues.rs	Exercises stack-local heap, queue, and page metadata for in-place normal-queue relinking while preserving counts and flags.
 typed-page-queue-membership-test-fixtures	test	src/types/page_queues/tests.rs	Exercises stack-local page and queue metadata for linked, unlinked, mismatched, normal, and full queue/page witnesses.
 typed-page-uninit-initialization-boundary	test	src/types/page_states/tests.rs	Exercises uninit page initialization into active page witnesses.
 typed-page-uninit-initialization-boundary	test	tests/release_fast_path_audit/datatype_acceptance/padding_and_page_state.rs	Checks page-state witnesses keep private page pointers and explicit constructors/accessors.

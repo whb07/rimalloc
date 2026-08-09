@@ -25,10 +25,10 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 6217 |
-| `unsafe_blocks` | 3676 |
-| `unsafe_fns` | 2103 |
-| `unsafe_extern_blocks` | 44 |
+| `unsafe_mentions` | 6222 |
+| `unsafe_blocks` | 3679 |
+| `unsafe_fns` | 2104 |
+| `unsafe_extern_blocks` | 45 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 235 |
 | `global_asm` | 10 |
@@ -69,7 +69,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/flags.rs` | 20 | 10 | 10 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/lifecycle.rs` | 63 | 39 | 24 | 0 | 0 | 0 | 0 |
-| `src/allocator/page/queues.rs` | 45 | 22 | 23 | 0 | 0 | 0 | 0 |
+| `src/allocator/page/queues.rs` | 46 | 23 | 23 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/stats_bin.rs` | 8 | 4 | 4 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/validation.rs` | 10 | 5 | 5 | 0 | 0 | 0 | 0 |
 | `src/allocator/page.rs` | 115 | 51 | 64 | 0 | 0 | 0 | 0 |
@@ -109,7 +109,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/platform/windows.rs` | 214 | 128 | 81 | 5 | 0 | 0 | 0 |
 | `src/raw/macros/header_forwarding.rs` | 17 | 7 | 10 | 0 | 0 | 0 | 0 |
 | `src/raw/macros/linux_libc.rs` | 18 | 9 | 9 | 0 | 0 | 0 | 0 |
-| `src/raw/macros.rs` | 348 | 131 | 126 | 3 | 1 | 30 | 3 |
+| `src/raw/macros.rs` | 352 | 133 | 127 | 4 | 1 | 30 | 3 |
 | `src/raw/mod.rs` | 4 | 3 | 0 | 0 | 0 | 0 | 0 |
 | `src/raw/posix.rs` | 81 | 41 | 20 | 3 | 0 | 17 | 0 |
 | `src/safe/allocation.rs` | 21 | 12 | 1 | 0 | 6 | 0 | 0 |

@@ -295,14 +295,15 @@ page to the front of its existing normal queue. The old typed implementation
 performed a full remove followed by a full insertion. This needlessly cleared
 the already-clear full-queue flag twice with locked atomic operations,
 decremented and restored heap/queue counts, and cleared and rebuilt links
-through generic queue transitions. `QueuedPage<NormalQueue>`
-already proves membership and non-full state, so the new implementation relinks
-the node in place while leaving counts and flags unchanged.
+through generic queue transitions. `QueuedPage<NormalQueue>` carries the exact
+queue identity and proves membership and non-full state, so the implementation
+checks the explicit queue against that witness in debug builds and relinks the
+node in place while leaving counts and flags unchanged.
 
 The release queue-search function changed from three locked atomic instructions
 to none. A focused invariant test covers moving both a middle and tail page and
-checks the complete link order, queue count, heap page count, and owner/flag
-words.
+checks the complete link order, queue count, heap page count, owner/flag words,
+and small-size direct-page cache updates.
 
 A ten-sample reversed-order baseline/candidate comparison measured:
 
@@ -345,6 +346,24 @@ Finally, a direct ten-sample reversed-order C comparison measured:
 This is a general queue-maintenance improvement rather than a Larson-specific
 policy change. No validation, atomic ordering, allocation policy, or benchmark
 behavior was weakened.
+
+### Post-implementation review
+
+**Review timestamp:** 2026-08-09T10:19:59-04:00
+
+A fresh invariant review found that the relink helper accepted an explicit
+normal queue alongside the queue identity already carried by `QueuedPage`. The
+unsafe precondition now states that both identities must match, and a debug-only
+assertion enforces it without adding release work. The focused test now also
+checks that each new queue front reaches the small-size direct-page cache.
+
+Removing the explicit queue parameter entirely was evaluated but rejected
+because it changed register allocation across the large inlined search routine.
+A six-sample reversed-order screen was mixed: 0.74% faster unsized and 1.01%
+slower sized. The retained debug-only assertion preserves the benchmarked
+release shape: the queue-search assembly has 396 instructions versus 397 in the
+benchmarked artifact, the same 91 static control transfers, and no locked
+instructions.
 
 ## C++ sized-delete findings
 

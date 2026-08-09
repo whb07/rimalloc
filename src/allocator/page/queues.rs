@@ -263,6 +263,9 @@ pub(super) unsafe fn mi_page_queue_push_typed(
     }
 }
 
+/// # Safety
+/// `theap` must be the local owner of the page, and `queue` must be the exact
+/// normal queue represented by `queued`.
 #[inline]
 pub(super) unsafe fn mi_page_queue_move_to_front_typed(
     theap: crate::core_types::ThreadHeapLocal,
@@ -274,6 +277,7 @@ pub(super) unsafe fn mi_page_queue_move_to_front_typed(
         let page_ptr = queued.page();
         let page = page_ptr.as_ptr();
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.ptr().as_ptr());
+        crate::internal::mi_assert_internal!(queue.ptr() == queued.normal_queue().ptr());
         let queue_ptr = queue.ptr();
         let Some(first) = queue_ptr.first() else {
             crate::internal::mi_assert_internal!(false);
@@ -283,8 +287,9 @@ pub(super) unsafe fn mi_page_queue_move_to_front_typed(
             return queued;
         }
 
-        // The typed witness proves the page is already in this normal queue,
-        // so relinking preserves its non-full flag and both page counts.
+        // The typed witness carries the exact normal queue containing this
+        // page, so relinking preserves its non-full flag and both page counts.
+        crate::internal::mi_assert_internal!(first.queue_prev().is_none());
         let Some(prev) = page_ptr.queue_prev() else {
             crate::internal::mi_assert_internal!(false);
             return queued;
@@ -664,6 +669,7 @@ mod tests {
             queue.set_count(crate::core_types::PageQueueCount::new(3));
 
             let normal = crate::core_types::NormalPageQueue::new_unchecked(queue);
+            let direct_idx = mi_direct_bin_from_size(block_size.get());
             let active = crate::core_types::assume_active_page(middle);
             let queued = crate::core_types::QueuedPage::try_queue(active, normal)
                 .expect("middle page is linked in the normal queue");
@@ -685,6 +691,7 @@ mod tests {
             assert_eq!((*first.as_ptr()).xthread_id, thread_id);
             assert_eq!((*middle.as_ptr()).xthread_id, thread_id);
             assert_eq!((*last.as_ptr()).xthread_id, thread_id);
+            assert_eq!(owner.ptr().direct_page(direct_idx), Some(middle));
 
             let active = crate::core_types::assume_active_page(last);
             let queued = crate::core_types::QueuedPage::try_queue(active, normal)
@@ -704,6 +711,7 @@ mod tests {
             assert_eq!((*first.as_ptr()).xthread_id, thread_id);
             assert_eq!((*middle.as_ptr()).xthread_id, thread_id);
             assert_eq!((*last.as_ptr()).xthread_id, thread_id);
+            assert_eq!(owner.ptr().direct_page(direct_idx), Some(last));
         }
     }
 }

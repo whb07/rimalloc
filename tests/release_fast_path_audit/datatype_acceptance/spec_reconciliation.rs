@@ -123,6 +123,9 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
                 "crate::page::mi_page_is_huge(page_ptr)\n                        && crate::page::mi_page_queue_is_huge(queue_ptr)"
             )
             && page_queues_rs.contains("queue: PageQueue::normal(queue)")
+            && page_queues_rs.contains(
+                "pub(crate) fn normal_queue(&self) -> NormalPageQueue {\n        NormalPageQueue(self.queue.ptr)"
+            )
             && page_runtime_queues_rs.contains(
                 "unsafe fn mi_page_queue_push_at_end_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
             )
@@ -131,6 +134,9 @@ pub(super) fn assert_type_spec_reconciliation(audit_sources: &DatatypeAcceptance
             )
             && page_runtime_queues_rs.contains(
                 "unsafe fn mi_page_queue_move_to_front_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,"
+            )
+            && page_runtime_queues_rs.contains(
+                "mi_assert_internal!(queue.ptr() == queued.normal_queue().ptr());"
             )
             && page_rs.contains(
                 "pub(crate) unsafe fn _mi_page_free_active_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,\n    queue: crate::core_types::NormalPageQueue,"

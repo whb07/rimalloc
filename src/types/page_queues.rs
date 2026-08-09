@@ -163,6 +163,11 @@ impl<K> QueuedPage<K> {
 
 impl QueuedPage<NormalQueue> {
     #[inline(always)]
+    pub(crate) fn normal_queue(&self) -> NormalPageQueue {
+        NormalPageQueue(self.queue.ptr)
+    }
+
+    #[inline(always)]
     pub(crate) fn into_active(self) -> crate::core_types::ActivePage {
         // SAFETY[AUDIT:typed-page-queue-domain]: forgetting the more specific
         // normal-queue membership proof preserves the page's active state.

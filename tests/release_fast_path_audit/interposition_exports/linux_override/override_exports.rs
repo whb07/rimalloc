@@ -33,7 +33,9 @@ fn linux_malloc_overrides_use_direct_fast_paths() {
             && !override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_array_fast_64")
             && override_rs.contains("core::arch::naked_asm!")
             && override_rs.contains(".set _Znam, _Znwm")
-            && override_rs.contains("try_new = sym crate::alloc::mi_theap_try_new")
+            && override_rs.contains("try_new = sym mi_cxx_new_fast_slow")
+            && override_rs.contains("fn mi_cxx_new_slow(size: usize) -> *mut c_void")
+            && override_rs.contains("unsafe { mi_cxx_new_slow(size) }")
             && override_rs.contains("\"xor edx, edx\"")
             && !override_rs.contains("\"jmp mi_new\"")
             && override_rs.matches("\"endbr64\"").count() >= 4

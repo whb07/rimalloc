@@ -436,14 +436,26 @@ fn ensure_c_mimalloc(root: &Path) -> PathBuf {
 #[cfg(target_os = "linux")]
 mod dylib {
     use super::*;
+    use std::ffi::OsStr;
+    use std::mem::MaybeUninit;
+    use std::os::unix::ffi::OsStrExt as _;
 
     const RTLD_NOW: c_int = 2;
     const RTLD_LOCAL: c_int = 0;
     const RTLD_GLOBAL: c_int = 0x100;
 
+    #[repr(C)]
+    struct DlInfo {
+        filename: *const c_char,
+        base: *mut c_void,
+        symbol_name: *const c_char,
+        symbol_address: *mut c_void,
+    }
+
     unsafe extern "C" {
         fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
         fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+        fn dladdr(address: *const c_void, info: *mut DlInfo) -> c_int;
         fn dlerror() -> *const c_char;
     }
 
@@ -476,6 +488,38 @@ mod dylib {
         if ptr.is_null() { None } else { Some(ptr) }
     }
 
+    unsafe fn assert_symbol_owner(symbol: *mut c_void, name: &CStr, expected: &Path) {
+        let mut info = MaybeUninit::<DlInfo>::uninit();
+        let found = unsafe { dladdr(symbol.cast_const(), info.as_mut_ptr()) };
+        assert_ne!(
+            found,
+            0,
+            "dladdr failed for allocator symbol {}",
+            name.to_string_lossy()
+        );
+        let info = unsafe { info.assume_init() };
+        assert!(
+            !info.filename.is_null(),
+            "dladdr returned no owner for allocator symbol {}",
+            name.to_string_lossy()
+        );
+        let owner = unsafe { CStr::from_ptr(info.filename) };
+        let owner = Path::new(OsStr::from_bytes(owner.to_bytes()));
+        let owner = owner.canonicalize().unwrap_or_else(|err| {
+            panic!(
+                "failed to canonicalize owner {} for allocator symbol {}: {err}",
+                owner.display(),
+                name.to_string_lossy()
+            )
+        });
+        assert_eq!(
+            owner,
+            expected,
+            "allocator symbol {} resolved from the wrong shared library",
+            name.to_string_lossy()
+        );
+    }
+
     fn preload_cxx_runtime() {
         for runtime in [c"libstdc++.so.6", c"libstdc++.so"] {
             let handle = unsafe { dlopen(runtime.as_ptr(), RTLD_NOW | RTLD_GLOBAL) };
@@ -486,7 +530,13 @@ mod dylib {
     }
 
     pub fn load_allocator(path: &Path) -> DylibAllocator {
-        let path = CString::new(path.as_os_str().as_encoded_bytes()).unwrap_or_else(|_| {
+        let expected_library = path.canonicalize().unwrap_or_else(|err| {
+            panic!(
+                "failed to canonicalize allocator library {}: {err}",
+                path.display()
+            )
+        });
+        let encoded_path = CString::new(path.as_os_str().as_encoded_bytes()).unwrap_or_else(|_| {
             panic!(
                 "allocator library path contains an interior NUL byte: {}",
                 path.display()
@@ -494,7 +544,7 @@ mod dylib {
         });
         preload_cxx_runtime();
         unsafe {
-            let handle = dlopen(path.as_ptr(), RTLD_NOW | RTLD_LOCAL);
+            let handle = dlopen(encoded_path.as_ptr(), RTLD_NOW | RTLD_LOCAL);
             assert!(
                 !handle.is_null(),
                 "failed to dlopen allocator library: {}",
@@ -509,6 +559,13 @@ mod dylib {
             let new_array = symbol(handle, c"_Znam");
             let delete_array = symbol(handle, c"_ZdaPv");
             let delete_array_sized = symbol(handle, c"_ZdaPvm");
+            for (symbol, name) in [
+                (new_array, c"_Znam"),
+                (delete_array, c"_ZdaPv"),
+                (delete_array_sized, c"_ZdaPvm"),
+            ] {
+                assert_symbol_owner(symbol, name, &expected_library);
+            }
             let bench_diagnostics_reset = optional_symbol(handle, c"mi_bench_diagnostics_reset");
             let bench_diagnostics_json = optional_symbol(handle, c"mi_bench_diagnostics_json");
 

@@ -301,9 +301,35 @@ mod unix_bootstrap {
     }
 }
 
+#[cfg(all(mi_c_malloc_fast, mi_cxx_shim_linked))]
+unsafe extern "C" {
+    fn mi_cxx_new_slow(size: usize) -> *mut c_void;
+}
+
+#[cfg(mi_c_malloc_fast)]
+#[inline(never)]
+// SAFETY[AUDIT:raw-macro-fast-override-boundary]: the assembly entrypoint supplies the current thread heap, requested size, and throwing allocation mode.
+unsafe extern "C" fn mi_cxx_new_fast_slow(
+    theap: *mut crate::types::mi_theap_t,
+    size: usize,
+    nothrow: bool,
+) -> *mut c_void {
+    #[cfg(mi_cxx_shim_linked)]
+    {
+        let _ = (theap, nothrow);
+        // SAFETY: the C++ slow helper implements the throwing operator-new retry contract.
+        unsafe { mi_cxx_new_slow(size) }
+    }
+    #[cfg(not(mi_cxx_shim_linked))]
+    {
+        // SAFETY: the assembly caller supplies its live thread heap and allocation mode.
+        unsafe { crate::alloc::mi_theap_try_new(theap, size, nothrow) }
+    }
+}
+
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[cfg(all(mi_c_malloc_fast, not(mi_cxx_shim_linked)))]
+#[cfg(mi_c_malloc_fast)]
 // SAFETY[AUDIT:raw-macro-fast-override-boundary]: fast override assembly preserves C malloc/free and C++ new/delete ABI entrypoints.
 #[unsafe(naked)]
 #[unsafe(export_name = "_Znwm")]
@@ -329,11 +355,11 @@ pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
         "2:",
         "xor edx, edx",
         "jmp {try_new}",
-        try_new = sym crate::alloc::mi_theap_try_new,
+        try_new = sym mi_cxx_new_fast_slow,
     );
 }
 
-#[cfg(all(mi_c_malloc_fast, not(mi_cxx_shim_linked)))]
+#[cfg(mi_c_malloc_fast)]
 // SAFETY[AUDIT:raw-macro-fast-override-boundary]: fast override assembly preserves C malloc/free and C++ new/delete ABI entrypoints.
 core::arch::global_asm!(".globl _Znam", ".type _Znam,@function", ".set _Znam, _Znwm",);
 

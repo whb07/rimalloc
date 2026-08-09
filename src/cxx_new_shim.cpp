@@ -18,6 +18,10 @@ static void* mi_cxx_new_impl(size_t size) {
   }
 }
 
+extern "C" void* mi_cxx_new_slow(size_t size) {
+  return mi_cxx_new_impl(size);
+}
+
 static void* mi_cxx_new_aligned_impl(size_t size, std::align_val_t alignment) {
   for (;;) {
     void* p = mi_malloc_aligned(size, static_cast<size_t>(alignment));
@@ -28,6 +32,7 @@ static void* mi_cxx_new_aligned_impl(size_t size, std::align_val_t alignment) {
   }
 }
 
+#if !defined(MI_CXX_USE_FAST_NEW)
 void* operator new(size_t size) {
   return mi_cxx_new_impl(size);
 }
@@ -35,6 +40,7 @@ void* operator new(size_t size) {
 void* operator new[](size_t size) {
   return mi_cxx_new_impl(size);
 }
+#endif
 
 void* operator new(size_t size, const std::nothrow_t&) noexcept {
   return mi_new_nothrow(size);

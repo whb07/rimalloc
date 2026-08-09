@@ -86,17 +86,21 @@ fn compile_track_shim(defines: &[&str], flags: &[&str]) {
     println!("cargo:rustc-link-lib=static=mechanical_mimalloc_track_shim");
 }
 
-fn compile_cxx_new_shim() {
+fn compile_cxx_new_shim(target_os: &str, fast_new: bool) {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let obj = out_dir.join("cxx_new_shim.o");
     let lib = out_dir.join("libmechanical_mimalloc_cxx_new_shim.a");
 
     let mut cxx = Command::new(tool_from_env("CXX", "c++"));
-    cxx.arg("-std=c++17")
-        .arg("-c")
+    cxx.arg("-std=c++17");
+    if fast_new {
+        cxx.arg("-DMI_CXX_USE_FAST_NEW=1");
+    }
+    cxx.arg("-c")
         .arg("src/cxx_new_shim.cpp")
         .arg("-o")
         .arg(&obj)
+        .arg("-O3")
         .arg("-fPIC");
     run_tool("C++ new/delete shim compiler", "CXX", &mut cxx);
 
@@ -106,6 +110,9 @@ fn compile_cxx_new_shim() {
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
     println!("cargo:rustc-link-lib=static:+whole-archive=mechanical_mimalloc_cxx_new_shim");
+    if target_os == "linux" {
+        println!("cargo:rustc-link-lib=dylib=stdc++");
+    }
 }
 
 fn compile_tls_shim() {
@@ -270,6 +277,14 @@ fn main() {
     let tls_shim = feature_enabled("TLS_SHIM") || feature_enabled("INTERPOSE");
     let interpose = feature_enabled("INTERPOSE");
     let std = feature_enabled("STD");
+    let default_fast_override = target_os == "linux"
+        && profile == "release"
+        && target_arch == "x86_64"
+        && interpose
+        && env::var_os("CARGO_FEATURE_SECURE").is_none()
+        && env::var_os("CARGO_FEATURE_GUARDED").is_none()
+        && env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_none()
+        && env::var_os("CARGO_FEATURE_TRACK_ASAN").is_none();
 
     println!("cargo:rerun-if-changed=src/track_shim.c");
     println!("cargo:rerun-if-changed=src/cxx_new_shim.cpp");
@@ -299,7 +314,7 @@ fn main() {
         cxx_overrides && target_os != "windows" && target_supports_cxx_shim(&target_os);
     if cxx_shim_linked {
         println!("cargo:rustc-cfg=mi_cxx_shim_linked");
-        compile_cxx_new_shim();
+        compile_cxx_new_shim(&target_os, default_fast_override);
     } else if cxx_overrides && target_os != "windows" {
         println!("cargo:warning=skipping C++ new/delete shim on unsupported target_os={target_os}");
     }
@@ -307,13 +322,6 @@ fn main() {
         if c_abi {
             link_linux_cdylib_exports(interpose, cxx_shim_linked);
         }
-        let default_fast_override = profile == "release"
-            && target_arch == "x86_64"
-            && interpose
-            && env::var_os("CARGO_FEATURE_SECURE").is_none()
-            && env::var_os("CARGO_FEATURE_GUARDED").is_none()
-            && env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_none()
-            && env::var_os("CARGO_FEATURE_TRACK_ASAN").is_none();
         if default_fast_override {
             println!("cargo:rustc-cfg=mi_c_malloc_fast");
         }

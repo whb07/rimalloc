@@ -37,7 +37,7 @@ fn pointer_wrappers_match_nonnull_layout() {
     assert_layout!(PageQueuePtr, NonNull<mi_page_queue_t>);
     assert_layout!(UserPtr, NonNull<core::ffi::c_void>);
     assert_layout!(InteriorUserPtr, NonNull<core::ffi::c_void>);
-    assert_layout!(PageStart, NonNull<u8>);
+    assert_layout!(ptr::PageStart, NonNull<u8>);
     assert_layout!(SliceStart, NonNull<u8>);
     assert_layout!(OsMemPtr, NonNull<core::ffi::c_void>);
     assert_layout!(PageConstPtr, NonNull<mi_page_t>);
@@ -72,7 +72,7 @@ fn optional_pointer_wrappers_are_pointer_sized() {
         size_of::<Option<InteriorUserPtr>>(),
         size_of::<*mut core::ffi::c_void>()
     );
-    assert_eq!(size_of::<Option<PageStart>>(), size_of::<*mut u8>());
+    assert_eq!(size_of::<Option<ptr::PageStart>>(), size_of::<*mut u8>());
     assert_eq!(size_of::<Option<SliceStart>>(), size_of::<*mut u8>());
     assert_eq!(
         size_of::<Option<OsMemPtr>>(),
@@ -101,7 +101,6 @@ fn scalar_wrappers_match_raw_layout() {
     assert_layout!(PageReclaimLimit, core::ffi::c_long);
     assert_layout!(UsedBlockCount, u16);
     assert_layout!(BatchLen, core::num::NonZeroU16);
-    assert_layout!(BatchLimit, core::num::NonZeroU16);
     assert_layout!(PageCapacity, u16);
     assert_layout!(ReservedBlockCount, u16);
     assert_layout!(RetireExpire, u8);
@@ -154,7 +153,7 @@ fn witness_wrappers_match_pointer_layout() {
     assert_layout!(OwnedAbandonedPage, PagePtr);
     assert_layout!(DestroyedPage, PagePtr);
     assert_layout!(ThreadHeapLocal, ThreadHeapPtr);
-    assert_layout!(ThreadHeapBorrowed, ThreadHeapPtr);
+    assert_layout!(heap::ThreadHeapBorrowed, ThreadHeapPtr);
     assert_layout!(MainHeap, HeapPtr);
     assert_layout!(OwnedHeap, HeapPtr);
     assert_layout!(BorrowedHeap, HeapPtr);
@@ -184,7 +183,6 @@ fn packed_and_atomic_wrappers_match_raw_layout() {
     assert_layout!(LocalFreeList, Option<BlockPtr>);
     assert_layout!(atomic::DetachedRemoteList, Option<BlockPtr>);
     assert_layout!(atomic::PublishedRemoteHead, BlockPtr);
-    assert_layout!(freelist_wrappers::EncodedFreeList, Option<BlockPtr>);
     assert_layout!(PaddingCanary, u32);
     assert_layout!(PaddingDelta, u32);
     assert_layout!(atomic::AtomicUsizeField, *mut usize);

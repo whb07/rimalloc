@@ -25,12 +25,6 @@ impl AtomicUsizeField {
         Self(field)
     }
 
-    #[cfg(test)]
-    #[inline(always)]
-    pub(crate) fn raw_field(self) -> *mut usize {
-        self.0
-    }
-
     /// # Safety
     /// See the type-level safety contract.
     #[inline(always)]
@@ -151,12 +145,6 @@ impl AtomicI64Field {
         Self(field)
     }
 
-    #[cfg(test)]
-    #[inline(always)]
-    pub(crate) fn raw_field(self) -> *mut i64 {
-        self.0
-    }
-
     /// # Safety
     /// See the type-level safety contract.
     #[inline(always)]
@@ -209,12 +197,6 @@ impl<T> AtomicPtrField<T> {
     #[inline(always)]
     pub(crate) fn from_raw(field: *mut *mut T) -> Self {
         Self(field)
-    }
-
-    #[cfg(test)]
-    #[inline(always)]
-    pub(crate) fn raw_field(self) -> *mut *mut T {
-        self.0
     }
 
     /// # Safety

@@ -47,13 +47,7 @@ pub(crate) enum Active {}
 #[derive(Debug)]
 pub(crate) enum Full {}
 #[derive(Debug)]
-pub(crate) enum Retired {}
-#[derive(Debug)]
 pub(crate) enum Abandoned {}
-#[derive(Debug)]
-pub(crate) enum AbandonedMapped {}
-#[derive(Debug)]
-pub(crate) enum Destroyed {}
 
 #[repr(transparent)]
 #[derive(Debug)]
@@ -295,14 +289,6 @@ impl FullPage {
 
 impl AvailablePage {
     #[inline(always)]
-    pub(in crate::types) fn into_active(self) -> ActivePage {
-        // SAFETY: an available page is
-        // an active page with a proven nonempty available free list; consuming
-        // the stronger witness preserves initialized active-page ownership.
-        unsafe { ActivePage::new_unchecked(self.page()) }
-    }
-
-    #[inline(always)]
     pub(crate) unsafe fn pop_free_block(
         self,
     ) -> (
@@ -365,15 +351,6 @@ impl<S> AllFreePage<S> {
     #[inline(always)]
     pub(crate) fn free_to_arena(self, owner: ThreadHeapLocal) -> DestroyedPage {
         crate::core_types::free_all_free_page_to_arena(self, owner)
-    }
-}
-
-impl RetiredPage {
-    #[inline(always)]
-    pub(crate) fn expire(self) -> DestroyedPage {
-        // SAFETY: an expired retired page has
-        // completed the transition to destroyed/free-to-arena state.
-        unsafe { DestroyedPage::new_unchecked(self.page()) }
     }
 }
 
@@ -495,8 +472,8 @@ pub(crate) enum PageForAbandon {
 
 #[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) enum PageAbandonOutcome {
-    Abandoned(AbandonedPageType),
-    Destroyed(DestroyedPage),
+    Abandoned,
+    Destroyed,
 }
 
 #[must_use = "abandoned dispositions must be consumed or explicitly returned"]
@@ -549,50 +526,9 @@ impl ThreadHeapLocal {
     pub(crate) fn ptr(self) -> ThreadHeapPtr {
         self.0
     }
-
-    #[inline(always)]
-    pub(crate) fn borrowed(self) -> crate::core_types::ThreadHeapBorrowed {
-        // SAFETY: a local thread heap is also a
-        // live borrowed thread-heap witness.
-        unsafe { crate::core_types::ThreadHeapBorrowed::new_unchecked(self.0) }
-    }
-
-    /// # Safety
-    /// The wrapped thread heap must still be live.
-    #[inline(always)]
-    pub(crate) unsafe fn state(self) -> crate::core_types::ThreadHeapState {
-        // SAFETY: forwarded to the wrapped live
-        // thread-heap pointer under this method's safety contract.
-        unsafe { self.0.state() }
-    }
 }
 
 impl PagePtr {
-    pub(crate) unsafe fn try_local(
-        self,
-        current: crate::core_types::ThreadId,
-    ) -> Result<LocalPage, PagePtr> {
-        // SAFETY: classification reads the
-        // page owner word from live page metadata.
-        match unsafe { self.classify_for_free(current) } {
-            PageFreeOwner::Local(lp) => Ok(lp),
-            _ => Err(self),
-        }
-    }
-
-    pub(crate) unsafe fn try_abandoned(self) -> Result<AbandonedPageType, PagePtr> {
-        // SAFETY: page metadata is live and its
-        // typed thread-id cell owns the abandoned bit classification.
-        let tid = unsafe { self.thread_id_cell().load_relaxed() };
-        if tid.is_abandoned() {
-            // SAFETY: the thread-id word marks
-            // this page as abandoned.
-            Ok(unsafe { AbandonedPageType::new_unchecked(self) })
-        } else {
-            Err(self)
-        }
-    }
-
     pub(crate) unsafe fn classify_for_free(
         self,
         current: crate::core_types::ThreadId,
@@ -625,79 +561,6 @@ impl PagePtr {
             }
         }
     }
-}
-
-pub(super) fn __lint_touch() {
-    let _ = core::mem::size_of::<Retired>();
-    let _ = core::mem::size_of::<AbandonedMapped>();
-    let _ = core::mem::size_of::<Destroyed>();
-
-    // SAFETY: lint-touch uses
-    // non-dereferenced dangling pointers only to keep typestate accessors and
-    // function items visible to dead-code analysis.
-    let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
-    // SAFETY: the synthetic page pointer
-    // is never dereferenced; the witness is consumed only by accessor coverage.
-    let retired = unsafe { RetiredPage::new_unchecked(page) };
-    let _ = retired.page();
-    let _ = retired.expire();
-    // SAFETY: the synthetic abandoned
-    // witness is used only to keep remote-free and function-item APIs live.
-    let _ = AbandonedPageType::try_claim_ownership
-        as unsafe fn(AbandonedPageType) -> Result<OwnedAbandonedPage, AbandonedPageType>;
-    // SAFETY: the synthetic abandoned
-    // witness is used only for enum-field reachability and is not dereferenced.
-    let abandoned = unsafe { AbandonedPageType::new_unchecked(page) };
-    let _ = abandoned.remote_free_page();
-    // SAFETY: the synthetic mapped
-    // abandoned witness is not dereferenced.
-    let mapped = unsafe { AbandonedMappedPageType::new_unchecked(page) };
-    let _ = mapped.remote_free_page();
-    // SAFETY: the synthetic owned
-    // abandoned witness is used only for transition API reachability.
-    let owned = unsafe { OwnedAbandonedPage::new_unchecked(page) };
-    let _ = owned.into_mapped_abandoned();
-
-    if let PageFreeOwner::Local(local) =
-        // SAFETY: the synthetic page is
-        // wrapped but not dereferenced while checking enum-field reachability.
-        PageFreeOwner::Local(unsafe { LocalPage::new_unchecked(page) })
-    {
-        let _ = local.page();
-    }
-    if let PageFreeOwner::Foreign(foreign) =
-        // SAFETY: the synthetic page is
-        // wrapped but not dereferenced while checking enum-field reachability.
-        PageFreeOwner::Foreign(unsafe { ForeignPage::new_unchecked(page) })
-    {
-        let _ = foreign.page();
-    }
-    // SAFETY: the synthetic abandoned
-    // witness is used only for enum-field reachability and is not dereferenced.
-    let abandoned = unsafe { AbandonedPageType::new_unchecked(page) };
-    if let PageAbandonOutcome::Abandoned(abandoned) = PageAbandonOutcome::Abandoned(abandoned) {
-        let _ = abandoned.page();
-    }
-    if let PageAbandonOutcome::Destroyed(destroyed) =
-        // SAFETY: the synthetic
-        // destroyed witness is used only for enum-field reachability.
-        PageAbandonOutcome::Destroyed(unsafe { DestroyedPage::new_unchecked(page) })
-    {
-        let _ = destroyed.page();
-    }
-
-    // SAFETY: the dangling thread-heap
-    // pointer is used as identity only and is not dereferenced by this helper.
-    let theap = unsafe { ThreadHeapPtr::new_unchecked(core::ptr::dangling_mut()) };
-    // SAFETY: the synthetic local
-    // thread-heap witness is used only for accessor/function-item reachability.
-    let local = unsafe { ThreadHeapLocal::new_unchecked(theap) };
-    let _ = local.borrowed();
-    let _ =
-        ThreadHeapLocal::state as unsafe fn(ThreadHeapLocal) -> crate::core_types::ThreadHeapState;
-    let _ = PagePtr::try_local
-        as unsafe fn(PagePtr, crate::core_types::ThreadId) -> Result<LocalPage, PagePtr>;
-    let _ = PagePtr::try_abandoned as unsafe fn(PagePtr) -> Result<AbandonedPageType, PagePtr>;
 }
 
 #[cfg(test)]

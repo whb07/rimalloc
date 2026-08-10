@@ -1,9 +1,9 @@
 use static_assertions::assert_not_impl_any;
 
 use super::atomic::{DetachedRemoteList, PublishedRemoteHead};
-use super::freelist_wrappers::{AvailableFreeList, EncodedFreeList, LocalFreeList};
-use super::page_batch::{LeasedBatch, LocalFreeBatch, RemoteFreeBatch};
-use super::page_queues::{NormalQueue, QueuedPage, UnqueuedPage};
+use super::freelist_wrappers::{AvailableFreeList, LocalFreeList};
+use super::page_batch::{LocalFreeBatch, RemoteFreeBatch};
+use super::page_queues::{NormalQueue, QueuedPage};
 use super::page_states::{
     AbandonedMappedPageType, AbandonedPageType, Active, ActivePage, AllFreePage, AvailablePage,
     DestroyedPage, ForeignPage, FullPage, LocalPage, OwnedAbandonedPage, Page, PageAbandonOutcome,
@@ -28,12 +28,10 @@ assert_not_impl_any!(AllocatedBlock: Copy, Clone);
 assert_not_impl_any!(FreeBlock: Copy, Clone);
 assert_not_impl_any!(AvailableFreeList: Copy, Clone);
 assert_not_impl_any!(LocalFreeList: Copy, Clone);
-assert_not_impl_any!(EncodedFreeList: Copy, Clone);
 assert_not_impl_any!(PublishedRemoteHead: Copy, Clone);
 assert_not_impl_any!(DetachedRemoteList: Copy, Clone);
 assert_not_impl_any!(RemoteFreeBatch: Copy, Clone);
 assert_not_impl_any!(LocalFreeBatch: Copy, Clone);
-assert_not_impl_any!(LeasedBatch: Copy, Clone);
 
 assert_not_impl_any!(Page<Uninit>: Copy, Clone);
 assert_not_impl_any!(ActivePage: Copy, Clone);
@@ -51,4 +49,3 @@ assert_not_impl_any!(PageForAbandon: Copy, Clone);
 assert_not_impl_any!(PageAbandonOutcome: Copy, Clone);
 assert_not_impl_any!(PageFreeOwner: Copy, Clone);
 assert_not_impl_any!(QueuedPage<NormalQueue>: Copy, Clone);
-assert_not_impl_any!(UnqueuedPage<Active>: Copy, Clone);

@@ -15,7 +15,6 @@ use super::scalar::{PageMapIndex, PageMapSubIndex, SliceCount};
 pub(crate) struct PageFlags(usize);
 
 impl PageFlags {
-    pub(crate) const EMPTY: Self = Self(0);
     pub(crate) const IN_FULL_QUEUE: Self = Self(MI_PAGE_IN_FULL_QUEUE);
     pub(crate) const HAS_INTERIOR_POINTERS: Self = Self(MI_PAGE_HAS_INTERIOR_POINTERS);
 
@@ -112,21 +111,6 @@ impl PageThreadId {
     }
 
     #[inline(always)]
-    pub(crate) fn owner(self) -> PageOwnerId {
-        let tid = self.0 & !MI_PAGE_FLAG_MASK;
-        if tid == 0 {
-            PageOwnerId::Abandoned
-        } else if tid == MI_THREADID_ABANDONED_MAPPED {
-            PageOwnerId::AbandonedMapped
-        } else {
-            // SAFETY: `tid` has the low page flag bits
-            // masked out and is neither the zero abandoned sentinel nor the
-            // abandoned-mapped sentinel.
-            PageOwnerId::Thread(unsafe { ThreadId::new_unchecked(tid) })
-        }
-    }
-
-    #[inline(always)]
     pub(crate) fn flags(self) -> PageFlags {
         PageFlags::from_low_bits(self.0)
     }
@@ -144,11 +128,6 @@ impl PageThreadId {
     #[inline(always)]
     pub(crate) fn is_abandoned_mapped(self) -> bool {
         self.owner_bits() == MI_THREADID_ABANDONED_MAPPED
-    }
-
-    #[inline(always)]
-    pub(crate) fn with_flags(self, flags: PageFlags) -> Self {
-        Self(self.owner_bits() | flags.bits())
     }
 
     #[inline(always)]
@@ -255,13 +234,6 @@ impl RegisteredPageRange {
     pub(crate) fn slice_count(self) -> SliceCount {
         self.slice_count
     }
-}
-
-pub(super) fn __lint_touch() {
-    let _ = PageFlags::EMPTY;
-    let tid = PageThreadId::new(0);
-    let _ = tid.owner();
-    let _ = tid.with_flags(PageFlags::EMPTY);
 }
 
 #[cfg(test)]

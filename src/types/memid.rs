@@ -62,8 +62,6 @@ pub(crate) enum StaticMem {}
 pub(crate) enum MetaMem {}
 pub(crate) enum OsMem {}
 pub(crate) enum ArenaMem {}
-pub(crate) enum HeapMainMem {}
-
 /// Safely wraps the raw `mi_memid_t` with a phantom tag proving its valid discriminator.
 #[repr(transparent)]
 pub(crate) struct MemId<K = AnyMem> {
@@ -76,21 +74,16 @@ impl<K> MemId<K> {
     pub(crate) const fn into_raw(self) -> crate::internal::memid::mi_memid_t {
         self.raw
     }
-
-    #[inline(always)]
-    pub(crate) const fn as_raw(&self) -> crate::internal::memid::mi_memid_t {
-        self.raw
-    }
 }
 
 pub(crate) enum MemIdView {
-    None(MemId<NoneMem>),
+    None,
     External(ExternalMemId),
-    Static(MemId<StaticMem>),
+    Static,
     Meta(MetaMemId),
     Os(OsMemId),
     Arena(ArenaMemId),
-    HeapMain(MemId<HeapMainMem>),
+    HeapMain,
     Unknown(MemKindCode),
 }
 
@@ -98,10 +91,7 @@ impl MemId<AnyMem> {
     pub(crate) fn view(raw: crate::internal::memid::mi_memid_t) -> MemIdView {
         let code = MemKindCode(raw.memkind as i32);
         match MemKind::from(code) {
-            MemKind::None => MemIdView::None(MemId {
-                raw,
-                _kind: PhantomData,
-            }),
+            MemKind::None => MemIdView::None,
             MemKind::External => {
                 // SAFETY: the discriminant is
                 // `MI_MEM_EXTERNAL`, whose C layout stores external memory
@@ -110,15 +100,9 @@ impl MemId<AnyMem> {
                 MemIdView::External(ExternalMemId {
                     base: OsMemPtr::new(os.base),
                     size: ReservedBytes::new(os.size),
-                    initially_committed: InitiallyCommitted(raw.initially_committed),
-                    initially_zero: InitiallyZero(raw.initially_zero),
-                    pinned: Pinned(raw.is_pinned),
                 })
             }
-            MemKind::Static => MemIdView::Static(MemId {
-                raw,
-                _kind: PhantomData,
-            }),
+            MemKind::Static => MemIdView::Static,
             MemKind::Meta => {
                 // SAFETY: the discriminant is
                 // `MI_MEM_META`, whose C layout stores meta-page metadata in
@@ -165,18 +149,9 @@ impl MemId<AnyMem> {
                 let Ok(range) = SliceRange::from_raw(a.slice_index, a.slice_count) else {
                     return MemIdView::Unknown(code);
                 };
-                MemIdView::Arena(ArenaMemId {
-                    arena,
-                    range,
-                    initially_committed: InitiallyCommitted(raw.initially_committed),
-                    initially_zero: InitiallyZero(raw.initially_zero),
-                    pinned: Pinned(raw.is_pinned),
-                })
+                MemIdView::Arena(ArenaMemId { arena, range })
             }
-            MemKind::HeapMain => MemIdView::HeapMain(MemId {
-                raw,
-                _kind: PhantomData,
-            }),
+            MemKind::HeapMain => MemIdView::HeapMain,
             MemKind::Unknown(c) => MemIdView::Unknown(c),
         }
     }
@@ -222,26 +197,6 @@ impl MemId<StaticMem> {
     }
 }
 
-impl MemId<HeapMainMem> {
-    pub(crate) const fn heap_main() -> Self {
-        Self {
-            raw: crate::internal::memid::mi_memid_t {
-                mem: crate::internal::memid::mi_memid_mem_t {
-                    os: crate::internal::memid::mi_memid_os_info_t {
-                        base: core::ptr::null_mut(),
-                        size: 0,
-                    },
-                },
-                is_pinned: false,
-                initially_committed: false,
-                initially_zero: false,
-                memkind: crate::internal::memid::mi_memkind_t::MI_MEM_HEAP_MAIN as _,
-            },
-            _kind: PhantomData,
-        }
-    }
-}
-
 impl MemId<OsMem> {
     pub(crate) fn os(
         base: Option<OsMemPtr>,
@@ -261,16 +216,6 @@ impl MemId<OsMem> {
         pinned: Pinned,
     ) -> Self {
         Self::os_with_kind(base, size, committed, zero, pinned, OsMemKind::Huge)
-    }
-
-    pub(crate) fn os_remap(
-        base: Option<OsMemPtr>,
-        size: ReservedBytes,
-        committed: InitiallyCommitted,
-        zero: InitiallyZero,
-        pinned: Pinned,
-    ) -> Self {
-        Self::os_with_kind(base, size, committed, zero, pinned, OsMemKind::Remap)
     }
 
     fn os_with_kind(
@@ -398,11 +343,6 @@ impl ReservedBytes {
     pub(crate) const fn get(self) -> usize {
         self.0
     }
-
-    #[inline(always)]
-    pub(crate) const fn is_zero(self) -> bool {
-        self.0 == 0
-    }
 }
 
 #[repr(transparent)]
@@ -451,18 +391,12 @@ pub(crate) enum OsMemKind {
 pub(crate) struct ExternalMemId {
     pub(crate) base: Option<OsMemPtr>,
     pub(crate) size: ReservedBytes,
-    pub(crate) initially_committed: InitiallyCommitted,
-    pub(crate) initially_zero: InitiallyZero,
-    pub(crate) pinned: Pinned,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct ArenaMemId {
     arena: ArenaPtr,
     range: SliceRange,
-    initially_committed: InitiallyCommitted,
-    initially_zero: InitiallyZero,
-    pinned: Pinned,
 }
 
 impl ArenaMemId {
@@ -475,107 +409,12 @@ impl ArenaMemId {
     pub(crate) const fn range(self) -> SliceRange {
         self.range
     }
-
-    #[inline(always)]
-    pub(crate) const fn initially_committed(self) -> InitiallyCommitted {
-        self.initially_committed
-    }
-
-    #[inline(always)]
-    pub(crate) const fn initially_zero(self) -> InitiallyZero {
-        self.initially_zero
-    }
-
-    #[inline(always)]
-    pub(crate) const fn pinned(self) -> Pinned {
-        self.pinned
-    }
 }
 
 pub(crate) struct MetaMemId {
     pub(crate) meta_page: NonNull<core::ffi::c_void>,
     pub(crate) block_index: BlockIndex,
     pub(crate) block_count: core::num::NonZeroU32,
-}
-
-pub(super) fn __lint_touch() {
-    let none = MemId::<NoneMem>::none();
-    let _ = none.as_raw();
-    let _ = MemId::<HeapMainMem>::heap_main();
-    let _ = MemId::<OsMem>::os_remap
-        as fn(
-            Option<OsMemPtr>,
-            ReservedBytes,
-            InitiallyCommitted,
-            InitiallyZero,
-            Pinned,
-        ) -> MemId<OsMem>;
-    let _ = ReservedBytes::new(0).is_zero();
-
-    if let MemIdView::None(memid) = MemIdView::None(MemId::<NoneMem>::none()) {
-        let _ = memid.into_raw();
-    }
-    if let MemIdView::Static(memid) = MemIdView::Static(MemId::<StaticMem>::static_mem()) {
-        let _ = memid.into_raw();
-    }
-    if let MemIdView::HeapMain(memid) = MemIdView::HeapMain(MemId::<HeapMainMem>::heap_main()) {
-        let _ = memid.into_raw();
-    }
-    if let MemIdView::Unknown(code) = MemIdView::Unknown(MemKindCode::NONE) {
-        let _ = code.0;
-    }
-
-    let os = OsMemId {
-        base: None,
-        size: ReservedBytes::new(0),
-        initially_committed: InitiallyCommitted(false),
-        initially_zero: InitiallyZero(false),
-        pinned: Pinned(false),
-        kind: OsMemKind::Normal,
-    };
-    let _ = (
-        os.base,
-        os.size,
-        os.initially_committed.0,
-        os.initially_zero.0,
-        os.pinned.0,
-        matches!(os.kind, OsMemKind::Normal),
-    );
-
-    let external = ExternalMemId {
-        base: None,
-        size: ReservedBytes::new(0),
-        initially_committed: InitiallyCommitted(false),
-        initially_zero: InitiallyZero(false),
-        pinned: Pinned(false),
-    };
-    let _ = (
-        external.base,
-        external.size,
-        external.initially_committed.0,
-        external.initially_zero.0,
-        external.pinned.0,
-    );
-
-    if let Ok(range) = SliceRange::from_raw(0, 1) {
-        let arena = ArenaMemId {
-            // SAFETY: this lint-touch fixture
-            // uses a non-dereferenced dangling pointer only to keep typed
-            // accessors referenced for dead-code lint accounting.
-            arena: unsafe { ArenaPtr::new_unchecked(core::ptr::dangling_mut()) },
-            range,
-            initially_committed: InitiallyCommitted(false),
-            initially_zero: InitiallyZero(false),
-            pinned: Pinned(false),
-        };
-        let _ = (
-            arena.arena(),
-            arena.range(),
-            arena.initially_committed().0,
-            arena.initially_zero().0,
-            arena.pinned().0,
-        );
-    }
 }
 
 #[cfg(test)]

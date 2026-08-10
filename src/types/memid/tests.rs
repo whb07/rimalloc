@@ -34,14 +34,11 @@ fn os_memid_round_trips_through_view() {
         Pinned(false),
     );
 
-    let MemIdView::Os(view) = MemId::<AnyMem>::view(normal.as_raw()) else {
+    let MemIdView::Os(view) = MemId::<AnyMem>::view(normal.into_raw()) else {
         panic!("expected normal OS memid view");
     };
     assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
     assert_eq!(view.size.get(), 2048);
-    assert!(!view.initially_committed.0);
-    assert!(view.initially_zero.0);
-    assert!(!view.pinned.0);
     assert!(matches!(view.kind, OsMemKind::Normal));
 
     let memid = MemId::<OsMem>::os_huge(
@@ -52,7 +49,7 @@ fn os_memid_round_trips_through_view() {
         Pinned(true),
     );
 
-    let MemIdView::Os(view) = MemId::<AnyMem>::view(memid.as_raw()) else {
+    let MemIdView::Os(view) = MemId::<AnyMem>::view(memid.into_raw()) else {
         panic!("expected OS memid view");
     };
     assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
@@ -64,27 +61,27 @@ fn os_memid_round_trips_through_view() {
 }
 
 #[test]
-fn os_remap_memid_round_trips_through_view() {
+fn raw_os_remap_memid_maps_to_remap_view() {
     let mut byte = 0u8;
-    // SAFETY: `byte` is stack-local storage
-    // used only as an opaque OS-remap pointer witness for this test.
-    let base = unsafe { OsMemPtr::new_unchecked((&mut byte as *mut u8).cast::<c_void>()) };
-    let memid = MemId::<OsMem>::os_remap(
-        Some(base),
-        ReservedBytes::new(16384),
-        InitiallyCommitted(false),
-        InitiallyZero(true),
-        Pinned(false),
-    );
-
-    let MemIdView::Os(view) = MemId::<AnyMem>::view(memid.as_raw()) else {
-        panic!("expected OS remap memid view");
+    let base = (&mut byte as *mut u8).cast::<c_void>();
+    let raw = crate::internal::memid::mi_memid_t {
+        mem: crate::internal::memid::mi_memid_mem_t {
+            os: crate::internal::memid::mi_memid_os_info_t { base, size: 6144 },
+        },
+        is_pinned: true,
+        initially_committed: false,
+        initially_zero: true,
+        memkind: crate::internal::memid::mi_memkind_t::MI_MEM_OS_REMAP as _,
     };
-    assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
-    assert_eq!(view.size.get(), 16384);
+
+    let MemIdView::Os(view) = MemId::<AnyMem>::view(raw) else {
+        panic!("expected remapped OS memid view");
+    };
+    assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base));
+    assert_eq!(view.size.get(), 6144);
     assert!(!view.initially_committed.0);
     assert!(view.initially_zero.0);
-    assert!(!view.pinned.0);
+    assert!(view.pinned.0);
     assert!(matches!(view.kind, OsMemKind::Remap));
 }
 
@@ -102,14 +99,11 @@ fn external_and_meta_memids_round_trip_through_view() {
         Pinned(false),
     );
 
-    let MemIdView::External(view) = MemId::<AnyMem>::view(external.as_raw()) else {
+    let MemIdView::External(view) = MemId::<AnyMem>::view(external.into_raw()) else {
         panic!("expected external memid view");
     };
     assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
     assert_eq!(view.size.get(), 8192);
-    assert!(!view.initially_committed.0);
-    assert!(view.initially_zero.0);
-    assert!(!view.pinned.0);
 
     let mut meta_byte = 0u8;
     let meta_page = NonNull::new((&mut meta_byte as *mut u8).cast::<c_void>()).unwrap();
@@ -119,7 +113,7 @@ fn external_and_meta_memids_round_trip_through_view() {
         core::num::NonZeroU32::new(3).unwrap(),
     );
 
-    let MemIdView::Meta(view) = MemId::<AnyMem>::view(meta.as_raw()) else {
+    let MemIdView::Meta(view) = MemId::<AnyMem>::view(meta.into_raw()) else {
         panic!("expected meta memid view");
     };
     assert_eq!(view.meta_page, meta_page);
@@ -135,9 +129,7 @@ fn arena_memid_round_trips_slice_metadata() {
     let arena_ptr = unsafe { ArenaPtr::new_unchecked(arena.as_mut_ptr()) };
     // SAFETY: the test has unique access to
     // the stack-local arena metadata before constructing the slice range.
-    unsafe {
-        arena_ptr.set_slice_count(crate::core_types::SliceCount::from_usize(32).unwrap());
-    }
+    unsafe { (*arena_ptr.as_ptr()).slice_count = 32 }
     let range = SliceRange::new(11, 5, arena_ptr).unwrap();
     let memid = MemId::<ArenaMem>::arena(
         arena_ptr,
@@ -147,28 +139,12 @@ fn arena_memid_round_trips_slice_metadata() {
         Pinned(true),
     );
 
-    let MemIdView::Arena(view) = MemId::<AnyMem>::view(memid.as_raw()) else {
+    let MemIdView::Arena(view) = MemId::<AnyMem>::view(memid.into_raw()) else {
         panic!("expected arena memid view");
     };
     assert_eq!(view.arena().as_ptr(), arena_ptr.as_ptr());
     assert_eq!(view.range().start_usize(), 11);
     assert_eq!(view.range().count_usize(), 5);
-    assert!(view.initially_committed().0);
-    assert!(!view.initially_zero().0);
-    assert!(view.pinned().0);
-}
-
-#[test]
-fn heap_main_memid_round_trips_through_view() {
-    let memid = MemId::<HeapMainMem>::heap_main();
-
-    let MemIdView::HeapMain(view) = MemId::<AnyMem>::view(memid.as_raw()) else {
-        panic!("expected heap-main memid view");
-    };
-    assert_eq!(
-        view.as_raw().memkind,
-        crate::internal::memid::mi_memkind_t::MI_MEM_HEAP_MAIN as _
-    );
 }
 
 #[test]

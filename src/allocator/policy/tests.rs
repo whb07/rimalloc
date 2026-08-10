@@ -1,7 +1,9 @@
 use core::ffi::c_long;
 
 use crate::allocator::page::{MI_MEDIUM_MAX_OBJ_SIZE, MI_SMALL_MAX_OBJ_SIZE};
-use crate::core_types::{BlockSize, PageCapacity, ReservedBlockCount, UsedBlockCount};
+use crate::core_types::{
+    BlockSize, PageCapacity, PageReclaimLimit, ReservedBlockCount, UsedBlockCount,
+};
 
 use super::compat::MIN_EXTEND;
 use super::{CompatPolicy, reference};
@@ -80,8 +82,14 @@ fn option_interpretation_preserves_clamps_and_signed_sentinels() {
             CompatPolicy::generic_collect_limit_from_raw(raw).get(),
             raw.clamp(1, 1_000_000)
         );
-        assert_eq!(CompatPolicy::page_candidate_limit_from_raw(raw).get(), raw);
-        assert_eq!(CompatPolicy::reclaim_limit_from_raw(raw).get(), raw);
+        assert_eq!(
+            CompatPolicy::page_candidate_limit_from_raw(raw),
+            PageReclaimLimit::new(raw)
+        );
+        assert_eq!(
+            CompatPolicy::reclaim_limit_from_raw(raw),
+            PageReclaimLimit::new(raw)
+        );
         assert_eq!(
             CompatPolicy::reclaim_on_free_mode_from_raw(raw).is_enabled(),
             raw >= 0

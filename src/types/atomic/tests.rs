@@ -3,7 +3,7 @@ use super::*;
 use crate::atomic::mi_lock_t;
 use crate::core_types::{
     LocalFreeList, OwnedAbandonedPage, PageFlags, PageOwnerId, PagePtr, PageThreadId,
-    ThreadFreeOwner,
+    ThreadFreeOwner, ThreadFreeWord,
 };
 use crate::types::{mi_block_t, mi_page_t};
 use core::{

@@ -58,7 +58,7 @@ unsafe fn done_typed(default_theap: ThreadHeapPtr) {
     // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let theap = match unsafe { default_theap.state() } {
         ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => theap,
-        ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return,
+        ThreadHeapState::Uninitialized | ThreadHeapState::Deleted => return,
     };
     // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let current = unsafe { ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id()) };

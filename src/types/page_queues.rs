@@ -1,14 +1,11 @@
 //! DT-10: Page queue types.
 
-use super::page_states::Page;
 use super::ptr::{PagePtr, PageQueuePtr};
 use core::marker::PhantomData;
 use core::mem::size_of;
 
 #[derive(Debug)]
 pub(crate) enum NormalQueue {}
-#[derive(Debug)]
-pub(crate) enum HugeQueue {}
 #[derive(Debug)]
 pub(crate) enum FullQueue {}
 
@@ -153,11 +150,6 @@ impl<K> QueuedPage<K> {
     #[inline(always)]
     pub(crate) fn page(&self) -> PagePtr {
         self.page
-    }
-
-    #[inline(always)]
-    pub(crate) fn queue(&self) -> &PageQueue<K> {
-        &self.queue
     }
 }
 
@@ -319,19 +311,6 @@ impl QueuedPage<FullQueue> {
     }
 }
 
-/// Witness that a page is definitively *not* in any queue.
-#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
-pub(crate) struct UnqueuedPage<S> {
-    page: Page<S>,
-}
-
-impl<S> UnqueuedPage<S> {
-    #[inline(always)]
-    pub(crate) fn page(&self) -> PagePtr {
-        self.page.ptr()
-    }
-}
-
 // Strictly typed transitions to prevent illegal states, per DT-10.
 
 #[inline]
@@ -368,17 +347,6 @@ const _: unsafe fn(QueuedPage<NormalQueue>, FullPageQueue) -> crate::core_types:
     QueuedPage::<NormalQueue>::into_full;
 const _: fn(&QueuedPage<NormalQueue>) -> PagePtr = QueuedPage::<NormalQueue>::page;
 const _: fn(&QueuedPage<FullQueue>) -> PagePtr = QueuedPage::<FullQueue>::page;
-
-pub(super) fn __lint_touch() {
-    let _ = core::mem::size_of::<HugeQueue>();
-    let _ = core::mem::size_of::<PageQueue<HugeQueue>>();
-    let _ =
-        QueuedPage::<NormalQueue>::queue as fn(&QueuedPage<NormalQueue>) -> &PageQueue<NormalQueue>;
-    let _ = QueuedPage::<FullQueue>::queue as fn(&QueuedPage<FullQueue>) -> &PageQueue<FullQueue>;
-    let _ = core::mem::size_of::<UnqueuedPage<crate::core_types::Active>>();
-    let _ = UnqueuedPage::<crate::core_types::Active>::page
-        as fn(&UnqueuedPage<crate::core_types::Active>) -> PagePtr;
-}
 
 #[cfg(test)]
 mod tests;

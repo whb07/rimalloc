@@ -139,10 +139,10 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
             // SAFETY: arena free dispatch validates memid ranges, marks free slices, and schedules purge without changing allocation ownership rules.
             unsafe { _mi_meta_free(p, size, memid) };
         }
-        crate::core_types::MemIdView::None(_)
+        crate::core_types::MemIdView::None
         | crate::core_types::MemIdView::External(_)
-        | crate::core_types::MemIdView::Static(_) => {}
-        crate::core_types::MemIdView::HeapMain(_) | crate::core_types::MemIdView::Unknown(_) => {
+        | crate::core_types::MemIdView::Static => {}
+        crate::core_types::MemIdView::HeapMain | crate::core_types::MemIdView::Unknown(_) => {
             crate::internal::mi_assert_internal!(false);
         }
     }

@@ -35,29 +35,6 @@ fn encoded_pointer_round_trips_block_and_null() {
 }
 
 #[test]
-fn block_link_read_from_raw_distinguishes_guarded_and_free_list_words() {
-    let mut block = mi_block_t::default();
-    // SAFETY: the test mutates a
-    // stack-local block word through typed link wrappers and reads it back
-    // before the local block leaves scope.
-    unsafe {
-        let block_ptr = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
-        BlockTag::write_guarded_to(block_ptr);
-        assert!(matches!(
-            BlockLink::read_from_raw(ptr::addr_of!(block)),
-            BlockLink::Guarded(_)
-        ));
-
-        let free_link = EncodedPtr::from_unencoded_raw(ptr::null());
-        BlockLink::FreeList(free_link).write_to(block_ptr);
-        assert!(matches!(
-            BlockLink::read_from_raw(ptr::addr_of!(block)),
-            BlockLink::FreeList(_)
-        ));
-    }
-}
-
-#[test]
 fn block_tag_explicit_aligned_write_is_not_guarded() {
     let mut block = mi_block_t::default();
     // SAFETY: the raw block pointer

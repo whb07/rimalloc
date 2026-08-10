@@ -1093,9 +1093,9 @@ unsafe fn _mi_theap_random_next_typed(theap: ThreadHeapLocal) -> usize {
 #[inline]
 fn mi_memid_is_refcounted(memid: mi_memid_t) -> bool {
     match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::None(_)
+        crate::core_types::MemIdView::None
         | crate::core_types::MemIdView::External(_)
-        | crate::core_types::MemIdView::Static(_) => false,
+        | crate::core_types::MemIdView::Static => false,
         crate::core_types::MemIdView::Unknown(code) => {
             code.0 > crate::core_types::MemKindCode::STATIC.0
         }
@@ -1131,7 +1131,7 @@ unsafe fn mi_theap_free_mem_typed(
         let raw = theap.ptr().as_ptr();
         __mi_stat_decrease_mt(&mut (*_mi_subproc()).stats.theaps, 1);
         match memid {
-            crate::core_types::MemIdView::HeapMain(_) => {
+            crate::core_types::MemIdView::HeapMain => {
                 let theap = raw;
                 crate::internal::mi_assert_internal!(_mi_is_heap_main(
                     _mi_theap_heap(theap).cast_const()
@@ -1246,7 +1246,7 @@ unsafe fn _mi_theap_free_typed(
             ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => {
                 theap.ptr().as_ptr()
             }
-            ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return false,
+            ThreadHeapState::Uninitialized | ThreadHeapState::Deleted => return false,
         };
 
         let heap = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!((*theap).heap))
@@ -1304,7 +1304,7 @@ unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: 
             ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => {
                 theap.ptr().as_ptr()
             }
-            ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return,
+            ThreadHeapState::Uninitialized | ThreadHeapState::Deleted => return,
         };
 
         crate::internal::mi_assert!(!theap_raw.is_null());

@@ -10,93 +10,10 @@ fn requested_size_padding_checks_overflow() {
 }
 
 #[test]
-fn size_wrappers_return_typed_errors_for_checked_arithmetic() {
+fn usable_size_checked_sub_reports_underflow() {
+    assert_eq!(UsableSize::new(16).checked_sub(4), Ok(UsableSize::new(12)));
     assert_eq!(
-        RequestedSize::new(16)
-            .checked_add(4)
-            .map(RequestedSize::get),
-        Ok(20)
-    );
-    assert_eq!(
-        RequestedSize::new(8).checked_mul(4).map(RequestedSize::get),
-        Ok(32)
-    );
-    assert_eq!(
-        RequestedSize::new(usize::MAX).checked_add(1),
-        Err(AllocSizeError::Overflow)
-    );
-    assert_eq!(
-        RequestedSize::new(usize::MAX).checked_mul(2),
-        Err(AllocSizeError::Overflow)
-    );
-
-    // SAFETY: this test uses a concrete raw
-    // size fixture only to exercise checked arithmetic on the wrapper.
-    let effective = unsafe { EffectiveSize::new_unchecked(16) };
-    assert_eq!(effective.checked_add(4).map(EffectiveSize::get), Ok(20));
-    // SAFETY: the unchecked max-value fixture
-    // is used locally to verify overflow reporting and is never used to size an allocation.
-    assert_eq!(
-        unsafe { EffectiveSize::new_unchecked(usize::MAX) }.checked_add(1),
-        Err(AllocSizeError::Overflow)
-    );
-
-    // SAFETY: the raw value is at least
-    // `MI_PADDING_SIZE`, matching the padded-size constructor precondition.
-    let padded = unsafe { PaddedSize::new_unchecked(crate::types::MI_PADDING_SIZE + 16) };
-    assert_eq!(
-        padded.checked_add(4).map(PaddedSize::get),
-        Ok(padded.get() + 4)
-    );
-    assert_eq!(padded.checked_sub_padding().map(RequestedSize::get), Ok(16));
-    // SAFETY: this max-value fixture stays
-    // local to the overflow assertion and is not passed to allocator code.
-    assert_eq!(
-        unsafe { PaddedSize::new_unchecked(usize::MAX) }.checked_add(1),
-        Err(AllocSizeError::Overflow)
-    );
-    // SAFETY: this deliberately undersized
-    // local fixture verifies checked padding subtraction reports overflow.
-    assert_eq!(
-        unsafe { PaddedSize::new_unchecked(1) }.checked_sub_padding(),
-        Err(AllocSizeError::Overflow)
-    );
-
-    // SAFETY: the raw value is at least
-    // `MI_PADDING_SIZE`, matching the block-size constructor precondition.
-    let block = unsafe { BlockSize::new_unchecked(crate::types::MI_PADDING_SIZE + 32) };
-    assert_eq!(
-        block.checked_add(4).map(BlockSize::get),
-        Ok(block.get() + 4)
-    );
-    assert_eq!(block.checked_usable().map(UsableSize::get), Ok(32));
-    // SAFETY: this max-value fixture stays
-    // local to the overflow assertion and is not passed to allocator code.
-    assert_eq!(
-        unsafe { BlockSize::new_unchecked(usize::MAX) }.checked_add(1),
-        Err(AllocSizeError::Overflow)
-    );
-    // SAFETY: this deliberately undersized
-    // local fixture verifies checked usable-size subtraction reports overflow.
-    assert_eq!(
-        unsafe { BlockSize::new_unchecked(1) }.checked_usable(),
-        Err(AllocSizeError::Overflow)
-    );
-
-    assert_eq!(
-        UsableSize::new(16).checked_add(4).map(UsableSize::get),
-        Ok(20)
-    );
-    assert_eq!(
-        UsableSize::new(16).checked_sub(4).map(UsableSize::get),
-        Ok(12)
-    );
-    assert_eq!(
-        UsableSize::new(usize::MAX).checked_add(1),
-        Err(AllocSizeError::Overflow)
-    );
-    assert_eq!(
-        UsableSize::new(0).checked_sub(1),
+        UsableSize::new(3).checked_sub(4),
         Err(AllocSizeError::Overflow)
     );
 }
@@ -108,7 +25,6 @@ fn scalar_constructors_preserve_zero_and_upper_bound_values() {
     assert_eq!(UsableSize::new(0).get(), 0);
     assert_eq!(UsableSize::new(usize::MAX).get(), usize::MAX);
     assert_eq!(AlignmentOffset::new(usize::MAX).get(), usize::MAX);
-    assert_eq!(WordCount::new(usize::MAX).get(), usize::MAX);
     assert_eq!(PageQueueCount::new(usize::MAX).get(), usize::MAX);
     assert_eq!(UsedBlockCount::new(u16::MAX).get(), u16::MAX);
     assert_eq!(ReservedBlockCount::new(u16::MAX).get(), u16::MAX);
@@ -130,62 +46,6 @@ fn slice_index_checked_add_reports_overflow() {
         Some(7)
     );
     assert_eq!(SliceIndex::new(usize::MAX).checked_add(1), None);
-}
-
-#[test]
-fn slice_index_reports_raw_u32_conversion_overflow() {
-    assert_eq!(SliceIndex::new(7).as_u32(), Some(7));
-    assert_eq!(SliceIndex::new(u32::MAX as usize).as_u32(), Some(u32::MAX));
-    assert!(SliceIndex::new(u32::MAX as usize + 1).as_u32().is_none());
-}
-
-#[test]
-fn unchecked_hot_path_constructors_preserve_valid_values() {
-    // SAFETY: `1` is a concrete non-zero
-    // effective-size fixture used only for wrapper round-trip testing.
-    assert_eq!(unsafe { EffectiveSize::new_unchecked(1) }.get(), 1);
-    // SAFETY: `1` is a local padded-size
-    // fixture used only to verify the unchecked constructor stores the value.
-    assert_eq!(unsafe { PaddedSize::new_unchecked(1) }.get(), 1);
-    // SAFETY: `1` is a local block-size
-    // fixture used only to verify the unchecked constructor stores the value.
-    assert_eq!(unsafe { BlockSize::new_unchecked(1) }.get(), 1);
-    // SAFETY: `1` is a local full-block-size
-    // fixture used only for wrapper round-trip testing.
-    assert_eq!(unsafe { FullBlockSize::new_unchecked(1) }.get(), 1);
-    // SAFETY: `64` is a non-zero power of two
-    // and satisfies the alignment constructor invariant.
-    assert_eq!(unsafe { Alignment::new_unchecked(64) }.get(), 64);
-    // SAFETY: `64` is a valid optional
-    // alignment fixture and is not used for allocation in this test.
-    assert_eq!(unsafe { MaybeAlignment::new_unchecked(64) }.get(), 64);
-    // SAFETY: `4096` is a concrete non-zero
-    // page-size fixture used only for wrapper round-trip testing.
-    assert_eq!(unsafe { OsPageSize::new_unchecked(4096) }.get(), 4096);
-    // SAFETY: `0` is within the page-map index
-    // table bounds for this constructor fixture.
-    assert_eq!(unsafe { PageMapIndex::new_unchecked(0) }.get(), 0);
-    // SAFETY: `0` is within the page-map
-    // sub-index table bounds for this constructor fixture.
-    assert_eq!(unsafe { PageMapSubIndex::new_unchecked(0) }.get(), 0);
-    // SAFETY: `0` is within the page-queue bin
-    // table bounds for this constructor fixture.
-    assert_eq!(unsafe { Bin::new_unchecked(0) }.get(), 0);
-    // SAFETY: `0` is within the stats-bin
-    // table bounds for this constructor fixture.
-    assert_eq!(unsafe { StatsBin::new_unchecked(0) }.get(), 0);
-    // SAFETY: `0` is within the direct-bin
-    // table bounds for this constructor fixture.
-    assert_eq!(unsafe { DirectBin::new_unchecked(0) }.get(), 0);
-    // SAFETY: `1` is a non-zero slice-count
-    // fixture used only for wrapper round-trip testing.
-    assert_eq!(unsafe { SliceCount::new_unchecked(1) }.get(), 1);
-    // SAFETY: `0` is within the arena table
-    // bounds for this constructor fixture.
-    assert_eq!(unsafe { ArenaIndex::new_unchecked(0) }.get(), 0);
-    // SAFETY: zero capacity is a local page
-    // capacity fixture and is not attached to live page metadata.
-    assert_eq!(unsafe { PageCapacity::new_unchecked(0) }.get(), 0);
 }
 
 #[test]
@@ -222,45 +82,6 @@ fn scalar_constructor_boundaries_cover_overflow_and_limits() {
         Some(u32::MAX)
     );
     assert!(SliceCount::from_usize(u32::MAX as usize + 1).is_none());
-}
-
-#[test]
-fn batch_scalar_boundaries_and_used_accounting_are_checked() {
-    assert!(BatchLen::new(0).is_none());
-    assert_eq!(BatchLen::new(1).map(BatchLen::get), Some(1));
-    assert_eq!(
-        BatchLen::new(u16::MAX).map(BatchLen::as_usize),
-        Some(u16::MAX as usize)
-    );
-    assert!(BatchLimit::new(0).is_none());
-
-    let limit = BatchLimit::new(8).expect("non-zero batch limit");
-    assert_eq!(limit.clamp_to_remaining(20).map(BatchLimit::get), Some(8));
-    assert_eq!(limit.clamp_to_remaining(3).map(BatchLimit::get), Some(3));
-    assert!(limit.clamp_to_remaining(0).is_none());
-
-    let len = BatchLen::new(4).expect("non-empty batch");
-    // SAFETY: ten is a valid standalone test
-    // capacity and is not published to page metadata.
-    let capacity = unsafe { PageCapacity::new_unchecked(10) };
-    assert_eq!(
-        UsedBlockCount::new(6)
-            .checked_add_batch(len, capacity)
-            .map(UsedBlockCount::get),
-        Some(10)
-    );
-    assert!(
-        UsedBlockCount::new(7)
-            .checked_add_batch(len, capacity)
-            .is_none()
-    );
-    assert_eq!(
-        UsedBlockCount::new(4)
-            .checked_sub_batch(len)
-            .map(UsedBlockCount::get),
-        Some(0)
-    );
-    assert!(UsedBlockCount::new(3).checked_sub_batch(len).is_none());
 }
 
 #[test]
@@ -369,8 +190,6 @@ fn sequence_domains_preserve_raw_values() {
     assert_eq!(HeapSeq::new(13).get(), 13);
     assert_eq!(SubprocSeq::new(17).get(), 17);
     assert_eq!(ArenaCount::new(19).get(), 19);
-    assert_eq!(ThreadCount::new(23).get(), 23);
-    assert_eq!(HeapCount::new(29).get(), 29);
 }
 
 #[test]
@@ -399,9 +218,9 @@ fn errno_preserves_raw_error_codes() {
 
 #[test]
 fn bin_rejects_indexes_outside_page_queue_table() {
-    assert_eq!(Bin::new(0).map(Bin::get), Some(0));
+    assert_eq!(Bin::new(0).map(|bin| bin.0), Some(0));
     assert_eq!(
-        Bin::new((crate::types::MI_BIN_COUNT - 1) as u16).map(Bin::get),
+        Bin::new((crate::types::MI_BIN_COUNT - 1) as u16).map(|bin| bin.0),
         Some((crate::types::MI_BIN_COUNT - 1) as u16)
     );
     assert!(Bin::new(crate::types::MI_BIN_COUNT as u16).is_none());
@@ -409,7 +228,7 @@ fn bin_rejects_indexes_outside_page_queue_table() {
     // SAFETY: `3` is within the page-queue
     // bin table bounds checked above.
     let unchecked = unsafe { Bin::new_unchecked(3) };
-    assert_eq!(unchecked.get(), 3);
+    assert_eq!(unchecked.0, 3);
 }
 
 #[test]
@@ -424,21 +243,6 @@ fn stats_bin_rejects_indexes_above_huge_bin() {
     // SAFETY: `3` is within the stats-bin
     // table bounds checked above.
     let unchecked = unsafe { StatsBin::new_unchecked(3) };
-    assert_eq!(unchecked.as_usize(), 3);
-}
-
-#[test]
-fn direct_bin_rejects_indexes_outside_direct_table() {
-    assert_eq!(DirectBin::new(0).map(DirectBin::get), Some(0));
-    assert_eq!(
-        DirectBin::new((crate::types::MI_PAGES_DIRECT - 1) as u16).map(DirectBin::get),
-        Some((crate::types::MI_PAGES_DIRECT - 1) as u16)
-    );
-    assert!(DirectBin::new(crate::types::MI_PAGES_DIRECT as u16).is_none());
-
-    // SAFETY: `3` is within the direct-page
-    // table bounds checked above.
-    let unchecked = unsafe { DirectBin::new_unchecked(3) };
     assert_eq!(unchecked.as_usize(), 3);
 }
 

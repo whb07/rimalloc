@@ -224,15 +224,6 @@ impl AtomicThreadFree {
         }
     }
 
-    pub(crate) unsafe fn compare_exchange_release_ownership(
-        self,
-        expected: &mut ThreadFreeWord,
-    ) -> bool {
-        // SAFETY: compatibility shim forwards to the
-        // typed ownership-release CAS with the same xthread_free contract.
-        unsafe { self.release_acq_rel(expected) }
-    }
-
     /// Atomically detach the current remote free-list head while preserving the
     /// ownership bit in `xthread_free`.
     ///

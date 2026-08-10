@@ -124,10 +124,10 @@ const _: unsafe fn(ThreadHeapPtr) -> ThreadHeapState = ThreadHeapPtr::state;
 pub(crate) struct ThreadHeapBorrowed(ThreadHeapPtr);
 
 pub(crate) enum ThreadHeapState {
-    Uninitialized(ThreadHeapPtr),
+    Uninitialized,
     Initialized(ThreadHeapBorrowed),
     Main(ThreadHeapBorrowed),
-    Deleted(ThreadHeapPtr),
+    Deleted,
 }
 
 impl ThreadHeapBorrowed {
@@ -230,9 +230,9 @@ impl ThreadHeapPtr {
             // projection distinguishes deleted thread heaps from initialized
             // but heap-less thread-heap records without dereferencing a heap.
             if unsafe { self.tld() }.is_none() {
-                return ThreadHeapState::Deleted(self);
+                return ThreadHeapState::Deleted;
             }
-            return ThreadHeapState::Uninitialized(self);
+            return ThreadHeapState::Uninitialized;
         };
 
         // SAFETY: a present heap pointer proves this
@@ -275,7 +275,7 @@ impl ThreadHeapPtr {
         // records before any local-thread witness can be constructed.
         match unsafe { self.state() } {
             ThreadHeapState::Initialized(_) | ThreadHeapState::Main(_) => {}
-            ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return Err(self),
+            ThreadHeapState::Uninitialized | ThreadHeapState::Deleted => return Err(self),
         }
 
         let theap = self.as_ptr();
@@ -330,18 +330,6 @@ impl ThreadHeapPtr {
             // the stable tld metadata for this thread heap.
             Some(unsafe { TldPtr::new_unchecked(raw) })
         }
-    }
-}
-
-pub(super) fn __lint_touch() {
-    let Some(theap) = ThreadHeapPtr::new(core::ptr::dangling_mut()) else {
-        return;
-    };
-    if let ThreadHeapState::Uninitialized(ptr) = ThreadHeapState::Uninitialized(theap) {
-        let _ = ptr.as_ptr();
-    }
-    if let ThreadHeapState::Deleted(ptr) = ThreadHeapState::Deleted(theap) {
-        let _ = ptr.as_ptr();
     }
 }
 

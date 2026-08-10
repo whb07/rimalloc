@@ -1,6 +1,6 @@
 //! DT-3 allocation layout types.
 
-use super::ptr::{BlockPtr, PagePtr, UserPtr};
+use super::ptr::{PagePtr, UserPtr};
 use super::scalar::{
     Alignment, AlignmentOffset, EffectiveSize, MaybeAlignment, PaddedSize, RequestedSize,
     UsableSize,
@@ -158,31 +158,6 @@ impl LayoutRequest {
         Ok(req)
     }
 
-    /// Construct a layout from a size that has already been normalized to a
-    /// nonzero effective allocation size.
-    ///
-    /// # Safety
-    /// `effective.get() + MI_PADDING_SIZE` must not overflow, and the caller
-    /// must not need to preserve a distinct zero-size requested value.
-    #[inline(always)]
-    // SAFETY: callers provide a nonzero
-    // `EffectiveSize` whose padding addition is valid for the allocation path.
-    pub(crate) unsafe fn from_effective_unchecked(
-        effective: EffectiveSize,
-        zeroed: Zeroed,
-    ) -> Self {
-        let requested = RequestedSize::new(effective.get());
-        Self {
-            requested,
-            effective,
-            padded: requested.padded_unchecked(),
-            // SAFETY: zero is the valid sentinel
-            // for "no explicit alignment" in `MaybeAlignment`.
-            alignment: unsafe { MaybeAlignment::new_unchecked(0) },
-            zeroed,
-        }
-    }
-
     /// Construct a layout from a size that already includes mimalloc padding.
     ///
     /// # Safety
@@ -229,8 +204,6 @@ impl ItemCount {
 
 #[derive(Clone, Copy)]
 pub(crate) struct CallocRequest {
-    count: ItemCount,
-    item_size: RequestedSize,
     total: RequestedSize,
     layout: LayoutRequest,
 }
@@ -238,29 +211,14 @@ pub(crate) struct CallocRequest {
 impl CallocRequest {
     pub(crate) fn new(count: usize, size: usize) -> Result<Self, LayoutError> {
         let total_size = count.checked_mul(size).ok_or(LayoutError::SizeOverflow)?;
-        // SAFETY: `total_size` was produced by
-        // `count.checked_mul(size)`.
-        unsafe { Self::from_checked_total(count, size, total_size) }
+        Self::from_checked_total(total_size)
     }
 
-    /// Builds a request from a multiplication result already checked by the
-    /// caller.
-    ///
-    /// # Safety
-    /// `total_size` must be exactly `count * size` and that multiplication
-    /// must not have overflowed.
+    /// Builds a zeroing request for a precomputed total size.
     #[inline]
-    // SAFETY: callers provide the exact checked
-    // multiplication result that this request stores and forwards to zalloc.
-    pub(crate) unsafe fn from_checked_total(
-        count: usize,
-        size: usize,
-        total_size: usize,
-    ) -> Result<Self, LayoutError> {
+    pub(crate) fn from_checked_total(total_size: usize) -> Result<Self, LayoutError> {
         let layout = LayoutRequest::zalloc(total_size)?;
         Ok(Self {
-            count: ItemCount::new(count),
-            item_size: RequestedSize::new(size),
             total: RequestedSize::new(total_size),
             layout,
         })
@@ -269,38 +227,16 @@ impl CallocRequest {
 
 #[derive(Clone, Copy)]
 pub(crate) struct AllocProduct {
-    count: ItemCount,
-    item_size: RequestedSize,
     total: RequestedSize,
     layout: LayoutRequest,
 }
 
 impl AllocProduct {
-    pub(crate) fn new(count: usize, size: usize) -> Result<Self, LayoutError> {
-        let total_size = count.checked_mul(size).ok_or(LayoutError::SizeOverflow)?;
-        // SAFETY: `total_size` was produced by
-        // `count.checked_mul(size)`.
-        unsafe { Self::from_checked_total(count, size, total_size) }
-    }
-
-    /// Builds a request from a multiplication result already checked by the
-    /// caller.
-    ///
-    /// # Safety
-    /// `total_size` must be exactly `count * size` and that multiplication
-    /// must not have overflowed.
+    /// Builds a non-zeroing request for a precomputed total size.
     #[inline]
-    // SAFETY: callers provide the exact checked
-    // multiplication result that this request stores and forwards to malloc.
-    pub(crate) unsafe fn from_checked_total(
-        count: usize,
-        size: usize,
-        total_size: usize,
-    ) -> Result<Self, LayoutError> {
+    pub(crate) fn from_checked_total(total_size: usize) -> Result<Self, LayoutError> {
         let layout = LayoutRequest::malloc(total_size)?;
         Ok(Self {
-            count: ItemCount::new(count),
-            item_size: RequestedSize::new(size),
             total: RequestedSize::new(total_size),
             layout,
         })
@@ -312,7 +248,6 @@ pub(crate) struct OldAllocation {
     ptr: UserPtr,
     usable: UsableSize,
     page: PagePtr,
-    block: BlockPtr,
 }
 
 #[repr(transparent)]
@@ -331,31 +266,25 @@ impl PreserveBytes {
 
 impl OldAllocation {
     // SAFETY: callers have already proven the user
-    // pointer, usable size, page, and block describe one allocation.
-    unsafe fn new(ptr: UserPtr, usable: UsableSize, page: PagePtr, block: BlockPtr) -> Self {
-        Self {
-            ptr,
-            usable,
-            page,
-            block,
-        }
+    // pointer, usable size, and page describe one allocation.
+    unsafe fn new(ptr: UserPtr, usable: UsableSize, page: PagePtr) -> Self {
+        Self { ptr, usable, page }
     }
 
     /// Constructs an old allocation after pointer validation has proven the
-    /// user pointer, page, and block belong together.
+    /// user pointer and page belong together.
     ///
     /// # Safety
-    /// `ptr`, `page`, and `block` must come from the same successful
+    /// `ptr` and `page` must come from the same successful
     /// `PointerLookup::Valid` result.
     pub(crate) unsafe fn from_validated_parts(
         ptr: UserPtr,
         usable: UsableSize,
         page: PagePtr,
-        block: BlockPtr,
     ) -> Self {
         // SAFETY: this public unsafe constructor
         // carries the same validated allocation proof into the private packer.
-        unsafe { Self::new(ptr, usable, page, block) }
+        unsafe { Self::new(ptr, usable, page) }
     }
 
     pub(crate) fn ptr(self) -> UserPtr {
@@ -368,10 +297,6 @@ impl OldAllocation {
 
     pub(crate) fn page(self) -> PagePtr {
         self.page
-    }
-
-    pub(crate) fn block(self) -> BlockPtr {
-        self.block
     }
 }
 
@@ -466,11 +391,6 @@ impl MallocGenericFlags {
     }
 
     #[inline(always)]
-    pub(crate) const fn raw(self) -> usize {
-        self.0
-    }
-
-    #[inline(always)]
     pub(crate) fn zeroed(self) -> Zeroed {
         if (self.0 & Self::ZERO_BIT) != 0 {
             Zeroed::Yes
@@ -507,12 +427,6 @@ impl LayoutRequest {
 }
 
 impl CallocRequest {
-    pub(crate) fn count(self) -> ItemCount {
-        self.count
-    }
-    pub(crate) fn item_size(self) -> RequestedSize {
-        self.item_size
-    }
     pub(crate) fn total(self) -> RequestedSize {
         self.total
     }
@@ -522,49 +436,12 @@ impl CallocRequest {
 }
 
 impl AllocProduct {
-    pub(crate) fn count(self) -> ItemCount {
-        self.count
-    }
-    pub(crate) fn item_size(self) -> RequestedSize {
-        self.item_size
-    }
     pub(crate) fn total(self) -> RequestedSize {
         self.total
     }
     pub(crate) fn layout(self) -> LayoutRequest {
         self.layout
     }
-}
-
-pub(super) fn __lint_touch() {
-    let _from_effective: unsafe fn(EffectiveSize, Zeroed) -> LayoutRequest =
-        LayoutRequest::from_effective_unchecked;
-    if let Ok(req) = CallocRequest::new(1, 1) {
-        let _ = req.count();
-        let _ = req.item_size();
-    }
-    if let Ok(req) = AllocProduct::new(1, 1) {
-        let _ = req.count();
-        let _ = req.item_size();
-    }
-    let _ = ItemCount::new(1).get();
-    // SAFETY: these non-dereferenced
-    // dangling pointers are lint-touch identity witnesses and are not exposed
-    // to allocator state.
-    let old = unsafe {
-        OldAllocation::from_validated_parts(
-            UserPtr::new_unchecked(core::ptr::dangling_mut()),
-            UsableSize::new(1),
-            PagePtr::new_unchecked(core::ptr::dangling_mut()),
-            BlockPtr::new_unchecked(core::ptr::dangling_mut()),
-        )
-    };
-    let _ = old.block();
-    // SAFETY: zero is a concrete valid flag
-    // fixture used only to keep accessors referenced for lint accounting.
-    let flags = unsafe { MallocGenericFlags::from_raw(0) };
-    let _ = flags.raw();
-    let _ = flags.huge_alignment();
 }
 
 #[cfg(test)]

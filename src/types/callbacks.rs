@@ -38,11 +38,6 @@ macro_rules! callback_arg_wrapper {
 
         impl $name {
             #[inline(always)]
-            pub(crate) const fn null() -> Self {
-                Self(CallbackArg::null())
-            }
-
-            #[inline(always)]
             pub(crate) const fn from_raw(arg: *mut c_void) -> Self {
                 Self(CallbackArg::from_raw(arg))
             }
@@ -50,11 +45,6 @@ macro_rules! callback_arg_wrapper {
             #[inline(always)]
             pub(crate) const fn as_ptr(self) -> *mut c_void {
                 self.0.as_ptr()
-            }
-
-            #[inline(always)]
-            pub(crate) const fn as_callback_arg(self) -> CallbackArg {
-                self.0
             }
         }
     };
@@ -65,7 +55,13 @@ callback_arg_wrapper!(OutputCallbackArg);
 callback_arg_wrapper!(ErrorCallbackArg);
 callback_arg_wrapper!(HeapVisitCallbackArg);
 callback_arg_wrapper!(BlockVisitCallbackArg);
-callback_arg_wrapper!(ThreadLocalClaimCallbackArg);
+
+impl OutputCallbackArg {
+    #[inline(always)]
+    pub(crate) const fn null() -> Self {
+        Self(CallbackArg::null())
+    }
+}
 
 macro_rules! optional_callback_wrapper {
     ($name:ident, $fun:ty) => {
@@ -75,11 +71,6 @@ macro_rules! optional_callback_wrapper {
 
         impl $name {
             #[inline(always)]
-            pub(crate) const fn none() -> Self {
-                Self(None)
-            }
-
-            #[inline(always)]
             pub(crate) const fn new(fun: Option<$fun>) -> Self {
                 Self(fun)
             }
@@ -87,11 +78,6 @@ macro_rules! optional_callback_wrapper {
             #[inline(always)]
             pub(crate) const fn raw(self) -> Option<$fun> {
                 self.0
-            }
-
-            #[inline(always)]
-            pub(crate) const fn is_some(self) -> bool {
-                self.0.is_some()
             }
         }
     };
@@ -102,6 +88,44 @@ optional_callback_wrapper!(OutputCallback, mi_output_fun);
 optional_callback_wrapper!(ErrorCallback, mi_error_fun);
 optional_callback_wrapper!(HeapVisitCallback, mi_heap_visit_fun);
 optional_callback_wrapper!(BlockVisitCallback, mi_block_visit_fun);
+
+impl DeferredFreeCallback {
+    #[inline(always)]
+    pub(crate) const fn none() -> Self {
+        Self(None)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn is_some(self) -> bool {
+        self.0.is_some()
+    }
+}
+
+impl OutputCallback {
+    #[inline(always)]
+    pub(crate) const fn none() -> Self {
+        Self(None)
+    }
+}
+
+impl ErrorCallback {
+    #[inline(always)]
+    pub(crate) const fn none() -> Self {
+        Self(None)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn is_some(self) -> bool {
+        self.0.is_some()
+    }
+}
+
+impl HeapVisitCallback {
+    #[inline(always)]
+    pub(crate) const fn is_some(self) -> bool {
+        self.0.is_some()
+    }
+}
 
 impl DeferredFreeCallback {
     #[inline(always)]
@@ -244,25 +268,6 @@ impl ThreadLocalClaimCallback {
             )
         }
     }
-}
-
-pub(super) fn __lint_touch() {
-    let _ = DeferredFreeCallbackArg::null();
-    let _ = DeferredFreeCallbackArg::null().as_callback_arg();
-    let _ = OutputCallbackArg::null();
-    let _ = OutputCallbackArg::null().as_callback_arg();
-    let _ = ErrorCallbackArg::null();
-    let _ = ErrorCallbackArg::null().as_callback_arg();
-    let _ = HeapVisitCallbackArg::null();
-    let _ = HeapVisitCallbackArg::null().as_callback_arg();
-    let _ = BlockVisitCallbackArg::null();
-    let _ = BlockVisitCallbackArg::null().as_callback_arg();
-    let _ = ThreadLocalClaimCallbackArg::null();
-    let _ = ThreadLocalClaimCallbackArg::from_raw(core::ptr::null_mut()).as_ptr();
-    let _ = ThreadLocalClaimCallbackArg::null().as_callback_arg();
-    let _ = OutputCallback::new(None).is_some();
-    let _ = HeapVisitCallback::none();
-    let _ = BlockVisitCallback::none().is_some();
 }
 
 #[cfg(test)]

@@ -106,7 +106,7 @@ fn local_push_free_block_updates_local_list_and_used_count() {
 }
 
 #[test]
-fn all_free_retire_expire_and_arena_free_preserve_page_identity() {
+fn all_free_retire_and_arena_free_preserve_page_identity() {
     // SAFETY: the stack-local page is
     // initialized with the exact `used` counts needed to exercise all-free,
     // retired, destroyed, and arena-free witness transitions.
@@ -116,8 +116,6 @@ fn all_free_retire_expire_and_arena_free_preserve_page_identity() {
         let all_free = active.try_mark_all_free().expect("used == 0");
         let retired = all_free.into_retired();
         assert_eq!(retired.page().as_ptr(), page.as_ptr());
-        let destroyed = retired.expire();
-        assert_eq!(destroyed.page().as_ptr(), page.as_ptr());
 
         let active = ActivePage::new_unchecked(page);
         let destroyed = active
@@ -211,7 +209,6 @@ fn abandoned_mapped_classification_remains_distinct() {
                 panic!("abandoned-mapped classified as owned")
             }
         }
-        assert!(page.try_abandoned().is_err());
     });
 
     let abandoned = PageThreadId::from_parts(PageOwnerId::Abandoned, flags);
@@ -229,6 +226,5 @@ fn abandoned_mapped_classification_remains_distinct() {
                 panic!("abandoned classified as owned")
             }
         }
-        assert!(page.try_abandoned().is_ok());
     });
 }

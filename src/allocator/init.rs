@@ -82,7 +82,7 @@ pub const fn mi_memid_static() -> mi_memid_t {
 fn mi_memid_is_static(memid: mi_memid_t) -> bool {
     matches!(
         crate::core_types::MemId::view(memid),
-        crate::core_types::MemIdView::Static(_)
+        crate::core_types::MemIdView::Static
     )
 }
 

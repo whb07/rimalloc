@@ -99,14 +99,6 @@ fn callback_wrappers_match_raw_layout() {
         align_of::<BlockVisitCallbackArg>(),
         align_of::<*mut c_void>()
     );
-    assert_eq!(
-        size_of::<ThreadLocalClaimCallbackArg>(),
-        size_of::<*mut c_void>()
-    );
-    assert_eq!(
-        align_of::<ThreadLocalClaimCallbackArg>(),
-        align_of::<*mut c_void>()
-    );
 }
 
 #[test]
@@ -127,8 +119,6 @@ fn callback_wrappers_preserve_raw_values() {
         let _ = (force, heartbeat, arg);
     }
 
-    assert!(!OutputCallback::none().is_some());
-    assert!(OutputCallback::new(Some(output)).is_some());
     assert!(OutputCallback::new(Some(output)).raw().is_some());
     assert!(ErrorCallback::new(Some(error)).raw().is_some());
     let deferred_callback = DeferredFreeCallback::new(Some(deferred));
@@ -146,8 +136,6 @@ fn callback_wrappers_preserve_raw_values() {
 
     let output_arg = OutputCallbackArg::from_raw(arg.as_ptr());
     assert_eq!(output_arg.as_ptr(), arg.as_ptr());
-    assert_eq!(output_arg.as_callback_arg().as_ptr(), arg.as_ptr());
-    assert!(DeferredFreeCallbackArg::null().as_ptr().is_null());
     assert_eq!(
         ErrorCallbackArg::from_raw(arg.as_ptr()).as_ptr(),
         arg.as_ptr()
@@ -158,10 +146,6 @@ fn callback_wrappers_preserve_raw_values() {
     );
     assert_eq!(
         BlockVisitCallbackArg::from_raw(arg.as_ptr()).as_ptr(),
-        arg.as_ptr()
-    );
-    assert_eq!(
-        ThreadLocalClaimCallbackArg::from_raw(arg.as_ptr()).as_ptr(),
         arg.as_ptr()
     );
 }

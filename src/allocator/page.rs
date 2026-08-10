@@ -757,9 +757,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
                 crate::core_types::PageForAbandon::Full(page) => {
                     let Ok(all_free) = page.try_mark_all_free() else {
                         crate::internal::mi_assert_internal!(false);
-                        return crate::core_types::PageAbandonOutcome::Abandoned(
-                            crate::core_types::assume_abandoned_page(page_ptr),
-                        );
+                        return crate::core_types::PageAbandonOutcome::Abandoned;
                     };
                     let queue = crate::core_types::FullPageQueue::new_unchecked(queue);
                     _mi_page_free_full_internal(all_free, queue)
@@ -767,9 +765,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
                 crate::core_types::PageForAbandon::Active(page) => {
                     let Ok(all_free) = page.try_mark_all_free() else {
                         crate::internal::mi_assert_internal!(false);
-                        return crate::core_types::PageAbandonOutcome::Abandoned(
-                            crate::core_types::assume_abandoned_page(page_ptr),
-                        );
+                        return crate::core_types::PageAbandonOutcome::Abandoned;
                     };
                     if let Some(queue) = crate::core_types::NormalPageQueue::new(queue) {
                         _mi_page_free_active_internal(all_free, queue)
@@ -779,7 +775,8 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
                     }
                 }
             };
-            crate::core_types::PageAbandonOutcome::Destroyed(destroyed)
+            let _ = destroyed;
+            crate::core_types::PageAbandonOutcome::Destroyed
         } else {
             match page_wrapper {
                 crate::core_types::PageForAbandon::Full(page) => {
@@ -819,9 +816,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
             (*page).theap = theap;
             _mi_arenas_page_abandon(page, theap);
             _mi_arenas_collect(false, false, (*theap).tld);
-            crate::core_types::PageAbandonOutcome::Abandoned(
-                crate::core_types::assume_abandoned_page(page_ptr),
-            )
+            crate::core_types::PageAbandonOutcome::Abandoned
         }
     }
 }

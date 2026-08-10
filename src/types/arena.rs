@@ -168,54 +168,6 @@ impl SliceRange {
 }
 
 #[repr(transparent)]
-pub(crate) struct SharedArena(ArenaPtr);
-
-impl SharedArena {
-    /// # Safety
-    /// `arena` must point to initialized arena metadata.
-    #[inline(always)]
-    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {
-        // SAFETY: callers provide initialized
-        // arena metadata; this constructor only reads the exclusive flag
-        // before packaging the shared-arena witness.
-        if unsafe { arena.is_exclusive() } {
-            None
-        } else {
-            Some(Self(arena))
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn ptr(self) -> ArenaPtr {
-        self.0
-    }
-}
-
-#[repr(transparent)]
-pub(crate) struct ExclusiveArena(ArenaPtr);
-
-impl ExclusiveArena {
-    /// # Safety
-    /// `arena` must point to initialized arena metadata.
-    #[inline(always)]
-    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {
-        // SAFETY: callers provide initialized
-        // arena metadata; this constructor only reads the exclusive flag
-        // before packaging the exclusive-arena witness.
-        if unsafe { arena.is_exclusive() } {
-            Some(Self(arena))
-        } else {
-            None
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn ptr(self) -> ArenaPtr {
-        self.0
-    }
-}
-
-#[repr(transparent)]
 #[derive(Clone, Copy)]
 pub(crate) struct MatchNuma(bool);
 
@@ -261,58 +213,6 @@ impl Exclusive {
     pub(crate) const fn get(self) -> bool {
         self.0
     }
-}
-
-#[repr(transparent)]
-pub(crate) struct ParentArena(ArenaPtr);
-
-impl ParentArena {
-    /// # Safety
-    /// `arena` must point to initialized arena metadata.
-    #[inline(always)]
-    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {
-        // SAFETY: callers provide initialized
-        // arena metadata; this constructor only reads the parent link before
-        // packaging a root parent-arena witness.
-        if unsafe { arena.parent().is_none() } {
-            Some(Self(arena))
-        } else {
-            None
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn ptr(self) -> ArenaPtr {
-        self.0
-    }
-}
-
-use core::ffi::c_void;
-use core::ptr::NonNull;
-use core::sync::atomic::{AtomicPtr, AtomicUsize};
-
-#[repr(transparent)]
-pub(crate) struct ArenaPageTablePtr(NonNull<crate::types::mi_arena_pages_t>);
-
-#[repr(transparent)]
-pub(crate) struct AbandonedCountCell(*const AtomicUsize);
-
-#[repr(transparent)]
-pub(crate) struct ArenaPageCell(*const AtomicPtr<c_void>);
-
-pub(super) fn __lint_touch() {
-    let _ = core::mem::size_of::<SharedArena>();
-    let _ = core::mem::size_of::<ExclusiveArena>();
-    let _ = core::mem::size_of::<ParentArena>();
-    let _ = core::mem::size_of::<ArenaPageTablePtr>();
-    let _ = core::mem::size_of::<AbandonedCountCell>();
-    let _ = core::mem::size_of::<ArenaPageCell>();
-    let _new: unsafe fn(ArenaPtr) -> Option<SharedArena> = SharedArena::new;
-    let _ptr: fn(SharedArena) -> ArenaPtr = SharedArena::ptr;
-    let _new: unsafe fn(ArenaPtr) -> Option<ExclusiveArena> = ExclusiveArena::new;
-    let _ptr: fn(ExclusiveArena) -> ArenaPtr = ExclusiveArena::ptr;
-    let _new: unsafe fn(ArenaPtr) -> Option<ParentArena> = ParentArena::new;
-    let _ptr: fn(ParentArena) -> ArenaPtr = ParentArena::ptr;
 }
 
 #[cfg(test)]

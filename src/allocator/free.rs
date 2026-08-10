@@ -725,7 +725,7 @@ pub(crate) unsafe fn mi_validate_pointer(
 ) -> crate::core_types::PointerLookup {
     // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
-        use crate::core_types::{PointerInvalidReason, PointerLookup, UserPtr};
+        use crate::core_types::{PointerLookup, UserPtr};
         if p.is_null() {
             return PointerLookup::Null;
         }
@@ -740,10 +740,7 @@ pub(crate) unsafe fn mi_validate_pointer(
                 Errno::EINVAL,
                 format_args!("{msg_str}: invalid (unaligned) pointer: {p:p}\n"),
             );
-            return PointerLookup::Invalid {
-                user: Some(user_ptr),
-                reason: PointerInvalidReason::BadAlignment,
-            };
+            return PointerLookup::Invalid;
         }
 
         let registered_page = mi_lookup_pointer_page(user_ptr);
@@ -756,10 +753,7 @@ pub(crate) unsafe fn mi_validate_pointer(
                     format_args!("{msg_str}: invalid pointer: {p:p}\n"),
                 );
             }
-            return PointerLookup::Invalid {
-                user: Some(user_ptr),
-                reason: PointerInvalidReason::NotOwnedByAllocator,
-            };
+            return PointerLookup::Invalid;
         };
 
         let location = mi_pointer_location(page_ptr, user_ptr, false, false);
@@ -1174,8 +1168,8 @@ mod tests {
     use crate::allocator::init::_mi_thread_id;
     use crate::core_types::{
         AvailableFreeList, BlockPtr, FreePathKind, LocalFreeList, PageFlags, PageFreeOwner,
-        PageOwnerId, PagePtr, PageThreadId, PointerInvalidReason, PointerLocation, PointerLookup,
-        ThreadFreeOwner, ThreadFreeWord, ThreadId, UserPtr,
+        PageOwnerId, PagePtr, PageThreadId, PointerLocation, PointerLookup, ThreadFreeOwner,
+        ThreadFreeWord, ThreadId, UserPtr,
     };
     use crate::types::{mi_block_t, mi_page_t};
     use core::{mem::MaybeUninit, ptr};
@@ -1289,18 +1283,12 @@ mod tests {
                     ptr::addr_of_mut!(aligned_non_heap).cast(),
                     c"free-test".as_ptr()
                 ),
-                PointerLookup::Invalid {
-                    reason: PointerInvalidReason::NotOwnedByAllocator,
-                    ..
-                }
+                PointerLookup::Invalid
             ));
 
             assert!(matches!(
                 mi_validate_pointer(ptr::dangling_mut::<u8>().cast(), c"free-test".as_ptr()),
-                PointerLookup::Invalid {
-                    reason: PointerInvalidReason::BadAlignment,
-                    ..
-                }
+                PointerLookup::Invalid
             ));
         }
     }
@@ -1312,7 +1300,7 @@ mod tests {
         // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let page = fixture.page();
-            let user = UserPtr::new_unchecked(fixture.user(0).as_u8_ptr().add(1).cast());
+            let user = UserPtr::new_unchecked(fixture.user(0).as_ptr().cast::<u8>().add(1).cast());
             let lookup = mi_validate_block_from_ptr(page, user);
 
             match lookup {
@@ -1340,7 +1328,8 @@ mod tests {
             let user = UserPtr::new_unchecked(
                 fixture
                     .user(0)
-                    .as_u8_ptr()
+                    .as_ptr()
+                    .cast::<u8>()
                     .add(core::mem::size_of::<mi_block_t>())
                     .cast(),
             );
@@ -1376,7 +1365,7 @@ mod tests {
     fn free_route_covers_local_remote_and_abandoned_owners() {
         let current = ThreadId::new(_mi_thread_id()).expect("current thread id is valid");
 
-        let mut local = FreeFixture::new(current_thread_owner(), PageFlags::EMPTY);
+        let mut local = FreeFixture::new(current_thread_owner(), PageFlags::new(0).unwrap());
         // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let validated =
@@ -1399,7 +1388,7 @@ mod tests {
             0x1000
         };
         let remote_owner = PageOwnerId::Thread(ThreadId::new(remote_raw).expect("valid remote id"));
-        let mut remote = FreeFixture::new(remote_owner, PageFlags::EMPTY);
+        let mut remote = FreeFixture::new(remote_owner, PageFlags::new(0).unwrap());
         // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let validated = mi_prepare_validated_free(mi_validate_block_from_ptr(
@@ -1418,7 +1407,7 @@ mod tests {
             ));
         }
 
-        let mut abandoned = FreeFixture::new(PageOwnerId::Abandoned, PageFlags::EMPTY);
+        let mut abandoned = FreeFixture::new(PageOwnerId::Abandoned, PageFlags::new(0).unwrap());
         // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let validated = mi_prepare_validated_free(mi_validate_block_from_ptr(
@@ -1439,7 +1428,7 @@ mod tests {
 
     #[test]
     fn free_checks_cover_double_free_detection() {
-        let mut fixture = FreeFixture::new(current_thread_owner(), PageFlags::EMPTY);
+        let mut fixture = FreeFixture::new(current_thread_owner(), PageFlags::new(0).unwrap());
         let _quiet_expected_errors = ShowErrorsGuard::disabled();
         // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {

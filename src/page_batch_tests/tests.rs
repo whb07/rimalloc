@@ -1,4 +1,5 @@
 use super::*;
+use crate::core_types::AvailablePage;
 use crate::types::{mi_block_t, mi_page_t};
 
 const SYNTHETIC_CAPACITY: usize = 8;
@@ -380,7 +381,7 @@ fn scans_basic_detached_chain_lengths_exactly() {
             assert_eq!(core.page(), fixture.page);
             assert_eq!(core.head(), fixture.block(0));
             assert_eq!(core.tail(), fixture.block(len - 1));
-            assert_eq!(core.len().as_usize(), len);
+            assert_eq!(core.len().get() as usize, len);
             assert!(core.tail().next(fixture.page).is_none());
 
             let mut current = Some(core.head());
@@ -427,7 +428,7 @@ fn scans_capacity_boundary_lengths_exactly() {
             fixture.link_prefix(len);
             let core = scan_detached_chain(fixture.page, fixture.block(0), capacity)
                 .expect("capacity-bounded detached chain");
-            assert_eq!(core.len().as_usize(), len);
+            assert_eq!(core.len().get() as usize, len);
             assert_eq!(core.tail(), fixture.block(len - 1));
             assert!(core.tail().next(fixture.page).is_none());
         }
@@ -813,45 +814,6 @@ fn abandoned_owner_detaches_and_splices_local_batch_without_local_proof() {
 }
 
 #[test]
-fn lease_take_and_return_preserve_counted_allocations() {
-    let mut fixture = SyntheticPage::new(2);
-    fixture.initialize();
-    // SAFETY: the available chain and
-    // page accounting are initialized consistently in the synthetic fixture.
-    unsafe {
-        fixture.link(&[0, 1, 2, 3, 4, 5]);
-        fixture
-            .page()
-            .set_free(AvailableFreeList::from_head(fixture.block(0)));
-        let available_page = AvailablePage::new_unchecked(fixture.page());
-        let limit = BatchLimit::new(4).expect("nonzero lease limit");
-        let (lease, active) = available_page.lease(limit);
-        assert_eq!(lease.len().get(), 4);
-        assert_eq!(fixture.page().used().get(), 6);
-        assert_eq!(
-            fixture.order_from(fixture.page().free().head()),
-            ListOrder::from_slices(&[4, 5], &[])
-        );
-
-        let (first, remaining) = lease.take_one();
-        assert_eq!(first.into_ptr(), fixture.block(0));
-        let (second, remaining) = remaining.expect("three leased blocks remain").take_one();
-        assert_eq!(second.into_ptr(), fixture.block(1));
-        let remaining = remaining.expect("two leased blocks remain");
-        assert_eq!(remaining.len().get(), 2);
-        assert_eq!(fixture.page().used().get(), 6);
-
-        let owner = LocalPage::new_unchecked(active.page());
-        remaining.return_to_page(&owner);
-        assert_eq!(fixture.page().used().get(), 4);
-        assert_eq!(
-            fixture.order_from(fixture.page().free().head()),
-            ListOrder::from_slices(&[2, 3, 4, 5], &[])
-        );
-    }
-}
-
-#[test]
 fn remote_batch_rejects_length_greater_than_used_without_mutation() {
     let mut fixture = SyntheticPage::new(2);
     fixture.initialize();
@@ -869,7 +831,8 @@ fn remote_batch_rejects_length_greater_than_used_without_mutation() {
         assert_eq!(
             error,
             BatchValidationError::ExceedsUsed {
-                len: BatchLen::new(3).expect("nonempty length"),
+                // SAFETY: three is non-zero.
+                len: BatchLen::new_unchecked(3),
                 used: UsedBlockCount::new(2),
             }
         );

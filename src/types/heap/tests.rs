@@ -237,7 +237,7 @@ fn thread_heap_state_classifies_main_initialized_uninitialized_and_deleted() {
     // used only as an identity sentinel; the test never dereferences it.
     let tld = unsafe { TldPtr::new_unchecked(core::ptr::NonNull::<mi_tld_t>::dangling().as_ptr()) };
     with_thread_heap_ptr(None, Some(tld), |theap| match unsafe { theap.state() } {
-        ThreadHeapState::Uninitialized(raw) => assert_eq!(raw.as_ptr(), theap.as_ptr()),
+        ThreadHeapState::Uninitialized => {}
         _ => panic!("null heap with tld should classify as uninitialized"),
     });
 
@@ -245,7 +245,7 @@ fn thread_heap_state_classifies_main_initialized_uninitialized_and_deleted() {
         // SAFETY: `theap` is stack-local
         // thread-heap metadata with cleared heap and TLD fields.
         match unsafe { theap.state() } {
-            ThreadHeapState::Deleted(raw) => assert_eq!(raw.as_ptr(), theap.as_ptr()),
+            ThreadHeapState::Deleted => {}
             _ => panic!("cleared heap and tld should classify as deleted"),
         }
     });
@@ -284,7 +284,6 @@ fn borrowed_thread_heap_converts_to_local_only_for_matching_thread() {
             Err(_) => panic!("matching thread id should produce ThreadHeapLocal"),
         };
         assert_eq!(local.ptr().as_ptr(), theap.as_ptr());
-        assert_eq!(local.borrowed().ptr().as_ptr(), theap.as_ptr());
 
         let other = crate::core_types::ThreadId::new(24).expect("valid thread id");
         assert!(
@@ -306,7 +305,7 @@ fn deleted_thread_heap_cannot_be_promoted_to_local() {
         // SAFETY: `theap` is stack-local
         // thread-heap metadata with cleared heap and TLD fields.
         match unsafe { theap.state() } {
-            ThreadHeapState::Deleted(raw) => assert_eq!(raw.as_ptr(), theap.as_ptr()),
+            ThreadHeapState::Deleted => {}
             _ => panic!("cleared heap and tld should classify as deleted"),
         }
         assert!(

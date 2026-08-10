@@ -13,15 +13,6 @@ use super::ptr::{BlockPtr, PagePtr, UserPtr};
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct BlockOffset(pub(crate) usize);
 
-/// Reason for an invalid pointer lookup.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum PointerInvalidReason {
-    NotOwnedByAllocator,
-    BadAlignment,
-    BadPadding,
-    DoubleFree,
-}
-
 /// Represents a guarded block that needs special handling.
 #[repr(transparent)]
 #[derive(PartialEq, Eq, Debug)]
@@ -104,24 +95,13 @@ impl PointerLocation {
             },
         }
     }
-
-    #[inline(always)]
-    pub(crate) fn block(&self) -> BlockPtr {
-        match self {
-            PointerLocation::BlockStart(block) | PointerLocation::Interior { block, .. } => *block,
-            PointerLocation::Guarded { block, .. } => block.block(),
-        }
-    }
 }
 
 /// Result of a user pointer lookup.
 pub(crate) enum PointerLookup {
     Null,
     Valid(ValidPointerLookup),
-    Invalid {
-        user: Option<UserPtr>,
-        reason: PointerInvalidReason,
-    },
+    Invalid,
 }
 
 #[must_use = "allocator state capabilities must be consumed or explicitly returned"]
@@ -252,17 +232,6 @@ pub(crate) struct ValidatedFreeParts {
     pub(crate) user: UserPtr,
     pub(crate) page: PagePtr,
     pub(crate) block: BlockForFree,
-}
-
-pub(super) fn __lint_touch() {
-    let _ = PointerInvalidReason::BadPadding;
-    let lookup = PointerLookup::Invalid {
-        user: None,
-        reason: PointerInvalidReason::DoubleFree,
-    };
-    if let PointerLookup::Invalid { user, reason } = lookup {
-        let _ = (user, reason);
-    }
 }
 
 #[cfg(test)]

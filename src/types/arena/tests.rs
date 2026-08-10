@@ -8,27 +8,7 @@ fn with_arena_slice_count<R>(count: usize, f: impl FnOnce(ArenaPtr) -> R) -> R {
     let arena = unsafe { ArenaPtr::new_unchecked(raw.as_mut_ptr()) };
     // SAFETY: the test has unique access to
     // the stack-local arena metadata before passing the typed pointer to `f`.
-    unsafe {
-        arena.set_slice_count(SliceCount::from_usize(count).unwrap());
-    }
-    f(arena)
-}
-
-fn with_arena_state<R>(
-    is_exclusive: bool,
-    parent: Option<ArenaPtr>,
-    f: impl FnOnce(ArenaPtr) -> R,
-) -> R {
-    let mut raw = MaybeUninit::<crate::types::mi_arena_t>::zeroed();
-    // SAFETY: `raw` is stack-local arena
-    // metadata, and the pointer remains valid for the duration of `f`.
-    let arena = unsafe { ArenaPtr::new_unchecked(raw.as_mut_ptr()) };
-    // SAFETY: the test has unique access to
-    // this stack-local arena metadata while initializing role fields.
-    unsafe {
-        arena.set_is_exclusive(is_exclusive);
-        arena.set_parent(parent);
-    }
+    unsafe { (*arena.as_ptr()).slice_count = count }
     f(arena)
 }
 
@@ -78,54 +58,4 @@ fn slice_range_single_at_offset_uses_checked_range_bounds() {
     assert_eq!(single.start_usize(), 15);
     assert_eq!(single.count_usize(), 1);
     assert_eq!(err, SliceError::OutOfBounds);
-}
-
-#[test]
-fn arena_role_constructors_follow_raw_exclusive_state() {
-    with_arena_state(false, None, |arena| {
-        assert_eq!(
-            // SAFETY: `with_arena_state`
-            // initialized stack-local metadata as a non-exclusive root arena.
-            unsafe { SharedArena::new(arena).unwrap().ptr().as_ptr() },
-            arena.as_ptr()
-        );
-        // SAFETY: the same fixture is marked
-        // non-exclusive, so the exclusive constructor must reject it.
-        assert!(unsafe { ExclusiveArena::new(arena).is_none() });
-    });
-
-    with_arena_state(true, None, |arena| {
-        assert_eq!(
-            // SAFETY: `with_arena_state`
-            // initialized stack-local metadata as an exclusive root arena.
-            unsafe { ExclusiveArena::new(arena).unwrap().ptr().as_ptr() },
-            arena.as_ptr()
-        );
-        // SAFETY: the same fixture is marked
-        // exclusive, so the shared constructor must reject it.
-        assert!(unsafe { SharedArena::new(arena).is_none() });
-    });
-}
-
-#[test]
-fn parent_arena_constructor_rejects_child_arena_state() {
-    let mut raw_parent = MaybeUninit::<crate::types::mi_arena_t>::zeroed();
-    // SAFETY: `raw_parent` is stack-local
-    // arena metadata used only as an opaque parent identity in this test.
-    let parent = unsafe { ArenaPtr::new_unchecked(raw_parent.as_mut_ptr()) };
-
-    with_arena_state(false, None, |arena| {
-        assert_eq!(
-            // SAFETY: the fixture is a
-            // non-exclusive arena with no parent, matching `ParentArena`.
-            unsafe { ParentArena::new(arena).unwrap().ptr().as_ptr() },
-            arena.as_ptr()
-        );
-    });
-
-    with_arena_state(false, Some(parent), |arena| {
-        // SAFETY: the fixture has a parent
-        // pointer, so the parent-arena constructor must reject it.
-        assert!(unsafe { ParentArena::new(arena).is_none() });
-    });
 }

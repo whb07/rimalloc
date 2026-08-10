@@ -18,6 +18,7 @@ impl PageKeys {
         Self(keys)
     }
 
+    #[cfg(any(test, feature = "bench-diagnostics"))]
     pub(crate) const fn disabled() -> Self {
         Self([0, 0])
     }
@@ -294,25 +295,9 @@ impl GuardedBlockTag {
 
 pub(crate) enum BlockLink {
     FreeList(EncodedPtr<crate::types::mi_block_t>),
-    Guarded(GuardedBlockTag),
 }
 
 impl BlockLink {
-    #[inline(always)]
-    pub(crate) unsafe fn read_from_raw(block: *const mi_block_t) -> Self {
-        // SAFETY: callers provide a readable
-        // block link word; the guarded tag probe decides whether the word is a
-        // tag or an encoded free-list link.
-        if let Some(tag) = unsafe { BlockTag::read_guarded_from_raw(block) } {
-            Self::Guarded(tag)
-        } else {
-            // SAFETY: the guarded probe above
-            // ruled out the reserved guarded tag, so the same link word is
-            // interpreted as an encoded free-list pointer.
-            Self::FreeList(unsafe { EncodedPtr::read_word_from_raw(block) })
-        }
-    }
-
     #[inline(always)]
     pub(crate) unsafe fn is_guarded_raw(block: *const mi_block_t) -> bool {
         // SAFETY: callers provide a readable
@@ -327,7 +312,6 @@ impl BlockLink {
         // guarded tag state.
         match self {
             Self::FreeList(link) => unsafe { link.write_word_to_raw(block) },
-            Self::Guarded(tag) => unsafe { tag.write_to(block) },
         }
     }
 }
@@ -343,6 +327,7 @@ impl BlockLink {
 pub(crate) struct AvailableFreeList(Option<BlockPtr>);
 
 impl AvailableFreeList {
+    #[cfg(any(test, feature = "bench-diagnostics"))]
     #[inline(always)]
     pub(crate) const fn empty() -> Self {
         Self(None)
@@ -490,23 +475,6 @@ impl LocalFreeList {
             Self(Some(unsafe { BlockPtr::new_unchecked(head) }))
         }
     }
-}
-
-/// Represents an explicitly encoded free list representation.
-#[repr(transparent)]
-#[derive(Debug)]
-#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
-pub(crate) struct EncodedFreeList(Option<BlockPtr>);
-
-pub(super) fn __lint_touch() {
-    let _ = PageKeys::disabled();
-    let _decode: unsafe fn(
-        EncodedPtr<crate::types::mi_block_t>,
-        crate::core_types::PagePtr,
-        PageKeys,
-    ) -> Option<BlockPtr> = EncodedPtr::<crate::types::mi_block_t>::decode_block;
-    let _read: unsafe fn(*const mi_block_t) -> BlockLink = BlockLink::read_from_raw;
-    let _ = core::mem::size_of::<EncodedFreeList>();
 }
 
 #[cfg(test)]

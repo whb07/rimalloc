@@ -6,12 +6,6 @@ fn page_thread_id_splits_owner_and_flags() {
     let owner = ThreadId::new(0x1000).expect("valid thread id");
     let tagged = PageThreadId::from_parts(PageOwnerId::Thread(owner), PageFlags::IN_FULL_QUEUE);
 
-    match tagged.owner() {
-        PageOwnerId::Thread(tid) => assert_eq!(tid.get(), owner.get()),
-        PageOwnerId::Abandoned | PageOwnerId::AbandonedMapped => {
-            panic!("expected thread owner")
-        }
-    }
     assert!(tagged.flags().contains(PageFlags::IN_FULL_QUEUE));
     assert!(!tagged.is_abandoned());
     assert!(!tagged.is_abandoned_mapped());
@@ -25,12 +19,6 @@ fn page_thread_id_from_parts_round_trips_owner_and_flags() {
 
     assert_eq!(tagged.raw(), owner.get() | MI_PAGE_FLAG_MASK);
     assert_eq!(tagged.flags().bits(), flags.bits());
-    match tagged.owner() {
-        PageOwnerId::Thread(tid) => assert_eq!(tid.get(), owner.get()),
-        PageOwnerId::Abandoned | PageOwnerId::AbandonedMapped => {
-            panic!("expected thread owner")
-        }
-    }
 
     let abandoned = PageThreadId::from_parts(PageOwnerId::Abandoned, flags);
     assert!(abandoned.is_abandoned());

@@ -691,26 +691,14 @@ pub(crate) fn calloc_request_or_report(
     let count = crate::core_types::ItemCount::new(count);
     let size = crate::core_types::RequestedSize::new(size);
     let total = product_size_or_report(count, size)?;
-    // SAFETY: `product_size_or_report` returns only a non-overflowing
-    // `count * size` total and reports the C-compatible overflow error.
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        crate::core_types::CallocRequest::from_checked_total(count.get(), size.get(), total.get())
-            .ok()
-    }
+    crate::core_types::CallocRequest::from_checked_total(total.get()).ok()
 }
 
 fn alloc_product_or_report(count: usize, size: usize) -> Option<crate::core_types::AllocProduct> {
     let count = crate::core_types::ItemCount::new(count);
     let size = crate::core_types::RequestedSize::new(size);
     let total = product_size_or_report(count, size)?;
-    // SAFETY: `product_size_or_report` returns only a non-overflowing
-    // `count * size` total and reports the C-compatible overflow error.
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        crate::core_types::AllocProduct::from_checked_total(count.get(), size.get(), total.get())
-            .ok()
-    }
+    crate::core_types::AllocProduct::from_checked_total(total.get()).ok()
 }
 
 /// # Safety
@@ -915,17 +903,17 @@ unsafe fn mi_realloc_old_allocation(
         match mi_validate_ptr_page(p, msg) {
             crate::core_types::PointerLookup::Valid(valid) => {
                 let (user, page, location) = valid.into_parts();
-                let block = location.block();
                 let usable =
                     crate::allocator::free::mi_usable_size_from_validated_location(page, location);
                 // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and
                 // supplies the block start derived by the validation boundary.
                 Some(crate::core_types::OldAllocation::from_validated_parts(
-                    user, usable, page, block,
+                    user, usable, page,
                 ))
             }
-            crate::core_types::PointerLookup::Null
-            | crate::core_types::PointerLookup::Invalid { .. } => None,
+            crate::core_types::PointerLookup::Null | crate::core_types::PointerLookup::Invalid => {
+                None
+            }
         }
     }
 }

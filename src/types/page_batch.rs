@@ -1,9 +1,8 @@
 //! Linear ownership values for detached, page-homogeneous block chains.
 
-use crate::core_types::validation_extra::AllocatedBlock;
 use crate::core_types::{
-    ActivePage, AvailableFreeList, AvailablePage, BatchLen, BatchLimit, BlockPtr, LocalFreeList,
-    LocalPage, OwnedAbandonedPage, PageCapacity, PagePtr, UsedBlockCount,
+    AvailableFreeList, BatchLen, BlockPtr, LocalFreeList, LocalPage, OwnedAbandonedPage,
+    PageCapacity, PagePtr, UsedBlockCount,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,10 +34,6 @@ pub(crate) struct RemoteFreeBatch(BatchCore);
 #[derive(Debug)]
 #[must_use = "local free batches must be returned to page availability"]
 pub(crate) struct LocalFreeBatch(BatchCore);
-
-#[derive(Debug)]
-#[must_use = "leased batches must be allocated from or returned to their page"]
-pub(crate) struct LeasedBatch(BatchCore);
 
 impl BatchCore {
     #[inline(always)]
@@ -79,18 +74,19 @@ macro_rules! impl_batch_accessors {
             pub(crate) fn tail(&self) -> BlockPtr {
                 self.0.tail()
             }
-
-            #[inline(always)]
-            pub(crate) fn len(&self) -> BatchLen {
-                self.0.len()
-            }
         }
     };
 }
 
 impl_batch_accessors!(RemoteFreeBatch);
 impl_batch_accessors!(LocalFreeBatch);
-impl_batch_accessors!(LeasedBatch);
+
+impl RemoteFreeBatch {
+    #[inline(always)]
+    pub(crate) fn len(&self) -> BatchLen {
+        self.0.len()
+    }
+}
 
 #[inline]
 unsafe fn block_belongs_to_page(page: PagePtr, block: BlockPtr, capacity: PageCapacity) -> bool {
@@ -395,165 +391,6 @@ unsafe fn detach_local_free_batch(
     // clearing the field uniquely transfers the complete chain to the batch.
     unsafe { page.set_local_free(LocalFreeList::empty()) };
     Ok(Some(LocalFreeBatch(core)))
-}
-
-impl AvailablePage {
-    /// Detach up to `limit` available blocks into a lease.
-    ///
-    /// # Safety
-    /// This witness must uniquely represent the page's non-empty available list.
-    #[inline]
-    pub(crate) unsafe fn lease(self, limit: BatchLimit) -> (LeasedBatch, ActivePage) {
-        let page = self.page();
-        // SAFETY: AvailablePage proves a nonempty
-        // page free list and exclusive current-thread mutation access.
-        let available = unsafe { page.free() };
-        let Some(head) = available.head() else {
-            // SAFETY: contradicting AvailablePage
-            // is unreachable under its construction invariant.
-            unsafe { core::hint::unreachable_unchecked() }
-        };
-        let mut tail = head;
-        let mut len = 1u16;
-        while len < limit.get() {
-            // SAFETY: tail is a block in this
-            // page's available chain and is readable with page-local keys.
-            let Some(next) = (unsafe { tail.next(page) }) else {
-                break;
-            };
-            tail = next;
-            len += 1;
-        }
-        // SAFETY: tail is still linked in the
-        // available chain, so its successor is the remaining free-list head.
-        let remaining = unsafe { tail.next(page) };
-        // SAFETY: detaching the recorded tail
-        // creates a null-terminated, page-homogeneous leased batch.
-        unsafe { tail.set_next(page, None) };
-        let remaining = match remaining {
-            Some(head) => AvailableFreeList::from_head(head),
-            None => AvailableFreeList::empty(),
-        };
-        // SAFETY: len is initialized at one and
-        // bounded by the nonzero u16 limit.
-        let len = unsafe { BatchLen::new_unchecked(len) };
-        // SAFETY: available blocks are excluded
-        // from used, so leasing at most the available chain preserves capacity.
-        unsafe {
-            page.set_free(remaining);
-            let used = page.used();
-            let capacity = page.capacity();
-            let Some(used) = used.checked_add_batch(len, capacity) else {
-                core::hint::unreachable_unchecked()
-            };
-            page.set_used(used);
-        }
-        let batch = LeasedBatch(BatchCore {
-            page,
-            head,
-            tail,
-            len,
-        });
-        // Leasing changes only free/used, so consuming the available witness
-        // returns the same initialized page in its active state.
-        (batch, self.into_active())
-    }
-}
-
-impl LeasedBatch {
-    /// # Safety
-    /// The lease must remain uniquely owned and detached.
-    #[inline]
-    pub(crate) unsafe fn take_one(self) -> (AllocatedBlock, Option<LeasedBatch>) {
-        let head = self.head();
-        let remaining = if self.len().get() == 1 {
-            None
-        } else {
-            // SAFETY: a lease longer than one has
-            // a non-null second block in the same detached chain.
-            let Some(next) = (unsafe { head.next(self.page()) }) else {
-                unsafe { core::hint::unreachable_unchecked() }
-            };
-            // SAFETY: len > 1, so len - 1 remains nonzero.
-            let len = unsafe { BatchLen::new_unchecked(self.len().get() - 1) };
-            Some(LeasedBatch(BatchCore {
-                page: self.page(),
-                head: next,
-                tail: self.tail(),
-                len,
-            }))
-        };
-        // SAFETY: the detached lease head is now
-        // uniquely removed and becomes an allocated-block mechanism witness.
-        (unsafe { AllocatedBlock::new_unchecked(head) }, remaining)
-    }
-
-    /// # Safety
-    /// `owner` must describe this lease's page destination.
-    #[inline]
-    pub(crate) unsafe fn return_to_page(self, owner: &LocalPage) {
-        crate::internal::mi_debug_assert!(owner.page() == self.page());
-        let page = owner.page();
-        // SAFETY: LocalPage grants exclusive
-        // access to the page's current available-list head.
-        let available = unsafe { page.free() };
-        // SAFETY: the lease tail is detached and
-        // can be linked to the current page-local available head.
-        unsafe { self.tail().set_next(page, available.head()) };
-        // SAFETY: leased blocks remain counted in
-        // used, so returning this batch subtracts its exact validated length.
-        let used = unsafe {
-            let used = page.used();
-            let Some(used) = used.checked_sub_batch(self.len()) else {
-                core::hint::unreachable_unchecked()
-            };
-            used
-        };
-        // SAFETY: publish both sides of the lease
-        // return together so callers cannot update free without used, or vice versa.
-        unsafe {
-            page.set_free(AvailableFreeList::from_head(self.head()));
-            page.set_used(used);
-        }
-    }
-}
-
-pub(super) fn __lint_touch() {
-    // SAFETY: one is a valid non-empty
-    // batch length used only to keep the staged error shape typechecked.
-    let one = unsafe { BatchLen::new_unchecked(1) };
-    let _exceeds_used = BatchValidationError::ExceedsUsed {
-        len: one,
-        used: crate::core_types::UsedBlockCount::new(0),
-    };
-    let _scan: unsafe fn(
-        PagePtr,
-        BlockPtr,
-        PageCapacity,
-    ) -> Result<BatchCore, BatchValidationError> = scan_detached_chain;
-    let _remote = (
-        RemoteFreeBatch::page as fn(&RemoteFreeBatch) -> PagePtr,
-        RemoteFreeBatch::head as fn(&RemoteFreeBatch) -> BlockPtr,
-        RemoteFreeBatch::tail as fn(&RemoteFreeBatch) -> BlockPtr,
-        RemoteFreeBatch::len as fn(&RemoteFreeBatch) -> BatchLen,
-    );
-    let _local = (
-        LocalFreeBatch::page as fn(&LocalFreeBatch) -> PagePtr,
-        LocalFreeBatch::head as fn(&LocalFreeBatch) -> BlockPtr,
-        LocalFreeBatch::tail as fn(&LocalFreeBatch) -> BlockPtr,
-        LocalFreeBatch::len as fn(&LocalFreeBatch) -> BatchLen,
-    );
-    let _leased = (
-        LeasedBatch::page as fn(&LeasedBatch) -> PagePtr,
-        LeasedBatch::head as fn(&LeasedBatch) -> BlockPtr,
-        LeasedBatch::tail as fn(&LeasedBatch) -> BlockPtr,
-        LeasedBatch::len as fn(&LeasedBatch) -> BatchLen,
-    );
-    let _lease: unsafe fn(AvailablePage, BatchLimit) -> (LeasedBatch, ActivePage) =
-        AvailablePage::lease;
-    let _take_one: unsafe fn(LeasedBatch) -> (AllocatedBlock, Option<LeasedBatch>) =
-        LeasedBatch::take_one;
-    let _return: unsafe fn(LeasedBatch, &LocalPage) = LeasedBatch::return_to_page;
 }
 
 #[cfg(test)]

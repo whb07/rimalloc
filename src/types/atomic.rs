@@ -2,8 +2,6 @@
 
 use core::sync::atomic::Ordering;
 
-use super::freelist::ThreadFreeWord;
-use super::page::{PageOwnerId, PageThreadId};
 use super::ptr::BlockPtr;
 
 mod arena_cells;
@@ -22,18 +20,6 @@ pub(crate) use thread_free::{
 pub(crate) use thread_heap_refcount::AtomicThreadHeapRefcount;
 
 pub(crate) type MemoryOrder = Ordering;
-
-pub(super) fn __lint_touch() {
-    let _ = AtomicPageThreadId::load_relaxed as unsafe fn(AtomicPageThreadId) -> PageThreadId;
-    let _ = AtomicPageThreadId::set_owner_release as unsafe fn(AtomicPageThreadId, PageOwnerId);
-    let _ = AtomicPageThreadId::compare_exchange_release
-        as unsafe fn(AtomicPageThreadId, &mut PageThreadId, PageThreadId) -> bool;
-    let _ = core::mem::size_of::<RemotePushResult>();
-    let _ = AtomicThreadFree::try_push
-        as fn(AtomicThreadFree, ThreadFreeWord, BlockPtr) -> RemotePushResult;
-    let _ = AtomicThreadFree::compare_exchange_release_ownership
-        as unsafe fn(AtomicThreadFree, &mut ThreadFreeWord) -> bool;
-}
 
 #[cfg(test)]
 mod tests;

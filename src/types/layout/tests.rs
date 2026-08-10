@@ -40,20 +40,6 @@ fn layout_request_from_parts_is_the_checked_padding_path() {
 }
 
 #[test]
-fn from_effective_unchecked_keeps_normalized_size() {
-    // SAFETY: `32` is a valid nonzero
-    // effective size fixture and the test immediately checks the preserved
-    // normalized fields.
-    let req = unsafe {
-        LayoutRequest::from_effective_unchecked(EffectiveSize::new_unchecked(32), Zeroed::Yes)
-    };
-    assert_eq!(req.requested().get(), 32);
-    assert_eq!(req.effective().get(), 32);
-    assert_eq!(req.padded().get(), crate::types::MI_PADDING_SIZE + 32);
-    assert_eq!(req.zeroed(), Zeroed::Yes);
-}
-
-#[test]
 fn zeroing_and_alignment_flags_are_explicit() {
     assert_eq!(core::mem::size_of::<Zeroed>(), core::mem::size_of::<bool>());
     assert_eq!(Zeroed::from_bool(false), Zeroed::No);
@@ -74,29 +60,13 @@ fn zeroing_and_alignment_flags_are_explicit() {
 }
 
 #[test]
-fn calloc_request_checks_multiplication_overflow() {
+fn calloc_request_checks_total_zeroing_and_overflow() {
     let req = CallocRequest::new(4, 32).expect("calloc request");
-    assert_eq!(req.count().get(), 4);
-    assert_eq!(req.item_size().get(), 32);
     assert_eq!(req.total().get(), 128);
     assert_eq!(req.layout().zeroed(), Zeroed::Yes);
 
     assert_eq!(
         CallocRequest::new(usize::MAX, 2).err(),
-        Some(LayoutError::SizeOverflow)
-    );
-}
-
-#[test]
-fn alloc_product_checks_multiplication_without_zeroing() {
-    let req = AllocProduct::new(4, 32).expect("alloc product");
-    assert_eq!(req.count().get(), 4);
-    assert_eq!(req.item_size().get(), 32);
-    assert_eq!(req.total().get(), 128);
-    assert_eq!(req.layout().zeroed(), Zeroed::No);
-
-    assert_eq!(
-        AllocProduct::new(usize::MAX, 2).err(),
         Some(LayoutError::SizeOverflow)
     );
 }
@@ -113,11 +83,9 @@ fn realloc_request_constructors_distinguish_null_from_existing() {
     // request construction.
     let user = unsafe { UserPtr::new_unchecked(core::ptr::dangling_mut::<u8>().cast()) };
     let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
-    let block = unsafe { BlockPtr::new_unchecked(core::ptr::dangling_mut()) };
     // SAFETY: the typed parts above are
     // non-null witnesses and a concrete usable size for request construction.
-    let old =
-        unsafe { OldAllocation::from_validated_parts(user, UsableSize::new(128), page, block) };
+    let old = unsafe { OldAllocation::from_validated_parts(user, UsableSize::new(128), page) };
     let existing = ReallocRequest::from_existing(old, layout, Zeroed::No);
     assert_eq!(existing.ptr().map(|ptr| ptr.as_ptr()), Some(user.as_ptr()));
     assert!(existing.old().is_some());
@@ -137,7 +105,6 @@ fn generic_flags_pack_zero_bit_and_huge_alignment() {
     let flags = MallocGenericFlags::new(Zeroed::Yes, MaybeHugeAlignment::new(64));
     assert_eq!(flags.zeroed(), Zeroed::Yes);
     assert_eq!(flags.huge_alignment().get(), 64);
-    assert_eq!(flags.raw(), 65);
 
     // SAFETY: these raw flag words are
     // concrete valid encodings used to exercise bit packing and unpacking.

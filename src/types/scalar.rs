@@ -63,20 +63,6 @@ impl RequestedSize {
         }
     }
     #[inline]
-    pub(crate) fn checked_add(self, add: usize) -> Result<Self, AllocSizeError> {
-        self.0
-            .checked_add(add)
-            .map(Self)
-            .ok_or(AllocSizeError::Overflow)
-    }
-    #[inline]
-    pub(crate) fn checked_mul(self, mul: usize) -> Result<Self, AllocSizeError> {
-        self.0
-            .checked_mul(mul)
-            .map(Self)
-            .ok_or(AllocSizeError::Overflow)
-    }
-    #[inline]
     pub(crate) fn checked_padded(self) -> Result<PaddedSize, AllocSizeError> {
         self.0
             .checked_add(crate::types::MI_PADDING_SIZE)
@@ -124,14 +110,6 @@ impl EffectiveSize {
     pub(crate) const fn get(self) -> usize {
         self.0.get()
     }
-    #[inline]
-    pub(crate) fn checked_add(self, add: usize) -> Result<Self, AllocSizeError> {
-        self.get()
-            .checked_add(add)
-            .and_then(NonZeroUsize::new)
-            .map(Self)
-            .ok_or(AllocSizeError::Overflow)
-    }
 }
 
 /// Padded request (requested + MI_PADDING_SIZE). Never zero.
@@ -152,21 +130,6 @@ impl PaddedSize {
     pub(crate) const fn get(self) -> usize {
         self.0.get()
     }
-    #[inline]
-    pub(crate) fn checked_add(self, add: usize) -> Result<Self, AllocSizeError> {
-        self.get()
-            .checked_add(add)
-            .and_then(NonZeroUsize::new)
-            .map(Self)
-            .ok_or(AllocSizeError::Overflow)
-    }
-    #[inline]
-    pub(crate) fn checked_sub_padding(self) -> Result<RequestedSize, AllocSizeError> {
-        self.get()
-            .checked_sub(crate::types::MI_PADDING_SIZE)
-            .map(RequestedSize)
-            .ok_or(AllocSizeError::Overflow)
-    }
 }
 
 /// Usable size visible to the user (excludes padding).
@@ -182,13 +145,6 @@ impl UsableSize {
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
         self.0
-    }
-    #[inline]
-    pub(crate) fn checked_add(self, add: usize) -> Result<Self, AllocSizeError> {
-        self.0
-            .checked_add(add)
-            .map(Self)
-            .ok_or(AllocSizeError::Overflow)
     }
     #[inline]
     pub(crate) fn checked_sub(self, sub: usize) -> Result<Self, AllocSizeError> {
@@ -208,11 +164,6 @@ impl UsableOut {
     #[inline(always)]
     pub(crate) const fn new(out: *mut usize) -> Self {
         Self(out)
-    }
-
-    #[inline(always)]
-    pub(crate) const fn as_ptr(self) -> *mut usize {
-        self.0
     }
 
     /// # Safety
@@ -245,21 +196,6 @@ impl BlockSize {
     pub(crate) const fn get(self) -> usize {
         self.0.get()
     }
-    #[inline]
-    pub(crate) fn checked_add(self, add: usize) -> Result<Self, AllocSizeError> {
-        self.get()
-            .checked_add(add)
-            .and_then(NonZeroUsize::new)
-            .map(Self)
-            .ok_or(AllocSizeError::Overflow)
-    }
-    #[inline]
-    pub(crate) fn checked_usable(self) -> Result<UsableSize, AllocSizeError> {
-        self.get()
-            .checked_sub(crate::types::MI_PADDING_SIZE)
-            .map(UsableSize)
-            .ok_or(AllocSizeError::Overflow)
-    }
     /// Subtract padding to get the user-visible usable size.
     ///
     /// Uses `wrapping_sub` (branchless in release) rather than `checked_sub` to
@@ -290,15 +226,6 @@ impl BlockSize {
 pub(crate) struct FullBlockSize(pub(crate) NonZeroUsize);
 
 impl FullBlockSize {
-    /// # Safety
-    /// `size` must be non-zero and include allocator metadata/padding.
-    // SAFETY: unchecked full-block construction
-    // is only valid after callers prove the non-zero full-block domain.
-    #[inline(always)]
-    pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
-        Self(unsafe { NonZeroUsize::new_unchecked(size) })
-    }
-
     #[inline(always)]
     pub(crate) const fn from_block_size(block_size: BlockSize) -> Self {
         Self(block_size.0)
@@ -367,10 +294,6 @@ impl MaybeAlignment {
     pub(crate) const fn get(self) -> usize {
         self.0
     }
-    #[inline(always)]
-    pub(crate) const fn is_some(self) -> bool {
-        self.0 != 0
-    }
 }
 
 /// Offset used by aligned-at allocation APIs.
@@ -396,11 +319,6 @@ impl AlignmentOffset {
 pub(crate) struct WordCount(pub(crate) usize);
 
 impl WordCount {
-    #[inline(always)]
-    pub(crate) const fn new(count: usize) -> Self {
-        Self(count)
-    }
-
     #[inline(always)]
     pub(crate) const fn from_size(size: usize) -> Self {
         Self(size.div_ceil(core::mem::size_of::<usize>()))
@@ -479,11 +397,6 @@ impl PageReclaimLimit {
     }
 
     #[inline(always)]
-    pub(crate) const fn get(self) -> c_long {
-        self.0
-    }
-
-    #[inline(always)]
     pub(crate) const fn decrement(self) -> Self {
         Self(self.0 - 1)
     }
@@ -547,18 +460,6 @@ impl UsedBlockCount {
     }
 
     #[inline(always)]
-    pub(crate) const fn checked_add_batch(
-        self,
-        len: BatchLen,
-        capacity: PageCapacity,
-    ) -> Option<Self> {
-        match self.0.checked_add(len.get()) {
-            Some(used) if used <= capacity.get() => Some(Self(used)),
-            _ => None,
-        }
-    }
-
-    #[inline(always)]
     pub(crate) const fn checked_sub_batch(self, len: BatchLen) -> Option<Self> {
         match self.0.checked_sub(len.get()) {
             Some(used) => Some(Self(used)),
@@ -573,14 +474,6 @@ impl UsedBlockCount {
 pub(crate) struct BatchLen(NonZeroU16);
 
 impl BatchLen {
-    #[inline(always)]
-    pub(crate) const fn new(value: u16) -> Option<Self> {
-        match NonZeroU16::new(value) {
-            Some(value) => Some(Self(value)),
-            None => None,
-        }
-    }
-
     /// # Safety
     /// `value` must be non-zero.
     #[inline(always)]
@@ -592,50 +485,6 @@ impl BatchLen {
     #[inline(always)]
     pub(crate) const fn get(self) -> u16 {
         self.0.get()
-    }
-
-    #[inline(always)]
-    pub(crate) const fn as_usize(self) -> usize {
-        self.get() as usize
-    }
-}
-
-/// Non-zero upper bound on the number of blocks leased from a page.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub(crate) struct BatchLimit(NonZeroU16);
-
-impl BatchLimit {
-    #[inline(always)]
-    pub(crate) const fn new(value: u16) -> Option<Self> {
-        match NonZeroU16::new(value) {
-            Some(value) => Some(Self(value)),
-            None => None,
-        }
-    }
-
-    /// # Safety
-    /// `value` must be non-zero.
-    #[inline(always)]
-    pub(crate) const unsafe fn new_unchecked(value: u16) -> Self {
-        // SAFETY: the caller proves the limit is non-zero.
-        Self(unsafe { NonZeroU16::new_unchecked(value) })
-    }
-
-    #[inline(always)]
-    pub(crate) const fn get(self) -> u16 {
-        self.0.get()
-    }
-
-    #[inline(always)]
-    pub(crate) const fn as_usize(self) -> usize {
-        self.get() as usize
-    }
-
-    #[inline(always)]
-    pub(crate) fn clamp_to_remaining(self, remaining: usize) -> Option<Self> {
-        let remaining = u16::try_from(remaining).unwrap_or(u16::MAX);
-        Self::new(self.get().min(remaining))
     }
 }
 
@@ -853,40 +702,6 @@ impl ArenaCount {
     }
 }
 
-/// Count of threads associated with a subprocess.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct ThreadCount(pub(crate) usize);
-
-impl ThreadCount {
-    #[inline(always)]
-    pub(crate) const fn new(count: usize) -> Self {
-        Self(count)
-    }
-
-    #[inline(always)]
-    pub(crate) const fn get(self) -> usize {
-        self.0
-    }
-}
-
-/// Count of heaps associated with a subprocess.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct HeapCount(pub(crate) usize);
-
-impl HeapCount {
-    #[inline(always)]
-    pub(crate) const fn new(count: usize) -> Self {
-        Self(count)
-    }
-
-    #[inline(always)]
-    pub(crate) const fn get(self) -> usize {
-        self.0
-    }
-}
-
 /// Thread-heap heartbeat used by deferred free callbacks.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -1013,10 +828,6 @@ impl Bin {
         Self(index)
     }
     #[inline(always)]
-    pub(crate) const fn get(self) -> u16 {
-        self.0
-    }
-    #[inline(always)]
     pub(crate) const fn as_usize(self) -> usize {
         self.0 as usize
     }
@@ -1060,14 +871,6 @@ impl StatsBin {
 pub(crate) struct DirectBin(pub(crate) u16);
 
 impl DirectBin {
-    #[inline(always)]
-    pub(crate) const fn new(index: u16) -> Option<Self> {
-        if (index as usize) < crate::types::MI_PAGES_DIRECT {
-            Some(Self(index))
-        } else {
-            None
-        }
-    }
     /// # Safety
     /// `index` must be less than `MI_PAGES_DIRECT`.
     // SAFETY: unchecked direct-bin construction is
@@ -1095,10 +898,6 @@ impl SliceIndex {
     #[inline(always)]
     pub(crate) const fn new(idx: usize) -> Self {
         Self(idx)
-    }
-    #[inline(always)]
-    pub(crate) fn as_u32(self) -> Option<u32> {
-        u32::try_from(self.0).ok()
     }
     #[inline(always)]
     pub(crate) fn checked_add(self, offset: usize) -> Option<Self> {
@@ -1191,60 +990,6 @@ impl GoodSize {
     pub(crate) const fn get(self) -> usize {
         self.0
     }
-}
-
-pub(super) fn __lint_touch() {
-    // SAFETY: one is a valid non-zero lint fixture.
-    let batch_limit = unsafe { BatchLimit::new_unchecked(1) };
-    let _ = batch_limit.as_usize();
-    let _ = BatchLimit::new(1);
-    let _ = batch_limit.clamp_to_remaining(1);
-    let _ = BatchLen::new(1);
-    // SAFETY: one is a valid non-zero lint fixture.
-    let batch_len = unsafe { BatchLen::new_unchecked(1) };
-    let _ = batch_len.as_usize();
-    let used = UsedBlockCount::new(1);
-    // SAFETY: one satisfies the standalone
-    // capacity fixture and is never published to page metadata.
-    let capacity = unsafe { PageCapacity::new_unchecked(1) };
-    let _ = UsedBlockCount::new(0).checked_add_batch(batch_len, capacity);
-    let _ = used.checked_sub_batch(batch_len);
-    let requested = RequestedSize::new(1);
-    let _ = requested.checked_add(1);
-    let _ = requested.checked_mul(1);
-    // SAFETY: lint-touch fixtures use known-valid
-    // non-zero values solely to keep scalar wrapper methods typechecked.
-    let effective = unsafe { EffectiveSize::new_unchecked(1) };
-    let _ = effective.checked_add(1);
-    let padded = unsafe { PaddedSize::new_unchecked(1) };
-    let _ = padded.checked_add(1);
-    let _ = padded.checked_sub_padding();
-    let usable = UsableSize::new(1);
-    let _ = usable.checked_add(1);
-    let usable_out = UsableOut::new(core::ptr::null_mut());
-    let _ = usable_out.as_ptr();
-    // SAFETY: lint-touch fixtures use known-valid
-    // scalar domains and never publish these values to allocator state.
-    let block = unsafe { BlockSize::new_unchecked(1) };
-    let _ = block.checked_add(1);
-    let _ = block.checked_usable();
-    let _ = unsafe { FullBlockSize::new_unchecked(1) };
-    // SAFETY: one is a valid optional alignment
-    // for this compile-time-only lint fixture.
-    let alignment = unsafe { MaybeAlignment::new_unchecked(1) };
-    let _ = alignment.is_some();
-    let _ = WordCount::new(1);
-    let _ = PageReclaimLimit::new(1).get();
-    let thread_count = ThreadCount::new(1);
-    let _ = thread_count.get();
-    let heap_count = HeapCount::new(1);
-    let _ = heap_count.get();
-    // SAFETY: zero is a valid page-queue bin for
-    // this compile-time-only lint fixture.
-    let bin = unsafe { Bin::new_unchecked(0) };
-    let _ = bin.get();
-    let _ = DirectBin::new(0);
-    let _ = SliceIndex::new(1).as_u32();
 }
 
 #[cfg(test)]

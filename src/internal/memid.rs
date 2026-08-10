@@ -90,9 +90,9 @@ pub fn mi_memid_is_os(memid: mi_memid_t) -> bool {
 pub fn mi_memid_needs_no_free(memid: mi_memid_t) -> bool {
     matches!(
         crate::core_types::MemId::view(memid),
-        crate::core_types::MemIdView::None(_)
+        crate::core_types::MemIdView::None
             | crate::core_types::MemIdView::External(_)
-            | crate::core_types::MemIdView::Static(_)
+            | crate::core_types::MemIdView::Static
     )
 }
 

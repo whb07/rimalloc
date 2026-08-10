@@ -112,7 +112,7 @@ fn queued_normal_page_requires_page_linked_in_normal_queue() {
         let queued =
             unsafe { QueuedPage::<NormalQueue>::try_queue(active, normal) }.expect("linked page");
         assert_eq!(queued.page().as_ptr(), page.as_ptr());
-        assert_eq!(queued.queue().ptr.as_ptr(), queue.as_ptr());
+        assert_eq!(queued.queue.ptr.as_ptr(), queue.as_ptr());
     });
 
     with_page_in_queue(64, false, |page, queue| {
@@ -168,7 +168,7 @@ fn queued_normal_page_requires_page_linked_in_normal_queue() {
         let queued =
             unsafe { QueuedPage::<NormalQueue>::try_queue(active, normal) }.expect("huge page");
         assert_eq!(queued.page().as_ptr(), page.as_ptr());
-        assert_eq!(queued.queue().ptr.as_ptr(), queue.as_ptr());
+        assert_eq!(queued.queue.ptr.as_ptr(), queue.as_ptr());
     });
 }
 
@@ -192,7 +192,7 @@ fn queued_full_page_requires_page_linked_in_full_queue() {
         let queued = unsafe { QueuedPage::<FullQueue>::try_queue_full(full_page, full_queue) }
             .expect("linked page");
         assert_eq!(queued.page().as_ptr(), page.as_ptr());
-        assert_eq!(queued.queue().ptr.as_ptr(), queue.as_ptr());
+        assert_eq!(queued.queue.ptr.as_ptr(), queue.as_ptr());
     });
 
     with_page_in_queue(full_size, false, |page, queue| {

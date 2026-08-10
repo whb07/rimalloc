@@ -81,19 +81,6 @@ impl AtomicPageThreadId {
         unsafe { self.0.store(new.raw(), Ordering::Relaxed) };
     }
 
-    /// Compatibility shim for callers not yet migrated to the `store_owner`
-    /// name.
-    ///
-    /// # Safety
-    /// `self.0` must point to a valid page's `xthread_id` field, and the caller
-    /// must hold the page in a state where a relaxed store is safe.
-    #[inline(always)]
-    pub(crate) unsafe fn set_owner_release(self, owner: PageOwnerId) {
-        // SAFETY: compatibility shim forwards to the
-        // typed owner store with the same page-state contract.
-        unsafe { self.store_owner(owner) };
-    }
-
     /// Release-CAS the page's tagged thread id from `expected` to `new`.
     /// On failure, updates `expected` with the observed typed value.
     ///
@@ -121,21 +108,5 @@ impl AtomicPageThreadId {
             *expected = PageThreadId::new(raw_expected);
         }
         exchanged
-    }
-
-    /// Compatibility shim for callers not yet migrated to the
-    /// `compare_exchange_owner` name.
-    ///
-    /// # Safety
-    /// `self.0` must point to a valid page's `xthread_id` field.
-    #[inline(always)]
-    pub(crate) unsafe fn compare_exchange_release(
-        self,
-        expected: &mut PageThreadId,
-        new: PageThreadId,
-    ) -> bool {
-        // SAFETY: compatibility shim forwards to the
-        // typed owner CAS with the same page-thread-id contract.
-        unsafe { self.compare_exchange_owner(expected, new) }
     }
 }

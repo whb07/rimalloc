@@ -230,17 +230,5 @@ impl GuardedDecision {
     }
 }
 
-pub(crate) fn __lint_touch() {
-    let config = GuardedConfig::new(
-        GuardedSizeMin::new(1),
-        GuardedSizeMax::new(1),
-        GuardedSampleRate::new(1),
-        GuardedSampleCount::new(1),
-    );
-    if let Some(config) = config {
-        let _ = config.decide(1).is_guarded();
-    }
-}
-
 #[cfg(test)]
 mod tests;

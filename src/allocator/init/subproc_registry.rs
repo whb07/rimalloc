@@ -1,4 +1,8 @@
-use super::*;
+use core::ptr;
+
+use crate::core_types::SubprocPtr;
+
+use super::{mi_subproc_prefix_typed, subprocs};
 
 /// Lock-protected intrusive registry of all process subprocs.
 ///

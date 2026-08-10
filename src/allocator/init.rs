@@ -5,35 +5,25 @@
 #![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 mod cpu;
+mod subproc;
 mod subproc_registry;
 mod thread;
 mod tls;
 use core::ffi::{c_char, c_void};
 use core::mem::size_of;
 use core::ptr;
-use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
-use crate::arena::_mi_arenas_unsafe_destroy_all;
 use crate::atomic::{
-    mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t, mi_lock_acquire, mi_lock_done,
-    mi_lock_init, mi_lock_release, mi_lock_t,
+    mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t, mi_lock_init, mi_lock_t,
 };
-use crate::core_types::{
-    BorrowedSubproc, HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainHeap, MainSubproc,
-    MiLockGuard, MiLockPtr, SubprocPtr, TldPtr,
-};
-use crate::heap::{_mi_heap_force_destroy, mi_heap_destroy};
-use crate::internal::{
-    _mi_allocator_done, _mi_allocator_init, _mi_meta_free, _mi_meta_zalloc, mi_memid_t,
-};
+use crate::core_types::{BorrowedSubproc, HeapPtr, SubprocPtr};
+use crate::internal::{_mi_allocator_done, _mi_allocator_init, mi_memid_t};
 use crate::options::{
-    _mi_fputs, _mi_options_init, _mi_options_post_init, _mi_verbose_message,
-    _mi_warning_message_fmt, mi_option_get, mi_option_is_enabled, mi_option_t,
+    _mi_fputs, _mi_options_post_init, _mi_verbose_message, mi_option_get, mi_option_is_enabled,
+    mi_option_t,
 };
-use crate::stats::{
-    __mi_stat_increase_mt, _mi_stats_merge_into, mi_stat_count_t, mi_stats_header_init, mi_stats_t,
-};
+use crate::stats::{__mi_stat_increase_mt, mi_stat_count_t, mi_stats_header_init, mi_stats_t};
 use crate::types::{
     MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_heap_visit_fun,
     mi_page_queue_t, mi_page_t, mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
@@ -566,16 +556,9 @@ unsafe fn mi_subproc_heap_main_raw(subproc: *mut mi_subproc_t) -> *mut mi_heap_t
     // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
     let subproc = unsafe { BorrowedSubproc::new(subproc) };
     // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
-    unsafe { mi_subproc_heap_main_typed(subproc) }
+    unsafe { subproc::heap_main_typed(subproc) }
         .map(HeapPtr::as_ptr)
         .unwrap_or(ptr::null_mut())
-}
-
-unsafe fn mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> Option<HeapPtr> {
-    // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
-    let subproc = unsafe { mi_subproc_prefix_typed(subproc.ptr()) };
-    // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
-    HeapPtr::new(unsafe { ptr::addr_of!((*subproc).heap_main).read_unaligned() })
 }
 
 unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
@@ -588,12 +571,7 @@ unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_subproc_id_t {
-    let subproc = SubprocPtr::new(subproc);
-    _mi_subproc_to_id_typed(subproc)
-}
-
-fn _mi_subproc_to_id_typed(subproc: Option<SubprocPtr>) -> mi_subproc_id_t {
-    mi_subproc_id_t::from_ptr(subproc.map(SubprocPtr::as_ptr).unwrap_or(ptr::null_mut()))
+    subproc::to_id(SubprocPtr::new(subproc))
 }
 
 // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
@@ -606,176 +584,10 @@ unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
         return;
     };
     // SAFETY: subproc metadata destruction is serialized by the subproc registry lock.
-    unsafe { mi_subproc_destroy_meta_typed(subproc) };
+    unsafe { subproc::destroy_meta(subproc) };
 }
 
 const _: unsafe fn(*mut mi_subproc_t) = mi_subproc_destroy_meta;
-
-unsafe fn mi_subproc_destroy_meta_typed(subproc: SubprocPtr) {
-    // SAFETY: subproc metadata destruction is serialized by the subproc registry lock.
-    let subproc = unsafe { mi_subproc_prefix_typed(subproc) };
-    // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.
-    // SAFETY: subproc metadata destruction is serialized by the subproc registry lock.
-    unsafe {
-        mi_lock_done(ptr::addr_of_mut!((*subproc).arena_reserve_lock));
-        mi_lock_done(ptr::addr_of_mut!((*subproc).heaps_lock));
-        _mi_meta_free(
-            subproc.cast(),
-            size_of::<MiSubprocPrefix>(),
-            (*subproc).memid,
-        );
-    }
-}
-
-#[cfg(all(not(miri), target_os = "linux", target_arch = "x86_64"))]
-#[inline(always)]
-unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
-    let main: *mut mi_subproc_t;
-    // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
-    unsafe {
-        core::arch::asm!(
-            "lea {main}, [rip + subproc_main]",
-            main = lateout(reg) main,
-            options(nostack, preserves_flags)
-        );
-    }
-    main
-}
-
-#[cfg(any(miri, not(all(target_os = "linux", target_arch = "x86_64"))))]
-#[inline(always)]
-unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
-    ptr::addr_of_mut!(subproc_main)
-        .cast::<MiSubprocPrefix>()
-        .cast::<mi_subproc_t>()
-}
-
-unsafe fn mi_subproc_main_addr_typed() -> MainSubproc {
-    // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
-    unsafe { MainSubproc::new_unchecked(SubprocPtr::new_unchecked(mi_subproc_main_addr())) }
-}
-
-fn mi_subproc_main_init() {
-    // SAFETY: one-time process initialization for local subproc scaffolding.
-    // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
-    unsafe {
-        let main = mi_subproc_main_addr();
-        let main_prefix = mi_subproc_prefix(main);
-        if !mi_memid_is_static((*main_prefix).memid) {
-            _mi_options_init();
-            (*main_prefix).memid =
-                crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().into_raw();
-            (*main_prefix).heaps = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
-            (*main_prefix).heap_total_count.store(1, Ordering::Relaxed);
-            (*main_prefix).heap_count.store(1, Ordering::Relaxed);
-            (*main_prefix).heap_main = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
-            __mi_stat_increase_mt(&mut (*main_prefix).stats.heaps, 1);
-            mi_stats_header_init(ptr::addr_of_mut!((*main_prefix).stats));
-            mi_lock_init(ptr::addr_of_mut!((*main_prefix).arena_reserve_lock));
-            mi_lock_init(ptr::addr_of_mut!((*main_prefix).heaps_lock));
-            mi_lock_init(ptr::addr_of_mut!(subprocs_lock));
-            mi_lock_init(ptr::addr_of_mut!(tld_empty.theaps_lock));
-        }
-    }
-}
-
-unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs_lock: bool) {
-    let Some(subproc) = SubprocPtr::new(subproc) else {
-        return;
-    };
-    // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-    unsafe { mi_subproc_unsafe_destroy_typed(subproc, acquire_subprocs_lock) };
-}
-
-unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_lock: bool) {
-    let subproc_raw = subproc.as_ptr();
-    // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-    let main_subproc = unsafe { mi_subproc_main_addr_typed().ptr() };
-    let is_main = ptr::eq(subproc_raw, main_subproc.as_ptr());
-    // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-    let subproc_prefix = unsafe { mi_subproc_prefix_typed(subproc) };
-    // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-    let borrowed_subproc = unsafe { BorrowedSubproc::new(subproc) };
-    if acquire_subprocs_lock {
-        // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        unsafe { mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock)) };
-    }
-    // SAFETY: registry membership rewires only the lock-protected subproc head and prev/next links.
-    unsafe { subproc_registry::unlink_locked(subproc) };
-    if acquire_subprocs_lock {
-        // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        unsafe { mi_lock_release(ptr::addr_of_mut!(subprocs_lock)) };
-    }
-
-    loop {
-        // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        let heaps_lock = unsafe { MiLockGuard::acquire(subproc.heaps_lock()) };
-        // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        let heap = unsafe { (*subproc_prefix).heaps };
-        drop(heaps_lock);
-        if heap.is_null() {
-            break;
-        }
-        // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        let main_heap = unsafe { mi_subproc_heap_main_typed(borrowed_subproc) }
-            .map(HeapPtr::as_ptr)
-            .unwrap_or(ptr::null_mut());
-        if !ptr::eq(heap, main_heap) {
-            // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-            unsafe { mi_heap_destroy(heap) };
-        } else {
-            // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-            unsafe { _mi_heap_force_destroy(heap) };
-            break;
-        }
-    }
-
-    {
-        let subproc = subproc_raw;
-        // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        unsafe { _mi_arenas_unsafe_destroy_all(subproc) };
-    }
-
-    if is_main {
-        let subproc = subproc_raw;
-        // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        unsafe { crate::page_map::_mi_page_map_unsafe_destroy(subproc) };
-    } else {
-        // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-        let main_subproc = unsafe { mi_subproc_prefix_typed(main_subproc) };
-        // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-        unsafe {
-            _mi_stats_merge_into(
-                ptr::addr_of_mut!((*main_subproc).stats),
-                ptr::addr_of_mut!((*subproc_prefix).stats),
-            );
-            mi_subproc_destroy_meta_typed(subproc);
-        }
-    }
-}
-
-unsafe fn mi_subprocs_unsafe_destroy_all() {
-    mi_subproc_main_init();
-    // SAFETY: registry teardown walks remaining subprocs while holding the registry lock.
-    let main_subproc = unsafe { _mi_subproc_main() };
-    // SAFETY: registry teardown walks remaining subprocs while holding the registry lock.
-    unsafe {
-        {
-            let lock =
-                MiLockPtr::from_nonnull(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
-            let _lock = MiLockGuard::acquire(lock);
-            let mut subproc = subproc_registry::head_locked();
-            while let Some(current) = subproc {
-                let next = subproc_registry::next_locked(current);
-                if !ptr::eq(current.as_ptr(), main_subproc) {
-                    mi_subproc_unsafe_destroy(current.as_ptr(), false);
-                }
-                subproc = next;
-            }
-        }
-        mi_subproc_unsafe_destroy(main_subproc, true);
-    }
-}
 
 #[inline(never)]
 pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
@@ -896,7 +708,7 @@ fn mi_heap_main_init() {
             heap_main.theaps = ptr::addr_of_mut!(theap_main);
 
             thread::theap_main_init();
-            mi_subproc_main_init();
+            subproc::main_init();
             thread::tld_main_init();
 
             mi_lock_init(ptr::addr_of_mut!(heap_main.theaps_lock));
@@ -912,7 +724,7 @@ fn mi_heap_main_init() {
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
     // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
-    unsafe { mi_subproc_main_addr_typed().ptr().as_ptr() }
+    unsafe { subproc::main_ptr() }
 }
 
 #[used]
@@ -993,23 +805,7 @@ static MI_THEAP_EMPTY_GET_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
     // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    unsafe { _mi_subproc_typed().ptr().as_ptr() }
-}
-
-unsafe fn _mi_subproc_typed() -> BorrowedSubproc {
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    let theap = unsafe { crate::prim::_mi_theap_default_raw() };
-    let subproc = if theap.is_null() {
-        // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-        unsafe { mi_subproc_main_addr_typed().ptr() }
-    } else {
-        // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-        let tld = unsafe { TldPtr::new_unchecked((*theap).tld) };
-        // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-        unsafe { tld.subproc() }.unwrap_or_else(|| unsafe { mi_subproc_main_addr_typed().ptr() })
-    };
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    unsafe { BorrowedSubproc::new(subproc) }
+    unsafe { subproc::current_ptr() }
 }
 
 // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
@@ -1020,15 +816,7 @@ pub(crate) unsafe extern "C" fn _mi_subproc_from_id(
     subproc_id: mi_subproc_id_t,
 ) -> *mut mi_subproc_t {
     // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    unsafe { _mi_subproc_from_id_typed(subproc_id) }
-        .map(|subproc| subproc.ptr().as_ptr())
-        .unwrap_or(ptr::null_mut())
-}
-
-unsafe fn _mi_subproc_from_id_typed(subproc_id: mi_subproc_id_t) -> Option<BorrowedSubproc> {
-    SubprocPtr::new(subproc_id.as_ptr::<mi_subproc_t>())
-        // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-        .map(|subproc| unsafe { BorrowedSubproc::new(subproc) })
+    unsafe { subproc::from_id(subproc_id) }
 }
 
 #[used]
@@ -1041,7 +829,7 @@ static MI_SUBPROC_FROM_ID_KEEP: unsafe extern "C" fn(mi_subproc_id_t) -> *mut mi
 /// Returns an opaque identifier for the main subproc.
 pub unsafe extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
     // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    _mi_subproc_to_id_typed(Some(unsafe { mi_subproc_main_addr_typed().ptr() }))
+    unsafe { subproc::main_id() }
 }
 
 // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
@@ -1050,7 +838,7 @@ pub unsafe extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
 /// Returns the current subproc identifier for the bounded crate state.
 pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
     // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    _mi_subproc_to_id_typed(Some(unsafe { _mi_subproc_typed().ptr() }))
+    unsafe { subproc::current_id() }
 }
 
 // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
@@ -1061,28 +849,7 @@ pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     subproc: *mut mi_subproc_t,
 ) -> *mut mi_heap_t {
     // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
-    let subproc = unsafe { BorrowedSubproc::new(SubprocPtr::new_unchecked(subproc)) };
-    // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
-    unsafe { _mi_subproc_heap_main_typed(subproc).ptr().as_ptr() }
-}
-
-unsafe fn _mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
-    // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
-    let heap = unsafe { mi_subproc_heap_main_typed(subproc) };
-    if let Some(heap) = heap {
-        // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
-        return unsafe { MainHeap::new_unchecked(heap) };
-    }
-    mi_heap_main_init();
-    // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
-    let heap = unsafe { mi_subproc_heap_main_typed(subproc) };
-    crate::internal::mi_assert_internal!(heap.is_some());
-    let Some(heap) = heap else {
-        // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
-        return unsafe { MainHeap::new_unchecked(HeapPtr::new_unchecked(mi_heap_main())) };
-    };
-    // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
-    unsafe { MainHeap::new_unchecked(heap) }
+    unsafe { subproc::ensure_heap_main(subproc) }
 }
 
 #[used]
@@ -1095,25 +862,7 @@ static MI_SUBPROC_HEAP_MAIN_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> *mu
 /// Returns the current subproc main heap for the bounded init/runtime scaffold.
 pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
     // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
-    let theap = unsafe { crate::prim::_mi_theap_default_raw() };
-    let subproc = if theap.is_null() {
-        // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
-        unsafe { mi_subproc_main_addr() }
-    } else {
-        // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
-        let tld = unsafe { (*theap).tld };
-        // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
-        unsafe { (*tld).subproc }
-    };
-    // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
-    let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
-    if heap.is_null() {
-        mi_heap_main_init();
-        // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
-        heap = unsafe { mi_subproc_heap_main_raw(subproc) };
-        crate::internal::mi_assert_internal!(!heap.is_null());
-    }
-    heap
+    unsafe { subproc::heap_main() }
 }
 
 // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
@@ -1122,15 +871,7 @@ pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
     // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-    let subproc = unsafe { mi_heap_subproc_raw(heap) };
-    // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-    let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
-    if main_heap.is_null() {
-        mi_heap_main_init();
-        // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-        main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
-    }
-    ptr::eq(main_heap, heap.cast_mut())
+    unsafe { subproc::is_heap_main(heap) }
 }
 
 // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
@@ -1139,21 +880,7 @@ pub(crate) unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
     // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-    if !unsafe { crate::internal::mi_theap_is_initialized(theap) } {
-        return false;
-    }
-    // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-    let heap = unsafe { crate::internal::_mi_theap_heap(theap) };
-    // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-    let subproc = unsafe { mi_heap_subproc_raw(heap) };
-    // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-    let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
-    if main_heap.is_null() {
-        mi_heap_main_init();
-        // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-        main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
-    }
-    ptr::eq(main_heap, heap)
+    unsafe { subproc::is_theap_main(theap) }
 }
 
 // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
@@ -1180,42 +907,8 @@ pub unsafe extern "C" fn mi_thread_init() {
 /// # Safety
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
 pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
-    mi_subproc_main_init();
-    let seq = SUBPROC_TOTAL_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
-    let mut memid = mi_memid_t::default();
     // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
-    let subproc_ptr = unsafe {
-        _mi_meta_zalloc(size_of::<MiSubprocPrefix>(), ptr::addr_of_mut!(memid))
-            .cast::<MiSubprocPrefix>()
-    };
-    if subproc_ptr.is_null() {
-        // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
-        return unsafe { _mi_subproc_to_id(ptr::null_mut()) };
-    }
-    // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
-    unsafe {
-        subproc_ptr.write(MiSubprocPrefix::new_with_memid(
-            crate::core_types::SubprocSeq::new(seq),
-            memid,
-        ))
-    };
-    // SAFETY: initializing lock words for a freshly allocated local prefix.
-    // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
-    unsafe {
-        mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).arena_reserve_lock));
-        mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).heaps_lock));
-    }
-    // SAFETY: local subproc list mutation is serialized by `subprocs_lock`.
-    // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
-    unsafe {
-        let lock =
-            MiLockPtr::from_nonnull(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
-        let _lock = MiLockGuard::acquire(lock);
-        subproc_registry::push_front_locked(SubprocPtr::new_unchecked(
-            subproc_ptr.cast::<mi_subproc_t>(),
-        ));
-        _mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>())
-    }
+    unsafe { subproc::new() }
 }
 
 // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
@@ -1223,16 +916,8 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
 /// # Safety
 /// `subproc_id` must identify a subproc created by this crate.
 pub unsafe extern "C" fn mi_subproc_destroy(subproc_id: mi_subproc_id_t) {
-    mi_subproc_main_init();
-    // SAFETY: raw ID comes from the C ABI surface.
     // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
-    let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
-    // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
-    if subproc.is_null() || core::ptr::eq(subproc, unsafe { _mi_subproc_main() }) {
-        return;
-    }
-    // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
-    unsafe { mi_subproc_unsafe_destroy(subproc, true) };
+    unsafe { subproc::destroy(subproc_id) };
 }
 
 // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
@@ -1250,48 +935,7 @@ pub unsafe extern "C" fn mi_subproc_delete(subproc_id: mi_subproc_id_t) {
 /// `subproc_id` must identify a local subproc created by this crate.
 pub unsafe extern "C" fn mi_subproc_add_current_thread(subproc_id: mi_subproc_id_t) {
     // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
-    if subproc.is_null() {
-        return;
-    }
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let theap = unsafe { _mi_theap_default_safe() };
-    if theap.is_null() {
-        return;
-    }
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let tld = unsafe { (*theap).tld };
-    if tld.is_null() {
-        return;
-    }
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let main_subproc = unsafe { _mi_subproc_main() };
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    if !ptr::eq(unsafe { (*tld).subproc }, main_subproc) {
-        _mi_warning_message_fmt(format_args!(
-            "unable to add thread to the subprocess as it was already in another subprocess (id: {:?})\n",
-            subproc
-        ));
-        return;
-    }
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let main_prefix = unsafe { mi_subproc_prefix(main_subproc) };
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    unsafe {
-        (*tld).subproc = subproc;
-        (*tld).thread_seq = crate::core_types::ThreadSeq::new(
-            (*subproc_prefix)
-                .thread_total_count
-                .fetch_add(1, Ordering::Relaxed),
-        )
-        .get();
-        (*main_prefix).thread_count.fetch_sub(1, Ordering::Relaxed);
-        (*subproc_prefix)
-            .thread_count
-            .fetch_add(1, Ordering::Relaxed);
-    }
+    unsafe { subproc::add_current_thread(subproc_id) };
 }
 
 // SAFETY: subproc heap visitation locks the heap list and invokes typed heap callbacks.
@@ -1303,31 +947,8 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
     visitor: Option<mi_heap_visit_fun>,
     arg: *mut c_void,
 ) -> bool {
-    let visitor = HeapVisitCallback::new(visitor);
-    if !visitor.is_some() {
-        return false;
-    };
-    let arg = HeapVisitCallbackArg::from_raw(arg);
     // SAFETY: subproc heap visitation locks the heap list and invokes typed heap callbacks.
-    let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
-    if subproc.is_null() {
-        return false;
-    }
-    // SAFETY: subproc heap visitation locks the heap list and invokes typed heap callbacks.
-    let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
-    // SAFETY: subproc heap visitation locks the heap list and invokes typed heap callbacks.
-    unsafe {
-        mi_lock_acquire(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
-        let mut heap = (*subproc_prefix).heaps;
-        let mut ok = true;
-        while !heap.is_null() && ok {
-            let next = (*(heap.cast::<MiHeapMainPrefix>())).next;
-            ok = visitor.invoke(HeapPtr::new_unchecked(heap), arg);
-            heap = next;
-        }
-        mi_lock_release(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
-        ok
-    }
+    unsafe { subproc::visit_heaps(subproc_id, visitor, arg) }
 }
 
 unsafe fn mi_process_init_inner() {
@@ -1338,7 +959,7 @@ unsafe fn mi_process_init_inner() {
         unsafe {
             _mi_process_is_initialized = true;
             cpu::mi_detect_cpu_features();
-            mi_subproc_main_init();
+            subproc::main_init();
             crate::stats::_mi_stats_init();
             crate::os::_mi_os_init();
             mi_heap_main_init();
@@ -1442,7 +1063,7 @@ pub unsafe extern "C" fn mi_process_done() {
         crate::threadlocal::_mi_thread_locals_done();
         crate::prim::_mi_prim_thread_done_auto_done();
         if mi_option_is_enabled(mi_option_t::mi_option_destroy_on_exit) {
-            mi_subprocs_unsafe_destroy_all();
+            subproc::unsafe_destroy_all();
         } else {
             crate::stats::mi_heap_stats_merge_to_subproc(mi_heap_main());
         }

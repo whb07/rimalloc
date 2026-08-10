@@ -55,7 +55,6 @@ longer exposed as raw Rust module paths.
 | `tests/original_test_api_fill.rs` | root `raw::mi_*` public C-header facade | Debug fill/tracking parity | Public C calls stay on root raw paths; debug/tracking byte constants are local test expectations. |
 | `tests/original_test_stress.rs` | root `raw::mi_*` public C-header facade | Port of upstream stress test | Migrated to public C-header facade. |
 | `tests/property_alloc_sequences.rs` | `raw::mimalloc::*` | Public C API property sequences | Keep on public C-header facade. |
-| `tests/release_fast_path_audit.rs` | repository source/docs only | Source-shape audit helpers | Uses source inspection; raw layout checks moved to crate-private unit tests. |
 | `src/types/constants.rs` unit tests | crate-private constants | Secure feature constants/types | Migrated from `tests/secure_features.rs`; no raw facade user. |
 | `tests/stats_exports.rs` | root `raw::mi_stats_get_bin_size`, `raw::MI_BIN_HUGE` | Public stats export behavior | Migrated to public C-header facade. |
 | `tests/thread_stats_regression.rs` | root `raw::mi_*`, `raw::mi_stats_t`, `raw::MI_STAT_VERSION` | Public stats regression behavior | Migrated to public C-header facade. |

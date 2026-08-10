@@ -10,7 +10,7 @@ use super::*;
 /// that page's usable address range.
 #[inline]
 pub unsafe fn mi_is_in_same_page(p: *const c_void, q: *const c_void) -> bool {
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     let page = unsafe { _mi_ptr_page(p) };
     unsafe { mi_page_contains_address(page, q) }
 }
@@ -86,7 +86,7 @@ pub unsafe fn mi_page_keys(page: *const mi_page_t) -> [usize; 2] {
         feature = "track-asan"
     ))]
     {
-        // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+        // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
         unsafe { (*page).keys }
     }
 
@@ -109,7 +109,7 @@ pub(crate) unsafe fn mi_page_set_keys(
     page: crate::core_types::PagePtr,
     keys: crate::core_types::PageKeys,
 ) {
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { page.set_keys(keys) }
 }
 
@@ -122,7 +122,7 @@ pub unsafe fn mi_block_nextx(
     block: *const mi_block_t,
     keys: &[usize; 2],
 ) -> *mut mi_block_t {
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { crate::track::mi_track_mem_defined(block.cast_mut().cast(), size_of::<mi_block_t>()) };
     let link = unsafe { crate::core_types::EncodedPtr::read_word_from_raw(block) };
     let next = if MI_ENCODE_FREELIST != 0 {
@@ -130,7 +130,7 @@ pub unsafe fn mi_block_nextx(
     } else {
         link.as_unencoded_raw()
     };
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe {
         crate::track::mi_track_mem_noaccess(block.cast_mut().cast(), size_of::<mi_block_t>())
     };
@@ -147,7 +147,7 @@ pub(crate) unsafe fn mi_block_set_nextx_typed(
     next: Option<crate::core_types::BlockPtr>,
     keys: crate::core_types::PageKeys,
 ) {
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { crate::track::mi_track_mem_undefined(block.as_ptr().cast(), size_of::<mi_block_t>()) };
     let link = if MI_ENCODE_FREELIST != 0 {
         unsafe { crate::core_types::EncodedPtr::encode_block(next, page, keys) }
@@ -158,7 +158,7 @@ pub(crate) unsafe fn mi_block_set_nextx_typed(
                 .cast_const(),
         )
     };
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { block.write_link(crate::core_types::BlockLink::FreeList(link)) };
     unsafe { crate::track::mi_track_mem_noaccess(block.as_ptr().cast(), size_of::<mi_block_t>()) };
 }
@@ -174,7 +174,7 @@ pub unsafe fn mi_block_set_nextx(
     keys: &[usize; 2],
 ) {
     if !null.is_null() {
-        // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+        // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
         let page = unsafe { crate::core_types::PagePtr::new_unchecked(null.cast_mut().cast()) };
         let block = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
         let next = crate::core_types::BlockPtr::new(next.cast_mut());
@@ -189,7 +189,7 @@ pub unsafe fn mi_block_set_nextx(
         return;
     }
 
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { crate::track::mi_track_mem_undefined(block.cast(), size_of::<mi_block_t>()) };
     let link = if MI_ENCODE_FREELIST != 0 {
         unsafe {
@@ -202,7 +202,7 @@ pub unsafe fn mi_block_set_nextx(
     } else {
         crate::core_types::EncodedPtr::from_unencoded_raw(next)
     };
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     let block_ptr = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
     unsafe { block_ptr.write_link(crate::core_types::BlockLink::FreeList(link)) };
     unsafe { crate::track::mi_track_mem_noaccess(block.cast(), size_of::<mi_block_t>()) };
@@ -212,7 +212,7 @@ pub unsafe fn mi_block_set_nextx(
 /// `page` must be valid, and `block` must point to a block list node belonging to that page.
 #[inline]
 pub unsafe fn mi_block_next(page: *const mi_page_t, block: *const mi_block_t) -> *mut mi_block_t {
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe {
         let keys = mi_page_keys(page);
         if MI_ENCODE_FREELIST == 0 {
@@ -243,7 +243,7 @@ pub(crate) unsafe fn mi_block_set_next_typed(
     block: crate::core_types::BlockPtr,
     next: Option<crate::core_types::BlockPtr>,
 ) {
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     let keys = unsafe { page.keys() };
     unsafe { mi_block_set_nextx_typed(page, block, next, keys) };
 }
@@ -257,7 +257,7 @@ pub unsafe fn mi_block_set_next(
     block: *mut mi_block_t,
     next: *const mi_block_t,
 ) {
-    // SAFETY[AUDIT:internal-block-link-boundary]: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     let page = unsafe { crate::core_types::PagePtr::new_unchecked(page.cast_mut()) };
     let block = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
     let next = crate::core_types::BlockPtr::new(next.cast_mut());

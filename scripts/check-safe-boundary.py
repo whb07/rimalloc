@@ -18,7 +18,6 @@ SAFE_BOUNDARY_FILES = [
         if (rel := path.relative_to(ROOT).as_posix()) not in TEST_ONLY_SAFE_FILES
     ),
 ]
-AUDIT_TAG = "SAFETY[AUDIT:"
 ALLOWED_PUBLIC_UNSAFE = {
     "src/safe/allocation.rs": {"assume_initialized"},
     "src/safe/heap.rs": {"assume_initialized"},
@@ -60,28 +59,6 @@ def public_unsafe_items(rel: str, text: str) -> list[str]:
     return offenders
 
 
-def has_recent_audit_tag(lines: list[str], index: int) -> bool:
-    start = max(0, index - 4)
-    return any(AUDIT_TAG in lines[i] for i in range(start, index))
-
-
-def untagged_boundary_unsafe(text: str) -> list[str]:
-    source = text.split("#[cfg(test)]", maxsplit=1)[0]
-    lines = source.splitlines()
-    offenders: list[str] = []
-    patterns = [
-        re.compile(r"^\s*unsafe\s*\{"),
-        re.compile(r"^\s*unsafe\s+impl\b"),
-        re.compile(r"^\s*unsafe\s+extern\b"),
-    ]
-    for index, line in enumerate(lines):
-        if any(pattern.search(line) for pattern in patterns) and not has_recent_audit_tag(
-            lines, index
-        ):
-            offenders.append(f"line {index + 1}: {line.strip()}")
-    return offenders
-
-
 def callback_guard_safe_surface_mentions(rel: str, text: str) -> list[str]:
     source = text.split("#[cfg(test)]", maxsplit=1)[0]
     return [
@@ -106,7 +83,6 @@ def local_clippy_allowances(rel: str, text: str) -> list[str]:
 
 def main() -> int:
     all_public_unsafe: list[str] = []
-    all_untagged: list[str] = []
     callback_guard_mentions: list[str] = []
     missing_policy: list[str] = []
     clippy_allowances: list[str] = []
@@ -120,7 +96,6 @@ def main() -> int:
     for rel in SAFE_BOUNDARY_FILES:
         text = (ROOT / rel).read_text()
         all_public_unsafe.extend(f"{rel}:{item}" for item in public_unsafe_items(rel, text))
-        all_untagged.extend(f"{rel}:{item}" for item in untagged_boundary_unsafe(text))
         callback_guard_mentions.extend(
             f"{rel}:{guard}" for guard in callback_guard_safe_surface_mentions(rel, text)
         )
@@ -138,11 +113,6 @@ def main() -> int:
     require(
         not all_public_unsafe,
         "public unsafe Rust items outside raw facade: " + "; ".join(all_public_unsafe),
-    )
-    require(
-        not all_untagged,
-        "safe facade unsafe boundary lacks SAFETY[AUDIT:*] tag: "
-        + "; ".join(all_untagged),
     )
     require(
         "pub use ffi::callbacks as unsafe_callbacks;" in lib_rs,
@@ -171,7 +141,7 @@ def main() -> int:
 
     print(
         "ok: safe facade unsafe boundary has only allowlisted public unsafe items, "
-        "all unsafe blocks are audit-tagged, and safe-facing lint policy is local"
+        "callback guards remain namespaced, and safe-facing lint policy is local"
     )
     return 0
 

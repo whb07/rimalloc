@@ -176,5 +176,5 @@ scripts/check-public-symbols.py --dynamic-manifests
 scripts/check-abi-diff.py --previous-ref <previous-tag>
 ```
 
-For local policy drift review, `tests/release_fast_path_audit.rs` checks this
-page against the script constants, checked manifests, and classification TSV.
+For local policy drift review, the symbol scripts compare built artifacts with
+the checked manifests and classification TSV.

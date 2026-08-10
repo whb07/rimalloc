@@ -9,7 +9,7 @@ use super::*;
 unsafe fn try_free_abandoned(
     page: crate::core_types::OwnedAbandonedPage,
 ) -> Result<crate::core_types::DestroyedPage, crate::core_types::OwnedAbandonedPage> {
-    // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
+    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
         let all_free = page.try_mark_all_free()?;
         let page_raw = all_free.page().as_ptr();
@@ -22,7 +22,7 @@ unsafe fn try_free_abandoned(
 unsafe fn try_reabandon_mapped(
     page: crate::core_types::OwnedAbandonedPage,
 ) -> Result<crate::core_types::AbandonedMappedPageType, crate::core_types::OwnedAbandonedPage> {
-    // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
+    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
         #[cfg(feature = "bench-diagnostics")]
         crate::bench_diagnostics::reabandon_attempt();
@@ -64,7 +64,7 @@ unsafe fn release_abandoned_ownership(
     mut page: crate::core_types::OwnedAbandonedPage,
     mut tf_expect: crate::core_types::ThreadFreeWord,
 ) -> crate::core_types::AbandonedDisposition {
-    // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
+    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
         let page_raw = page.page().as_ptr();
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
@@ -105,7 +105,7 @@ unsafe fn mi_page_queue_len_is_atmost(
     block_size: crate::core_types::BlockSize,
     atmost: crate::core_types::PageQueueCount,
 ) -> bool {
-    // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
+    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
         let pq = mi_page_queue(theap.ptr().as_ptr(), block_size);
         crate::internal::mi_assert_internal!(!pq.is_null());
@@ -117,7 +117,7 @@ unsafe fn try_reclaim_abandoned(
     page: crate::core_types::OwnedAbandonedPage,
     decision: crate::allocator::policy::ReclaimDecision,
 ) -> Result<crate::core_types::ActivePage, crate::core_types::OwnedAbandonedPage> {
-    // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
+    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
         let reclaim_on_free = decision.reclaim_on_free();
         #[cfg(feature = "bench-diagnostics")]
@@ -216,7 +216,7 @@ pub(super) unsafe fn collect_after_remote_free(
     page: crate::core_types::OwnedAbandonedPage,
     published: crate::core_types::PublishedRemoteHead,
 ) -> crate::core_types::AbandonedDisposition {
-    // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
+    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
         let page_raw = page.page().as_ptr();
         let block_size = page.page().block_size_raw();

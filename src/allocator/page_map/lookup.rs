@@ -7,11 +7,11 @@ use super::*;
 /// `p` may be null or arbitrary. The page map must be initialized and not
 /// concurrently destroyed while this lookup runs.
 #[cfg(target_pointer_width = "32")]
-// SAFETY[AUDIT:page-map-lookup32-boundary]: safe pointer lookup accepts arbitrary input
+// SAFETY: safe pointer lookup accepts arbitrary input
 // and converts a registered range witness back to the page pointer.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-map-lookup32-boundary]: registered lookup handles null/invalid
+    // SAFETY: registered lookup handles null/invalid
     // pointers and returns a witness only for initialized page-map entries.
     unsafe { _mi_safe_ptr_page_registered(p) }
         .map(|registered| registered.page().as_ptr())
@@ -25,7 +25,7 @@ pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_p
 #[cfg(target_pointer_width = "32")]
 #[inline(always)]
 pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<RegisteredPageRange> {
-    // SAFETY[AUDIT:page-map-lookup32-boundary]: max address is initialized with the
+    // SAFETY: max address is initialized with the
     // page-map globals and bounds arbitrary input before indexing.
     if p >= unsafe { mi_page_map_max_address } {
         return None;
@@ -35,7 +35,7 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
         crate::internal::mi_assert_internal!(false);
         return None;
     };
-    // SAFETY[AUDIT:page-map-lookup32-boundary]: optional bitmap is initialized with the
+    // SAFETY: optional bitmap is initialized with the
     // byte-map and is checked before reading uncommitted page-map bytes.
     if unsafe { !mi_page_map_commit.is_null() }
         && !unsafe {
@@ -47,7 +47,7 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
     {
         return None;
     }
-    // SAFETY[AUDIT:page-map-lookup32-boundary]: committed byte-map index was validated
+    // SAFETY: committed byte-map index was validated
     // and optional bitmap confirmed before reading the offset byte.
     let ofs = unsafe { *_mi_page_map.add(idx.get()) as usize };
     if ofs == 0 {
@@ -56,11 +56,11 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
     let page = (((crate::core_types::ptr_exposed_addr(p) >> MI_ARENA_SLICE_SHIFT) - ofs + 1)
         << MI_ARENA_SLICE_SHIFT) as *mut mi_page_t;
     let page = PagePtr::new(page)?;
-    // SAFETY[AUDIT:page-map-lookup32-boundary]: 32-bit lookup uses a zero sub-index and
+    // SAFETY: 32-bit lookup uses a zero sub-index and
     // one-slice witness for the containing page registration.
     let sub_idx = unsafe { crate::core_types::PageMapSubIndex::new_unchecked(0) };
     let slice_count = unsafe { SliceCount::from_usize_const(1).unwrap_unchecked() };
-    // SAFETY[AUDIT:page-map-lookup32-boundary]: nonzero byte-map entry proves the page is
+    // SAFETY: nonzero byte-map entry proves the page is
     // registered for this index/sub-index witness.
     Some(unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) })
 }
@@ -70,11 +70,11 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
 /// `p` may be null or arbitrary. The page map must be initialized and not
 /// concurrently destroyed while this lookup runs.
 #[cfg(target_pointer_width = "32")]
-// SAFETY[AUDIT:page-map-lookup32-boundary]: exported heap-region query forwards arbitrary
+// SAFETY: exported heap-region query forwards arbitrary
 // input through the safe page-map lookup boundary.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_is_in_heap_region(p: *const c_void) -> bool {
-    // SAFETY[AUDIT:page-map-lookup32-boundary]: `_mi_safe_ptr_page` handles arbitrary
+    // SAFETY: `_mi_safe_ptr_page` handles arbitrary
     // nullable input and returns null for non-registered pointers.
     !unsafe { _mi_safe_ptr_page(p) }.is_null()
 }
@@ -84,11 +84,11 @@ pub unsafe extern "C" fn mi_is_in_heap_region(p: *const c_void) -> bool {
 /// `p` may be null or arbitrary. The page map must be initialized and not
 /// concurrently destroyed while this lookup runs.
 #[cfg(not(target_pointer_width = "32"))]
-// SAFETY[AUDIT:page-map-lookup64-boundary]: safe pointer lookup accepts arbitrary input
+// SAFETY: safe pointer lookup accepts arbitrary input
 // and converts a registered range witness back to the page pointer.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-map-lookup64-boundary]: registered lookup handles null/invalid
+    // SAFETY: registered lookup handles null/invalid
     // pointers and returns a witness only for initialized page-map entries.
     unsafe { _mi_safe_ptr_page_registered(p) }
         .map(|registered| registered.page().as_ptr())
@@ -105,13 +105,13 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
     if p.is_null() {
         return None;
     }
-    // SAFETY[AUDIT:page-map-lookup64-boundary]: max address is initialized with the
+    // SAFETY: max address is initialized with the
     // page-map globals and bounds arbitrary input before indexing.
     if p >= unsafe { mi_page_map_max_address } {
         return None;
     }
     let mut sub_idx = 0usize;
-    // SAFETY[AUDIT:page-map-lookup64-boundary]: arbitrary pointer and stack-local
+    // SAFETY: arbitrary pointer and stack-local
     // sub-index out pointer are converted to typed page-map domains below.
     let idx = unsafe { _mi_page_map_index(p, &mut sub_idx) };
     let Some(idx) = mi_page_map_index(idx) else {
@@ -125,19 +125,19 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
     if !mi_page_map_is_committed(idx, ptr::null_mut()) {
         return None;
     }
-    // SAFETY[AUDIT:page-map-lookup64-boundary]: committed top-level index can be loaded
+    // SAFETY: committed top-level index can be loaded
     // through the audited page-map accessor.
     let sub = unsafe { _mi_page_map_at(idx.get()) };
     if sub.is_null() {
         return None;
     }
-    // SAFETY[AUDIT:page-map-lookup64-boundary]: typed sub-index bounds the submap lookup
+    // SAFETY: typed sub-index bounds the submap lookup
     // and `PagePtr::new` rejects null entries.
     let page = PagePtr::new(unsafe { *sub.add(sub_idx.get()) })?;
-    // SAFETY[AUDIT:page-map-lookup64-boundary]: lookup witnesses a single slice at the
+    // SAFETY: lookup witnesses a single slice at the
     // found page-map entry.
     let slice_count = unsafe { SliceCount::from_usize_const(1).unwrap_unchecked() };
-    // SAFETY[AUDIT:page-map-lookup64-boundary]: non-null submap entry proves the page is
+    // SAFETY: non-null submap entry proves the page is
     // registered for this index/sub-index witness.
     Some(unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) })
 }
@@ -147,11 +147,11 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
 /// `p` may be null or arbitrary. The page map must be initialized and not
 /// concurrently destroyed while this lookup runs.
 #[cfg(not(target_pointer_width = "32"))]
-// SAFETY[AUDIT:page-map-lookup64-boundary]: exported heap-region query forwards arbitrary
+// SAFETY: exported heap-region query forwards arbitrary
 // input through the safe page-map lookup boundary.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_is_in_heap_region(p: *const c_void) -> bool {
-    // SAFETY[AUDIT:page-map-lookup64-boundary]: `_mi_safe_ptr_page` handles arbitrary
+    // SAFETY: `_mi_safe_ptr_page` handles arbitrary
     // nullable input and returns null for non-registered pointers.
     !unsafe { _mi_safe_ptr_page(p) }.is_null()
 }

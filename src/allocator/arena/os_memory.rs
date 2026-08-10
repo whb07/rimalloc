@@ -15,7 +15,7 @@ pub(super) unsafe fn mi_arena_reserve(
     let subproc_ptr = subproc;
     let subproc = subproc.as_ptr();
     let req_size = req_size.get();
-    // SAFETY[AUDIT:arena-reserve-growth-boundary]: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+    // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
     if arena_count > (MI_MAX_ARENAS - 4) {
         return false;
@@ -26,7 +26,7 @@ pub(super) unsafe fn mi_arena_reserve(
         return false;
     }
 
-    // SAFETY[AUDIT:arena-reserve-growth-boundary]: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+    // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
     if !unsafe { _mi_os_has_virtual_reserve() } {
         arena_reserve /= 4;
     }
@@ -59,7 +59,7 @@ pub(super) unsafe fn mi_arena_reserve(
         return false;
     }
 
-    // SAFETY[AUDIT:arena-reserve-growth-boundary]: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+    // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
     let overcommit = unsafe { _mi_os_has_overcommit() };
     let mut arena_commit = false;
     if mi_option_get(mi_option_t::mi_option_arena_eager_commit) == 2 {
@@ -71,7 +71,7 @@ pub(super) unsafe fn mi_arena_reserve(
 
     let adjust = overcommit && arena_commit;
     if adjust {
-        // SAFETY[AUDIT:arena-reserve-growth-boundary]: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+        // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
         unsafe {
             __mi_stat_adjust_decrease_mt(
                 ptr::addr_of_mut!((*subproc).stats.committed),
@@ -80,7 +80,7 @@ pub(super) unsafe fn mi_arena_reserve(
         }
     }
 
-    // SAFETY[AUDIT:arena-reserve-growth-boundary]: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+    // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
     let mut err = unsafe {
         mi_reserve_os_memory_ex2(
             subproc_ptr,
@@ -94,7 +94,7 @@ pub(super) unsafe fn mi_arena_reserve(
     };
     if err != 0 {
         if adjust {
-            // SAFETY[AUDIT:arena-reserve-growth-boundary]: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+            // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
             unsafe {
                 __mi_stat_adjust_increase_mt(
                     ptr::addr_of_mut!((*subproc).stats.committed),
@@ -105,7 +105,7 @@ pub(super) unsafe fn mi_arena_reserve(
         let small_arena_reserve = 4 * MI_ARENA_MIN_SIZE;
         if arena_reserve > small_arena_reserve && small_arena_reserve > req_size {
             if adjust {
-                // SAFETY[AUDIT:arena-reserve-growth-boundary]: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+                // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
                 unsafe {
                     __mi_stat_adjust_decrease_mt(
                         ptr::addr_of_mut!((*subproc).stats.committed),
@@ -113,7 +113,7 @@ pub(super) unsafe fn mi_arena_reserve(
                     );
                 }
             }
-            // SAFETY[AUDIT:arena-reserve-growth-boundary]: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+            // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
             err = unsafe {
                 mi_reserve_os_memory_ex2(
                     subproc_ptr,
@@ -126,7 +126,7 @@ pub(super) unsafe fn mi_arena_reserve(
                 )
             };
             if err != 0 && adjust {
-                // SAFETY[AUDIT:arena-reserve-growth-boundary]: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+                // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
                 unsafe {
                     __mi_stat_adjust_increase_mt(
                         ptr::addr_of_mut!((*subproc).stats.committed),
@@ -153,13 +153,13 @@ unsafe fn mi_reserve_os_memory_ex2(
     let allow_large = allow_large.get();
     let exclusive = exclusive.get();
     if !arena_id.is_null() {
-        // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+        // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
         unsafe { *arena_id = _mi_arena_id_none() };
     }
 
     let size = _mi_align_up(size.get(), MI_ARENA_SLICE_SIZE);
     let mut memid = unsafe { _mi_memid_none() };
-    // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
     let start = unsafe {
         _mi_os_alloc_aligned(size, MI_ARENA_SLICE_ALIGN, commit, allow_large, &mut memid)
     };
@@ -167,7 +167,7 @@ unsafe fn mi_reserve_os_memory_ex2(
         return ENOMEM;
     }
 
-    // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
     if unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(subproc),
@@ -192,7 +192,7 @@ unsafe fn mi_reserve_os_memory_ex2(
         ));
         0
     } else {
-        // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+        // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
         unsafe { _mi_os_free_ex(start, size, commit, memid, ptr::null_mut()) };
         crate::options::_mi_verbose_message(format_args!(
             "failed to reserve {} KiB memory\n",
@@ -204,7 +204,7 @@ unsafe fn mi_reserve_os_memory_ex2(
 
 /// # Safety
 /// Matches the C API and may mutate global arena state through the active sub-process.
-// SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+// SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     size: usize,
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     exclusive: bool,
     arena_id: *mut mi_arena_id_t,
 ) -> c_int {
-    // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
     unsafe {
         mi_reserve_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -229,20 +229,20 @@ pub unsafe extern "C" fn mi_reserve_os_memory_ex(
 
 /// # Safety
 /// Matches the C API and may mutate global arena state through the active sub-process.
-// SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+// SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_os_memory(
     size: usize,
     commit: bool,
     allow_large: bool,
 ) -> c_int {
-    // SAFETY[AUDIT:arena-public-reserve-entry-boundary]: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
     unsafe { mi_reserve_os_memory_ex(size, commit, allow_large, false, ptr::null_mut()) }
 }
 
 /// # Safety
 /// Matches the C API and forwards to the current arena-management entrypoint.
-// SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+// SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_manage_os_memory(
     start: *mut c_void,
@@ -252,7 +252,7 @@ pub unsafe extern "C" fn mi_manage_os_memory(
     is_zero: bool,
     numa_node: c_int,
 ) -> bool {
-    // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+    // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
     unsafe {
         mi_manage_os_memory_ex(
             start,
@@ -284,7 +284,7 @@ unsafe fn mi_manage_os_memory_ex2(
     let mut size = size.get();
     let exclusive = exclusive.get();
     if !arena_id.is_null() {
-        // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+        // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
         unsafe { *arena_id = _mi_arena_id_none() };
     }
     if !(start as usize).is_multiple_of(MI_ARENA_SLICE_SIZE) {
@@ -323,7 +323,7 @@ unsafe fn mi_manage_os_memory_ex2(
             return false;
         };
 
-        // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+        // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
         let arena = unsafe {
             mi_arena_initialize(
                 SubprocPtr::new_unchecked(subproc),
@@ -353,7 +353,7 @@ unsafe fn mi_manage_os_memory_ex2(
             }
             crate::internal::mi_assert!(
                 mi_size_of_slices(total_slice_count)
-                    // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+                    // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
                     <= unsafe { (*parent.cast::<MiArenaPrefix>()).total_size }
             );
             unsafe {
@@ -369,7 +369,7 @@ unsafe fn mi_manage_os_memory_ex2(
         }
         crate::internal::mi_assert!(slice_count <= total_slice_count);
         total_slice_count -= slice_count;
-        // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+        // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
         start = unsafe {
             start
                 .cast::<u8>()
@@ -383,7 +383,7 @@ unsafe fn mi_manage_os_memory_ex2(
 
 /// # Safety
 /// Matches the C API and may mutate arena state for externally managed memory.
-// SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+// SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_manage_os_memory_ex(
     start: *mut c_void,
@@ -406,7 +406,7 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     let Some(start_ptr) = crate::core_types::OsMemPtr::new(start) else {
         return false;
     };
-    // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+    // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
     unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -422,7 +422,7 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     }
 }
 
-// SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+// SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `start..start+size` must describe caller-owned memory suitable for arena management.
@@ -450,7 +450,7 @@ pub unsafe extern "C" fn mi_manage_memory(
     let Some(start_ptr) = crate::core_types::OsMemPtr::new(start) else {
         return false;
     };
-    // SAFETY[AUDIT:arena-managed-os-memory-boundary]: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+    // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
     unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -468,7 +468,7 @@ pub unsafe extern "C" fn mi_manage_memory(
 
 /// # Safety
 /// Matches the C API and may reserve/manage huge-page backed arena memory.
-// SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+// SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     pages: usize,
@@ -478,7 +478,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     arena_id: *mut mi_arena_id_t,
 ) -> c_int {
     if !arena_id.is_null() {
-        // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
         unsafe { *arena_id = ptr::null_mut() };
     }
     if pages == 0 {
@@ -489,13 +489,13 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     } else {
         crate::core_types::NumaNode::new(numa_node)
     }
-    // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+    // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
     .normalize(unsafe { _mi_os_numa_node_count() });
     let numa_node_raw = numa_node.get();
     let mut hsize = 0usize;
     let mut pages_reserved = 0usize;
     let mut memid = unsafe { _mi_memid_none() };
-    // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+    // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
     let p = unsafe {
         _mi_os_alloc_huge_os_pages(
             pages,
@@ -518,7 +518,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
         numa_node_raw, pages_reserved, pages
     ));
 
-    // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+    // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
     if !unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -532,7 +532,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
             arena_id,
         )
     } {
-        // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
         unsafe { _mi_os_free(p, hsize, memid) };
         return ENOMEM;
     }
@@ -541,14 +541,14 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
 
 /// # Safety
 /// Matches the C API and reserves huge-page backed arena memory on a specific NUMA node.
-// SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+// SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages_at(
     pages: usize,
     numa_node: c_int,
     timeout_msecs: usize,
 ) -> c_int {
-    // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+    // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
     unsafe {
         mi_reserve_huge_os_pages_at_ex(pages, numa_node, timeout_msecs, false, ptr::null_mut())
     }
@@ -556,7 +556,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at(
 
 /// # Safety
 /// Matches the C API and reserves huge-page backed arena memory interleaved across NUMA nodes.
-// SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+// SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
     mut pages: usize,
@@ -570,7 +570,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
     let mut numa_count = if numa_nodes > 0 && numa_nodes <= c_int::MAX as usize {
         numa_nodes as c_int
     } else {
-        // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
         unsafe { _mi_os_numa_node_count() }
     };
     if numa_count <= 0 {
@@ -592,7 +592,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
         if (numa_node as usize) < pages_mod {
             node_pages += 1;
         }
-        // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
         let err = unsafe { mi_reserve_huge_os_pages_at(node_pages, numa_node, timeout_per) };
         if err != 0 {
             return err;
@@ -609,7 +609,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
 
 /// # Safety
 /// Matches the deprecated C API and forwards to the interleaved huge-page reservation path.
-// SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+// SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages(
     pages: usize,
@@ -620,13 +620,13 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages(
         "mi_reserve_huge_os_pages is deprecated: use mi_reserve_huge_os_pages_interleave/at instead\n"
     ));
     if !pages_reserved.is_null() {
-        // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
         unsafe { *pages_reserved = 0 };
     }
     let err =
         unsafe { mi_reserve_huge_os_pages_interleave(pages, 0, (max_secs * 1000.0) as usize) };
     if err == 0 && !pages_reserved.is_null() {
-        // SAFETY[AUDIT:arena-huge-reservation-boundary]: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
         unsafe { *pages_reserved = pages };
     }
     err

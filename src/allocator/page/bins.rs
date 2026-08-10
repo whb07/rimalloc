@@ -58,7 +58,7 @@ fn mi_bin_from_raw_size(size: usize) -> crate::core_types::Bin {
     let bin = mi_bin_impl(size);
     crate::internal::mi_debug_assert!(u16::try_from(bin).is_ok());
     crate::internal::mi_debug_assert!(bin < crate::types::MI_BIN_COUNT);
-    // SAFETY[AUDIT:page-bin-size-classes]: `mi_bin_impl` returns a non-huge
+    // SAFETY: `mi_bin_impl` returns a non-huge
     // bin below `MI_BIN_COUNT`, and the assertions preserve that table bound.
     unsafe { crate::core_types::Bin::new_unchecked(bin as u16) }
 }
@@ -83,7 +83,7 @@ pub(crate) fn mi_bin_from_usable(usable: crate::core_types::UsableSize) -> crate
 #[inline(never)]
 pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
     crate::internal::mi_debug_assert!(bin <= MI_BIN_HUGE);
-    // SAFETY[AUDIT:page-bin-size-classes]: `_mi_theap_empty.pages` contains the
+    // SAFETY: `_mi_theap_empty.pages` contains the
     // allocator's size-class table, and callers/assertions keep `bin` within
     // the C-compatible `0..=MI_BIN_HUGE` range.
     unsafe { (*ptr::addr_of!(_mi_theap_empty).cast::<mi_theap_t>()).pages[bin].block_size }
@@ -120,7 +120,7 @@ pub(crate) fn mi_good_size_typed(
     }
 }
 
-// SAFETY[AUDIT:page-bin-size-classes]: this preserves the C `mi_good_size`
+// SAFETY: this preserves the C `mi_good_size`
 // symbol name while the body immediately routes into typed size wrappers.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_good_size(size: usize) -> usize {

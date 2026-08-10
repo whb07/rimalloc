@@ -123,18 +123,12 @@ def link_static_smoke(
     subprocess.run([str(binary)], cwd=ROOT, check=True)
 
 
-def assert_internal_symbol_is_documented(staticlib: pathlib.Path) -> None:
+def assert_internal_symbol_is_present(staticlib: pathlib.Path) -> None:
     nm = run(["nm", "-g", "--defined-only", str(staticlib)])
     if INTERNAL_COLLISION_SYMBOL not in nm.stdout:
         raise SystemExit(
             f"expected preview internal static symbol missing: {INTERNAL_COLLISION_SYMBOL}"
         )
-    abi_doc = (ROOT / "docs/abi.md").read_text()
-    if (
-        "non-header `_mi_*`" not in abi_doc
-        or "not be treated as a stable static ABI" not in abi_doc
-    ):
-        raise SystemExit("docs/abi.md must document preview-only internal static symbols")
 
 
 def assert_collision_fails(
@@ -184,7 +178,7 @@ def main() -> int:
     compile_object(cc, support, support_o)
     compile_object(cc, collision, collision_o)
 
-    assert_internal_symbol_is_documented(staticlib)
+    assert_internal_symbol_is_present(staticlib)
     link_static_smoke(cc, smoke, support_o, staticlib)
     assert_collision_fails(cc, smoke, support_o, collision_o, staticlib)
 

@@ -56,7 +56,7 @@ fn meta_block_index(raw: usize) -> BlockIndex {
 #[inline]
 fn meta_block_count(block_count: usize) -> NonZeroU32 {
     crate::internal::mi_assert_internal!(block_count > 0 && block_count <= u32::MAX as usize);
-    // SAFETY[AUDIT:arena-meta-allocator]: the assertions above establish the
+    // SAFETY: the assertions above establish the
     // non-zero u32 block-count domain used by meta memids.
     unsafe { NonZeroU32::new_unchecked(block_count as u32) }
 }
@@ -67,7 +67,7 @@ unsafe fn mi_meta_memid(
     block_index: BlockIndex,
     block_count: NonZeroU32,
 ) -> mi_memid_t {
-    // SAFETY[AUDIT:arena-meta-allocator]: callers pass a live meta page plus
+    // SAFETY: callers pass a live meta page plus
     // checked block index/count domains before constructing the typed memid.
     unsafe {
         crate::internal::mi_assert_internal!(!mpage.is_null());
@@ -86,7 +86,7 @@ unsafe fn mi_meta_memid(
 /// If `block_idx` is non-null, it must be valid for writing one `usize`.
 #[inline]
 pub unsafe fn mi_meta_page_of_ptr(p: *mut c_void, block_idx: *mut usize) -> *mut mi_meta_page_t {
-    // SAFETY[AUDIT:arena-meta-allocator]: `p` is inside a meta allocation, so
+    // SAFETY: `p` is inside a meta allocation, so
     // aligning to the slice base and adding the guard-page size reaches the
     // owning meta-page header.
     let mpage = unsafe {
@@ -95,7 +95,7 @@ pub unsafe fn mi_meta_page_of_ptr(p: *mut c_void, block_idx: *mut usize) -> *mut
             .cast::<mi_meta_page_t>()
     };
     if !block_idx.is_null() {
-        // SAFETY[AUDIT:arena-meta-allocator]: `block_idx` was checked non-null
+        // SAFETY: `block_idx` was checked non-null
         // and this function's contract requires it to be writable.
         unsafe {
             *block_idx =
@@ -115,17 +115,17 @@ pub unsafe fn mi_meta_block_start(
     block_index: BlockIndex,
 ) -> *mut c_void {
     let block_idx = block_index.0 as usize;
-    // SAFETY[AUDIT:arena-meta-allocator]: secure guard-page size is a platform
+    // SAFETY: secure guard-page size is a platform
     // primitive used only for meta-page address derivation.
     let guard_size = unsafe { _mi_os_secure_guard_page_size() };
     crate::internal::mi_assert_internal!(_mi_is_aligned(
-        // SAFETY[AUDIT:arena-meta-allocator]: `mpage` is a live meta page, and
+        // SAFETY: `mpage` is a live meta page, and
         // subtracting the guard size returns the aligned slice base.
         unsafe { mpage.cast::<u8>().sub(guard_size).cast() },
         MI_ARENA_SLICE_ALIGN
     ));
     crate::internal::mi_assert_internal!(block_idx < MI_META_BLOCKS_PER_PAGE);
-    // SAFETY[AUDIT:arena-meta-allocator]: `block_idx` is within the meta page
+    // SAFETY: `block_idx` is within the meta page
     // and the computed block start stays inside the owning slice.
     let p = unsafe {
         mpage
@@ -135,7 +135,7 @@ pub unsafe fn mi_meta_block_start(
             .cast::<c_void>()
     };
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:arena-meta-allocator]: the computed block pointer is
+        // SAFETY: the computed block pointer is
         // checked by round-tripping to the same meta-page header.
         mpage == unsafe { mi_meta_page_of_ptr(p, ptr::null_mut()) }
     );
@@ -143,7 +143,7 @@ pub unsafe fn mi_meta_block_start(
 }
 
 unsafe fn mi_meta_page_zalloc() -> *mut mi_meta_page_t {
-    // SAFETY[AUDIT:arena-meta-allocator]: this helper owns creation of a new
+    // SAFETY: this helper owns creation of a new
     // meta page, initializes its memid/bitmap header, and publishes it with the
     // existing acquire/release stack discipline.
     unsafe {
@@ -204,14 +204,14 @@ unsafe fn mi_meta_page_zalloc() -> *mut mi_meta_page_t {
 ///
 /// `pmemid` must be valid for writing one `mi_memid_t`. The returned pointer,
 /// when non-null, must be released with `_mi_meta_free` using the returned memid.
-// SAFETY[AUDIT:arena-meta-allocator]: this C-shaped shim validates size and
+// SAFETY: this C-shaped shim validates size and
 // output memid storage before allocating from the meta bitmap or arena/OS
 // fallback.
 pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
     size: usize,
     pmemid: *mut mi_memid_t,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:arena-meta-allocator]: the function contract provides valid
+    // SAFETY: the function contract provides valid
     // memid output storage and the body keeps all meta-page mutations local to
     // this allocation attempt.
     unsafe {
@@ -268,7 +268,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
 ///
 /// `p` may be null. Otherwise `p`, `size`, and `memid` must describe a live
 /// allocation returned by `_mi_meta_zalloc` or its arena fallback.
-// SAFETY[AUDIT:arena-meta-allocator]: this C-shaped shim accepts the memid
+// SAFETY: this C-shaped shim accepts the memid
 // returned by allocation, reclaims meta bitmap ranges, and delegates non-meta
 // memory to the arena free path.
 pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
@@ -312,7 +312,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid
 ///
 /// `p` may be any pointer-sized value. The meta-page list must not be
 /// concurrently destroyed while the lookup runs.
-// SAFETY[AUDIT:arena-meta-allocator]: debug classification only traverses the
+// SAFETY: debug classification only traverses the
 // acquire-loaded meta-page stack and compares header identity.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
@@ -321,7 +321,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
         if mpage.cast::<c_void>() == p {
             return true;
         }
-        // SAFETY[AUDIT:arena-meta-allocator]: `mpage` came from the published
+        // SAFETY: `mpage` came from the published
         // meta-page stack and remains valid for this debug traversal.
         mpage = unsafe { mi_meta_page_next(mpage) };
     }
@@ -329,6 +329,6 @@ pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
 }
 
 #[used]
-// SAFETY[AUDIT:arena-meta-allocator]: keep the debug classification shim linked
+// SAFETY: keep the debug classification shim linked
 // with its exact C-shaped function pointer type.
 static MI_META_IS_META_PAGE_KEEP: unsafe extern "C" fn(*mut c_void) -> bool = _mi_meta_is_meta_page;

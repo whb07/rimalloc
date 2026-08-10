@@ -100,7 +100,7 @@ impl RequestedSize {
             self.0.checked_add(crate::types::MI_PADDING_SIZE).is_some(),
             "requested size + padding must not overflow"
         );
-        // SAFETY[AUDIT:scalar-size-domain-wrappers]: caller guarantees the padded
+        // SAFETY: caller guarantees the padded
         // sum is non-zero and cannot overflow on this hot path.
         unsafe { PaddedSize::new_unchecked(self.0.wrapping_add(crate::types::MI_PADDING_SIZE)) }
     }
@@ -114,7 +114,7 @@ pub(crate) struct EffectiveSize(pub(crate) NonZeroUsize);
 impl EffectiveSize {
     /// # Safety
     /// `size` must be non-zero.
-    // SAFETY[AUDIT:scalar-size-domain-wrappers]: unchecked effective-size
+    // SAFETY: unchecked effective-size
     // construction is only valid after callers prove the non-zero size domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
@@ -142,7 +142,7 @@ pub(crate) struct PaddedSize(pub(crate) NonZeroUsize);
 impl PaddedSize {
     /// # Safety
     /// `size` must be non-zero.
-    // SAFETY[AUDIT:scalar-size-domain-wrappers]: unchecked padded-size construction
+    // SAFETY: unchecked padded-size construction
     // is only valid after callers prove the non-zero padded-size domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
@@ -217,7 +217,7 @@ impl UsableOut {
 
     /// # Safety
     /// If non-null, the wrapped pointer must be valid for a `usize` write.
-    // SAFETY[AUDIT:scalar-size-domain-wrappers]: nullable usable-size out pointer is
+    // SAFETY: nullable usable-size out pointer is
     // checked for null before writing the caller-provided storage.
     #[inline(always)]
     pub(crate) unsafe fn write_if_present(self, usable: UsableSize) {
@@ -235,7 +235,7 @@ pub(crate) struct BlockSize(pub(crate) NonZeroUsize);
 impl BlockSize {
     /// # Safety
     /// `size` must be non-zero.
-    // SAFETY[AUDIT:scalar-size-domain-wrappers]: unchecked block-size construction is
+    // SAFETY: unchecked block-size construction is
     // only valid after callers prove the non-zero block-size domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
@@ -292,7 +292,7 @@ pub(crate) struct FullBlockSize(pub(crate) NonZeroUsize);
 impl FullBlockSize {
     /// # Safety
     /// `size` must be non-zero and include allocator metadata/padding.
-    // SAFETY[AUDIT:scalar-size-domain-wrappers]: unchecked full-block construction
+    // SAFETY: unchecked full-block construction
     // is only valid after callers prove the non-zero full-block domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
@@ -320,7 +320,7 @@ impl Alignment {
     #[inline(always)]
     pub(crate) fn new(align: usize) -> Option<Self> {
         if align.is_power_of_two() {
-            // SAFETY[AUDIT:scalar-alignment-domain-wrappers]: `usize::is_power_of_two`
+            // SAFETY: `usize::is_power_of_two`
             // rejects zero and proves the alignment domain.
             Some(unsafe { Self::new_unchecked(align) })
         } else {
@@ -329,7 +329,7 @@ impl Alignment {
     }
     /// # Safety
     /// `align` must be a non-zero power of two.
-    // SAFETY[AUDIT:scalar-alignment-domain-wrappers]: unchecked alignment construction is
+    // SAFETY: unchecked alignment construction is
     // only valid after callers prove non-zero power-of-two alignment.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(align: usize) -> Self {
@@ -357,7 +357,7 @@ impl MaybeAlignment {
     }
     /// # Safety
     /// `align` must be zero or a power of two.
-    // SAFETY[AUDIT:scalar-alignment-domain-wrappers]: unchecked optional alignment keeps
+    // SAFETY: unchecked optional alignment keeps
     // the raw zero-or-power-of-two domain in a transparent wrapper.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(align: usize) -> Self {
@@ -585,7 +585,7 @@ impl BatchLen {
     /// `value` must be non-zero.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(value: u16) -> Self {
-        // SAFETY[AUDIT:typed-page-batch-scalars]: the caller proves the batch is non-empty.
+        // SAFETY: the caller proves the batch is non-empty.
         Self(unsafe { NonZeroU16::new_unchecked(value) })
     }
 
@@ -618,7 +618,7 @@ impl BatchLimit {
     /// `value` must be non-zero.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(value: u16) -> Self {
-        // SAFETY[AUDIT:typed-page-batch-scalars]: the caller proves the limit is non-zero.
+        // SAFETY: the caller proves the limit is non-zero.
         Self(unsafe { NonZeroU16::new_unchecked(value) })
     }
 
@@ -682,7 +682,7 @@ impl PageCapacity {
 
     /// # Safety
     /// Caller must prove `used <= capacity <= reserved`.
-    // SAFETY[AUDIT:scalar-page-count-domain-wrappers]: unchecked page capacity construction
+    // SAFETY: unchecked page capacity construction
     // is reserved for callers that have already proved page count ordering.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(capacity: u16) -> Self {
@@ -917,7 +917,7 @@ pub(crate) struct OsPageSize(pub(crate) NonZeroUsize);
 impl OsPageSize {
     /// # Safety
     /// `size` must be nonzero.
-    // SAFETY[AUDIT:scalar-page-count-domain-wrappers]: unchecked OS page-size construction
+    // SAFETY: unchecked OS page-size construction
     // is only valid after platform initialization proves a non-zero page size.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
@@ -947,7 +947,7 @@ impl PageMapIndex {
 
     /// # Safety
     /// `index` must be less than `MI_PAGE_MAP_COUNT`.
-    // SAFETY[AUDIT:scalar-index-domain-wrappers]: unchecked page-map index
+    // SAFETY: unchecked page-map index
     // construction is reserved for callers that already proved top-level bounds.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: usize) -> Self {
@@ -977,7 +977,7 @@ impl PageMapSubIndex {
 
     /// # Safety
     /// `index` must be less than `MI_PAGE_MAP_SUB_COUNT`.
-    // SAFETY[AUDIT:scalar-index-domain-wrappers]: unchecked page-map sub-index
+    // SAFETY: unchecked page-map sub-index
     // construction is reserved for callers that already proved submap bounds.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: usize) -> Self {
@@ -1006,7 +1006,7 @@ impl Bin {
     }
     /// # Safety
     /// `index` must be less than `MI_BIN_COUNT`.
-    // SAFETY[AUDIT:scalar-index-domain-wrappers]: unchecked bin construction is
+    // SAFETY: unchecked bin construction is
     // reserved for callers that already proved the page-queue bin domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: u16) -> Self {
@@ -1038,7 +1038,7 @@ impl StatsBin {
     }
     /// # Safety
     /// `index` must be less than or equal to `MI_BIN_HUGE`.
-    // SAFETY[AUDIT:scalar-index-domain-wrappers]: unchecked stats-bin construction is
+    // SAFETY: unchecked stats-bin construction is
     // reserved for callers that already proved the stats bin domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: u16) -> Self {
@@ -1070,7 +1070,7 @@ impl DirectBin {
     }
     /// # Safety
     /// `index` must be less than `MI_PAGES_DIRECT`.
-    // SAFETY[AUDIT:scalar-index-domain-wrappers]: unchecked direct-bin construction is
+    // SAFETY: unchecked direct-bin construction is
     // reserved for callers that already proved the direct-page bin domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: u16) -> Self {
@@ -1126,14 +1126,14 @@ impl SliceCount {
         if count == 0 || count > u32::MAX as usize {
             None
         } else {
-            // SAFETY[AUDIT:scalar-index-domain-wrappers]: the const branch rejects zero
+            // SAFETY: the const branch rejects zero
             // and values outside the non-zero `u32` slice-count domain.
             Some(unsafe { Self::new_unchecked(count as u32) })
         }
     }
     /// # Safety
     /// `count` must be non-zero.
-    // SAFETY[AUDIT:scalar-index-domain-wrappers]: unchecked slice-count construction
+    // SAFETY: unchecked slice-count construction
     // is only valid after callers prove the non-zero `u32` count domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(count: u32) -> Self {
@@ -1165,7 +1165,7 @@ impl ArenaIndex {
     }
     /// # Safety
     /// `idx` must be less than `MI_MAX_ARENAS`.
-    // SAFETY[AUDIT:scalar-index-domain-wrappers]: unchecked arena-index construction
+    // SAFETY: unchecked arena-index construction
     // is reserved for callers that already proved arena table bounds.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(idx: u16) -> Self {
@@ -1194,17 +1194,17 @@ impl GoodSize {
 }
 
 pub(super) fn __lint_touch() {
-    // SAFETY[AUDIT:typed-page-batch-scalars]: one is a valid non-zero lint fixture.
+    // SAFETY: one is a valid non-zero lint fixture.
     let batch_limit = unsafe { BatchLimit::new_unchecked(1) };
     let _ = batch_limit.as_usize();
     let _ = BatchLimit::new(1);
     let _ = batch_limit.clamp_to_remaining(1);
     let _ = BatchLen::new(1);
-    // SAFETY[AUDIT:typed-page-batch-scalars]: one is a valid non-zero lint fixture.
+    // SAFETY: one is a valid non-zero lint fixture.
     let batch_len = unsafe { BatchLen::new_unchecked(1) };
     let _ = batch_len.as_usize();
     let used = UsedBlockCount::new(1);
-    // SAFETY[AUDIT:typed-page-batch-scalars]: one satisfies the standalone
+    // SAFETY: one satisfies the standalone
     // capacity fixture and is never published to page metadata.
     let capacity = unsafe { PageCapacity::new_unchecked(1) };
     let _ = UsedBlockCount::new(0).checked_add_batch(batch_len, capacity);
@@ -1212,7 +1212,7 @@ pub(super) fn __lint_touch() {
     let requested = RequestedSize::new(1);
     let _ = requested.checked_add(1);
     let _ = requested.checked_mul(1);
-    // SAFETY[AUDIT:scalar-lint-fixture-wrappers]: lint-touch fixtures use known-valid
+    // SAFETY: lint-touch fixtures use known-valid
     // non-zero values solely to keep scalar wrapper methods typechecked.
     let effective = unsafe { EffectiveSize::new_unchecked(1) };
     let _ = effective.checked_add(1);
@@ -1223,13 +1223,13 @@ pub(super) fn __lint_touch() {
     let _ = usable.checked_add(1);
     let usable_out = UsableOut::new(core::ptr::null_mut());
     let _ = usable_out.as_ptr();
-    // SAFETY[AUDIT:scalar-lint-fixture-wrappers]: lint-touch fixtures use known-valid
+    // SAFETY: lint-touch fixtures use known-valid
     // scalar domains and never publish these values to allocator state.
     let block = unsafe { BlockSize::new_unchecked(1) };
     let _ = block.checked_add(1);
     let _ = block.checked_usable();
     let _ = unsafe { FullBlockSize::new_unchecked(1) };
-    // SAFETY[AUDIT:scalar-lint-fixture-wrappers]: one is a valid optional alignment
+    // SAFETY: one is a valid optional alignment
     // for this compile-time-only lint fixture.
     let alignment = unsafe { MaybeAlignment::new_unchecked(1) };
     let _ = alignment.is_some();
@@ -1239,7 +1239,7 @@ pub(super) fn __lint_touch() {
     let _ = thread_count.get();
     let heap_count = HeapCount::new(1);
     let _ = heap_count.get();
-    // SAFETY[AUDIT:scalar-lint-fixture-wrappers]: zero is a valid page-queue bin for
+    // SAFETY: zero is a valid page-queue bin for
     // this compile-time-only lint fixture.
     let bin = unsafe { Bin::new_unchecked(0) };
     let _ = bin.get();

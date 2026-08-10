@@ -50,7 +50,7 @@ unsafe fn mi_padding_shrink_call(
     block: *const mi_block_t,
     min_size: usize,
 ) {
-    // SAFETY[AUDIT:aligned-padding-shrink-boundary]: aligned padding-shrink shims preserve C ABI and page/block witness requirements.
+    // SAFETY: aligned padding-shrink shims preserve C ABI and page/block witness requirements.
     unsafe {
         core::arch::asm!(
             "call _mi_padding_shrink",
@@ -69,7 +69,7 @@ unsafe fn mi_padding_shrink_call(
     block: *const mi_block_t,
     min_size: usize,
 ) {
-    // SAFETY[AUDIT:aligned-padding-shrink-boundary]: aligned padding-shrink shims preserve C ABI and page/block witness requirements.
+    // SAFETY: aligned padding-shrink shims preserve C ABI and page/block witness requirements.
     unsafe { _mi_padding_shrink(page, block, min_size) };
 }
 
@@ -165,17 +165,17 @@ unsafe fn mi_theap_malloc_guarded_aligned(
         return core::ptr::null_mut();
     }
     let oversize = size + alignment - 1;
-    // SAFETY[AUDIT:aligned-guarded-allocation-boundary]: guarded aligned allocation preserves layout, tracking, and usable-size witnesses.
+    // SAFETY: guarded aligned allocation preserves layout, tracking, and usable-size witnesses.
     let base = unsafe { _mi_theap_malloc_guarded(theap, oversize, zero) };
     if base.is_null() {
         return core::ptr::null_mut();
     }
     let p = _mi_align_up_ptr(base.cast_const(), alignment);
-    // SAFETY[AUDIT:aligned-guarded-allocation-boundary]: guarded aligned allocation preserves layout, tracking, and usable-size witnesses.
+    // SAFETY: guarded aligned allocation preserves layout, tracking, and usable-size witnesses.
     unsafe {
         mi_track_align(base, p, p as usize - base as usize, size);
     }
-    // SAFETY[AUDIT:aligned-guarded-allocation-boundary]: guarded aligned allocation preserves layout, tracking, and usable-size witnesses.
+    // SAFETY: guarded aligned allocation preserves layout, tracking, and usable-size witnesses.
     crate::internal::mi_assert_internal!(unsafe { crate::mimalloc::mi_usable_size(p) } >= size);
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(p, alignment));
     p
@@ -196,7 +196,7 @@ pub(crate) unsafe fn mi_theap_malloc_zero_no_guarded(
     let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
     crate::internal::mi_assert_internal!(alignment.get() > 0);
     crate::internal::mi_assert_internal!(offset.get() < alignment.get());
-    // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
+    // SAFETY: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
     unsafe { _mi_theap_malloc_zero(theap.ptr().as_ptr(), size, zero, usable) }
 }
 
@@ -237,7 +237,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
         let theap = theap
             .map(|theap| theap.ptr().as_ptr())
             .unwrap_or(core::ptr::null_mut());
-        // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
+        // SAFETY: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
         p = unsafe { _mi_theap_malloc_zero_ex(theap, oversize, zero, alignment_raw, usable) };
         if p.is_null() {
             return core::ptr::null_mut();
@@ -259,12 +259,12 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
             return core::ptr::null_mut();
         };
         p = if let Some(theap) = theap {
-            // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
+            // SAFETY: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
             unsafe {
                 mi_theap_malloc_zero_no_guarded(theap, no_guarded_layout, alignment, offset, usable)
             }
         } else {
-            // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
+            // SAFETY: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
             unsafe { _mi_theap_malloc_zero(core::ptr::null_mut(), oversize, zero, usable) }
         };
         if p.is_null() {
@@ -282,48 +282,48 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
     crate::internal::mi_assert_internal!(adjust < alignment_raw);
     let aligned_p = (p as usize + adjust) as *mut c_void;
 
-    // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+    // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
     let page = unsafe { _mi_ptr_page(p) };
     if aligned_p != p {
-        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+        // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe {
             mi_page_set_has_interior_pointers(crate::core_types::PagePtr::new_unchecked(page), true)
         };
         if MI_GUARDED != 0 && adjust >= size_of::<mi_block_t>() {
             let block = p.cast::<mi_block_t>();
-            // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+            // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
             let block = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
-            // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+            // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
             unsafe {
                 crate::core_types::BlockTag::write_aligned_to(block);
             }
         }
-        // SAFETY[AUDIT:aligned-padding-shrink-boundary]: aligned padding-shrink shims preserve C ABI and page/block witness requirements.
+        // SAFETY: aligned padding-shrink shims preserve C ABI and page/block witness requirements.
         unsafe { mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size) };
     }
 
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+        // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe { mi_page_usable_block_size(page) }.get() >= adjust + size
     );
     crate::internal::mi_assert_internal!(
         ((aligned_p as usize) + offset_raw).is_multiple_of(alignment_raw)
     );
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+        // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe { crate::mimalloc::mi_usable_size(aligned_p) } >= size
     );
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+        // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe { crate::mimalloc::mi_usable_size(p) }
-            // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+            // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
             == unsafe { crate::mimalloc::mi_usable_size(aligned_p) } + adjust
     );
 
     if p != aligned_p {
-        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+        // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         let usable_size = unsafe { crate::mimalloc::mi_usable_size(aligned_p) };
-        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
+        // SAFETY: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe { mi_track_align(p, aligned_p, adjust, usable_size) };
     }
     aligned_p
@@ -357,7 +357,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_generic(
         && offset_raw == 0
         && mi_malloc_is_naturally_aligned(layout.requested(), alignment)
     {
-        // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
+        // SAFETY: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
         let p = unsafe {
             mi_theap_malloc_zero_no_guarded(local_theap, layout, alignment, offset, usable)
         };
@@ -368,40 +368,40 @@ unsafe fn mi_theap_malloc_zero_aligned_at_generic(
             return p;
         }
         crate::internal::mi_assert!(false);
-        // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
+        // SAFETY: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
         unsafe { crate::mimalloc::mi_free(p) };
     }
 
-    // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
+    // SAFETY: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
     unsafe { mi_theap_malloc_zero_aligned_at_overalloc(theap, layout, alignment, offset, usable) }
 }
 
 /// # Safety
 /// `alignment` must be valid for aligned allocation. Returned memory must be released through this
 /// allocator.
-// SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+// SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_aligned_at(
     size: usize,
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+    // SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
     unsafe { mi_theap_malloc_aligned_at(_mi_theap_default(), size, alignment, offset) }
 }
 
 /// # Safety
 /// `alignment` must be valid for aligned allocation. Returned memory must be released through this
 /// allocator.
-// SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+// SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
 #[cfg(not(mi_c_malloc_fast))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_aligned(size: usize, alignment: usize) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+    // SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
     unsafe { mi_theap_malloc_aligned(_mi_theap_default(), size, alignment) }
 }
 
-// SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+// SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
 #[cfg(mi_c_malloc_fast)]
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
@@ -420,14 +420,14 @@ pub unsafe extern "C" fn mi_malloc_aligned(_size: usize, _alignment: usize) -> *
 /// # Safety
 /// `alignment` must be valid for aligned allocation. If `block_size` is non-null it must be
 /// writable for one `usize`.
-// SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+// SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_umalloc_aligned(
     size: usize,
     alignment: usize,
     block_size: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+    // SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
     unsafe {
         mi_theap_malloc_zero_aligned_at(_mi_theap_default(), size, alignment, 0, false, block_size)
     }
@@ -436,38 +436,38 @@ pub unsafe extern "C" fn mi_umalloc_aligned(
 /// # Safety
 /// `alignment` must be valid for aligned allocation. Returned memory must be released through this
 /// allocator.
-// SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+// SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_aligned_at(
     size: usize,
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+    // SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
     unsafe { mi_theap_zalloc_aligned_at(_mi_theap_default(), size, alignment, offset) }
 }
 
 /// # Safety
 /// `alignment` must be valid for aligned allocation. Returned memory must be released through this
 /// allocator.
-// SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+// SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_aligned(size: usize, alignment: usize) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+    // SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
     unsafe { mi_theap_zalloc_aligned(_mi_theap_default(), size, alignment) }
 }
 
 /// # Safety
 /// `alignment` must be valid for aligned allocation. If `block_size` is non-null it must be
 /// writable for one `usize`.
-// SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+// SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_uzalloc_aligned(
     size: usize,
     alignment: usize,
     block_size: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+    // SAFETY: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
     unsafe {
         mi_theap_malloc_zero_aligned_at(_mi_theap_default(), size, alignment, 0, true, block_size)
     }
@@ -476,7 +476,7 @@ pub unsafe extern "C" fn mi_uzalloc_aligned(
 /// # Safety
 /// `alignment` must be valid for aligned allocation. Returned memory must be released through this
 /// allocator.
-// SAFETY[AUDIT:aligned-global-calloc-export-boundary]: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
+// SAFETY: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_calloc_aligned_at(
     count: usize,
@@ -484,27 +484,27 @@ pub unsafe extern "C" fn mi_calloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-calloc-export-boundary]: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
+    // SAFETY: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
     unsafe { mi_theap_calloc_aligned_at(_mi_theap_default(), count, size, alignment, offset) }
 }
 
 /// # Safety
 /// `alignment` must be valid for aligned allocation. Returned memory must be released through this
 /// allocator.
-// SAFETY[AUDIT:aligned-global-calloc-export-boundary]: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
+// SAFETY: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_calloc_aligned(
     count: usize,
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-calloc-export-boundary]: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
+    // SAFETY: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
     unsafe { mi_theap_calloc_aligned(_mi_theap_default(), count, size, alignment) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+// SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -512,7 +512,7 @@ pub unsafe extern "C" fn mi_heap_malloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -521,7 +521,7 @@ pub unsafe extern "C" fn mi_heap_malloc_aligned_at(
     else {
         return core::ptr::null_mut();
     };
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     unsafe { mi_heap_malloc_aligned_at_typed(heap, layout, alignment, offset) }
 }
 
@@ -531,19 +531,19 @@ unsafe fn mi_heap_malloc_aligned_at_typed(
     alignment: crate::core_types::Alignment,
     offset: crate::core_types::AlignmentOffset,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
     let theap = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+        // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     unsafe {
         mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
     }
@@ -551,14 +551,14 @@ unsafe fn mi_heap_malloc_aligned_at_typed(
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+// SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_aligned(
     heap: *mut mi_heap_t,
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -566,13 +566,13 @@ pub unsafe extern "C" fn mi_heap_malloc_aligned(
     else {
         return core::ptr::null_mut();
     };
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     unsafe { mi_heap_malloc_aligned_at_typed(heap, layout, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+// SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -580,7 +580,7 @@ pub unsafe extern "C" fn mi_heap_zalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -588,20 +588,20 @@ pub unsafe extern "C" fn mi_heap_zalloc_aligned_at(
     else {
         return core::ptr::null_mut();
     };
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     unsafe { mi_heap_malloc_aligned_at_typed(heap, layout, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+// SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_aligned(
     heap: *mut mi_heap_t,
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -609,13 +609,13 @@ pub unsafe extern "C" fn mi_heap_zalloc_aligned(
     else {
         return core::ptr::null_mut();
     };
-    // SAFETY[AUDIT:aligned-heap-allocation-export-boundary]: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
+    // SAFETY: heap aligned allocation exports borrow heap handles before checked aligned dispatch.
     unsafe { mi_heap_malloc_aligned_at_typed(heap, layout, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-calloc-product-boundary]: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
+// SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_calloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -624,7 +624,7 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-calloc-product-boundary]: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
+    // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -644,7 +644,7 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned_at(
         return core::ptr::null_mut();
     };
     let offset = crate::core_types::AlignmentOffset::new(offset);
-    // SAFETY[AUDIT:aligned-calloc-product-boundary]: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
+    // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
     unsafe { mi_heap_calloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
@@ -656,25 +656,25 @@ unsafe fn mi_heap_calloc_aligned_at_typed(
     alignment: crate::core_types::Alignment,
     offset: crate::core_types::AlignmentOffset,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-calloc-product-boundary]: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
+    // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
     let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
     let theap = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY[AUDIT:aligned-calloc-product-boundary]: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
+        // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY[AUDIT:aligned-calloc-product-boundary]: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
+    // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
     unsafe { mi_theap_calloc_aligned_at_req(theap, request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-calloc-product-boundary]: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
+// SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_calloc_aligned(
     heap: *mut mi_heap_t,
@@ -682,7 +682,7 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-calloc-product-boundary]: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
+    // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -702,7 +702,7 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned(
         return core::ptr::null_mut();
     };
     let offset = crate::core_types::AlignmentOffset::new(0);
-    // SAFETY[AUDIT:aligned-calloc-product-boundary]: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
+    // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
     unsafe { mi_heap_calloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
@@ -727,7 +727,7 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
         let Ok(layout) = layout else {
             return core::ptr::null_mut();
         };
-        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
@@ -745,7 +745,7 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -755,7 +755,7 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+    // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment_typed, offset) }
 }
 
@@ -777,21 +777,21 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
 
     crate::internal::mi_assert!(alignment_raw > 0);
     if alignment_raw <= size_of::<usize>() && offset_raw == 0 {
-        // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         return unsafe { crate::alloc::mi_theap_realloc_req(theap, request) };
     }
     if p.is_null() {
         let theap = if MI_THEAP_INITASNULL && theap.is_null() {
             None
         } else {
-            // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+            // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
             Some(unsafe {
                 crate::core_types::ThreadHeapLocal::new_unchecked(
                     crate::core_types::ThreadHeapPtr::new_unchecked(theap),
                 )
             })
         };
-        // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         return unsafe {
             mi_theap_malloc_zero_aligned_at_req(
                 theap,
@@ -829,14 +829,14 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
     let theap_local = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY[AUDIT:aligned-realloc-copy-boundary]: aligned realloc copy preserves bounded old contents before freeing the validated old block.
+        // SAFETY: aligned realloc copy preserves bounded old contents before freeing the validated old block.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY[AUDIT:aligned-realloc-copy-boundary]: aligned realloc copy preserves bounded old contents before freeing the validated old block.
+    // SAFETY: aligned realloc copy preserves bounded old contents before freeing the validated old block.
     let newp = unsafe {
         mi_theap_malloc_zero_aligned_at_req(
             theap_local,
@@ -858,10 +858,10 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
             } else {
                 0
             };
-            // SAFETY[AUDIT:aligned-realloc-copy-boundary]: aligned realloc copy preserves bounded old contents before freeing the validated old block.
+            // SAFETY: aligned realloc copy preserves bounded old contents before freeing the validated old block.
             unsafe { _mi_memzero((newp as *mut u8).add(start).cast(), newsize - start) };
         }
-        // SAFETY[AUDIT:aligned-realloc-copy-boundary]: aligned realloc copy preserves bounded old contents before freeing the validated old block.
+        // SAFETY: aligned realloc copy preserves bounded old contents before freeing the validated old block.
         unsafe {
             _mi_memcpy_aligned(newp, p, preserve.get());
             crate::mimalloc::mi_free(p);
@@ -891,7 +891,7 @@ pub unsafe fn mi_theap_realloc_zero_aligned(
         let Ok(layout) = layout else {
             return core::ptr::null_mut();
         };
-        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
@@ -916,7 +916,7 @@ pub unsafe fn mi_theap_realloc_zero_aligned(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -926,7 +926,7 @@ pub unsafe fn mi_theap_realloc_zero_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+    // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
@@ -946,7 +946,7 @@ pub unsafe fn mi_theap_realloc_aligned_at(
         let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) else {
             return core::ptr::null_mut();
         };
-        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
@@ -962,7 +962,7 @@ pub unsafe fn mi_theap_realloc_aligned_at(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -972,7 +972,7 @@ pub unsafe fn mi_theap_realloc_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+    // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
@@ -991,7 +991,7 @@ pub unsafe fn mi_theap_realloc_aligned(
         let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) else {
             return core::ptr::null_mut();
         };
-        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
@@ -1012,7 +1012,7 @@ pub unsafe fn mi_theap_realloc_aligned(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1022,7 +1022,7 @@ pub unsafe fn mi_theap_realloc_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+    // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
@@ -1042,7 +1042,7 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
         let Ok(layout) = crate::core_types::LayoutRequest::zalloc(newsize) else {
             return core::ptr::null_mut();
         };
-        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
@@ -1052,7 +1052,7 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
         let Ok(layout) = crate::core_types::LayoutRequest::zalloc(newsize) else {
             return core::ptr::null_mut();
         };
-        // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let offset = crate::core_types::AlignmentOffset::new(offset);
@@ -1065,7 +1065,7 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1075,7 +1075,7 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
+    // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment_typed, offset) }
 }
 
@@ -1094,7 +1094,7 @@ pub unsafe fn mi_theap_rezalloc_aligned(
         let Ok(layout) = crate::core_types::LayoutRequest::zalloc(newsize) else {
             return core::ptr::null_mut();
         };
-        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
@@ -1115,7 +1115,7 @@ pub unsafe fn mi_theap_rezalloc_aligned(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-recalloc-product-boundary]: aligned recalloc paths use checked product requests and zeroing metadata.
+        // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1125,7 +1125,7 @@ pub unsafe fn mi_theap_rezalloc_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-recalloc-product-boundary]: aligned recalloc paths use checked product requests and zeroing metadata.
+    // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
@@ -1147,7 +1147,7 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     };
     if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
         let layout = request.layout();
-        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path after checked multiplication, matching C mimalloc.
+        // SAFETY: naturally aligned requests use the ordinary realloc path after checked multiplication, matching C mimalloc.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
@@ -1155,7 +1155,7 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     };
     if alignment_typed.get() <= size_of::<usize>() && offset == 0 {
         let layout = request.layout();
-        // SAFETY[AUDIT:aligned-recalloc-product-boundary]: aligned recalloc paths use checked product requests and zeroing metadata.
+        // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let offset = crate::core_types::AlignmentOffset::new(offset);
@@ -1168,7 +1168,7 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
         return core::ptr::null_mut();
     };
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-recalloc-product-boundary]: aligned recalloc paths use checked product requests and zeroing metadata.
+        // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
         let Some(realloc_request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1178,7 +1178,7 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-recalloc-product-boundary]: aligned recalloc paths use checked product requests and zeroing metadata.
+    // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
     unsafe {
         mi_theap_recalloc_aligned_at_req(theap, request, realloc_request, alignment_typed, offset)
     }
@@ -1194,7 +1194,7 @@ unsafe fn mi_theap_recalloc_aligned_at_req(
     crate::internal::mi_debug_assert!(
         request.total().get() == realloc_request.new_layout().requested().get()
     );
-    // SAFETY[AUDIT:aligned-recalloc-product-boundary]: aligned recalloc paths use checked product requests and zeroing metadata.
+    // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, realloc_request, alignment, offset) }
 }
 
@@ -1215,7 +1215,7 @@ pub unsafe fn mi_theap_recalloc_aligned(
     };
     if alignment != 0 && alignment <= size_of::<usize>() {
         let layout = request.layout();
-        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path after checked multiplication, matching C mimalloc.
+        // SAFETY: naturally aligned requests use the ordinary realloc path after checked multiplication, matching C mimalloc.
         return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
@@ -1236,7 +1236,7 @@ pub unsafe fn mi_theap_recalloc_aligned(
         return core::ptr::null_mut();
     };
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-recalloc-product-boundary]: aligned recalloc paths use checked product requests and zeroing metadata.
+        // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
         let Some(realloc_request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1246,14 +1246,14 @@ pub unsafe fn mi_theap_recalloc_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-recalloc-product-boundary]: aligned recalloc paths use checked product requests and zeroing metadata.
+    // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
     unsafe { mi_theap_recalloc_aligned_at_req(theap, request, realloc_request, alignment, offset) }
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
 /// valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+// SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realloc_aligned_at(
     p: *mut c_void,
@@ -1261,28 +1261,28 @@ pub unsafe extern "C" fn mi_realloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+    // SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
     unsafe { mi_theap_realloc_aligned_at(_mi_theap_default(), p, newsize, alignment, offset) }
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
 /// valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+// SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realloc_aligned(
     p: *mut c_void,
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+    // SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
     unsafe { mi_theap_realloc_aligned(_mi_theap_default(), p, newsize, alignment) }
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
 /// valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+// SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_rezalloc_aligned_at(
     p: *mut c_void,
@@ -1290,28 +1290,28 @@ pub unsafe extern "C" fn mi_rezalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+    // SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
     unsafe { mi_theap_rezalloc_aligned_at(_mi_theap_default(), p, newsize, alignment, offset) }
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
 /// valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+// SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_rezalloc_aligned(
     p: *mut c_void,
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+    // SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
     unsafe { mi_theap_rezalloc_aligned(_mi_theap_default(), p, newsize, alignment) }
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
 /// valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+// SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc_aligned_at(
     p: *mut c_void,
@@ -1320,7 +1320,7 @@ pub unsafe extern "C" fn mi_recalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+    // SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
     unsafe {
         mi_theap_recalloc_aligned_at(_mi_theap_default(), p, newcount, size, alignment, offset)
     }
@@ -1329,7 +1329,7 @@ pub unsafe extern "C" fn mi_recalloc_aligned_at(
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
 /// valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+// SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc_aligned(
     p: *mut c_void,
@@ -1337,14 +1337,14 @@ pub unsafe extern "C" fn mi_recalloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+    // SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
     unsafe { mi_theap_recalloc_aligned(_mi_theap_default(), p, newcount, size, alignment) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+// SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -1353,12 +1353,12 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-global-export-boundary]: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
+    // SAFETY: global aligned realloc exports forward raw C ABI inputs into checked realloc requests.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
     if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
-        // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned realloc route.
+        // SAFETY: the borrowed heap supplies its thread heap to the C-compatible naturally aligned realloc route.
         return unsafe {
             mi_theap_realloc_aligned_at(
                 _mi_heap_theap(heap.ptr().as_ptr()),
@@ -1375,7 +1375,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1385,7 +1385,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
@@ -1397,16 +1397,16 @@ unsafe fn mi_heap_realloc_aligned_at_typed(
     alignment: crate::core_types::Alignment,
     offset: crate::core_types::AlignmentOffset,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
-    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc_aligned(
     heap: *mut mi_heap_t,
@@ -1414,12 +1414,12 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
     if alignment != 0 && alignment <= size_of::<usize>() {
-        // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned realloc route.
+        // SAFETY: the borrowed heap supplies its thread heap to the C-compatible naturally aligned realloc route.
         return unsafe {
             mi_theap_realloc_aligned(_mi_heap_theap(heap.ptr().as_ptr()), p, newsize, alignment)
         };
@@ -1442,7 +1442,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1452,14 +1452,14 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -1468,12 +1468,12 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
     if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
-        // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned rezalloc route.
+        // SAFETY: the borrowed heap supplies its thread heap to the C-compatible naturally aligned rezalloc route.
         return unsafe {
             mi_theap_rezalloc_aligned_at(
                 _mi_heap_theap(heap.ptr().as_ptr()),
@@ -1490,7 +1490,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1500,14 +1500,14 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     heap: *mut mi_heap_t,
@@ -1515,12 +1515,12 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
     if alignment != 0 && alignment <= size_of::<usize>() {
-        // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned rezalloc route.
+        // SAFETY: the borrowed heap supplies its thread heap to the C-compatible naturally aligned rezalloc route.
         return unsafe {
             mi_theap_rezalloc_aligned(_mi_heap_theap(heap.ptr().as_ptr()), p, newsize, alignment)
         };
@@ -1543,7 +1543,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
         return core::ptr::null_mut();
     };
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1553,14 +1553,14 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -1570,7 +1570,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -1578,7 +1578,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
         return core::ptr::null_mut();
     };
     if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
-        // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned recalloc route.
+        // SAFETY: the borrowed heap supplies its thread heap to the C-compatible naturally aligned recalloc route.
         return unsafe {
             mi_theap_recalloc_aligned_at(
                 _mi_heap_theap(heap.ptr().as_ptr()),
@@ -1603,7 +1603,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
         return core::ptr::null_mut();
     };
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(realloc_request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1613,7 +1613,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe {
         mi_heap_recalloc_aligned_at_typed(heap, request, realloc_request, alignment_typed, offset)
     }
@@ -1628,16 +1628,16 @@ unsafe fn mi_heap_recalloc_aligned_at_typed(
     alignment: crate::core_types::Alignment,
     offset: crate::core_types::AlignmentOffset,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
-    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_theap_recalloc_aligned_at_req(theap, request, realloc_request, alignment, offset) }
 }
 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator, and `alignment` must be valid for aligned allocation.
-// SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+// SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     heap: *mut mi_heap_t,
@@ -1646,7 +1646,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
@@ -1654,7 +1654,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
         return core::ptr::null_mut();
     };
     if alignment != 0 && alignment <= size_of::<usize>() {
-        // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned recalloc route.
+        // SAFETY: the borrowed heap supplies its thread heap to the C-compatible naturally aligned recalloc route.
         return unsafe {
             mi_theap_recalloc_aligned(
                 _mi_heap_theap(heap.ptr().as_ptr()),
@@ -1683,7 +1683,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
         return core::ptr::null_mut();
     };
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+        // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(realloc_request) = (unsafe {
             crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
         }) else {
@@ -1693,6 +1693,6 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     } else {
         crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
     };
-    // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
+    // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
     unsafe { mi_heap_recalloc_aligned_at_typed(heap, request, realloc_request, alignment, offset) }
 }

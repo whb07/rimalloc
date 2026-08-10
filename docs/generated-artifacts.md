@@ -11,9 +11,6 @@ the path is covered by an audit or release check.
 | --- | --- | --- |
 | `docs/abi-manifests/*.tsv` | `scripts/check-public-symbols.py --write-dynamic-manifests` | `scripts/check-abi-symbols.sh` |
 | `benchmarks/thresholds.json` | Maintained with benchmark policy updates | `scripts/check-bench-smoke.sh` and `scripts/check-bench-full.sh` |
-| `NO_ALLOCATION_CRITICAL_PATHS.json` | Maintained with no-allocation audit updates | `scripts/check-no-allocation-audit.py` |
-| `docs/unsafe-migration-allowlist.tsv` | Maintained with unsafe migration work | `scripts/check-unsafe-audit.py` |
-| `docs/unsafe-audit-evidence.tsv` | Maintained with unsafe evidence updates | `scripts/check-unsafe-audit-evidence.py` |
 
 ## Local-Only Outputs
 

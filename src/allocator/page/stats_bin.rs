@@ -5,7 +5,7 @@ use super::{mi_bin_from_block_size, mi_page_block_size, mi_page_is_huge, mi_page
 
 #[inline]
 pub(crate) unsafe fn mi_page_bin_typed(page: *const mi_page_t) -> crate::core_types::Bin {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         let bin = if mi_page_is_in_full(page) {
             MI_BIN_FULL
@@ -29,7 +29,7 @@ pub(crate) unsafe fn mi_page_bin_typed(page: *const mi_page_t) -> crate::core_ty
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe { mi_page_bin_typed(page).as_usize() }
 }
 
@@ -37,7 +37,7 @@ pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
 pub(crate) unsafe fn _mi_page_stats_bin_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::StatsBin {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         let bin = if mi_page_is_huge(page) {
             MI_BIN_HUGE
@@ -56,7 +56,7 @@ pub(crate) unsafe fn _mi_page_stats_bin_typed(
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
-// SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+// SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_stats_bin(page: *const mi_page_t) -> usize {
     unsafe {

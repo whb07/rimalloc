@@ -173,3 +173,5 @@ const _: fn() = __lint_touch;
 
 #[cfg(test)]
 mod layout_tests;
+#[cfg(test)]
+mod linearity_tests;

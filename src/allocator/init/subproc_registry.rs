@@ -5,7 +5,7 @@ use super::*;
 /// The caller owns serialization with `subprocs_lock`; this module owns only
 /// the `subprocs` head plus each `MiSubprocPrefix::{next, prev}` link.
 pub(super) unsafe fn push_front_locked(subproc: SubprocPtr) {
-    // SAFETY[AUDIT:init-subproc-registry-list-boundary]: registry membership rewires only the lock-protected subproc head and prev/next links.
+    // SAFETY: registry membership rewires only the lock-protected subproc head and prev/next links.
     unsafe {
         let prefix = mi_subproc_prefix_typed(subproc);
         (*prefix).prev = ptr::null_mut();
@@ -18,7 +18,7 @@ pub(super) unsafe fn push_front_locked(subproc: SubprocPtr) {
 }
 
 pub(super) unsafe fn unlink_locked(subproc: SubprocPtr) {
-    // SAFETY[AUDIT:init-subproc-registry-list-boundary]: registry membership rewires only the lock-protected subproc head and prev/next links.
+    // SAFETY: registry membership rewires only the lock-protected subproc head and prev/next links.
     unsafe {
         let prefix = mi_subproc_prefix_typed(subproc);
         let next = SubprocPtr::new((*prefix).next);
@@ -38,11 +38,11 @@ pub(super) unsafe fn unlink_locked(subproc: SubprocPtr) {
 }
 
 pub(super) unsafe fn head_locked() -> Option<SubprocPtr> {
-    // SAFETY[AUDIT:init-subproc-registry-list-boundary]: registry membership rewires only the lock-protected subproc head and prev/next links.
+    // SAFETY: registry membership rewires only the lock-protected subproc head and prev/next links.
     unsafe { SubprocPtr::new(subprocs) }
 }
 
 pub(super) unsafe fn next_locked(subproc: SubprocPtr) -> Option<SubprocPtr> {
-    // SAFETY[AUDIT:init-subproc-registry-list-boundary]: registry membership rewires only the lock-protected subproc head and prev/next links.
+    // SAFETY: registry membership rewires only the lock-protected subproc head and prev/next links.
     unsafe { SubprocPtr::new((*mi_subproc_prefix_typed(subproc)).next) }
 }

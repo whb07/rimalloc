@@ -7,7 +7,7 @@ use super::mi_interpose_s;
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
-// SAFETY[AUDIT:raw-macro-header-forwarding-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe fn mi_forward1<R, A>(fun: unsafe extern "C" fn(A) -> R, x: A) -> R {
     unsafe { fun(x) }
 }
@@ -15,21 +15,21 @@ pub unsafe fn mi_forward1<R, A>(fun: unsafe extern "C" fn(A) -> R, x: A) -> R {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
-// SAFETY[AUDIT:raw-macro-header-forwarding-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe fn mi_forward3<R, A, B, C>(
     fun: unsafe extern "C" fn(A, B, C) -> R,
     x: A,
     y: B,
     z: C,
 ) -> R {
-    // SAFETY[AUDIT:raw-macro-header-forwarding-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { fun(x, y, z) }
 }
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
-// SAFETY[AUDIT:raw-macro-header-forwarding-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe fn mi_forward02<A, B>(fun: unsafe extern "C" fn(A, B), x: A, y: B) {
     unsafe { fun(x, y) }
 }
@@ -54,7 +54,7 @@ pub const fn MI_INTERPOSE_DECLS<const N: usize>(
 #[allow(improper_ctypes_definitions)]
 #[inline]
 pub unsafe fn mi_malloc_good_size_forward(size: usize) -> usize {
-    // SAFETY[AUDIT:raw-macro-allocation-query-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_malloc_good_size(size) }
 }
 
@@ -62,7 +62,7 @@ pub unsafe fn mi_malloc_good_size_forward(size: usize) -> usize {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_vfree_forward(p: *mut c_void) {
-    // SAFETY[AUDIT:raw-macro-header-forwarding-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
@@ -70,7 +70,7 @@ pub unsafe fn mi_vfree_forward(p: *mut c_void) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_malloc_size_forward(p: *const c_void) -> usize {
-    // SAFETY[AUDIT:raw-macro-allocation-query-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_usable_size(p) }
 }
 
@@ -78,6 +78,6 @@ pub unsafe fn mi_malloc_size_forward(p: *const c_void) -> usize {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_aligned_alloc_forward(alignment: usize, size: usize) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-header-forwarding-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
     unsafe { crate::mimalloc::mi_aligned_alloc(alignment, size) }
 }

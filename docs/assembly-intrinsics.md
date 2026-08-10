@@ -71,7 +71,7 @@ Assembly or intrinsic changes must document:
 - stack assumptions,
 - fallback path,
 - feature gating,
-- expected codegen or source-shape invariant.
+- expected codegen invariant.
 
 For hot-path assembly, run a benchmark smoke check first and escalate to a fuller
 run when instruction shape, branches, TLS access, or allocator-wide behavior can
@@ -84,9 +84,8 @@ Relevant local checks are:
 ```sh
 scripts/check-abi-symbols.sh
 scripts/check-layout.sh
-cargo test --quiet --test release_fast_path_audit --features std
+cargo test --workspace --all-targets --all-features
 ```
 
-The release fast-path audit checks the expected TLS symbol usage, hidden-symbol
-declarations, naked/global assembly presence, exported override names, and
-selected source-shape invariants.
+The ABI and layout checks inspect built artifacts. Targeted unit and integration
+tests exercise the fallback and feature-gated paths.

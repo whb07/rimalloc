@@ -105,11 +105,7 @@ allocator behavior, its ordering must be re-audited.
 Ordering-sensitive changes should run:
 
 ```sh
-scripts/check-atomic-ordering-audit.py
-scripts/check-layout.sh
-cargo test --quiet
+scripts/check-concurrency-models.sh
+scripts/check-release-thread-stress.py
+cargo test --workspace --all-targets --all-features
 ```
-
-`tests/release_fast_path_audit.rs` also checks that selected metadata fields
-continue to use the typed wrappers and that known hot-path atomic shapes do not
-silently drift.

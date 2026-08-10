@@ -1,905 +1,1217 @@
-# Mechanical mimalloc performance parity plan
+# Exemplary Rust library improvement plan
 
-This is the ordered work plan for improving the mechanical Rust translation of
-mimalloc 3.3.2. It is written so that one engineer can execute each experiment
-independently, leave a reproducible record, and make an unambiguous keep/reject
-decision.
+This is the ordered implementation plan for turning `mechanical_mimalloc` into
+an exemplary Rust systems library while preserving mimalloc 3.3.2 behavior,
+the supported C ABI, allocator performance, `no_std` operation, and the
+mechanical relationship with upstream.
 
-The goal is not to win particular benchmarks. The goal is to make common
-allocator operations do less real work while preserving mimalloc's semantics,
-safety model, memory behavior, ABI, and portability. Benchmarks are evidence
-for or against a general mechanism; they are not the product being optimized.
+The plan is intentionally explicit enough for a junior engineer to execute one
+item at a time. Complete the phases in order. Within a phase, complete one task
+before starting the next unless the task explicitly says that work may proceed
+in parallel.
 
-## Current evidence
+Public-API compatibility tooling, public-API snapshots, and SemVer automation
+are deliberately out of scope for this plan. Do not add them as part of these
+tasks.
 
-The old complete ten-run comparison at Rust commit `8baba5e` is not a current
-HEAD baseline. Since that run:
+## How to use this plan
 
-- the C++ allocation shim was compiled with optimization and the common
-  `_Znwm`/`_Znam` success path was restored;
-- normal page-queue movement was changed from generic remove/reinsert to an
-  invariant-preserving in-place relink;
-- targeted C comparisons reduced the remaining Larson gap to about 3.62% for
-  unsized Larson and 1.78% for sized Larson;
-- the remaining Larson artifact retired about 4.3% to 4.9% more instructions
-  and 11.2% to 11.8% more branches per operation than C;
-- profiling associated most of the remaining excess with page collection and
-  abandoned-page lifecycle work, not cache misses or weaker atomic code;
-- several intuitive changes have already failed measurement and must not be
-  repeated without materially new evidence.
+For every task:
 
-Read these before starting:
+1. Read the named source files and their existing tests before editing.
+2. Write down the invariant or problem in one sentence in the commit or pull
+   request description.
+3. Add or identify a test that fails if the invariant is broken.
+4. Make the smallest production change that satisfies the task.
+5. Run the task-specific validation.
+6. Run the common Rust validation gate.
+7. Inspect the diff and remove unrelated formatting, renames, or cleanup.
+8. Check the task only after every completion condition is true.
 
-- `RUST_VS_C_MIMALLOC_BENCHMARK_2026-08-08.md`
-- `LARSON_REGRESSION_INVESTIGATION_2026-08-08.md`
-- `MIMALLOC_BENCH_HOTSPOT_REPORT.md`
-- `BENCHMARK_RESULTS.md`
-- `docs/performance.md`
-- `docs/memory-ordering.md`
-- `docs/rust-safety-model.md`
+Do not combine unrelated tasks in one change. A task that discovers no safe or
+useful production change may end as `NO CHANGE`, but the checklist must record
+what was inspected and why no change was justified.
 
-## Non-negotiable rules
+## Non-negotiable engineering rules
 
-Apply these rules to every item below.
+- Preserve mimalloc's allocation, failure, alignment, initialization,
+  reclamation, statistics, option, and thread-lifecycle behavior.
+- Preserve the supported C and C++ ABI symbols and layouts. ABI changes are not
+  authorized by this plan.
+- Keep C-shaped names and raw-pointer conventions inside `raw`, `ffi`,
+  `platform`, or clearly mechanical translation boundaries.
+- Keep the crate-root safe facade idiomatic Rust with private representation,
+  ownership types, lifetimes, `Option`, and typed `Result` values.
+- Do not weaken atomic ordering, pointer validation, corruption detection, or
+  ownership checks for readability or speed.
+- Remove a validation check only when a stronger invariant makes the check
+  redundant, the invariant is encoded at the boundary, and tests prove it.
+- Do not replace a typed wrapper with a primitive merely to make the Rust source
+  resemble C. Compare emitted code before judging wrapper cost.
+- Do not add an abstraction for one call site. Prefer a direct helper or an
+  inherent method unless multiple real users need a shared abstraction.
+- Do not add broad `allow` attributes. Use the narrowest possible allowance and
+  explain why the code must retain the flagged shape.
+- Do not add audit rows, caps, or source-shape tests as a substitute for reducing
+  unsafe code, complexity, or runtime work.
+- Do not split files only to meet a line-count target. A new module must own a
+  coherent invariant or lifecycle.
+- Do not add production allocation, formatting, dynamic dispatch, locks,
+  syscalls, or environment reads to allocator hot paths.
+- Keep diagnostics behind `bench-diagnostics` and prove they compile out of the
+  default release artifact.
+- Never claim a performance improvement from a single run or from source
+  appearance. Use assembly, normalized counters, balanced measurements, and
+  held-out workloads.
 
-1. Work on one hypothesis at a time.
-   - Start from the latest accepted commit.
-   - Make one mechanism change in one candidate.
-   - Do not combine two individually unproven ideas.
-   - If a candidate is rejected, abandon that candidate branch or worktree. Do
-     not leave pieces of it in the next experiment.
+## Common validation gate
 
-2. Do not recognize benchmarks in production code.
-   - No workload names, benchmark feature checks, magic thread counts, or
-     benchmark-specific size sequences in allocator policy.
-   - Do not change benchmark duration, operation count, allocation mix, or
-     correctness checks to improve a result.
-   - A new size or count threshold is allowed only when it expresses a general
-     allocator invariant or matches an upstream mimalloc policy, and the reason
-     is documented independently of benchmark results.
-
-3. Preserve semantics and safety.
-   - Do not weaken atomic ordering.
-   - Do not remove pointer, list, ownership, corruption, or overflow validation
-     unless a stronger invariant makes that validation redundant and the proof
-     is represented in the type/API boundary.
-   - Preserve C and C++ allocation failure behavior, `new_handler`,
-     `bad_alloc`, alignment, sized-delete, option mutability, statistics, and
-     public ABI behavior.
-   - Keep secure, guarded, tracking, debug, and default modes correct.
-
-4. Do not buy CPU speed with uncontrolled memory growth.
-   - Record RSS, reserved, committed, page-committed, abandoned pages, purge
-     calls, page searches, and page faults where applicable.
-   - Reject a CPU improvement that creates a repeatable memory-policy
-     regression unless the tradeoff is an intentional upstream-compatible
-     policy decision reviewed separately.
-
-5. Diagnostics must disappear from production artifacts.
-   - Internal counters belong behind `bench-diagnostics` or external profiling.
-   - Default release builds must gain no diagnostic atomics, branches, storage,
-     symbols, or initialization.
-   - Never use a diagnostics-enabled artifact for the final timing claim.
-
-6. Prefer the C algorithm, but compare generated work rather than source style.
-   - The Rust implementation may use types and ownership witnesses that C does
-     not have.
-   - A wrapper is not a problem if LLVM erases it.
-   - A shorter-looking implementation is not a win if it adds calls, branches,
-     spills, locked instructions, code size, or retained memory.
-
-7. Record rejected results.
-   - A failed experiment is useful evidence.
-   - Record the exact baseline/candidate commits and artifact hashes, commands,
-     raw results, codegen change, correctness result, and rejection reason.
-   - Never describe a noisy or order-dependent result as an improvement.
-
-## Definition of an accepted performance change
-
-A production change may be kept only when all of the following are true:
-
-- The change has a general allocator explanation, such as eliminating a
-  redundant scan, atomic operation, metadata transition, option read, or
-  allocation-boundary call.
-- Assembly or mechanism counters confirm that the claimed work was actually
-  removed. Moving samples to another symbol is not sufficient.
-- Two independent balanced baseline/candidate comparisons show the same
-  direction. At least one must reverse allocator order.
-- The wall-time result agrees with the mechanism counters. A neutral wall-time
-  result may be considered only when instructions/cycles and code complexity
-  clearly decrease and every guard workload remains neutral.
-- No held-out workload has a repeatable regression larger than its established
-  noise. Treat a repeatable 1% regression as material even if an aggregate is
-  positive.
-- Full correctness, ABI, concurrency, C++ semantic, lint, format, and test gates
-  pass.
-- Resource evidence shows no unexplained RSS, committed-memory, abandonment,
-  purge, or page-fault regression.
-
-Do not use cross-workload geometric mean alone. Very short tests can dominate
-relative aggregates. Report per-workload results, a duration-weighted summary,
-variation, and resource changes.
-
-## Standard experiment layout
-
-Use a distinct ID such as `E03-local-to-available`. Store ignored artifacts
-under `target/perf-experiments/<ID>/`:
-
-```text
-target/perf-experiments/<ID>/
-  README.md
-  environment.txt
-  baseline-commit.txt
-  candidate-commit.txt
-  hashes.txt
-  commands.txt
-  baseline/
-  candidate/
-  assembly/
-  perf/
-  focused-results/
-  guard-results/
-  full-results/
-```
-
-`README.md` must contain:
-
-- hypothesis;
-- source and C reference locations;
-- exact intended codegen change;
-- correctness invariants;
-- primary and held-out workloads;
-- results with variation;
-- resource results;
-- final `KEEP` or `REJECT` decision.
-
-Use separate Cargo target directories for baseline and candidate. Do not
-overwrite an artifact and then assume its provenance from its filename. Record:
-
-```bash
-git rev-parse HEAD
-rustc --version --verbose
-cargo --version --verbose
-cc --version
-c++ --version
-cmake --version
-uname -a
-lscpu
-sha256sum <every allocator shared library>
-ldd <every allocator shared library>
-```
-
-Capture host load, governor/frequency state, CPU affinity, and temperature when
-the host exposes them. Stop and rerun if unrelated load, throttling, or thermal
-drift changes between variants.
-
-## Standard artifact construction
-
-For the deployed Rust interposition artifact, use an isolated target directory:
-
-```bash
-CARGO_TARGET_DIR=target/perf-experiments/<ID>/<variant>-build \
-  cargo rustc --release --features interpose --lib -- \
-  --crate-type cdylib
-```
-
-Build C mimalloc 3.3.2 with the same release options used by the repository's
-comparison harness:
-
-```bash
-cmake -S mimalloc-3.3.2 \
-  -B target/perf-experiments/c-mimalloc-3.3.2 \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DMI_BUILD_SHARED=ON \
-  -DMI_BUILD_STATIC=OFF \
-  -DMI_BUILD_OBJECT=OFF \
-  -DMI_BUILD_TESTS=OFF \
-  -DMI_OVERRIDE=ON
-cmake --build target/perf-experiments/c-mimalloc-3.3.2 \
-  --config Release --parallel
-```
-
-Before measuring an interposition artifact:
-
-```bash
-ldd -r <allocator.so>
-env LD_PRELOAD=<allocator.so> /bin/true
-nm -D <allocator.so> | sort
-```
-
-The smoke test must have no unresolved symbol or loader error. Verify that the
-expected malloc/free and C++ allocation symbols resolve to the tested artifact,
-not libc or libstdc++.
-
-## Standard measurement protocol
-
-### Focused A/B screen
-
-Use focused measurements only to reject bad candidates quickly. They are not
-enough to accept a change.
-
-1. Run baseline then candidate.
-2. Cool down.
-3. Run candidate then baseline.
-4. Use the same executable, operation count, environment, CPU set, and allocator
-   options for both.
-5. Collect at least elapsed time, cycles, instructions, branches, branch
-   misses, cache misses, task clock, context switches, migrations, page faults,
-   and max RSS.
-
-Example counter set:
-
-```bash
-perf stat -x, -r 5 \
-  -e task-clock,cycles,instructions,branches,branch-misses,cache-references,cache-misses,context-switches,cpu-migrations,page-faults \
-  -- env LD_PRELOAD=<allocator.so> <workload command>
-```
-
-Normalize counters by completed operations when the workload reports
-throughput. Keep raw values too.
-
-### Balanced `mimalloc-bench` comparison
-
-Create two allocator-list files under the experiment directory. One lists
-baseline before candidate; the other lists candidate before baseline:
-
-```text
-base /absolute/path/to/baseline.so
-cand /absolute/path/to/candidate.so
-```
-
-```text
-cand /absolute/path/to/candidate.so
-base /absolute/path/to/baseline.so
-```
-
-From `mimalloc-bench/out/bench`, run both orders. Five repetitions in each
-order give ten samples per allocator:
-
-```bash
-../../bench.sh --procs=32 -r=5 \
-  --external=/absolute/path/to/base-first.allocators <test selection>
-../../bench.sh --procs=32 -r=5 \
-  --external=/absolute/path/to/candidate-first.allocators <test selection>
-```
-
-Do the same with C/current-Rust allocator lists before claiming C parity.
-
-### Workload families
-
-Select the focused workload from the mechanism, not from whichever test gives
-the largest percentage. Every accepted candidate must also pass held-out
-families:
-
-| Mechanism | Primary probes | Required held-out guards |
-|---|---|---|
-| local small allocation/free | hotpath paired/single reuse, `glibc-simple` | Redis, RocksDB, alloc-test, large allocation, fragmentation |
-| cross-thread free/collection | `xmalloc-testN`, Larson sized/unsized | mstress, rptest, glibc-thread, Redis, fragmentation |
-| page queue/reclaim | Larson sized/unsized, `glibc-thread` | xmalloc, mstress, cache-scratch, RocksDB, RSS/resource probes |
-| C++ allocation ABI | alloc-test1/N, Larson sized/unsized | C++ semantic tests, Redis, glibc-simple/thread, RocksDB |
-| page refill/extension | page-batch plain/secure, malloc-large | glibc-simple/thread, xmalloc, fragmentation, RSS/resource probes |
-| memory policy | fragmentation, malloc-large, resource probes | complete `allt`, Redis, RocksDB, mstress, cache-scratch |
-
-### Assembly comparison
-
-Run `scripts/capture-release-assembly.sh` before and after. For internal symbols
-not captured by that script, record `nm -C -S` and bounded `objdump -Cd` output.
-
-For each changed hot function count:
-
-- bytes and instructions;
-- conditional and unconditional control transfers;
-- calls and tail calls;
-- stack spills/reloads;
-- loads and stores in the target loop;
-- atomic/locked instructions;
-- duplicated cold/error machinery in hot text.
-
-Compare against both the previous Rust artifact and the corresponding C
-mimalloc 3.3.2 function.
-
-## Standard correctness gate
-
-Run focused tests while iterating. Before a candidate can be kept, run all of
-the following from a clean candidate tree:
+Run these commands after every Rust source change:
 
 ```bash
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features
 cargo test --workspace --all-targets --all-features
-scripts/check-behavioral-parity.py
-scripts/check-safety-stress.sh
-scripts/check-concurrency-models.sh
-scripts/check-layout.sh
-scripts/check-public-abi.py
-scripts/check-atomic-ordering-audit.py
-scripts/check-cxx-operator-new-parity.py
-scripts/check-release-cxx-artifacts.py
-scripts/check-release-ld-preload.py
-scripts/check-release-integrity.py
-scripts/check-bench-full.sh
 ```
 
-If a command is unavailable or fails for an unrelated environmental reason,
-record the exact command and failure. Do not silently skip it and do not call
-the candidate accepted until the gate is completed on a suitable host.
+For documentation-only changes, run:
 
-Changes to unsafe list traversal, pointer provenance, atomics, page ownership,
-or batch state also require the relevant Miri/fuzz/stress checks documented in
-`docs/testing.md`. Add a focused invariant or concurrency-model regression test
-before changing the implementation.
+```bash
+scripts/check-fmt.sh
+scripts/check-docs.sh
+```
+
+For changes that touch raw pointers, unsafe code, layout, FFI, atomics,
+thread-local state, or allocator policy, also run the relevant commands named by
+the task. A task is not complete if a required command fails. If the failure is
+environmental, record the command, full error, and required follow-up instead of
+checking the task.
 
 ---
 
-# Ordered TODO
+# Phase 0 — Establish a trustworthy starting point
 
-Complete these items in order. There may be only one production candidate in
-progress. An item may end with `NO CHANGE` when its prerequisite evidence is
-absent.
+## 0.1 Record the current engineering baseline
 
-## E00 — Establish a fresh current-HEAD C parity baseline
-
-Status: [x] completed 2026-08-09; see `PERFORMANCE_WORKLOG.md` and
-`target/perf-experiments/E00-current-head-baseline/`
-
-Purpose: replace the pre-fix `8baba5e` full-suite numbers with authoritative
-current-HEAD evidence.
+Purpose: make later improvement claims measurable without creating another
+permanent audit ledger.
 
 ### Work
 
-- [x] Build a fresh C mimalloc 3.3.2 release shared library.
-- [x] Build a fresh current Rust `interpose` release shared library.
-- [x] Record artifact hashes, dynamic dependencies, exported symbols, toolchain,
-      host state, and exact commands.
-- [x] Run `allt` with C first/Rust second for five repetitions.
-- [x] Run `allt` with Rust first/C second for five repetitions.
-- [x] Run both Larson variants in a separate ten-sample balanced comparison.
-- [x] Run alloc-test1/N in a separate ten-sample balanced comparison to confirm
-      whether the repaired C++ path removed the old 6% to 7% loss.
-- [x] Collect `perf stat` for Larson sized/unsized, xmalloc, alloc-test1/N,
-      glibc-simple/thread, and malloc-large.
-- [x] Run the repository resource probes for both artifacts.
-- [x] Publish a per-workload table with mean, median, standard deviation,
-      coefficient of variation, order split, Rust/C ratio, RSS, and page faults.
+- [ ] Record the current commit with `git rev-parse HEAD` in the change
+      description.
+- [ ] Record the current count of production Rust files and lines under `src/`.
+- [ ] Record the number of production files above 1,000 and 1,500 lines.
+- [ ] Record lexical counts for `unsafe fn`, `unsafe {`, `unsafe impl`,
+      `#[inline(always)]`, `dyn Trait`, `Vec`, `Box`, and `.clone()` under
+      `src/`. Label these as lexical counts, not AST-accurate facts.
+- [ ] Record the current strict-type and unsafe allowlist totals using the
+      repository check scripts.
+- [ ] Record the current ignored-test count and the reason for every ignored
+      production-behavior test.
+- [ ] Put the measurements directly in this task's completion note or the
+      associated change description. Do not create a new inventory document.
+
+### Validation
+
+- [ ] Re-run every counting command from a clean tree and confirm it gives the
+      recorded value.
+- [ ] Run `scripts/check-unsafe-inventory.py` for advisory counts and require
+      `scripts/check-strict-types.py` to pass.
+- [ ] Confirm `git diff --check` reports no whitespace errors.
 
 ### Completion condition
 
-This item is complete only when every result can be traced to the recorded
-artifact hashes. Do not begin optimization from the old full-suite report.
+This task is complete when later work can report an exact before/after change
+for file size, unsafe surface, allowances, ignored tests, and forced inlining.
 
-## E01 — Improve non-production observability of collection work
+## 0.2 Confirm the existing correctness baseline
 
-Status: [x] complete; diagnostics retained; E02 unblocked
+### Work
 
-Purpose: distinguish excessive call frequency from excessive work per call
-before changing collection logic.
-
-### Files in scope
-
-- `src/allocator/bench_diagnostics.rs`
-- `src/allocator/page/lifecycle.rs`
-- `src/allocator/free/abandoned.rs`
-- `src/types/page_batch.rs`
-- `benches/mimalloc_bench.rs`
-
-### Counters to add or verify
-
-- [x] Full collection calls split by local/abandoned owner and force/non-force.
-- [x] Partial collection calls and final-head collection calls.
-- [x] Remote lists detached, total blocks scanned, and length histogram buckets.
-- [x] Local-to-available moves split between empty-available O(1) moves and
-      force append scans.
-- [x] Local-list blocks scanned solely to find a tail.
-- [x] Remote-list validation failures by reason.
-- [x] Ownership-release CAS attempts and retries.
-- [x] Reclaim attempts/success/failure by reason, including thread-uninitialized.
-- [x] Reabandon attempts/success/failure by reason.
-- [x] Queue searches, candidates scanned, selected position, failed extension,
-      fresh-page allocation, and retry.
-
-Prefer per-thread diagnostics accumulation where possible. Use atomics only
-where aggregation truly crosses threads. Sampling is acceptable if the sample
-rate and scaling are exact and tested.
+- [ ] Run the common Rust validation gate without modifying production code.
+- [ ] Run `scripts/check-behavioral-parity.py`.
+- [ ] Run `scripts/check-concurrency-models.sh`.
+- [ ] Run `scripts/check-layout.sh`.
+- [ ] Run `scripts/check-ffi-boundary.py`.
+- [ ] Run `tests/no_allocation_critical_paths.rs` and the default no-std build.
+- [ ] Save the exact failing command and output for any pre-existing failure.
+      Do not repair failures in this baseline task.
 
 ### Validation
 
-- [x] Add tests for reset, snapshot, JSON output, and counter relationships.
-- [x] Build default release without `bench-diagnostics` and prove with `nm`,
-      `.text` size, and hot-path assembly that diagnostics add no production
-      symbols or instructions.
-- [x] Run diagnostic builds of Larson, xmalloc, glibc-thread, and page-batch.
-- [x] Normalize counts per allocator operation and record which branches or
-      scans dominate.
+- [ ] Confirm the working tree is unchanged after the baseline run, excluding
+      ignored build artifacts.
+- [ ] Confirm every pre-existing failure has an owner and a later task in this
+      plan, or add a narrowly scoped task before starting Phase 1.
 
 ### Completion condition
 
-Keep diagnostics only if they answer a concrete decision below and compile
-entirely out of default release. Diagnostics timing is never a speed claim.
-
-## E02 — Eliminate the redundant empty-available local-list scan
-
-Status: [x] original attempt rejected 2026-08-09; corrected experiment E02R
-**ACCEPTED** 2026-08-10 after root-causing the configuration-dependent forced
-splice defect; production O(1) transfer retained; see `PERFORMANCE_WORKLOG.md`
-
-Priority: highest current production candidate.
-
-General hypothesis: when `page->free` is empty, moving an already-owned
-`local_free` list to `free` requires only ownership transfer of the head. It
-does not require finding the local tail. C mimalloc performs this move in O(1).
-The Rust generic full collector currently routes the local list through batch
-detachment, which can scan the list before performing the same move.
-
-### Compare first
-
-- Rust: `collect_page_free_lists` and local-list helpers in
-  `src/allocator/page/lifecycle.rs` and `src/types/page_batch.rs`.
-- C: `_mi_page_free_collect` in `mimalloc-3.3.2/src/page.c`.
-- Existing Rust O(1) precedent: `mi_page_free_quick_collect_raw`.
-
-### Required invariant
-
-The concrete local or claimed-abandoned owner must have exclusive mutation
-rights to both `local_free` and `free`. The local list must already be a
-page-homogeneous list produced by validated allocator transitions. Document why
-converting its head from `LocalFreeList` to `AvailableFreeList` preserves used
-count and link encoding without reading the tail.
-
-### Candidate modification
-
-- [x] Split local collection into the same cases as C:
-  1. `local_free` empty: do nothing;
-  2. `free` empty: transfer `local_free` to `free` in O(1), clear
-     `local_free`, and clear `free_is_zero`;
-  3. `free` nonempty and `force == true`: perform the validated tail scan and
-     prepend/append exactly as required;
-  4. `free` nonempty and not forced: leave `local_free` in place.
-- [x] Do not alter remote-list collection, used-count accounting, force
-      semantics, corruption handling, or list encoding in this experiment.
-- [x] Do not add a new abstraction if existing typed list conversions can
-      express the transfer.
-
-### Tests to add before timing
-
-- [x] Empty local list leaves every field unchanged.
-- [x] Nonempty local plus empty available transfers the exact head, clears
-      local, preserves every link, preserves used/capacity, and clears
-      `free_is_zero`.
-- [x] Nonempty local plus nonempty available and `force == false` does not
-      splice lists.
-- [x] Forced nonempty/nonempty collection preserves every block exactly once.
-- [x] Both `LocalPage` and `OwnedAbandonedPage` owner paths preserve their
-      ownership state.
-- [x] Secure encoded-link mode passes the same cases.
-- [x] Corrupted forced lists still report failure without an out-of-bounds
-      read.
-
-### Mechanism validation
-
-- [x] Assembly shows no local-list traversal in the empty-available branch.
-- [x] Diagnostics show fewer local-list nodes scanned, with unchanged remote
-      blocks collected and used counts.
-- [x] No new call, owner-discriminant test, or locked instruction appears in
-      the common branch.
-
-### Performance validation
-
-Primary: Larson sized/unsized, xmalloc, glibc-thread, page-batch collection.
-
-Held-out: mstress, rptest, Redis, glibc-simple, malloc-large, fragmentation,
-RocksDB, and the complete balanced `allt` screen.
-
-Reject if the scan disappears in assembly but total instructions/cycles do not
-improve in any workload that exercises it, or if corruption/safety behavior is
-weakened rather than made redundant by ownership.
-
-## E03 — Match C's abandoned-page decision spine
-
-Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
-
-General hypothesis: Rust performs the same collect → free → reclaim → reabandon
-→ unown policy as C, but linear ownership return shapes may leave additional
-branches, moves, calls, or spills in `collect_after_remote_free`.
-
-### Compare first
-
-- Rust: `collect_after_remote_free`, `try_free_abandoned`,
-  `try_reclaim_abandoned`, `try_reabandon_mapped`, and
-  `release_abandoned_ownership` in `src/allocator/free/abandoned.rs`.
-- C: `mi_free_try_collect_mt` and its helpers in
-  `mimalloc-3.3.2/src/free.c`.
-
-### Investigation
-
-- [x] Produce annotated Rust/C control-flow graphs or side-by-side assembly.
-- [x] Count function bytes, calls, control transfers, stack frame size, spills,
-      page-field reloads, and reconstruction of thread-free words.
-- [x] Attribute each extra Rust instruction to a required invariant, an
-      optimizer/code-layout effect, or redundant source work.
-- [x] Use E01 counters to confirm the hot outcomes and their frequencies.
-
-### Candidate modification
-
-Change only one demonstrated source of surplus work. Suitable examples are:
-
-- carrying one already-extracted page pointer or block size through the
-  decision sequence;
-- borrowing an ownership witness through a failure check and consuming it only
-  on the successful transition;
-- removing a repeated witness-to-raw-to-witness conversion within one proven
-  ownership epoch;
-- making the release path pass the already-constructed expected thread-free
-  word instead of reconstructing it.
-
-Do not rewrite all helpers at once. Do not replace typed ownership with
-unchecked raw state merely to resemble C source. The candidate must retain a
-single obvious owner for every success and failure edge.
-
-### Tests and validation
-
-- [x] Verify transition coverage for destroyed, reclaimed, mapped, and
-      still-abandoned outcomes. (Existing typed disposition/state tests retained;
-      no candidate required new behavior tests.)
-- [x] Verify concurrent remote frees during ownership release in loom or
-      concurrency-model coverage. (Existing release-vs-push model retained.)
-- [x] Confirm unchanged atomic orderings and CAS success/failure behavior.
-- [x] Confirm assembly removes the exact targeted work. (`N/A`: no candidate.)
-- [x] Run the cross-thread primary and held-out workload families. (`N/A`: no candidate.)
-
-Reject if samples merely move between helper symbols or code size grows enough
-to erase the intended instruction reduction.
-
-## E04 — Re-evaluate early uninitialized-thread reclaim rejection
-
-Status: [x] completed 2026-08-09; **REJECTED** at balanced focused screen;
-see `PERFORMANCE_WORKLOG.md`
-
-General hypothesis: a thread that is not initialized cannot reclaim an
-abandoned page. Existing diagnostics previously showed this outcome for about
-99.8% of reclaim attempts in xmalloc. Rejecting it before avoidable reclaim
-policy work may save general thread-teardown/cross-thread-free work.
-
-This idea was previously inconclusive because host variance exceeded the
-apparent effect. Do not keep it without stronger evidence now.
-
-### Candidate modification
-
-- [x] Preserve the order: collect remote blocks, then try to free a now-empty
-      page first.
-- [x] Only after `try_free_abandoned` fails, test whether the current thread is
-      initialized before reading or constructing reclaim-only policy state.
-- [x] If uninitialized, skip only reclaim. Continue with the unchanged
-      reabandon and ownership-release paths.
-- [x] Do not initialize TLS as a side effect and do not cache option values
-      across public allocator calls.
-
-### Validation
-
-- [x] Verify existing tests cover initialized and uninitialized freeing threads,
-      including TLS destructor timing; no new behavior surface was introduced.
-- [x] Diagnostics show identical disposition counts and fewer reclaim-policy
-      reads on the uninitialized path.
-- [x] Inspect assembly for the avoided option/policy work and return-value
-      spills. (Option work moved as intended, but total function size grew.)
-- [x] Measure both a workload with uninitialized releasing threads and one with
-      initialized cross-thread reclaim. The second must remain neutral.
-- [x] Run the proportionate lifecycle/concurrency gate before timing. (Focused
-      concurrency passed; the complete release gate was intentionally not run
-      after the candidate failed its balanced performance rejection screen.)
-
-Reject again if two balanced comparisons do not reproduce the same direction.
-
-## E05 — Remove any second traversal of a detached remote batch
-
-Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
-
-General hypothesis: each detached remote chain should be traversed at most once
-to validate it, find its tail, and count its blocks. That one traversal should
-produce a typed batch whose head, tail, page, and length are reused by every
-subsequent splice and used-count update.
-
-### Investigation
-
-- [x] Trace full local collection, full abandoned collection, and partial
-      abandoned collection separately.
-- [x] With E01 counters and annotated assembly, determine whether any path
-      traverses the same links twice.
-- [x] Distinguish a second traversal from the already-rejected idea of merely
-      deleting per-node membership validation.
-
-### Candidate modification
-
-Proceed only if a real second traversal is measured.
-
-- [x] Candidate steps were evaluated and found already implemented: the first
-      successful scan returns `RemoteFreeBatch`, and splice/accounting consume
-      that metadata without rediscovery.
-- [x] Existing scan bounds, corruption classifications, and return ABI were
-      preserved; no candidate source change was warranted.
-
-### Validation
-
-- [x] Counter relationships prove one scan per detached batch.
-- [x] Property/fuzz tests cover lengths 1, capacity, over-capacity, cycles,
-      foreign-page links, invalid encoded links, and `len > used`.
-- [x] Secure and ordinary link modes pass.
-- [x] Assembly confirmed there is no second traversal to remove; therefore the
-      candidate-only instruction/branch/code-size criterion is not applicable.
-
-If no second traversal exists after E02, record `NO CHANGE` and continue.
-
-## E06 — Tighten the ownership-release CAS loop
-
-Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
-
-General hypothesis: Rust and C implement the same ownership-release protocol,
-but typed state construction or reloads may add work on CAS failure/retry edges.
-
-### Work
-
-- [x] Compare `release_abandoned_ownership` with C
-      `mi_abandoned_page_unown_from_free` instruction by instruction.
-- [x] Use diagnostics to record CAS attempts, retries, and nested collections.
-- [x] Confirm whether the common case is first-attempt success.
-- [x] Identify repeated construction of `(head, owned)` words, redundant loads,
-      or conversions that survive optimization.
-
-### Candidate modification
-
-Change only a proven redundant operation. Preserve AcqRel success, Acquire
-failure, weak-CAS retry behavior, ownership bits, and concurrent-free handling.
-Do not change ordering for an x86-only instruction-count claim.
-
-### Validation
-
-- [x] Loom/concurrency models cover remote push racing with owner release,
-      multiple retries, a newly nonempty list, page destruction, and reabandon.
-- [x] Assembly proved the suspected repeated construction/load does not survive
-      optimization, so there was no targeted instruction to remove.
-- [x] CAS retry counts and page dispositions were recorded and conserved.
-- [x] Cross-thread and local controls were measured; no candidate was created
-      after the mechanism gate failed.
-
-## E07 — Reassess reclaim and reabandon input derivation
-
-Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
-
-General hypothesis: successful or late-stage reclaim/reabandon paths may
-rederive arena identity, slice range, page ownership, thread-pool state, or
-exclusive-arena suitability after those facts were already validated.
-
-### Evidence gate
-
-Do not implement this item unless E01 shows that at least 1% of relevant
-operations reach the repeated work in a stable workload. Earlier xmalloc data
-showed that approximately 99.8% of reclaim attempts exited before these inputs,
-so widening the common failure path is likely harmful.
-
-### Candidate modification
-
-- [x] Select one repeated derivation visible in assembly and counters.
-      (`NO CHANGE`: none survives the evidence gate.)
-- [x] No repeated derivation survived the evidence gate, so no scalar/newtype or
-      context object was introduced.
-- [x] Arena suitability, page-map, bitmap, and abandonment validation remained
-      unchanged.
-
-### Validation
-
-- [x] Measured Larson successful/late reclaim and xmalloc early-failure control.
-- [x] Assembly confirmed no candidate spill or larger early-exit return because
-      no source change was made.
-- [x] Recorded reclaim/reabandon dispositions and RSS; arena rollback and purge
-      policy were unchanged and the final production artifact matches B00.
-
-If the evidence gate is not met, record `NO CHANGE`.
-
-## E08 — Inspect the residual page-queue search difference
-
-Status: [x] completed 2026-08-09; **REJECTED** after two balanced screens;
-see `PERFORMANCE_WORKLOG.md`
-
-Priority: secondary. The retained in-place relink already removed the largest
-known queue mismatch and all locked instructions from normal move-to-front.
-
-### Work
-
-- [x] Compare `mi_page_queue_find_free_ex_typed` with C
-      `mi_page_queue_find_free_ex` in source and annotated assembly.
-- [x] Separate queue scanning, collection calls, candidate selection, page
-      extension, fresh-page allocation, and move-to-front costs.
-- [x] Use E01 counters to compare candidates scanned and outcome frequency with
-      C where equivalent instrumentation is possible.
-- [x] Identify one extra load, transition, option read, or proof reconstruction
-      on a common outcome.
-
-### Candidate modification
-
-Only implement a candidate tied to a measured common outcome. Keep C's search
-order and memory policy: collect before classifying full, retain the same
-candidate limit, prefer the same fuller pages, retire/fresh/retry in the same
-order, and update direct-page caches correctly.
-
-### Required tests
-
-- [x] Empty queue and fresh-page path.
-- [x] Immediate first-page success.
-- [x] Expandable candidate.
-- [x] Multiple candidates and candidate limit.
-- [x] All-free candidate disposal.
-- [x] Full-page movement and retain policy.
-- [x] Failed extension and first-try retry.
-- [x] Middle/tail move-to-front with direct cache updates.
-- [x] Queue/heap counts, links, owner words, and flags after every transition.
-
-Reject source-only simplifications that do not reduce emitted work. Do not
-retry whole-function forced inlining, generic classification simplification,
-or power-of-two membership masks; they have already regressed measured cases.
-
-## E09 — Verify every C++ allocation/deallocation fast boundary
-
-Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
-
-Purpose: ensure the earlier `_Znwm`/`_Znam` repair generalizes across the full
-C++ ABI instead of only the Larson-imported symbols.
-
-### Work
-
-- [x] Inventory scalar/array, throwing/nothrow, sized/unsized, and aligned
-      `new`/`delete` symbols for supported Itanium ABI builds.
-- [x] Confirm symbol ownership with `nm`, `readelf`, and `dladdr` tests.
-- [x] Compare Rust and C entry assembly for every overload.
-- [x] Confirm common successful ordinary allocations use the assembly allocator
-      fast path and reach the optimized C++ helper only when semantics require
-      failure handling.
-- [x] Confirm delete overloads tail-call the correct free route without
-      duplicate size/usable-size work in release.
-
-### Candidate modification
-
-Modify only an overload with a demonstrated extra common-path call, spill, or
-semantic detour. Do not duplicate delete symbols already provided by
-`src/raw/macros.rs`. Do not bypass `new_handler`, `bad_alloc`, alignment, or
-nothrow behavior.
-
-### Validation
-
-- [x] C++11, C++14, C++17, and C++20 semantic parity.
-- [x] Dynamic, static, and standalone preload artifacts.
-- [x] Throwing, nothrow, zero-size, OOM, over-aligned, sized-delete, and array
-      cases.
-- [x] alloc-test1/N and Larson sized/unsized as primary probes.
-- [x] Redis, glibc-simple/thread, RocksDB, and complete `allt` as guards.
-
-## E10 — Revisit page refill/extension only if the new baseline identifies it
-
-Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
-
-The ordinary refill loop already closely matches C and previous unrolling,
-nonnull specialization, and alternate loop forms were neutral or slower.
-
-### Evidence gate
-
-Proceed only if fresh current-HEAD profiling shows
-`mi_page_free_list_extend` accounts for a material Rust/C instruction or cycle
-gap after normalizing by blocks extended.
-
-### Work if the gate is met
-
-- [x] Compare blocks extended per call and calls per operation before comparing
-      function samples.
-- [x] Compare Rust/C loop-carried dependencies, link store order, address
-      arithmetic, spills, and secure/default compile-time separation.
-- [x] Check whether the difference is policy frequency or cost per block.
-- [x] Select one surplus instruction or reload as the candidate. (`NO CHANGE`:
-      no normalized per-block surplus instruction exists.)
-
-### Validation
-
-- [x] Page-batch ordinary and secure modes.
-- [x] Small, medium, large, aligned, zeroed, and randomized allocation
-      sequences.
-- [x] malloc-large, glibc-simple/thread, xmalloc, fragmentation, and RSS.
-- [x] Fuzz/property tests for capacity, commit boundaries, and link integrity.
-
-If no normalized Rust/C gap exists, record `NO CHANGE`.
-
-## E11 — Separate compiler effects from translation effects
-
-Status: [x] completed 2026-08-09; see `PERFORMANCE_WORKLOG.md`
-
-Purpose: avoid contorting correct Rust source to compensate for a difference
-caused primarily by GCC-versus-LLVM code generation.
-
-### Work
-
-- [x] Build C mimalloc with the current GCC release configuration.
-- [x] Build the same C source and options with Clang/LLVM.
-- [x] Compare C-GCC, C-Clang, and Rust on the same balanced workload set.
-- [x] Compare assembly for the remaining hot functions.
-- [x] Classify each remaining gap as algorithm/source-shape, compiler/code
-      layout, or measurement noise.
-
-Do not claim Rust parity by selecting the slower C compiler. The official C
-baseline remains the established release build. This experiment only decides
-where engineering effort belongs.
-
-### Optional follow-up: PGO
-
-Attempt PGO only after source-shape experiments are exhausted and only if a
-runnable deployed-equivalent artifact can be produced. The previous
-interposition PGO attempt failed because the profiling runtime left `atexit`
-unresolved.
-
-If retried:
-
-- train on a mixed allocation corpus spanning local, cross-thread, C++, large,
-  aligned, zeroed, fragmentation, and real-application behavior;
-- validate on held-out workloads not used for training;
-- preserve a portable non-PGO build;
-- reject a profile that improves trained tests but regresses held-out behavior
-  or changes loader/interposition semantics.
-
-## E12 — Final parity and release qualification
-
-Status: [x] completed 2026-08-09; performance investigation complete. The
-baseline behavioral-parity failure was repaired afterward; establish a fresh
-accepted performance baseline before beginning another optimization experiment.
-
-### Work
-
-- [x] Rebuild fresh C and final Rust artifacts. The worktree intentionally
-      contained retained diagnostics/docs, so exact hashes and dirty provenance
-      were recorded instead of claiming a clean tree.
-- [x] Record hashes and the complete environment.
-- [x] Run balanced ten-sample C/Rust `allt` in both allocator orders.
-- [x] Run focused higher-resolution comparisons for every workload outside the
-      parity band.
-- [x] Run `scripts/check-bench-full.sh` and preserve all five artifact modes.
-      The official bundler rejected truthful dirty manifests; a checksummed,
-      explicitly dirty fallback archive preserves the complete evidence.
-- [x] Run the complete standard correctness gate. The original E12 run recorded
-      the B00 behavioral-parity subprocess failure verbatim; the follow-up
-      parity repair passes the full gate and is documented in the worklog.
-- [x] Compare final assembly against the E00 baseline and C for every modified
-      hot function.
-- [x] Report CPU, instruction, branch, cache, RSS, committed-memory, abandoned
-      page, purge, and page-fault effects.
-- [x] Update `BENCHMARK_RESULTS.md` and the relevant investigation report with
-      exact artifact provenance and rejected-experiment references.
-
-### Success condition
-
-The effort succeeds when the final allocator is broadly at parity or better,
-the remaining differences are within measured noise or have a documented
-general tradeoff, and every retained change makes an allocator mechanism
-strictly clearer or cheaper without weakening safety, semantics, memory
-behavior, or portability.
+There must be a known-good baseline, or an explicit list of pre-existing
+failures that prevents later changes from being blamed incorrectly.
 
 ---
 
-## Previously rejected directions
+# Phase 1 — Make the architecture easy to navigate
 
-Do not retry these without a new profiler signal, a different mechanism, and a
-written reason the old result no longer applies:
+## 1.1 Write a maintainer map for the largest modules
 
-- `target-cpu=native` on the current host;
-- blanket `inline(always)` or `inline(never)` changes;
-- generic branchless rewrites;
-- changing atomic orderings;
-- two-link refill-loop unrolling;
-- ordinary-path prefetching or queue-node prefetching;
-- page metadata reordering/padding or moving `xthread_free` to another cache
-  line;
-- generic static dispatch for the complete `PageCollectOwner` collector;
-- deleting detached-chain membership validation without a replacement
-  invariant;
-- power-of-two membership masks;
-- simplifying page-queue classification wholesale;
-- forcing the large direct-cache updater inline;
-- caching mutable allocator options across public calls;
-- combining several weak ideas into one candidate.
+Purpose: identify real invariant boundaries before moving code.
 
-When in doubt, make the allocator do measurably less work in a general state
-transition, prove that state transition correct, and then let the complete
-workload and resource suite decide whether the change belongs.
+### Work
+
+- [ ] For each production Rust file above 1,500 lines, list its distinct
+      responsibilities, important state it owns, and callers.
+- [ ] Mark each responsibility as one of: raw ABI, safe facade, allocation hot
+      path, lifecycle, policy, platform primitive, diagnostics, or formatting.
+- [ ] Identify responsibilities already represented by an existing child
+      module; prefer moving code there instead of creating a new module.
+- [ ] Propose a module extraction only when the extracted code owns one
+      invariant, lifecycle, or boundary.
+- [ ] Add the final module ownership map to `ARCHITECTURE.md`; keep it concise
+      and link to existing detailed documents instead of duplicating them.
+
+### Validation
+
+- [ ] Verify every proposed module name corresponds to an actual responsibility
+      and at least two related functions or one complete state lifecycle.
+- [ ] Run the documentation-only validation commands.
+- [ ] Have `rg` confirm that every source path named in the map exists.
+
+### Completion condition
+
+Another engineer must be able to locate allocation, free, page lifecycle,
+arena lifecycle, initialization, options, statistics, platform, raw, and safe
+facade code from `ARCHITECTURE.md` without searching the entire repository.
+
+## 1.2 Decompose `src/allocator/init.rs` by lifecycle
+
+### Work
+
+- [ ] Identify the process initialization/teardown functions.
+- [ ] Identify thread initialization/teardown and TLS association functions.
+- [ ] Identify subprocess registry and subprocess lifecycle functions.
+- [ ] Identify CPU detection, random initialization, and platform hook glue.
+- [ ] Move one coherent group at a time into an `init/` child module. Reuse
+      `init/subproc_registry.rs` where it already owns the behavior.
+- [ ] Keep raw export entrypoints and the high-level initialization sequence in
+      `init.rs`; move implementation details behind crate-private functions.
+- [ ] Preserve function visibility unless a moved item can safely become more
+      private.
+- [ ] Remove imports and aliases made unused by each extraction.
+
+### Validation
+
+- [ ] Add or retain focused tests for process initialization, thread init/done,
+      TLS reset, subprocess creation/destruction, and repeated initialization.
+- [ ] Run `scripts/check-release-thread-stress.py` if present; otherwise run the
+      repository's documented release thread-stress entrypoint.
+- [ ] Run `scripts/check-behavioral-parity.py` and
+      `scripts/check-layer-boundaries.py`.
+- [ ] Run the common Rust validation gate.
+- [ ] Compare `git diff --stat` and confirm this is code movement plus only the
+      minimal visibility/import changes required by the move.
+
+### Completion condition
+
+Each new module owns a complete lifecycle, no initialization order changes, and
+the parent file is materially easier to scan without duplicating logic.
+
+## 1.3 Decompose allocator policy and reporting modules
+
+Complete these subitems independently.
+
+### Options
+
+- [ ] Separate option storage/initialization from diagnostic output,
+      formatting, and callback invocation in `src/allocator/options.rs`.
+- [ ] Keep option reads on their current fast path and preserve option
+      mutability and environment semantics.
+- [ ] Validate with option export tests, callback tests,
+      `scripts/check-policy-boundaries.py`, and the common gate.
+
+### Statistics
+
+- [ ] Separate counter mutation/aggregation, JSON/text rendering, and process
+      information collection in `src/allocator/stats.rs`.
+- [ ] Keep all formatting bounded and allocation-free in allocator paths.
+- [ ] Validate with stats export tests, safe stats tests,
+      `tests/no_allocation_critical_paths.rs`, and the common gate.
+
+### Arena
+
+- [ ] Move remaining arena responsibilities into existing `arena/` child
+      modules where their invariant already belongs: geometry, OS memory,
+      abandoned ownership, purge, metadata, or page ownership.
+- [ ] Leave orchestration and raw compatibility entrypoints in
+      `src/allocator/arena.rs`.
+- [ ] Validate with arena/type tests, layout checks, behavioral parity, and the
+      common gate.
+
+### Validation
+
+- [ ] Run the option, callback, statistics, arena, and safe-facade focused tests
+      named above after each independent extraction.
+- [ ] Run `scripts/check-policy-boundaries.py`,
+      `tests/no_allocation_critical_paths.rs`, `scripts/check-layout.sh`, and
+      `scripts/check-behavioral-parity.py` after all three module families are
+      complete.
+- [ ] Run the common Rust validation gate.
+- [ ] Compare the pre/post module dependency graph with `rg` and confirm that
+      no new cross-layer import or circular responsibility was introduced.
+
+### Completion condition
+
+- [ ] Confirm every resulting file has a describable single responsibility.
+- [ ] Confirm no duplicate helper, wrapper, or validation path was introduced.
+- [ ] Confirm no file was split solely to satisfy a size target.
+
+## 1.4 Remove accidental crate-root coupling
+
+### Work
+
+- [ ] Inventory crate-root compatibility aliases in `src/lib.rs` and identify
+      all internal users of each alias.
+- [ ] For new Rust-native modules, replace broad crate-root aliases with the
+      owning module path or a narrow import.
+- [ ] Retain aliases required by mechanical translation or raw compatibility;
+      document why they remain next to the alias.
+- [ ] Do not rename C-shaped functions inside compatibility layers in this task.
+- [ ] Do not change crate-root public exports.
+
+### Validation
+
+- [ ] Run `scripts/check-layer-boundaries.py`,
+      `scripts/check-safe-boundary.py`, and
+      `scripts/check-raw-facade.sh`.
+- [ ] Use `rg` to prove removed aliases have no remaining users.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+New Rust-native code depends on owning modules, while mechanical compatibility
+aliases remain explicitly identified and contained.
+
+---
+
+# Phase 2 — Reduce the real unsafe trust surface
+
+## 2.1 Rank unsafe hotspots by risk, not raw count
+
+### Work
+
+- [ ] Rank files containing unsafe code using these factors: aliasing risk,
+      pointer arithmetic, lifetime extension, union access, atomic publication,
+      FFI entry, and number of callers.
+- [ ] Select the five highest-risk domains. Expected candidates include free
+      routing, page metadata, arena ownership, thread lifecycle, and callback
+      state; use the evidence rather than assuming this exact order.
+- [ ] For each selected domain, identify the smallest safe or typed primitive
+      that could own repeated unsafe operations.
+- [ ] Reject proposed wrappers that merely move an unsafe block without reducing
+      the number of callers that must understand its invariant.
+- [ ] Record the ranked list in this task's completion note, not a new ledger.
+
+### Validation
+
+- [ ] Confirm every proposed primitive has at least two current unsafe callers
+      or encloses one complete high-risk state transition.
+- [ ] Confirm each proposed safe API can state and enforce its invariant without
+      accepting an unchecked primitive that recreates the original risk.
+- [ ] Run `scripts/check-unsafe-inventory.py` before making production changes.
+
+### Completion condition
+
+The next unsafe reductions must be ordered by potential undefined behavior and
+review burden, not by whichever file is easiest to edit.
+
+## 2.2 Centralize pointer arithmetic and metadata field access
+
+Work through one pointer domain at a time: page, block, heap/thread heap, arena,
+subprocess, and OS allocation.
+
+### Work
+
+- [ ] Find direct pointer arithmetic and direct raw metadata field access
+      outside the owning `src/types/` or boundary module.
+- [ ] Reuse an existing checked pointer wrapper before creating a new wrapper.
+- [ ] Add a wrapper method only when it can validate bounds, alignment,
+      provenance, initialization, or ownership once for multiple callers.
+- [ ] Return typed values or `Option`/`Result` from checked operations; do not
+      encode failure with a new sentinel.
+- [ ] Keep raw accessors crate-private and avoid `Deref`/`DerefMut` for
+      allocator metadata wrappers.
+- [ ] Replace callers in one domain, then remove the superseded unsafe helper or
+      raw field access.
+
+### Validation
+
+- [ ] Add boundary tests for null, zero, minimum, maximum, overflow,
+      misalignment, and one-past-end cases relevant to the domain.
+- [ ] Run `scripts/check-strict-types.py` and the focused provenance tests.
+- [ ] Run the relevant focused Miri command from `scripts/check-miri-all.sh`.
+- [ ] Run the common Rust validation gate.
+- [ ] Record the before/after unsafe-site count and require a net reduction or a
+      clearly smaller set of callers that must uphold the invariant.
+
+### Completion condition
+
+Each pointer invariant has one owner, callers cannot bypass it accidentally,
+and the change reduces the code that must be manually trusted.
+
+## 2.3 Narrow unsafe functions and blocks
+
+### Work
+
+- [ ] Find `unsafe fn` bodies containing ordinary control flow around only one
+      or two unsafe operations.
+- [ ] Keep the function unsafe only if callers must uphold an invariant. A
+      function is not unsafe merely because its implementation uses unsafe.
+- [ ] Move validation and ordinary calculations outside the smallest possible
+      `unsafe` block.
+- [ ] Replace whole-function unsafe scopes with operation-level unsafe blocks.
+- [ ] Ensure every remaining unsafe function has a `# Safety` section naming
+      pointer validity, lifetime, aliasing, initialization, ownership,
+      threading, and unwind requirements that apply.
+- [ ] Ensure every unsafe block or impl has a nearby `SAFETY:` comment
+      that explains this exact operation, not only the surrounding subsystem.
+
+### Validation
+
+- [ ] Run Clippy's `missing_safety_doc` and `unsafe_op_in_unsafe_fn` gates and
+      `scripts/check-safe-docs.py`.
+- [ ] Run Clippy with all features and confirm `unsafe_op_in_unsafe_fn` remains
+      denied.
+- [ ] Record a net reduction in broad unsafe scope. Do not count splitting one
+      broad block into many equivalent blocks as risk reduction.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+A reviewer can see the exact unsafe operation and its proof without reasoning
+through unrelated control flow.
+
+## 2.4 Remove redundant unsafe marker layers
+
+### Work
+
+- [ ] Find raw-pointer-to-wrapper-to-raw-pointer round trips inside one function
+      or one proven ownership epoch.
+- [ ] Determine whether the wrapper can be carried through the complete
+      operation instead of reconstructed.
+- [ ] Preserve linear capability consumption on state transitions.
+- [ ] Do not make a linear capability `Copy` to simplify call sites.
+- [ ] Remove superseded unchecked constructors that no longer have callers.
+- [ ] Remove allowlist entries made obsolete by the production reduction.
+
+### Validation
+
+- [ ] Add compile-fail or source-enforced tests showing linear capabilities
+      cannot be duplicated or forged.
+- [ ] Run capability, strict-type, layout, and release-fast-path audit tests.
+- [ ] Capture release assembly for any changed allocation/free hot path.
+- [ ] Confirm wrapper traffic does not survive in release code, or record and
+      justify any remaining instruction.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+Typed state travels through the operation without repeated unsafe
+reconstruction, and obsolete unsafe constructors and allowances are gone.
+
+---
+
+# Phase 3 — Make zero-cost claims precise and enforceable
+
+## 3.1 Classify every `#[inline(always)]`
+
+### Work
+
+- [ ] Produce a list of every production `#[inline(always)]` grouped by file and
+      function.
+- [ ] Classify each site as: required hot-path wrapper, required ABI shim,
+      measured codegen fix, compile-time accessor, or unproven.
+- [ ] Put the reason next to retained non-obvious forced-inline attributes.
+- [ ] For unproven sites, compare three release variants: current,
+      ordinary `#[inline]`, and no attribute.
+- [ ] Change one coherent function family at a time. Do not perform a blanket
+      replacement.
+
+### Validation
+
+- [ ] Use `scripts/capture-release-assembly.sh` for before/after artifacts.
+- [ ] Compare function bytes, instructions, calls, branches, stack references,
+      and complete artifact `.text` size.
+- [ ] Retain `#[inline(always)]` only when it removes a real call/wrapper cost or
+      preserves a measured hot-path improvement without harmful code growth.
+- [ ] Run focused correctness tests and the common gate for each batch.
+- [ ] For a changed allocator hot path, follow `docs/performance.md` before
+      accepting the change.
+
+### Completion condition
+
+Every forced-inline site has evidence or an obvious trivial-wrapper reason;
+the attribute is no longer a general style default.
+
+## 3.2 Prove strict wrappers have the intended representation
+
+### Work
+
+- [ ] Inventory pointer, scalar, layout, queue, freelist, atomic, and typestate
+      wrappers used on allocation/free hot paths.
+- [ ] For each transparent wrapper, test size and alignment equality with its
+      wrapped representation.
+- [ ] For optional non-null wrappers, test the expected niche size.
+- [ ] For linear capability types, test that they are stack-only and are not
+      `Copy` or `Clone` unless duplication is semantically harmless.
+- [ ] For public owned allocations, document intentional metadata such as
+      `Layout` and heap identity instead of calling the whole public type
+      representation-free.
+- [ ] Remove `#[repr(transparent)]` where no layout contract is required, or
+      document the real layout reason where it remains.
+
+### Validation
+
+- [ ] Run `scripts/check-layout.sh` in default, `secure`, `guarded`, and tracking
+      configurations supported by the script.
+- [ ] Run the strict-type layout and niche tests.
+- [ ] Capture assembly for free-list pop, local free, remote free, small page
+      lookup, and layout construction.
+- [ ] Confirm constructors/accessors add no calls, branches, spills, loads, or
+      stores beyond the underlying operation.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+Every “zero-cost” wrapper claim names the exact cost being eliminated:
+representation, dispatch, allocation, or emitted instructions.
+
+## 3.3 Keep allocator critical paths allocation- and dispatch-free
+
+### Work
+
+- [ ] Review allocator, internal, platform, and strict-type modules for `Vec`,
+      `Box`, `String`, formatting allocation, `Arc`, `Rc`, trait objects, and
+      standard synchronization types.
+- [ ] Confirm every occurrence is test-only, diagnostics-only, a safe facade
+      boundary, or explicitly justified outside a critical path.
+- [ ] Replace accidental intermediate collections with direct loops or caller
+      buffers.
+- [ ] Replace accidental dynamic dispatch in hot code with an enum, generic, or
+      direct function only when a real occurrence exists.
+- [ ] Do not introduce a custom collection or abstraction when no accidental
+      allocation exists.
+
+### Validation
+
+- [ ] Run `tests/no_allocation_critical_paths.rs` and the default no-std build.
+- [ ] Inspect the default release dynamic symbol table for unexpected allocator
+      or formatting dependencies.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+Allocation/free critical paths require no Rust heap allocation or runtime
+dispatch beyond the allocator mechanism itself.
+
+---
+
+# Phase 4 — Improve ordinary Rust style without rustifying the ABI
+
+## 4.1 Remove panic-prone production shortcuts
+
+### Work
+
+- [ ] Search non-test production code for `unwrap`, `expect`, `panic!`, indexing
+      that can fail, unchecked arithmetic, and `unreachable!`.
+- [ ] Classify each occurrence as input failure, allocator corruption,
+      impossible-by-type state, FFI abort policy, or static invariant.
+- [ ] Return `Option` or a typed error for expected failure.
+- [ ] Keep abort/assert behavior where mimalloc compatibility requires process
+      termination; document that boundary explicitly.
+- [ ] Use checked arithmetic at untrusted or overflow-sensitive boundaries.
+- [ ] Do not add error allocation or formatting to a hot path.
+
+### Validation
+
+- [ ] Add regression tests for every converted expected-failure path.
+- [ ] Run `tests/ffi_panic_audit.rs`, oversize allocation tests, allocation
+      boundary tests, and behavioral parity.
+- [ ] Run `scripts/check-no-unwind-artifact.py`.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+Ordinary invalid input cannot panic, and every remaining abort/panic is an
+explicit compatibility or invariant boundary.
+
+## 4.2 Make ownership and borrowing obvious at function boundaries
+
+### Work
+
+- [ ] Review Rust-native helpers for owned parameters used only for reading.
+- [ ] Accept references, slices, or typed borrowed handles where ownership is
+      not transferred.
+- [ ] Review returned references and ensure their lifetime is tied to the
+      correct heap, page, or owner.
+- [ ] Keep consuming parameters for linear state transitions; do not borrow a
+      capability that must be invalidated.
+- [ ] Review `Copy` and `Clone` implementations and retain them only for cheap,
+      semantically duplicable values.
+- [ ] Make intentional snapshot copies visible through naming or a short
+      comment.
+
+### Validation
+
+- [ ] Add compile-fail docs or tests for values that must not outlive a heap or
+      cross a thread boundary.
+- [ ] Run the safe facade, capability-linearity, and trait expectation tests.
+- [ ] Confirm `.clone()` and `Copy` counts do not grow without an explicit
+      reason.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+Each Rust-native signature communicates whether it borrows, mutates, consumes,
+or transfers allocator state.
+
+## 4.3 Simplify complex functions with pure decision helpers
+
+### Work
+
+- [ ] Find long functions that mix policy decisions, pointer mutation, atomic
+      operations, statistics, and error reporting.
+- [ ] Extract pure decision logic only when it can take typed values and return
+      a small enum or typed result.
+- [ ] Keep pointer mutation and atomic publication in the state-owning module.
+- [ ] Use exhaustive matches for internal closed state machines.
+- [ ] Do not introduce a trait, context object, or generic framework for a
+      single decision.
+- [ ] Name helpers after allocator concepts, not vague verbs such as `handle`,
+      `process`, or `do_work`.
+
+### Validation
+
+- [ ] Add table-driven tests comparing the extracted decision with the previous
+      formula over boundary values.
+- [ ] Run behavioral parity and relevant policy tests.
+- [ ] Capture assembly if the changed function is on an allocation/free hot
+      path; reject extra calls or branches that survive release optimization.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+Policy is testable without raw pointers, mutation remains close to its owner,
+and emitted hot-path work does not increase.
+
+## 4.4 Tighten lint exceptions
+
+### Work
+
+- [ ] Review every crate-wide Clippy `allow` in `Cargo.toml`.
+- [ ] Remove an allowance if the current crate passes without it.
+- [ ] If only a few compatibility sites need an allowance, move it to those
+      sites with a reason.
+- [ ] Retain crate-wide allowances only when the warning is pervasive because
+      of mechanical C compatibility and local annotations would add noise.
+- [ ] Pay special attention to `inline_always`, `too_many_lines`,
+      `wildcard_imports`, pointer casts, numeric casts, and pass-by-value.
+- [ ] Do not rewrite correct compatibility code merely to satisfy a stylistic
+      lint.
+
+### Validation
+
+- [ ] Remove one allowance at a time and run full-feature Clippy.
+- [ ] Run full-feature Clippy after each allowance removal.
+- [ ] Confirm the final exception list contains a short explanation for every
+      non-obvious crate-wide allowance.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+The lint policy describes intentional compatibility constraints rather than
+hiding ordinary Rust quality issues.
+
+---
+
+# Phase 5 — Strengthen concurrency and lifecycle correctness
+
+## 5.1 Resolve the thread-lifecycle sanitizer finding
+
+Purpose: investigate the recorded TSan race between `_mi_theap_create` and
+`_mi_thread_done` instead of treating it as permanent background noise.
+
+### Work
+
+- [ ] Reproduce the race using the exact command and artifact configuration
+      recorded in `PERFORMANCE_WORKLOG.md`.
+- [ ] Confirm whether current HEAD still reproduces it in at least three runs.
+- [ ] Reduce the reproducer to the smallest thread create/allocate/free/exit
+      sequence that retains the report.
+- [ ] Map every reported access to its owning state and intended atomic or TLS
+      synchronization.
+- [ ] Compare the lifecycle with C mimalloc 3.3.2 and document whether the race
+      is a translation defect, a sanitizer false positive, or inherited design.
+- [ ] If it is a defect, add a regression test before changing synchronization.
+- [ ] Make the smallest fix that establishes a clear happens-before relation.
+- [ ] Do not add a global lock or strengthen unrelated atomics as a shortcut.
+
+### Validation
+
+- [ ] The minimized reproducer passes at least ten TSan runs after the fix.
+- [ ] Run release thread stress, behavioral parity, Loom models, ASan, and
+      Valgrind checks documented for thread lifecycle.
+- [ ] Compare allocation/free assembly and counters to ensure the fix does not
+      add synchronization to unrelated hot paths.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+The race is fixed with a proven synchronization edge or documented with a
+minimal false-positive proof and an automated suppression scoped to that exact
+boundary.
+
+## 5.2 Review atomic APIs by protocol
+
+### Work
+
+- [ ] Group atomic operations by protocol: remote free publication, ownership
+      claim/release, once initialization, arena bitmap, page-map publication,
+      statistics, and locks.
+- [ ] For each protocol, write the state transition and required visibility in
+      a short module comment next to its implementation.
+- [ ] Ensure raw C memory-order enums are converted once at the compatibility
+      boundary and do not propagate into Rust-native code.
+- [ ] Ensure atomic wrapper methods name the operation, such as `publish`,
+      `detach`, `claim`, or `release`, rather than only `load`/`store` when they
+      carry a protocol invariant.
+- [ ] Remove duplicate raw atomic access that bypasses an existing protocol
+      wrapper.
+- [ ] Do not weaken or strengthen ordering without a protocol proof and C
+      comparison.
+
+### Validation
+
+- [ ] Run the focused atomic protocol tests.
+- [ ] Add or update a Loom model for every changed publication/ownership
+      protocol.
+- [ ] Run `scripts/check-concurrency-models.sh` and release thread stress.
+- [ ] Compare release assembly for changed atomic hot paths and confirm no
+      unexpected fences or locked instructions were introduced.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+Atomic orderings are understandable from the protocol they implement, and
+Rust-native code cannot casually bypass that protocol.
+
+## 5.3 Make process-global callback tests deterministic
+
+### Work
+
+- [ ] Inventory the ignored callback tests in `src/safe/tests.rs`.
+- [ ] Move process-global callback tests into a dedicated integration test
+      binary or otherwise guarantee serial execution and process isolation.
+- [ ] Test registration, nested LIFO restoration, allocator reentry, recursive
+      suppression, panic containment, and drop restoration.
+- [ ] Ensure a failed test restores global callback state before process exit
+      where possible.
+- [ ] Remove `#[ignore]` only after isolation makes the test deterministic.
+
+### Validation
+
+- [ ] Run the isolated callback test binary at least twenty times.
+- [ ] Run it once with the test harness default thread count and once with
+      `--test-threads=1`.
+- [ ] Run FFI panic audit and the common Rust validation gate.
+- [ ] Confirm the ignored-test count decreases and no process-global test leaks
+      state into another test.
+
+### Completion condition
+
+Callback safety behavior runs in normal CI rather than depending on permanently
+ignored tests.
+
+---
+
+# Phase 6 — Improve tests without creating audit theater
+
+## 6.1 Replace brittle source-shape checks where stronger tests exist
+
+### Work
+
+- [ ] Inventory tests that pass by searching source text for names, comments,
+      line shapes, or tokens.
+- [ ] Classify each as enforcing an otherwise untestable architectural boundary
+      or approximating behavior/layout/codegen that can be tested directly.
+- [ ] Keep source checks for visibility, forbidden dependencies, macro
+      expansion boundaries, and properties Rust reflection cannot express.
+- [ ] Replace approximations with runtime tests, compile-fail tests, layout
+      assertions, symbol inspection, Loom, Miri, or assembly checks.
+- [ ] Delete the superseded source-shape test and any ledger row that exists
+      only for it.
+- [ ] Do not reduce coverage merely to reduce test count.
+
+### Validation
+
+- [ ] Demonstrate that the replacement test fails against a deliberate local
+      violation, then revert the violation.
+- [ ] Run the release fast-path audit and common gate.
+- [ ] Record the number of source-shape assertions removed and the stronger
+      evidence replacing them.
+
+### Completion condition
+
+Tests prove externally observable behavior or compiler properties whenever
+possible, while source checks remain only for genuine architectural rules.
+
+## 6.2 Expand property tests around unsafe boundaries
+
+### Work
+
+- [ ] Add property coverage for layout products, alignment, size-class
+      boundaries, page capacity, slice ranges, and pointer classification.
+- [ ] Add randomized valid state-transition sequences for page queues,
+      local/remote free lists, reclaim, and reabandon behavior.
+- [ ] Include zero, one, maximum valid, first invalid, and arithmetic-overflow
+      values in every numeric domain.
+- [ ] Check conservation properties: no duplicate block, no lost block, used
+      count matches ownership, and every allocation is freed at most once.
+- [ ] Use deterministic seeds and print the seed on failure.
+- [ ] Keep property-test allocation and randomness outside allocator timed or
+      no-allocation paths.
+
+### Validation
+
+- [ ] Demonstrate each new property catches one deliberately introduced local
+      defect, then revert the defect.
+- [ ] Run property tests in default and `secure` modes.
+- [ ] Run the relevant fuzz-smoke and Miri scripts.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+The most dangerous unsafe transitions are checked over domains and sequences,
+not only a handful of hand-written examples.
+
+## 6.3 Make test ownership and naming consistent
+
+### Work
+
+- [ ] Keep private invariant tests beside their owning module or in that
+      module's `tests.rs`.
+- [ ] Keep public behavior, FFI linking, and downstream-usage tests under
+      `tests/`.
+- [ ] Rename vague tests so the name states the condition and expected result.
+- [ ] Split a test file only when the new file owns a coherent behavior family.
+- [ ] Remove duplicate fixtures created by previous file splits; retain one
+      focused helper in the nearest shared test module.
+- [ ] Do not move tests solely for cosmetic consistency.
+
+### Validation
+
+- [ ] Run `cargo test -- --list` and confirm names are unique and descriptive.
+- [ ] Confirm each production invariant named in `ARCHITECTURE.md` has an
+      identifiable test owner.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+An engineer can find the test for an invariant from the module that owns it,
+and public behavior is tested as a downstream user would observe it.
+
+---
+
+# Phase 7 — Validate features, `no_std`, and supported boundaries
+
+## 7.1 Make the feature matrix explicit and additive
+
+### Work
+
+- [ ] Enumerate supported combinations for `std`, `secure`, `guarded`,
+      `track-valgrind`, `track-asan`, `bench-diagnostics`, `c-abi`, and
+      `interpose` using `docs/features.md` as the owner.
+- [ ] Identify intentionally precedence-based combinations such as Valgrind
+      versus ASan tracking.
+- [ ] Confirm enabling a feature does not silently remove unrelated Rust APIs.
+- [ ] Confirm benchmark/diagnostic features do not alter default production
+      behavior when disabled.
+- [ ] Remove stale feature conditionals that cannot occur in a supported build.
+- [ ] Do not add new features for internal implementation choices.
+
+### Validation
+
+- [ ] Run `scripts/check-features.sh` and `scripts/check-feature-abi.sh`.
+- [ ] Run layout and focused allocation tests for every executable feature
+      combination supported by the scripts.
+- [ ] Compare default release symbols and assembly before/after diagnostics are
+      compiled out.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+Every supported feature combination has documented behavior and an automated
+compile or execution check.
+
+## 7.2 Tighten `no_std` separation
+
+### Work
+
+- [ ] Search allocator-core modules for accidental `std` imports or APIs.
+- [ ] Keep `std::error::Error` implementations, examples, tooling, and
+      diagnostics behind `std`.
+- [ ] Ensure safe facade functionality that does not require `std` remains
+      available in the default Linux `no_std` build.
+- [ ] Keep error values allocation-free and format through `core::fmt`.
+- [ ] Confirm platform primitives, not `std`, own required OS interaction.
+
+### Validation
+
+- [ ] Run the repository default `no_std` check and `scripts/check-features.sh`.
+- [ ] Run `scripts/check-safe-api-features.sh`.
+- [ ] Run the strict-type no-std/no-allocation audit tests.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+The core allocator and safe facade use `std` only where the feature explicitly
+permits it, with no accidental dependency hidden by tests.
+
+## 7.3 Contain source-present unsupported platforms
+
+### Work
+
+- [ ] Confirm Linux x86_64 GNU remains the only maintained release target unless
+      project policy explicitly changes.
+- [ ] Ensure source-present platform modules are clearly gated and cannot imply
+      unsupported production status.
+- [ ] Keep shared platform interfaces narrow and avoid forcing the maintained
+      target through lowest-common-denominator abstractions.
+- [ ] Fix cross-platform compile failures only when they can be validated by an
+      available target or CI environment.
+- [ ] Do not advertise a platform based on source compilation alone.
+
+### Validation
+
+- [ ] Run the platform status and primitive-boundary tests.
+- [ ] Run `scripts/check-unix-syscall-parity.py` on the maintained target.
+- [ ] Run available cross-target compile checks without claiming runtime
+      support.
+- [ ] Run the common Rust validation gate on the maintained target.
+
+### Completion condition
+
+Platform abstractions are honest, narrow, and optimized for verified targets.
+
+---
+
+# Phase 8 — Simplify documentation and governance
+
+## 8.1 Assign one owner document per policy
+
+### Work
+
+- [ ] Group tracked Markdown files by topic: architecture, safety, unsafe audit,
+      performance, testing, ABI/FFI, features/platforms, release, and upstream
+      parity.
+- [ ] Select one authoritative document for each topic.
+- [ ] Replace duplicated explanations in secondary files with a short summary
+      and link to the owner.
+- [ ] Delete obsolete reports only when their historical evidence is preserved
+      in an authoritative report or version control.
+- [ ] Keep experiment history in `PERFORMANCE_WORKLOG.md`; do not copy it into
+      policy documents.
+- [ ] Update README links after consolidation.
+
+### Validation
+
+- [ ] Run `scripts/check-docs.sh`, `scripts/check-generated-artifacts.py`, and
+      doc tests.
+- [ ] Use `rg` to confirm deleted document names have no remaining references.
+- [ ] Confirm each policy topic has exactly one named authoritative owner in
+      `ARCHITECTURE.md` or README.
+- [ ] Confirm the tracked documentation count or duplicated text decreases.
+
+### Completion condition
+
+Documentation remains thorough but no policy must be updated in several places
+to stay consistent.
+
+## 8.2 Turn allowlists into reduction queues
+
+### Work
+
+- [ ] Review strict-type, unsafe migration, Clippy, dead-code, and compatibility
+      allowlists.
+- [ ] Remove entries whose production site no longer exists.
+- [ ] For each non-permanent entry, name the production change that removes it
+      and link it to a task in this plan.
+- [ ] Challenge “permanent” entries that are internal rather than required by
+      raw ABI, platform ABI, or upstream source-shape parity.
+- [ ] Do not split one allowance into several narrower rows and count that as
+      progress unless the trusted production surface also shrinks.
+- [ ] Delete caps that only preserve ledger size and do not prevent a concrete
+      risk.
+
+### Validation
+
+- [ ] Run all allowance inventory, strict-type, and unsafe audit checks.
+- [ ] Record before/after production-site and allowlist counts.
+- [ ] Require every claimed improvement to remove an unsafe/raw/dead-code site,
+      narrow a boundary, or eliminate an allowance.
+- [ ] Run the common Rust validation gate if production code changes.
+
+### Completion condition
+
+Allowlist maintenance follows real code reduction and never becomes the primary
+deliverable.
+
+## 8.3 Review comments for proof value
+
+### Work
+
+- [ ] Remove comments that restate syntax or narrate obvious control flow.
+- [ ] Keep comments that explain aliasing, lifetime, ownership, memory ordering,
+      upstream parity, platform behavior, or non-obvious performance choices.
+- [ ] Update stale source paths and line references.
+- [ ] Ensure safety comments explain why the operation is valid at that exact
+      point.
+- [ ] Ensure performance comments name the evidence artifact or general
+      mechanism, not an unexplained claim such as “faster.”
+
+### Validation
+
+- [ ] Run safe-doc, unsafe-audit, docs, and generated-artifact checks.
+- [ ] Review the diff and confirm production code behavior is unchanged.
+- [ ] Run documentation-only validation if no Rust code changed; otherwise run
+      the common Rust gate.
+
+### Completion condition
+
+Comments carry information the type system and code cannot express, and safety
+proofs remain local and reviewable.
+
+---
+
+# Phase 9 — Close measured performance gaps without weakening design
+
+Do not begin this phase until structural and safety refactors above are complete
+and a fresh baseline has been captured. Follow `docs/performance.md` and record
+every experiment in `PERFORMANCE_WORKLOG.md`.
+
+## 9.1 Re-establish the post-refactor Rust/C baseline
+
+### Work
+
+- [ ] Build clean current Rust and C mimalloc 3.3.2 release artifacts in
+      separate target directories.
+- [ ] Record commit, toolchains, build commands, hashes, dynamic dependencies,
+      host state, and allocator order.
+- [ ] Run the repository's balanced full comparison protocol in both allocator
+      orders.
+- [ ] Capture resource evidence and release assembly.
+- [ ] Compare against the accepted B02 evidence without treating runs from a
+      different host or configuration as directly interchangeable.
+
+### Validation
+
+- [ ] Every reported number resolves to an immutable artifact hash.
+- [ ] Both allocator orders agree for every claimed stable difference.
+- [ ] No structural refactor introduced a material hot-path or resource
+      regression.
+- [ ] The full correctness and release gates pass on the measured artifact.
+
+### Completion condition
+
+There is a trustworthy baseline for the exact post-refactor source before any
+new optimization candidate is attempted.
+
+## 9.2 Reduce low-contention remote-free overhead
+
+Current evidence reports remaining Rust/C throughput gaps in low-contention
+1+1 remote-free cases, especially 64–2048-byte objects.
+
+### Work
+
+- [ ] Reproduce the gap with balanced, normalized measurements.
+- [ ] Compare Rust and C allocation work separately from remote publication,
+      detachment, scan, collection, reclaim, and ownership release.
+- [ ] Use counters and assembly to identify one repeated load, validation,
+      branch, division, scan, or state reconstruction on the common path.
+- [ ] Confirm whether the work is required safety behavior, a compiler artifact,
+      or redundant under an existing typed ownership invariant.
+- [ ] Make only one mechanism change per candidate.
+- [ ] Preserve deep validation in debug/secure modes if ordinary release can
+      rely on a proven trusted boundary.
+
+### Validation
+
+- [ ] Add a focused correctness test for the exact invariant used by the
+      optimization.
+- [ ] Run Loom, Miri/fuzz, release thread stress, ASan, TSan, and Valgrind checks
+      relevant to the changed path.
+- [ ] Show the targeted emitted work disappears in release assembly.
+- [ ] Show two balanced comparisons improve normalized instructions/cycles and
+      wall time in the same direction.
+- [ ] Guard saturated xmalloc, Larson, glibc-thread, mstress, alloc-test,
+      Redis, RocksDB, and resource behavior.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+Keep a change only when it removes general allocator work, preserves every
+ownership/corruption invariant, and has no repeatable held-out regression.
+
+## 9.3 Investigate the remaining `glibc-thread` difference
+
+### Work
+
+- [ ] Reproduce the approximately 1% gap at high resolution before changing
+      code.
+- [ ] Profile allocator symbols separately from the workload loop and C++
+      boundary.
+- [ ] Compare call frequency and cost for allocation, delete/free, page retire,
+      refill, collection, and option reads.
+- [ ] Identify one common-path difference confirmed by both counters and
+      annotated assembly.
+- [ ] Reject branch-layout or forced-inline guesses without a demonstrated
+      instruction or cache effect.
+- [ ] Make one candidate change and record `KEEP`, `REJECT`, or `NO CHANGE`.
+
+### Validation
+
+- [ ] Use balanced baseline/candidate order and enough samples to resolve a 1%
+      effect from host noise.
+- [ ] Guard local allocation/free, low-contention remote free, Larson,
+      fragmentation, and memory/resource probes.
+- [ ] Confirm no `.text`, branch, instruction, or RSS regression is hidden by a
+      noisy wall-time result.
+- [ ] Run the full correctness gate before keeping a candidate.
+
+### Completion condition
+
+The gap is either reduced by a general improvement or documented as measured
+noise/compiler behavior with no unjustified source churn.
+
+## 9.4 Enforce performance neutrality for the safe facade
+
+### Work
+
+- [ ] Compare the safe `MiMalloc`, `Allocation`, and heap allocation paths with
+      their corresponding raw entrypoints at the call and assembly level.
+- [ ] Separate intentional safe metadata and error mapping from accidental
+      calls, branches, or allocation.
+- [ ] Confirm zero-sized allocation handling remains outside raw allocator calls.
+- [ ] Confirm initialized wrappers do not add copying beyond requested zeroing
+      or explicit clone operations.
+- [ ] Optimize only accidental wrapper overhead; retain metadata required for
+      ownership and correct `Drop`.
+
+### Validation
+
+- [ ] Run safe facade allocation, resize, zeroing, heap lifetime, failure, and
+      global allocator tests.
+- [ ] Inspect release assembly for representative sizes and alignments.
+- [ ] Run the repository's public-versus-raw evidence protocol when performance
+      measurements are authorized.
+- [ ] Run the common Rust validation gate.
+
+### Completion condition
+
+The safe facade charges only for its documented semantics—ownership metadata,
+failure classification, initialization, and drop—not accidental abstraction
+machinery.
+
+---
+
+# Phase 10 — Final exemplary-library signoff
+
+## 10.1 Perform a clean-tree senior review
+
+### Work
+
+- [ ] Confirm every production module has a clear owner and responsibility.
+- [ ] Confirm public safe types have private fields, correct ownership, typed
+      errors, appropriate thread traits, and complete rustdoc examples.
+- [ ] Confirm raw pointers are confined to raw/FFI/platform/mechanical or
+      narrowly trusted internal boundaries.
+- [ ] Confirm unsafe scopes and constructors are minimal and locally justified.
+- [ ] Confirm no production `unwrap`, `expect`, or panic handles ordinary input
+      failure.
+- [ ] Confirm no accidental allocation, dynamic dispatch, broad lock, or
+      formatting exists on allocator critical paths.
+- [ ] Confirm every remaining forced-inline attribute and lint allowance has a
+      concrete reason.
+- [ ] Confirm documentation has one owner per policy and no stale generated
+      claims.
+- [ ] Confirm the working tree contains no stale TODO edits, generated evidence,
+      or uncommitted production change.
+
+### Validation
+
+- [ ] Re-run the Phase 0 measurements and report exact before/after changes.
+- [ ] Require a real reduction in unsafe review burden, oversized mixed-purpose
+      modules, unjustified forced inlining, ignored tests, or allowances. More
+      documentation alone is not completion.
+- [ ] Review every changed line and trace it to a task in this plan.
+
+### Completion condition
+
+A senior reviewer can understand the boundaries, trust surface, ownership
+model, and performance evidence without relying on institutional memory.
+
+## 10.2 Run the final correctness and release qualification
+
+### Work and validation
+
+- [ ] Run `cargo fmt --all`.
+- [ ] Run `cargo clippy --workspace --all-targets --all-features`.
+- [ ] Run `cargo test --workspace --all-targets --all-features`.
+- [ ] Run `scripts/check-local.sh` and every additional release check documented
+      in `docs/release.md`.
+- [ ] Run behavioral parity, feature, layout, ABI/FFI boundary, no-unwind,
+      no-allocation, unsafe audit, strict-type, and policy checks.
+- [ ] Run Loom/concurrency models.
+- [ ] Run the supported Miri suite.
+- [ ] Run ASan, TSan, and Valgrind stress checks on the maintained target.
+- [ ] Run package and documentation builds from a clean tree.
+- [ ] Run the full performance/resource qualification only after all
+      correctness checks pass.
+- [ ] Preserve exact commands, commit, toolchains, artifact hashes, and any
+      environmental limitation.
+- [ ] Fix every source-caused failure before checking this task. Do not waive a
+      failure because unrelated checks passed.
+
+### Completion condition
+
+All mandatory checks pass on the same clean source revision, performance is at
+or near the accepted C baseline without unexplained resource regressions, and
+no required evidence depends on an uncommitted working tree.
+
+## 10.3 Close the plan with measured results
+
+### Work
+
+- [ ] Replace every remaining unchecked task with a completed result, a linked
+      follow-up approved by the maintainer, or a documented `NO CHANGE` backed by
+      evidence.
+- [ ] Summarize unsafe-site, allowlist, forced-inline, ignored-test, large-file,
+      code-size, and performance changes from the Phase 0 baseline.
+- [ ] List any intentionally retained translation debt and the compatibility or
+      performance reason it remains.
+- [ ] Confirm no completed item claims success solely because a cap, ledger, or
+      document grew.
+- [ ] Move historical experiment detail to `PERFORMANCE_WORKLOG.md`; keep this
+      file focused on remaining work and final outcomes.
+
+### Validation
+
+- [ ] Verify every cited path, command, commit, and artifact exists.
+- [ ] Verify the final summary agrees with the clean-tree measurements.
+- [ ] Run documentation checks after the final update.
+
+### Completion condition
+
+The library is not merely well-audited: it has a smaller and clearer trusted
+core, idiomatic safe boundaries, evidence-backed zero-cost abstractions,
+deterministic tests, and measured parity with the allocator it translates.

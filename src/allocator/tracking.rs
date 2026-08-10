@@ -20,7 +20,7 @@ pub const MI_TRACK_HEAP_DESTROY: usize = MI_TRACK_MODE.heap_destroy_flag();
 #[allow(dead_code)]
 pub const MI_TRACK_TOOL: &str = MI_TRACK_MODE.tool_name();
 
-// SAFETY[AUDIT:tracking-hooks]: the tracking shim symbols are supplied by the
+// SAFETY: the tracking shim symbols are supplied by the
 // C tracking bridge for the selected tracking feature and mirror C mimalloc's
 // Valgrind/ASan hook signatures.
 #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -39,7 +39,7 @@ unsafe extern "C" {
 /// enabled tracking backend. `reqsize` must be the requested user size.
 #[inline]
 pub unsafe fn mi_track_malloc_size(p: *mut c_void, reqsize: usize, size: usize, zero: bool) {
-    // SAFETY[AUDIT:tracking-hooks]: callers provide the tracked allocation
+    // SAFETY: callers provide the tracked allocation
     // range and requested size; the cfg-gated shim forwards that range to the
     // selected tracking backend without taking ownership.
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -59,7 +59,7 @@ pub unsafe fn mi_track_malloc_size(p: *mut c_void, reqsize: usize, size: usize, 
 /// tracking backend.
 #[inline]
 pub unsafe fn mi_track_free_size(p: *mut c_void, size: usize) {
-    // SAFETY[AUDIT:tracking-hooks]: callers provide the tracked allocation
+    // SAFETY: callers provide the tracked allocation
     // range being released; the cfg-gated shim only reports it to the backend.
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
     unsafe {
@@ -77,7 +77,7 @@ pub unsafe fn mi_track_free_size(p: *mut c_void, size: usize) {
 /// `p..p + size` must be a valid tracked memory range to mark as defined.
 #[inline]
 pub unsafe fn mi_track_mem_defined(p: *mut c_void, size: usize) {
-    // SAFETY[AUDIT:tracking-hooks]: callers provide a live tracked memory
+    // SAFETY: callers provide a live tracked memory
     // range; the cfg-gated shim only marks the range defined for the backend.
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
     unsafe {
@@ -95,7 +95,7 @@ pub unsafe fn mi_track_mem_defined(p: *mut c_void, size: usize) {
 /// `p..p + size` must be a valid tracked memory range to mark as undefined.
 #[inline]
 pub unsafe fn mi_track_mem_undefined(p: *mut c_void, size: usize) {
-    // SAFETY[AUDIT:tracking-hooks]: callers provide a live tracked memory
+    // SAFETY: callers provide a live tracked memory
     // range; the cfg-gated shim only marks the range undefined for the backend.
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
     unsafe {
@@ -113,7 +113,7 @@ pub unsafe fn mi_track_mem_undefined(p: *mut c_void, size: usize) {
 /// `p..p + size` must be a valid tracked memory range to mark as inaccessible.
 #[inline]
 pub unsafe fn mi_track_mem_noaccess(p: *mut c_void, size: usize) {
-    // SAFETY[AUDIT:tracking-hooks]: callers provide a live tracked memory
+    // SAFETY: callers provide a live tracked memory
     // range; the cfg-gated shim only marks the range inaccessible for the
     // backend.
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -134,7 +134,7 @@ pub unsafe fn mi_track_mem_noaccess(p: *mut c_void, size: usize) {
 #[inline]
 #[allow(dead_code)]
 pub unsafe fn mi_track_resize(p: *mut c_void, oldsize: usize, newsize: usize) {
-    // SAFETY[AUDIT:tracking-hooks]: callers provide the old and new tracked
+    // SAFETY: callers provide the old and new tracked
     // ranges for the same allocation; the cfg-gated shim reports the resize.
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
     unsafe {
@@ -143,7 +143,7 @@ pub unsafe fn mi_track_resize(p: *mut c_void, oldsize: usize, newsize: usize) {
 
     #[cfg(not(any(feature = "track-valgrind", feature = "track-asan")))]
     {
-        // SAFETY[AUDIT:tracking-hooks]: without an external tracking backend,
+        // SAFETY: without an external tracking backend,
         // resize reporting is equivalent to release followed by allocation
         // reporting for the same caller-provided allocation range.
         unsafe { mi_track_free_size(p, oldsize) };
@@ -157,7 +157,7 @@ pub unsafe fn mi_track_resize(p: *mut c_void, oldsize: usize, newsize: usize) {
 /// allocation reported to the tracking backend.
 #[inline]
 pub unsafe fn mi_track_align(p: *mut c_void, _alignedp: *mut c_void, offset: usize, _size: usize) {
-    // SAFETY[AUDIT:tracking-hooks]: callers provide the leading range of an
+    // SAFETY: callers provide the leading range of an
     // aligned allocation that must be hidden from the tracking backend.
     unsafe { mi_track_mem_noaccess(p, offset) };
 }
@@ -187,7 +187,7 @@ pub unsafe fn mi_track_malloc(p: *mut c_void, reqsize: usize, zero: bool) {
         return;
     }
     if crate::types::MI_PADDING != 0 {
-        // SAFETY[AUDIT:tracking-hooks]: `p` is a non-null allocation pointer
+        // SAFETY: `p` is a non-null allocation pointer
         // from the caller; `mi_usable_size` is the allocator's bounded metadata
         // query for tracking and assertion purposes.
         let usable = unsafe { crate::mimalloc::mi_usable_size(p.cast_const()) };
@@ -196,21 +196,21 @@ pub unsafe fn mi_track_malloc(p: *mut c_void, reqsize: usize, zero: bool) {
                 || (reqsize == 0 && usable >= crate::core_types::RequestedSize::MIN_ZERO_SIZE)
         );
         if MI_TRACK_ENABLED != 0 {
-            // SAFETY[AUDIT:tracking-hooks]: `usable` came from allocator
+            // SAFETY: `usable` came from allocator
             // metadata for `p` and bounds the range reported to tracking.
             unsafe { mi_track_malloc_size(p, reqsize, usable, zero) };
         }
     } else {
-        // SAFETY[AUDIT:tracking-hooks]: `p` is a non-null allocation pointer
+        // SAFETY: `p` is a non-null allocation pointer
         // from the caller; the usable-size query checks the request bound.
         crate::internal::mi_assert_internal!(
             unsafe { crate::mimalloc::mi_usable_size(p.cast_const()) } >= reqsize
         );
         if MI_TRACK_ENABLED != 0 {
-            // SAFETY[AUDIT:tracking-hooks]: `p` is non-null and the
+            // SAFETY: `p` is non-null and the
             // usable-size result bounds the tracked allocation range.
             let size = unsafe { crate::mimalloc::mi_usable_size(p.cast_const()) };
-            // SAFETY[AUDIT:tracking-hooks]: `size` came from allocator
+            // SAFETY: `size` came from allocator
             // metadata for `p` and bounds the range reported to tracking.
             unsafe { mi_track_malloc_size(p, reqsize, size, zero) };
         }

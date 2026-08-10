@@ -117,7 +117,7 @@ const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
 
 /// # Safety
 /// `page` must point to a page currently owned by a full queue.
-// SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
+// SAFETY: full/active page transitions preserve queue membership and heap ownership.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
     unsafe {
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
 pub(crate) unsafe fn _mi_page_unfull_internal(
     page_wrapper: crate::core_types::FullPage,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
+    // SAFETY: full/active page transitions preserve queue membership and heap ownership.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -169,7 +169,7 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
 
 #[inline]
 unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    // SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
+    // SAFETY: full/active page transitions preserve queue membership and heap ownership.
     unsafe {
         crate::internal::mi_assert_internal!(pq == mi_page_queue_of(page));
         crate::internal::mi_assert_internal!(!mi_page_immediate_available(page));
@@ -207,7 +207,7 @@ unsafe fn mi_page_move_to_full_typed(
     from: crate::core_types::NormalPageQueue,
     to: crate::core_types::FullPageQueue,
 ) -> crate::core_types::FullPage {
-    // SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
+    // SAFETY: full/active page transitions preserve queue membership and heap ownership.
     unsafe { page.into_full(from, to) }
 }
 
@@ -216,13 +216,13 @@ unsafe fn mi_page_unfull_typed(
     page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,
     to: crate::core_types::NormalPageQueue,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-full-transition-boundary]: full/active page transitions preserve queue membership and heap ownership.
+    // SAFETY: full/active page transitions preserve queue membership and heap ownership.
     unsafe { mi_page_queue_enqueue_from_full(to, page) }
 }
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    // SAFETY[AUDIT:page-queue-free-release-boundary]: all-free pages are removed from queues before arena release.
+    // SAFETY: all-free pages are removed from queues before arena release.
     unsafe {
         if mi_page_queue_is_full(pq) {
             if !mi_page_is_in_full(page) {
@@ -259,7 +259,7 @@ pub(crate) unsafe fn _mi_page_free_active_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
     queue: crate::core_types::NormalPageQueue,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY[AUDIT:page-queue-free-release-boundary]: all-free pages are removed from queues before arena release.
+    // SAFETY: all-free pages are removed from queues before arena release.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -278,7 +278,7 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Full>,
     queue: crate::core_types::FullPageQueue,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY[AUDIT:page-queue-free-release-boundary]: all-free pages are removed from queues before arena release.
+    // SAFETY: all-free pages are removed from queues before arena release.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -307,7 +307,7 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
 unsafe fn _mi_page_free_after_remove<S>(
     page_wrapper: crate::core_types::AllFreePage<S>,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY[AUDIT:page-queue-free-release-boundary]: all-free pages are removed from queues before arena release.
+    // SAFETY: all-free pages are removed from queues before arena release.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let theap = mi_page_theap(page);
@@ -322,7 +322,7 @@ unsafe fn _mi_page_free_after_remove<S>(
     }
 }
 
-// SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
+// SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     unsafe {
         let active =
@@ -338,7 +338,7 @@ pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
 pub(crate) unsafe fn _mi_page_retire_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
 ) {
-    // SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
+    // SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -393,7 +393,7 @@ pub(crate) unsafe fn _mi_page_retire_internal(
     }
 }
 
-// SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
+// SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.
 pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool) {
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
@@ -405,7 +405,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t
 
 #[inline]
 unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLocal, force: bool) {
-    // SAFETY[AUDIT:page-queue-retire-boundary]: retired page collection updates expire counters and queue fronts under thread-heap ownership.
+    // SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.
     unsafe {
         let theap_ptr = theap.ptr();
         let theap = theap_ptr.as_ptr();
@@ -458,7 +458,7 @@ unsafe fn mi_page_free_list_extend_secure(
     bsize: usize,
     extend: usize,
 ) {
-    // SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         mi_page_free_list_extend_secure_typed(
             theap,
@@ -476,7 +476,7 @@ unsafe fn mi_page_free_list_extend_secure_typed(
     bsize: crate::core_types::BlockSize,
     extend: usize,
 ) {
-    // SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let page_raw = page.as_ptr();
@@ -548,7 +548,7 @@ unsafe fn mi_page_free_list_extend_secure_typed(
     }
 }
 
-// SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 unsafe extern "C" fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: usize) {
     unsafe {
@@ -566,7 +566,7 @@ unsafe fn mi_page_free_list_extend_typed(
     bsize: crate::core_types::BlockSize,
     extend: usize,
 ) {
-    // SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
@@ -598,12 +598,12 @@ unsafe fn mi_page_free_list_extend_typed(
     }
 }
 
-// SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[used]
 static MI_PAGE_FREE_LIST_EXTEND_KEEP: unsafe extern "C" fn(*mut mi_page_t, usize, usize) =
     mi_page_free_list_extend;
 
-// SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
     unsafe {
@@ -619,7 +619,7 @@ unsafe fn mi_page_extend_free_typed(
     theap: crate::core_types::ThreadHeapLocal,
     page_ptr: PagePtr,
 ) -> bool {
-    // SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap_local = theap;
         let theap = theap.ptr().as_ptr();
@@ -708,12 +708,12 @@ unsafe fn mi_page_extend_free_typed(
     }
 }
 
-// SAFETY[AUDIT:page-free-list-extend-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[used]
 static MI_PAGE_EXTEND_FREE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) -> bool =
     mi_page_extend_free;
 
-// SAFETY[AUDIT:page-queue-abandon-boundary]: abandon transitions detach active/full pages before arena abandon publication.
+// SAFETY: abandon transitions detach active/full pages before arena abandon publication.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     unsafe {
@@ -728,7 +728,7 @@ unsafe fn _mi_page_abandon_typed(
     page_ptr: crate::core_types::PagePtr,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::PageAbandonOutcome {
-    // SAFETY[AUDIT:page-queue-abandon-boundary]: abandon transitions detach active/full pages before arena abandon publication.
+    // SAFETY: abandon transitions detach active/full pages before arena abandon publication.
     unsafe {
         let page_wrapper = if mi_page_is_in_full(page_ptr.as_ptr()) {
             crate::core_types::assume_full_page(page_ptr).into_abandon_candidate()
@@ -743,7 +743,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
     page_wrapper: crate::core_types::PageForAbandon,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::PageAbandonOutcome {
-    // SAFETY[AUDIT:page-queue-abandon-boundary]: abandon transitions detach active/full pages before arena abandon publication.
+    // SAFETY: abandon transitions detach active/full pages before arena abandon publication.
     unsafe {
         let page_ptr = match &page_wrapper {
             crate::core_types::PageForAbandon::Active(page) => page.page(),
@@ -828,7 +828,7 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
 
 /// # Safety
 /// `theap` must be valid. If non-null, `pq` must be a page queue belonging to `theap`.
-// SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn mi_page_fresh_alloc(
     theap: *mut mi_theap_t,
@@ -836,7 +836,7 @@ pub unsafe extern "C" fn mi_page_fresh_alloc(
     block_size: usize,
     page_alignment: usize,
 ) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         crate::internal::mi_assert_internal!(pq.is_null() || mi_theap_contains_queue(theap, pq));
         crate::internal::mi_assert_internal!(
@@ -870,7 +870,7 @@ unsafe fn mi_page_fresh_alloc_typed(
     layout: crate::core_types::LayoutRequest,
     page_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let block_size = layout.padded().get();
@@ -924,7 +924,7 @@ unsafe fn mi_page_fresh_alloc_typed(
     }
 }
 
-// SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[used]
 static MI_PAGE_FRESH_ALLOC_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,
@@ -933,13 +933,13 @@ static MI_PAGE_FRESH_ALLOC_KEEP: unsafe extern "C" fn(
     usize,
 ) -> *mut mi_page_t = mi_page_fresh_alloc;
 
-// SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_init(
     theap: *mut mi_theap_t,
     page: *mut mi_page_t,
 ) -> bool {
-    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         crate::internal::mi_assert!(!page.is_null());
         crate::internal::mi_assert!(!theap.is_null());
@@ -957,7 +957,7 @@ unsafe fn _mi_page_init_typed(
     owner: crate::core_types::ThreadHeapLocal,
     page_uninit: crate::core_types::Page<crate::core_types::Uninit>,
 ) -> bool {
-    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let page = page_uninit.ptr().as_ptr();
@@ -1035,7 +1035,7 @@ unsafe fn _mi_page_init_typed(
 /// `theap` must be valid, and `pq` must be a page queue belonging to `theap`.
 #[inline]
 pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
         let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
@@ -1066,7 +1066,7 @@ unsafe fn mi_page_fresh_typed(
     block_size_typed: crate::core_types::BlockSize,
     slice_count: crate::core_types::SliceCount,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-fresh-allocation-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -1089,7 +1089,7 @@ pub(crate) unsafe fn try_reclaim_abandoned(
     page_wrapper: crate::core_types::OwnedAbandonedPage,
     target: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-reclaim-boundary]: abandoned-page reclaim reattaches pages to target thread-heap queues.
+    // SAFETY: abandoned-page reclaim reattaches pages to target thread-heap queues.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let theap = target.ptr().as_ptr();
@@ -1124,14 +1124,14 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
     page: crate::core_types::OwnedAbandonedPage,
     target: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-reclaim-boundary]: abandoned-page reclaim reattaches pages to target thread-heap queues.
+    // SAFETY: abandoned-page reclaim reattaches pages to target thread-heap queues.
     unsafe { try_reclaim_abandoned(page, target) }
 }
 
 /// # Safety
 /// C-ABI-shaped keep boundary for page reclaim. The caller must ensure `theap`
 /// and `page` are valid, and that `page` is an owned abandoned page.
-// SAFETY[AUDIT:page-queue-reclaim-boundary]: abandoned-page reclaim reattaches pages to target thread-heap queues.
+// SAFETY: abandoned-page reclaim reattaches pages to target thread-heap queues.
 #[inline(never)]
 unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mut mi_page_t) {
     unsafe {
@@ -1143,20 +1143,20 @@ unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mu
     }
 }
 
-// SAFETY[AUDIT:page-queue-reclaim-boundary]: abandoned-page reclaim reattaches pages to target thread-heap queues.
+// SAFETY: abandoned-page reclaim reattaches pages to target thread-heap queues.
 #[used]
 static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) =
     mi_theap_page_reclaim_raw;
 
 /// # Safety
 /// `theap` must be valid, and `pq` must point to a page queue belonging to that heap.
-// SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+// SAFETY: queue validation walks linked pages without mutating queue ownership.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_queue_is_valid(
     theap: *mut mi_theap_t,
     pq: *const mi_page_queue_t,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         if pq.is_null() {
             return false;
@@ -1182,7 +1182,7 @@ pub(crate) unsafe fn mi_normal_page_queue_is_valid(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
 }
 
@@ -1191,7 +1191,7 @@ pub(crate) unsafe fn mi_huge_page_queue_is_valid(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::HugePageQueue,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
 }
 
@@ -1200,7 +1200,7 @@ pub(crate) unsafe fn mi_full_page_queue_is_valid(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::FullPageQueue,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
 }
 
@@ -1209,7 +1209,7 @@ unsafe fn mi_page_queue_is_valid_typed(
     theap: crate::core_types::ThreadHeapLocal,
     pq: crate::core_types::PageQueuePtr,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let pq = pq.as_ptr();
@@ -1250,7 +1250,7 @@ unsafe fn mi_page_queue_is_valid_typed(
     }
 }
 
-// SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+// SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
 #[used]
 static MI_PAGE_QUEUE_IS_VALID_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,
@@ -1264,7 +1264,7 @@ pub(crate) unsafe fn mi_theap_page_queue_of_typed(
     theap: crate::core_types::ThreadHeapLocal,
     block_size: crate::core_types::BlockSize,
 ) -> crate::core_types::PageQueuePtr {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         let bin = mi_bin_from_block_size(block_size);
         crate::internal::mi_assert_internal!(bin.as_usize() <= MI_BIN_HUGE);
@@ -1279,7 +1279,7 @@ pub unsafe fn mi_theap_page_queue_of(
     theap: *mut mi_theap_t,
     page: *const mi_page_t,
 ) -> *mut mi_page_queue_t {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         crate::internal::mi_assert_internal!(!theap.is_null());
         let bin = mi_page_bin_typed(page).as_usize();
@@ -1305,7 +1305,7 @@ pub unsafe fn mi_theap_page_queue_of(
 /// # Safety
 /// `theap` must be valid, and `pq` must point to one of its page queues.
 pub unsafe fn mi_theap_queue_first_update(theap: *mut mi_theap_t, pq: *const mi_page_queue_t) {
-    // SAFETY[AUDIT:page-queue-direct-cache-boundary]: direct-page cache updates mirror normal queue fronts for small pages.
+    // SAFETY: direct-page cache updates mirror normal queue fronts for small pages.
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
         let queue = page_queue_ptr(pq);
@@ -1323,7 +1323,7 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
 ) {
-    // SAFETY[AUDIT:page-queue-direct-cache-boundary]: direct-page cache updates mirror normal queue fronts for small pages.
+    // SAFETY: direct-page cache updates mirror normal queue fronts for small pages.
     unsafe {
         let Some(block_size) = queue.ptr().block_size() else {
             crate::internal::mi_assert_internal!(false);
@@ -1375,7 +1375,7 @@ unsafe fn mi_page_queue_find_free_ex(
     pq: *mut mi_page_queue_t,
     first_try: bool,
 ) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-queue-search-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let queue = page_queue_ptr(pq);
         let Some(queue) = crate::core_types::NormalPageQueue::new(queue) else {
@@ -1402,7 +1402,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
     block_size: crate::core_types::BlockSize,
     first_try: bool,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-queue-search-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap_raw = theap.ptr().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -1565,7 +1565,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
 
 #[inline]
 unsafe fn mi_find_free_page(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-queue-search-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let queue = page_queue_ptr(pq);
         let Some(queue) = crate::core_types::NormalPageQueue::new(queue) else {
@@ -1592,7 +1592,7 @@ unsafe fn mi_find_free_page_typed(
     queue: crate::core_types::NormalPageQueue,
     block_size: crate::core_types::BlockSize,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-queue-search-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page = queue.ptr().first();
         if let Some(page) = page.filter(|page| mi_page_free_quick_collect(page.as_ptr())) {
@@ -1619,7 +1619,7 @@ unsafe fn mi_huge_page_alloc(
     page_alignment: usize,
     pq: *mut mi_page_queue_t,
 ) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-huge-allocation-boundary]: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
+    // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
     unsafe {
         let block_size = _mi_os_good_alloc_size(size);
         crate::internal::mi_assert_internal!(mi_page_queue_is_huge(pq));
@@ -1653,7 +1653,7 @@ unsafe fn mi_huge_page_alloc_typed(
     page_alignment: crate::core_types::MaybeAlignment,
     queue: crate::core_types::HugePageQueue,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-huge-allocation-boundary]: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
+    // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
     unsafe {
         let theap = owner.ptr().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -1684,7 +1684,7 @@ unsafe fn mi_find_page(
     size: usize,
     huge_alignment: usize,
 ) -> *mut mi_page_t {
-    // SAFETY[AUDIT:page-huge-allocation-boundary]: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
+    // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -1723,7 +1723,7 @@ unsafe fn mi_find_page_typed(
     size: crate::core_types::PaddedSize,
     huge_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY[AUDIT:page-huge-allocation-boundary]: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
+    // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
     unsafe {
         let req_size = size.get().wrapping_sub(MI_PADDING_SIZE);
         if req_size > MI_MAX_ALLOC_SIZE {
@@ -1772,14 +1772,14 @@ unsafe fn mi_find_page_typed(
     }
 }
 
-// SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+// SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
 pub(crate) unsafe extern "C" fn _mi_malloc_generic(
     theap: *mut mi_theap_t,
     size: usize,
     zero_huge_alignment: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         // SAFETY: `zero_huge_alignment` is the C-compatible packed flag word:
         // bit 0 is zeroing and the remaining bits are the huge-alignment payload.
@@ -1803,7 +1803,7 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
 pub(crate) unsafe fn _mi_theap_or_default_typed(
     mut theap: *mut mi_theap_t,
 ) -> Option<crate::core_types::ThreadHeapPtr> {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         if !mi_theap_is_initialized(theap) {
             if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
@@ -1828,7 +1828,7 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
     flags: crate::core_types::MallocGenericFlags,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         let local_theap = crate::core_types::ThreadHeapLocal::new_unchecked(theap);
         let theap = local_theap.ptr().as_ptr();

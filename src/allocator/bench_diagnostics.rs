@@ -461,19 +461,19 @@ impl PageBatchBenchFixture {
             return ptr::null_mut();
         };
         let block_count = len + destination_len;
-        // SAFETY[AUDIT:bench-page-batch-fixture]: benchmark fixture storage is
+        // SAFETY: benchmark fixture storage is
         // allocated before timing, checked for null, and released by destroy.
         let page_storage =
             unsafe { crate::mimalloc::mi_zalloc(mem::size_of::<mi_page_t>()) }.cast::<mi_page_t>();
         let blocks =
             unsafe { crate::mimalloc::mi_zalloc(block_count * mem::size_of::<mi_block_t>()) }
                 .cast::<mi_block_t>();
-        // SAFETY[AUDIT:bench-page-batch-fixture]: the opaque fixture allocation
+        // SAFETY: the opaque fixture allocation
         // is checked below and initialized exactly once before publication.
         let fixture_storage =
             unsafe { crate::mimalloc::mi_zalloc(mem::size_of::<Self>()) }.cast::<Self>();
         if page_storage.is_null() || blocks.is_null() || fixture_storage.is_null() {
-            // SAFETY[AUDIT:bench-page-batch-fixture]: each value is either null
+            // SAFETY: each value is either null
             // or an allocation returned above and has not been published.
             unsafe {
                 crate::mimalloc::mi_free(fixture_storage.cast());
@@ -482,7 +482,7 @@ impl PageBatchBenchFixture {
             }
             return ptr::null_mut();
         }
-        // SAFETY[AUDIT:bench-page-batch-fixture]: all storage is live and
+        // SAFETY: all storage is live and
         // uniquely owned; the page fields initialize exactly the batch paths.
         unsafe {
             let page = crate::core_types::PagePtr::new_unchecked(page_storage);
@@ -509,7 +509,7 @@ impl PageBatchBenchFixture {
     }
 
     fn block(&self, slot: usize) -> crate::core_types::BlockPtr {
-        // SAFETY[AUDIT:bench-page-batch-fixture]: callers bound slots by the
+        // SAFETY: callers bound slots by the
         // configured batch plus destination lengths.
         unsafe { crate::core_types::BlockPtr::new_unchecked(self.blocks.add(slot)) }
     }
@@ -519,20 +519,20 @@ impl PageBatchBenchFixture {
             return;
         }
         for slot in start + 1..start + len {
-            // SAFETY[AUDIT:bench-page-batch-fixture]: adjacent blocks belong to
+            // SAFETY: adjacent blocks belong to
             // this fixture page and use its page-local encoding keys.
             unsafe {
                 self.block(slot - 1)
                     .set_next(self.page, Some(self.block(slot)))
             };
         }
-        // SAFETY[AUDIT:bench-page-batch-fixture]: the bounded range tail is
+        // SAFETY: the bounded range tail is
         // writable fixture storage and terminates the detached chain.
         unsafe { self.block(start + len - 1).set_next(self.page, None) };
     }
 
     unsafe fn prepare(&self) {
-        // SAFETY[AUDIT:bench-page-batch-fixture]: each range is disjoint,
+        // SAFETY: each range is disjoint,
         // page-homogeneous, and bounded by the allocated fixture storage.
         unsafe {
             self.link_range(0, self.len);
@@ -543,7 +543,7 @@ impl PageBatchBenchFixture {
         } else {
             Some(self.block(self.len))
         };
-        // SAFETY[AUDIT:bench-page-batch-fixture]: preparation runs outside the
+        // SAFETY: preparation runs outside the
         // timed region with exclusive fixture access and restores accounting.
         unsafe {
             self.page.set_used(crate::core_types::UsedBlockCount::new(
@@ -573,32 +573,32 @@ impl PageBatchBenchFixture {
 
     unsafe fn run(&self) -> bool {
         if self.kind == PAGE_BATCH_FORCE {
-            // SAFETY[AUDIT:bench-page-batch-transition]: the synthetic page has a
+            // SAFETY: the synthetic page has a
             // valid local list and exclusive current-thread ownership.
             unsafe { crate::page::_mi_page_free_collect(self.page_storage, true) };
             return true;
         }
-        // SAFETY[AUDIT:bench-page-batch-transition]: preparation assigns this
+        // SAFETY: preparation assigns this
         // synthetic page exclusively to the current benchmark thread.
         let owner = unsafe { crate::core_types::assume_local_page(self.page) };
         if self.kind == PAGE_BATCH_LOCAL {
-            // SAFETY[AUDIT:bench-page-batch-transition]: the prepared local list
+            // SAFETY: the prepared local list
             // and destination are valid page-homogeneous chains.
             let Ok(Some(batch)) = (unsafe { owner.detach_local_free_batch() }) else {
                 return false;
             };
-            // SAFETY[AUDIT:bench-page-batch-transition]: the available destination
+            // SAFETY: the available destination
             // is a valid list owned by the exclusive fixture page.
             let available = unsafe { self.page.free() };
-            // SAFETY[AUDIT:bench-page-batch-transition]: the detached batch and
+            // SAFETY: the detached batch and
             // available destination belong to the same exclusive fixture page.
             let available = unsafe { batch.prepend_to_available(&owner, available) };
-            // SAFETY[AUDIT:bench-page-batch-transition]: the splice result is the
+            // SAFETY: the splice result is the
             // fixture page's new uniquely owned available list.
             unsafe { self.page.set_free(available) };
             true
         } else {
-            // SAFETY[AUDIT:bench-page-batch-transition]: the prepared remote chain
+            // SAFETY: the prepared remote chain
             // is detached, nonempty, capacity-bounded, and counted in used.
             let Ok(batch) = (unsafe {
                 crate::core_types::RemoteFreeBatch::from_detached(
@@ -610,10 +610,10 @@ impl PageBatchBenchFixture {
             }) else {
                 return false;
             };
-            // SAFETY[AUDIT:bench-page-batch-transition]: the local destination
+            // SAFETY: the local destination
             // was prepared as a valid page-homogeneous fixture chain.
             let local = unsafe { self.page.local_free() };
-            // SAFETY[AUDIT:bench-page-batch-transition]: the detached remote
+            // SAFETY: the detached remote
             // batch and local destination share exclusive fixture ownership.
             let _ = unsafe { batch.collect_into_local_page(&owner, local) };
             true
@@ -622,7 +622,7 @@ impl PageBatchBenchFixture {
 }
 
 /// Create an opaque page-batch slow-path benchmark fixture.
-// SAFETY[AUDIT:bench-page-batch-ffi]: the returned handle is either null or a
+// SAFETY: the returned handle is either null or a
 // uniquely owned fixture released by `mi_bench_page_batch_fixture_destroy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_bench_page_batch_fixture_new(
@@ -630,7 +630,7 @@ pub extern "C" fn mi_bench_page_batch_fixture_new(
     len: usize,
     destination_len: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:bench-page-batch-ffi]: the constructor validates all scalar
+    // SAFETY: the constructor validates all scalar
     // bounds before allocating or initializing the opaque fixture.
     unsafe { PageBatchBenchFixture::allocate(kind, len, destination_len).cast() }
 }
@@ -640,11 +640,11 @@ pub extern "C" fn mi_bench_page_batch_fixture_new(
 /// # Safety
 /// `fixture` must be null or a live handle returned by the matching constructor,
 /// and operations on a non-null handle must be serialized.
-// SAFETY[AUDIT:bench-page-batch-ffi]: callers must pass a live handle returned
+// SAFETY: callers must pass a live handle returned
 // by the matching constructor and serialize prepare/run/destroy operations.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_bench_page_batch_fixture_prepare(fixture: *mut c_void) -> bool {
-    // SAFETY[AUDIT:bench-page-batch-ffi]: the function contract requires a
+    // SAFETY: the function contract requires a
     // live fixture handle for the duration of this shared borrow.
     let Some(fixture) = (unsafe { fixture.cast::<PageBatchBenchFixture>().as_ref() }) else {
         return false;
@@ -658,11 +658,11 @@ pub unsafe extern "C" fn mi_bench_page_batch_fixture_prepare(fixture: *mut c_voi
 /// # Safety
 /// `fixture` must be a live, prepared handle with no concurrent operation on
 /// the same fixture.
-// SAFETY[AUDIT:bench-page-batch-ffi]: callers must pass a live prepared handle
+// SAFETY: callers must pass a live prepared handle
 // and must not race another operation on the same fixture.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_bench_page_batch_fixture_run(fixture: *mut c_void) -> bool {
-    // SAFETY[AUDIT:bench-page-batch-ffi]: the function contract requires a
+    // SAFETY: the function contract requires a
     // live fixture handle for the duration of this shared borrow.
     let Some(fixture) = (unsafe { fixture.cast::<PageBatchBenchFixture>().as_ref() }) else {
         return false;
@@ -675,7 +675,7 @@ pub unsafe extern "C" fn mi_bench_page_batch_fixture_run(fixture: *mut c_void) -
 /// # Safety
 /// `fixture` must be null or a live unique handle and must not be used after a
 /// non-null handle is destroyed.
-// SAFETY[AUDIT:bench-page-batch-ffi]: callers must pass a live unique handle or
+// SAFETY: callers must pass a live unique handle or
 // null and must not use a non-null handle after this function returns.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_bench_page_batch_fixture_destroy(fixture: *mut c_void) {
@@ -683,7 +683,7 @@ pub unsafe extern "C" fn mi_bench_page_batch_fixture_destroy(fixture: *mut c_voi
     if fixture.is_null() {
         return;
     }
-    // SAFETY[AUDIT:bench-page-batch-ffi]: the handle uniquely owns all three
+    // SAFETY: the handle uniquely owns all three
     // allocator-backed storage regions and none carry drop glue.
     unsafe {
         let page_storage = (*fixture).page_storage;
@@ -720,7 +720,7 @@ pub struct mi_bench_diagnostics_snapshot_t {
     pub values: [c_ulonglong; COUNTER_COUNT],
 }
 
-// SAFETY[AUDIT:bench-diagnostics-ffi]: the exported reset symbol has no
+// SAFETY: the exported reset symbol has no
 // caller-provided pointers and only resets diagnostic counters with relaxed
 // stores.
 #[unsafe(no_mangle)]
@@ -732,7 +732,7 @@ pub extern "C" fn mi_bench_diagnostics_reset() {
 
 /// # Safety
 /// Both pointers must be non-null and writable for one `usize`.
-// SAFETY[AUDIT:bench-occupancy-ffi]: this benchmark-only export validates
+// SAFETY: this benchmark-only export validates
 // both output pointers and derives occupancy from a local statistics snapshot.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_bench_page_occupancy(
@@ -743,7 +743,7 @@ pub unsafe extern "C" fn mi_bench_page_occupancy(
         return false;
     }
     let mut stats = crate::stats::mi_stats_t::default();
-    // SAFETY[AUDIT:bench-occupancy-ffi]: `stats` is fresh local writable
+    // SAFETY: `stats` is fresh local writable
     // storage and thread initialization takes no caller pointers.
     unsafe {
         crate::stats::mi_stats_init(ptr::addr_of_mut!(stats));
@@ -770,7 +770,7 @@ pub unsafe extern "C" fn mi_bench_page_occupancy(
         used_bytes = used_bytes.saturating_add(blocks.saturating_mul(block_size));
         capacity_bytes = capacity_bytes.saturating_add(pages.saturating_mul(page_size));
     }
-    // SAFETY[AUDIT:bench-occupancy-ffi]: both pointers were checked non-null
+    // SAFETY: both pointers were checked non-null
     // and the function contract requires writable output storage.
     unsafe {
         used_bytes_out.write(used_bytes.min(capacity_bytes));
@@ -781,7 +781,7 @@ pub unsafe extern "C" fn mi_bench_page_occupancy(
 
 /// # Safety
 /// `out` must be null or point to writable storage for one snapshot.
-// SAFETY[AUDIT:bench-diagnostics-ffi]: the exported snapshot symbol preserves
+// SAFETY: the exported snapshot symbol preserves
 // the C ABI, rejects null output pointers, and writes exactly one snapshot when
 // the caller provides writable storage.
 #[unsafe(no_mangle)]
@@ -791,7 +791,7 @@ pub unsafe extern "C" fn mi_bench_diagnostics_snapshot(
     if out.is_null() {
         return false;
     }
-    // SAFETY[AUDIT:bench-diagnostics-ffi]: `out` is non-null and this function's
+    // SAFETY: `out` is non-null and this function's
     // safety contract requires writable storage for one snapshot.
     unsafe {
         for (idx, counter) in COUNTERS.iter().enumerate() {
@@ -821,7 +821,7 @@ impl JsonBuf {
     fn finish(&mut self) -> usize {
         if !self.buf.is_null() && self.len > 0 {
             let nul_at = self.written.min(self.len - 1);
-            // SAFETY[AUDIT:bench-diagnostics-ffi]: non-null `buf` with
+            // SAFETY: non-null `buf` with
             // `len > 0` provides at least one writable byte, and `nul_at` is
             // clamped below `len`.
             unsafe { *self.buf.add(nul_at) = 0 };
@@ -840,7 +840,7 @@ impl fmt::Write for JsonBuf {
         let available = cap.saturating_sub(self.written);
         let copy_len = available.min(s.len());
         if copy_len > 0 {
-            // SAFETY[AUDIT:bench-diagnostics-ffi]: `copy_len` is bounded by the
+            // SAFETY: `copy_len` is bounded by the
             // remaining writable capacity before the reserved NUL byte, and the
             // source `str` cannot overlap the caller-provided output buffer.
             unsafe {
@@ -858,7 +858,7 @@ impl fmt::Write for JsonBuf {
 
 /// # Safety
 /// If `buf` is non-null, it must point to `buf_len` writable bytes.
-// SAFETY[AUDIT:bench-diagnostics-ffi]: the exported JSON symbol accepts a
+// SAFETY: the exported JSON symbol accepts a
 // nullable caller buffer, writes at most `buf_len - 1` bytes when present, and
 // always NUL-terminates non-empty buffers.
 #[unsafe(no_mangle)]
@@ -893,14 +893,14 @@ mod tests {
         let sentinel = u64::MAX / 4;
         COUNTERS[counter as usize].store(sentinel, Ordering::Relaxed);
 
-        // SAFETY[AUDIT:bench-diagnostics-ffi]: null output is an explicitly
+        // SAFETY: null output is an explicitly
         // supported rejection path for the C ABI snapshot helper.
         assert!(!unsafe { mi_bench_diagnostics_snapshot(core::ptr::null_mut()) });
 
         let mut snapshot = mi_bench_diagnostics_snapshot_t {
             values: [0; COUNTER_COUNT],
         };
-        // SAFETY[AUDIT:bench-diagnostics-ffi]: `snapshot` is writable storage
+        // SAFETY: `snapshot` is writable storage
         // for exactly one C ABI snapshot.
         assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
         assert!(snapshot.values[counter as usize] >= sentinel as c_ulonglong);
@@ -916,7 +916,7 @@ mod tests {
         let mut snapshot = mi_bench_diagnostics_snapshot_t {
             values: [0; COUNTER_COUNT],
         };
-        // SAFETY[AUDIT:bench-diagnostics-ffi]: `snapshot` is writable storage
+        // SAFETY: `snapshot` is writable storage
         // for exactly one diagnostic snapshot.
         assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
         assert_eq!(snapshot.values[Counter::RemoteFreeCasRetries as usize], 1);
@@ -947,7 +947,7 @@ mod tests {
         let mut snapshot = mi_bench_diagnostics_snapshot_t {
             values: [0; COUNTER_COUNT],
         };
-        // SAFETY[AUDIT:bench-diagnostics-ffi]: `snapshot` is writable storage
+        // SAFETY: `snapshot` is writable storage
         // for exactly one diagnostic snapshot.
         assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
         let value = |counter: Counter| snapshot.values[counter as usize];
@@ -983,7 +983,7 @@ mod tests {
         let mut snapshot = mi_bench_diagnostics_snapshot_t {
             values: [0; COUNTER_COUNT],
         };
-        // SAFETY[AUDIT:bench-diagnostics-ffi]: `snapshot` is writable storage
+        // SAFETY: `snapshot` is writable storage
         // for exactly one diagnostic snapshot.
         assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
         assert_eq!(
@@ -1002,7 +1002,7 @@ mod tests {
         let _guard = test_lock();
         let mut used = usize::MAX;
         let mut capacity = usize::MAX;
-        // SAFETY[AUDIT:bench-occupancy-ffi]: null outputs exercise the
+        // SAFETY: null outputs exercise the
         // documented rejection paths; valid outputs below are local storage.
         unsafe {
             assert!(!mi_bench_page_occupancy(
@@ -1020,7 +1020,7 @@ mod tests {
     fn page_batch_fixture_rejects_invalid_inputs_and_runs_each_transition() {
         assert!(mi_bench_page_batch_fixture_new(PAGE_BATCH_LOCAL, 0, 0).is_null());
         assert!(mi_bench_page_batch_fixture_new(PAGE_BATCH_REMOTE + 1, 1, 0).is_null());
-        // SAFETY[AUDIT:bench-page-batch-ffi]: null is the documented rejection
+        // SAFETY: null is the documented rejection
         // or no-op path for each opaque-handle function.
         unsafe {
             assert!(!mi_bench_page_batch_fixture_prepare(ptr::null_mut()));
@@ -1031,7 +1031,7 @@ mod tests {
         for kind in [PAGE_BATCH_FORCE, PAGE_BATCH_LOCAL, PAGE_BATCH_REMOTE] {
             let fixture = mi_bench_page_batch_fixture_new(kind, 8, 3);
             assert!(!fixture.is_null());
-            // SAFETY[AUDIT:bench-page-batch-ffi]: the constructor returned a
+            // SAFETY: the constructor returned a
             // unique live handle used serially and destroyed exactly once.
             unsafe {
                 assert!(mi_bench_page_batch_fixture_prepare(fixture));
@@ -1046,13 +1046,13 @@ mod tests {
         let _guard = test_lock();
         mi_bench_diagnostics_reset();
 
-        // SAFETY[AUDIT:bench-diagnostics-ffi]: null buffer with zero length is
+        // SAFETY: null buffer with zero length is
         // the size-query path and performs no writes.
         let null_needed = unsafe { mi_bench_diagnostics_json(core::ptr::null_mut(), 0) };
         assert!(null_needed > COUNTER_COUNT);
 
         let mut zero_len = [0xA5_u8; 1];
-        // SAFETY[AUDIT:bench-diagnostics-ffi]: a non-null buffer with zero
+        // SAFETY: a non-null buffer with zero
         // length is permitted and must not be written.
         let zero_needed =
             unsafe { mi_bench_diagnostics_json(zero_len.as_mut_ptr().cast::<c_char>(), 0) };
@@ -1060,7 +1060,7 @@ mod tests {
         assert_eq!(zero_len[0], 0xA5);
 
         let mut one_byte = [0xA5_u8; 1];
-        // SAFETY[AUDIT:bench-diagnostics-ffi]: `one_byte` provides one
+        // SAFETY: `one_byte` provides one
         // writable byte, which is reserved for the NUL terminator.
         let one_needed =
             unsafe { mi_bench_diagnostics_json(one_byte.as_mut_ptr().cast::<c_char>(), 1) };
@@ -1068,7 +1068,7 @@ mod tests {
         assert_eq!(one_byte[0], 0);
 
         let mut small = [0xA5_u8; 8];
-        // SAFETY[AUDIT:bench-diagnostics-ffi]: `small` is a valid writable
+        // SAFETY: `small` is a valid writable
         // byte buffer and the writer must truncate before its trailing NUL.
         let needed =
             unsafe { mi_bench_diagnostics_json(small.as_mut_ptr().cast::<c_char>(), small.len()) };

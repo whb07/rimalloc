@@ -103,7 +103,7 @@ impl MemId<AnyMem> {
                 _kind: PhantomData,
             }),
             MemKind::External => {
-                // SAFETY[AUDIT:typed-memid-view]: the discriminant is
+                // SAFETY: the discriminant is
                 // `MI_MEM_EXTERNAL`, whose C layout stores external memory
                 // metadata in the `os` union arm.
                 let os = unsafe { raw.mem.os };
@@ -120,7 +120,7 @@ impl MemId<AnyMem> {
                 _kind: PhantomData,
             }),
             MemKind::Meta => {
-                // SAFETY[AUDIT:typed-memid-view]: the discriminant is
+                // SAFETY: the discriminant is
                 // `MI_MEM_META`, whose C layout stores meta-page metadata in
                 // the `meta` union arm; invalid payloads are rejected below.
                 let m = unsafe { raw.mem.meta };
@@ -137,7 +137,7 @@ impl MemId<AnyMem> {
                 })
             }
             MemKind::Os | MemKind::OsHuge | MemKind::OsRemap => {
-                // SAFETY[AUDIT:typed-memid-view]: OS, huge-OS, and remap
+                // SAFETY: OS, huge-OS, and remap
                 // discriminants all use the `os` union arm in the C layout.
                 let os = unsafe { raw.mem.os };
                 MemIdView::Os(OsMemId {
@@ -154,7 +154,7 @@ impl MemId<AnyMem> {
                 })
             }
             MemKind::Arena => {
-                // SAFETY[AUDIT:typed-memid-view]: the discriminant is
+                // SAFETY: the discriminant is
                 // `MI_MEM_ARENA`, whose C layout stores arena metadata in the
                 // `arena` union arm; null arenas and invalid ranges are
                 // rejected below.
@@ -559,7 +559,7 @@ pub(super) fn __lint_touch() {
 
     if let Ok(range) = SliceRange::from_raw(0, 1) {
         let arena = ArenaMemId {
-            // SAFETY[AUDIT:typed-memid-test-fixtures]: this lint-touch fixture
+            // SAFETY: this lint-touch fixture
             // uses a non-dereferenced dangling pointer only to keep typed
             // accessors referenced for dead-code lint accounting.
             arena: unsafe { ArenaPtr::new_unchecked(core::ptr::dangling_mut()) },

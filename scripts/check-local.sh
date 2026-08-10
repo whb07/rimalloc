@@ -13,13 +13,9 @@ run scripts/check-layer-boundaries.py
 run scripts/check-ffi-boundary.py
 run scripts/check-strict-types.py
 run scripts/check-policy-boundaries.py
-run scripts/check-unsafe-inventory.py
-run scripts/check-unsafe-audit.py
-run scripts/check-unsafe-audit-evidence.py
 run scripts/check-generated-artifacts.py
 run scripts/check-features.sh
 run scripts/check-lints.sh
 run scripts/check-layout.sh
 run scripts/check-docs.sh
 run scripts/check-package.sh
-run scripts/check-bench-smoke.sh

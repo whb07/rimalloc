@@ -4,7 +4,7 @@ use super::*;
 /// `queue` must be valid, and `page` must be null or page metadata compatible with that queue.
 #[inline]
 pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         let queue_ptr = super::counts::page_queue_ptr(queue);
@@ -39,7 +39,7 @@ pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const m
 /// `page` must point to non-abandoned page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
-    // SAFETY[AUDIT:page-stats-public-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         let theap = crate::page::mi_page_theap(page);
         let pq = super::mi_theap_page_queue_of(theap, page);
@@ -51,7 +51,7 @@ pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
 /// # Safety
 /// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
 pub(crate) unsafe fn mi_page_queue_remove_raw(queue: *mut mi_page_queue_t, page: *mut mi_page_t) {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let queue = PageQueuePtr::new_unchecked(queue);
         let page = PagePtr::new_unchecked(page);
@@ -63,7 +63,7 @@ pub(crate) unsafe fn mi_page_queue_remove_raw(queue: *mut mi_page_queue_t, page:
 /// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
 #[inline]
 pub(crate) unsafe fn mi_page_queue_remove_typed(queue: PageQueuePtr, page: PagePtr) {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let queue_ptr = queue;
         let queue = queue.as_ptr();
@@ -117,7 +117,7 @@ pub(super) unsafe fn mi_page_queue_push_raw(
     queue: *mut mi_page_queue_t,
     page: *mut mi_page_t,
 ) {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -139,7 +139,7 @@ unsafe fn mi_page_queue_push_internal(
     queue: PageQueuePtr,
     page: PagePtr,
 ) {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let theap_raw = theap.ptr().as_ptr();
         let queue_raw = queue.as_ptr();
@@ -178,7 +178,7 @@ pub(super) unsafe fn mi_page_queue_push_at_end_raw(
     queue: *mut mi_page_queue_t,
     page: *mut mi_page_t,
 ) {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -200,7 +200,7 @@ unsafe fn mi_page_queue_push_at_end_internal(
     queue: PageQueuePtr,
     page: PagePtr,
 ) {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let theap_raw = theap.ptr().as_ptr();
         let queue_raw = queue.as_ptr();
@@ -243,7 +243,7 @@ pub(super) unsafe fn mi_page_queue_push_at_end_typed(
     queue: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         mi_page_queue_push_at_end_internal(theap, queue.ptr(), page.page());
         crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::from_enqueued(page, queue)
@@ -256,7 +256,7 @@ pub(super) unsafe fn mi_page_queue_push_typed(
     queue: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         mi_page_queue_push_internal(theap, queue.ptr(), page.page());
         crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::from_enqueued(page, queue)
@@ -272,7 +272,7 @@ pub(super) unsafe fn mi_page_queue_move_to_front_typed(
     queue: crate::core_types::NormalPageQueue,
     queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let page_ptr = queued.page();
         let page = page_ptr.as_ptr();
@@ -319,7 +319,7 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_raw(
     enqueue_at_end: bool,
     page: crate::core_types::PagePtr,
 ) {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe {
         let to_ptr = to;
         let from_ptr = from;
@@ -406,7 +406,7 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from(
     to: crate::core_types::FullPageQueue,
     page: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
 ) -> crate::core_types::FullPage {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe { page.into_full(to) }
 }
 
@@ -415,20 +415,20 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_full(
     to: crate::core_types::NormalPageQueue,
     page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,
 ) -> crate::core_types::ActivePage {
-    // SAFETY[AUDIT:page-queue-link-mutation-boundary]: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
     unsafe { page.unfull(to) }
 }
 
 /// # Safety
 /// `theap`, `pq`, and `append` must be valid page-queue structures with compatible block sizes.
-// SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
+// SAFETY: queue append moves linked pages between queues while retargeting owning thread heaps.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_queue_append(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
     append: *mut mi_page_queue_t,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
+    // SAFETY: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe {
         let queue = page_queue_ptr(pq);
         let append_queue = page_queue_ptr(append);
@@ -468,7 +468,7 @@ unsafe fn mi_page_queue_append_normal_typed(
     queue: crate::core_types::NormalPageQueue,
     append: crate::core_types::NormalPageQueue,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
+    // SAFETY: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe { mi_page_queue_append_typed(theap, queue.ptr(), append.ptr(), Some(queue)) }
 }
 
@@ -478,7 +478,7 @@ unsafe fn mi_page_queue_append_huge_typed(
     queue: crate::core_types::HugePageQueue,
     append: crate::core_types::HugePageQueue,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
+    // SAFETY: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe { mi_page_queue_append_typed(theap, queue.ptr(), append.ptr(), None) }
 }
 
@@ -488,7 +488,7 @@ unsafe fn mi_page_queue_append_full_typed(
     queue: crate::core_types::FullPageQueue,
     append: crate::core_types::FullPageQueue,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
+    // SAFETY: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe { mi_page_queue_append_typed(theap, queue.ptr(), append.ptr(), None) }
 }
 
@@ -499,7 +499,7 @@ unsafe fn mi_page_queue_append_typed(
     append_queue: crate::core_types::PageQueuePtr,
     first_update_queue: Option<crate::core_types::NormalPageQueue>,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
+    // SAFETY: queue append moves linked pages between queues while retargeting owning thread heaps.
     unsafe {
         if append_queue.first().is_none() {
             return 0;
@@ -547,7 +547,7 @@ unsafe fn mi_page_queue_append_typed(
     }
 }
 
-// SAFETY[AUDIT:page-queue-append-boundary]: queue append moves linked pages between queues while retargeting owning thread heaps.
+// SAFETY: queue append moves linked pages between queues while retargeting owning thread heaps.
 #[used]
 static MI_PAGE_QUEUE_APPEND_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,
@@ -563,7 +563,7 @@ pub(super) unsafe fn mi_theap_contains_queue(
     theap: *const crate::types::mi_theap_t,
     pq: *const mi_page_queue_t,
 ) -> bool {
-    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         let start = crate::core_types::ptr_exposed_addr(ptr::addr_of!((*theap).pages[0]));
         let end = crate::core_types::ptr_exposed_addr(ptr::addr_of!((*theap).pages[MI_BIN_FULL]));
@@ -579,7 +579,7 @@ pub(super) unsafe fn mi_theap_queue_index(
     theap: crate::core_types::ThreadHeapPtr,
     queue: PageQueuePtr,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-validation-boundary]: queue validation walks linked pages without mutating queue ownership.
+    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         queue
             .as_ptr()
@@ -597,7 +597,7 @@ pub(super) unsafe fn mi_theap_direct_cache_start(
     block_size: crate::core_types::BlockSize,
     direct_idx: crate::core_types::DirectBin,
 ) -> usize {
-    // SAFETY[AUDIT:page-queue-direct-cache-boundary]: direct-page cache updates mirror normal queue fronts for small pages.
+    // SAFETY: direct-page cache updates mirror normal queue fronts for small pages.
     unsafe {
         let idx = direct_idx.as_usize();
         if idx <= 1 {
@@ -633,7 +633,7 @@ mod tests {
         let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
         let mut pages = [const { MaybeUninit::<mi_page_t>::zeroed() }; 3];
 
-        // SAFETY[AUDIT:typed-page-queue-test-fixtures]: the stack-local heap,
+        // SAFETY: the stack-local heap,
         // queue, and page metadata are initialized for the exact fields read
         // and written by the typed normal-queue relink operation.
         unsafe {

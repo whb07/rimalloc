@@ -122,15 +122,12 @@ Every unsafe block, unsafe impl, unsafe extern boundary, or unsafe attribute
 needs a nearby safety comment with this shape:
 
 ```rust
-// SAFETY[AUDIT:<operation-id>]: <why the operation is valid here>.
+// SAFETY: <why the operation is valid here>.
 ```
 
 The comment should state the relevant pointer validity, aliasing, lifetime,
 initialization, threading, ownership, and unwind invariants. Public unsafe
 functions must also document caller obligations in a `# Safety` rustdoc section.
-
-Every `SAFETY[AUDIT:*]` operation ID must be mapped to tests, tooling evidence,
-or manual proof in `docs/unsafe-audit-evidence.tsv`.
 
 ## Hot Paths
 

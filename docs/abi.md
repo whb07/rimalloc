@@ -118,8 +118,8 @@ must not rely on their dynamic presence, Rust path, ownership model,
 nullability, threading behavior, or symbol spelling unless a future release
 explicitly documents one of them here as an intentional extension ABI.
 
-`tests/release_fast_path_audit.rs` also guards known internal helpers against
-regaining `#[unsafe(no_mangle)]`.
+`scripts/check-ffi-boundary.py` and the dynamic symbol checks guard internal
+helpers against becoming unclassified exports.
 
 ## Layout and Constant Compatibility
 

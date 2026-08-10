@@ -204,16 +204,15 @@ or ownership violations outside the safe facade and documented C ABI contract.
 Documented C-compatible abort behavior is not an allocator bug unless this crate
 documents a stronger non-aborting guarantee for that path.
 
-Confirmed fuzz findings that touch unsafe invariants must update the unsafe
-audit mapping before the fix is complete:
+Confirmed fuzz findings that touch unsafe invariants must leave durable
+evidence before the fix is complete:
 
 - Update `docs/unsafe-audit.md` when the proof obligation or boundary
   explanation changes.
-- Update `docs/unsafe-audit-evidence.tsv` with the new corpus path, regression
-  test, sanitizer/Miri script, or release artifact script that proves the
-  affected `SAFETY[AUDIT:*]` boundary.
-- Add a new `SAFETY[AUDIT:*]` tag and evidence row if the finding exposes a
-  previously undocumented unsafe boundary.
+- Keep the minimized corpus input or add a focused regression test.
+- Run the relevant sanitizer, Miri, Loom, parity, or stress check and record
+  environmental limitations in the change description.
+- Update the local `// SAFETY:` explanation when the operation's proof changes.
 
 Private security reproducers stay out of the public corpus until coordinated
 disclosure allows publication. `SECURITY.md` and

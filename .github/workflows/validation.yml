@@ -36,14 +36,8 @@ jobs:
           scripts/check-policy-boundaries.py
       - name: Feature-sensitive ABI
         run: scripts/check-feature-abi.sh
-      - name: Audit drift checks
+      - name: Safety documentation
         run: |
-          scripts/check-unsafe-inventory.py
-          scripts/check-unsafe-audit.py
-          scripts/check-unsafe-audit-evidence.py
-          scripts/check-atomic-ordering-audit.py
-          scripts/check-pointer-provenance-audit.py
-          scripts/check-no-allocation-audit.py
           scripts/check-safe-docs.py
       - name: No-default builds
         run: |

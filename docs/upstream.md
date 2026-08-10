@@ -54,11 +54,9 @@ scripts/check-guarded-mode-parity.py
 scripts/check-asan-tracking-parity.py
 scripts/check-valgrind-tracking-parity.py
 scripts/check-unsafe-inventory.py --verify-builds
-scripts/check-unsafe-audit.py
-scripts/check-unsafe-audit-evidence.py
-scripts/check-atomic-ordering-audit.py
-scripts/check-pointer-provenance-audit.py
-scripts/check-no-allocation-audit.py
+scripts/check-strict-types.py
+scripts/check-concurrency-models.sh
+scripts/check-safety-stress.sh
 scripts/check-fuzz-smoke.sh
 ```
 

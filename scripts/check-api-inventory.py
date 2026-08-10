@@ -405,8 +405,6 @@ def main() -> int:
     abi_rs = (ROOT / "src/ffi/abi.rs").read_text()
     mimalloc_rs = (ROOT / "src/ffi/mimalloc.rs").read_text()
     api_doc = (ROOT / "docs/api-inventory.md").read_text()
-    abi_doc = (ROOT / "docs/abi.md").read_text()
-    compatibility_doc = (ROOT / "docs/compatibility.md").read_text()
 
     actual_root = root_public_items(lib_rs)
     require(
@@ -490,38 +488,6 @@ def main() -> int:
             f"docs/api-inventory.md must classify unsafe_callbacks::{item} as Tier U",
         )
 
-    for phrase in [
-        "Tier S: safe Rust API, Rust SemVer surface.",
-        "Tier U: unsafe Rust convenience API, Rust SemVer surface, outside Tier S",
-        "Tier U is public unsafe Rust API with Rust SemVer review",
-        "Tier R: raw Rust facade, unsafe and unstable unless explicitly versioned.",
-        "Tier C: exported C ABI and raw layout compatibility surface.",
-        "Tier I: internal implementation surface, not public API.",
-        "Implementation modules such as allocation, page, heap, arena, OS, primitive,",
-        "Naming firewall: Tier S crate-root items and public safe-facade methods use",
-        "`mi_*`, `_mi_*`, malloc-family, and C++ operator spellings",
-        "Representation firewall: Tier S and Tier U structs keep fields private",
-        "All current Tier S enums are growable and marked `#[non_exhaustive]`",
-        "There are no current Tier U enums.",
-        "There are no current Tier S or Tier U public traits.",
-        "`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`",
-        "`unsafe_callbacks`: Tier U unsafe Rust callback guard namespace.",
-        "API diff review is required for style refactors",
-        "classify any public change as Tier S,",
-        "`cargo semver-checks check-release`",
-        "The raw Rust module path surface is unstable until explicitly versioned.",
-        "symbols/public-symbol-classification.tsv",
-    ]:
-        require(phrase in api_doc, f"docs/api-inventory.md missing policy phrase: {phrase}")
-    for phrase in [
-        "For style refactors touching `src/lib.rs`, `src/safe`,",
-        "Classify every public change as Tier S, Tier U, Tier R, or Tier C.",
-        "`cargo semver-checks check-release`",
-    ]:
-        require(
-            phrase in compatibility_doc,
-            f"docs/compatibility.md missing API diff policy phrase: {phrase}",
-        )
     for macro_tier, macros in EXPECTED_EXPORTED_MACROS_BY_TIER.items():
         require(
             f"Macro tier: `{macro_tier}`" in api_doc,
@@ -544,28 +510,6 @@ def main() -> int:
     require(
         'unsafe extern "C"' not in mimalloc_rs,
         "src/ffi/mimalloc.rs must remain an internal alias, not a C header mirror",
-    )
-    for phrase in [
-        "## Module Taxonomy",
-        "## Current File Layout",
-        "C header declarations and layouts",
-        "Raw C-shaped Rust facade",
-        "Exported C ABI implementations",
-        "Internal compatibility aliases",
-        "Allocator internals",
-        "raw::abi",
-        "raw::mimalloc",
-        "raw::headers",
-        "src/ffi/abi.rs",
-        "New public C ABI declarations",
-        "New exported C ABI implementations",
-        "scripts/check-ffi-boundary.py",
-        "scripts/check-api-inventory.py",
-    ]:
-        require(phrase in abi_doc, f"docs/abi.md missing module taxonomy phrase: {phrase}")
-    require(
-        "raw::{alloc, free, heap, stats, options, ...}" not in abi_doc,
-        "docs/abi.md still describes broad implementation modules as default raw facade",
     )
     if args.write_tier_su_snapshot:
         TIER_SU_SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)

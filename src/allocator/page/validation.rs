@@ -25,7 +25,7 @@ pub unsafe fn mi_page_block_at(
     block_size: usize,
     i: usize,
 ) -> *mut mi_block_t {
-    // SAFETY[AUDIT:page-validation-helpers]: callers supply page metadata and
+    // SAFETY: callers supply page metadata and
     // a block-area start for the same page; reserved-count bounds protect the
     // raw block offset calculation.
     unsafe {
@@ -43,7 +43,7 @@ pub unsafe fn mi_page_block_at(
 /// `page` must be valid, and `head` must be null or a block list belonging to `page`.
 #[inline]
 pub(crate) unsafe fn mi_page_list_count(page: PagePtr, mut head: *mut mi_block_t) -> usize {
-    // SAFETY[AUDIT:page-validation-helpers]: callers provide a typed page
+    // SAFETY: callers provide a typed page
     // witness and a block list for that page; traversal follows encoded links
     // only after page ownership assertions.
     unsafe {
@@ -71,7 +71,7 @@ pub(crate) unsafe fn mi_page_list_count(page: PagePtr, mut head: *mut mi_block_t
 /// `page` must be valid, and `p` must be null or a block list belonging to `page`.
 #[inline]
 pub(crate) unsafe fn mi_page_list_is_valid(page: PagePtr, mut p: *mut mi_block_t) -> bool {
-    // SAFETY[AUDIT:page-validation-helpers]: callers provide a typed page
+    // SAFETY: callers provide a typed page
     // witness and a candidate block list; the helper bounds every block against
     // the page area before following the next link.
     unsafe {
@@ -105,7 +105,7 @@ pub(crate) unsafe fn mi_page_list_is_valid(page: PagePtr, mut p: *mut mi_block_t
 /// `page` must point to page metadata initialized or being initialized by this allocator.
 #[inline]
 pub(crate) unsafe fn mi_page_is_valid_init(page: PagePtr) -> bool {
-    // SAFETY[AUDIT:page-validation-helpers]: callers provide initialized page
+    // SAFETY: callers provide initialized page
     // metadata; the helper checks typed capacity/used/reserved domains and all
     // local block lists before reporting validity.
     unsafe {
@@ -152,7 +152,7 @@ pub(crate) unsafe fn mi_page_is_valid_init(page: PagePtr) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
-    // SAFETY[AUDIT:page-validation-helpers]: callers provide allocator-owned
+    // SAFETY: callers provide allocator-owned
     // page metadata; this wraps the pointer once, validates local invariants,
     // then checks owner queue membership for non-abandoned pages.
     unsafe {

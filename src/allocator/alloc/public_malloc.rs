@@ -14,7 +14,7 @@ use super::{
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
+// SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
     unsafe {
@@ -30,7 +30,7 @@ pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
+// SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -45,7 +45,7 @@ pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usi
 
 /// # Safety
 /// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
+// SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize)
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
+// SAFETY: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) ->
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
+// SAFETY: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
     unsafe { mi_theap_malloc(_mi_theap_default(), size) }
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
 
 /// # Safety
 /// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
+// SAFETY: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *m
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+// SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
     unsafe {
@@ -119,7 +119,7 @@ pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+// SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -145,7 +145,7 @@ pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usi
 
 /// # Safety
 /// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+// SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     unsafe {

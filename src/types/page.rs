@@ -55,7 +55,7 @@ impl ThreadId {
         if id == 0 || (id & MI_PAGE_FLAG_MASK) != 0 {
             None
         } else {
-            // SAFETY[AUDIT:typed-page-domain]: the branch rejects zero and all
+            // SAFETY: the branch rejects zero and all
             // page flag bits before constructing the non-zero thread id.
             Some(unsafe { Self::new_unchecked(id) })
         }
@@ -63,11 +63,11 @@ impl ThreadId {
 
     /// # Safety
     /// `id` must be non-zero and must not conflict with `MI_PAGE_FLAG_MASK`.
-    // SAFETY[AUDIT:typed-page-domain]: callers must prove the raw thread id is
+    // SAFETY: callers must prove the raw thread id is
     // non-zero and has no page flag bits set before using this hot constructor.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(id: usize) -> Self {
-        // SAFETY[AUDIT:typed-page-domain]: the function safety contract requires
+        // SAFETY: the function safety contract requires
         // `id` to be non-zero, matching `NonZeroUsize::new_unchecked`.
         Self(unsafe { NonZeroUsize::new_unchecked(id) })
     }
@@ -119,7 +119,7 @@ impl PageThreadId {
         } else if tid == MI_THREADID_ABANDONED_MAPPED {
             PageOwnerId::AbandonedMapped
         } else {
-            // SAFETY[AUDIT:typed-page-domain]: `tid` has the low page flag bits
+            // SAFETY: `tid` has the low page flag bits
             // masked out and is neither the zero abandoned sentinel nor the
             // abandoned-mapped sentinel.
             PageOwnerId::Thread(unsafe { ThreadId::new_unchecked(tid) })
@@ -219,7 +219,7 @@ impl RegisteredPageRange {
     /// The caller must have registered `page` in the page map for
     /// `index/sub_index..+slice_count`, and that registration must still be
     /// valid for the lifetime of this witness.
-    // SAFETY[AUDIT:typed-page-domain]: this constructor only packages the
+    // SAFETY: this constructor only packages the
     // caller's registered page-map range proof into a typed witness.
     #[inline(always)]
     pub(crate) unsafe fn new_unchecked(

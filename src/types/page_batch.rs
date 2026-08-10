@@ -94,7 +94,7 @@ impl_batch_accessors!(LeasedBatch);
 
 #[inline]
 unsafe fn block_belongs_to_page(page: PagePtr, block: BlockPtr, capacity: PageCapacity) -> bool {
-    // SAFETY[AUDIT:typed-page-batch-scan]: the caller supplies initialized page
+    // SAFETY: the caller supplies initialized page
     // metadata; arithmetic is bounded by the page capacity and block size.
     let start = unsafe { page.start().as_ptr() } as usize;
     let block_size = unsafe { page.block_size().get() };
@@ -110,7 +110,7 @@ unsafe fn block_belongs_to_page(page: PagePtr, block: BlockPtr, capacity: PageCa
 
 #[inline]
 unsafe fn classify_foreign_link(page: PagePtr, block: BlockPtr) -> BatchValidationError {
-    // SAFETY[AUDIT:typed-page-batch-scan]: allocator page lookup accepts an
+    // SAFETY: allocator page lookup accepts an
     // arbitrary candidate address and returns null when it is unregistered.
     let owner = unsafe { crate::internal::_mi_ptr_page(block.as_ptr().cast()) };
     if !owner.is_null() && owner != page.as_ptr() {
@@ -136,7 +136,7 @@ unsafe fn scan_detached_chain_impl<const VALIDATE_BLOCKS: bool>(
     let mut current = head;
     let mut observed = 0usize;
     loop {
-        // SAFETY[AUDIT:typed-page-batch-scan]: hardened callers classify
+        // SAFETY: hardened callers classify
         // membership before dereferencing a block. Trusted callers discharge
         // the same-page invariant through the detached-list owner proof.
         if VALIDATE_BLOCKS && !unsafe { block_belongs_to_page(page, current, capacity) } {
@@ -144,12 +144,12 @@ unsafe fn scan_detached_chain_impl<const VALIDATE_BLOCKS: bool>(
         }
 
         observed += 1;
-        // SAFETY[AUDIT:typed-page-batch-scan]: hardened callers validated
+        // SAFETY: hardened callers validated
         // membership above; trusted callers guarantee membership and readable
         // link storage through the constructor contract.
         let next = unsafe { current.next(page) };
         let Some(next) = next else {
-            // SAFETY[AUDIT:typed-page-batch-scan]: observed is in 1..=capacity
+            // SAFETY: observed is in 1..=capacity
             // and therefore fits the page's u16 count domain.
             let len = unsafe { BatchLen::new_unchecked(observed as u16) };
             return Ok(BatchCore {
@@ -182,7 +182,7 @@ unsafe fn scan_detached_chain(
     head: BlockPtr,
     capacity: PageCapacity,
 ) -> Result<BatchCore, BatchValidationError> {
-    // SAFETY[AUDIT:typed-page-batch-scan]: the caller provides the live page
+    // SAFETY: the caller provides the live page
     // and unique detached chain required by the validating scanner.
     unsafe { scan_detached_chain_impl::<true>(page, head, capacity) }
 }
@@ -200,7 +200,7 @@ unsafe fn scan_trusted_detached_chain(
     head: BlockPtr,
     capacity: PageCapacity,
 ) -> Result<BatchCore, BatchValidationError> {
-    // SAFETY[AUDIT:typed-page-batch-trusted-scan]: the caller's detached-list
+    // SAFETY: the caller's detached-list
     // ownership proof establishes page identity; the scanner retains C's
     // capacity bound before following more than one page of links.
     unsafe { scan_detached_chain_impl::<false>(page, head, capacity) }
@@ -216,7 +216,7 @@ impl RemoteFreeBatch {
         capacity: PageCapacity,
         used: UsedBlockCount,
     ) -> Result<Self, BatchValidationError> {
-        // SAFETY[AUDIT:typed-page-batch-scan]: the detached-list owner provides
+        // SAFETY: the detached-list owner provides
         // live page metadata and unique traversal access.
         #[cfg(feature = "bench-diagnostics")]
         crate::bench_diagnostics::remote_list_detached();
@@ -225,11 +225,11 @@ impl RemoteFreeBatch {
             feature = "secure",
             feature = "bench-diagnostics"
         )) {
-            // SAFETY[AUDIT:typed-page-batch-scan]: hardened builds validate
+            // SAFETY: hardened builds validate
             // every block before following its encoded link.
             unsafe { scan_detached_chain(page, head, capacity) }
         } else {
-            // SAFETY[AUDIT:typed-page-batch-trusted-scan]: the unsafe
+            // SAFETY: the unsafe
             // constructor contract requires this uniquely detached chain to
             // belong to `page`; ordinary release retains C's bounded scan.
             unsafe { scan_trusted_detached_chain(page, head, capacity) }
@@ -263,7 +263,7 @@ impl RemoteFreeBatch {
         owner: &LocalPage,
         current: LocalFreeList,
     ) -> LocalFreeList {
-        // SAFETY[AUDIT:typed-page-batch-remote-collect]: the typed local owner
+        // SAFETY: the typed local owner
         // and detached batch establish exclusive page-local splice access.
         unsafe { self.collect_into_page(owner.page(), current) }
     }
@@ -276,7 +276,7 @@ impl RemoteFreeBatch {
         owner: &OwnedAbandonedPage,
         current: LocalFreeList,
     ) -> LocalFreeList {
-        // SAFETY[AUDIT:typed-page-batch-remote-collect]: claimed abandoned-page
+        // SAFETY: claimed abandoned-page
         // ownership and the detached batch exclude competing collectors.
         unsafe { self.collect_into_page(owner.page(), current) }
     }
@@ -284,11 +284,11 @@ impl RemoteFreeBatch {
     #[inline]
     unsafe fn collect_into_page(self, owner: PagePtr, current: LocalFreeList) -> LocalFreeList {
         crate::internal::mi_debug_assert!(owner == self.page());
-        // SAFETY[AUDIT:typed-page-batch-remote-collect]: the batch tail is
+        // SAFETY: the batch tail is
         // detached and all links share the owner's page-local encoding keys.
         unsafe { self.tail().set_next(owner, current.head()) };
         let new_local = LocalFreeList::from_head(self.head());
-        // SAFETY[AUDIT:typed-page-batch-remote-collect]: batch construction
+        // SAFETY: batch construction
         // proved len <= used, so subtraction and metadata publication agree.
         unsafe {
             owner.set_local_free(LocalFreeList::from_head(self.head()));
@@ -311,7 +311,7 @@ impl LocalFreeBatch {
         owner: &LocalPage,
         available: AvailableFreeList,
     ) -> AvailableFreeList {
-        // SAFETY[AUDIT:typed-page-batch-local-collect]: LocalPage proves
+        // SAFETY: LocalPage proves
         // exclusive current-thread access to the destination page lists.
         unsafe { self.prepend_to_page(owner.page(), available) }
     }
@@ -324,7 +324,7 @@ impl LocalFreeBatch {
         owner: &OwnedAbandonedPage,
         available: AvailableFreeList,
     ) -> AvailableFreeList {
-        // SAFETY[AUDIT:typed-page-batch-local-collect]: claimed abandoned-page
+        // SAFETY: claimed abandoned-page
         // ownership excludes competing collectors for the destination lists.
         unsafe { self.prepend_to_page(owner.page(), available) }
     }
@@ -336,7 +336,7 @@ impl LocalFreeBatch {
         available: AvailableFreeList,
     ) -> AvailableFreeList {
         crate::internal::mi_debug_assert!(owner == self.page());
-        // SAFETY[AUDIT:typed-page-batch-local-collect]: the local batch is
+        // SAFETY: the local batch is
         // uniquely detached and its tail may be linked to the current free head.
         unsafe { self.tail().set_next(owner, available.head()) };
         AvailableFreeList::from_head(self.head())
@@ -352,7 +352,7 @@ impl LocalPage {
     pub(crate) unsafe fn detach_local_free_batch(
         &self,
     ) -> Result<Option<LocalFreeBatch>, BatchValidationError> {
-        // SAFETY[AUDIT:typed-page-batch-local-detach]: LocalPage proves
+        // SAFETY: LocalPage proves
         // exclusive current-thread access to the page-local list.
         unsafe { detach_local_free_batch(self.page()) }
     }
@@ -367,7 +367,7 @@ impl OwnedAbandonedPage {
     pub(crate) unsafe fn detach_local_free_batch(
         &self,
     ) -> Result<Option<LocalFreeBatch>, BatchValidationError> {
-        // SAFETY[AUDIT:typed-page-batch-abandoned-local-detach]: claimed
+        // SAFETY: claimed
         // abandoned-page ownership excludes competing local-list collectors.
         unsafe { detach_local_free_batch(self.page()) }
     }
@@ -377,21 +377,21 @@ impl OwnedAbandonedPage {
 unsafe fn detach_local_free_batch(
     page: PagePtr,
 ) -> Result<Option<LocalFreeBatch>, BatchValidationError> {
-    // SAFETY[AUDIT:typed-page-batch-local-detach]: the local owner may read
+    // SAFETY: the local owner may read
     // its page-local list and capacity metadata.
     let local = unsafe { page.local_free() };
     let Some(head) = local.head() else {
         return Ok(None);
     };
-    // SAFETY[AUDIT:typed-page-batch-local-detach]: the local owner may read
+    // SAFETY: the local owner may read
     // initialized page capacity while validating its current chain.
     let capacity = unsafe { page.capacity() };
-    // SAFETY[AUDIT:typed-page-batch-local-detach]: the current local list
+    // SAFETY: the current local list
     // remains published and unchanged throughout the bounded scan.
     let core = unsafe { scan_detached_chain(page, head, capacity) }?;
     #[cfg(feature = "bench-diagnostics")]
     crate::bench_diagnostics::local_tail_scan(core.len().get() as usize);
-    // SAFETY[AUDIT:typed-page-batch-local-detach]: validation succeeded, so
+    // SAFETY: validation succeeded, so
     // clearing the field uniquely transfers the complete chain to the batch.
     unsafe { page.set_local_free(LocalFreeList::empty()) };
     Ok(Some(LocalFreeBatch(core)))
@@ -405,18 +405,18 @@ impl AvailablePage {
     #[inline]
     pub(crate) unsafe fn lease(self, limit: BatchLimit) -> (LeasedBatch, ActivePage) {
         let page = self.page();
-        // SAFETY[AUDIT:typed-page-batch-lease]: AvailablePage proves a nonempty
+        // SAFETY: AvailablePage proves a nonempty
         // page free list and exclusive current-thread mutation access.
         let available = unsafe { page.free() };
         let Some(head) = available.head() else {
-            // SAFETY[AUDIT:typed-page-batch-lease]: contradicting AvailablePage
+            // SAFETY: contradicting AvailablePage
             // is unreachable under its construction invariant.
             unsafe { core::hint::unreachable_unchecked() }
         };
         let mut tail = head;
         let mut len = 1u16;
         while len < limit.get() {
-            // SAFETY[AUDIT:typed-page-batch-lease]: tail is a block in this
+            // SAFETY: tail is a block in this
             // page's available chain and is readable with page-local keys.
             let Some(next) = (unsafe { tail.next(page) }) else {
                 break;
@@ -424,20 +424,20 @@ impl AvailablePage {
             tail = next;
             len += 1;
         }
-        // SAFETY[AUDIT:typed-page-batch-lease]: tail is still linked in the
+        // SAFETY: tail is still linked in the
         // available chain, so its successor is the remaining free-list head.
         let remaining = unsafe { tail.next(page) };
-        // SAFETY[AUDIT:typed-page-batch-lease]: detaching the recorded tail
+        // SAFETY: detaching the recorded tail
         // creates a null-terminated, page-homogeneous leased batch.
         unsafe { tail.set_next(page, None) };
         let remaining = match remaining {
             Some(head) => AvailableFreeList::from_head(head),
             None => AvailableFreeList::empty(),
         };
-        // SAFETY[AUDIT:typed-page-batch-lease]: len is initialized at one and
+        // SAFETY: len is initialized at one and
         // bounded by the nonzero u16 limit.
         let len = unsafe { BatchLen::new_unchecked(len) };
-        // SAFETY[AUDIT:typed-page-batch-lease]: available blocks are excluded
+        // SAFETY: available blocks are excluded
         // from used, so leasing at most the available chain preserves capacity.
         unsafe {
             page.set_free(remaining);
@@ -469,12 +469,12 @@ impl LeasedBatch {
         let remaining = if self.len().get() == 1 {
             None
         } else {
-            // SAFETY[AUDIT:typed-page-batch-lease]: a lease longer than one has
+            // SAFETY: a lease longer than one has
             // a non-null second block in the same detached chain.
             let Some(next) = (unsafe { head.next(self.page()) }) else {
                 unsafe { core::hint::unreachable_unchecked() }
             };
-            // SAFETY[AUDIT:typed-page-batch-lease]: len > 1, so len - 1 remains nonzero.
+            // SAFETY: len > 1, so len - 1 remains nonzero.
             let len = unsafe { BatchLen::new_unchecked(self.len().get() - 1) };
             Some(LeasedBatch(BatchCore {
                 page: self.page(),
@@ -483,7 +483,7 @@ impl LeasedBatch {
                 len,
             }))
         };
-        // SAFETY[AUDIT:typed-page-batch-lease]: the detached lease head is now
+        // SAFETY: the detached lease head is now
         // uniquely removed and becomes an allocated-block mechanism witness.
         (unsafe { AllocatedBlock::new_unchecked(head) }, remaining)
     }
@@ -494,13 +494,13 @@ impl LeasedBatch {
     pub(crate) unsafe fn return_to_page(self, owner: &LocalPage) {
         crate::internal::mi_debug_assert!(owner.page() == self.page());
         let page = owner.page();
-        // SAFETY[AUDIT:typed-page-batch-lease]: LocalPage grants exclusive
+        // SAFETY: LocalPage grants exclusive
         // access to the page's current available-list head.
         let available = unsafe { page.free() };
-        // SAFETY[AUDIT:typed-page-batch-lease]: the lease tail is detached and
+        // SAFETY: the lease tail is detached and
         // can be linked to the current page-local available head.
         unsafe { self.tail().set_next(page, available.head()) };
-        // SAFETY[AUDIT:typed-page-batch-lease]: leased blocks remain counted in
+        // SAFETY: leased blocks remain counted in
         // used, so returning this batch subtracts its exact validated length.
         let used = unsafe {
             let used = page.used();
@@ -509,7 +509,7 @@ impl LeasedBatch {
             };
             used
         };
-        // SAFETY[AUDIT:typed-page-batch-lease]: publish both sides of the lease
+        // SAFETY: publish both sides of the lease
         // return together so callers cannot update free without used, or vice versa.
         unsafe {
             page.set_free(AvailableFreeList::from_head(self.head()));
@@ -519,7 +519,7 @@ impl LeasedBatch {
 }
 
 pub(super) fn __lint_touch() {
-    // SAFETY[AUDIT:typed-page-batch-lint-fixture]: one is a valid non-empty
+    // SAFETY: one is a valid non-empty
     // batch length used only to keep the staged error shape typechecked.
     let one = unsafe { BatchLen::new_unchecked(1) };
     let _exceeds_used = BatchValidationError::ExceedsUsed {

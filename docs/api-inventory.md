@@ -396,12 +396,12 @@ those feature-sensitive cdylib modes.
 
 Tier I internal C-shaped helper functions may remain `extern "C"` when translated code
 depends on that shape, but they must not become dynamic ABI exports unless the
-symbol is deliberately classified. `tests/release_fast_path_audit.rs` guards
-known internal helpers against regaining `#[unsafe(no_mangle)]`.
+symbol is deliberately classified. Dynamic symbol and FFI-boundary checks reject
+unclassified exports.
 
 New crate-root public items, new raw modules, or new export attributes outside
 approved FFI boundary files are release-blocking until this inventory and the
-corresponding source-shape checks are updated.
+corresponding API, symbol, and FFI-boundary checks are updated.
 
 ## SemVer Classification
 

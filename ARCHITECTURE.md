@@ -25,9 +25,9 @@ keeping translated allocator code close enough to upstream to audit.
   provenance-sensitive code. They are not public API.
 - Build glue: `build.rs` owns C ABI and interposition build setup, including
   optional C/C++ shims, TLS shims, export scripts, and linker flags.
-- Policy gates: `scripts/` and source-shape tests enforce API inventory,
-  boundaries, ABI/layout drift, safety audits, feature behavior, and hot-path
-  allocation constraints.
+- Policy gates: `scripts/` and focused tests enforce public boundaries,
+  ABI/layout drift, feature behavior, concurrency protocols, and behavioral
+  parity.
 
 ## Boundary Rules
 

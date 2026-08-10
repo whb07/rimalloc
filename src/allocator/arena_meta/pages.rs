@@ -22,7 +22,7 @@ pub(super) fn mi_meta_page_list_changed_since(head: *mut mi_meta_page_t) -> bool
 /// `mpage` must point to a live meta page from the published stack.
 #[inline]
 pub(super) unsafe fn mi_meta_page_next(mpage: *mut mi_meta_page_t) -> *mut mi_meta_page_t {
-    // SAFETY[AUDIT:arena-meta-page-stack]: callers provide a live meta-page
+    // SAFETY: callers provide a live meta-page
     // header loaded from the acquire-published meta-page stack.
     unsafe { (*mpage).next }
 }
@@ -33,7 +33,7 @@ pub(super) unsafe fn mi_meta_page_next(mpage: *mut mi_meta_page_t) -> *mut mi_me
 /// published on the global meta-page stack.
 #[inline]
 pub(super) unsafe fn mi_meta_page_publish(mpage: *mut mi_meta_page_t) -> *mut mi_meta_page_t {
-    // SAFETY[AUDIT:arena-meta-page-stack]: `mpage` is fully initialized before
+    // SAFETY: `mpage` is fully initialized before
     // publication; the release CAS publishes its header and next link to
     // acquire-loading traversals.
     unsafe {

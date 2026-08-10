@@ -26,19 +26,19 @@ impl AtomicAbandonedCount {
     }
 
     pub(crate) unsafe fn load_relaxed(self) -> usize {
-        // SAFETY[AUDIT:typed-atomic-abandoned-count]: `AtomicAbandonedCount` points to an
+        // SAFETY: `AtomicAbandonedCount` points to an
         // allocator-owned abandoned-count atomic and preserves relaxed loading.
         unsafe { self.field().load(Ordering::Relaxed) }
     }
 
     pub(crate) unsafe fn fetch_add_relaxed(self, value: usize) -> usize {
-        // SAFETY[AUDIT:typed-atomic-abandoned-count]: `AtomicAbandonedCount` points to an
+        // SAFETY: `AtomicAbandonedCount` points to an
         // allocator-owned abandoned-count atomic and preserves relaxed increment.
         unsafe { self.field().fetch_add(value, Ordering::Relaxed) }
     }
 
     pub(crate) unsafe fn fetch_sub_relaxed(self, value: usize) -> usize {
-        // SAFETY[AUDIT:typed-atomic-abandoned-count]: `AtomicAbandonedCount` points to an
+        // SAFETY: `AtomicAbandonedCount` points to an
         // allocator-owned abandoned-count atomic and preserves relaxed decrement.
         unsafe { self.field().fetch_sub(value, Ordering::Relaxed) }
     }
@@ -55,7 +55,7 @@ impl AtomicArenaPage {
     }
 
     pub(crate) unsafe fn load_acquire(self) -> *mut crate::types::mi_arena_pages_t {
-        // SAFETY[AUDIT:typed-atomic-arena-page]: `AtomicArenaPage` points to an
+        // SAFETY: `AtomicArenaPage` points to an
         // allocator-owned page-table pointer atomic and preserves acquire load.
         let atomic = unsafe { &*self.0 };
         atomic
@@ -64,7 +64,7 @@ impl AtomicArenaPage {
     }
 
     pub(crate) unsafe fn store_release(self, value: *mut crate::types::mi_arena_pages_t) {
-        // SAFETY[AUDIT:typed-atomic-arena-page]: `AtomicArenaPage` points to an
+        // SAFETY: `AtomicArenaPage` points to an
         // allocator-owned page-table pointer atomic and preserves release store.
         let atomic = unsafe { &*self.0 };
         atomic.store(value.cast::<c_void>(), Ordering::Release);

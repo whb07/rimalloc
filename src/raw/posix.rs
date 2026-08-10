@@ -12,92 +12,92 @@ use core::ffi::CStr;
 use core::ffi::{c_int, c_void};
 use core::{mem::size_of, ptr};
 
-// SAFETY[AUDIT:raw-posix-environment-boundary]: declares C environment lookup for the POSIX
+// SAFETY: declares C environment lookup for the POSIX
 // compatibility helpers; returned storage remains owned by the process.
 unsafe extern "C" {
     fn getenv(name: *const i8) -> *const i8;
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-// SAFETY[AUDIT:raw-posix-errno-boundary]: Linux/Android errno publication uses the
+// SAFETY: Linux/Android errno publication uses the
 // platform thread-local errno slot exactly as the C compatibility layer does.
 unsafe fn mi_set_errno(err: c_int) {
     unsafe extern "C" {
         fn __errno_location() -> *mut c_int;
     }
-    // SAFETY[AUDIT:raw-posix-errno-boundary]: `__errno_location` returns the
+    // SAFETY: `__errno_location` returns the
     // thread-local errno slot for this platform.
     unsafe { *__errno_location() = err };
 }
 
 #[cfg(target_vendor = "apple")]
-// SAFETY[AUDIT:raw-posix-errno-boundary]: Apple errno publication uses the platform
+// SAFETY: Apple errno publication uses the platform
 // thread-local errno slot exactly as the C compatibility layer does.
 unsafe fn mi_set_errno(err: c_int) {
     unsafe extern "C" {
         fn __error() -> *mut c_int;
     }
-    // SAFETY[AUDIT:raw-posix-errno-boundary]: `__error` returns the thread-local errno
+    // SAFETY: `__error` returns the thread-local errno
     // slot for this platform.
     unsafe { *__error() = err };
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
-// SAFETY[AUDIT:raw-posix-errno-boundary]: unsupported errno targets intentionally keep
+// SAFETY: unsupported errno targets intentionally keep
 // the C-compatible helper as a no-op fallback.
 unsafe fn mi_set_errno(_err: c_int) {}
 
-// SAFETY[AUDIT:raw-posix-query-free-boundary]: exports the POSIX usable-size compatibility
+// SAFETY: exports the POSIX usable-size compatibility
 // symbol without changing its raw pointer contract.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `p` may be null or must be a pointer previously returned by mimalloc or a
 /// compatible allocation entry point.
-// SAFETY[AUDIT:raw-posix-query-free-boundary]: forwards the raw allocation pointer to the
+// SAFETY: forwards the raw allocation pointer to the
 // mimalloc usable-size boundary under the caller's ownership contract.
 pub unsafe extern "C" fn mi_malloc_usable_size(p: *const c_void) -> usize {
     unsafe { mi_usable_size(p) }
 }
 
-// SAFETY[AUDIT:raw-posix-query-free-boundary]: exports the malloc-size compatibility alias
+// SAFETY: exports the malloc-size compatibility alias
 // with the same raw pointer contract as usable-size.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `p` may be null or must be a pointer previously returned by mimalloc or a
 /// compatible allocation entry point.
-// SAFETY[AUDIT:raw-posix-query-free-boundary]: forwards the raw allocation pointer to the
+// SAFETY: forwards the raw allocation pointer to the
 // mimalloc usable-size boundary under the caller's ownership contract.
 pub unsafe extern "C" fn mi_malloc_size(p: *const c_void) -> usize {
     unsafe { mi_usable_size(p) }
 }
 
-// SAFETY[AUDIT:raw-posix-query-free-boundary]: exports the cfree compatibility symbol while
+// SAFETY: exports the cfree compatibility symbol while
 // keeping ownership validation inside the body.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `p` may be null. A non-null pointer must be suitable for mimalloc heap-region
 /// inspection and, when owned by mimalloc, valid to free.
-// SAFETY[AUDIT:raw-posix-query-free-boundary]: heap-region inspection gates the raw free so
+// SAFETY: heap-region inspection gates the raw free so
 // non-mimalloc pointers are ignored like the C compatibility helper.
 pub unsafe extern "C" fn mi_cfree(p: *mut c_void) {
     if unsafe { mi_is_in_heap_region(p.cast_const()) } {
-        // SAFETY[AUDIT:raw-posix-query-free-boundary]: the region check accepted `p`; the
+        // SAFETY: the region check accepted `p`; the
         // function contract requires owned mimalloc pointers to be freeable.
         unsafe { mi_free(p) };
     }
 }
 
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: exports POSIX memalign with its raw
+// SAFETY: exports POSIX memalign with its raw
 // out-pointer contract and errno-style integer result.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `p` must be valid for writing one pointer. On success the written pointer
 /// must be released through mimalloc-compatible free APIs.
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: validates the POSIX alignment and nullable
+// SAFETY: validates the POSIX alignment and nullable
 // allocation result before writing through the caller-provided pointer slot.
 pub unsafe extern "C" fn mi_posix_memalign(
     p: *mut *mut c_void,
@@ -113,27 +113,27 @@ pub unsafe extern "C" fn mi_posix_memalign(
     if alignment == 0 || !_mi_is_power_of_two(alignment) {
         return EINVAL;
     }
-    // SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: valid POSIX alignment was checked above;
+    // SAFETY: valid POSIX alignment was checked above;
     // mimalloc owns the returned allocation on success.
     let q = unsafe { mi_malloc_aligned(size, alignment) };
     if q.is_null() && size != 0 {
         return ENOMEM;
     }
     crate::internal::mi_assert_internal!(_mi_is_aligned(q, alignment));
-    // SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: `p` was checked non-null and is valid for
+    // SAFETY: `p` was checked non-null and is valid for
     // one pointer by this C ABI contract.
     unsafe { *p = q };
     0
 }
 
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: exports memalign as a raw allocation
+// SAFETY: exports memalign as a raw allocation
 // compatibility symbol.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// The returned pointer, when non-null, must be released through
 /// mimalloc-compatible free APIs.
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: forwards to mimalloc's aligned allocator and
+// SAFETY: forwards to mimalloc's aligned allocator and
 // preserves the raw free ownership contract.
 pub unsafe extern "C" fn mi_memalign(alignment: usize, size: usize) -> *mut c_void {
     let p = unsafe { mi_malloc_aligned(size, alignment) };
@@ -141,27 +141,27 @@ pub unsafe extern "C" fn mi_memalign(alignment: usize, size: usize) -> *mut c_vo
     p
 }
 
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: exports valloc as a page-aligned raw
+// SAFETY: exports valloc as a page-aligned raw
 // allocation compatibility symbol.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// The returned pointer, when non-null, must be released through
 /// mimalloc-compatible free APIs.
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: uses the current OS page-size wrapper before
+// SAFETY: uses the current OS page-size wrapper before
 // forwarding to the memalign compatibility helper.
 pub unsafe extern "C" fn mi_valloc(size: usize) -> *mut c_void {
     unsafe { mi_memalign(crate::os::_mi_os_page_size_typed().get(), size) }
 }
 
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: exports pvalloc as a page-rounded raw
+// SAFETY: exports pvalloc as a page-rounded raw
 // allocation compatibility symbol.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// The returned pointer, when non-null, must be released through
 /// mimalloc-compatible free APIs.
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: page-size lookup and aligned allocation
+// SAFETY: page-size lookup and aligned allocation
 // preserve the C helper's overflow/null behavior.
 pub unsafe extern "C" fn mi_pvalloc(size: usize) -> *mut c_void {
     let psize = unsafe { crate::os::_mi_os_page_size_typed().get() };
@@ -169,19 +169,19 @@ pub unsafe extern "C" fn mi_pvalloc(size: usize) -> *mut c_void {
         return ptr::null_mut();
     }
     let asize = _mi_align_up(size, psize);
-    // SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: `asize` was page-rounded without
+    // SAFETY: `asize` was page-rounded without
     // overflow and `psize` is the OS page alignment.
     unsafe { mi_malloc_aligned(asize, psize) }
 }
 
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: exports C11 aligned_alloc with the raw
+// SAFETY: exports C11 aligned_alloc with the raw
 // allocation/free contract.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// The returned pointer, when non-null, must be released through
 /// mimalloc-compatible free APIs.
-// SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]: forwards directly to mimalloc's aligned
+// SAFETY: forwards directly to mimalloc's aligned
 // allocation path and preserves the caller's raw ownership obligations.
 pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut c_void {
     let p = unsafe { mi_malloc_aligned(size, alignment) };
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut
     p
 }
 
-// SAFETY[AUDIT:raw-posix-reallocarray-boundary]: exports reallocarray with the POSIX
+// SAFETY: exports reallocarray with the POSIX
 // overflow-to-null and errno behavior.
 #[unsafe(no_mangle)]
 /// # Safety
@@ -197,48 +197,48 @@ pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut
 /// `p` may be null or must be a pointer previously returned by mimalloc or a
 /// compatible allocation entry point. The returned pointer, when non-null, must
 /// be released through mimalloc-compatible free APIs.
-// SAFETY[AUDIT:raw-posix-reallocarray-boundary]: validates the product through
+// SAFETY: validates the product through
 // `CallocRequest` before forwarding to the raw realloc boundary.
 pub unsafe extern "C" fn mi_reallocarray(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
-        // SAFETY[AUDIT:raw-posix-reallocarray-boundary]: `p` follows the realloc input
+        // SAFETY: `p` follows the realloc input
         // contract and the requested total was checked above.
         let newp = unsafe { mi_realloc(p, req.total().get()) };
         if newp.is_null() {
-            // SAFETY[AUDIT:raw-posix-reallocarray-boundary]: publishes POSIX allocation
+            // SAFETY: publishes POSIX allocation
             // failure through the platform errno shim.
             unsafe { mi_set_errno(ENOMEM) };
         }
         newp
     } else {
-        // SAFETY[AUDIT:raw-posix-reallocarray-boundary]: publishes POSIX product overflow
+        // SAFETY: publishes POSIX product overflow
         // through the platform errno shim.
         unsafe { mi_set_errno(EOVERFLOW) };
         ptr::null_mut()
     }
 }
 
-// SAFETY[AUDIT:raw-posix-reallocarr-boundary]: exports reallocarr with its in/out pointer
+// SAFETY: exports reallocarr with its in/out pointer
 // slot contract and errno-style result.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `ptrp` must be valid for reading and writing one pointer. `*ptrp` may be
 /// null or must be a mimalloc-compatible allocation pointer.
-// SAFETY[AUDIT:raw-posix-reallocarr-boundary]: validates the pointer slot and product before
+// SAFETY: validates the pointer slot and product before
 // reading or rewriting the caller's allocation pointer.
 pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, size: usize) -> c_int {
     crate::internal::mi_assert!(size != 0);
     crate::internal::mi_assert!(!ptrp.is_null());
     if ptrp.is_null() || size == 0 {
-        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: publishes POSIX invalid-argument
+        // SAFETY: publishes POSIX invalid-argument
         // failure through the platform errno shim.
         unsafe { mi_set_errno(EINVAL) };
         return EINVAL;
     }
 
     let Ok(req) = crate::core_types::CallocRequest::new(count, size) else {
-        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: publishes POSIX product overflow
+        // SAFETY: publishes POSIX product overflow
         // through the platform errno shim.
         unsafe { mi_set_errno(EOVERFLOW) };
         return EOVERFLOW;
@@ -246,83 +246,83 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
     let total = req.total().get();
 
     if total == 0 {
-        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `ptrp` was checked non-null and is
+        // SAFETY: `ptrp` was checked non-null and is
         // valid for one pointer by the C ABI contract.
         let oldp = unsafe { *ptrp };
-        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `oldp` is null or a
+        // SAFETY: `oldp` is null or a
         // mimalloc-compatible allocation pointer by the function contract.
         unsafe { mi_free(oldp) };
-        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `ptrp` was checked non-null and is
+        // SAFETY: `ptrp` was checked non-null and is
         // valid for one pointer by the C ABI contract.
         unsafe { *ptrp = ptr::null_mut() };
         return 0;
     }
 
-    // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `ptrp` was checked non-null and is valid
+    // SAFETY: `ptrp` was checked non-null and is valid
     // for one pointer by the C ABI contract.
     let oldp = unsafe { *ptrp };
-    // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `oldp` is null or a mimalloc-compatible
+    // SAFETY: `oldp` is null or a mimalloc-compatible
     // allocation pointer and `total` was checked above.
     let newp = unsafe { mi_realloc(oldp, total) };
     if newp.is_null() {
-        // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: publishes POSIX allocation failure
+        // SAFETY: publishes POSIX allocation failure
         // through the platform errno shim.
         unsafe { mi_set_errno(ENOMEM) };
         return ENOMEM;
     }
-    // SAFETY[AUDIT:raw-posix-reallocarr-boundary]: `ptrp` is valid for one pointer and
+    // SAFETY: `ptrp` is valid for one pointer and
     // receives the successful realloc result.
     unsafe { *ptrp = newp };
     0
 }
 
-// SAFETY[AUDIT:raw-posix-expand-boundary]: exports the POSIX expand compatibility
+// SAFETY: exports the POSIX expand compatibility
 // symbol with the raw realloc-like pointer contract.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `p` may be null or must be a pointer previously returned by mimalloc or a
 /// compatible allocation entry point.
-// SAFETY[AUDIT:raw-posix-expand-boundary]: forwards to mimalloc expand and publishes
+// SAFETY: forwards to mimalloc expand and publishes
 // allocation failure through errno.
 pub unsafe extern "C" fn mi__expand(p: *mut c_void, newsize: usize) -> *mut c_void {
     let res = unsafe { mi_expand(p, newsize) };
     if res.is_null() {
-        // SAFETY[AUDIT:raw-posix-expand-boundary]: publishes POSIX allocation failure
+        // SAFETY: publishes POSIX allocation failure
         // through the platform errno shim.
         unsafe { mi_set_errno(ENOMEM) };
     }
     res
 }
 
-// SAFETY[AUDIT:raw-posix-string-dup-boundary]: exports mbsdup with nullable C string input
+// SAFETY: exports mbsdup with nullable C string input
 // and mimalloc-owned duplicate output.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `s` may be null or must point to a readable nul-terminated multibyte string.
 /// The returned pointer, when non-null, must be freed through mimalloc.
-// SAFETY[AUDIT:raw-posix-string-dup-boundary]: forwards the nullable C string to mimalloc's
+// SAFETY: forwards the nullable C string to mimalloc's
 // strdup helper and preserves ownership of the returned duplicate.
 pub unsafe extern "C" fn mi_mbsdup(s: *const u8) -> *mut u8 {
     unsafe { mi_strdup(s.cast::<i8>()).cast::<u8>() }
 }
 
-// SAFETY[AUDIT:raw-posix-string-dup-boundary]: exports wcsdup with nullable wide-string
+// SAFETY: exports wcsdup with nullable wide-string
 // input and mimalloc-owned duplicate output.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `s` may be null or must point to a readable nul-terminated wide string. The
 /// returned pointer, when non-null, must be freed through mimalloc.
-// SAFETY[AUDIT:raw-posix-string-dup-boundary]: scans the caller-provided wide string up to
+// SAFETY: scans the caller-provided wide string up to
 // the first nul or representable size bound before allocating a duplicate.
 pub unsafe extern "C" fn mi_wcsdup(s: *const c_wchar) -> *mut c_wchar {
     if s.is_null() {
         return ptr::null_mut();
     }
     let mut wlen = 0usize;
-    // SAFETY[AUDIT:raw-posix-string-dup-boundary]: non-null `s` is readable as a
+    // SAFETY: non-null `s` is readable as a
     // nul-terminated wide string by the function contract.
     while unsafe { *s.add(wlen) } != 0 && wlen < isize::MAX as usize {
         wlen += 1;
@@ -331,25 +331,25 @@ pub unsafe extern "C" fn mi_wcsdup(s: *const c_wchar) -> *mut c_wchar {
     if mi_mul_overflow(wlen + 1, size_of::<c_wchar>(), &mut size) || size > isize::MAX as usize {
         return ptr::null_mut();
     }
-    // SAFETY[AUDIT:raw-posix-string-dup-boundary]: `size` was checked for overflow and is
+    // SAFETY: `size` was checked for overflow and is
     // the byte length of the wide-string duplicate including its terminator.
     let p = unsafe { mi_malloc(size) }.cast::<c_wchar>();
     if !p.is_null() {
-        // SAFETY[AUDIT:raw-posix-string-dup-boundary]: `p` is writable for `size` bytes from
+        // SAFETY: `p` is writable for `size` bytes from
         // mimalloc and `s` is readable for the same nul-terminated range.
         unsafe { _mi_memcpy(p.cast::<c_void>(), s.cast::<c_void>(), size) };
     }
     p
 }
 
-// SAFETY[AUDIT:raw-posix-environment-boundary]: exports the wide environment duplication
+// SAFETY: exports the wide environment duplication
 // fallback with raw nullable out-pointers.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `buf` and `size`, when non-null, must be valid for writing one value.
 /// `_name`, when non-null, must point to a readable nul-terminated wide string.
-// SAFETY[AUDIT:raw-posix-environment-boundary]: writes only validated out-pointers and
+// SAFETY: writes only validated out-pointers and
 // preserves the current unsupported wide-environment result.
 pub unsafe extern "C" fn mi_wdupenv_s(
     buf: *mut *mut c_wchar,
@@ -357,20 +357,20 @@ pub unsafe extern "C" fn mi_wdupenv_s(
     _name: *const c_wchar,
 ) -> c_int {
     if !size.is_null() {
-        // SAFETY[AUDIT:raw-posix-environment-boundary]: non-null `size` is valid for one
+        // SAFETY: non-null `size` is valid for one
         // `usize` write by the C ABI contract.
         unsafe { *size = 0 };
     }
     if buf.is_null() || _name.is_null() {
         return EINVAL;
     }
-    // SAFETY[AUDIT:raw-posix-environment-boundary]: non-null `buf` is valid for one pointer
+    // SAFETY: non-null `buf` is valid for one pointer
     // write by the C ABI contract.
     unsafe { *buf = ptr::null_mut() };
     EINVAL
 }
 
-// SAFETY[AUDIT:raw-posix-aligned-recalloc-boundary]: exports aligned offset recalloc as a raw
+// SAFETY: exports aligned offset recalloc as a raw
 // allocation compatibility shim.
 #[unsafe(no_mangle)]
 /// # Safety
@@ -378,7 +378,7 @@ pub unsafe extern "C" fn mi_wdupenv_s(
 /// `p` may be null or must be a mimalloc-compatible allocation pointer. The
 /// returned pointer, when non-null, must be released through mimalloc-compatible
 /// free APIs.
-// SAFETY[AUDIT:raw-posix-aligned-recalloc-boundary]: forwards raw arguments to the aligned
+// SAFETY: forwards raw arguments to the aligned
 // allocator boundary, which owns product/alignment validation.
 pub unsafe extern "C" fn mi_aligned_offset_recalloc(
     p: *mut c_void,
@@ -387,12 +387,12 @@ pub unsafe extern "C" fn mi_aligned_offset_recalloc(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:raw-posix-aligned-recalloc-boundary]: forwards raw arguments to the aligned
+    // SAFETY: forwards raw arguments to the aligned
     // allocator boundary, which owns product/alignment validation.
     unsafe { crate::alloc_aligned::mi_recalloc_aligned_at(p, newcount, size, alignment, offset) }
 }
 
-// SAFETY[AUDIT:raw-posix-aligned-recalloc-boundary]: exports aligned recalloc as a raw allocation
+// SAFETY: exports aligned recalloc as a raw allocation
 // compatibility shim.
 #[unsafe(no_mangle)]
 /// # Safety
@@ -400,7 +400,7 @@ pub unsafe extern "C" fn mi_aligned_offset_recalloc(
 /// `p` may be null or must be a mimalloc-compatible allocation pointer. The
 /// returned pointer, when non-null, must be released through mimalloc-compatible
 /// free APIs.
-// SAFETY[AUDIT:raw-posix-aligned-recalloc-boundary]: forwards raw arguments to the aligned
+// SAFETY: forwards raw arguments to the aligned
 // allocator boundary, which owns product/alignment validation.
 pub unsafe extern "C" fn mi_aligned_recalloc(
     p: *mut c_void,
@@ -408,19 +408,19 @@ pub unsafe extern "C" fn mi_aligned_recalloc(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:raw-posix-aligned-recalloc-boundary]: forwards raw arguments to the aligned
+    // SAFETY: forwards raw arguments to the aligned
     // allocator boundary, which owns product/alignment validation.
     unsafe { crate::alloc_aligned::mi_recalloc_aligned(p, newcount, size, alignment) }
 }
 
-// SAFETY[AUDIT:raw-posix-environment-boundary]: exports dupenv_s with raw nullable
+// SAFETY: exports dupenv_s with raw nullable
 // out-pointers and process environment lookup.
 #[unsafe(no_mangle)]
 /// # Safety
 ///
 /// `buf` and `size`, when non-null, must be valid for writing one value. `name`
 /// must point to a readable nul-terminated C string.
-// SAFETY[AUDIT:raw-posix-environment-boundary]: validates out-pointers before process
+// SAFETY: validates out-pointers before process
 // environment lookup and mimalloc-owned duplication.
 pub unsafe extern "C" fn mi_dupenv_s(
     buf: *mut *mut i8,
@@ -428,33 +428,33 @@ pub unsafe extern "C" fn mi_dupenv_s(
     name: *const i8,
 ) -> c_int {
     if !size.is_null() {
-        // SAFETY[AUDIT:raw-posix-environment-boundary]: non-null `size` is valid for one
+        // SAFETY: non-null `size` is valid for one
         // `usize` write by the C ABI contract.
         unsafe { *size = 0 };
     }
     if buf.is_null() || name.is_null() {
         return EINVAL;
     }
-    // SAFETY[AUDIT:raw-posix-environment-boundary]: non-null `name` is a readable C string by
+    // SAFETY: non-null `name` is a readable C string by
     // the function contract; `getenv` returns process-owned storage.
     let value = unsafe { getenv(name) };
     if value.is_null() {
-        // SAFETY[AUDIT:raw-posix-environment-boundary]: non-null `buf` is valid for one
+        // SAFETY: non-null `buf` is valid for one
         // pointer write by the C ABI contract.
         unsafe { *buf = ptr::null_mut() };
         return 0;
     }
-    // SAFETY[AUDIT:raw-posix-environment-boundary]: `value` is a non-null C string returned
+    // SAFETY: `value` is a non-null C string returned
     // by `getenv`; mimalloc owns the duplicate on success.
     let dup = unsafe { mi_strdup(value) };
-    // SAFETY[AUDIT:raw-posix-environment-boundary]: non-null `buf` is valid for one pointer
+    // SAFETY: non-null `buf` is valid for one pointer
     // write by the C ABI contract.
     unsafe { *buf = dup };
     if dup.is_null() {
         return ENOMEM;
     }
     if !size.is_null() {
-        // SAFETY[AUDIT:raw-posix-environment-boundary]: `value` is a readable environment C
+        // SAFETY: `value` is a readable environment C
         // string and `size` is valid for one `usize` write.
         unsafe { *size = CStr::from_ptr(value).to_bytes_with_nul().len() };
     }

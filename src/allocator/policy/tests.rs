@@ -23,7 +23,7 @@ const OPTION_VALUES: [c_long; 13] = [
 ];
 
 fn block_size(value: usize) -> BlockSize {
-    // SAFETY[AUDIT:policy-reference-test-fixtures]: every table entry passed to
+    // SAFETY: every table entry passed to
     // this helper is non-zero.
     unsafe { BlockSize::new_unchecked(value) }
 }

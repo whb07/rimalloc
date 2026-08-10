@@ -146,12 +146,12 @@ impl StatsSnapshot {
     #[inline]
     pub fn capture() -> Result<Self, StatsError> {
         let mut raw = crate::stats::mi_stats_t::default();
-        // SAFETY[AUDIT:safe-stats]: `raw` is a fresh writable stats value.
+        // SAFETY: `raw` is a fresh writable stats value.
         unsafe { crate::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
-        // SAFETY[AUDIT:safe-stats]: initializes allocator state for the
+        // SAFETY: initializes allocator state for the
         // current thread before collecting process stats.
         unsafe { crate::init::mi_thread_init() };
-        // SAFETY[AUDIT:safe-stats]: `raw` is valid writable stats storage.
+        // SAFETY: `raw` is valid writable stats storage.
         if unsafe { crate::stats::mi_stats_get(ptr::addr_of_mut!(raw)) } {
             Ok(Self { raw })
         } else {
@@ -172,12 +172,12 @@ impl StatsSnapshot {
     #[inline]
     pub fn for_heap(heap: HeapRef<'_>) -> Result<Self, StatsError> {
         let mut raw = crate::stats::mi_stats_t::default();
-        // SAFETY[AUDIT:safe-stats]: `raw` is a fresh writable stats value.
+        // SAFETY: `raw` is a fresh writable stats value.
         unsafe { crate::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
-        // SAFETY[AUDIT:safe-stats]: initializes allocator state for the
+        // SAFETY: initializes allocator state for the
         // current thread before collecting heap stats.
         unsafe { crate::init::mi_thread_init() };
-        // SAFETY[AUDIT:safe-stats]: `raw` is valid writable stats storage and
+        // SAFETY: `raw` is valid writable stats storage and
         // `heap` is a live borrowed heap handle.
         if unsafe { crate::stats::mi_heap_stats_get(heap.ptr.as_ptr(), ptr::addr_of_mut!(raw)) } {
             Ok(Self { raw })
@@ -273,7 +273,7 @@ impl StatsSnapshot {
         if output.is_empty() {
             return Err(StatsError::BufferTooSmall);
         }
-        // SAFETY[AUDIT:safe-stats]: `output` is writable for its length and
+        // SAFETY: `output` is writable for its length and
         // `self.raw` is an initialized stats snapshot.
         let ptr = unsafe {
             crate::stats::mi_stats_get_json_from(
@@ -285,7 +285,7 @@ impl StatsSnapshot {
         let Some(ptr) = NonNull::new(ptr) else {
             return Err(StatsError::BufferTooSmall);
         };
-        // SAFETY[AUDIT:safe-stats]: successful JSON formatting writes a NUL
+        // SAFETY: successful JSON formatting writes a NUL
         // terminated string into `output`.
         let bytes = unsafe { CStr::from_ptr(ptr.as_ptr()) }.to_bytes();
         if !bytes.starts_with(b"{") || !bytes.ends_with(b"}\n") {
@@ -337,7 +337,7 @@ impl ProcessInfo {
         let mut current_commit = 0usize;
         let mut peak_commit = 0usize;
         let mut page_faults = 0usize;
-        // SAFETY[AUDIT:safe-process-info]: all out-pointers are valid local
+        // SAFETY: all out-pointers are valid local
         // storage for one `usize`.
         unsafe {
             crate::stats::mi_process_info(
@@ -351,7 +351,7 @@ impl ProcessInfo {
                 &mut page_faults,
             );
         }
-        // SAFETY[AUDIT:safe-process-info]: querying the platform page size
+        // SAFETY: querying the platform page size
         // reads allocator primitive state and does not dereference caller data.
         let page_size = unsafe { crate::os::_mi_os_page_size() };
         Self {

@@ -72,21 +72,17 @@ not expose allocator metadata pointers or raw deletion rights. Internal
 hot-path wrappers are expected to compile away; they must not add allocation,
 formatting, panic, lock, or syscall behavior to allocator critical paths.
 
-## Audit Tags And Evidence
+## Unsafe Evidence
 
-Unsafe subsystems are tracked with `SAFETY[AUDIT:*]` tags such as
-`global-alloc`, `owned-allocation-resize-boundary`, `safe-heap`,
-`unsafe-callback`, `ffi-export`, `raw-macro-boundary`, `panic-boundary`, and
-`raw-auto-trait`.
-`docs/unsafe-audit.md` explains the current proof obligations, and
-`docs/unsafe-audit-evidence.tsv` maps tags to tests, scripts, Miri,
-sanitizers, benchmark evidence, or assembly evidence.
+`docs/unsafe-audit.md` owns the unsafe-code policy. Each unsafe operation has a
+local `// SAFETY:` proof, while behavior, concurrency, provenance, ABI, and
+code-generation claims are covered by the focused test or tool appropriate to
+the risk. The project does not maintain a parallel operation-ID ledger.
 
-Allocator hot paths are guarded by no-allocation evidence. Source audits reject
-Rust heap allocation, formatting, panics, and synchronization primitives in
-documented critical paths. New strict internal wrappers on hot paths require
-release assembly or benchmark evidence for free-list pop, local free, remote
-free, small page lookup, and any changed path.
+Allocator hot paths are guarded by the default `no_std` build, allocation
+boundary tests, and release evidence. New strict internal wrappers on hot paths
+require release assembly or benchmark evidence for free-list pop, local free,
+remote free, small page lookup, and any changed path.
 
 ## Strict Internal Types
 

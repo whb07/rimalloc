@@ -63,7 +63,7 @@ impl PaddingPtr {
     /// `ptr` must be non-null, properly aligned, and point to live padding metadata.
     #[inline(always)]
     pub(crate) unsafe fn new_unchecked(ptr: *mut mi_padding_t) -> Self {
-        // SAFETY[AUDIT:typed-padding-metadata]: callers uphold non-null,
+        // SAFETY: callers uphold non-null,
         // alignment, and liveness for padding metadata pointer witnesses.
         Self(unsafe { NonNull::new_unchecked(ptr) })
     }
@@ -72,7 +72,7 @@ impl PaddingPtr {
     /// `block` must point to a block with padding metadata at `block + usable_size`.
     #[inline(always)]
     pub(crate) unsafe fn from_block_usable(block: BlockPtr, usable_size: UsableSize) -> Self {
-        // SAFETY[AUDIT:typed-padding-metadata]: callers supply a live block
+        // SAFETY: callers supply a live block
         // whose usable-size boundary is followed by padding metadata.
         let padding = unsafe {
             block
@@ -81,7 +81,7 @@ impl PaddingPtr {
                 .add(usable_size.get())
                 .cast::<mi_padding_t>()
         };
-        // SAFETY[AUDIT:typed-padding-metadata]: the derived padding pointer is
+        // SAFETY: the derived padding pointer is
         // non-null and aligned by the block plus usable-size padding contract.
         unsafe { Self::new_unchecked(padding) }
     }
@@ -97,11 +97,11 @@ impl PaddingPtr {
     pub(crate) unsafe fn read(self) -> Padding {
         let ptr = self.as_ptr();
         Padding {
-            // SAFETY[AUDIT:typed-padding-metadata]: callers guarantee readable
+            // SAFETY: callers guarantee readable
             // live padding metadata, and this copies the raw canary field into
             // the typed scalar wrapper.
             canary: PaddingCanary(unsafe { (*ptr).canary }),
-            // SAFETY[AUDIT:typed-padding-metadata]: callers guarantee readable
+            // SAFETY: callers guarantee readable
             // live padding metadata, and this copies the raw delta field into
             // the typed scalar wrapper.
             delta: PaddingDelta(unsafe { (*ptr).delta }),
@@ -113,7 +113,7 @@ impl PaddingPtr {
     #[inline(always)]
     pub(crate) unsafe fn write(self, padding: Padding) {
         let ptr = self.as_ptr();
-        // SAFETY[AUDIT:typed-padding-metadata]: callers guarantee writable live
+        // SAFETY: callers guarantee writable live
         // padding metadata, and values are supplied through typed wrappers.
         unsafe {
             (*ptr).canary = padding.canary.get();
@@ -126,7 +126,7 @@ impl PaddingPtr {
     #[cfg(not(mi_c_malloc_fast))]
     #[inline(always)]
     pub(crate) unsafe fn write_delta(self, delta: PaddingDelta) {
-        // SAFETY[AUDIT:typed-padding-metadata]: callers guarantee writable live
+        // SAFETY: callers guarantee writable live
         // padding metadata; only the typed delta field is updated.
         unsafe { (*self.as_ptr()).delta = delta.get() };
     }

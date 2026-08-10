@@ -195,7 +195,7 @@ impl Heap {
     /// Does not panic.
     #[inline]
     pub fn new() -> Result<Self, HeapError> {
-        // SAFETY[AUDIT:safe-heap]: heap creation initializes allocator runtime
+        // SAFETY: heap creation initializes allocator runtime
         // as needed and returns either null or an owned heap pointer.
         let ptr = unsafe { crate::heap::mi_heap_new() };
         let ptr = NonNull::new(ptr).ok_or(HeapError::Create)?;
@@ -299,7 +299,7 @@ impl Heap {
 
 impl Drop for Heap {
     fn drop(&mut self) {
-        // SAFETY[AUDIT:safe-heap]: `Heap` owns this non-main heap and Rust
+        // SAFETY: `Heap` owns this non-main heap and Rust
         // lifetimes prevent safe heap-tied allocations from outliving it.
         unsafe { crate::heap::mi_heap_delete(self.ptr.as_ptr()) };
     }
@@ -488,7 +488,7 @@ impl MainHeap {
     /// Does not panic.
     #[inline]
     pub fn get() -> Result<Self, HeapError> {
-        // SAFETY[AUDIT:safe-heap]: returns the process main heap or null if
+        // SAFETY: returns the process main heap or null if
         // runtime initialization is unavailable.
         let ptr = unsafe { crate::init::mi_heap_main() };
         let ptr = NonNull::new(ptr).ok_or(HeapError::MainUnavailable)?;
@@ -703,7 +703,7 @@ impl<'heap> HeapAllocation<'heap> {
     #[inline]
     #[must_use]
     pub fn as_uninit_slice(&self) -> &[MaybeUninit<u8>] {
-        // SAFETY[AUDIT:safe-heap]: `self.raw.ptr` is valid for `self.len()`
+        // SAFETY: `self.raw.ptr` is valid for `self.len()`
         // bytes when non-zero. `MaybeUninit<u8>` permits uninitialized
         // contents, and zero-sized allocations produce an empty slice over the
         // aligned sentinel.
@@ -718,7 +718,7 @@ impl<'heap> HeapAllocation<'heap> {
     #[inline]
     #[must_use]
     pub fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<u8>] {
-        // SAFETY[AUDIT:safe-heap]: `&mut self` guarantees unique access to the
+        // SAFETY: `&mut self` guarantees unique access to the
         // heap allocation bytes. `MaybeUninit<u8>` permits writing
         // uninitialized storage, and zero-sized allocations return an empty
         // slice over the aligned sentinel.
@@ -811,7 +811,7 @@ impl<'heap> RawHeapAllocation<'heap> {
             return Err(AllocError { layout });
         }
 
-        // SAFETY[AUDIT:safe-heap]: `heap` is a live heap borrowed for
+        // SAFETY: `heap` is a live heap borrowed for
         // `'heap`; raw allocation returns null on failure.
         let ptr = unsafe {
             if layout.align() <= crate::types::MI_MAX_ALIGN_SIZE {
@@ -872,7 +872,7 @@ impl<'heap> RawHeapAllocation<'heap> {
 
         if new_size == 0 {
             if old_size != 0 {
-                // SAFETY[AUDIT:safe-heap]: heap allocations are released
+                // SAFETY: heap allocations are released
                 // through mimalloc free and `ManuallyDrop` prevents double-free.
                 unsafe { crate::mimalloc::mi_free(old.ptr.as_ptr().cast::<c_void>()) };
             }
@@ -894,7 +894,7 @@ impl<'heap> RawHeapAllocation<'heap> {
                 });
             }
 
-            // SAFETY[AUDIT:safe-heap]: `old` owns this heap allocation and
+            // SAFETY: `old` owns this heap allocation and
             // mimalloc leaves it valid on realloc failure.
             let ptr = unsafe {
                 if old_layout.align() <= crate::types::MI_MAX_ALIGN_SIZE {
@@ -942,7 +942,7 @@ impl<'heap> RawHeapAllocation<'heap> {
             }
         };
         if old_size != 0 {
-            // SAFETY[AUDIT:safe-heap]: both allocations are live and
+            // SAFETY: both allocations are live and
             // non-overlapping; copy only preserved bytes and free the old block.
             unsafe {
                 ptr::copy_nonoverlapping(
@@ -963,7 +963,7 @@ impl<'heap> RawHeapAllocation<'heap> {
     fn zero_tail(&self, initialized_prefix: usize) {
         let len = self.layout.size();
         if initialized_prefix < len {
-            // SAFETY[AUDIT:safe-heap]: `initialized_prefix..len` is inside the
+            // SAFETY: `initialized_prefix..len` is inside the
             // live heap allocation and is being initialized with zero bytes.
             unsafe {
                 self.ptr
@@ -978,7 +978,7 @@ impl<'heap> RawHeapAllocation<'heap> {
 impl Drop for RawHeapAllocation<'_> {
     fn drop(&mut self) {
         if self.layout.size() != 0 {
-            // SAFETY[AUDIT:safe-heap]: this value owns a live mimalloc block.
+            // SAFETY: this value owns a live mimalloc block.
             unsafe { crate::mimalloc::mi_free(self.ptr.as_ptr().cast::<c_void>()) };
         }
     }
@@ -1074,7 +1074,7 @@ impl<'heap> InitializedHeapAllocation<'heap> {
     #[inline]
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        // SAFETY[AUDIT:safe-heap]: initialized heap allocation guarantees
+        // SAFETY: initialized heap allocation guarantees
         // readable initialized bytes.
         unsafe { core::slice::from_raw_parts(self.as_ptr(), self.len()) }
     }
@@ -1083,7 +1083,7 @@ impl<'heap> InitializedHeapAllocation<'heap> {
     #[inline]
     #[must_use]
     pub fn as_mut_bytes(&mut self) -> &mut [u8] {
-        // SAFETY[AUDIT:safe-heap]: `&mut self` guarantees unique access.
+        // SAFETY: `&mut self` guarantees unique access.
         unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.len()) }
     }
 

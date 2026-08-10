@@ -347,22 +347,10 @@ At minimum, the no-harness-allocation assertion must cover:
 
 The assertion may be disabled around setup, Criterion machinery, channel operations, string formatting, and report output.
 
-### Static audit
+### Verification
 
-Add `tests/release_fast_path_audit/benchmark_hygiene.rs`. It should verify that the benchmark timed helper bodies do not contain:
-
-```text
-vec!
-Vec::
-Box::
-String::
-format!
-thread::spawn
-channel(
-sync_channel(
-```
-
-This static check is supplementary. The counting allocator is the runtime proof.
+The counting allocator is the runtime proof. Benchmark smoke tests must execute
+every covered timed helper with the assertion enabled.
 
 ---
 
@@ -854,7 +842,8 @@ Stage 1 makes transitions semantically meaningful without changing raw represent
 
 ## 6.2 Identity-versus-capability classification
 
-Create `docs/capability-inventory.md` containing every `src/types` wrapper and its classification.
+Classify identity and capability types in their owning modules. Compiler-checked
+assertions must keep linear capability types non-`Copy` and non-`Clone`.
 
 ### Identity types that MAY remain `Copy`
 
@@ -1405,15 +1394,9 @@ Reject `DetachedRemoteList` construction except in:
 * test fixtures;
 * explicitly documented raw compatibility ingress.
 
-### Release audit
+### Compiler checks
 
-Add:
-
-```text
-tests/release_fast_path_audit/capability_linearity.rs
-```
-
-It verifies:
+Crate unit tests verify:
 
 * every required capability is non-`Copy`;
 * raw constructors are not crate-wide;
@@ -2871,8 +2854,8 @@ Stage 3 is complete when:
 | `src/allocator/free.rs`           | Consume validation and page-owner capabilities    |
 | `src/allocator/free/abandoned.rs` | Linear disposition state machine                  |
 | `src/allocator/page/lifecycle.rs` | Separate local and abandoned collection           |
-| `scripts/check-strict-types.py`   | Constructor and non-copy enforcement              |
-| `tests/release_fast_path_audit/*` | Capability-linearity guards                       |
+| `scripts/check-strict-types.py`   | Architectural boundary enforcement                |
+| `src/types/linearity_tests.rs`    | Compiler-checked capability linearity              |
 
 ## Stage 2
 
@@ -2885,7 +2868,7 @@ Stage 3 is complete when:
 | `src/allocator/init.rs`              | Use policy for thread-heap options            |
 | `src/allocator/thread_heap.rs`       | Use policy for thread-pool adjustment         |
 | `scripts/check-policy-boundaries.py` | Enforce scoped decisions                      |
-| `tests/release_fast_path_audit/*`    | Policy-boundary guards                        |
+| `tests/*`                            | Behavioral policy coverage                    |
 
 ## Stage 3
 
@@ -2979,4 +2962,3 @@ The four-stage program is complete when all of the following are true:
 21. All release, feature, fuzz/model, differential, benchmark, and resource gates pass against the Stage 0 baseline.
 
 At that point, Stage 4 can introduce a single-page thread magazine without first having to invent ownership, batch accounting, policy, or evidence infrastructure inside the magazine patch itself.
-

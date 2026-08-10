@@ -17,7 +17,7 @@ use super::{flags, mi_page_used_count};
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe { flags::mi_page_is_full(page) }
 }
 
@@ -27,7 +27,7 @@ pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
 pub(crate) unsafe fn mi_page_slice_committed(
     page: *const mi_page_t,
 ) -> crate::core_types::CommittedBytes {
-    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe { crate::core_types::CommittedBytes::new((*page).slice_committed) }
 }
 
@@ -38,7 +38,7 @@ pub(crate) unsafe fn mi_page_set_slice_committed(
     page: *mut mi_page_t,
     committed: crate::core_types::CommittedBytes,
 ) {
-    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         (*page).slice_committed = committed.get();
     }
@@ -50,7 +50,7 @@ pub(crate) unsafe fn mi_page_set_slice_committed(
 pub(crate) unsafe fn mi_page_retire_expire(
     page: *const mi_page_t,
 ) -> crate::core_types::RetireExpire {
-    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe { crate::core_types::RetireExpire::new((*page).retire_expire) }
 }
 
@@ -61,7 +61,7 @@ pub(crate) unsafe fn mi_page_set_retire_expire(
     page: *mut mi_page_t,
     expire: crate::core_types::RetireExpire,
 ) {
-    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         (*page).retire_expire = expire.get();
     }
@@ -71,7 +71,7 @@ pub(crate) unsafe fn mi_page_set_retire_expire(
 /// `page` must point to writable page metadata.
 #[inline(always)]
 pub(crate) unsafe fn mi_page_reset_retire_expire(page: *mut mi_page_t) {
-    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         mi_page_set_retire_expire(page, crate::core_types::RetireExpire::zero());
     }
@@ -83,7 +83,7 @@ pub(crate) unsafe fn mi_page_reset_retire_expire(page: *mut mi_page_t) {
 pub(crate) unsafe fn mi_page_decrement_retire_expire(
     page: *mut mi_page_t,
 ) -> crate::core_types::RetireExpire {
-    // SAFETY[AUDIT:page-metadata-accessor-boundary]: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         let expire = mi_page_retire_expire(page).decrement();
         mi_page_set_retire_expire(page, expire);
@@ -96,7 +96,7 @@ pub(crate) unsafe fn mi_page_decrement_retire_expire(
 /// thread-free list for that page.
 #[inline]
 pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut mi_block_t) {
-    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         if head.is_null() {
             return;
@@ -155,10 +155,10 @@ impl PageCollectOwner<'_> {
         local: LocalFreeList,
     ) -> Result<LocalFreeList, BatchValidationError> {
         match self {
-            // SAFETY[AUDIT:page-free-list-owner-variant]: each enum variant
+            // SAFETY: each enum variant
             // retains the concrete proof required by its monomorphic collector.
             Self::Local(owner) => unsafe { collect_remote_for_local_page(owner, detached, local) },
-            // SAFETY[AUDIT:page-free-list-owner-variant]: each enum variant
+            // SAFETY: each enum variant
             // retains the concrete proof required by its monomorphic collector.
             Self::Abandoned(owner) => unsafe {
                 collect_remote_for_owned_abandoned_page(owner, detached, local)
@@ -171,10 +171,10 @@ impl PageCollectOwner<'_> {
         &self,
     ) -> Result<Option<crate::core_types::LocalFreeBatch>, BatchValidationError> {
         match self {
-            // SAFETY[AUDIT:page-free-list-owner-variant]: the variant carries
+            // SAFETY: the variant carries
             // the exact owner proof required for local-list detachment.
             Self::Local(owner) => unsafe { owner.detach_local_free_batch() },
-            // SAFETY[AUDIT:page-free-list-owner-variant]: the variant carries
+            // SAFETY: the variant carries
             // the exact owner proof required for abandoned-list detachment.
             Self::Abandoned(owner) => unsafe { owner.detach_local_free_batch() },
         }
@@ -187,10 +187,10 @@ impl PageCollectOwner<'_> {
         available: AvailableFreeList,
     ) -> AvailableFreeList {
         match self {
-            // SAFETY[AUDIT:page-free-list-owner-variant]: the batch and
+            // SAFETY: the batch and
             // concrete owner proof refer to the same page.
             Self::Local(owner) => unsafe { batch.prepend_to_available(owner, available) },
-            // SAFETY[AUDIT:page-free-list-owner-variant]: the batch and
+            // SAFETY: the batch and
             // concrete owner proof refer to the same claimed abandoned page.
             Self::Abandoned(owner) => unsafe {
                 batch.prepend_to_owned_abandoned_page(owner, available)
@@ -207,7 +207,7 @@ pub(crate) unsafe fn collect_remote_for_local_page(
     detached: DetachedRemoteList,
     local: LocalFreeList,
 ) -> Result<LocalFreeList, BatchValidationError> {
-    // SAFETY[AUDIT:page-free-list-local-detached-collect]: LocalPage and the
+    // SAFETY: LocalPage and the
     // detached owner establish page identity and unique collection access.
     match unsafe { detached.into_batch_for_local(page) } {
         Ok(None) => Ok(local),
@@ -224,7 +224,7 @@ pub(crate) unsafe fn collect_remote_for_owned_abandoned_page(
     detached: DetachedRemoteList,
     local: LocalFreeList,
 ) -> Result<LocalFreeList, BatchValidationError> {
-    // SAFETY[AUDIT:page-free-list-abandoned-detached-collect]: claimed
+    // SAFETY: claimed
     // abandoned ownership and the detached owner exclude competing collectors.
     match unsafe { detached.into_batch_for_abandoned(page) } {
         Ok(None) => Ok(local),
@@ -237,7 +237,7 @@ pub(crate) unsafe fn collect_remote_for_owned_abandoned_page(
 /// `page` must point to page metadata owned by the current thread heap.
 #[inline]
 pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
-    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = crate::core_types::assume_local_page(page_ptr);
@@ -257,7 +257,7 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
     page: LocalPage,
     remote: DetachedRemoteList,
 ) -> LocalFreeList {
-    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = page.page();
         let local = page_ptr.local_free();
@@ -272,25 +272,25 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
 unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
     let page_ptr = owner.page();
     let page = page_ptr.as_ptr();
-    // SAFETY[AUDIT:page-free-list-owner-dispatch]: either concrete owner proof
+    // SAFETY: either concrete owner proof
     // grants exclusive collection access to the atomic thread-free head.
     let remote = unsafe { page_ptr.thread_free_cell().detach_head() };
     if !remote.is_empty() {
-        // SAFETY[AUDIT:page-free-list-owner-dispatch]: the detached head and
+        // SAFETY: the detached head and
         // current local list belong to the proven owner page.
         let local = unsafe { page_ptr.local_free() };
         let _ = unsafe { owner.collect_remote(remote, local) };
     }
 
-    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the owner proof grants
+    // SAFETY: the owner proof grants
     // exclusive access to the page-local list fields.
     let local = unsafe { page_ptr.local_free() };
     if !local.is_empty() {
-        // SAFETY[AUDIT:page-free-list-owner-dispatch]: the owner proof grants
+        // SAFETY: the owner proof grants
         // exclusive access to the available-list field.
         let available = unsafe { page_ptr.free() };
         if available.is_empty() {
-            // SAFETY[AUDIT:page-free-list-owner-dispatch]: the owner proof grants
+            // SAFETY: the owner proof grants
             // exclusive access to both page-local list fields. Both typed lists
             // use the same page-encoded links, so moving the head needs no scan.
             unsafe {
@@ -301,17 +301,17 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
             #[cfg(feature = "bench-diagnostics")]
             crate::bench_diagnostics::page_free_collect_moved_to_free(false);
         } else if force {
-            // SAFETY[AUDIT:page-free-list-owner-dispatch]: dispatch retains the
+            // SAFETY: dispatch retains the
             // concrete owner proof while detaching and moving the local batch.
             match unsafe { owner.detach_local_free_batch() } {
                 Ok(Some(batch)) => {
-                    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the batch was
+                    // SAFETY: the batch was
                     // detached from this owner immediately above.
                     let new_available = unsafe { owner.prepend_to_available(batch, available) };
-                    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the splice
+                    // SAFETY: the splice
                     // result is now the owner's unique available-list head.
                     unsafe { page_ptr.set_free(new_available) };
-                    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the owner
+                    // SAFETY: the owner
                     // grants writable access to this page metadata flag.
                     unsafe { (*page).free_is_zero = false };
                     #[cfg(feature = "bench-diagnostics")]
@@ -331,7 +331,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
         crate::bench_diagnostics::page_free_collect_local_empty();
     }
 
-    // SAFETY[AUDIT:page-free-list-owner-dispatch]: the same owner proof remains
+    // SAFETY: the same owner proof remains
     // live through the final forced-collection invariant check.
     crate::internal::mi_assert_internal!(!force || unsafe { page_ptr.local_free() }.is_empty());
 }
@@ -344,7 +344,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
 pub(crate) unsafe fn collect_page_free_lists_local(page: &LocalPage, force: bool) {
     #[cfg(feature = "bench-diagnostics")]
     crate::bench_diagnostics::page_free_collect_local_call(force);
-    // SAFETY[AUDIT:page-free-list-owner-dispatch]: LocalPage is preserved in
+    // SAFETY: LocalPage is preserved in
     // the owner enum rather than reconstructed from a raw pointer.
     unsafe { collect_page_free_lists(PageCollectOwner::Local(page), force) };
 }
@@ -357,7 +357,7 @@ pub(crate) unsafe fn collect_page_free_lists_local(page: &LocalPage, force: bool
 pub(crate) unsafe fn collect_page_free_lists_abandoned(page: &OwnedAbandonedPage, force: bool) {
     #[cfg(feature = "bench-diagnostics")]
     crate::bench_diagnostics::page_free_collect_abandoned_call(force);
-    // SAFETY[AUDIT:page-free-list-owner-dispatch]: OwnedAbandonedPage is
+    // SAFETY: OwnedAbandonedPage is
     // preserved in the owner enum rather than weakened to LocalPage.
     unsafe { collect_page_free_lists(PageCollectOwner::Abandoned(page), force) };
 }
@@ -366,7 +366,7 @@ pub(crate) unsafe fn collect_page_free_lists_abandoned(page: &OwnedAbandonedPage
 /// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
-    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = crate::core_types::assume_local_page(page_ptr);
@@ -384,7 +384,7 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
     available: AvailableFreeList,
     local: LocalFreeList,
 ) -> bool {
-    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe { mi_page_free_quick_collect_raw(page.page(), available, local) }
 }
 
@@ -394,7 +394,7 @@ unsafe fn mi_page_free_quick_collect_raw(
     available: AvailableFreeList,
     local: LocalFreeList,
 ) -> bool {
-    // SAFETY[AUDIT:page-free-list-collect-boundary]: typed page/list witnesses
+    // SAFETY: typed page/list witnesses
     // preserve the raw quick-collection invariants.
     unsafe {
         if !available.is_empty() {
@@ -416,7 +416,7 @@ unsafe fn mi_page_free_quick_collect_raw(
 /// # Safety
 /// `page` must point to page metadata owned by the current thread heap. Owned
 /// abandoned pages must use `collect_page_free_lists_abandoned` instead.
-// SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
     unsafe {
@@ -431,7 +431,7 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
 /// `page` must be valid, its atomic thread-free ownership bit must already be
 /// claimed by the caller, and `head` must be null or the still-published head
 /// belonging to `page`.
-// SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
     unsafe {
@@ -454,7 +454,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
     owned_page: &OwnedAbandonedPage,
     remote_head: PublishedRemoteHead,
 ) {
-    // SAFETY[AUDIT:page-free-list-collect-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let page_ptr = owned_page.page();
         let page = page_ptr.as_ptr();
@@ -491,7 +491,7 @@ mod tests {
     #[test]
     fn published_head_detaches_only_its_tail() {
         let mut blocks = [ptr::null_mut::<mi_block_t>(); 16];
-        // SAFETY[AUDIT:page-remote-list-tail-fixture]: real allocator-owned
+        // SAFETY: real allocator-owned
         // blocks keep encoded-link validation within one registered page.
         unsafe {
             for block in &mut blocks {

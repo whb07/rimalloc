@@ -21,7 +21,7 @@ impl<'a> AtomicGuard<'a> {
     #[inline(always)]
     pub(crate) unsafe fn try_acquire(field: AtomicUsizeField) -> Option<Self> {
         let mut expected = 0;
-        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: the caller provides a valid guard
+        // SAFETY: the caller provides a valid guard
         // word and acquisition uses the existing AcqRel/Acquire CAS contract.
         if unsafe { field.compare_exchange_acq_rel(&mut expected, 1) } {
             Some(Self {
@@ -37,7 +37,7 @@ impl<'a> AtomicGuard<'a> {
 impl Drop for AtomicGuard<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: `AtomicGuard` is constructed only
+        // SAFETY: `AtomicGuard` is constructed only
         // after acquiring this guard word.
         unsafe { self.field.store(0, Ordering::Release) };
     }
@@ -69,7 +69,7 @@ impl<'a> OnceGuard<'a> {
     /// `once` must refer to a valid allocator once-state.
     #[inline(always)]
     pub(crate) unsafe fn try_enter(once: OnceStatePtr) -> Option<Self> {
-        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: the caller provides a valid
+        // SAFETY: the caller provides a valid
         // allocator once-state and the guard releases it in Drop.
         if unsafe { crate::atomic::_mi_atomic_once_enter(once.as_once_ptr()) } {
             Some(Self {
@@ -85,7 +85,7 @@ impl<'a> OnceGuard<'a> {
 impl Drop for OnceGuard<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: `OnceGuard` is constructed only
+        // SAFETY: `OnceGuard` is constructed only
         // after entering this once-state.
         unsafe { crate::atomic::_mi_atomic_once_release(self.once.as_once_ptr()) };
     }
@@ -117,7 +117,7 @@ impl<'a> MiLockGuard<'a> {
     /// `lock` must refer to a valid allocator lock.
     #[inline(always)]
     pub(crate) unsafe fn acquire(lock: MiLockPtr) -> Self {
-        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: the caller provides a valid
+        // SAFETY: the caller provides a valid
         // allocator lock and the guard releases it in Drop.
         unsafe { crate::atomic::mi_lock_acquire(lock.as_ptr()) };
         Self {
@@ -130,7 +130,7 @@ impl<'a> MiLockGuard<'a> {
 impl Drop for MiLockGuard<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: `MiLockGuard` is constructed only
+        // SAFETY: `MiLockGuard` is constructed only
         // after acquiring this lock.
         unsafe { crate::atomic::mi_lock_release(self.lock.as_ptr()) };
     }

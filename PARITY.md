@@ -146,7 +146,6 @@ scripts/check-secure-mode-parity.py
 scripts/check-guarded-mode-parity.py
 scripts/check-valgrind-tracking-parity.py
 scripts/check-asan-tracking-parity.py
-scripts/check-no-allocation-audit.py
 ```
 
 Each command must exit successfully. The script checks compare the Rust artifact

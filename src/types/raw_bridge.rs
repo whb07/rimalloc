@@ -17,7 +17,7 @@ use super::{
 /// initialized. Legal callers: C-shaped page initialization entry points.
 #[inline(always)]
 pub(crate) unsafe fn assume_uninit_page(page: PagePtr) -> Page<Uninit> {
-    // SAFETY[AUDIT:raw-bridge-uninit-page]: the initialization ingress owns
+    // SAFETY: the initialization ingress owns
     // the raw metadata exclusively and this bridge performs no mutation.
     unsafe { Page::<Uninit>::new_unchecked(page) }
 }
@@ -29,7 +29,7 @@ macro_rules! raw_page_bridge {
         #[inline(always)]
         #[doc = $marker]
         pub(crate) unsafe fn $name(page: PagePtr) -> $output {
-            // SAFETY[AUDIT:raw-bridge-page-witness]: this module is the sole
+            // SAFETY: this module is the sole
             // allocator-facing constructor bridge; the function-specific
             // contract is established by its audited ingress caller.
             unsafe { <$output>::new_unchecked(page) }
@@ -40,7 +40,7 @@ macro_rules! raw_page_bridge {
 raw_page_bridge!(
     assume_active_page,
     ActivePage,
-    "SAFETY[AUDIT:raw-bridge-active-page]",
+    "SAFETY",
     "`page` must be initialized, locally owned, active, and not full. Legal callers: C-shaped allocation/page entry points, initialization, and queue lookup."
 );
 
@@ -49,37 +49,37 @@ raw_page_bridge!(
 /// arena free classification boundaries.
 #[inline(always)]
 pub(crate) unsafe fn assume_all_free_abandoned(page: AbandonedPage) -> AllFreePage<Abandoned> {
-    // SAFETY[AUDIT:raw-bridge-all-free-abandoned-page]: the caller establishes
+    // SAFETY: the caller establishes
     // the all-free metadata predicate at the arena ingress boundary.
     unsafe { AllFreePage::abandoned_unchecked(page) }
 }
 raw_page_bridge!(
     assume_full_page,
     FullPage,
-    "SAFETY[AUDIT:raw-bridge-full-page]",
+    "SAFETY",
     "`page` must be initialized, locally owned, and linked in the full queue. Legal callers: C-shaped page entry points and queue classification."
 );
 raw_page_bridge!(
     assume_local_page,
     LocalPage,
-    "SAFETY[AUDIT:raw-bridge-local-page]",
+    "SAFETY",
     "`page` must be owned by the current thread heap. Legal callers: validated free classification and C-shaped local collection entry points."
 );
 raw_page_bridge!(
     assume_foreign_page,
     ForeignPage,
-    "SAFETY[AUDIT:raw-bridge-foreign-page]",
+    "SAFETY",
     "`page` must be owned by another thread or abandoned for remote-free routing. Legal callers: validated free classification boundaries."
 );
 raw_page_bridge!(
     assume_abandoned_page,
     AbandonedPage,
-    "SAFETY[AUDIT:raw-bridge-abandoned-page]",
+    "SAFETY",
     "`page` must be marked abandoned and unowned by a live thread heap. Legal callers: arena lookup/classification, C-shaped abandon entry points, and abandoned block visitation."
 );
 raw_page_bridge!(
     assume_owned_abandoned_page,
     OwnedAbandonedPage,
-    "SAFETY[AUDIT:raw-bridge-owned-abandoned-page]",
+    "SAFETY",
     "`page` must be abandoned and its atomic thread-free ownership successfully claimed by this caller. Legal callers: atomic ownership success and raw compatibility ingress."
 );

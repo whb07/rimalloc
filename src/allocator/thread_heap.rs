@@ -53,7 +53,7 @@ pub const MI_MAX_BLOCKS: usize = MI_SMALL_PAGE_SIZE / core::mem::size_of::<*cons
 ///
 /// The callback receives allocator-owned thread-heap, queue, and page pointers
 /// that must remain valid for the duration of the visit.
-// SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub type theap_page_visitor_fun = unsafe extern "C" fn(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -79,7 +79,7 @@ impl TheapPageVisitCallback {
         page: PagePtr,
         state: TheapPageVisitState,
     ) -> bool {
-        // SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+        // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
         unsafe {
             (self.0)(
                 theap.as_ptr(),
@@ -112,7 +112,7 @@ pub type mi_theap_area_ex_t = mi_theap_area_ex_s;
 ///
 /// The callback receives allocator-owned thread-heap and area pointers that
 /// must remain valid for the duration of the visit.
-// SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub type mi_theap_area_visit_fun = unsafe extern "C" fn(
     theap: *const mi_theap_t,
     area: *const mi_theap_area_ex_t,
@@ -125,7 +125,7 @@ struct TheapAreaVisitCallback(mi_theap_area_visit_fun);
 impl TheapAreaVisitCallback {
     #[inline(always)]
     unsafe fn from_raw_slot(vfun: *mut c_void) -> Self {
-        // SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+        // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
         unsafe { Self(*vfun.cast::<mi_theap_area_visit_fun>()) }
     }
 
@@ -136,7 +136,7 @@ impl TheapAreaVisitCallback {
         area: *const mi_theap_area_ex_t,
         arg: *mut c_void,
     ) -> bool {
-        // SAFETY[AUDIT:thread-heap-visit-callback-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+        // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
         unsafe { (self.0)(theap.as_ptr().cast_const(), area, arg) }
     }
 }
@@ -154,21 +154,21 @@ type mi_visit_blocks_args_t = mi_visit_blocks_args_s;
 ///
 /// `area` must point to writable heap-area storage and `page` must point to a
 /// valid page owned by this allocator.
-// SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_area_init(
     area: *mut mi_heap_area_t,
     page: *mut mi_page_t,
 ) {
-    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     let page = unsafe { PagePtr::new_unchecked(page) };
-    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     let heap = unsafe { HeapPtr::new_unchecked(mi_page_heap(page.as_ptr())) };
     unsafe { mi_heap_area_init_typed(area, heap, page) };
 }
 
 unsafe fn mi_heap_area_init_typed(area: *mut mi_heap_area_t, heap: HeapPtr, page: PagePtr) {
-    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::MI_UNUSED(&heap);
         let page = page.as_ptr();
@@ -190,7 +190,7 @@ unsafe fn mi_heap_area_init_typed(area: *mut mi_heap_area_t, heap: HeapPtr, page
 }
 
 unsafe fn mi_get_fast_divisor(divisor: usize, magic: *mut u64, shift: *mut usize) {
-    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::mi_assert_internal!(divisor > 0 && u32::try_from(divisor).is_ok());
         *shift = MI_SIZE_BITS - mi_clz(divisor - 1);
@@ -213,7 +213,7 @@ pub unsafe fn mi_fast_divide(n: usize, magic: u64, shift: usize) -> usize {
 ///
 /// `area` and `page` must describe the same valid allocator page. `visitor`
 /// must be valid to call for each live block in the page.
-// SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
     area: *const mi_heap_area_t,
@@ -221,9 +221,9 @@ pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
     visitor: BlockVisitCallback,
     arg: BlockVisitCallbackArg,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     let page = unsafe { PagePtr::new_unchecked(page) };
-    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe { mi_theap_area_visit_blocks_typed(area, page, visitor, arg) }
 }
 
@@ -233,7 +233,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
     visitor: BlockVisitCallback,
     arg: BlockVisitCallbackArg,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::mi_assert_internal!(!area.is_null());
         if area.is_null() {
@@ -366,7 +366,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
     }
 }
 
-// SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[used]
 static MI_THEAP_AREA_VISIT_BLOCKS_KEEP: unsafe extern "C" fn(
     *const mi_heap_area_t,
@@ -375,7 +375,7 @@ static MI_THEAP_AREA_VISIT_BLOCKS_KEEP: unsafe extern "C" fn(
     BlockVisitCallbackArg,
 ) -> bool = _mi_theap_area_visit_blocks;
 
-// SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 unsafe extern "C" fn mi_theap_visit_areas_page(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -383,7 +383,7 @@ unsafe extern "C" fn mi_theap_visit_areas_page(
     vfun: *mut c_void,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::MI_UNUSED(&pq);
         let theap = ThreadHeapPtr::new_unchecked(theap);
@@ -399,7 +399,7 @@ unsafe fn mi_theap_visit_areas_page_typed(
     visitor: TheapAreaVisitCallback,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_theap(page.as_ptr()) == theap.as_ptr());
         let page = page.as_ptr();
@@ -417,7 +417,7 @@ unsafe fn mi_theap_visit_areas(
     visitor: Option<mi_theap_area_visit_fun>,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let Some(visitor) = visitor else {
             return false;
@@ -433,14 +433,14 @@ unsafe fn mi_theap_visit_areas(
     }
 }
 
-// SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[inline(never)]
 unsafe extern "C" fn mi_theap_area_visitor(
     theap: *const mi_theap_t,
     xarea: *const mi_theap_area_ex_t,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let args = arg.cast::<mi_visit_blocks_args_t>();
         if !(*args).visitor.invoke(
@@ -472,7 +472,7 @@ static MI_THEAP_AREA_VISITOR_KEEP: mi_theap_area_visit_fun = mi_theap_area_visit
 ///
 /// `theap`, when non-null, must point to a valid thread heap. `visitor`, when
 /// present, must be valid for every visited heap area and block.
-// SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_visit_blocks(
     theap: *const mi_theap_t,
@@ -480,7 +480,7 @@ pub unsafe extern "C" fn mi_theap_visit_blocks(
     visitor: Option<mi_block_visit_fun>,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let Some(visitor) = visitor else {
             return false;
@@ -509,7 +509,7 @@ pub unsafe fn mi_theap_visit_pages(
     arg1: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let Some(theap) = ThreadHeapPtr::new(theap) else {
             return false;
@@ -528,7 +528,7 @@ unsafe fn mi_theap_visit_pages_typed(
     include_full: bool,
     state: TheapPageVisitState,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let theap_ptr = theap.as_ptr();
         if (*theap_ptr).page_count == 0 {
@@ -573,7 +573,7 @@ unsafe fn mi_theap_visit_pages_typed(
 ///
 /// `theap`, `pq`, and `page` must be valid allocator objects from the same
 /// thread heap.
-// SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub unsafe extern "C" fn mi_theap_page_is_valid(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -581,7 +581,7 @@ pub unsafe extern "C" fn mi_theap_page_is_valid(
     arg1: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::MI_UNUSED(&arg1);
         crate::internal::MI_UNUSED(&arg2);
@@ -593,7 +593,7 @@ pub unsafe extern "C" fn mi_theap_page_is_valid(
 }
 
 unsafe fn mi_theap_page_is_valid_typed(theap: ThreadHeapPtr, page: PagePtr) -> bool {
-    // SAFETY[AUDIT:thread-heap-page-visit-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let page = page.as_ptr();
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.as_ptr());
@@ -606,7 +606,7 @@ unsafe fn mi_theap_page_is_valid_typed(theap: ThreadHeapPtr, page: PagePtr) -> b
 ///
 /// `theap`, `pq`, and `page` must be valid allocator objects from the same
 /// thread heap. `arg_collect` must point to a valid `mi_collect_t` value.
-// SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
 pub unsafe extern "C" fn mi_theap_page_collect(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -614,7 +614,7 @@ pub unsafe extern "C" fn mi_theap_page_collect(
     arg_collect: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         crate::internal::MI_UNUSED(&arg2);
         let theap = ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap));
@@ -631,7 +631,7 @@ unsafe fn mi_theap_page_collect_typed(
     page: PagePtr,
     collect: mi_collect_t,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_page_is_valid_typed(theap.ptr(), page));
 
@@ -670,7 +670,7 @@ unsafe fn mi_theap_page_collect_typed(
 ///
 /// `theap` must point to an initialized thread heap.
 pub unsafe fn mi_theap_is_valid(theap: *mut mi_theap_t) -> bool {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         let Some(theap) = ThreadHeapPtr::new(theap) else {
             crate::internal::mi_assert_internal!(false);
@@ -681,7 +681,7 @@ pub unsafe fn mi_theap_is_valid(theap: *mut mi_theap_t) -> bool {
 }
 
 unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         let state = TheapPageVisitState {
             visitor: TheapPageVisitCallback::new(Some(mi_theap_page_is_valid)),
@@ -720,7 +720,7 @@ unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
 /// `theap` must point to an initialized thread heap whose backing heap remains
 /// valid for stats merging.
 pub unsafe fn mi_theap_merge_stats(theap: *mut mi_theap_t) {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         let Some(theap) = ThreadHeapPtr::new(theap) else {
             crate::internal::mi_assert_internal!(false);
@@ -731,7 +731,7 @@ pub unsafe fn mi_theap_merge_stats(theap: *mut mi_theap_t) {
 }
 
 unsafe fn mi_theap_merge_stats_typed(theap: ThreadHeapPtr) {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         let theap_raw = theap.as_ptr();
         crate::internal::mi_assert_internal!(mi_theap_is_initialized(theap_raw));
@@ -741,7 +741,7 @@ unsafe fn mi_theap_merge_stats_typed(theap: ThreadHeapPtr) {
 }
 
 unsafe fn mi_theap_collect_ex(theap: *mut mi_theap_t, collect: mi_collect_t) {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         if theap.is_null() || !mi_theap_is_initialized(theap) {
             return;
@@ -754,7 +754,7 @@ unsafe fn mi_theap_collect_ex(theap: *mut mi_theap_t, collect: mi_collect_t) {
 const _: unsafe fn(*mut mi_theap_t, mi_collect_t) = mi_theap_collect_ex;
 
 unsafe fn mi_theap_collect_ex_typed(theap: ThreadHeapLocal, mut collect: mi_collect_t) {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         let theap_ptr = theap.ptr();
         let theap = theap_ptr.as_ptr();
@@ -782,7 +782,7 @@ unsafe fn mi_theap_collect_ex_typed(theap: ThreadHeapLocal, mut collect: mi_coll
 ///
 /// `theap` must be null or point to an initialized thread heap that can be
 /// collected and abandoned.
-// SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_collect_abandon(theap: *mut mi_theap_t) {
     unsafe {
@@ -795,7 +795,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_collect_abandon(theap: *mut mi_theap_t
 }
 
 unsafe fn mi_theap_collect_abandon_typed(theap: ThreadHeapLocal) {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         mi_theap_collect_ex_typed(theap, mi_collect_t::MI_ABANDON);
     }
@@ -805,7 +805,7 @@ unsafe fn mi_theap_collect_abandon_typed(theap: ThreadHeapLocal) {
 ///
 /// `theap` must be null or point to an initialized thread heap owned by this
 /// allocator.
-// SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_collect(theap: *mut mi_theap_t, force: bool) {
     unsafe {
@@ -826,7 +826,7 @@ pub unsafe extern "C" fn mi_theap_collect(theap: *mut mi_theap_t, force: bool) {
 ///
 /// Must be called only after allocator process/thread initialization has made
 /// the default thread heap accessible.
-// SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_collect(force: bool) {
     unsafe {
@@ -837,7 +837,7 @@ pub unsafe extern "C" fn mi_collect(force: bool) {
 /// # Safety
 ///
 /// `heap` must be null or point to a heap managed by this allocator.
-// SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_collect(heap: *mut mi_heap_t, force: bool) {
     unsafe {
@@ -847,7 +847,7 @@ pub unsafe extern "C" fn mi_heap_collect(heap: *mut mi_heap_t, force: bool) {
 
 #[inline]
 unsafe fn mi_heap_collect_typed(heap: Option<BorrowedHeap>, force: bool) {
-    // SAFETY[AUDIT:thread-heap-collect-boundary]: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         let Some(theap) = crate::heap::mi_heap_theap_typed(heap.map(BorrowedHeap::ptr)) else {
             return;
@@ -868,7 +868,7 @@ unsafe fn mi_heap_collect_typed(heap: Option<BorrowedHeap>, force: bool) {
 ///
 /// Must be called only after allocator process/thread initialization has made
 /// the default thread heap accessible.
-// SAFETY[AUDIT:thread-heap-default-boundary]: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
+// SAFETY: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_get_default() -> *mut mi_theap_t {
     unsafe {
@@ -886,7 +886,7 @@ pub unsafe extern "C" fn mi_theap_get_default() -> *mut mi_theap_t {
 ///
 /// `theap`, when non-null, must point to a valid initialized thread heap whose
 /// lifetime covers subsequent default-thread-heap use.
-// SAFETY[AUDIT:thread-heap-default-boundary]: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
+// SAFETY: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_set_default(theap: *mut mi_theap_t) -> *mut mi_theap_t {
     unsafe {
@@ -900,7 +900,7 @@ pub unsafe extern "C" fn mi_theap_set_default(theap: *mut mi_theap_t) -> *mut mi
 }
 
 unsafe fn mi_theap_set_default_typed(theap: ThreadHeapLocal) {
-    // SAFETY[AUDIT:thread-heap-default-boundary]: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
+    // SAFETY: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
     unsafe {
         crate::init::_mi_theap_default_set(theap.ptr().as_ptr());
     }
@@ -910,7 +910,7 @@ unsafe fn mi_theap_set_default_typed(theap: ThreadHeapLocal) {
 ///
 /// `theap`, `heap`, and `tld` must point to valid writable allocator metadata
 /// objects that are not concurrently initialized elsewhere.
-// SAFETY[AUDIT:thread-heap-create-boundary]: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+// SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_init(
     theap: *mut mi_theap_t,
@@ -932,7 +932,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_init(
     };
 
     // SAFETY: raw pointers were validated into typed metadata wrappers above.
-    // SAFETY[AUDIT:thread-heap-create-boundary]: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+    // SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
     unsafe { _mi_theap_init_typed(theap, heap, tld) };
 }
 
@@ -940,7 +940,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_init(
 unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr) {
     let theap_raw = theap.as_ptr();
     let tld_raw = tld.as_ptr();
-    // SAFETY[AUDIT:thread-heap-create-boundary]: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+    // SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
     unsafe {
         let memid = (*theap_raw).memid;
         _mi_memcpy_aligned(
@@ -993,7 +993,7 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
 ///
 /// `heap` and `tld` must point to valid allocator metadata objects used to own
 /// the new thread heap.
-// SAFETY[AUDIT:thread-heap-create-boundary]: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+// SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_create(
     heap: *mut mi_heap_t,
@@ -1009,7 +1009,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_create(
         return ptr::null_mut();
     };
 
-    // SAFETY[AUDIT:thread-heap-create-boundary]: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+    // SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
     unsafe { _mi_theap_create_typed(heap, tld) }
         .map(ThreadHeapPtr::as_ptr)
         .unwrap_or(ptr::null_mut())
@@ -1017,7 +1017,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_create(
 
 #[inline]
 unsafe fn _mi_theap_create_typed(heap: HeapPtr, tld: TldPtr) -> Option<ThreadHeapPtr> {
-    // SAFETY[AUDIT:thread-heap-create-boundary]: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+    // SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
     unsafe {
         let heap_raw = heap.as_ptr();
         let tld_raw = tld.as_ptr();
@@ -1070,7 +1070,7 @@ unsafe fn _mi_theap_create_typed(heap: HeapPtr, tld: TldPtr) -> Option<ThreadHea
 /// # Safety
 ///
 /// `theap` must point to a valid initialized thread heap.
-// SAFETY[AUDIT:thread-heap-random-boundary]: random helpers read initialized thread-heap random state through typed wrappers.
+// SAFETY: random helpers read initialized thread-heap random state through typed wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) -> usize {
     unsafe {
@@ -1081,7 +1081,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) ->
 
 #[inline(always)]
 unsafe fn _mi_theap_random_next_typed(theap: ThreadHeapLocal) -> usize {
-    // SAFETY[AUDIT:thread-heap-random-boundary]: random helpers read initialized thread-heap random state through typed wrappers.
+    // SAFETY: random helpers read initialized thread-heap random state through typed wrappers.
     unsafe {
         let theap = theap.ptr().as_ptr();
         _mi_random_next(ptr::addr_of_mut!((*theap).random))
@@ -1103,7 +1103,7 @@ fn mi_memid_is_refcounted(memid: mi_memid_t) -> bool {
 
 #[inline(always)]
 unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
-    // SAFETY[AUDIT:thread-heap-refcount-boundary]: refcount paths release backing thread-heap metadata only after typed ownership checks.
+    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
     unsafe {
         let Some(theap) = ThreadHeapPtr::new(theap) else {
             return;
@@ -1124,7 +1124,7 @@ unsafe fn mi_theap_free_mem_typed(
     memid: crate::core_types::MemIdView,
     size: crate::core_types::ReservedBytes,
 ) {
-    // SAFETY[AUDIT:thread-heap-refcount-boundary]: refcount paths release backing thread-heap metadata only after typed ownership checks.
+    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
     unsafe {
         let raw = theap.ptr().as_ptr();
         __mi_stat_decrease_mt(&mut (*_mi_subproc()).stats.theaps, 1);
@@ -1156,7 +1156,7 @@ unsafe fn mi_theap_free_arena_mem(
     _range: crate::core_types::SliceRange,
     size: crate::core_types::ReservedBytes,
 ) {
-    // SAFETY[AUDIT:thread-heap-refcount-boundary]: refcount paths release backing thread-heap metadata only after typed ownership checks.
+    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
     unsafe {
         let raw = theap.ptr().as_ptr();
         let alloc_size =
@@ -1168,19 +1168,19 @@ unsafe fn mi_theap_free_arena_mem(
 /// # Safety
 ///
 /// `theap` must be null or point to a valid thread heap metadata object.
-// SAFETY[AUDIT:thread-heap-refcount-boundary]: refcount paths release backing thread-heap metadata only after typed ownership checks.
+// SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_incref(theap: *mut mi_theap_t) {
     let Some(theap) = ThreadHeapPtr::new(theap) else {
         return;
     };
-    // SAFETY[AUDIT:thread-heap-refcount-boundary]: refcount paths release backing thread-heap metadata only after typed ownership checks.
+    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
     unsafe { _mi_theap_incref_typed(theap) };
 }
 
 #[inline(always)]
 unsafe fn _mi_theap_incref_typed(theap: ThreadHeapPtr) {
-    // SAFETY[AUDIT:thread-heap-refcount-boundary]: refcount paths release backing thread-heap metadata only after typed ownership checks.
+    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
     unsafe {
         if mi_memid_is_refcounted((*theap.as_ptr()).memid) {
             theap.refcount_cell().incref_acq_rel();
@@ -1190,7 +1190,7 @@ unsafe fn _mi_theap_incref_typed(theap: ThreadHeapPtr) {
 
 #[inline(always)]
 unsafe fn mi_theap_decref_inline(theap: ThreadHeapPtr) {
-    // SAFETY[AUDIT:thread-heap-refcount-boundary]: refcount paths release backing thread-heap metadata only after typed ownership checks.
+    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
     unsafe {
         if mi_memid_is_refcounted((*theap.as_ptr()).memid)
             && theap.refcount_cell().decref_acq_rel() == 1
@@ -1203,13 +1203,13 @@ unsafe fn mi_theap_decref_inline(theap: ThreadHeapPtr) {
 /// # Safety
 ///
 /// `theap` must be null or point to a valid thread heap metadata object.
-// SAFETY[AUDIT:thread-heap-refcount-boundary]: refcount paths release backing thread-heap metadata only after typed ownership checks.
+// SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
     let Some(theap) = ThreadHeapPtr::new(theap) else {
         return;
     };
-    // SAFETY[AUDIT:thread-heap-refcount-boundary]: refcount paths release backing thread-heap metadata only after typed ownership checks.
+    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
     unsafe { mi_theap_decref_inline(theap) };
 }
 
@@ -1217,7 +1217,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
 ///
 /// `theap` must point to a valid thread heap. Lock flags must accurately reflect
 /// whether the caller already holds the corresponding heap and TLD locks.
-// SAFETY[AUDIT:thread-heap-delete-boundary]: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+// SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_free(
     theap: *mut mi_theap_t,
@@ -1228,7 +1228,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_free(
     let Some(theap) = ThreadHeapPtr::new(theap) else {
         return true;
     };
-    // SAFETY[AUDIT:thread-heap-delete-boundary]: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+    // SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
     unsafe { _mi_theap_free_typed(theap, acquire_heap_theaps_lock, acquire_tld_theaps_lock) }
 }
 
@@ -1238,7 +1238,7 @@ unsafe fn _mi_theap_free_typed(
     acquire_heap_theaps_lock: bool,
     acquire_tld_theaps_lock: bool,
 ) -> bool {
-    // SAFETY[AUDIT:thread-heap-delete-boundary]: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+    // SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
     unsafe {
         let theap = match theap.state() {
             ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => {
@@ -1281,7 +1281,7 @@ unsafe fn _mi_theap_free_typed(
 /// `theap` must point to a valid initialized thread heap with no concurrent
 /// users. `acquire_tld_theaps_lock` must reflect whether the caller already
 /// holds the TLD thread-heap list lock.
-// SAFETY[AUDIT:thread-heap-delete-boundary]: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+// SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_delete(
     theap: *mut mi_theap_t,
@@ -1290,13 +1290,13 @@ pub(crate) unsafe extern "C" fn _mi_theap_delete(
     let Some(theap) = ThreadHeapPtr::new(theap) else {
         return;
     };
-    // SAFETY[AUDIT:thread-heap-delete-boundary]: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+    // SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
     unsafe { _mi_theap_delete_typed(theap, acquire_tld_theaps_lock) };
 }
 
 #[inline]
 unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: bool) {
-    // SAFETY[AUDIT:thread-heap-delete-boundary]: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+    // SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
     unsafe {
         let theap_raw = match theap.state() {
             ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => {
@@ -1318,13 +1318,13 @@ unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: 
     }
 }
 
-// SAFETY[AUDIT:thread-heap-create-boundary]: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+// SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
 #[used]
 static MI_THEAP_CREATE_KEEP: unsafe extern "C" fn(
     *mut mi_heap_t,
     *mut mi_tld_t,
 ) -> *mut mi_theap_t = _mi_theap_create;
 
-// SAFETY[AUDIT:thread-heap-delete-boundary]: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+// SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
 #[used]
 static MI_THEAP_DELETE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, bool) = _mi_theap_delete;

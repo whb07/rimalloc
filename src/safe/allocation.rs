@@ -102,23 +102,23 @@ struct RawAllocation {
     layout: Layout,
 }
 
-// SAFETY[AUDIT:owned-allocation-traits-boundary]: `RawAllocation` has unique ownership of a
+// SAFETY: `RawAllocation` has unique ownership of a
 // block allocated by mimalloc. Mimalloc supports freeing allocations from a
 // different thread, and this private owner does not expose references into the
 // block.
 unsafe impl Send for RawAllocation {}
 
-// SAFETY[AUDIT:owned-allocation-traits-boundary]: shared references to `RawAllocation` expose
+// SAFETY: shared references to `RawAllocation` expose
 // only metadata and a raw pointer. Safe code cannot read or mutate allocation
 // contents through `&RawAllocation`.
 unsafe impl Sync for RawAllocation {}
 
-// SAFETY[AUDIT:owned-allocation-traits-boundary]: `Allocation` has unique ownership of a block
+// SAFETY: `Allocation` has unique ownership of a block
 // allocated by mimalloc. Mimalloc supports freeing allocations from a different
 // thread, and safe methods do not expose references into the block.
 unsafe impl Send for Allocation {}
 
-// SAFETY[AUDIT:owned-allocation-traits-boundary]: shared references to `Allocation` expose only
+// SAFETY: shared references to `Allocation` expose only
 // metadata and raw pointers. Safe code cannot read or mutate allocation
 // contents through `&Allocation`; any raw pointer dereference remains an unsafe
 // caller boundary.
@@ -303,7 +303,7 @@ impl Allocation {
     #[inline]
     #[must_use]
     pub fn as_uninit_slice(&self) -> &[MaybeUninit<u8>] {
-        // SAFETY[AUDIT:owned-allocation-slice-boundary]: `self.raw.ptr` is valid for
+        // SAFETY: `self.raw.ptr` is valid for
         // `self.len()` bytes when non-zero. `MaybeUninit<u8>` permits
         // uninitialized contents, and zero-sized allocations produce an empty
         // slice over the aligned sentinel.
@@ -319,7 +319,7 @@ impl Allocation {
     #[inline]
     #[must_use]
     pub fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<u8>] {
-        // SAFETY[AUDIT:owned-allocation-slice-boundary]: `&mut self` guarantees unique access
+        // SAFETY: `&mut self` guarantees unique access
         // to the allocation bytes. `MaybeUninit<u8>` permits writing
         // uninitialized storage, and zero-sized allocations return an empty
         // slice over the aligned sentinel.
@@ -417,7 +417,7 @@ impl RawAllocation {
             return Err(AllocError { layout });
         }
 
-        // SAFETY[AUDIT:owned-allocation-resize-boundary]: `layout` is non-zero here and the
+        // SAFETY: `layout` is non-zero here and the
         // returned pointer is checked for null before ownership is recorded.
         let ptr = unsafe {
             if zeroed {
@@ -458,7 +458,7 @@ impl RawAllocation {
 
         if new_size == 0 {
             if old_size != 0 {
-                // SAFETY[AUDIT:owned-allocation-resize-boundary]: `old` owns a live allocation
+                // SAFETY: `old` owns a live allocation
                 // from this allocator and `ManuallyDrop` prevents double-free.
                 unsafe { MiMalloc.dealloc(old.ptr.as_ptr(), old_layout) };
             }
@@ -492,7 +492,7 @@ impl RawAllocation {
                 });
             }
 
-            // SAFETY[AUDIT:owned-allocation-resize-boundary]: `old` owns `ptr` with
+            // SAFETY: `old` owns `ptr` with
             // `old_layout`; `realloc` preserves the original allocation on
             // failure and transfers ownership to the returned pointer on
             // success.
@@ -522,7 +522,7 @@ impl RawAllocation {
                 });
             }
         };
-        // SAFETY[AUDIT:owned-allocation-resize-boundary]: both allocations are live and
+        // SAFETY: both allocations are live and
         // non-overlapping; copy only the preserved prefix.
         unsafe {
             ptr::copy_nonoverlapping(
@@ -542,7 +542,7 @@ impl RawAllocation {
     fn zero_tail(&self, initialized_prefix: usize) {
         let len = self.layout.size();
         if initialized_prefix < len {
-            // SAFETY[AUDIT:owned-allocation-resize-boundary]: `initialized_prefix..len` is within
+            // SAFETY: `initialized_prefix..len` is within
             // the live allocation and is being initialized with zero bytes.
             unsafe {
                 self.ptr
@@ -557,7 +557,7 @@ impl RawAllocation {
 impl Drop for RawAllocation {
     fn drop(&mut self) {
         if self.layout.size() != 0 {
-            // SAFETY[AUDIT:owned-allocation-resize-boundary]: non-zero `Allocation` values are
+            // SAFETY: non-zero `Allocation` values are
             // constructed only from successful `MiMalloc` allocation calls and
             // are freed exactly once from `Drop`.
             unsafe { MiMalloc.dealloc(self.ptr.as_ptr(), self.layout) };
@@ -591,11 +591,11 @@ pub struct InitializedAllocation {
     raw: RawAllocation,
 }
 
-// SAFETY[AUDIT:owned-initialized-allocation-boundary]: this wrapper has the same unique ownership as
+// SAFETY: this wrapper has the same unique ownership as
 // `Allocation` and exposes ordinary byte slices only through Rust borrows.
 unsafe impl Send for InitializedAllocation {}
 
-// SAFETY[AUDIT:owned-initialized-allocation-boundary]: shared references expose immutable byte
+// SAFETY: shared references expose immutable byte
 // slices and allocation metadata only.
 unsafe impl Sync for InitializedAllocation {}
 
@@ -694,7 +694,7 @@ impl InitializedAllocation {
     #[inline]
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        // SAFETY[AUDIT:owned-initialized-allocation-boundary]: `InitializedAllocation` guarantees
+        // SAFETY: `InitializedAllocation` guarantees
         // all bytes in the stored layout are initialized for reads.
         unsafe { core::slice::from_raw_parts(self.as_ptr(), self.len()) }
     }
@@ -703,7 +703,7 @@ impl InitializedAllocation {
     #[inline]
     #[must_use]
     pub fn as_mut_bytes(&mut self) -> &mut [u8] {
-        // SAFETY[AUDIT:owned-initialized-allocation-boundary]: `&mut self` guarantees unique access
+        // SAFETY: `&mut self` guarantees unique access
         // to the allocation bytes.
         unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.len()) }
     }
@@ -807,7 +807,7 @@ impl fmt::Debug for InitializedAllocation {
 
 #[inline]
 pub(super) fn dangling_for(layout: Layout) -> NonNull<u8> {
-    // SAFETY[AUDIT:owned-allocation-traits-boundary]: `Layout` alignments are non-zero powers of
+    // SAFETY: `Layout` alignments are non-zero powers of
     // two, so the integer value is an aligned non-null sentinel for zero-sized
     // allocations and is never dereferenced by safe code.
     unsafe { NonNull::new_unchecked(layout.align() as *mut u8) }

@@ -33,13 +33,13 @@ use crate::types::{
     MI_MALLOC_VERSION, mi_error_fun, mi_option_desc_t, mi_option_init_t, mi_output_fun,
 };
 
-// SAFETY[AUDIT:options-assertion-boundary]: assertion failure shims read caller C strings, emit diagnostics, and abort.
+// SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
 unsafe extern "C" {
     #[link_name = "abort"]
     fn c_abort() -> !;
 }
 
-// SAFETY[AUDIT:options-libc-file-symbol-boundary]: C stdout/stderr symbol comparisons stay behind platform-gated libc file handles.
+// SAFETY: C stdout/stderr symbol comparisons stay behind platform-gated libc file handles.
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" {
     #[link_name = "stdout"]
@@ -263,7 +263,7 @@ static OPTION_INITS: [AtomicU8; MI_OPTION_COUNT] =
 
 struct LockedOptions(UnsafeCell<[mi_option_desc_t; MI_OPTION_COUNT]>);
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 unsafe impl Sync for LockedOptions {}
 
 static mut options_lock: mi_lock_t = mi_lock_s::new();
@@ -567,7 +567,7 @@ thread_local! {
     static recurse: Cell<bool> = const { Cell::new(false) };
 }
 
-// SAFETY[AUDIT:options-recurse-guard-boundary]: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
+// SAFETY: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
 #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 unsafe extern "C" {
     fn _mi_tls_recurse_get() -> c_int;
@@ -576,7 +576,7 @@ unsafe extern "C" {
 
 struct DelayedOutputBuffer(UnsafeCell<[u8; MI_MAX_DELAY_OUTPUT + 1]>);
 
-// SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+// SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
 unsafe impl Sync for DelayedOutputBuffer {}
 
 static out_buf: DelayedOutputBuffer =
@@ -592,7 +592,7 @@ static warning_count: AtomicUsize = AtomicUsize::new(0);
 
 struct LockedErrorHandler(UnsafeCell<ErrorCallback>);
 
-// SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
 unsafe impl Sync for LockedErrorHandler {}
 
 static mut mi_error_handler_lock: mi_lock_t = mi_lock_s::new();
@@ -602,7 +602,7 @@ static mi_error_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 
 #[inline]
 fn with_options_table<R>(f: impl FnOnce(&mut [mi_option_desc_t; MI_OPTION_COUNT]) -> R) -> R {
-    // SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+    // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
     unsafe {
         let lock = MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(options_lock)));
         let _lock = MiLockGuard::acquire(lock);
@@ -612,7 +612,7 @@ fn with_options_table<R>(f: impl FnOnce(&mut [mi_option_desc_t; MI_OPTION_COUNT]
 
 #[inline]
 fn error_handler_load() -> ErrorCallback {
-    // SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+    // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
     unsafe {
         let lock =
             MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
@@ -623,7 +623,7 @@ fn error_handler_load() -> ErrorCallback {
 
 #[inline]
 fn error_handler_store(fun: ErrorCallback) {
-    // SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+    // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
     unsafe {
         let lock =
             MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
@@ -709,7 +709,7 @@ fn mi_output_is_c_file(out: mi_output_fun) -> bool {
     let p = OutputCallback::new(Some(out)).storage_ptr();
     #[cfg(all(target_os = "linux", not(target_env = "musl")))]
     {
-        // SAFETY[AUDIT:options-libc-file-symbol-boundary]: C stdout/stderr symbol comparisons stay behind platform-gated libc file handles.
+        // SAFETY: C stdout/stderr symbol comparisons stay behind platform-gated libc file handles.
         p == unsafe { C_STDOUT } || p == unsafe { C_STDERR }
     }
     #[cfg(not(all(target_os = "linux", not(target_env = "musl"))))]
@@ -719,24 +719,24 @@ fn mi_output_is_c_file(out: mi_output_fun) -> bool {
     }
 }
 
-// SAFETY[AUDIT:options-stderr-output-boundary]: stderr output validates C strings before forwarding to the primitive backend.
+// SAFETY: stderr output validates C strings before forwarding to the primitive backend.
 unsafe extern "C" fn mi_out_stderr(msg: *const c_char, arg: *mut c_void) {
     let _ = arg;
-    // SAFETY[AUDIT:options-stderr-output-boundary]: stderr output validates C strings before forwarding to the primitive backend.
+    // SAFETY: stderr output validates C strings before forwarding to the primitive backend.
     if !msg.is_null() && unsafe { *msg } != 0 {
-        // SAFETY[AUDIT:options-stderr-output-boundary]: stderr output validates C strings before forwarding to the primitive backend.
+        // SAFETY: stderr output validates C strings before forwarding to the primitive backend.
         unsafe { _mi_prim_out_stderr(msg) };
     }
 }
 
-// SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+// SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
 unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
     let _ = arg;
     if msg.is_null() || out_len.load(Ordering::Acquire) >= MI_MAX_DELAY_OUTPUT {
         return;
     }
 
-    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     let msg_bytes = unsafe { CStr::from_ptr(msg).to_bytes() };
     let mut n = msg_bytes.len();
     if n == 0 || n >= MI_MAX_DELAY_OUTPUT {
@@ -745,25 +745,25 @@ unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
 
     // Manual lock handling keeps this translated callback buffer path close to
     // upstream and makes the callback-holding lifetime explicit.
-    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
     let start = out_len.fetch_add(n, Ordering::AcqRel);
     if start < MI_MAX_DELAY_OUTPUT {
         if start + n >= MI_MAX_DELAY_OUTPUT {
             n = MI_MAX_DELAY_OUTPUT - start - 1;
         }
-        // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+        // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
         let buf = unsafe { &mut *out_buf.0.get() };
         buf[start..start + n].copy_from_slice(&msg_bytes[..n]);
     }
-    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
 }
 
 fn mi_out_buf_flush(out: OutputCallback, no_more_buf: bool, arg: OutputCallbackArg) {
     // Intentionally holds the output buffer lock while invoking `out`, matching
     // the existing delayed-output flush semantics.
-    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
     let mut count = out_len.fetch_add(
         if no_more_buf { MI_MAX_DELAY_OUTPUT } else { 1 },
@@ -772,23 +772,23 @@ fn mi_out_buf_flush(out: OutputCallback, no_more_buf: bool, arg: OutputCallbackA
     if count > MI_MAX_DELAY_OUTPUT {
         count = MI_MAX_DELAY_OUTPUT;
     }
-    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     let buf = unsafe { &mut *out_buf.0.get() };
     buf[count] = 0;
-    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { out.invoke(buf.as_ptr().cast::<c_char>(), arg) };
     if !no_more_buf {
         buf[count] = b'\n';
     }
-    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
 }
 
-// SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+// SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
 unsafe extern "C" fn mi_out_buf_stderr(msg: *const c_char, arg: *mut c_void) {
-    // SAFETY[AUDIT:options-stderr-output-boundary]: stderr output validates C strings before forwarding to the primitive backend.
+    // SAFETY: stderr output validates C strings before forwarding to the primitive backend.
     unsafe { mi_out_stderr(msg, arg) };
-    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_out_buf(msg, arg) };
 }
 
@@ -797,7 +797,7 @@ fn mi_out_get_default(parg: Option<&mut OutputCallbackArg>) -> OutputCallback {
         *arg = OutputCallbackArg::from_raw(mi_out_arg.load(Ordering::Acquire));
     }
     let callback =
-        // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
+        // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
         unsafe { OutputCallback::from_storage_ptr(mi_out_default.load(Ordering::Acquire)) };
     OutputCallback::new(callback.raw().or(Some(mi_out_buf)))
 }
@@ -821,7 +821,7 @@ fn mi_add_stderr_output() {
 #[inline(never)]
 fn mi_recurse_enter_prim() -> bool {
     #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
-    // SAFETY[AUDIT:options-recurse-guard-boundary]: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
+    // SAFETY: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
     unsafe {
         if _mi_tls_recurse_get() != 0 {
             false
@@ -860,7 +860,7 @@ fn mi_recurse_enter() -> bool {
 #[inline(never)]
 fn mi_recurse_exit_prim() {
     #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
-    // SAFETY[AUDIT:options-recurse-guard-boundary]: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
+    // SAFETY: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
     unsafe {
         _mi_tls_recurse_set(0);
     }
@@ -888,7 +888,7 @@ fn mi_recurse_exit() {
 ///
 /// `prefix` and `message`, when non-null, must point to valid nul-terminated
 /// C strings. If `out` is supplied, it must be callable with `arg`.
-// SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
+// SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_fputs(
     out: Option<mi_output_fun>,
@@ -907,20 +907,20 @@ pub(crate) unsafe extern "C" fn _mi_fputs(
         let mut default_arg = OutputCallbackArg::null();
         let default_out = mi_out_get_default(Some(&mut default_arg));
         if !prefix.is_null() {
-            // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
+            // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
             unsafe { default_out.invoke(prefix, default_arg) };
         }
-        // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
+        // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
         unsafe { default_out.invoke(message, default_arg) };
         mi_recurse_exit();
     } else if let Some(out) = out {
         let out = OutputCallback::new(Some(out));
         let arg = OutputCallbackArg::from_raw(arg);
         if !prefix.is_null() {
-            // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
+            // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
             unsafe { out.invoke(prefix, arg) };
         }
-        // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
+        // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
         unsafe { out.invoke(message, arg) };
     }
 }
@@ -928,7 +928,7 @@ pub(crate) unsafe extern "C" fn _mi_fputs(
 pub(crate) fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, args: fmt::Arguments<'_>) {
     let mut text = StackMessage::new();
     if fmt::write(&mut text, args).is_ok() {
-        // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
+        // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
         unsafe { _mi_fputs(out, arg, ptr::null(), text.as_c_ptr()) };
     }
 }
@@ -985,7 +985,7 @@ fn mi_vfprintf(
     if !wrote {
         return;
     }
-    // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
+    // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
     unsafe { _mi_fputs(out, arg, prefix, text.as_c_ptr()) };
 }
 
@@ -996,12 +996,12 @@ fn mi_vfprintf_thread(
     args: fmt::Arguments<'_>,
 ) {
     if !prefix.is_null() {
-        // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
+        // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
         let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
         if prefix_len <= 32 && !_mi_is_main_thread() {
             let mut tprefix = StackMessage::new();
             let prefix_bytes =
-                // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
+                // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
                 unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
             tprefix.write_bytes(prefix_bytes);
             let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
@@ -1022,21 +1022,21 @@ fn mi_vfputs_thread(
         return;
     }
     if !prefix.is_null() {
-        // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
+        // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
         let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
         if prefix_len <= 32 && !_mi_is_main_thread() {
             let mut tprefix = StackMessage::new();
             let prefix_bytes =
-                // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
+                // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
                 unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
             tprefix.write_bytes(prefix_bytes);
             let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
-            // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
+            // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
             unsafe { _mi_fputs(out, arg, tprefix.as_c_ptr(), message) };
             return;
         }
     }
-    // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
+    // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
     unsafe { _mi_fputs(out, arg, prefix, message) };
 }
 
@@ -1126,7 +1126,7 @@ pub(crate) fn _mi_warning_message_fmt(args: fmt::Arguments<'_>) {
 
 /// # Safety
 /// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
-// SAFETY[AUDIT:options-warning-error-callback-boundary]: warning and error display paths bound counters and route through C-compatible message output.
+// SAFETY: warning and error display paths bound counters and route through C-compatible message output.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
@@ -1149,7 +1149,7 @@ pub(crate) fn _mi_error_message_fmt(err: Errno, args: fmt::Arguments<'_>) {
     let handler = error_handler_load();
     let arg = ErrorCallbackArg::from_raw(mi_error_arg.load(Ordering::Acquire));
     if handler.is_some() {
-        // SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+        // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
         unsafe { handler.invoke(err.get(), arg) };
     } else {
         mi_error_default(err);
@@ -1158,7 +1158,7 @@ pub(crate) fn _mi_error_message_fmt(err: Errno, args: fmt::Arguments<'_>) {
 
 /// # Safety
 /// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
-// SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char) {
@@ -1167,7 +1167,7 @@ pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char
     let handler = error_handler_load();
     let arg = ErrorCallbackArg::from_raw(mi_error_arg.load(Ordering::Acquire));
     if handler.is_some() {
-        // SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+        // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
         unsafe { handler.invoke(err.get(), arg) };
     } else {
         mi_error_default(err);
@@ -1177,12 +1177,12 @@ pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char
 #[used]
 static MI_WARNING_MESSAGE_FMT_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_warning_message_fmt;
 #[used]
-// SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
 static MI_WARNING_MESSAGE_KEEP: unsafe extern "C" fn(*const c_char) = _mi_warning_message;
 #[used]
 static MI_ERROR_MESSAGE_FMT_KEEP: for<'a> fn(Errno, fmt::Arguments<'a>) = _mi_error_message_fmt;
 #[used]
-// SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
 static MI_ERROR_MESSAGE_KEEP: unsafe extern "C" fn(c_int, *const c_char) = _mi_error_message;
 
 #[inline]
@@ -1204,7 +1204,7 @@ fn get_env_value_stack<'a>(suffix: &[u8], value_buf: &'a mut [c_char; 65]) -> Op
     if !build_mimalloc_env_name(&mut env_name, suffix) {
         return None;
     }
-    // SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+    // SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
     if !unsafe {
         crate::libc::_mi_getenv(
             env_name.as_ptr().cast(),
@@ -1214,7 +1214,7 @@ fn get_env_value_stack<'a>(suffix: &[u8], value_buf: &'a mut [c_char; 65]) -> Op
     } {
         return None;
     }
-    // SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+    // SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
     let value = unsafe { CStr::from_ptr(value_buf.as_ptr()) };
     value.to_str().ok()
 }
@@ -1327,7 +1327,7 @@ fn parse_option_value(raw: &str, size_in_kib: bool) -> Option<c_long> {
     }
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_version() -> i32 {
     MI_MALLOC_VERSION
@@ -1335,12 +1335,12 @@ pub extern "C" fn mi_version() -> i32 {
 
 pub(crate) fn mi_error_default(err: Errno) {
     if err == Errno::EFAULT && (MI_DEBUG > 0 || cfg!(feature = "secure")) {
-        // SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+        // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
         unsafe { c_abort() };
     }
 }
 
-// SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
+// SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
     let callback = OutputCallback::new(Some(out.unwrap_or(mi_out_stderr)));
@@ -1352,7 +1352,7 @@ pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_voi
     }
 }
 
-// SAFETY[AUDIT:options-allocation-failure-callback-boundary]: allocation and error failures invoke registered callbacks or the default abort policy.
+// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void) {
     let callback = ErrorCallback::new(fun);
@@ -1362,14 +1362,14 @@ pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void)
 }
 
 fn mi_option_init(desc: &mut mi_option_desc_t) {
-    // SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+    // SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
     let name = unsafe { CStr::from_ptr(desc.name) };
     let name_str = name.to_str().unwrap_or("");
     let mut value_buf = [0 as c_char; 65];
     let mut found = get_env_value_stack(name.to_bytes(), &mut value_buf);
 
     if found.is_none() && !desc.legacy_name.is_null() {
-        // SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+        // SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
         let legacy = unsafe { CStr::from_ptr(desc.legacy_name) };
         let legacy_str = legacy.to_str().unwrap_or("");
         found = get_env_value_stack(legacy.to_bytes(), &mut value_buf);
@@ -1435,7 +1435,7 @@ pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
     mi_option_get_fast_impl(option)
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
     let idx = option.as_usize();
@@ -1466,7 +1466,7 @@ pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
     option_value_load(idx)
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get_clamp(option: mi_option_t, min: c_long, max: c_long) -> c_long {
     let x = mi_option_get(option);
@@ -1479,7 +1479,7 @@ pub extern "C" fn mi_option_get_clamp(option: mi_option_t, min: c_long, max: c_l
     }
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get_size(option: mi_option_t) -> usize {
     let x = mi_option_get(option);
@@ -1495,7 +1495,7 @@ pub extern "C" fn mi_option_get_size(option: mi_option_t) -> usize {
     size
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
     let idx = option.as_usize();
@@ -1530,7 +1530,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
     }
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
     let idx = option.as_usize();
@@ -1547,37 +1547,37 @@ pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
     });
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_is_enabled(option: mi_option_t) -> bool {
     mi_option_get(option) != 0
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_enabled(option: mi_option_t, enable: bool) {
     mi_option_set(option, if enable { 1 } else { 0 });
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_enabled_default(option: mi_option_t, enable: bool) {
     mi_option_set_default(option, if enable { 1 } else { 0 });
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_enable(option: mi_option_t) {
     mi_option_set_enabled(option, true);
 }
 
-// SAFETY[AUDIT:options-storage-lock-boundary]: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_disable(option: mi_option_t) {
     mi_option_set_enabled(option, false);
 }
 
-// SAFETY[AUDIT:options-print-output-boundary]: option printing formats static option names and values through the registered output path.
+// SAFETY: option printing formats static option names and values through the registered output path.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     let (out, arg) = if let Some(out) = out {
@@ -1605,7 +1605,7 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
         let value = mi_option_get(option);
         let desc = with_options_table(|table| table[i]);
         // SAFETY: option names are static ASCII strings from the translated option table.
-        // SAFETY[AUDIT:options-print-output-boundary]: option printing formats static option names and values through the registered output path.
+        // SAFETY: option printing formats static option names and values through the registered output path.
         let name = unsafe { core::str::from_utf8_unchecked(CStr::from_ptr(desc.name).to_bytes()) };
         _mi_fprintf(
             Some(out),
@@ -1638,7 +1638,7 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
     }
 }
 
-// SAFETY[AUDIT:options-print-output-boundary]: option printing formats static option names and values through the registered output path.
+// SAFETY: option printing formats static option names and values through the registered output path.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_options_print() {
     mi_options_print_out(None, ptr::null_mut());
@@ -1648,7 +1648,7 @@ pub extern "C" fn mi_options_print() {
 ///
 /// `assertion`, `fname`, and `func`, when non-null, must point to valid
 /// nul-terminated C strings. This function aborts and does not return.
-// SAFETY[AUDIT:options-assertion-boundary]: assertion failure shims read caller C strings, emit diagnostics, and abort.
+// SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
 #[cold]
 pub unsafe extern "C" fn _mi_assert_fail(
     assertion: *const c_char,
@@ -1659,24 +1659,24 @@ pub unsafe extern "C" fn _mi_assert_fail(
     let assertion = if assertion.is_null() {
         ""
     } else {
-        // SAFETY[AUDIT:options-assertion-boundary]: assertion failure shims read caller C strings, emit diagnostics, and abort.
+        // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
         unsafe { CStr::from_ptr(assertion).to_str().unwrap_or("") }
     };
     let fname = if fname.is_null() {
         ""
     } else {
-        // SAFETY[AUDIT:options-assertion-boundary]: assertion failure shims read caller C strings, emit diagnostics, and abort.
+        // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
         unsafe { CStr::from_ptr(fname).to_str().unwrap_or("") }
     };
     let func = if func.is_null() {
         ""
     } else {
-        // SAFETY[AUDIT:options-assertion-boundary]: assertion failure shims read caller C strings, emit diagnostics, and abort.
+        // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
         unsafe { CStr::from_ptr(func).to_str().unwrap_or("") }
     };
-    // SAFETY[AUDIT:options-assertion-boundary]: assertion failure shims read caller C strings, emit diagnostics, and abort.
+    // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
     unsafe {
-        // SAFETY[AUDIT:options-assertion-boundary]: assertion failure shims read caller C strings, emit diagnostics, and abort.
+        // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
         unsafe extern "C" {
             fn dprintf(
                 fd: core::ffi::c_int,
@@ -1713,7 +1713,7 @@ pub unsafe extern "C" fn _mi_assert_fail(
             fname, line, func, assertion
         ),
     );
-    // SAFETY[AUDIT:options-assertion-boundary]: assertion failure shims read caller C strings, emit diagnostics, and abort.
+    // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
     unsafe { c_abort() };
 }
 
@@ -1763,7 +1763,7 @@ mod tests {
             "allocator::options::tests::mimalloc_assert_fail_aborts_instead_of_unwinding";
 
         if std::env::var_os(CHILD_ENV).is_some() {
-            // SAFETY[AUDIT:options-assertion-boundary]: assertion failure shims read caller C strings, emit diagnostics, and abort.
+            // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
             unsafe {
                 _mi_assert_fail(
                     c"false".as_ptr(),

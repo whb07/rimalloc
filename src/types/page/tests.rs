@@ -125,14 +125,14 @@ fn page_flags_new_rejects_bits_outside_flag_mask() {
 #[test]
 fn registered_page_range_preserves_registration_domain() {
     let mut raw = MaybeUninit::<crate::types::mi_page_t>::zeroed();
-    // SAFETY[AUDIT:typed-page-test-fixtures]: This fixture uses stack-local
+    // SAFETY: This fixture uses stack-local
     // page metadata only to exercise `RegisteredPageRange` witness accessors.
     let page = unsafe { PagePtr::new_unchecked(raw.as_mut_ptr()) };
     let index = PageMapIndex::new(7).expect("valid page-map index");
     let sub_index = PageMapSubIndex::new(3).expect("valid page-map sub-index");
     let slice_count = SliceCount::from_usize(5).expect("valid slice count");
 
-    // SAFETY[AUDIT:typed-page-test-fixtures]: The synthetic range is never
+    // SAFETY: The synthetic range is never
     // published to the allocator page map; the test only verifies stored
     // witness fields round-trip unchanged.
     let range = unsafe { RegisteredPageRange::new_unchecked(page, index, sub_index, slice_count) };

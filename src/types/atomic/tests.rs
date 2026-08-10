@@ -34,7 +34,7 @@ fn atomic_usize_field_updates_stack_atomic_word() {
     let field =
         AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
+    // SAFETY: `field` points at the
     // stack-local `AtomicUsize`; all accesses in this fixture use atomic
     // operations and the storage outlives the wrapper calls.
     unsafe {
@@ -63,7 +63,7 @@ fn atomic_usize_field_weak_cas_updates_expected_on_failure() {
         AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
 
     let mut expected = 11;
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` aliases only the
+    // SAFETY: `field` aliases only the
     // stack-local `AtomicUsize` fixture and is exercised through atomic CAS
     // operations for the lifetime of this test.
     unsafe {
@@ -88,7 +88,7 @@ fn atomic_i64_field_updates_expected_on_cas_failure() {
     let atomic = AtomicI64::new(-4);
     let field = AtomicI64Field::from_raw((&atomic as *const AtomicI64).cast_mut().cast::<i64>());
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
+    // SAFETY: `field` points at the
     // stack-local `AtomicI64`; the fixture uses atomic operations only and the
     // storage remains live throughout the wrapper calls.
     unsafe {
@@ -116,7 +116,7 @@ fn atomic_ptr_field_round_trips_pointer_values() {
         AtomicPtrField::<c_void>::from_raw((&atomic as *const AtomicPtr<c_void>).cast_mut().cast())
     };
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: each `field()` wrapper points
+    // SAFETY: each `field()` wrapper points
     // at the stack-local `AtomicPtr`; the raw values are stack-local pointer
     // witnesses and all accesses use atomic pointer operations.
     unsafe {
@@ -139,7 +139,7 @@ fn atomic_arena_page_loads_and_stores_page_table_pointer() {
     let atomic = AtomicPtr::new(ptr::null_mut::<c_void>());
     let field = AtomicArenaPage::from_cell(&atomic);
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
+    // SAFETY: `field` points at the
     // stack-local `AtomicPtr`; `pages_ptr` is an opaque stack-local arena-page
     // table witness used only for load/store round trips.
     unsafe {
@@ -159,7 +159,7 @@ fn atomic_page_thread_id_updates_owner_and_flags() {
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
+    // SAFETY: `field` points at the
     // stack-local owner/flags word and the fixture exercises only atomic
     // updates through `AtomicPageThreadId`.
     unsafe {
@@ -200,7 +200,7 @@ fn atomic_thread_free_claims_and_releases_ownership_bit() {
     ));
 
     assert!(!field.load_relaxed().is_owned());
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
+    // SAFETY: `field` points at the
     // stack-local thread-free word and the fixture uses the atomic ownership
     // protocol helpers only.
     unsafe {
@@ -220,7 +220,7 @@ fn atomic_thread_free_claims_and_releases_ownership_bit() {
 #[test]
 fn atomic_thread_free_take_head_preserves_owner_bit() {
     let mut block = crate::types::mi_block_t::default();
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `block` is stack-local block
+    // SAFETY: `block` is stack-local block
     // metadata used only as an opaque remote-free-list head witness.
     let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
     let word = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
@@ -229,7 +229,7 @@ fn atomic_thread_free_take_head_preserves_owner_bit() {
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at the
+    // SAFETY: `field` points at the
     // stack-local thread-free word initialized with the stack-local block head.
     let list = unsafe { field.detach_head() };
     assert_eq!(list.head().map(BlockPtr::as_ptr), Some(head.as_ptr()));
@@ -242,19 +242,19 @@ fn atomic_thread_free_take_head_preserves_owner_bit() {
 #[test]
 fn remote_push_publishes_head_and_atomic_detach_owns_it() {
     let mut block = mi_block_t::default();
-    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the stack-local block
+    // SAFETY: the stack-local block
     // remains live throughout publication and detachment.
     let block = unsafe { BlockPtr::new_unchecked(ptr::addr_of_mut!(block)) };
     let initial = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned);
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let raw_page = page.as_mut_ptr();
-    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the page storage remains
+    // SAFETY: the page storage remains
     // live and its atomic word is initialized before typed access.
     unsafe { ptr::addr_of_mut!((*raw_page).xthread_free).write(initial.raw()) };
-    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: raw_page is non-null,
+    // SAFETY: raw_page is non-null,
     // aligned, initialized stack-local metadata for this test.
     let page = unsafe { PagePtr::new_unchecked(raw_page) };
-    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the initialized page owns
+    // SAFETY: the initialized page owns
     // the xthread_free field for the fixture lifetime.
     let field = unsafe { page.thread_free_cell() };
 
@@ -276,7 +276,7 @@ fn remote_push_publishes_head_and_atomic_detach_owns_it() {
     };
     published.leave_published();
 
-    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the stack-local atomic word
+    // SAFETY: the stack-local atomic word
     // contains only the stack-local block head and remains live for the detach.
     let detached = unsafe { field.detach_head() };
     assert_eq!(detached.head().map(BlockPtr::as_ptr), Some(block.as_ptr()));
@@ -286,20 +286,20 @@ fn remote_push_publishes_head_and_atomic_detach_owns_it() {
 #[test]
 fn remote_push_retry_returns_observation_without_consuming_block() {
     let mut raw_block = mi_block_t::default();
-    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: stack-local block storage
+    // SAFETY: stack-local block storage
     // remains live throughout the failed publication attempt.
     let block = unsafe { BlockPtr::new_unchecked(ptr::addr_of_mut!(raw_block)) };
     let live = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned);
     let stale = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Unowned);
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let raw_page = page.as_mut_ptr();
-    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: initialize the live
+    // SAFETY: initialize the live
     // stack-local atomic word before creating typed page access.
     unsafe { ptr::addr_of_mut!((*raw_page).xthread_free).write(live.raw()) };
-    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: raw_page is live, non-null,
+    // SAFETY: raw_page is live, non-null,
     // aligned stack-local metadata for the duration of this test.
     let page = unsafe { PagePtr::new_unchecked(raw_page) };
-    // SAFETY[AUDIT:typed-atomic-remote-push-fixture]: the initialized page owns
+    // SAFETY: the initialized page owns
     // its xthread_free field for the fixture lifetime.
     let field = unsafe { page.thread_free_cell() };
 
@@ -315,7 +315,7 @@ fn remote_push_retry_returns_observation_without_consuming_block() {
 fn empty_remote_free_list_collects_through_detached_atomic_path() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut local = mi_block_t::default();
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: this fixture initializes only
+    // SAFETY: this fixture initializes only
     // the stack-local page fields required by the detached thread-free
     // collection path, then consumes them before the locals go out of scope.
     unsafe {
@@ -345,7 +345,7 @@ fn atomic_abandoned_count_uses_relaxed_cell_operations() {
     let atomic = AtomicUsize::new(2);
     let count = AtomicAbandonedCount::from_cell(&atomic);
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `count` references the
+    // SAFETY: `count` references the
     // stack-local abandoned-count atomic and is accessed only through relaxed
     // atomic operations in this fixture.
     unsafe {
@@ -364,7 +364,7 @@ fn atomic_thread_heap_refcount_uses_acq_rel_operations() {
         (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
     ));
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `refcount` points at the
+    // SAFETY: `refcount` points at the
     // stack-local thread-heap reference-count word and uses only atomic
     // operations while the storage is live.
     unsafe {
@@ -382,7 +382,7 @@ fn atomic_guard_acquires_once_and_releases_on_drop() {
     let field =
         AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `field` points at a stack-local
+    // SAFETY: `field` points at a stack-local
     // guard word and the guard owns the successful acquire until it is dropped.
     unsafe {
         let guard = AtomicGuard::try_acquire(field).expect("first acquire succeeds");
@@ -400,7 +400,7 @@ fn once_guard_enters_once_and_releases_on_drop() {
     let mut once = crate::atomic::mi_atomic_once_t::new();
     let state = OnceStatePtr::from_raw(ptr::addr_of_mut!(once).cast::<usize>());
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `state` points at the
+    // SAFETY: `state` points at the
     // stack-local once cell and each successful guard releases it before the
     // fixture ends.
     unsafe {
@@ -417,12 +417,12 @@ fn once_guard_enters_once_and_releases_on_drop() {
 #[test]
 fn mi_lock_guard_acquires_and_releases_on_drop() {
     let mut lock = crate::atomic::mi_lock_t::new();
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: `lock` is stack-local allocator
+    // SAFETY: `lock` is stack-local allocator
     // lock storage and the non-null pointer is used only while it is live.
     let lock_ptr =
         MiLockPtr::from_nonnull(unsafe { NonNull::new_unchecked(ptr::addr_of_mut!(lock)) });
 
-    // SAFETY[AUDIT:typed-atomic-test-fixtures]: the guard acquires the
+    // SAFETY: the guard acquires the
     // stack-local lock, releases it on drop, and the final raw acquire is
     // released before the fixture exits.
     unsafe {

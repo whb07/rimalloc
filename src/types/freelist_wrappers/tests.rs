@@ -7,7 +7,7 @@ use core::{mem::MaybeUninit, ptr};
 fn encoded_pointer_round_trips_block_and_null() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
-    // SAFETY[AUDIT:typed-freelist-wrapper-test-fixtures]: this builds
+    // SAFETY: this builds
     // stack-local page/block metadata used only for encoded pointer round-trip
     // assertions; the records are not registered with allocator globals.
     unsafe {
@@ -37,7 +37,7 @@ fn encoded_pointer_round_trips_block_and_null() {
 #[test]
 fn block_link_read_from_raw_distinguishes_guarded_and_free_list_words() {
     let mut block = mi_block_t::default();
-    // SAFETY[AUDIT:typed-freelist-wrapper-test-fixtures]: the test mutates a
+    // SAFETY: the test mutates a
     // stack-local block word through typed link wrappers and reads it back
     // before the local block leaves scope.
     unsafe {
@@ -60,7 +60,7 @@ fn block_link_read_from_raw_distinguishes_guarded_and_free_list_words() {
 #[test]
 fn block_tag_explicit_aligned_write_is_not_guarded() {
     let mut block = mi_block_t::default();
-    // SAFETY[AUDIT:typed-freelist-wrapper-test-fixtures]: the raw block pointer
+    // SAFETY: the raw block pointer
     // is derived from a stack-local block and is used only to exercise guarded
     // versus aligned tag writes.
     unsafe {
@@ -77,7 +77,7 @@ fn block_tag_explicit_aligned_write_is_not_guarded() {
 fn available_pop_consumes_available_page_witness() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
-    // SAFETY[AUDIT:typed-freelist-wrapper-test-fixtures]: the fixture writes the
+    // SAFETY: the fixture writes the
     // minimal stack-local page fields needed to model one available free block.
     unsafe {
         let raw_page = page.as_mut_ptr();
@@ -107,7 +107,7 @@ fn available_pop_consumes_available_page_witness() {
 fn local_push_requires_free_block_witness() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
-    // SAFETY[AUDIT:typed-freelist-wrapper-test-fixtures]: the fixture constructs
+    // SAFETY: the fixture constructs
     // local page and free-block witnesses from stack-local records for this
     // assertion only.
     unsafe {

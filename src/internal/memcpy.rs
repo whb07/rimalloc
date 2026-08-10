@@ -18,7 +18,7 @@ use core::arch::x86_64::*;
 /// - AVX2 must be supported if the AVX2 path is taken
 #[inline(always)]
 pub unsafe fn optimized_memcpy_unified(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         // Size-class dispatch into narrow leaves so each band only pays its own
         // compares and does not jump into a mega-medium dispatcher.
@@ -64,7 +64,7 @@ pub unsafe fn optimized_memcpy_unified(dest: *mut u8, src: *const u8, n: usize) 
 
 #[inline(always)]
 unsafe fn optimized_memcpy_sse_tiny(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         // n < 32 guaranteed by dispatch
         // SAFETY: Unaligned loads/stores are valid for any alignment; caller
@@ -117,7 +117,7 @@ unsafe fn optimized_memcpy_sse_tiny(dest: *mut u8, src: *const u8, n: usize) -> 
 /// AVX2 overlapping copy for `32 <= n < 128` (glibc-style VEC=32 classes).
 #[target_feature(enable = "avx2")]
 unsafe fn optimized_memcpy_avx2_small(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         // SAFETY: Unaligned AVX loads/stores are valid for any alignment; caller
         // guarantees `src`/`dest` are valid for `n` bytes and non-overlapping.
@@ -155,7 +155,7 @@ unsafe fn optimized_memcpy_avx2_small(dest: *mut u8, src: *const u8, n: usize) -
 
 #[target_feature(enable = "avx2")]
 unsafe fn copy_128_avx2(d: *mut u8, s: *const u8) {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         let v0 = _mm256_loadu_si256(s as *const __m256i);
         let v1 = _mm256_loadu_si256(s.add(32) as *const __m256i);
@@ -170,7 +170,7 @@ unsafe fn copy_128_avx2(d: *mut u8, s: *const u8) {
 
 #[target_feature(enable = "avx2")]
 unsafe fn copy_64_avx2(d: *mut u8, s: *const u8) {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         let v0 = _mm256_loadu_si256(s as *const __m256i);
         let v1 = _mm256_loadu_si256(s.add(32) as *const __m256i);
@@ -181,7 +181,7 @@ unsafe fn copy_64_avx2(d: *mut u8, s: *const u8) {
 
 #[target_feature(enable = "avx2")]
 unsafe fn copy_256_avx2(d: *mut u8, s: *const u8) {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         let v0 = _mm256_loadu_si256(s as *const __m256i);
         let v1 = _mm256_loadu_si256(s.add(32) as *const __m256i);
@@ -208,7 +208,7 @@ unsafe fn copy_256_avx2(d: *mut u8, s: *const u8) {
 /// have already copied at least 32 bytes immediately before `d`/`s`.
 #[target_feature(enable = "avx2")]
 unsafe fn copy_remainder_avx2(d: *mut u8, s: *const u8, rem: usize) {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         if rem == 0 {
             return;
@@ -284,7 +284,7 @@ const NT_THRESHOLD: usize = 24 * 1024 * 1024;
 /// Branch-free 128B AVX2 leaf (4×YMM load-all / store-all).
 #[target_feature(enable = "avx2")]
 unsafe fn optimized_memcpy_avx2_exact_128(dest: *mut u8, src: *const u8) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         let a0 = _mm256_loadu_si256(src as *const __m256i);
         let a1 = _mm256_loadu_si256(src.add(32) as *const __m256i);
@@ -303,7 +303,7 @@ unsafe fn optimized_memcpy_avx2_exact_128(dest: *mut u8, src: *const u8) -> *mut
 /// take the same fast path through `vmovups`.
 #[target_feature(enable = "avx2")]
 unsafe fn optimized_memcpy_avx2_exact_256(dest: *mut u8, src: *const u8) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         let a0 = _mm256_loadu_si256(src as *const __m256i);
         let a1 = _mm256_loadu_si256(src.add(32) as *const __m256i);
@@ -328,7 +328,7 @@ unsafe fn optimized_memcpy_avx2_exact_256(dest: *mut u8, src: *const u8) -> *mut
 /// Branch-free 512B AVX2 leaf: two sequential 256B blocks (register-reuse).
 #[target_feature(enable = "avx2")]
 unsafe fn optimized_memcpy_avx2_exact_512(dest: *mut u8, src: *const u8) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         // Inline both blocks (no helper calls) — same shape as exact_256, twice.
         let a0 = _mm256_loadu_si256(src as *const __m256i);
@@ -371,7 +371,7 @@ unsafe fn optimized_memcpy_avx2_exact_512(dest: *mut u8, src: *const u8) -> *mut
 /// Branch-free 1024B AVX2 leaf: four sequential 256B blocks.
 #[target_feature(enable = "avx2")]
 unsafe fn optimized_memcpy_avx2_exact_1024(dest: *mut u8, src: *const u8) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         copy_256_avx2(dest, src);
         copy_256_avx2(dest.add(256), src.add(256));
@@ -388,7 +388,7 @@ unsafe fn optimized_memcpy_avx2_overlap_129_255(
     src: *const u8,
     n: usize,
 ) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         // SAFETY: Unaligned AVX loads/stores are valid for any alignment; caller
         // guarantees `src`/`dest` are valid for `n` bytes and non-overlapping.
@@ -433,7 +433,7 @@ unsafe fn optimized_memcpy_avx2_overlap_129_255(
 /// `257 <= n <= 511`: one 256B block + sized remainder; upper band overlaps.
 #[target_feature(enable = "avx2")]
 unsafe fn optimized_memcpy_avx2_blocks_257_511(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         // SAFETY: caller guarantees valid non-overlapping `n` bytes; remainder may
         // overlap into the 256B head for rem < 32.
@@ -457,7 +457,7 @@ unsafe fn optimized_memcpy_avx2_blocks_513_1023(
     src: *const u8,
     n: usize,
 ) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         // SAFETY: caller guarantees valid non-overlapping `n` bytes.
         copy_256_avx2(dest, src);
@@ -477,7 +477,7 @@ unsafe fn optimized_memcpy_avx2_blocks_513_1023(
 /// `n >= 1025`, below NT: dest-aligned main loop + sized remainder.
 #[target_feature(enable = "avx2")]
 unsafe fn optimized_memcpy_avx2_large(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         // SAFETY: Unaligned AVX loads/stores are valid for any alignment; caller
         // guarantees `src`/`dest` are valid for `n` bytes and non-overlapping.
@@ -581,7 +581,7 @@ unsafe fn optimized_memcpy_avx2_large(dest: *mut u8, src: *const u8, n: usize) -
 
 #[target_feature(enable = "avx2")]
 unsafe fn optimized_memcpy_avx2_nt(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    // SAFETY[AUDIT:internal-memcpy-simd-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe {
         let mut d = dest;
         let mut s = src;
@@ -663,7 +663,7 @@ use core::ffi::c_void;
 /// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges.
 #[inline]
 pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void {
-    // SAFETY[AUDIT:internal-cpu-memory-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe { optimized_memcpy_unified(dst.cast::<u8>(), src.cast::<u8>(), n).cast::<c_void>() }
 }
 
@@ -671,7 +671,7 @@ pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) -> *mut
 /// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges.
 #[inline]
 pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void {
-    // SAFETY[AUDIT:internal-cpu-memory-boundary]: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
+    // SAFETY: callers provide valid non-overlapping ranges; unaligned SIMD accesses stay within those ranges.
     unsafe { optimized_memcpy_unified(dst.cast::<u8>(), src.cast::<u8>(), n).cast::<c_void>() }
 }
 
@@ -689,7 +689,7 @@ mod tests {
 
         for n in 0..=1024 {
             dst.fill(0);
-            // SAFETY[AUDIT:internal-cpu-memory-boundary]: the arrays provide disjoint valid ranges for every tested length.
+            // SAFETY: the arrays provide disjoint valid ranges for every tested length.
             unsafe {
                 optimized_memcpy_unified(dst.as_mut_ptr(), src.as_ptr(), n);
             }
@@ -714,7 +714,7 @@ mod tests {
                     2048, 4096, 8192,
                 ] {
                     dst.fill(0);
-                    // SAFETY[AUDIT:internal-cpu-memory-boundary]: offsets and lengths stay within separate source and destination arrays.
+                    // SAFETY: offsets and lengths stay within separate source and destination arrays.
                     unsafe {
                         optimized_memcpy_unified(
                             dst.as_mut_ptr().add(dst_offset),

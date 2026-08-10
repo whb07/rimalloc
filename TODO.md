@@ -288,23 +288,38 @@ failures that prevents later changes from being blamed incorrectly.
 
 ### Work
 
-- [ ] Correct `scripts/check-concurrency-models.sh` to select the current Loom
+- [x] Correct `scripts/check-concurrency-models.sh` to select the current Loom
       module path.
-- [ ] Make the script fail if its filter ever selects zero tests again.
-- [ ] Permit an explicitly named test-only filter override solely so the guard
-      can be regression-tested without editing the script's default filter.
-- [ ] Do not change the models, allocator production code, or concurrency
+- [x] Make the script fail if its filter ever selects zero tests again.
+- [x] Permit an explicitly named test-only zero-match hook solely so the guard
+      can be regression-tested without editing the script's fixed real filter.
+- [x] Do not change the models, allocator production code, or concurrency
       semantics in this task.
 
 ### Validation
 
-- [ ] Run the script and require all six current Loom models to execute and
+- [x] Run the script and require all six current Loom models to execute and
       pass with the configured preemption bound.
-- [ ] Exercise the actual script guard through the test-only override and
+- [x] Exercise the actual script guard through the test-only zero-match hook and
       require a deliberately unmatched filter to fail, without editing the
       script's default filter.
-- [ ] Run the documentation/script formatting checks and the common Rust
+- [x] Run the documentation/script formatting checks and the common Rust
       validation gate.
+
+### Completion note (2026-08-10)
+
+- The gate now fixes its successful filter to
+  `types::atomic::concurrency_models`, enumerates matches before execution, and
+  rejects zero matches. It selected and passed all six Loom models with
+  `LOOM_MAX_PREEMPTIONS=3`.
+- `MIMALLOC_TEST_CONCURRENCY_MODEL_ZERO_MATCH=1` selects one fixed nonexistent
+  path for regression testing only; it exited 1 with
+  `error: concurrency model filter does::not::exist selected zero tests`.
+  Fresh-eyes review caught and removed the earlier arbitrary filter override,
+  which could have produced a false green by selecting unrelated tests.
+- No Rust source, model, or concurrency semantic changed. Shell syntax,
+  formatting, documentation, full-workspace/all-target/all-feature Clippy, and
+  the corresponding full test suite passed.
 
 ### Completion condition
 

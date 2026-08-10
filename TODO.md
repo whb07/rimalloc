@@ -128,27 +128,98 @@ minimum reference revision, or the later commit that contains this plan update.
 
 ### Work
 
-- [ ] Record the current commit with `git rev-parse HEAD` in the change
+- [x] Record the current commit with `git rev-parse HEAD` in the change
       description and confirm it descends from `4c51636`.
-- [ ] Record the current count of production Rust files and lines under `src/`.
-- [ ] Record the number of production files above 1,000 and 1,500 lines.
-- [ ] Record lexical counts for `unsafe fn`, `unsafe {`, `unsafe impl`,
+- [x] Record the current count of production Rust files and lines under `src/`.
+- [x] Record the number of production files above 1,000 and 1,500 lines.
+- [x] Record lexical counts for `unsafe fn`, `unsafe {`, `unsafe impl`,
       `#[inline(always)]`, `dyn Trait`, `Vec`, `Box`, and `.clone()` under
       `src/`. Label these as lexical counts, not AST-accurate facts.
-- [ ] Record the current crate-wide lint exceptions and narrow architectural
+- [x] Record the current crate-wide lint exceptions and narrow architectural
       boundary exceptions that are relevant to planned work.
-- [ ] Record the current ignored-test count and the reason for every ignored
+- [x] Record the current ignored-test count and the reason for every ignored
       production-behavior test.
-- [ ] Put the measurements directly in this task's completion note or the
+- [x] Put the measurements directly in this task's completion note or the
       associated change description. Do not create a new inventory document.
 
 ### Validation
 
-- [ ] Re-run every counting command from a clean tree and confirm it gives the
+- [x] Re-run every counting command from a clean tree and confirm it gives the
       recorded value.
-- [ ] Run `scripts/check-unsafe-inventory.py` for advisory counts and require
+- [x] Run `scripts/check-unsafe-inventory.py` for advisory counts and require
       `scripts/check-strict-types.py` to pass.
-- [ ] Confirm `git diff --check` reports no whitespace errors.
+- [x] Confirm `git diff --check` reports no whitespace errors.
+
+### Completion note (2026-08-10)
+
+- Baseline revision: `dedaa847f65a7f19bd65dee868bba031ea85d396`;
+  `git merge-base --is-ancestor 4c51636 HEAD` passed.
+- Production sources, using the same test-source exclusions as
+  `scripts/check-strict-types.py`: 125 Rust files and 63,889 physical lines.
+  There are 20 production files above 1,000 lines and 12 above 1,500 lines.
+  The latter are `src/allocator/arena.rs`, `src/allocator/init.rs`,
+  `src/internal/bitmap.rs`, `src/platform/windows.rs`, `src/raw/macros.rs`,
+  `src/allocator/stats.rs`, `src/allocator/page.rs`, `src/types/ptr.rs`,
+  `src/allocator/options.rs`, `src/allocator/alloc.rs`,
+  `src/platform/os.rs`, and `src/allocator/aligned.rs`. For transparency, all
+  of `src/`, including test-only source files, is 148 files and 71,008 lines,
+  with 22 files above 1,000 lines and 12 above 1,500 lines.
+- Lexical counts over all `src/**/*.rs`, including comments and tests, are
+  `unsafe fn` 1,337, `unsafe {` 3,702, `unsafe impl` 16,
+  `#[inline(always)]` 834, `dyn Trait` 3, `Vec` 5, `Box` 4, and `.clone()` 0.
+  These are repeatable regular-expression counts, not AST-accurate facts. The
+  unsafe advisory's broader pattern also finds 6,222 mentions, 2,106 unsafe
+  functions (including `unsafe extern ... fn`), 45 extern blocks, and 235
+  attributes; those figures are not interchangeable with the requested
+  literal counts.
+- `Cargo.toml` has 55 crate-wide Clippy `allow` entries and no Rust or rustdoc
+  allow-level entries: `borrow_as_ptr`, `bool_to_int_with_if`,
+  `branches_sharing_code`, `checked_conversions`, `cast_lossless`,
+  `cast_possible_truncation`, `cast_possible_wrap`, `cast_ptr_alignment`,
+  `cast_precision_loss`, `cast_sign_loss`, `doc_markdown`,
+  `elidable_lifetime_names`, `explicit_iter_loop`, `if_not_else`,
+  `inline_always`, `iter_with_drain`, `items_after_statements`,
+  `large_stack_arrays`, `literal_string_with_formatting_args`,
+  `manual_let_else`, `map_unwrap_or`, `match_same_arms`,
+  `match_wild_err_arm`, `many_single_char_names`, `missing_errors_doc`,
+  `missing_const_for_fn`, `must_use_candidate`, `needless_continue`,
+  `needless_raw_string_hashes`, `needless_pass_by_value`,
+  `no_effect_underscore_binding`, `option_if_let_else`, `option_option`,
+  `ptr_as_ptr`, `ptr_cast_constness`, `pub_underscore_fields`,
+  `redundant_closure_for_method_calls`, `redundant_pub_crate`, `ref_as_ptr`,
+  `semicolon_if_nothing_returned`, `single_match_else`,
+  `significant_drop_tightening`, `similar_names`, `suboptimal_flops`,
+  `too_many_lines`, `trivially_copy_pass_by_ref`, `unreadable_literal`,
+  `unnecessary_semicolon`, `uninlined_format_args`, `use_self`,
+  `used_underscore_binding`, `used_underscore_items`, `while_float`,
+  `wildcard_imports`, and `useless_let_if_seq`.
+- The strict-type boundary exceptions allow direct memid access in
+  `types/{constants,memid}.rs`; direct block-next access in
+  `types/{constants,freelist_wrappers}.rs`; packed thread-id bits in
+  `types/atomic.rs`, `types/atomic/page_thread.rs`, `types/constants.rs`, and
+  `types/page.rs`; and packed thread-free bits in `types/atomic.rs`,
+  `types/atomic/thread_free.rs`, `types/constants.rs`, and `types/freelist.rs`.
+  There are 28 reviewed caller/constructor pairs across the eight raw bridges:
+  `assume_uninit_page` 1, `assume_active_page` 6,
+  `assume_all_free_abandoned` 1, `assume_full_page` 4,
+  `assume_local_page` 4, `assume_foreign_page` 1,
+  `assume_abandoned_page` 5, and `assume_owned_abandoned_page` 6.
+- Other narrow architectural baselines are two allowed public-unsafe
+  `assume_initialized` methods (`safe/allocation.rs` and `safe/heap.rs`); ten
+  safe/backend module pairs (`safe/heap.rs` to `alloc`, `alloc_aligned`,
+  `heap`, `init`, `mimalloc`, and `types`; `safe/options.rs` to `options`; and
+  `safe/stats.rs` to `init`, `os`, and `stats`); and 52 public raw/ABI reentry
+  occurrences confined to `ffi/abi.rs` (12) and `ffi/headers.rs` (40) with
+  their required safety marker.
+- Exactly eight production-behavior tests are ignored, all in
+  `src/safe/tests.rs`: error/deferred callback registration and restoration,
+  nested LIFO restoration, panic containment, and allocator-reentry coverage.
+  Every ignore has the same explicit reason: process-global callback
+  registration must run serialized. Task 5.3 owns their isolation and removal.
+- Two clean-tree runs produced identical counts. The unsafe inventory and
+  strict-type checks passed, and `git diff --check` passed. Ignored build/fuzz
+  outputs and pre-existing local benchmark, review, and debugger artifacts
+  were left untouched.
 
 ### Completion condition
 

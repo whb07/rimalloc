@@ -380,29 +380,56 @@ facade code from `ARCHITECTURE.md` without searching the entire repository.
 
 ### Work
 
-- [ ] Identify the process initialization/teardown functions.
-- [ ] Identify thread initialization/teardown and TLS association functions.
-- [ ] Identify subprocess registry and subprocess lifecycle functions.
-- [ ] Identify CPU detection, random initialization, and platform hook glue.
-- [ ] Move one coherent group at a time into an `init/` child module. Reuse
+- [x] Identify the process initialization/teardown functions.
+- [x] Identify thread initialization/teardown and TLS association functions.
+- [x] Identify subprocess registry and subprocess lifecycle functions.
+- [x] Identify CPU detection, random initialization, and platform hook glue.
+- [x] Move one coherent group at a time into an `init/` child module. Reuse
       `init/subproc_registry.rs` where it already owns the behavior.
-- [ ] Keep raw export entrypoints and the high-level initialization sequence in
+- [x] Keep raw export entrypoints and the high-level initialization sequence in
       `init.rs`; move implementation details behind crate-private functions.
-- [ ] Preserve function visibility unless a moved item can safely become more
+- [x] Preserve function visibility unless a moved item can safely become more
       private.
-- [ ] Remove imports and aliases made unused by each extraction.
+- [x] Remove imports and aliases made unused by each extraction.
 
 ### Validation
 
-- [ ] Add or retain focused tests for process initialization, thread init/done,
+- [x] Add or retain focused tests for process initialization, thread init/done,
       TLS reset, subprocess creation/destruction, and repeated initialization.
-- [ ] Run `scripts/check-release-thread-stress.py` if present; otherwise run the
+- [x] Run `scripts/check-release-thread-stress.py` if present; otherwise run the
       repository's documented release thread-stress entrypoint.
-- [ ] Run `scripts/check-behavioral-parity.py` and
+- [x] Run `scripts/check-behavioral-parity.py` and
       `scripts/check-layer-boundaries.py`.
-- [ ] Run the common Rust validation gate.
-- [ ] Compare `git diff --stat` and confirm this is code movement plus only the
+- [x] Run the common Rust validation gate.
+- [x] Compare `git diff --stat` and confirm this is code movement plus only the
       minimal visibility/import changes required by the move.
+
+### Completion note (2026-08-10)
+
+- The process bootstrap state, raw/export entrypoints, and high-level init/done
+  order remain in `init.rs`, now 1,097 lines instead of 2,591. Complete private
+  owners now cover CPU detection (`cpu.rs`), TLS association and platform TLS
+  glue (`tls.rs`), per-thread heap/TLD setup and teardown (`thread.rs`), and
+  subprocess creation, lookup, visitation, and destruction (`subproc.rs`). The
+  existing intrusive `subproc_registry.rs` remains the registry-link owner.
+- The full Rust gate, no-default library check, focused init and thread-stat
+  tests, release thread stress, subprocess heap-main baseline, behavioral
+  parity, layer and FFI boundaries, public layout/symbol checks, and the C link
+  smoke all passed. Behavioral parity covers repeated process initialization,
+  thread init/done/re-init and TLS reset, subprocess create/associate/destroy,
+  heap visitation, and process teardown in isolated children.
+- The clean benchmark smoke validated all six applicable thresholds. The
+  selected 16-byte paired allocation median was 52.19 us after versus 52.16 us
+  before (effectively unchanged at this sample size); Rust workload ratios
+  ranged from 0.921 to 1.015. Final clean release captures preserve the same
+  size and opcode sequence for all six required hot functions; only data-symbol
+  relocation displacements changed.
+- Fresh-eyes reviews caught and fixed an incidental out-of-scope platform import
+  change, a lost always-inline boundary that initially changed hot codegen,
+  wildcard parent imports, and three unnecessary parent/child back-edges. The
+  final modules use explicit dependencies, preserve the raw extern set plus all
+  20 `no_mangle`-bearing attributes (17 unconditional) and 12 `#[used]` sites,
+  and duplicate no lifecycle logic.
 
 ### Completion condition
 

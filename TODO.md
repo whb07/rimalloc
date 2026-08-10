@@ -26,7 +26,11 @@ For every task:
 5. Run the task-specific validation.
 6. Run the common Rust validation gate.
 7. Inspect the diff and remove unrelated formatting, renames, or cleanup.
-8. Check the task only after every completion condition is true.
+8. Record the production simplification achieved: removed raw callers,
+   unchecked constructors, broad re-exports, internal C ABIs, synthetic-use
+   helpers, or justified exceptions. Counts are supporting evidence, not the
+   goal.
+9. Check the task only after every completion condition is true.
 
 Do not combine unrelated tasks in one change. A task that discovers no safe or
 useful production change may end as `NO CHANGE`, but the checklist must record
@@ -87,6 +91,31 @@ the task. A task is not complete if a required command fails. If the failure is
 environmental, record the command, full error, and required follow-up instead of
 checking the task.
 
+## Completed foundation — remove audit theater
+
+Completed in `4c51636`:
+
+- [x] Deleted the 193-file `release_fast_path_audit` source/prose inspection
+      harness instead of preserving it as a coverage metric.
+- [x] Deleted unsafe evidence ledgers, migration and strict-type allowlists,
+      marker IDs, count caps, and their enforcement scripts.
+- [x] Replaced capability-linearity text inspection with compiler assertions in
+      `src/types/linearity_tests.rs`.
+- [x] Reduced `scripts/check-strict-types.py` to architectural boundaries Rust
+      visibility cannot directly express; it has no debt ledger or count cap.
+- [x] Made `scripts/check-unsafe-inventory.py` an advisory lexical report rather
+      than a checked-in snapshot or release gate.
+- [x] Removed documentation-wording assertions while retaining checks for real
+      public items, safety sections, ABI symbols, links, and boundaries.
+- [x] Removed benchmark execution from `scripts/check-local.sh`; benchmark smoke
+      and performance qualification remain explicit opt-in commands.
+- [x] Updated CI, specifications, and policy documentation to use compiler,
+      runtime, layout, symbol, concurrency, Miri, and assembly evidence.
+
+Do not recreate these systems under new names. New checks must identify a
+concrete defect that compiler, runtime, artifact, or narrowly scoped
+architectural evidence can catch.
+
 ---
 
 # Phase 0 — Establish a trustworthy starting point
@@ -94,19 +123,20 @@ checking the task.
 ## 0.1 Record the current engineering baseline
 
 Purpose: make later improvement claims measurable without creating another
-permanent audit ledger.
+permanent audit ledger. This is a post-cleanup baseline: use `4c51636` as the
+minimum reference revision, or the later commit that contains this plan update.
 
 ### Work
 
 - [ ] Record the current commit with `git rev-parse HEAD` in the change
-      description.
+      description and confirm it descends from `4c51636`.
 - [ ] Record the current count of production Rust files and lines under `src/`.
 - [ ] Record the number of production files above 1,000 and 1,500 lines.
 - [ ] Record lexical counts for `unsafe fn`, `unsafe {`, `unsafe impl`,
       `#[inline(always)]`, `dyn Trait`, `Vec`, `Box`, and `.clone()` under
       `src/`. Label these as lexical counts, not AST-accurate facts.
-- [ ] Record the current strict-type and unsafe allowlist totals using the
-      repository check scripts.
+- [ ] Record the current crate-wide lint exceptions and narrow architectural
+      boundary exceptions that are relevant to planned work.
 - [ ] Record the current ignored-test count and the reason for every ignored
       production-behavior test.
 - [ ] Put the measurements directly in this task's completion note or the
@@ -123,7 +153,8 @@ permanent audit ledger.
 ### Completion condition
 
 This task is complete when later work can report an exact before/after change
-for file size, unsafe surface, allowances, ignored tests, and forced inlining.
+for file size, unsafe surface, justified exceptions, ignored tests, and forced
+inlining.
 
 ## 0.2 Confirm the existing correctness baseline
 
@@ -292,6 +323,36 @@ Complete these subitems independently.
 New Rust-native code depends on owning modules, while mechanical compatibility
 aliases remain explicitly identified and contained.
 
+## 1.5 Remove synthetic reachability and broad internal re-exports
+
+### Work
+
+- [ ] Replace broad allocator re-exports in `src/lib.rs` with narrow owning
+      module imports where no compatibility boundary requires the alias.
+- [ ] Replace wildcard re-exports in `src/internal/mod.rs` with explicit imports
+      at the actual call sites.
+- [ ] Remove the `src/types/mod.rs::__lint_touch` chain and every subordinate
+      `__lint_touch()` helper.
+- [ ] Delete helpers, imports, and constants that become genuinely unused after
+      synthetic reachability is removed.
+- [ ] Retain a compatibility alias only when an actual raw, FFI, assembly, or
+      mechanical translation consumer requires it; state that reason locally.
+- [ ] Do not replace one broad re-export with another prelude or facade module.
+
+### Validation
+
+- [ ] Run Clippy with warnings denied after each module family is disconnected
+      from the synthetic-use chain.
+- [ ] Use `rg` to confirm no `__lint_touch` identifier remains.
+- [ ] Run layer, raw-facade, API-boundary, and common Rust validation checks.
+- [ ] Compare release assembly for any allocation/free path whose imports or
+      helper reachability changed.
+
+### Completion condition
+
+The crate contains no fake-use machinery, Rust-native modules import their
+actual owners, and every remaining compatibility alias has a real consumer.
+
 ---
 
 # Phase 2 — Reduce the real unsafe trust surface
@@ -402,13 +463,14 @@ through unrelated control flow.
 - [ ] Preserve linear capability consumption on state transitions.
 - [ ] Do not make a linear capability `Copy` to simplify call sites.
 - [ ] Remove superseded unchecked constructors that no longer have callers.
-- [ ] Remove allowlist entries made obsolete by the production reduction.
+- [ ] Remove narrow boundary exceptions made obsolete by the production
+      reduction.
 
 ### Validation
 
-- [ ] Add compile-fail or source-enforced tests showing linear capabilities
+- [ ] Add compiler assertions or compile-fail tests showing linear capabilities
       cannot be duplicated or forged.
-- [ ] Run capability, strict-type, layout, and release-fast-path audit tests.
+- [ ] Run capability, strict-type, layout, and focused behavioral tests.
 - [ ] Capture release assembly for any changed allocation/free hot path.
 - [ ] Confirm wrapper traffic does not survive in release code, or record and
       justify any remaining instruction.
@@ -418,6 +480,103 @@ through unrelated control flow.
 
 Typed state travels through the operation without repeated unsafe
 reconstruction, and obsolete unsafe constructors and allowances are gone.
+
+## 2.5 Finish domain-type migration one invariant at a time
+
+Work in this order unless hotspot evidence justifies a change: sizes and
+alignments, bins and indexes, page/block counts, ownership words, then metadata
+pointers. Migrate cold validation and diagnostic paths before allocation/free
+hot paths.
+
+### Work
+
+- [ ] Find Rust-native functions that accept `usize`, integer flags, or raw
+      metadata pointers even though an existing domain type represents the
+      invariant.
+- [ ] Convert one complete caller/callee slice at a time so the typed value
+      survives through the operation instead of being immediately unwrapped.
+- [ ] Add a newtype only when it rejects an invalid state, prevents domain
+      mixing, or gives one owner to checked arithmetic.
+- [ ] Keep primitive conversion at raw, FFI, platform, or mechanical ingress
+      and egress boundaries.
+- [ ] Keep metadata wrappers private, `#[repr(transparent)]` only when layout is
+      required, and free of `Deref`/`DerefMut`.
+- [ ] Remove superseded primitive overloads and unchecked constructors after
+      their last caller is migrated.
+
+### Validation
+
+- [ ] Add boundary and property tests for every constructor or checked
+      arithmetic operation introduced.
+- [ ] Run strict-type, layout, Miri, and common Rust validation checks.
+- [ ] Capture assembly before changing a hot path and reject surviving wrapper
+      traffic, extra branches, or extra calls.
+- [ ] Record fewer primitive/raw parameters or fewer callers that must prove the
+      invariant; adding a wrapper alone is not completion.
+
+### Completion condition
+
+Rust-native signatures express their domains, primitives are confined to real
+boundaries, and the number of call sites manually preserving each invariant is
+smaller.
+
+## 2.6 Translate failures at the raw and ABI edges
+
+### Work
+
+- [ ] Identify internal functions that encode expected failure as null, a
+      sentinel integer, errno mutation, formatted diagnostics, or abort.
+- [ ] Return an existing typed `Result` or `Option` internally; introduce a new
+      error enum only when callers need to distinguish actionable cases.
+- [ ] Translate typed failure into null, errno, C diagnostics, or required abort
+      behavior once at the owning raw or exported C ABI boundary.
+- [ ] Keep corruption and impossible-by-invariant failures distinct from
+      ordinary allocation, layout, and input failures.
+- [ ] Keep hot-path errors allocation-free and avoid owned strings or formatting
+      before the ABI boundary.
+- [ ] Remove duplicate error translation and errno writes from internal
+      callees.
+
+### Validation
+
+- [ ] Add Rust tests for each typed error and C-facing tests for the exact null,
+      errno, diagnostic, and preservation contract.
+- [ ] Run allocation-boundary, oversize, FFI panic/no-unwind, behavioral parity,
+      and common Rust checks.
+- [ ] Confirm each migrated failure has one translation point and no new unwind
+      path crosses an ABI boundary.
+
+### Completion condition
+
+Rust-native code communicates ordinary failure through types, while C-shaped
+failure behavior exists only at the boundary that promises it.
+
+## 2.7 Remove unnecessary internal C calling conventions
+
+### Work
+
+- [ ] Inventory `extern "C"` functions and classify each as exported ABI,
+      foreign callback, assembly/linker target, or internal-only function.
+- [ ] Convert internal-only functions to the Rust ABI and give them typed
+      parameters where an existing wrapper applies.
+- [ ] Narrow visibility after confirming no foreign, assembly, linker-script,
+      or dynamic-symbol consumer exists.
+- [ ] Preserve symbol names and calling conventions for actual ABI contracts.
+- [ ] Do not infer export status from a C-shaped name; inspect built artifacts
+      and call sites.
+
+### Validation
+
+- [ ] Inspect dynamic and static symbols before and after each conversion.
+- [ ] Run ABI-symbol, FFI-boundary, static-link, release-consumer, and common
+      Rust checks.
+- [ ] Record the internal `extern "C"` functions removed and the real ABI
+      functions intentionally retained.
+
+### Completion condition
+
+Every remaining C calling convention has a foreign, assembly, linker, or
+export contract; ordinary internal calls use Rust signatures.
 
 ---
 
@@ -622,7 +781,6 @@ and emitted hot-path work does not increase.
 ### Validation
 
 - [ ] Remove one allowance at a time and run full-feature Clippy.
-- [ ] Run full-feature Clippy after each allowance removal.
 - [ ] Confirm the final exception list contains a short explanation for every
       non-obvious crate-wide allowance.
 - [ ] Run the common Rust validation gate.
@@ -631,6 +789,41 @@ and emitted hot-path work does not increase.
 
 The lint policy describes intentional compatibility constraints rather than
 hiding ordinary Rust quality issues.
+
+## 4.5 Replace C compatibility idioms inside Rust-native code
+
+### Work
+
+- [ ] Classify uses of `MI_UNUSED`, `MI_UNUSED_RELEASE`, `MI_DEBUG`, assertion
+      wrappers, `mi_likely`/`mi_unlikely`, and numeric tag constants as raw
+      compatibility or Rust-native implementation.
+- [ ] Replace unused-value shims in Rust-native code with removal, an
+      underscore binding, or `let _ = value` as appropriate.
+- [ ] Replace debug/assertion wrappers only when Rust assertions preserve the
+      required debug level, message, abort/no-unwind behavior, and evaluation
+      semantics.
+- [ ] Replace numeric tags with closed internal enums when exhaustive matching
+      prevents invalid states; preserve integer constants at layout/ABI edges.
+- [ ] Treat branch hints as a code-generation decision: remove or replace them
+      only after checking support on the pinned toolchain and emitted assembly.
+- [ ] Keep compatibility macros where mechanical parity is clearer and safer
+      than an abstraction.
+
+### Validation
+
+- [ ] Add behavioral tests for assertion levels, tag conversion, and any
+      compatibility fallback changed.
+- [ ] Run no-unwind, behavioral parity, full-feature Clippy, and common Rust
+      checks.
+- [ ] Compare optimized assembly for every changed hot-path assertion or branch
+      hint.
+- [ ] Record the C idioms removed from Rust-native modules; renaming or moving a
+      shim is not completion.
+
+### Completion condition
+
+Rust-native code uses Rust control flow and domain types, while retained C
+idioms are confined to boundaries where they preserve a concrete contract.
 
 ---
 
@@ -736,36 +929,7 @@ ignored tests.
 
 # Phase 6 — Improve tests without creating audit theater
 
-## 6.1 Replace brittle source-shape checks where stronger tests exist
-
-### Work
-
-- [ ] Inventory tests that pass by searching source text for names, comments,
-      line shapes, or tokens.
-- [ ] Classify each as enforcing an otherwise untestable architectural boundary
-      or approximating behavior/layout/codegen that can be tested directly.
-- [ ] Keep source checks for visibility, forbidden dependencies, macro
-      expansion boundaries, and properties Rust reflection cannot express.
-- [ ] Replace approximations with runtime tests, compile-fail tests, layout
-      assertions, symbol inspection, Loom, Miri, or assembly checks.
-- [ ] Delete the superseded source-shape test and any ledger row that exists
-      only for it.
-- [ ] Do not reduce coverage merely to reduce test count.
-
-### Validation
-
-- [ ] Demonstrate that the replacement test fails against a deliberate local
-      violation, then revert the violation.
-- [ ] Run the release fast-path audit and common gate.
-- [ ] Record the number of source-shape assertions removed and the stronger
-      evidence replacing them.
-
-### Completion condition
-
-Tests prove externally observable behavior or compiler properties whenever
-possible, while source checks remain only for genuine architectural rules.
-
-## 6.2 Expand property tests around unsafe boundaries
+## 6.1 Expand property tests around unsafe boundaries
 
 ### Work
 
@@ -794,7 +958,7 @@ possible, while source checks remain only for genuine architectural rules.
 The most dangerous unsafe transitions are checked over domains and sequences,
 not only a handful of hand-written examples.
 
-## 6.3 Make test ownership and naming consistent
+## 6.2 Make test ownership and naming consistent
 
 ### Work
 
@@ -869,7 +1033,8 @@ compile or execution check.
 
 - [ ] Run the repository default `no_std` check and `scripts/check-features.sh`.
 - [ ] Run `scripts/check-safe-api-features.sh`.
-- [ ] Run the strict-type no-std/no-allocation audit tests.
+- [ ] Run `scripts/check-strict-types.py`, the default no-std build, and
+      `tests/no_allocation_critical_paths.rs`.
 - [ ] Run the common Rust validation gate.
 
 ### Completion condition
@@ -903,6 +1068,45 @@ permits it, with no accidental dependency hidden by tests.
 
 Platform abstractions are honest, narrow, and optimized for verified targets.
 
+## 7.4 Evaluate and narrow the platform operation boundary
+
+Do not assume that one `Platform` trait is the desired result. First determine
+whether platform operations actually share a stable typed contract and whether
+an abstraction reduces unsafe callers or duplicated invariants.
+
+### Work
+
+- [ ] Group maintained-target platform operations by responsibility: virtual
+      memory, commit/decommit, protection, process information, environment,
+      clocks, NUMA, and thread lifecycle.
+- [ ] Identify raw arguments and repeated validation that can move behind a
+      narrow typed operation shared by at least two real callers.
+- [ ] Compare `cfg`-selected modules, direct functions, a sealed static-dispatch
+      trait, and small operation-specific interfaces.
+- [ ] Reject a broad trait that introduces dynamic dispatch, a context object,
+      lowest-common-denominator semantics, or unused methods.
+- [ ] Implement only the smallest boundary that reduces duplicated unsafe code
+      or makes a platform invariant unrepresentable to callers.
+- [ ] Keep unsupported platform implementations isolated; do not distort the
+      maintained Linux path to make source-present platforms look uniform.
+
+### Validation
+
+- [ ] Test typed operation boundaries on the maintained target and compile-check
+      only those additional targets with available toolchains.
+- [ ] Run syscall parity, platform primitive, feature, layout, and common Rust
+      checks.
+- [ ] Compare optimized code for allocation/free paths that cross the platform
+      boundary.
+- [ ] Record fewer unsafe platform callers or duplicated validation sites. A
+      new trait or module by itself is not completion.
+
+### Completion condition
+
+Platform code has the narrowest useful statically dispatched boundary; keeping
+`cfg`-selected functions is an acceptable result when it is simpler and equally
+safe.
+
 ---
 
 # Phase 8 — Simplify documentation and governance
@@ -911,7 +1115,7 @@ Platform abstractions are honest, narrow, and optimized for verified targets.
 
 ### Work
 
-- [ ] Group tracked Markdown files by topic: architecture, safety, unsafe audit,
+- [ ] Group tracked Markdown files by topic: architecture, safety,
       performance, testing, ABI/FFI, features/platforms, release, and upstream
       parity.
 - [ ] Select one authoritative document for each topic.
@@ -937,33 +1141,34 @@ Platform abstractions are honest, narrow, and optimized for verified targets.
 Documentation remains thorough but no policy must be updated in several places
 to stay consistent.
 
-## 8.2 Turn allowlists into reduction queues
+## 8.2 Reduce remaining production exceptions
 
 ### Work
 
-- [ ] Review strict-type, unsafe migration, Clippy, dead-code, and compatibility
-      allowlists.
-- [ ] Remove entries whose production site no longer exists.
-- [ ] For each non-permanent entry, name the production change that removes it
-      and link it to a task in this plan.
-- [ ] Challenge “permanent” entries that are internal rather than required by
-      raw ABI, platform ABI, or upstream source-shape parity.
-- [ ] Do not split one allowance into several narrower rows and count that as
-      progress unless the trusted production surface also shrinks.
-- [ ] Delete caps that only preserve ledger size and do not prevent a concrete
-      risk.
+- [x] Delete the strict-type and unsafe-migration debt allowlists and their count
+      caps.
+- [ ] Review crate-wide Clippy allowances and narrow FFI/layer boundary
+      exceptions against current production code.
+- [ ] Remove an exception when the production site no longer exists or the code
+      can be made clearer without changing compatibility or codegen.
+- [ ] Keep exceptions only for concrete raw ABI, platform ABI, upstream
+      translation, or measured performance constraints.
+- [ ] Do not split one exception into several entries and count that as progress
+      unless the trusted production surface also shrinks.
 
 ### Validation
 
-- [ ] Run all allowance inventory, strict-type, and unsafe audit checks.
-- [ ] Record before/after production-site and allowlist counts.
+- [ ] Run Clippy, `scripts/check-strict-types.py`, and the relevant FFI/layer
+      boundary checks.
+- [ ] Record the production change and exception removed; raw counts are
+      supporting context only.
 - [ ] Require every claimed improvement to remove an unsafe/raw/dead-code site,
       narrow a boundary, or eliminate an allowance.
 - [ ] Run the common Rust validation gate if production code changes.
 
 ### Completion condition
 
-Allowlist maintenance follows real code reduction and never becomes the primary
+Exception removal follows real code reduction and never becomes the primary
 deliverable.
 
 ## 8.3 Review comments for proof value
@@ -981,7 +1186,7 @@ deliverable.
 
 ### Validation
 
-- [ ] Run safe-doc, unsafe-audit, docs, and generated-artifact checks.
+- [ ] Run `scripts/check-safe-docs.py`, docs, and generated-artifact checks.
 - [ ] Review the diff and confirm production code behavior is unchanged.
 - [ ] Run documentation-only validation if no Rust code changed; otherwise run
       the common Rust gate.
@@ -1170,7 +1375,7 @@ model, and performance evidence without relying on institutional memory.
 - [ ] Run `scripts/check-local.sh` and every additional release check documented
       in `docs/release.md`.
 - [ ] Run behavioral parity, feature, layout, ABI/FFI boundary, no-unwind,
-      no-allocation, unsafe audit, strict-type, and policy checks.
+      no-allocation, strict-type, safety-documentation, and policy checks.
 - [ ] Run Loom/concurrency models.
 - [ ] Run the supported Miri suite.
 - [ ] Run ASan, TSan, and Valgrind stress checks on the maintained target.
@@ -1195,8 +1400,8 @@ no required evidence depends on an uncommitted working tree.
 - [ ] Replace every remaining unchecked task with a completed result, a linked
       follow-up approved by the maintainer, or a documented `NO CHANGE` backed by
       evidence.
-- [ ] Summarize unsafe-site, allowlist, forced-inline, ignored-test, large-file,
-      code-size, and performance changes from the Phase 0 baseline.
+- [ ] Summarize unsafe-site, justified-exception, forced-inline, ignored-test,
+      large-file, code-size, and performance changes from the Phase 0 baseline.
 - [ ] List any intentionally retained translation debt and the compatibility or
       performance reason it remains.
 - [ ] Confirm no completed item claims success solely because a cap, ledger, or

@@ -313,6 +313,37 @@ impl AvailablePage {
 }
 
 impl LocalPage {
+    /// Ensure this locally owned page has an available block.
+    ///
+    /// # Safety
+    /// This witness must represent the current thread's live page ownership,
+    /// and its available and local free lists must be valid for that page. The
+    /// caller must have exclusive write access to the page-local list fields
+    /// and `free_is_zero` if a local-list transfer is required.
+    #[inline(always)]
+    pub(crate) unsafe fn try_ensure_available(self) -> Result<AvailablePage, LocalPage> {
+        let page = self.page();
+        // SAFETY: the local owner proves the page metadata and its available
+        // list are live for this exclusive page-local operation.
+        if !unsafe { page.free() }.is_empty() {
+            // SAFETY: the observed non-empty available list establishes the
+            // available-page witness for the same locally owned page.
+            return Ok(unsafe { AvailablePage::new_unchecked(page) });
+        }
+        // SAFETY: the local owner proves the page metadata and local list are
+        // live for this exclusive page-local operation.
+        let local = unsafe { page.local_free() };
+        if local.is_empty() {
+            return Err(self);
+        }
+        // SAFETY: the available list was observed empty and `local` is the
+        // current non-empty local list loaded from this same owner.
+        unsafe { self.transfer_local_to_available(local) };
+        // SAFETY: the ordered transfer just published a non-empty available
+        // list for this same locally owned page.
+        Ok(unsafe { AvailablePage::new_unchecked(page) })
+    }
+
     /// Publish a recycled local list as the page's available list.
     ///
     /// # Safety

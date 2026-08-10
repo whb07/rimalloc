@@ -203,7 +203,7 @@ impl QueuedPage<NormalQueue> {
     /// `page` must be known to be currently linked in `queue`, not marked full,
     /// and have a block size compatible with `queue`.
     #[inline(always)]
-    pub(in crate::types) unsafe fn new_unchecked(
+    pub(crate) unsafe fn new_unchecked(
         page: crate::core_types::ActivePage,
         queue: NormalPageQueue,
     ) -> Self {

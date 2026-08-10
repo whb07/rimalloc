@@ -69,8 +69,8 @@ pub use flags::{
 pub(crate) use lifecycle::collect_page_free_lists_local;
 #[allow(unused_imports)]
 pub use lifecycle::{
-    _mi_page_free_collect, _mi_page_free_collect_partly, mi_page_free_quick_collect,
-    mi_page_is_full, mi_page_thread_collect_to_local, mi_page_thread_free_collect,
+    _mi_page_free_collect, _mi_page_free_collect_partly, mi_page_is_full,
+    mi_page_thread_collect_to_local, mi_page_thread_free_collect,
 };
 pub(crate) use lifecycle::{
     _mi_page_free_collect_partly_typed, collect_page_free_lists_abandoned,
@@ -1333,7 +1333,7 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
 }
 
 #[inline]
-unsafe fn mi_page_queue_find_free_ex_typed(
+unsafe fn mi_page_queue_find_free_ex_active(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
     block_size: crate::core_types::BlockSize,
@@ -1464,47 +1464,51 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             if let Some(fresh) = mi_page_fresh_typed(theap, queue, block_size, slice_count) {
                 #[cfg(feature = "bench-diagnostics")]
                 crate::allocator::bench_diagnostics::page_queue_fresh_allocation();
-                crate::internal::mi_assert_internal!(mi_page_immediate_available(
-                    fresh.page().as_ptr()
-                ));
                 return Some(fresh);
             }
             if first_try {
                 #[cfg(feature = "bench-diagnostics")]
                 crate::allocator::bench_diagnostics::page_queue_retry();
-                let page = mi_page_queue_find_free_ex_typed(theap, queue, block_size, false);
-                crate::internal::mi_assert_internal!(
-                    page.as_ref()
-                        .is_none_or(|page| mi_page_immediate_available(page.page().as_ptr()))
-                );
-                return page;
+                return mi_page_queue_find_free_ex_active(theap, queue, block_size, false);
             }
-        } else {
-            crate::internal::mi_assert_internal!(mi_page_immediate_available(page));
-            let active = crate::core_types::assume_active_page(
-                crate::core_types::PagePtr::new_unchecked(page),
-            );
-            let queued =
-                crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::try_queue(
-                    active, queue,
-                )
-                .unwrap_unchecked();
-            let _ = mi_page_queue_move_to_front_typed(theap, queue, queued);
-            mi_page_reset_retire_expire(page);
-            #[cfg(feature = "bench-diagnostics")]
-            {
-                crate::allocator::bench_diagnostics::page_queue_search(
-                    count.get(),
-                    true,
-                    failed_extend,
-                );
-                crate::allocator::bench_diagnostics::page_queue_selected(selected_position);
-            }
+            return None;
         }
-        crate::internal::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
 
-        crate::core_types::PagePtr::new(page)
-            .map(|page| crate::core_types::assume_active_page(page))
+        let active =
+            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
+        // SAFETY: traversal proves membership in this exact queue; the normal
+        // queue invariant proves the page is not full and has a compatible
+        // block size.
+        let queued = crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
+            active, queue,
+        );
+        let queued = mi_page_queue_move_to_front_typed(theap, queue, queued);
+        mi_page_reset_retire_expire(page);
+        #[cfg(feature = "bench-diagnostics")]
+        {
+            crate::allocator::bench_diagnostics::page_queue_search(
+                count.get(),
+                true,
+                failed_extend,
+            );
+            crate::allocator::bench_diagnostics::page_queue_selected(selected_position);
+        }
+        Some(queued.into_active())
+    }
+}
+
+#[inline]
+unsafe fn mi_page_queue_find_free_ex_typed(
+    theap: crate::core_types::ThreadHeapLocal,
+    queue: crate::core_types::NormalPageQueue,
+    block_size: crate::core_types::BlockSize,
+    first_try: bool,
+) -> Option<crate::core_types::AvailablePage> {
+    // SAFETY: the active search preserves page ownership and establishes an
+    // immediately available page before returning a successful producer.
+    unsafe {
+        mi_page_queue_find_free_ex_active(theap, queue, block_size, first_try)
+            .and_then(|active| active.try_available().ok())
     }
 }
 
@@ -1514,24 +1518,25 @@ unsafe fn mi_find_free_page_typed(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
     block_size: crate::core_types::BlockSize,
-) -> Option<crate::core_types::ActivePage> {
+) -> Option<crate::core_types::AvailablePage> {
     // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
-        let page = queue.ptr().first();
-        if let Some(page) = page.filter(|page| mi_page_free_quick_collect(page.as_ptr())) {
-            let page_raw = page.as_ptr();
-            if MI_SECURE >= 2
-                && mi_page_capacity_count(page_raw).get() < mi_page_reserved_count(page_raw).get()
-                && ((_mi_theap_random_next(theap.ptr().as_ptr()) & 1) == 1)
-            {
-                let _ = mi_page_extend_free(theap.ptr().as_ptr(), page_raw);
-                crate::internal::mi_assert_internal!(mi_page_immediate_available(page_raw));
+        if let Some(page) = queue.ptr().first() {
+            let local = crate::core_types::assume_local_page(page);
+            if let Ok(available) = local.try_ensure_available() {
+                let page_raw = available.page().as_ptr();
+                if MI_SECURE >= 2
+                    && mi_page_capacity_count(page_raw).get()
+                        < mi_page_reserved_count(page_raw).get()
+                    && ((_mi_theap_random_next(theap.ptr().as_ptr()) & 1) == 1)
+                {
+                    let _ = mi_page_extend_free(theap.ptr().as_ptr(), page_raw);
+                }
+                mi_page_reset_retire_expire(page_raw);
+                return Some(available);
             }
-            mi_page_reset_retire_expire(page_raw);
-            Some(crate::core_types::assume_active_page(page))
-        } else {
-            mi_page_queue_find_free_ex_typed(theap, queue, block_size, true)
         }
+        mi_page_queue_find_free_ex_typed(theap, queue, block_size, true)
     }
 }
 
@@ -1541,7 +1546,7 @@ unsafe fn mi_huge_page_alloc_typed(
     layout: crate::core_types::LayoutRequest,
     page_alignment: crate::core_types::MaybeAlignment,
     queue: crate::core_types::HugePageQueue,
-) -> Option<crate::core_types::ActivePage> {
+) -> Option<crate::core_types::AvailablePage> {
     // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
     unsafe {
         let theap = owner.ptr().as_ptr();
@@ -1551,7 +1556,6 @@ unsafe fn mi_huge_page_alloc_typed(
         let page = mi_page_fresh_alloc(theap, pq, block_size, page_alignment);
         if !page.is_null() {
             crate::internal::mi_assert_internal!(mi_page_block_size(page) >= layout.padded().get());
-            crate::internal::mi_assert_internal!(mi_page_immediate_available(page));
             crate::internal::mi_assert_internal!(mi_page_is_huge(page));
             crate::internal::mi_assert_internal!(mi_page_is_singleton(page));
             if MI_STAT > 0 {
@@ -1562,8 +1566,9 @@ unsafe fn mi_huge_page_alloc_typed(
                 __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);
             }
         }
-        crate::core_types::PagePtr::new(page)
-            .map(|page| crate::core_types::assume_active_page(page))
+        let page = crate::core_types::PagePtr::new(page)?;
+        let active = crate::core_types::assume_active_page(page);
+        active.try_available().ok()
     }
 }
 
@@ -1572,7 +1577,7 @@ unsafe fn mi_find_page_typed(
     theap: crate::core_types::ThreadHeapLocal,
     size: crate::core_types::PaddedSize,
     huge_alignment: crate::core_types::MaybeAlignment,
-) -> Option<crate::core_types::ActivePage> {
+) -> Option<crate::core_types::AvailablePage> {
     // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
     unsafe {
         let req_size = size.get().wrapping_sub(MI_PADDING_SIZE);
@@ -1707,13 +1712,13 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
             }
         }
 
-        let mut active = mi_find_page_typed(local_theap, layout.padded(), huge_alignment);
-        if active.is_none() {
+        let mut available = mi_find_page_typed(local_theap, layout.padded(), huge_alignment);
+        if available.is_none() {
             crate::mimalloc::mi_theap_collect(theap, true);
-            active = mi_find_page_typed(local_theap, layout.padded(), huge_alignment);
+            available = mi_find_page_typed(local_theap, layout.padded(), huge_alignment);
         }
 
-        let Some(active) = active else {
+        let Some(available) = available else {
             let req_size = size.wrapping_sub(MI_PADDING_SIZE);
             _mi_error_message_fmt(
                 Errno::ENOMEM,
@@ -1721,9 +1726,8 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
             );
             return ptr::null_mut();
         };
-        let page = active.page().as_ptr();
+        let page = available.page().as_ptr();
 
-        crate::internal::mi_assert_internal!(mi_page_immediate_available(page));
         crate::internal::mi_assert_internal!(mi_page_block_size(page) >= size);
         crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
             mi_page_slice_start(page).cast(),
@@ -1732,7 +1736,6 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
         crate::internal::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
 
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
-        let available = active.try_available().unwrap_unchecked();
         let p = _mi_page_malloc_zero_typed(
             theap,
             available,

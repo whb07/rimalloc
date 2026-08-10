@@ -379,53 +379,6 @@ pub(crate) unsafe fn collect_page_free_lists_abandoned(page: &OwnedAbandonedPage
 }
 
 /// # Safety
-/// `page` must point to live page metadata owned by the current thread heap.
-#[inline]
-pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let page_ptr = PagePtr::new_unchecked(page);
-        let local_page = crate::core_types::assume_local_page(page_ptr);
-        let available = page_ptr.free();
-        let local = page_ptr.local_free();
-        mi_page_free_quick_collect_typed(local_page, available, local)
-    }
-}
-
-/// # Safety
-/// `page` must remain owned by the current thread heap, and `available` and
-/// `local` must be the current exact free-list snapshots for that page.
-#[inline]
-pub(crate) unsafe fn mi_page_free_quick_collect_typed(
-    page: LocalPage,
-    available: AvailableFreeList,
-    local: LocalFreeList,
-) -> bool {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe { mi_page_free_quick_collect_raw(PageCollectOwner::Local(&page), available, local) }
-}
-
-#[inline(always)]
-unsafe fn mi_page_free_quick_collect_raw(
-    owner: PageCollectOwner<'_>,
-    available: AvailableFreeList,
-    local: LocalFreeList,
-) -> bool {
-    // SAFETY: typed page/list witnesses
-    // preserve the raw quick-collection invariants.
-    unsafe {
-        if !available.is_empty() {
-            return true;
-        }
-        if local.is_empty() {
-            return false;
-        }
-        owner.transfer_local_to_available(local);
-        true
-    }
-}
-
-/// # Safety
 /// `page` must point to page metadata owned by the current thread heap. Owned
 /// abandoned pages must use `collect_page_free_lists_abandoned` instead.
 // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
@@ -479,13 +432,8 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             let local = page_ptr.local_free();
             let _ = collect_remote_for_owned_abandoned_page(owned_page, remote_tail, local);
             if !page_ptr.local_free().is_empty() && page_ptr.free().is_empty() {
-                let available = page_ptr.free();
                 let local = page_ptr.local_free();
-                let _ = mi_page_free_quick_collect_raw(
-                    PageCollectOwner::Abandoned(owned_page),
-                    available,
-                    local,
-                );
+                owned_page.transfer_local_to_available(local);
             }
         }
         remote_head.leave_published();

@@ -791,7 +791,7 @@ fn empty_available_transfer_preserves_secure_encoded_links() {
 }
 
 #[test]
-fn quick_collection_preserves_or_clears_zero_status_with_publication() {
+fn local_page_ensure_available_preserves_or_clears_zero_status_with_publication() {
     // An existing available list returns immediately without changing either
     // list or its zero-status promise.
     let mut available = SyntheticPage::new(3);
@@ -808,8 +808,9 @@ fn quick_collection_preserves_or_clears_zero_status_with_publication() {
         (*available.page_storage).free_is_zero = true;
         let available_head = available.page().free().head();
         let local_head = available.page().local_free().head();
-        let result = crate::allocator::page::mi_page_free_quick_collect(available.page_storage);
-        assert!(result);
+        let owner = LocalPage::new_unchecked(available.page());
+        let result = owner.try_ensure_available();
+        assert!(result.is_ok());
         assert_eq!(available.page().free().head(), available_head);
         assert_eq!(available.page().local_free().head(), local_head);
         assert!((*available.page_storage).free_is_zero);
@@ -820,8 +821,9 @@ fn quick_collection_preserves_or_clears_zero_status_with_publication() {
     empty.initialize();
     unsafe {
         (*empty.page_storage).free_is_zero = true;
-        let result = crate::allocator::page::mi_page_free_quick_collect(empty.page_storage);
-        assert!(!result);
+        let owner = LocalPage::new_unchecked(empty.page());
+        let result = owner.try_ensure_available();
+        assert!(result.is_err());
         assert!(empty.page().free().is_empty());
         assert!(empty.page().local_free().is_empty());
         assert!((*empty.page_storage).free_is_zero);
@@ -837,8 +839,9 @@ fn quick_collection_preserves_or_clears_zero_status_with_publication() {
             .page()
             .set_local_free(LocalFreeList::from_head(transfer.block(0)));
         (*transfer.page_storage).free_is_zero = true;
-        let result = crate::allocator::page::mi_page_free_quick_collect(transfer.page_storage);
-        assert!(result);
+        let owner = LocalPage::new_unchecked(transfer.page());
+        let result = owner.try_ensure_available();
+        assert!(result.is_ok());
         assert_eq!(transfer.head_index(transfer.page().free().head()), Some(0));
         assert!(transfer.page().local_free().is_empty());
         assert!(!(*transfer.page_storage).free_is_zero);

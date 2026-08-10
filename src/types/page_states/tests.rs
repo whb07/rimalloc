@@ -161,6 +161,81 @@ fn recycled_available_publication_updates_coupled_page_fields() {
 }
 
 #[test]
+fn local_page_ensure_available_covers_existing_empty_and_transfer_states() {
+    let flags = PageFlags::new(0).expect("zero page flags are valid");
+    let local_thread = ThreadId::new(crate::prim::_mi_prim_thread_id())
+        .expect("platform current-thread id is nonzero and unflagged");
+    let local_id = PageThreadId::from_parts(PageOwnerId::Thread(local_thread), flags).raw();
+    let unowned = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Unowned).raw();
+
+    let mut existing_page = MaybeUninit::<mi_page_t>::zeroed();
+    let mut existing_block = mi_block_t::default();
+    let mut existing_local = mi_block_t::default();
+    // SAFETY: this fully initialized stack fixture models a live local page
+    // with both list heads present for the duration of the consuming check.
+    unsafe {
+        let raw = existing_page.as_mut_ptr();
+        let page = PagePtr::new_unchecked(raw);
+        let available_head = BlockPtr::new_unchecked(ptr::addr_of_mut!(existing_block));
+        let local_head = BlockPtr::new_unchecked(ptr::addr_of_mut!(existing_local));
+        ptr::addr_of_mut!((*raw).xthread_id).write(local_id);
+        ptr::addr_of_mut!((*raw).xthread_free).write(unowned);
+        ptr::addr_of_mut!((*raw).free).write(available_head.as_ptr());
+        ptr::addr_of_mut!((*raw).local_free).write(local_head.as_ptr());
+        ptr::addr_of_mut!((*raw).free_is_zero).write(true);
+
+        let available = LocalPage::new_unchecked(page)
+            .try_ensure_available()
+            .expect("existing available head must succeed");
+        assert_eq!(available.page(), page);
+        assert_eq!((*raw).free, available_head.as_ptr());
+        assert_eq!((*raw).local_free, local_head.as_ptr());
+        assert!((*raw).free_is_zero);
+    }
+
+    let mut empty_page = MaybeUninit::<mi_page_t>::zeroed();
+    // SAFETY: this fully initialized stack fixture models a live local page
+    // with both page-local free lists empty.
+    unsafe {
+        let raw = empty_page.as_mut_ptr();
+        let page = PagePtr::new_unchecked(raw);
+        ptr::addr_of_mut!((*raw).xthread_id).write(local_id);
+        ptr::addr_of_mut!((*raw).xthread_free).write(unowned);
+        ptr::addr_of_mut!((*raw).free_is_zero).write(true);
+
+        let local = LocalPage::new_unchecked(page)
+            .try_ensure_available()
+            .expect_err("empty local page must preserve its owner witness");
+        assert_eq!(local.page(), page);
+        assert!((*raw).free.is_null());
+        assert!((*raw).local_free.is_null());
+        assert!((*raw).free_is_zero);
+    }
+
+    let mut transfer_page = MaybeUninit::<mi_page_t>::zeroed();
+    let mut transfer_block = mi_block_t::default();
+    // SAFETY: this fully initialized stack fixture models a live local page
+    // whose current non-empty local list can be transferred while it is live.
+    unsafe {
+        let raw = transfer_page.as_mut_ptr();
+        let page = PagePtr::new_unchecked(raw);
+        let local_head = BlockPtr::new_unchecked(ptr::addr_of_mut!(transfer_block));
+        ptr::addr_of_mut!((*raw).xthread_id).write(local_id);
+        ptr::addr_of_mut!((*raw).xthread_free).write(unowned);
+        ptr::addr_of_mut!((*raw).local_free).write(local_head.as_ptr());
+        ptr::addr_of_mut!((*raw).free_is_zero).write(true);
+
+        let available = LocalPage::new_unchecked(page)
+            .try_ensure_available()
+            .expect("non-empty local list must become available");
+        assert_eq!(available.page(), page);
+        assert_eq!((*raw).free, local_head.as_ptr());
+        assert!((*raw).local_free.is_null());
+        assert!(!(*raw).free_is_zero);
+    }
+}
+
+#[test]
 fn all_free_retire_and_arena_free_preserve_page_identity() {
     // SAFETY: the stack-local page is
     // initialized with the exact `used` counts needed to exercise all-free,

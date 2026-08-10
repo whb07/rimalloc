@@ -8,6 +8,9 @@ use core::ffi::c_void;
 use core::mem::size_of;
 use core::ptr;
 
+use crate::allocator::tracking::{
+    MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
+};
 use crate::arena::{
     _mi_arenas_collect, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free_typed,
     MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
@@ -27,9 +30,6 @@ use crate::internal::{
 };
 use crate::options::_mi_error_message_fmt;
 use crate::stats::MI_BIN_HUGE;
-use crate::track::{
-    MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
-};
 use crate::types::{
     MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_ENCODE_FREELIST, MI_LARGE_MAX_OBJ_WSIZE, MI_PADDING,
     MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_page_queue_t, mi_page_t,
@@ -482,7 +482,7 @@ unsafe fn mi_page_free_list_extend_secure_typed(
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
         #[cfg(feature = "bench-diagnostics")]
-        crate::bench_diagnostics::free_list_extend(extend);
+        crate::allocator::bench_diagnostics::free_list_extend(extend);
         if MI_SECURE < 3 {
             crate::internal::mi_assert_internal!(page.free().is_empty());
             crate::internal::mi_assert_internal!(page.local_free().is_empty());
@@ -571,7 +571,7 @@ unsafe fn mi_page_free_list_extend_typed(
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
         #[cfg(feature = "bench-diagnostics")]
-        crate::bench_diagnostics::free_list_extend(extend);
+        crate::allocator::bench_diagnostics::free_list_extend(extend);
         if MI_SECURE < 3 {
             crate::internal::mi_assert_internal!(page.free().is_empty());
             crate::internal::mi_assert_internal!(page.local_free().is_empty());
@@ -1512,7 +1512,11 @@ unsafe fn mi_page_queue_find_free_ex_typed(
 
         if page.is_null() {
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::page_queue_search(count.get(), false, failed_extend);
+            crate::allocator::bench_diagnostics::page_queue_search(
+                count.get(),
+                false,
+                failed_extend,
+            );
             _mi_theap_collect_retired_typed(theap, false);
             let Some(slice_count) = crate::core_types::SliceCount::from_usize(
                 crate::internal::mi_slice_count_of_size(block_size.get()),
@@ -1522,7 +1526,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             };
             if let Some(fresh) = mi_page_fresh_typed(theap, queue, block_size, slice_count) {
                 #[cfg(feature = "bench-diagnostics")]
-                crate::bench_diagnostics::page_queue_fresh_allocation();
+                crate::allocator::bench_diagnostics::page_queue_fresh_allocation();
                 crate::internal::mi_assert_internal!(mi_page_immediate_available(
                     fresh.page().as_ptr()
                 ));
@@ -1530,7 +1534,7 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             }
             if first_try {
                 #[cfg(feature = "bench-diagnostics")]
-                crate::bench_diagnostics::page_queue_retry();
+                crate::allocator::bench_diagnostics::page_queue_retry();
                 let page = mi_page_queue_find_free_ex_typed(theap, queue, block_size, false);
                 crate::internal::mi_assert_internal!(
                     page.as_ref()
@@ -1552,8 +1556,12 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             mi_page_reset_retire_expire(page);
             #[cfg(feature = "bench-diagnostics")]
             {
-                crate::bench_diagnostics::page_queue_search(count.get(), true, failed_extend);
-                crate::bench_diagnostics::page_queue_selected(selected_position);
+                crate::allocator::bench_diagnostics::page_queue_search(
+                    count.get(),
+                    true,
+                    failed_extend,
+                );
+                crate::allocator::bench_diagnostics::page_queue_selected(selected_position);
             }
         }
         crate::internal::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));

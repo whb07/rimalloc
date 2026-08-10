@@ -942,7 +942,7 @@ unsafe fn mi_process_init_inner() {
             crate::stats::_mi_stats_init();
             crate::os::_mi_os_init();
             mi_heap_main_init();
-            crate::threadlocal::_mi_thread_locals_init();
+            crate::allocator::threadlocal::_mi_thread_locals_init();
             let _ = crate::page_map::_mi_page_map_init();
             crate::prim::_mi_prim_thread_init_auto_done();
             _mi_theap_default_set(ptr::addr_of_mut!(theap_main));
@@ -1037,7 +1037,7 @@ pub unsafe extern "C" fn mi_process_done() {
 
     // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     unsafe {
-        crate::threadlocal::_mi_thread_locals_done();
+        crate::allocator::threadlocal::_mi_thread_locals_done();
         crate::prim::_mi_prim_thread_done_auto_done();
         if mi_option_is_enabled(mi_option_t::mi_option_destroy_on_exit) {
             subproc::unsafe_destroy_all();

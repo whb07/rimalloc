@@ -225,17 +225,11 @@ pub mod __bench {
     pub use crate::internal::_mi_memcpy;
 }
 
-// Benchmark instrumentation spans translated and typed hot paths, so its
-// feature-gated compatibility name remains stable across those modules.
-#[cfg(feature = "bench-diagnostics")]
-pub(crate) use allocator::bench_diagnostics;
-
 // Mechanical allocator and raw compatibility code retain these C-shaped
 // module names. Rust-native code must use the owning `allocator` modules.
 #[allow(unused_imports)]
 pub(crate) use allocator::{
     aligned as alloc_aligned, alloc, arena, free, heap, init, options, page, page_map, stats,
-    thread_heap as theap, threadlocal, tracking as track,
 };
 
 // Raw and translated compatibility code retain these FFI module names.

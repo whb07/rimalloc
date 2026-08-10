@@ -27,9 +27,9 @@ pub const MI_STAT: usize = if MI_DEBUG > 0 || cfg!(feature = "bench-diagnostics"
 pub const MI_GUARDED: usize = crate::internal::MI_GUARDED;
 pub const MI_PADDING: usize = if cfg!(feature = "secure")
     || MI_DEBUG >= 1
-    || crate::track::MI_TRACK_VALGRIND != 0
-    || crate::track::MI_TRACK_ASAN != 0
-    || crate::track::MI_TRACK_ETW != 0
+    || crate::allocator::tracking::MI_TRACK_VALGRIND != 0
+    || crate::allocator::tracking::MI_TRACK_ASAN != 0
+    || crate::allocator::tracking::MI_TRACK_ETW != 0
 {
     1
 } else {

@@ -186,7 +186,7 @@ impl AtomicThreadFree {
             }
         } else {
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::remote_free_cas_retry();
+            crate::allocator::bench_diagnostics::remote_free_cas_retry();
             RemotePushResult::Retry {
                 observed: ThreadFreeWord::from_raw(raw_expected),
             }

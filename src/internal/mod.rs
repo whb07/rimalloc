@@ -39,6 +39,10 @@ pub(crate) use crate::alloc::{
 pub(crate) use crate::allocator::arena_meta::{
     _mi_meta_free, _mi_meta_is_meta_page, _mi_meta_zalloc,
 };
+pub(crate) use crate::allocator::thread_heap::{
+    _mi_theap_area_visit_blocks, _mi_theap_collect_abandon, _mi_theap_create, _mi_theap_decref,
+    _mi_theap_delete, _mi_theap_free, _mi_theap_incref, _mi_theap_random_next,
+};
 pub(crate) use crate::arena::{
     _mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable, _mi_arenas_alloc,
     _mi_arenas_alloc_aligned, _mi_arenas_collect, _mi_arenas_contain, _mi_arenas_free,
@@ -112,10 +116,6 @@ pub(crate) use crate::stats::{
     __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
     __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
 };
-pub(crate) use crate::theap::{
-    _mi_theap_area_visit_blocks, _mi_theap_collect_abandon, _mi_theap_create, _mi_theap_decref,
-    _mi_theap_delete, _mi_theap_free, _mi_theap_incref, _mi_theap_random_next,
-};
 pub use crate::types::*;
 pub use block_link::{
     mi_block_next, mi_block_nextx, mi_block_set_next, mi_block_set_nextx, mi_is_in_same_page,
@@ -149,8 +149,8 @@ pub const _Atomic: () = ();
 
 pub const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
 pub const MI_SECURE: usize = if cfg!(feature = "secure") { 4 } else { 0 };
-pub const MI_TRACK_ASAN: usize = crate::track::MI_TRACK_ASAN;
-pub const MI_TRACK_ENABLED: usize = crate::track::MI_TRACK_ENABLED;
+pub const MI_TRACK_ASAN: usize = crate::allocator::tracking::MI_TRACK_ASAN;
+pub const MI_TRACK_ENABLED: usize = crate::allocator::tracking::MI_TRACK_ENABLED;
 pub const MI_TRACK_ENABLED_FULL: usize = 0;
 pub const MI_GUARDED: usize = if cfg!(feature = "guarded") { 1 } else { 0 };
 pub const MI_PAGE_META_IS_SEPARATED: usize = if MI_PAGE_MAP_FLAT != 0 { 0 } else { 1 };

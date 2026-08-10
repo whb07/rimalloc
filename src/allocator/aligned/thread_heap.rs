@@ -1,11 +1,11 @@
 use core::ffi::c_void;
 
 use crate::alloc::{_mi_page_malloc_zero_typed, calloc_request_or_report};
+use crate::allocator::tracking::mi_track_malloc;
 use crate::core_types::Errno;
 use crate::internal::{mi_likely, mi_page_usable_block_size, mi_theap_malloc_use_guarded};
 use crate::options::_mi_error_message_fmt;
 use crate::prim::MI_THEAP_INITASNULL;
-use crate::track::mi_track_malloc;
 use crate::types::{MI_SMALL_SIZE_MAX, mi_theap_t};
 
 use super::{

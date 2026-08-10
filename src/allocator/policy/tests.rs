@@ -149,14 +149,14 @@ fn remote_collection_switches_at_the_compatibility_boundary() {
 #[cfg(feature = "bench-diagnostics")]
 #[test]
 fn option_dependent_policy_calls_preserve_fast_read_counts() {
-    let _guard = crate::bench_diagnostics::test_support::lock();
-    crate::bench_diagnostics::mi_bench_diagnostics_reset();
+    let _guard = crate::allocator::bench_diagnostics::test_support::lock();
+    crate::allocator::bench_diagnostics::mi_bench_diagnostics_reset();
     let _ = CompatPolicy::page_candidate_limit();
     let _ = CompatPolicy::reclaim_on_free_mode();
     let _ = CompatPolicy::reclaim_limit(super::ReclaimContext::SameThreadHeap);
     let _ = CompatPolicy::reclaim_limit(super::ReclaimContext::CrossThreadHeap);
     assert_eq!(
-        crate::bench_diagnostics::option_read_counts_for_tests(),
+        crate::allocator::bench_diagnostics::option_read_counts_for_tests(),
         (4, 1, 1, 1, 1)
     );
 }

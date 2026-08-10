@@ -453,7 +453,7 @@ impl BlockPtr {
     #[inline(always)]
     pub(crate) unsafe fn next(self, page: PagePtr) -> Option<BlockPtr> {
         unsafe {
-            crate::track::mi_track_mem_defined(
+            crate::allocator::tracking::mi_track_mem_defined(
                 self.as_ptr().cast(),
                 core::mem::size_of::<mi_block_t>(),
             )
@@ -467,7 +467,7 @@ impl BlockPtr {
         };
         // SAFETY: caller-proven metadata access stays behind transparent NonNull wrappers.
         unsafe {
-            crate::track::mi_track_mem_noaccess(
+            crate::allocator::tracking::mi_track_mem_noaccess(
                 self.as_ptr().cast(),
                 core::mem::size_of::<mi_block_t>(),
             )
@@ -482,7 +482,7 @@ impl BlockPtr {
     #[inline(always)]
     pub(crate) unsafe fn set_next(self, page: PagePtr, next: Option<BlockPtr>) {
         unsafe {
-            crate::track::mi_track_mem_undefined(
+            crate::allocator::tracking::mi_track_mem_undefined(
                 self.as_ptr().cast(),
                 core::mem::size_of::<mi_block_t>(),
             )
@@ -500,7 +500,7 @@ impl BlockPtr {
         // SAFETY: caller-proven metadata access stays behind transparent NonNull wrappers.
         unsafe { self.write_link(BlockLink::FreeList(link)) };
         unsafe {
-            crate::track::mi_track_mem_noaccess(
+            crate::allocator::tracking::mi_track_mem_noaccess(
                 self.as_ptr().cast(),
                 core::mem::size_of::<mi_block_t>(),
             )

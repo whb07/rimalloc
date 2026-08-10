@@ -2110,35 +2110,35 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN(
         if n == 1 {
             let found = mi_bbitmap_try_find_and_clear(bbitmap, tseq, pidx);
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::bitmap_find_clear(found);
+            crate::allocator::bench_diagnostics::bitmap_find_clear(found);
             return found;
         }
         if n == 8 {
             let found = mi_bbitmap_try_find_and_clear8(bbitmap, tseq, pidx);
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::bitmap_find_clear(found);
+            crate::allocator::bench_diagnostics::bitmap_find_clear(found);
             return found;
         }
         if n == 0 {
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::bitmap_find_clear(false);
+            crate::allocator::bench_diagnostics::bitmap_find_clear(false);
             return false;
         }
         if n <= MI_BFIELD_BITS {
             let found = mi_bbitmap_try_find_and_clearNX(bbitmap, tseq, n, pidx);
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::bitmap_find_clear(found);
+            crate::allocator::bench_diagnostics::bitmap_find_clear(found);
             return found;
         }
         if n <= MI_BCHUNK_BITS {
             let found = mi_bbitmap_try_find_and_clearNC(bbitmap, tseq, n, pidx);
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::bitmap_find_clear(found);
+            crate::allocator::bench_diagnostics::bitmap_find_clear(found);
             return found;
         }
         let found = mi_bbitmap_try_find_and_clearN_(bbitmap, tseq, n, pidx);
         #[cfg(feature = "bench-diagnostics")]
-        crate::bench_diagnostics::bitmap_find_clear(found);
+        crate::allocator::bench_diagnostics::bitmap_find_clear(found);
         found
     }
 }

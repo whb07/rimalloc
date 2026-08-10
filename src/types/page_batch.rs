@@ -219,7 +219,7 @@ impl RemoteFreeBatch {
         // SAFETY: the detached-list owner provides
         // live page metadata and unique traversal access.
         #[cfg(feature = "bench-diagnostics")]
-        crate::bench_diagnostics::remote_list_detached();
+        crate::allocator::bench_diagnostics::remote_list_detached();
         let core = match if cfg!(any(
             debug_assertions,
             feature = "secure",
@@ -237,19 +237,19 @@ impl RemoteFreeBatch {
             Ok(core) => core,
             Err(error) => {
                 #[cfg(feature = "bench-diagnostics")]
-                crate::bench_diagnostics::remote_validation_failure(error);
+                crate::allocator::bench_diagnostics::remote_validation_failure(error);
                 return Err(error);
             }
         };
         #[cfg(feature = "bench-diagnostics")]
-        crate::bench_diagnostics::remote_list_scanned(core.len().get() as usize);
+        crate::allocator::bench_diagnostics::remote_list_scanned(core.len().get() as usize);
         if core.len().get() > used.get() {
             let error = BatchValidationError::ExceedsUsed {
                 len: core.len(),
                 used,
             };
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::remote_validation_failure(error);
+            crate::allocator::bench_diagnostics::remote_validation_failure(error);
             return Err(error);
         }
         Ok(Self(core))
@@ -390,7 +390,7 @@ unsafe fn detach_local_free_batch(
     // remains published and unchanged throughout the bounded scan.
     let core = unsafe { scan_detached_chain(page, head, capacity) }?;
     #[cfg(feature = "bench-diagnostics")]
-    crate::bench_diagnostics::local_tail_scan(core.len().get() as usize);
+    crate::allocator::bench_diagnostics::local_tail_scan(core.len().get() as usize);
     // SAFETY: validation succeeded, so
     // clearing the field uniquely transfers the complete chain to the batch.
     unsafe { page.set_local_free(LocalFreeList::empty()) };

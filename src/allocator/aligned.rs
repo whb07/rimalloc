@@ -11,6 +11,7 @@ use crate::alloc::{
     _mi_theap_malloc_guarded, _mi_theap_malloc_zero, _mi_theap_malloc_zero_ex,
     calloc_request_or_report,
 };
+use crate::allocator::tracking::mi_track_align;
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
 use crate::core_types::{BorrowedHeap, Errno};
@@ -26,7 +27,6 @@ use crate::page::{
     MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size_typed,
 };
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
-use crate::track::mi_track_align;
 use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_theap_t};
 
 const MI_MAX_ALIGN_SIZE: usize = 16;

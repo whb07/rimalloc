@@ -277,7 +277,7 @@ pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usi
             if unsafe { !mi_theap_is_initialized(theap) } {
                 return core::ptr::null_mut();
             }
-            let r = unsafe { crate::theap::_mi_theap_random_next(theap) };
+            let r = unsafe { crate::allocator::thread_heap::_mi_theap_random_next(theap) };
             init += (MI_HINT_ALIGN * ((r >> 17) & 0xFFFFF)) % MI_HINT_AREA;
         }
         let _ = ALIGNED_BASE.compare_exchange(

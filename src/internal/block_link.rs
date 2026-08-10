@@ -124,7 +124,12 @@ pub unsafe fn mi_block_nextx(
     keys: &[usize; 2],
 ) -> *mut mi_block_t {
     // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
-    unsafe { crate::track::mi_track_mem_defined(block.cast_mut().cast(), size_of::<mi_block_t>()) };
+    unsafe {
+        crate::allocator::tracking::mi_track_mem_defined(
+            block.cast_mut().cast(),
+            size_of::<mi_block_t>(),
+        )
+    };
     let link = unsafe { crate::core_types::EncodedPtr::read_word_from_raw(block) };
     let next = if MI_ENCODE_FREELIST != 0 {
         unsafe { link.decode_block_raw(null, crate::core_types::PageKeys::from_raw(*keys)) }
@@ -133,7 +138,10 @@ pub unsafe fn mi_block_nextx(
     };
     // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe {
-        crate::track::mi_track_mem_noaccess(block.cast_mut().cast(), size_of::<mi_block_t>())
+        crate::allocator::tracking::mi_track_mem_noaccess(
+            block.cast_mut().cast(),
+            size_of::<mi_block_t>(),
+        )
     };
     next
 }
@@ -149,7 +157,12 @@ pub(crate) unsafe fn mi_block_set_nextx_typed(
     keys: crate::core_types::PageKeys,
 ) {
     // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
-    unsafe { crate::track::mi_track_mem_undefined(block.as_ptr().cast(), size_of::<mi_block_t>()) };
+    unsafe {
+        crate::allocator::tracking::mi_track_mem_undefined(
+            block.as_ptr().cast(),
+            size_of::<mi_block_t>(),
+        )
+    };
     let link = if MI_ENCODE_FREELIST != 0 {
         unsafe { crate::core_types::EncodedPtr::encode_block(next, page, keys) }
     } else {
@@ -161,7 +174,12 @@ pub(crate) unsafe fn mi_block_set_nextx_typed(
     };
     // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     unsafe { block.write_link(crate::core_types::BlockLink::FreeList(link)) };
-    unsafe { crate::track::mi_track_mem_noaccess(block.as_ptr().cast(), size_of::<mi_block_t>()) };
+    unsafe {
+        crate::allocator::tracking::mi_track_mem_noaccess(
+            block.as_ptr().cast(),
+            size_of::<mi_block_t>(),
+        )
+    };
 }
 
 /// # Safety
@@ -191,7 +209,9 @@ pub unsafe fn mi_block_set_nextx(
     }
 
     // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
-    unsafe { crate::track::mi_track_mem_undefined(block.cast(), size_of::<mi_block_t>()) };
+    unsafe {
+        crate::allocator::tracking::mi_track_mem_undefined(block.cast(), size_of::<mi_block_t>())
+    };
     let link = if MI_ENCODE_FREELIST != 0 {
         unsafe {
             crate::core_types::EncodedPtr::encode_block_raw(
@@ -206,7 +226,9 @@ pub unsafe fn mi_block_set_nextx(
     // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
     let block_ptr = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
     unsafe { block_ptr.write_link(crate::core_types::BlockLink::FreeList(link)) };
-    unsafe { crate::track::mi_track_mem_noaccess(block.cast(), size_of::<mi_block_t>()) };
+    unsafe {
+        crate::allocator::tracking::mi_track_mem_noaccess(block.cast(), size_of::<mi_block_t>())
+    };
 }
 
 /// # Safety

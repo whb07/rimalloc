@@ -1,12 +1,12 @@
 use core::ffi::c_void;
 use core::mem::size_of;
 
+use crate::allocator::tracking::MI_TRACK_ENABLED;
 use crate::core_types::{PageConstPtr, PagePtr};
 use crate::internal::{
     _mi_ptr_page, MI_DEBUG, mi_block_next, mi_mem_is_zero, mi_page_block_size,
     mi_page_contains_address, mi_page_slice_start, mi_page_thread_free, mi_page_usable_block_size,
 };
-use crate::track::MI_TRACK_ENABLED;
 use crate::types::{mi_block_t, mi_page_t};
 
 use super::{

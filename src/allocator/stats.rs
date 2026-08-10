@@ -682,7 +682,7 @@ unsafe fn mi_heap_stats_get_borrowed(heap: BorrowedHeap, stats: &mut mi_stats_t)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_collect_reduce(_target_thread_owned: usize) {
     // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
-    unsafe { crate::theap::mi_collect(false) };
+    unsafe { crate::allocator::thread_heap::mi_collect(false) };
 }
 
 /// # Safety

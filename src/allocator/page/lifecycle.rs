@@ -299,7 +299,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
                 (*page).free_is_zero = false;
             }
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::page_free_collect_moved_to_free(false);
+            crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(false);
         } else if force {
             // SAFETY: dispatch retains the
             // concrete owner proof while detaching and moving the local batch.
@@ -315,7 +315,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
                     // grants writable access to this page metadata flag.
                     unsafe { (*page).free_is_zero = false };
                     #[cfg(feature = "bench-diagnostics")]
-                    crate::bench_diagnostics::page_free_collect_moved_to_free(true);
+                    crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(true);
                 }
                 Ok(None) => {}
                 Err(error) => {
@@ -324,11 +324,11 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
             }
         } else {
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::page_free_collect_noop_local_blocked();
+            crate::allocator::bench_diagnostics::page_free_collect_noop_local_blocked();
         }
     } else {
         #[cfg(feature = "bench-diagnostics")]
-        crate::bench_diagnostics::page_free_collect_local_empty();
+        crate::allocator::bench_diagnostics::page_free_collect_local_empty();
     }
 
     // SAFETY: the same owner proof remains
@@ -343,7 +343,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
 #[inline]
 pub(crate) unsafe fn collect_page_free_lists_local(page: &LocalPage, force: bool) {
     #[cfg(feature = "bench-diagnostics")]
-    crate::bench_diagnostics::page_free_collect_local_call(force);
+    crate::allocator::bench_diagnostics::page_free_collect_local_call(force);
     // SAFETY: LocalPage is preserved in
     // the owner enum rather than reconstructed from a raw pointer.
     unsafe { collect_page_free_lists(PageCollectOwner::Local(page), force) };
@@ -356,7 +356,7 @@ pub(crate) unsafe fn collect_page_free_lists_local(page: &LocalPage, force: bool
 #[inline]
 pub(crate) unsafe fn collect_page_free_lists_abandoned(page: &OwnedAbandonedPage, force: bool) {
     #[cfg(feature = "bench-diagnostics")]
-    crate::bench_diagnostics::page_free_collect_abandoned_call(force);
+    crate::allocator::bench_diagnostics::page_free_collect_abandoned_call(force);
     // SAFETY: OwnedAbandonedPage is
     // preserved in the owner enum rather than weakened to LocalPage.
     unsafe { collect_page_free_lists(PageCollectOwner::Abandoned(page), force) };
@@ -436,7 +436,7 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
 pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
     unsafe {
         #[cfg(feature = "bench-diagnostics")]
-        crate::bench_diagnostics::page_free_collect_partly_call(head.is_null());
+        crate::allocator::bench_diagnostics::page_free_collect_partly_call(head.is_null());
         if head.is_null() {
             return;
         }
@@ -463,7 +463,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
         let (remote_head, remote_tail) = remote_head.detach_tail(owned_page);
         if let Some(remote_tail) = remote_tail {
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::page_free_collect_partly_detached();
+            crate::allocator::bench_diagnostics::page_free_collect_partly_detached();
             let local = page_ptr.local_free();
             let _ = collect_remote_for_owned_abandoned_page(owned_page, remote_tail, local);
             if !page_ptr.local_free().is_empty() && page_ptr.free().is_empty() {
@@ -478,7 +478,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             crate::internal::mi_assert_internal!(atomic_tf.load_relaxed().head_raw() == head);
             crate::internal::mi_assert_internal!(mi_block_next(page, head).is_null());
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::page_free_collect_partly_final_collect();
+            crate::allocator::bench_diagnostics::page_free_collect_partly_final_collect();
             collect_page_free_lists_abandoned(owned_page, false);
         }
     }

@@ -5,6 +5,7 @@ mod abandoned;
 use core::ffi::{CStr, c_char, c_void};
 use core::{cmp, ptr};
 
+use crate::allocator::tracking::{mi_track_free_size, mi_track_mem_defined, mi_track_mem_noaccess};
 use crate::arena::{
     _mi_arenas_page_free, _mi_arenas_page_try_reabandon_to_mapped_arena, _mi_arenas_page_unabandon,
 };
@@ -31,7 +32,6 @@ use crate::prim::{
     _mi_page_associated_theap_peek, _mi_prim_thread_id, _mi_theap_default,
     _mi_thread_is_initialized,
 };
-use crate::track::{mi_track_free_size, mi_track_mem_defined, mi_track_mem_noaccess};
 use crate::types::{
     MI_DEBUG_FREED, MI_DEBUG_PADDING, MI_MAX_ALIGN_SIZE, MI_PAGE_META_ALIGNED_FREE_SMALL,
     MI_SMALL_PAGE_SIZE, MI_SMALL_SIZE_MAX, mi_block_t, mi_page_t, mi_theap_t,

@@ -4,6 +4,9 @@ use core::ffi::{c_char, c_void};
 use core::mem::size_of;
 use core::ptr;
 
+use crate::allocator::tracking::{
+    MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
+};
 use crate::core_types::{BorrowedHeap, Errno, PagePtr, ThreadHeapLocal, ThreadHeapPtr, UserPtr};
 use crate::free::_mi_usable_size_typed;
 use crate::init::_mi_theap_empty_wrong;
@@ -23,9 +26,6 @@ use crate::page::{
     mi_good_size_typed,
 };
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
-use crate::track::{
-    MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
-};
 use crate::types::{
     MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING_SIZE, MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t,
     mi_heap_t, mi_page_t, mi_theap_t,

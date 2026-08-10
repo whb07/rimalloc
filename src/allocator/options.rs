@@ -171,7 +171,7 @@ static MI_ERROR_MESSAGE_KEEP: unsafe extern "C" fn(c_int, *const c_char) = _mi_e
 #[inline(never)]
 pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
     #[cfg(feature = "bench-diagnostics")]
-    crate::bench_diagnostics::option_read(option);
+    crate::allocator::bench_diagnostics::option_read(option);
     storage::option_get_fast(option)
 }
 

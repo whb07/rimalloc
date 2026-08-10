@@ -7,6 +7,8 @@ use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
+use crate::allocator::thread_heap::{_mi_heap_area_init, _mi_theap_area_visit_blocks};
+use crate::allocator::tracking::{mi_track_mem_defined, mi_track_mem_undefined};
 use crate::atomic::{mi_atomic_guard_t, mi_lock_acquire, mi_lock_release};
 use crate::bitmap::{
     _mi_bitmap_forall_setc_rangesn, MI_BCHUNK_BITS, MI_BCHUNK_FIELDS, MI_BCHUNK_SIZE,
@@ -53,8 +55,6 @@ use crate::page::{
 use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page};
 use crate::prim::_mi_page_associated_theap_peek;
 use crate::stats::{MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_OTHER, MI_CBIN_SMALL};
-use crate::theap::{_mi_heap_area_init, _mi_theap_area_visit_blocks};
-use crate::track::{mi_track_mem_defined, mi_track_mem_undefined};
 use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
     MI_PAGE_MAX_START_BLOCK_ALIGN2, MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE,

@@ -442,48 +442,80 @@ Complete these subitems independently.
 
 ### Options
 
-- [ ] Separate option storage/initialization from diagnostic output,
+- [x] Separate option storage/initialization from diagnostic output,
       formatting, and callback invocation in `src/allocator/options.rs`.
-- [ ] Keep option reads on their current fast path and preserve option
+- [x] Keep option reads on their current fast path and preserve option
       mutability and environment semantics.
-- [ ] Validate with option export tests, callback tests,
+- [x] Validate with option export tests, callback tests,
       `scripts/check-policy-boundaries.py`, and the common gate.
 
 ### Statistics
 
-- [ ] Separate counter mutation/aggregation, JSON/text rendering, and process
+- [x] Separate counter mutation/aggregation, JSON/text rendering, and process
       information collection in `src/allocator/stats.rs`.
-- [ ] Keep all formatting bounded and allocation-free in allocator paths.
-- [ ] Validate with stats export tests, safe stats tests,
+- [x] Keep all formatting bounded and allocation-free in allocator paths.
+- [x] Validate with stats export tests, safe stats tests,
       `tests/no_allocation_critical_paths.rs`, and the common gate.
 
 ### Arena
 
-- [ ] Move remaining arena responsibilities into existing `arena/` child
+- [x] Move remaining arena responsibilities into existing `arena/` child
       modules where their invariant already belongs: geometry, OS memory,
       abandoned ownership, purge, metadata, or page ownership.
-- [ ] Leave orchestration and raw compatibility entrypoints in
+- [x] Leave orchestration and raw compatibility entrypoints in
       `src/allocator/arena.rs`.
-- [ ] Validate with arena/type tests, layout checks, behavioral parity, and the
+- [x] Validate with arena/type tests, layout checks, behavioral parity, and the
       common gate.
 
 ### Validation
 
-- [ ] Run the option, callback, statistics, arena, and safe-facade focused tests
+- [x] Run the option, callback, statistics, arena, and safe-facade focused tests
       named above after each independent extraction.
-- [ ] Run `scripts/check-policy-boundaries.py`,
+- [x] Run `scripts/check-policy-boundaries.py`,
       `tests/no_allocation_critical_paths.rs`, `scripts/check-layout.sh`, and
       `scripts/check-behavioral-parity.py` after all three module families are
       complete.
-- [ ] Run the common Rust validation gate.
-- [ ] Compare the pre/post module dependency graph with `rg` and confirm that
+- [x] Run the common Rust validation gate.
+- [x] Compare the pre/post module dependency graph with `rg` and confirm that
       no new cross-layer import or circular responsibility was introduced.
+
+### Completion note (2026-08-10)
+
+- Options now keeps ABI and initialization orchestration in `options.rs`, with
+  descriptor storage, atomics, environment parsing, and mutation in
+  `options/storage.rs`, and bounded diagnostic formatting plus callback state
+  in `options/diagnostics.rs`. The fast option getter retains its four-
+  instruction release path, and callback, environment, mutability, policy,
+  export, and no-allocation checks pass.
+- Statistics now keeps ABI types, snapshot collection, heap/subprocess
+  traversal, and raw entrypoints in `stats.rs`; counter mutation/aggregation,
+  process information, and bounded text/JSON rendering have distinct private
+  owners. Public JSON calls retain their pre-split interposable call graph, and
+  focused stats, lifecycle, safe-facade, FFI, and no-allocation checks pass.
+- Arena metadata layout, registry, initialization, and teardown moved to
+  `arena/metadata.rs`; NUMA geometry, abandoned transitions, and OS-memory
+  operations moved to their existing owners. `arena.rs` retains allocation and
+  iteration orchestration plus every affected raw compatibility entrypoint.
+  Arena/type, purge, stub, layout, policy, and behavioral-parity checks pass.
+- The common Rust gate and the final dependency/duplication review pass. Fresh-
+  eyes reviews removed parent/child cycles and implicit sibling alias feeds,
+  restored crate-visible and FFI boundaries, and preserved public symbol
+  interposition. Each child owns a coherent invariant or operation family; no
+  split was made solely to reduce line count and no implementation body is
+  duplicated.
+- Clean smoke benchmarking at `511f618` passes all six applicable thresholds
+  with no review-required result. Ratios to the maintained baseline range from
+  0.913 to 0.999; the selected 16-byte paired allocation median is 52.16 us.
+  The required release hot functions retain their baseline instruction shapes
+  and sizes: `mi_malloc` 144, `mi_malloc_small` 128, `mi_free` 16,
+  `mi_route_free` 624, `mi_free_block_local` 208, and
+  `_mi_theap_malloc_zero_ex` 272 bytes.
 
 ### Completion condition
 
-- [ ] Confirm every resulting file has a describable single responsibility.
-- [ ] Confirm no duplicate helper, wrapper, or validation path was introduced.
-- [ ] Confirm no file was split solely to satisfy a size target.
+- [x] Confirm every resulting file has a describable single responsibility.
+- [x] Confirm no duplicate helper, wrapper, or validation path was introduced.
+- [x] Confirm no file was split solely to satisfy a size target.
 
 ## 1.4 Remove accidental crate-root coupling
 

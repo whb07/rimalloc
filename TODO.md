@@ -231,26 +231,85 @@ inlining.
 
 ### Work
 
-- [ ] Run the common Rust validation gate without modifying production code.
-- [ ] Run `scripts/check-behavioral-parity.py`.
-- [ ] Run `scripts/check-concurrency-models.sh`.
-- [ ] Run `scripts/check-layout.sh`.
-- [ ] Run `scripts/check-ffi-boundary.py`.
-- [ ] Run `tests/no_allocation_critical_paths.rs` and the default no-std build.
-- [ ] Save the exact failing command and output for any pre-existing failure.
+- [x] Run the common Rust validation gate without modifying production code.
+- [x] Run `scripts/check-behavioral-parity.py`.
+- [x] Run `scripts/check-concurrency-models.sh`.
+- [x] Run `scripts/check-layout.sh`.
+- [x] Run `scripts/check-ffi-boundary.py`.
+- [x] Run `tests/no_allocation_critical_paths.rs` and the default no-std build.
+- [x] Save the exact failing command and output for any pre-existing failure.
       Do not repair failures in this baseline task.
 
 ### Validation
 
-- [ ] Confirm the working tree is unchanged after the baseline run, excluding
+- [x] Confirm the working tree is unchanged after the baseline run, excluding
       ignored build artifacts.
-- [ ] Confirm every pre-existing failure has an owner and a later task in this
+- [x] Confirm every pre-existing failure has an owner and a later task in this
       plan, or add a narrowly scoped task before starting Phase 1.
 
 ### Completion condition
 
 There must be a known-good baseline, or an explicit list of pre-existing
 failures that prevents later changes from being blamed incorrectly.
+
+### Completion note (2026-08-10)
+
+- Baseline revision: `37de83d6370920471cf6304039f64ff60fb88ef0`.
+  `cargo fmt --all`, full-workspace/all-target/all-feature Clippy, and the same
+  full test configuration passed. The library result was 251 passed, zero
+  failed, and eight ignored; every integration, example, and benchmark target
+  also passed.
+- Behavioral parity passed in debug and release configurations. Its two C++
+  compiler warnings came from the intentional `SIZE_MAX * 2` oversized
+  allocation probe and were not test failures. Layout/public ABI passed, and
+  the FFI boundary check classified 333 export sites and 52 reviewed raw/ABI
+  reentry sites.
+- `tests/no_allocation_critical_paths.rs` passed, including its assertion that
+  allocator critical paths do not use Rust's global allocator.
+  `cargo check --lib --no-default-features` also passed.
+- One pre-existing gate defect remains. The exact captured output was:
+
+  ```text
+  + env LOOM_MAX_PREEMPTIONS=3 cargo test --quiet --lib core_types::atomic_wrappers::concurrency_models
+
+  running 0 tests
+
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 242 filtered out; finished in 0.00s
+  ```
+
+  The six Loom models currently live under `types::atomic::concurrency_models`,
+  so the green exit is not valid concurrency evidence. Task 0.3 owns this
+  defect before Phase 1.
+- The tracked working tree and index were unchanged and clean after all
+  baseline commands. Ignored build outputs and the preserved pre-existing
+  local artifacts were the only filesystem effects.
+
+## 0.3 Make the concurrency-model gate execute its tests
+
+### Work
+
+- [ ] Correct `scripts/check-concurrency-models.sh` to select the current Loom
+      module path.
+- [ ] Make the script fail if its filter ever selects zero tests again.
+- [ ] Permit an explicitly named test-only filter override solely so the guard
+      can be regression-tested without editing the script's default filter.
+- [ ] Do not change the models, allocator production code, or concurrency
+      semantics in this task.
+
+### Validation
+
+- [ ] Run the script and require all six current Loom models to execute and
+      pass with the configured preemption bound.
+- [ ] Exercise the actual script guard through the test-only override and
+      require a deliberately unmatched filter to fail, without editing the
+      script's default filter.
+- [ ] Run the documentation/script formatting checks and the common Rust
+      validation gate.
+
+### Completion condition
+
+The concurrency command is meaningful evidence: it executes the intended Loom
+models and cannot silently become a zero-test success.
 
 ---
 

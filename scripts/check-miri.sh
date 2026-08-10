@@ -48,25 +48,39 @@ if (($# > 0)); then
   filters=("$@")
 else
   filters=(
-    core_types::arena::
-    core_types::atomic_wrappers::
-    core_types::callbacks::
-    core_types::freelist::
-    core_types::freelist_wrappers::
-    core_types::layout::
-    core_types::layout_tests::
-    core_types::memid::
-    core_types::padding::
-    core_types::page::
-    core_types::page_queues::
-    core_types::page_states::
-    core_types::ptr::
-    core_types::scalar::
-    core_types::track::
-    core_types::validation::
+    types::arena::
+    types::atomic::
+    types::callbacks::
+    types::freelist::
+    types::freelist_wrappers::
+    types::layout::
+    types::layout_tests::
+    types::memid::
+    types::padding::
+    types::page::
+    types::page_queues::
+    types::page_states::
+    types::ptr::
+    types::scalar::
+    types::track::
+    types::validation::
   )
 fi
 
+test_list="$(
+  env MIRIFLAGS="${MIRIFLAGS}" \
+    cargo +"${toolchain}" miri test --quiet --features std --lib -- --list
+)"
+
 for filter in "${filters[@]}"; do
+  selected_count="$(
+    printf '%s\n' "${test_list}" \
+      | awk -v filter="${filter}" 'index($0, filter) && /: test$/ { count++ } END { print count + 0 }'
+  )"
+  if [[ "${selected_count}" == "0" ]]; then
+    printf 'error: Miri filter selected no tests: %s\n' "${filter}" >&2
+    exit 1
+  fi
+  printf 'selected %s Miri tests for %s\n' "${selected_count}" "${filter}"
   run env MIRIFLAGS="${MIRIFLAGS}" cargo +"${toolchain}" miri test --features std --lib "${filter}"
 done

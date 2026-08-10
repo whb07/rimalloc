@@ -5,6 +5,8 @@
 use core::ffi::c_void;
 use core::ptr;
 #[cfg(not(target_pointer_width = "32"))]
+use core::ptr::NonNull;
+#[cfg(not(target_pointer_width = "32"))]
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::allocator::arena::MI_ARENA_SLICE_SIZE;
@@ -14,7 +16,7 @@ use crate::allocator::options::{
 };
 use crate::allocator::page::MI_LARGE_PAGE_SIZE;
 #[cfg(not(target_pointer_width = "32"))]
-use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
+use crate::atomic::{mi_lock_done, mi_lock_init, mi_lock_t};
 #[cfg(not(target_pointer_width = "32"))]
 use crate::bitmap::MI_BFIELD_BITS;
 #[cfg(target_pointer_width = "32")]
@@ -51,6 +53,8 @@ use crate::os::_mi_os_alloc_aligned;
 #[cfg(not(target_pointer_width = "32"))]
 use crate::os::_mi_os_zalloc;
 use crate::types::{MI_PAGE_ALIGN, mi_page_t, mi_subproc_t};
+#[cfg(not(target_pointer_width = "32"))]
+use crate::types::{MiLockGuard, MiLockPtr, PageMapSubIndex};
 
 mod lookup;
 
@@ -64,6 +68,33 @@ const MI_PAGE_MAP_ENTRIES_PER_CBIT: usize = if MI_PAGE_MAP_COUNT < MI_BFIELD_BIT
 } else {
     MI_PAGE_MAP_COUNT / MI_BFIELD_BITS
 };
+
+#[cfg(not(target_pointer_width = "32"))]
+/// Non-owning witness for a published submap allocation. This type does not
+/// extend the allocation lifetime or protect against allocator teardown.
+#[repr(transparent)]
+struct PublishedSubmap(NonNull<*mut mi_page_t>);
+
+#[cfg(not(target_pointer_width = "32"))]
+impl PublishedSubmap {
+    /// # Safety
+    ///
+    /// If `submap` is non-null, it must address all `MI_PAGE_MAP_SUB_COUNT`
+    /// slots and remain allocated while the returned value is used. Concurrent
+    /// page-map teardown must be excluded. A null pointer is accepted and
+    /// returns `None` without being dereferenced.
+    #[inline(always)]
+    unsafe fn from_raw(submap: mi_submap_t) -> Option<Self> {
+        NonNull::new(submap).map(Self)
+    }
+
+    #[inline(always)]
+    fn slot_ptr(&self, index: PageMapSubIndex) -> NonNull<*mut mi_page_t> {
+        // SAFETY: construction proves the full submap allocation is live and
+        // the typed index is strictly below `MI_PAGE_MAP_SUB_COUNT`.
+        unsafe { NonNull::new_unchecked(self.0.as_ptr().add(index.get())) }
+    }
+}
 
 #[cfg(not(target_pointer_width = "32"))]
 // SAFETY: process-global page-map base is mutated only
@@ -861,23 +892,27 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
 }
 
 #[cfg(not(target_pointer_width = "32"))]
+/// # Safety
+///
+/// The process-global page map and growth lock must be initialized and remain
+/// live. Concurrent unsafe page-map destruction must be excluded, and the
+/// returned witness must not outlive its backing page-map allocation.
 unsafe fn mi_page_map_ensure_submap_at(
     idx: crate::core_types::PageMapIndex,
-    submap: *mut mi_submap_t,
-) -> bool {
-    // SAFETY: caller provides a writable null out slot
-    // for the published or newly allocated submap.
-    crate::internal::mi_assert_internal!(!submap.is_null() && unsafe { (*submap).is_null() });
+) -> Option<PublishedSubmap> {
     let mut sub = ptr::null_mut();
     // SAFETY: typed top-level index bounds the commit
     // check and initial submap slot load.
     if !unsafe { mi_page_map_ensure_committed(idx, &mut sub) } {
-        return false;
+        return None;
     }
     if sub.is_null() {
         // SAFETY: global page-map growth lock protects
         // submap allocation/publication for this slot.
-        unsafe { mi_lock_acquire(&raw mut mi_page_map_lock) };
+        let lock = unsafe { NonNull::new_unchecked(&raw mut mi_page_map_lock) };
+        // SAFETY: the process-global page-map lock remains live throughout
+        // allocator operation and the guard releases it on every exit path.
+        let _guard = unsafe { MiLockGuard::acquire(MiLockPtr::from_nonnull(lock)) };
         // SAFETY: typed index bounds the top-level slot
         // reinterpreted as an audited atomic pointer field.
         let atomic_submap =
@@ -911,17 +946,13 @@ unsafe fn mi_page_map_ensure_submap_at(
                 }
             }
         }
-        // SAFETY: releases the global page-map growth
-        // lock after slot publication or failed allocation.
-        unsafe { mi_lock_release(&raw mut mi_page_map_lock) };
         if sub.is_null() {
-            return false;
+            return None;
         }
     }
-    // SAFETY: non-null submap is published to the
-    // caller-provided out slot.
-    unsafe { *submap = sub };
-    true
+    // SAFETY: the non-null submap was loaded from or published into the
+    // process-global page map and remains live until lifecycle teardown.
+    unsafe { PublishedSubmap::from_raw(sub) }
 }
 
 #[cfg(not(target_pointer_width = "32"))]
@@ -935,17 +966,15 @@ unsafe fn mi_page_map_set_range_prim(
     let mut slice_count = slice_count.get() as usize;
     while slice_count > 0 {
         let mut map_sub_idx = sub_idx;
-        let mut sub: mi_submap_t = ptr::null_mut();
-        // SAFETY: typed top-level index and out slot
-        // bound submap commit/allocation before page publication.
-        if !unsafe { mi_page_map_ensure_submap_at(idx, &mut sub) } {
+        // SAFETY: typed top-level index bounds submap commit/allocation before
+        // page publication, with lifecycle teardown excluded by the caller.
+        let Some(sub) = (unsafe { mi_page_map_ensure_submap_at(idx) }) else {
             return false;
-        }
-        crate::internal::mi_assert_internal!(!sub.is_null());
+        };
         while slice_count > 0 && map_sub_idx.get() < MI_PAGE_MAP_SUB_COUNT {
             // SAFETY: typed sub-index bounds the write
             // inside the published submap slot range.
-            unsafe { *sub.add(map_sub_idx.get()) = page };
+            unsafe { *sub.slot_ptr(map_sub_idx).as_ptr() = page };
             slice_count -= 1;
             map_sub_idx = match mi_page_map_sub_index(map_sub_idx.get() + 1) {
                 Some(next) => next,
@@ -975,17 +1004,15 @@ unsafe fn mi_page_map_clear_range_prim(
     let mut slice_count = slice_count.get() as usize;
     while slice_count > 0 {
         let mut map_sub_idx = sub_idx;
-        let mut sub: mi_submap_t = ptr::null_mut();
-        // SAFETY: typed top-level index and out slot
-        // bound submap commit/allocation before clearing entries.
-        if !unsafe { mi_page_map_ensure_submap_at(idx, &mut sub) } {
+        // SAFETY: typed top-level index bounds submap commit/allocation before
+        // clearing entries, with lifecycle teardown excluded by the caller.
+        let Some(sub) = (unsafe { mi_page_map_ensure_submap_at(idx) }) else {
             return false;
-        }
-        crate::internal::mi_assert_internal!(!sub.is_null());
+        };
         while slice_count > 0 && map_sub_idx.get() < MI_PAGE_MAP_SUB_COUNT {
             // SAFETY: typed sub-index bounds the clear
             // inside the published submap slot range.
-            unsafe { *sub.add(map_sub_idx.get()) = ptr::null_mut() };
+            unsafe { *sub.slot_ptr(map_sub_idx).as_ptr() = ptr::null_mut() };
             slice_count -= 1;
             map_sub_idx = match mi_page_map_sub_index(map_sub_idx.get() + 1) {
                 Some(next) => next,
@@ -1201,4 +1228,46 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
     // SAFETY: typed index/sub-index/count witnesses
     // bound the non-32-bit range clear.
     unsafe { mi_page_map_clear_range(location.index(), location.sub_index(), slice_count) };
+}
+
+#[cfg(all(test, not(target_pointer_width = "32")))]
+mod tests {
+    use super::*;
+    use core::mem::size_of;
+
+    #[test]
+    fn published_submap_rejects_null() {
+        // SAFETY: null is explicitly accepted for rejection without being
+        // dereferenced or wrapped as a published submap.
+        assert!(unsafe { PublishedSubmap::from_raw(ptr::null_mut()) }.is_none());
+    }
+
+    #[test]
+    fn published_submap_preserves_pointer_layout_and_option_niche() {
+        assert_eq!(size_of::<PublishedSubmap>(), size_of::<mi_submap_t>());
+        assert_eq!(
+            size_of::<Option<PublishedSubmap>>(),
+            size_of::<mi_submap_t>()
+        );
+    }
+
+    #[test]
+    fn published_submap_addresses_first_and_last_typed_slots() {
+        let mut slots = std::vec![ptr::null_mut(); MI_PAGE_MAP_SUB_COUNT].into_boxed_slice();
+        let base = slots.as_mut_ptr();
+        // SAFETY: the boxed slice provides every submap slot and remains live
+        // until after all derived slot pointers are checked.
+        let submap = unsafe { PublishedSubmap::from_raw(base) }
+            .expect("boxed full-size submap must have a non-null base");
+        let first = PageMapSubIndex::new(0).expect("zero is a valid submap index");
+        let last = PageMapSubIndex::new(MI_PAGE_MAP_SUB_COUNT - 1)
+            .expect("last in-range submap index must be valid");
+
+        assert_eq!(submap.slot_ptr(first).as_ptr(), base);
+        // SAFETY: the boxed slice contains exactly `MI_PAGE_MAP_SUB_COUNT`
+        // elements, so its last element is in bounds.
+        assert_eq!(submap.slot_ptr(last).as_ptr(), unsafe {
+            base.add(MI_PAGE_MAP_SUB_COUNT - 1)
+        });
+    }
 }

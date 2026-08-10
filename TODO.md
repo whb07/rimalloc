@@ -648,25 +648,86 @@ actual owners, and every remaining compatibility alias has a real consumer.
 
 ### Work
 
-- [ ] Rank files containing unsafe code using these factors: aliasing risk,
+- [x] Rank files containing unsafe code using these factors: aliasing risk,
       pointer arithmetic, lifetime extension, union access, atomic publication,
       FFI entry, and number of callers.
-- [ ] Select the five highest-risk domains. Expected candidates include free
+- [x] Select the five highest-risk domains. Expected candidates include free
       routing, page metadata, arena ownership, thread lifecycle, and callback
       state; use the evidence rather than assuming this exact order.
-- [ ] For each selected domain, identify the smallest safe or typed primitive
+- [x] For each selected domain, identify the smallest safe or typed primitive
       that could own repeated unsafe operations.
-- [ ] Reject proposed wrappers that merely move an unsafe block without reducing
+- [x] Reject proposed wrappers that merely move an unsafe block without reducing
       the number of callers that must understand its invariant.
-- [ ] Record the ranked list in this task's completion note, not a new ledger.
+- [x] Record the ranked list in this task's completion note, not a new ledger.
 
 ### Validation
 
-- [ ] Confirm every proposed primitive has at least two current unsafe callers
+- [x] Confirm every proposed primitive has at least two current unsafe callers
       or encloses one complete high-risk state transition.
-- [ ] Confirm each proposed safe API can state and enforce its invariant without
+- [x] Confirm each proposed safe API can state and enforce its invariant without
       accepting an unchecked primitive that recreates the original risk.
-- [ ] Run `scripts/check-unsafe-inventory.py` before making production changes.
+- [x] Run `scripts/check-unsafe-inventory.py` before making production changes.
+
+### Completion note (2026-08-10)
+
+- The pre-change advisory inventory reported 5,708 unsafe mentions, 3,480
+  blocks, 1,814 unsafe functions, 45 extern blocks, 16 unsafe impls, and 235
+  unsafe attributes. Counts informed caller breadth only; ranking weighted
+  aliasing, pointer arithmetic, lifetime extension, union access, atomic
+  publication, and FFI exposure. The five selected domains are:
+
+  1. **Page-map publication and lookup** (`page_map.rs` and `page_map/lookup.rs`).
+     Arbitrary user addresses feed index arithmetic and atomically published
+     submaps whose storage can later be cleared. Registration currently
+     discards its `RegisteredPageRange` proof, while unregister reconstructs
+     one unchecked. The smallest enforceable state is a non-forgeable
+     registered-page capability returned by successful publication and
+     consumed by unregister. A pure `PageMapLocation` replaces the raw
+     index/out-parameter sites, and a `PublishedSubmap` result replaces the raw
+     out-slot API at its two callers while owning the single publication CAS.
+  2. **Process-global callback registration and invocation**
+     (`options/diagnostics.rs`, `thread_heap.rs`, `page.rs`, and
+     `ffi/callbacks.rs`). Callback and argument atomics can expose mixed
+     generations, while scoped unsafe-callback guards extend a borrowed `FnMut`
+     context into process-global, cross-thread state. A generation-coherent
+     `CallbackSlot` must publish and snapshot the pair together without holding
+     its lock across reentrant invocation. A genuinely safe Rust registration
+     also requires an owned or `'static + Send + Sync` shared-call `Fn` context
+     (or internally synchronized mutable state) plus quiescent unregister; RAII
+     alone cannot make `forget` safe.
+  3. **Arena slice ownership** (`arena.rs`, `arena/purge.rs`, `arena_meta.rs`,
+     and the bitmap owner). Claim, rollback, commit, memid publication, and free
+     span bitmap atomics, slice arithmetic, and metadata lifetime. A non-Copy
+     `ClaimedArenaSlices` created only by atomic claim owns rollback through
+     commit, dirty-state, and accounting decisions, and is consumed when the
+     current `ArenaAllocation`/memid is published. This covers the complete
+     pre-publication transition with two allocation callers without pretending
+     the current Copy allocation token can own later free/purge restoration.
+  4. **Free-route ownership classification** (`free.rs` and
+     `types/page_states.rs`). Both validated and fast routes classify local
+     versus remote ownership; the validated route reloads the atomic owner
+     after its initial load. A single-load `FreeRouteSnapshot` containing owner,
+     flags, and path eliminates that validated-route reload and gives both
+     routes one classifier while preserving the assembly-named raw shims.
+     Existing remote-list capabilities remain useful and are not wrapped again.
+  5. **Subprocess/thread lifecycle ownership** (`init/subproc.rs`,
+     `init/subproc_registry.rs`, `init/thread.rs`, `thread_heap.rs`, and platform
+     TLS destructors). Pointer-shaped subprocess IDs, intrusive registries,
+     TLS/TLD publication, and teardown can leave stale borrows across metadata
+     destruction. A lock-bound `SubprocRegistryGuard` yields only a
+     guard-lifetime-bound non-Copy live borrow or a consumed `DetachedSubproc`
+     teardown token; the thread side follows with a linear `LocalThreadContext`
+     to `ThreadTeardown` transition that clears TLS before draining and freeing
+     TLD state. Each covers a complete high-risk state transition with several
+     current lookup/init/done consumers.
+- OS virtual-memory regions and atomic stats mutation ranked immediately below
+  the cutoff and remain required later: a linear `OsRegion` should couple the
+  usable range to its backing memid, and stats fields need owner-projected
+  atomic views that never manufacture concurrent `&mut` references. Raw macro
+  forwarding, options storage, generic pointer newtypes, safe raw-prefix
+  getters, boolean lock-state wrappers, and closure-based pointer hiding were
+  rejected because they enforce no additional invariant or merely relocate
+  unsafe reasoning.
 
 ### Completion condition
 

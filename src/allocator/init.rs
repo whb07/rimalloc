@@ -6,17 +6,7 @@
 
 mod cpu;
 mod subproc_registry;
-
-#[cfg(any(
-    miri,
-    not(all(
-        target_os = "linux",
-        any(feature = "tls-shim", not(feature = "std")),
-        target_arch = "x86_64",
-        not(target_env = "musl")
-    ))
-))]
-use core::cell::Cell;
+mod tls;
 #[cfg(feature = "guarded")]
 use core::ffi::c_long;
 use core::ffi::{c_char, c_void};
@@ -30,7 +20,6 @@ use crate::atomic::{
     mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t, mi_lock_acquire, mi_lock_done,
     mi_lock_init, mi_lock_release, mi_lock_t,
 };
-use crate::bits::MI_SIZE_SIZE;
 use crate::core_types::{
     BorrowedSubproc, Errno, HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainHeap,
     MainSubproc, MiLockGuard, MiLockPtr, SubprocPtr, ThreadHeapLocal, ThreadHeapPtr,
@@ -60,8 +49,16 @@ use crate::types::{
     mi_page_queue_t, mi_page_t, mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
     mi_thread_local_t, mi_threadid_t, mi_tld_t,
 };
-#[cfg(windows)]
-use crate::{prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
+#[cfg(any(
+    miri,
+    not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))
+))]
+pub(crate) use tls::fallback_thread_id;
+pub(crate) use tls::{
+    _mi_theap_cached_expansion_slot, _mi_theap_cached_key, _mi_theap_cached_slot,
+    _mi_theap_default_expansion_slot, _mi_theap_default_key, _mi_theap_default_slot,
+    mi_theap_main_tls_peek, mi_theap_main_tls_set,
+};
 
 // SAFETY: platform ABI hooks and link-name shims forward into the bounded init lifecycle.
 #[cfg(target_os = "linux")]
@@ -73,17 +70,8 @@ core::arch::global_asm!(".hidden _mi_cpu_stosb_max");
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden subproc_main");
 
-pub const MI_TLS_DIRECT_SLOTS: usize = 64;
-pub const MI_TLS_EXPANSION_SLOTS: usize = 1024;
-pub const MI_TLS_DIRECT_FIRST: usize = if MI_SIZE_SIZE == 4 {
-    0x0E10 / MI_SIZE_SIZE
-} else {
-    0x1480 / MI_SIZE_SIZE
-};
-pub const MI_TLS_INITIAL_SLOT: usize = 5;
 const MI_MAX_ARENAS: usize = 160;
 pub const MI_TLD_INVALID: *mut mi_tld_t = core::ptr::dangling_mut::<mi_tld_t>();
-pub const TLS_OUT_OF_INDEXES: u32 = u32::MAX;
 
 #[allow(non_snake_case)]
 pub const fn MI_STAT_COUNT_NULL() -> mi_stat_count_t {
@@ -521,27 +509,6 @@ static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
 #[unsafe(no_mangle)]
 pub(crate) static mut _mi_cpu_stosb_max: usize = 0;
 
-pub(crate) static mut _mi_theap_default_slot: usize = MI_TLS_INITIAL_SLOT;
-
-pub(crate) static mut _mi_theap_default_expansion_slot: usize = 0;
-
-pub(crate) static mut _mi_theap_cached_slot: usize = MI_TLS_INITIAL_SLOT;
-
-pub(crate) static mut _mi_theap_cached_expansion_slot: usize = 0;
-
-#[cfg(windows)]
-pub(crate) static mut mi_tls_raw_index_default: u32 = TLS_OUT_OF_INDEXES;
-
-#[cfg(windows)]
-pub(crate) static mut mi_tls_raw_index_cached: u32 = TLS_OUT_OF_INDEXES;
-
-pub(crate) static mut _mi_theap_default_key: mi_thread_local_t = 0;
-
-pub(crate) static mut _mi_theap_cached_key: mi_thread_local_t = 0;
-
-#[cfg(not(target_os = "linux"))]
-pub(crate) static mut __mi_theap_main: *mut mi_theap_t = ptr::null_mut();
-
 pub(crate) static mut _mi_process_is_initialized: bool = false;
 
 pub(crate) static mut _mi_cpu_has_popcnt: bool = false;
@@ -820,206 +787,9 @@ unsafe fn mi_subprocs_unsafe_destroy_all() {
     }
 }
 
-#[cfg(any(
-    miri,
-    not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))
-))]
-static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(8);
-
-#[cfg(any(
-    miri,
-    not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))
-))]
-thread_local! {
-    static THREAD_ID: Cell<usize> = const { Cell::new(0) };
-}
-
-#[cfg(any(
-    miri,
-    not(target_os = "linux"),
-    all(feature = "std", not(feature = "tls-shim"))
-))]
-thread_local! {
-    static THEAP_MAIN: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
-}
-
-// SAFETY: main thread-heap TLS access publishes only typed thread-heap pointers.
-#[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
-unsafe extern "C" {
-    fn _mi_tls_theap_main_get() -> *mut mi_theap_t;
-    #[link_name = "_mi_tls_theap_main_set"]
-    fn _mi_tls_theap_main_set_raw(theap: *mut c_void);
-}
-
-#[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
-#[inline(always)]
-unsafe fn _mi_tls_theap_main_set(theap: Option<ThreadHeapPtr>) {
-    let theap = theap
-        .map(ThreadHeapPtr::as_ptr)
-        .unwrap_or(ptr::null_mut())
-        .cast();
-    // SAFETY: main thread-heap TLS access publishes only typed thread-heap pointers.
-    unsafe { _mi_tls_theap_main_set_raw(theap) };
-}
-
-#[cfg(all(
-    not(miri),
-    target_os = "linux",
-    any(feature = "tls-shim", not(feature = "std")),
-    target_arch = "x86_64",
-    not(target_env = "musl")
-))]
-#[inline(always)]
-unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
-    let theap: *mut mi_theap_t;
-    // SAFETY: main thread-heap TLS access publishes only typed thread-heap pointers.
-    unsafe {
-        core::arch::asm!(
-            "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
-            "mov {theap}, qword ptr fs:[{tls_offset}]",
-            tls_offset = lateout(reg) _,
-            theap = lateout(reg) theap,
-            options(nostack, preserves_flags, readonly),
-        );
-    }
-    theap
-}
-
-#[cfg(all(
-    not(miri),
-    target_os = "linux",
-    any(feature = "tls-shim", not(feature = "std")),
-    target_arch = "x86_64",
-    not(target_env = "musl")
-))]
-#[inline(always)]
-unsafe fn mi_linux_x64_theap_main_set(theap: Option<ThreadHeapPtr>) {
-    let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
-    // SAFETY: main thread-heap TLS access publishes only typed thread-heap pointers.
-    unsafe {
-        core::arch::asm!(
-            "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
-            "mov qword ptr fs:[{tls_offset}], {theap}",
-            tls_offset = out(reg) _,
-            theap = in(reg) theap,
-            options(nostack, preserves_flags),
-        );
-    }
-}
-
-#[inline]
-pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
-    #[cfg(miri)]
-    {
-        THEAP_MAIN.with(Cell::get)
-    }
-    #[cfg(all(
-        not(miri),
-        target_os = "linux",
-        feature = "std",
-        not(feature = "tls-shim")
-    ))]
-    {
-        THEAP_MAIN.with(Cell::get)
-    }
-    #[cfg(all(
-        not(miri),
-        target_os = "linux",
-        any(feature = "tls-shim", not(feature = "std")),
-        target_arch = "x86_64",
-        not(target_env = "musl")
-    ))]
-    // SAFETY: main thread-heap TLS access publishes only typed thread-heap pointers.
-    unsafe {
-        mi_linux_x64_theap_main_get()
-    }
-    #[cfg(all(
-        not(miri),
-        target_os = "linux",
-        any(feature = "tls-shim", not(feature = "std")),
-        not(all(target_arch = "x86_64", not(target_env = "musl")))
-    ))]
-    // SAFETY: main thread-heap TLS access publishes only typed thread-heap pointers.
-    unsafe {
-        _mi_tls_theap_main_get()
-    }
-    #[cfg(not(any(miri, target_os = "linux")))]
-    {
-        THEAP_MAIN.with(Cell::get)
-    }
-}
-
-#[inline]
-pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
-    #[cfg(miri)]
-    {
-        let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
-        THEAP_MAIN.with(|slot| slot.set(theap));
-    }
-    #[cfg(all(
-        not(miri),
-        target_os = "linux",
-        feature = "std",
-        not(feature = "tls-shim")
-    ))]
-    {
-        let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
-        THEAP_MAIN.with(|slot| slot.set(theap));
-    }
-    #[cfg(all(
-        not(miri),
-        target_os = "linux",
-        any(feature = "tls-shim", not(feature = "std")),
-        target_arch = "x86_64",
-        not(target_env = "musl")
-    ))]
-    // SAFETY: main thread-heap TLS access publishes only typed thread-heap pointers.
-    unsafe {
-        mi_linux_x64_theap_main_set(theap);
-    }
-    #[cfg(all(
-        not(miri),
-        target_os = "linux",
-        any(feature = "tls-shim", not(feature = "std")),
-        not(all(target_arch = "x86_64", not(target_env = "musl")))
-    ))]
-    // SAFETY: main thread-heap TLS access publishes only typed thread-heap pointers.
-    unsafe {
-        _mi_tls_theap_main_set(theap);
-    }
-    #[cfg(not(any(miri, target_os = "linux")))]
-    {
-        let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
-        THEAP_MAIN.with(|slot| slot.set(theap));
-    }
-}
-
-#[inline]
-#[cfg(any(
-    miri,
-    not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))
-))]
-pub(crate) fn fallback_thread_id() -> mi_threadid_t {
-    THREAD_ID.with(|slot| {
-        let tid = slot.get();
-        if tid != 0 {
-            tid
-        } else {
-            let tid = NEXT_THREAD_ID.fetch_add(4, Ordering::Relaxed);
-            slot.set(tid);
-            tid
-        }
-    })
-}
-
-#[inline]
-fn current_thread_id() -> mi_threadid_t {
-    crate::prim::_mi_prim_thread_id()
-}
-
 #[inline(never)]
 pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
-    current_thread_id()
+    tls::current_thread_id()
 }
 
 #[used]
@@ -1029,7 +799,7 @@ static MI_THREAD_ID_KEEP: extern "C" fn() -> mi_threadid_t = _mi_thread_id;
 fn mi_is_main_thread_fast() -> bool {
     // SAFETY: main-thread identity compares initialized thread metadata with the current thread ID.
     let main_tid = unsafe { tld_main.thread_id };
-    main_tid == 0 || main_tid == current_thread_id()
+    main_tid == 0 || main_tid == tls::current_thread_id()
 }
 
 #[inline(never)]
@@ -1446,188 +1216,6 @@ fn mi_tld_free(tld: *mut mi_tld_t) {
     }
 }
 
-// SAFETY: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
-#[cfg(any(target_os = "openbsd", target_os = "android"))]
-unsafe extern "C" {
-    fn pthread_key_delete(key: mi_thread_local_t) -> i32;
-}
-
-// SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-#[cfg(windows)]
-unsafe extern "system" {
-    fn TlsAlloc() -> u32;
-    fn TlsFree(dw_tls_index: u32) -> i32;
-    fn TlsSetValue(dw_tls_index: u32, lp_tls_value: *mut c_void) -> i32;
-}
-
-#[cfg(windows)]
-unsafe fn mi_win_tls_slot_alloc(
-    slot: *mut usize,
-    extended: *mut usize,
-    raw_index: *mut u32,
-) -> bool {
-    // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-    let index = unsafe { TlsAlloc() };
-    // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-    unsafe { raw_index.write(index) };
-    if index == TLS_OUT_OF_INDEXES {
-        // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-        unsafe {
-            extended.write(0);
-            slot.write(0);
-        }
-        false
-    } else if usize::try_from(index)
-        .ok()
-        .is_some_and(|i| i < MI_TLS_DIRECT_SLOTS)
-    {
-        // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-        unsafe {
-            extended.write(0);
-            slot.write(index as usize + MI_TLS_DIRECT_FIRST);
-        }
-        true
-    } else if usize::try_from(index)
-        .ok()
-        .is_some_and(|i| i < MI_TLS_DIRECT_SLOTS + MI_TLS_EXPANSION_SLOTS - 1)
-    {
-        // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-        unsafe {
-            extended.write(index as usize - MI_TLS_DIRECT_SLOTS);
-            slot.write(MI_TLS_EXPANSION_SLOT);
-        }
-        true
-    } else {
-        // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-        unsafe {
-            _mi_error_message_fmt(
-                Errno::EFAULT,
-                format_args!("returned tls index was too high ({})\n", index),
-            );
-            let _ = TlsFree(index);
-            raw_index.write(TLS_OUT_OF_INDEXES);
-            extended.write(0);
-            slot.write(0);
-        }
-        false
-    }
-}
-
-#[cfg(windows)]
-unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
-    // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-    let index = unsafe { raw_index.read() };
-    if index != TLS_OUT_OF_INDEXES {
-        // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-        unsafe {
-            let _ = TlsFree(index);
-            raw_index.write(TLS_OUT_OF_INDEXES);
-        }
-    }
-}
-
-#[cfg(windows)]
-unsafe fn mi_win_tls_slot_set(slot: usize, extended_slot: usize, value: *mut c_void) {
-    crate::internal::mi_assert_internal!(
-        (slot >= MI_TLS_DIRECT_FIRST && slot < MI_TLS_DIRECT_FIRST + MI_TLS_DIRECT_SLOTS)
-            || slot == MI_TLS_EXPANSION_SLOT
-    );
-    if slot < MI_TLS_DIRECT_FIRST + MI_TLS_DIRECT_SLOTS {
-        crate::prim::mi_prim_tls_slot_set(slot, value);
-    } else {
-        crate::internal::mi_assert_internal!(extended_slot < MI_TLS_EXPANSION_SLOTS);
-        // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
-        let _ = unsafe { TlsSetValue((extended_slot + MI_TLS_DIRECT_SLOTS) as u32, value) };
-    }
-}
-
-#[cfg(not(windows))]
-unsafe fn mi_win_tls_slot_set(_slot: usize, _extended_slot: usize, _value: *mut c_void) {}
-
-#[cfg(any(target_os = "openbsd", target_os = "android"))]
-unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
-    let key = crate::threadlocal::_mi_thread_local_create();
-    if key == 0 {
-        EFAULT
-    } else {
-        // SAFETY: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
-        unsafe { pkey.write(key) };
-        0
-    }
-}
-
-fn mi_tls_slots_init() {
-    static TLS_SLOTS_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
-    if let Some(_once) =
-        // SAFETY: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
-        unsafe { mi_atomic_do_once_enter(ptr::addr_of!(TLS_SLOTS_INIT).cast_mut()) }
-    {
-        #[cfg(windows)]
-        // SAFETY: one-time initialization of process-global TLS slot metadata.
-        // SAFETY: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
-        unsafe {
-            let mut ok = mi_win_tls_slot_alloc(
-                ptr::addr_of_mut!(_mi_theap_default_slot),
-                ptr::addr_of_mut!(_mi_theap_default_expansion_slot),
-                ptr::addr_of_mut!(mi_tls_raw_index_default),
-            );
-            if ok {
-                ok = mi_win_tls_slot_alloc(
-                    ptr::addr_of_mut!(_mi_theap_cached_slot),
-                    ptr::addr_of_mut!(_mi_theap_cached_expansion_slot),
-                    ptr::addr_of_mut!(mi_tls_raw_index_cached),
-                );
-            }
-            if !ok {
-                _mi_error_message_fmt(
-                    Errno::EFAULT,
-                    format_args!(
-                        "unable to allocate fast TLS user slot (0x{:x})\n",
-                        _mi_theap_cached_slot
-                    ),
-                );
-            }
-        }
-
-        #[cfg(any(target_os = "openbsd", target_os = "android"))]
-        // SAFETY: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
-        unsafe {
-            let mut err = mi_pthread_key_create(ptr::addr_of_mut!(_mi_theap_default_key));
-            if err == 0 {
-                err = mi_pthread_key_create(ptr::addr_of_mut!(_mi_theap_cached_key));
-            }
-            if err != 0 {
-                _mi_error_message_fmt(
-                    Errno::EFAULT,
-                    format_args!("unable to allocate pthread keys (error {})\n", err),
-                );
-            }
-        }
-    }
-}
-
-fn mi_tls_slots_done() {
-    #[cfg(windows)]
-    // SAFETY: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
-    unsafe {
-        mi_win_tls_slot_free(ptr::addr_of_mut!(mi_tls_raw_index_default));
-        mi_win_tls_slot_free(ptr::addr_of_mut!(mi_tls_raw_index_cached));
-    }
-
-    #[cfg(any(target_os = "openbsd", target_os = "android"))]
-    // SAFETY: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
-    unsafe {
-        if _mi_theap_default_key != 0 {
-            let _ = pthread_key_delete(_mi_theap_default_key);
-            _mi_theap_default_key = 0;
-        }
-        if _mi_theap_cached_key != 0 {
-            let _ = pthread_key_delete(_mi_theap_cached_key);
-            _mi_theap_cached_key = 0;
-        }
-    }
-}
-
 // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
 /// # Safety
 /// Returns a borrowed process-global opaque subproc pointer.
@@ -1645,78 +1233,7 @@ static MI_SUBPROC_MAIN_KEEP: unsafe extern "C" fn() -> *mut mi_subproc_t = _mi_s
 /// `theap` must be a valid default theap for the current thread.
 pub(crate) unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
     // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    let theap_old = unsafe { crate::prim::_mi_theap_default() };
-    crate::internal::mi_assert_internal!(!theap.is_null());
-    crate::internal::mi_assert_internal!(
-        // SAFETY: default thread-heap association validates local ownership before TLS publication.
-        unsafe { (*(*theap).tld).thread_id } == 0
-            // SAFETY: default thread-heap association validates local ownership before TLS publication.
-            || unsafe { (*(*theap).tld).thread_id } == _mi_thread_id()
-    );
-    // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    let theap = unsafe { ThreadHeapPtr::new_unchecked(theap) };
-    // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
-    // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    let theap = match unsafe { theap.try_local(current) } {
-        Ok(theap) => theap,
-        // SAFETY: default thread-heap association validates local ownership before TLS publication.
-        Err(theap) => unsafe { ThreadHeapLocal::new_unchecked(theap) },
-    };
-
-    // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    unsafe { _mi_theap_default_set_typed(theap, ThreadHeapPtr::new(theap_old)) };
-}
-
-unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<ThreadHeapPtr>) {
-    let theap_ptr = theap.ptr();
-    let theap_raw = theap_ptr.as_ptr();
-    mi_tls_slots_init();
-    if crate::prim::MI_TLS_MODEL_THREAD_LOCAL {
-        crate::prim::mi_prim_thread_local_default_set(Some(theap_ptr));
-    } else if crate::prim::MI_TLS_MODEL_FIXED_SLOT {
-        crate::prim::mi_prim_tls_slot_set(
-            crate::prim::MI_TLS_MODEL_FIXED_SLOT_DEFAULT,
-            theap_raw.cast(),
-        );
-    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
-        // SAFETY: default thread-heap publication writes the validated local heap pointer into the selected TLS backend.
-        unsafe {
-            mi_win_tls_slot_set(
-                _mi_theap_default_slot,
-                _mi_theap_default_expansion_slot,
-                theap_raw.cast(),
-            );
-        }
-    // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_default_key } != 0 {
-        let _ = crate::threadlocal::_mi_thread_local_set(
-            // SAFETY: default thread-heap publication writes the validated local heap pointer into the selected TLS backend.
-            unsafe { _mi_theap_default_key },
-            theap_raw.cast(),
-        );
-    }
-
-    // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    if unsafe { crate::internal::mi_theap_is_initialized(theap_raw) } {
-        // SAFETY: default thread-heap publication writes the validated local heap pointer into the selected TLS backend.
-        unsafe { crate::prim::_mi_prim_thread_associate_default_theap(theap_raw) };
-        // SAFETY: default thread-heap association validates local ownership before TLS publication.
-        if unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_raw)) } {
-            mi_theap_main_tls_set(Some(theap_ptr));
-        }
-    }
-
-    if let Some(theap_old) = theap_old {
-        let theap_old = theap_old.as_ptr();
-        // SAFETY: default thread-heap association validates local ownership before TLS publication.
-        if unsafe { crate::internal::mi_theap_is_initialized(theap_old) }
-            // SAFETY: default thread-heap association validates local ownership before TLS publication.
-            && unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_old)) }
-        {
-            mi_theap_main_tls_set(ThreadHeapPtr::new(theap_old));
-        }
-    }
+    unsafe { tls::theap_default_set(theap) };
 }
 
 // SAFETY: cached thread-heap association validates local ownership before TLS publication.
@@ -1725,63 +1242,7 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
     // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-    let prev = unsafe { crate::prim::_mi_theap_cached() };
-    if ptr::eq(prev, theap) {
-        return;
-    }
-    let theap = ThreadHeapPtr::new(theap).map(|theap| {
-        // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-        let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
-        // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-        match unsafe { theap.try_local(current) } {
-            Ok(theap) => theap,
-            // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-            Err(theap) => unsafe { ThreadHeapLocal::new_unchecked(theap) },
-        }
-    });
-
-    // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-    unsafe { _mi_theap_cached_set_typed(theap, ThreadHeapPtr::new(prev)) };
-}
-
-unsafe fn _mi_theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Option<ThreadHeapPtr>) {
-    let theap_ptr = theap.map(ThreadHeapLocal::ptr);
-    let theap_raw = theap_ptr
-        .map(ThreadHeapPtr::as_ptr)
-        .unwrap_or(ptr::null_mut());
-    mi_tls_slots_init();
-    if crate::prim::MI_TLS_MODEL_THREAD_LOCAL {
-        crate::prim::mi_prim_thread_local_cached_set(theap_ptr);
-    } else if crate::prim::MI_TLS_MODEL_FIXED_SLOT {
-        crate::prim::mi_prim_tls_slot_set(
-            crate::prim::MI_TLS_MODEL_FIXED_SLOT_CACHED,
-            theap_raw.cast(),
-        );
-    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
-        // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-        unsafe {
-            mi_win_tls_slot_set(
-                _mi_theap_cached_slot,
-                _mi_theap_cached_expansion_slot,
-                theap_raw.cast(),
-            );
-        }
-    // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_cached_key } != 0 {
-        let _ = crate::threadlocal::_mi_thread_local_set(
-            // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-            unsafe { _mi_theap_cached_key },
-            theap_raw.cast(),
-        );
-    }
-
-    // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-    unsafe {
-        crate::internal::_mi_theap_incref(theap_raw);
-        crate::internal::_mi_theap_decref(
-            prev.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut()),
-        );
-    }
+    unsafe { tls::theap_cached_set(theap) };
 }
 
 // SAFETY: cached thread-heap association validates local ownership before TLS publication.
@@ -2369,7 +1830,7 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     unsafe { mi_process_init_inner() };
     mi_heap_main_init();
-    mi_tls_slots_init();
+    tls::mi_tls_slots_init();
     if OPTIONS_POST_INIT_STATE
         .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
@@ -2450,7 +1911,7 @@ pub unsafe extern "C" fn mi_process_done() {
         {
             crate::stats::mi_subproc_stats_print_out(mi_subproc_main(), None, ptr::null_mut());
         }
-        mi_tls_slots_done();
+        tls::mi_tls_slots_done();
         _mi_allocator_done();
         OS_PRELOADING.store(true, Ordering::Relaxed);
     }

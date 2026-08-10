@@ -525,7 +525,7 @@ pub(super) unsafe fn init() {
         return;
     }
     // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
-    if unsafe { super::_mi_thread_init_theap_default() }.is_null() {
+    if unsafe { init_default() }.is_null() {
         return;
     }
     // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.

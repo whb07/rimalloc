@@ -19,8 +19,8 @@ use crate::types::{mi_heap_t, mi_heap_visit_fun, mi_subproc_id_t, mi_subproc_t, 
 
 use super::{
     _mi_theap_default_safe, MiHeapMainPrefix, MiSubprocPrefix, SUBPROC_TOTAL_COUNT,
-    mi_heap_main_init, mi_heap_subproc_raw, mi_memid_is_static, mi_subproc_heap_main_raw,
-    mi_subproc_prefix, mi_subproc_prefix_typed, subproc_registry, subprocs_lock, tld_empty,
+    mi_heap_main_init, mi_memid_is_static, mi_subproc_heap_main_raw, mi_subproc_prefix,
+    mi_subproc_prefix_typed, subproc_registry, subprocs_lock, tld_empty,
 };
 
 pub(super) unsafe fn heap_main_typed(subproc: BorrowedSubproc) -> Option<HeapPtr> {
@@ -34,7 +34,7 @@ pub(super) fn to_id(subproc: Option<SubprocPtr>) -> mi_subproc_id_t {
     mi_subproc_id_t::from_ptr(subproc.map(SubprocPtr::as_ptr).unwrap_or(ptr::null_mut()))
 }
 
-pub(super) unsafe fn destroy_meta(subproc: SubprocPtr) {
+unsafe fn destroy_meta(subproc: SubprocPtr) {
     // SAFETY: subproc metadata destruction is serialized by the subproc registry lock.
     let subproc = unsafe { mi_subproc_prefix_typed(subproc) };
     // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.
@@ -48,6 +48,21 @@ pub(super) unsafe fn destroy_meta(subproc: SubprocPtr) {
             (*subproc).memid,
         );
     }
+}
+
+unsafe fn destroy_meta_raw(subproc: *mut mi_subproc_t) {
+    let Some(subproc) = SubprocPtr::new(subproc) else {
+        return;
+    };
+    // SAFETY: subproc metadata destruction is serialized by the subproc registry lock.
+    unsafe { destroy_meta(subproc) };
+}
+
+const _: unsafe fn(*mut mi_subproc_t) = destroy_meta_raw;
+
+unsafe fn heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
+    // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
+    unsafe { ptr::addr_of!((*(heap.cast::<MiHeapMainPrefix>())).subproc).read_unaligned() }
 }
 
 #[cfg(all(not(miri), target_os = "linux", target_arch = "x86_64"))]
@@ -300,7 +315,7 @@ pub(super) unsafe fn heap_main() -> *mut mi_heap_t {
 
 pub(super) unsafe fn is_heap_main(heap: *const mi_heap_t) -> bool {
     // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-    let subproc = unsafe { mi_heap_subproc_raw(heap) };
+    let subproc = unsafe { heap_subproc_raw(heap) };
     // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
     let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if main_heap.is_null() {
@@ -319,7 +334,7 @@ pub(super) unsafe fn is_theap_main(theap: *const mi_theap_t) -> bool {
     // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
     let heap = unsafe { crate::internal::_mi_theap_heap(theap) };
     // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-    let subproc = unsafe { mi_heap_subproc_raw(heap) };
+    let subproc = unsafe { heap_subproc_raw(heap) };
     // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
     let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if main_heap.is_null() {

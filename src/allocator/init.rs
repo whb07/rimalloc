@@ -561,11 +561,6 @@ unsafe fn mi_subproc_heap_main_raw(subproc: *mut mi_subproc_t) -> *mut mi_heap_t
         .unwrap_or(ptr::null_mut())
 }
 
-unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
-    // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
-    unsafe { ptr::addr_of!((*(heap.cast::<MiHeapMainPrefix>())).subproc).read_unaligned() }
-}
-
 // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
 /// # Safety
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
@@ -578,16 +573,6 @@ pub(crate) unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) ->
 #[used]
 static MI_SUBPROC_TO_ID_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> mi_subproc_id_t =
     _mi_subproc_to_id;
-
-unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
-    let Some(subproc) = SubprocPtr::new(subproc) else {
-        return;
-    };
-    // SAFETY: subproc metadata destruction is serialized by the subproc registry lock.
-    unsafe { subproc::destroy_meta(subproc) };
-}
-
-const _: unsafe fn(*mut mi_subproc_t) = mi_subproc_destroy_meta;
 
 #[inline(never)]
 pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
@@ -887,12 +872,6 @@ pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> b
 #[used]
 static MI_IS_THEAP_MAIN_KEEP: unsafe extern "C" fn(*const mi_theap_t) -> bool = _mi_is_theap_main;
 
-#[inline(always)]
-unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
-    // SAFETY: thread init installs a default heap only after process and TLD setup.
-    unsafe { thread::init_default() }
-}
-
 #[unsafe(no_mangle)]
 /// # Safety
 /// Initializes per-thread mimalloc state for the current thread when it is not already set up.
@@ -967,9 +946,7 @@ unsafe fn mi_process_init_inner() {
             let _ = crate::page_map::_mi_page_map_init();
             crate::prim::_mi_prim_thread_init_auto_done();
             _mi_theap_default_set(ptr::addr_of_mut!(theap_main));
-            if !crate::prim::_mi_thread_is_initialized()
-                && !_mi_thread_init_theap_default().is_null()
-            {
+            if !crate::prim::_mi_thread_is_initialized() && !thread::init_default().is_null() {
                 let heap = mi_heap_main();
                 if !heap.is_null() {
                     __mi_stat_increase_mt(

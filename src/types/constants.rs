@@ -24,7 +24,6 @@ pub const MI_STAT: usize = if MI_DEBUG > 0 || cfg!(feature = "bench-diagnostics"
 } else {
     0
 };
-pub const MI_GUARDED: usize = crate::internal::MI_GUARDED;
 pub const MI_PADDING: usize = if cfg!(feature = "secure")
     || MI_DEBUG >= 1
     || crate::allocator::tracking::MI_TRACK_VALGRIND != 0
@@ -46,17 +45,11 @@ pub const MI_ENCODE_FREELIST: usize = if cfg!(feature = "secure") || MI_DEBUG >=
 } else {
     0
 };
-const MI_PAGE_META_IS_SEPARATED: usize = if crate::bits::MI_PAGE_MAP_FLAT != 0 {
-    0
-} else {
-    1
-};
 pub const MI_PAGE_META_ALIGNED_FREE_SMALL: usize = 0;
 const MI_ARENA_SLICE_ALIGN: usize = crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_ARENA_MIN_OBJ_SLICES: usize = 1;
 pub const MI_ARENA_MIN_OBJ_SIZE: usize =
     MI_ARENA_MIN_OBJ_SLICES * crate::allocator::arena::MI_ARENA_SLICE_SIZE;
-const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 pub const MI_PAGE_MIN_COMMIT_SIZE: usize = crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
@@ -73,14 +66,6 @@ pub const EOVERFLOW: c_int = 75;
 pub const MI_DEBUG_UNINIT: u8 = 0xD0;
 pub const MI_DEBUG_FREED: u8 = 0xDF;
 pub const MI_DEBUG_PADDING: u8 = 0xDE;
-
-const _: (usize, usize, usize, usize, usize) = (
-    MI_SECURE,
-    MI_GUARDED,
-    MI_PAGE_META_IS_SEPARATED,
-    MI_ARENA_SLICE_ALIGN,
-    MI_MAX_ALLOC_SIZE,
-);
 
 pub const MI_MALLOC_VERSION: i32 = 30302;
 pub const MI_ENABLE_LARGE_PAGES: usize = 1;

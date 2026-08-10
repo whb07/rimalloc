@@ -196,11 +196,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase(
     mi_stat_adjust(unsafe { &mut *stat }, amount as i64);
 }
 
-#[used]
-// SAFETY: stats adjust helper retention preserves C helper shape without invoking it.
-static MI_STAT_ADJUST_INCREASE_KEEP: unsafe extern "C" fn(*mut mi_stat_count_t, usize) =
-    __mi_stat_adjust_increase;
-
 /// # Safety
 /// `stat` must point to valid writable count storage.
 // SAFETY: stats adjust helpers update current and total counters without peak tracking.

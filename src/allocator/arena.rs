@@ -1946,17 +1946,3 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     // SAFETY: unabandon entry validates raw page and thread-heap witnesses before cleanup.
     unsafe { _mi_arenas_page_unabandon_internal(page, current_theap) };
 }
-
-#[used]
-static MI_ARENAS_PAGE_SINGLETON_ALLOC_KEEP: unsafe fn(
-    *mut mi_theap_t,
-    crate::core_types::BlockSize,
-    crate::core_types::MaybeAlignment,
-) -> *mut mi_page_t = mi_arenas_page_singleton_alloc;
-// SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
-#[used]
-static MI_ARENAS_PAGE_ALLOC_KEEP: unsafe extern "C" fn(
-    *mut mi_theap_t,
-    usize,
-    usize,
-) -> *mut mi_page_t = _mi_arenas_page_alloc;

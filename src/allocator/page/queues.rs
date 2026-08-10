@@ -547,14 +547,6 @@ unsafe fn mi_page_queue_append_typed(
     }
 }
 
-// SAFETY: queue append moves linked pages between queues while retargeting owning thread heaps.
-#[used]
-static MI_PAGE_QUEUE_APPEND_KEEP: unsafe extern "C" fn(
-    *mut mi_theap_t,
-    *mut mi_page_queue_t,
-    *mut mi_page_queue_t,
-) -> usize = _mi_page_queue_append;
-
 /// # Safety
 /// `theap` must point to a valid thread heap, and `pq` must be a queue pointer to compare against
 /// that heap's page queues.

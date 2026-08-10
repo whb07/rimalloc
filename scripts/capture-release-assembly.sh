@@ -89,7 +89,9 @@ resolve_symbol_range() {
 
 capture_symbol() {
   local symbol="$1"
-  local out_file="$out_dir/$symbol.asm"
+  local output_name="${2:-$symbol}"
+  local note="${3:-}"
+  local out_file="$out_dir/$output_name.asm"
   local range start stop
 
   range="$(resolve_symbol_range "$symbol")"
@@ -102,6 +104,9 @@ capture_symbol() {
 
   {
     printf '# symbol=%s\n' "$symbol"
+    if [[ -n "$note" ]]; then
+      printf '# note=%s\n' "$note"
+    fi
     printf '# start=0x%s\n' "$start"
     if [[ -n "${stop:-}" ]]; then
       printf '# stop=0x%s\n' "$stop"
@@ -118,7 +123,9 @@ capture_symbol mi_malloc
 capture_symbol mi_malloc_small
 capture_symbol mi_free
 capture_symbol mi_route_free
-capture_symbol mi_free_block_local
-capture_symbol _mi_theap_malloc_zero_ex
+capture_symbol mi_route_free mi_free_block_local \
+  'mi_free_block_local is inlined into this emitted caller'
+capture_symbol _mi_theap_malloc_zero_ex_typed _mi_theap_malloc_zero_ex \
+  '_mi_theap_malloc_zero_ex is inlined; this is its emitted typed implementation'
 
 printf 'manifest -> %s\n' "$out_dir/manifest.txt"

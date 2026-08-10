@@ -48,9 +48,6 @@ pub(crate) extern "C" fn _mi_toupper(c: c_char) -> c_char {
     }
 }
 
-#[used]
-static MI_TOUPPER_KEEP: extern "C" fn(c_char) -> c_char = _mi_toupper;
-
 /// # Safety
 ///
 /// `s` and `t`, when non-null, must point to readable C strings for at least
@@ -334,9 +331,6 @@ unsafe fn mi_out_num(
     }
 }
 
-#[used]
-static MI_OUT_NUM_KEEP: unsafe fn(u128, usize, c_char, &mut *mut c_char, *mut c_char) = mi_out_num;
-
 #[inline]
 #[cfg(target_pointer_width = "32")]
 fn mi_byte_sum32(mut x: u32) -> usize {
@@ -458,9 +452,6 @@ pub(crate) extern "C" fn _mi_popcount_generic(x: usize) -> usize {
     }
 }
 
-#[used]
-static MI_POPCOUNT_GENERIC_KEEP: extern "C" fn(usize) -> usize = _mi_popcount_generic;
-
 pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arguments<'_>) -> i32 {
     if buf.is_null() || bufsize == 0 {
         return 0;
@@ -552,48 +543,6 @@ pub(crate) unsafe extern "C" fn _mi_vsnprintf(
 pub(crate) fn _mi_snprintf(buf: *mut c_char, buflen: usize, args: fmt::Arguments<'_>) -> i32 {
     mi_vsnprintf_args(buf, buflen, args)
 }
-
-#[used]
-// SAFETY: retention pointer preserves the helper's raw
-// C ABI type without invoking it.
-static MI_STRNICMP_KEEP: unsafe extern "C" fn(*const c_char, *const c_char, usize) -> i32 =
-    _mi_strnicmp;
-#[used]
-// SAFETY: retention pointer preserves the helper's raw
-// C ABI type without invoking it.
-static MI_STREQ_KEEP: unsafe extern "C" fn(*const c_char, *const c_char) -> bool = _mi_streq;
-#[used]
-// SAFETY: retention pointer preserves the helper's raw
-// C ABI type without invoking it.
-static MI_STRLCPY_KEEP: unsafe extern "C" fn(*mut c_char, *const c_char, usize) = _mi_strlcpy;
-#[used]
-// SAFETY: retention pointer preserves the helper's raw
-// C ABI type without invoking it.
-static MI_STRLCAT_KEEP: unsafe extern "C" fn(*mut c_char, *const c_char, usize) = _mi_strlcat;
-#[used]
-// SAFETY: retention pointer preserves the helper's raw
-// C ABI type without invoking it.
-static MI_STRNLEN_KEEP: unsafe extern "C" fn(*const c_char, usize) -> usize = _mi_strnlen;
-#[used]
-// SAFETY: retention pointer preserves the helper's raw
-// C ABI type without invoking it.
-static MI_STRLEN_KEEP: unsafe extern "C" fn(*const c_char) -> usize = _mi_strlen;
-#[used]
-// SAFETY: retention pointer preserves the helper's raw
-// C ABI type without invoking it.
-static MI_STRNSTR_KEEP: unsafe extern "C" fn(*mut c_char, usize, *const c_char) -> *mut c_char =
-    _mi_strnstr;
-#[used]
-// SAFETY: retention pointer preserves the helper's raw
-// C ABI type without invoking it.
-static MI_VSNPRINTF_KEEP: unsafe extern "C" fn(
-    *mut c_char,
-    usize,
-    *const c_char,
-    *mut c_void,
-) -> c_int = _mi_vsnprintf;
-#[used]
-static MI_SNPRINTF_KEEP: for<'a> fn(*mut c_char, usize, fmt::Arguments<'a>) -> i32 = _mi_snprintf;
 
 #[cfg(test)]
 mod tests {

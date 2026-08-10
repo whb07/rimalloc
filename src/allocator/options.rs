@@ -22,9 +22,6 @@ pub(crate) fn _mi_message(args: fmt::Arguments<'_>) {
     diagnostics::message_impl(args);
 }
 
-#[used]
-static MI_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_message;
-
 pub(crate) fn mi_error_default(err: Errno) {
     diagnostics::mi_error_default(err);
 }
@@ -159,13 +156,6 @@ pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char
     // SAFETY: the caller provides the same C string required by the diagnostic implementation.
     unsafe { diagnostics::error_message(err, fmt) };
 }
-
-#[used]
-// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
-static MI_WARNING_MESSAGE_KEEP: unsafe extern "C" fn(*const c_char) = _mi_warning_message;
-#[used]
-// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
-static MI_ERROR_MESSAGE_KEEP: unsafe extern "C" fn(c_int, *const c_char) = _mi_error_message;
 
 #[inline(never)]
 pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {

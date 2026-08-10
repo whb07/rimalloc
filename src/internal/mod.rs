@@ -76,9 +76,7 @@ pub(crate) use crate::platform::os::{
 #[cfg(windows)]
 pub(crate) use crate::platform::os::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint};
 pub(crate) use crate::platform::{_mi_allocator_done, _mi_allocator_init};
-use crate::types::{
-    mi_block_t, mi_heap_t, mi_output_fun, mi_page_queue_t, mi_page_t, mi_theap_t, mi_thread_free_t,
-};
+use crate::types::{mi_block_t, mi_heap_t, mi_output_fun, mi_page_queue_t, mi_page_t, mi_theap_t};
 #[cfg(test)]
 pub use block_link::mi_block_set_nextx;
 pub use block_link::{
@@ -606,28 +604,6 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
 }
 
 /// # Safety
-/// `page` must point to mutable abandoned page metadata owned by this allocator.
-#[inline]
-pub(crate) unsafe fn mi_page_set_abandoned_mapped(page: crate::core_types::PagePtr) {
-    // SAFETY: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
-    unsafe {
-        crate::internal::mi_assert_internal!(crate::allocator::page::mi_page_is_abandoned(
-            page.as_ptr()
-        ));
-        let atomic_tid = page.thread_id_cell();
-        let mut old = atomic_tid.load();
-        loop {
-            let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);
-            if atomic_tid.compare_exchange_owner(&mut old, new) {
-                break;
-            }
-        }
-    }
-}
-
-const _: unsafe fn(crate::core_types::PagePtr) = mi_page_set_abandoned_mapped;
-
-/// # Safety
 /// `page` must point to mutable abandoned-mapped page metadata owned by this allocator.
 #[inline]
 pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::PagePtr) {
@@ -644,36 +620,6 @@ pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::Pag
         }
     }
 }
-
-#[inline]
-pub(crate) fn mi_tf_block(tf: mi_thread_free_t) -> *mut mi_block_t {
-    crate::core_types::ThreadFreeWord::from_raw(tf).head_raw()
-}
-
-const _: fn(mi_thread_free_t) -> *mut mi_block_t = mi_tf_block;
-
-#[inline]
-pub(crate) const fn mi_tf_is_owned(tf: mi_thread_free_t) -> bool {
-    crate::core_types::ThreadFreeWord::from_raw(tf).is_owned()
-}
-
-const _: fn(mi_thread_free_t) -> bool = mi_tf_is_owned;
-
-#[inline]
-pub(crate) fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_free_t {
-    let free_owner = if owned {
-        crate::core_types::ThreadFreeOwner::Owned
-    } else {
-        crate::core_types::ThreadFreeOwner::Unowned
-    };
-    crate::core_types::ThreadFreeWord::from_parts(
-        crate::core_types::BlockPtr::new(block),
-        free_owner,
-    )
-    .raw()
-}
-
-const _: fn(*mut mi_block_t, bool) -> mi_thread_free_t = mi_tf_create;
 
 /// # Safety
 /// `page` must be abandoned page metadata whose thread-free ownership may be claimed.

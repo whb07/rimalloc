@@ -557,6 +557,8 @@ pub(crate) unsafe fn mi_block_check_unguard(
 }
 
 #[allow(clippy::absurd_extreme_comparisons)]
+// The fast-malloc assembly reaches this through the generic free shims below.
+#[cfg_attr(not(mi_c_malloc_fast), allow(dead_code))]
 pub(crate) unsafe fn mi_validate_block_from_ptr(
     page: crate::core_types::PagePtr,
     user: crate::core_types::UserPtr,
@@ -627,31 +629,11 @@ unsafe fn mi_pointer_location(
     }
 }
 
-/// # Safety
-/// `lookup` must come from validating the same page/user pair that is about to
-/// be freed by the generic free path. The caller must not separately unguard
-/// the block; this boundary consumes the lookup and performs any required
-/// guarded-block unprotection before returning the freeable block witness.
-unsafe fn mi_block_for_free_from_lookup(
-    lookup: crate::core_types::PointerLookup,
-) -> Option<crate::core_types::BlockForFree> {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
-    unsafe {
-        mi_prepare_validated_free(lookup).map(|validated| {
-            let parts = validated.into_parts();
-            let _ = parts.user;
-            let _ = parts.page;
-            parts.block
-        })
-    }
-}
-
-const _: unsafe fn(crate::core_types::PointerLookup) -> Option<crate::core_types::BlockForFree> =
-    mi_block_for_free_from_lookup;
-
 // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
 #[cold]
 #[inline(never)]
+// `raw::macros` names this function as an assembly operand in fast-malloc builds.
+#[cfg_attr(not(mi_c_malloc_fast), allow(dead_code))]
 pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
     unsafe {
         crate::internal::mi_assert_internal!(!p.is_null() && !page.is_null());
@@ -678,6 +660,8 @@ pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *
 // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
 #[cold]
 #[inline(never)]
+// `raw::macros` names this function as an assembly operand in fast-malloc builds.
+#[cfg_attr(not(mi_c_malloc_fast), allow(dead_code))]
 pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
     unsafe {
         crate::internal::mi_assert_internal!(!p.is_null() && !page.is_null());
@@ -713,11 +697,6 @@ pub(crate) unsafe extern "C" fn _mi_free_generic(
         }
     }
 }
-
-#[used]
-// SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
-static MI_FREE_GENERIC_KEEP: unsafe extern "C" fn(*mut mi_page_t, bool, *mut c_void) =
-    _mi_free_generic;
 
 pub(crate) unsafe fn mi_validate_pointer(
     p: *mut c_void,
@@ -985,18 +964,6 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
 // SAFETY: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 const _: unsafe extern "C" fn(*mut mi_page_t, *mut mi_block_t) = mi_free_try_collect_mt;
 
-/// # Safety
-/// `page` must be the page containing `p`.
-// SAFETY: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
-#[inline(never)]
-pub unsafe extern "C" fn mi_page_usable_aligned_size_of(
-    page: *const mi_page_t,
-    p: *const c_void,
-) -> usize {
-    // SAFETY: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
-    unsafe { mi_page_usable_aligned_size_of_typed(page, p).get() }
-}
-
 pub(crate) unsafe fn mi_page_usable_aligned_size_of_typed(
     page: *const mi_page_t,
     p: *const c_void,
@@ -1059,13 +1026,6 @@ pub unsafe fn _mi_usable_size(p: *const c_void, page: *const mi_page_t) -> usize
     // SAFETY: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
     unsafe { _mi_usable_size_typed(p, page).get() }
 }
-
-#[used]
-// SAFETY: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
-static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP: unsafe extern "C" fn(
-    *const mi_page_t,
-    *const c_void,
-) -> usize = mi_page_usable_aligned_size_of;
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator.

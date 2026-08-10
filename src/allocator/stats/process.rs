@@ -45,9 +45,6 @@ pub(crate) extern "C" fn _mi_stats_init() {
     }
 }
 
-#[used]
-static MI_STATS_INIT_KEEP: extern "C" fn() = _mi_stats_init;
-
 fn clamp_msecs_to_size(value: i64) -> usize {
     if value <= 0 {
         0

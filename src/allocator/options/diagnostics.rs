@@ -271,9 +271,6 @@ fn mi_recurse_enter_prim() -> bool {
     }
 }
 
-#[used]
-static MI_RECURSE_ENTER_PRIM_KEEP: fn() -> bool = mi_recurse_enter_prim;
-
 #[inline]
 fn mi_recurse_enter() -> bool {
     if cfg!(any(target_vendor = "apple", target_os = "android")) && _mi_preloading() {
@@ -297,9 +294,6 @@ fn mi_recurse_exit_prim() {
         recurse.with(|slot| slot.set(false));
     }
 }
-
-#[used]
-static MI_RECURSE_EXIT_PRIM_KEEP: fn() = mi_recurse_exit_prim;
 
 #[inline]
 fn mi_recurse_exit() {
@@ -475,9 +469,6 @@ pub(super) fn message_impl(args: fmt::Arguments<'_>) {
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
 }
 
-#[used]
-static MI_RAW_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_raw_message;
-
 #[inline(never)]
 pub(crate) fn _mi_trace_message(args: fmt::Arguments<'_>) {
     if option_get(mi_option_t::mi_option_verbose) <= 1 {
@@ -493,11 +484,6 @@ pub(crate) fn _mi_verbose_message(args: fmt::Arguments<'_>) {
     }
     mi_vfprintf(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
 }
-
-#[used]
-static MI_TRACE_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_trace_message;
-#[used]
-static MI_VERBOSE_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_verbose_message;
 
 fn mi_show_error_message(args: fmt::Arguments<'_>) {
     if !option_is_enabled(mi_option_t::mi_option_verbose) {
@@ -588,11 +574,6 @@ pub(super) unsafe fn error_message(err: c_int, fmt: *const c_char) {
         mi_error_default(err);
     }
 }
-
-#[used]
-static MI_WARNING_MESSAGE_FMT_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_warning_message_fmt;
-#[used]
-static MI_ERROR_MESSAGE_FMT_KEEP: for<'a> fn(Errno, fmt::Arguments<'a>) = _mi_error_message_fmt;
 
 pub(super) fn mi_error_default(err: Errno) {
     if err == Errno::EFAULT && (MI_DEBUG > 0 || cfg!(feature = "secure")) {

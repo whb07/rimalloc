@@ -280,27 +280,6 @@ pub(super) fn theap_main_init() {
 }
 
 #[inline(always)]
-fn tld_alloc() -> *mut mi_tld_t {
-    let main_subproc = ptr::addr_of_mut!(subproc_main)
-        .cast::<MiSubprocPrefix>()
-        .cast::<mi_subproc_t>();
-    if mi_is_main_thread_fast() {
-        tld_main_init();
-        // SAFETY: main-thread bookkeeping mutates only the process-global main subproc counters.
-        // SAFETY: TLD allocation/free and per-thread metadata counters use typed TLD and subproc witnesses.
-        unsafe {
-            let subproc = mi_subproc_prefix(main_subproc);
-            (*subproc).thread_count.fetch_add(1, Ordering::Relaxed);
-            ptr::addr_of_mut!(tld_main)
-        }
-    } else {
-        tld_alloc_non_main(main_subproc)
-    }
-}
-
-const _: fn() -> *mut mi_tld_t = tld_alloc;
-
-#[inline(always)]
 fn tld_alloc_non_main(main_subproc: *mut mi_subproc_t) -> *mut mi_tld_t {
     let Some(main_subproc) = SubprocPtr::new(main_subproc) else {
         return ptr::null_mut();

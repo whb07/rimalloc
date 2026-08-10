@@ -689,15 +689,3 @@ pub(crate) unsafe extern "C" fn _mi_heap_theap_get_or_init(
     unsafe { _mi_theap_cached_set(theap) };
     theap
 }
-
-#[used]
-// SAFETY: retention anchor keeps the local C ABI
-// lazy thread-heap initializer visible to generated artifacts.
-static MI_HEAP_INIT_THEAP_KEEP: unsafe extern "C" fn(*const mi_heap_t) -> *mut mi_theap_t =
-    mi_heap_init_theap;
-
-#[used]
-// SAFETY: retention anchor keeps the local C ABI
-// get-or-init helper visible to generated artifacts.
-static MI_HEAP_THEAP_GET_OR_INIT_KEEP: unsafe extern "C" fn(*const mi_heap_t) -> *mut mi_theap_t =
-    _mi_heap_theap_get_or_init;

@@ -328,8 +328,3 @@ pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
     }
     false
 }
-
-#[used]
-// SAFETY: keep the debug classification shim linked
-// with its exact C-shaped function pointer type.
-static MI_META_IS_META_PAGE_KEEP: unsafe extern "C" fn(*mut c_void) -> bool = _mi_meta_is_meta_page;

@@ -607,24 +607,6 @@ unsafe fn _mi_theap_malloc_zero_typed(
     unsafe { _mi_theap_malloc_zero_ex_typed(theap, layout, no_alignment(), usable) }
 }
 
-#[used]
-static MI_THEAP_MALLOC_ZERO_EX_KEEP: unsafe extern "C" fn(
-    *mut mi_theap_t,
-    usize,
-    bool,
-    usize,
-    *mut usize,
-) -> *mut c_void = _mi_theap_malloc_zero_ex;
-
-// SAFETY: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
-#[used]
-static MI_THEAP_MALLOC_ZERO_KEEP: unsafe extern "C" fn(
-    *mut mi_theap_t,
-    usize,
-    bool,
-    *mut usize,
-) -> *mut c_void = _mi_theap_malloc_zero;
-
 unsafe fn mi_theap_malloc_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,

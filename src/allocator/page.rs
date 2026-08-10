@@ -49,12 +49,12 @@ mod validation;
 pub use bins::_mi_bin_size;
 pub(crate) use bins::{mi_bin_from_block_size, mi_bin_from_usable, mi_good_size_typed};
 use counts::{
-    mi_page_add_capacity_count, mi_page_queue_add_count, mi_page_queue_block_size_raw,
-    mi_page_queue_decrement_count, mi_page_queue_increment_count, page_queue_ptr,
+    mi_page_add_capacity_count, mi_page_queue_block_size_raw, mi_page_queue_decrement_count,
+    mi_page_queue_increment_count, page_queue_ptr,
 };
 pub(crate) use counts::{
-    mi_page_capacity_count, mi_page_increment_used_count, mi_page_queue_count_typed,
-    mi_page_reserved_count, mi_page_set_reserved_count, mi_page_set_used_count, mi_page_used_count,
+    mi_page_capacity_count, mi_page_queue_count_typed, mi_page_reserved_count,
+    mi_page_set_reserved_count, mi_page_set_used_count, mi_page_used_count,
 };
 pub use counts::{mi_page_queue_is_full, mi_page_queue_is_huge, mi_page_queue_is_special};
 pub use deferred::mi_register_deferred_free;
@@ -80,13 +80,13 @@ pub(crate) use lifecycle::{
 };
 pub use queues::{mi_page_queue_contains, mi_page_queue_of};
 pub(crate) use queues::{
-    mi_page_queue_enqueue_from, mi_page_queue_enqueue_from_full, mi_page_queue_enqueue_from_raw,
-    mi_page_queue_remove_raw, mi_page_queue_remove_typed,
+    mi_page_queue_enqueue_from_full, mi_page_queue_enqueue_from_raw, mi_page_queue_remove_raw,
+    mi_page_queue_remove_typed,
 };
 use queues::{
-    mi_page_queue_move_to_front_typed, mi_page_queue_push_at_end_raw,
-    mi_page_queue_push_at_end_typed, mi_page_queue_push_raw, mi_page_queue_push_typed,
-    mi_theap_contains_queue, mi_theap_direct_cache_start, mi_theap_queue_index,
+    mi_page_queue_move_to_front_typed, mi_page_queue_push_at_end_typed, mi_page_queue_push_raw,
+    mi_page_queue_push_typed, mi_theap_contains_queue, mi_theap_direct_cache_start,
+    mi_theap_queue_index,
 };
 pub(crate) use stats_bin::mi_page_bin_typed;
 #[allow(unused_imports)]
@@ -598,11 +598,6 @@ unsafe fn mi_page_free_list_extend_typed(
 }
 
 // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-#[used]
-static MI_PAGE_FREE_LIST_EXTEND_KEEP: unsafe extern "C" fn(*mut mi_page_t, usize, usize) =
-    mi_page_free_list_extend;
-
-// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
     unsafe {
@@ -706,11 +701,6 @@ unsafe fn mi_page_extend_free_typed(
         true
     }
 }
-
-// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-#[used]
-static MI_PAGE_EXTEND_FREE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) -> bool =
-    mi_page_extend_free;
 
 // SAFETY: abandon transitions detach active/full pages before arena abandon publication.
 #[inline(never)]
@@ -917,15 +907,6 @@ unsafe fn mi_page_fresh_alloc_typed(
         Some(page)
     }
 }
-
-// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-#[used]
-static MI_PAGE_FRESH_ALLOC_KEEP: unsafe extern "C" fn(
-    *mut mi_theap_t,
-    *mut mi_page_queue_t,
-    usize,
-    usize,
-) -> *mut mi_page_t = mi_page_fresh_alloc;
 
 // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
@@ -1137,11 +1118,6 @@ unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mu
     }
 }
 
-// SAFETY: abandoned-page reclaim reattaches pages to target thread-heap queues.
-#[used]
-static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) =
-    mi_theap_page_reclaim_raw;
-
 /// # Safety
 /// `theap` must be valid, and `pq` must point to a page queue belonging to that heap.
 // SAFETY: queue validation walks linked pages without mutating queue ownership.
@@ -1243,13 +1219,6 @@ unsafe fn mi_page_queue_is_valid_typed(
         true
     }
 }
-
-// SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
-#[used]
-static MI_PAGE_QUEUE_IS_VALID_KEEP: unsafe extern "C" fn(
-    *mut mi_theap_t,
-    *const mi_page_queue_t,
-) -> bool = _mi_page_queue_is_valid;
 
 /// # Safety
 /// `theap` must be valid, and `page` must point to page metadata owned by that heap.
@@ -1360,32 +1329,6 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
             direct_idx,
             Some(crate::core_types::PagePtr::new_unchecked(page)),
         );
-    }
-}
-
-#[inline]
-unsafe fn mi_page_queue_find_free_ex(
-    theap: *mut mi_theap_t,
-    pq: *mut mi_page_queue_t,
-    first_try: bool,
-) -> *mut mi_page_t {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let queue = page_queue_ptr(pq);
-        let Some(queue) = crate::core_types::NormalPageQueue::new(queue) else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
-        let Some(block_size) = queue.ptr().block_size() else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
-        let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        mi_page_queue_find_free_ex_typed(theap, queue, block_size, first_try)
-            .map(|page| page.page().as_ptr())
-            .unwrap_or(ptr::null_mut())
     }
 }
 
@@ -1566,28 +1509,6 @@ unsafe fn mi_page_queue_find_free_ex_typed(
 }
 
 #[inline]
-unsafe fn mi_find_free_page(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let queue = page_queue_ptr(pq);
-        let Some(queue) = crate::core_types::NormalPageQueue::new(queue) else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
-        let Some(block_size) = queue.ptr().block_size() else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
-        let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        mi_find_free_page_typed(theap, queue, block_size)
-            .map(|page| page.page().as_ptr())
-            .unwrap_or(ptr::null_mut())
-    }
-}
-
-#[inline]
 #[allow(clippy::absurd_extreme_comparisons)]
 unsafe fn mi_find_free_page_typed(
     theap: crate::core_types::ThreadHeapLocal,
@@ -1611,40 +1532,6 @@ unsafe fn mi_find_free_page_typed(
         } else {
             mi_page_queue_find_free_ex_typed(theap, queue, block_size, true)
         }
-    }
-}
-
-#[inline]
-unsafe fn mi_huge_page_alloc(
-    theap: *mut mi_theap_t,
-    size: usize,
-    page_alignment: usize,
-    pq: *mut mi_page_queue_t,
-) -> *mut mi_page_t {
-    // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
-    unsafe {
-        let block_size = _mi_os_good_alloc_size(size);
-        crate::internal::mi_assert_internal!(mi_page_queue_is_huge(pq));
-        let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        let Some(queue) = crate::core_types::HugePageQueue::new(
-            crate::core_types::PageQueuePtr::new_unchecked(pq),
-        ) else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
-        let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
-            crate::core_types::PaddedSize::new_unchecked(block_size),
-            crate::core_types::Zeroed::No,
-        );
-        let Some(page_alignment) = crate::core_types::MaybeAlignment::new(page_alignment) else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
-        mi_huge_page_alloc_typed(owner, layout, page_alignment, queue)
-            .map(|page| page.page().as_ptr())
-            .unwrap_or(ptr::null_mut())
     }
 }
 
@@ -1679,45 +1566,6 @@ unsafe fn mi_huge_page_alloc_typed(
             .map(|page| crate::core_types::assume_active_page(page))
     }
 }
-
-#[inline(always)]
-unsafe fn mi_find_page(
-    theap: *mut mi_theap_t,
-    size: usize,
-    huge_alignment: usize,
-) -> *mut mi_page_t {
-    // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
-    unsafe {
-        let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        let size = crate::core_types::PaddedSize::new_unchecked(size);
-        let Some(huge_alignment) = crate::core_types::MaybeAlignment::new(huge_alignment) else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
-        mi_find_page_typed(theap, size, huge_alignment)
-            .map(|page| page.page().as_ptr())
-            .unwrap_or(ptr::null_mut())
-    }
-}
-
-const _: unsafe fn(*mut mi_page_queue_t, crate::core_types::PageQueueCount) =
-    mi_page_queue_add_count;
-const _: unsafe fn(*mut mi_page_t) -> crate::core_types::UsedBlockCount =
-    mi_page_increment_used_count;
-const _: unsafe fn(*mut mi_theap_t, *mut mi_page_queue_t, *mut mi_page_t) =
-    mi_page_queue_push_at_end_raw;
-const _: unsafe fn(
-    crate::core_types::FullPageQueue,
-    crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
-) -> crate::core_types::FullPage = mi_page_queue_enqueue_from;
-const _: unsafe fn(*mut mi_theap_t, *mut mi_page_queue_t, bool) -> *mut mi_page_t =
-    mi_page_queue_find_free_ex;
-const _: unsafe fn(*mut mi_theap_t, *mut mi_page_queue_t) -> *mut mi_page_t = mi_find_free_page;
-const _: unsafe fn(*mut mi_theap_t, usize, usize, *mut mi_page_queue_t) -> *mut mi_page_t =
-    mi_huge_page_alloc;
-const _: unsafe fn(*mut mi_theap_t, usize, usize) -> *mut mi_page_t = mi_find_page;
 
 #[inline(always)]
 unsafe fn mi_find_page_typed(

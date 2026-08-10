@@ -201,15 +201,6 @@ unsafe fn try_reclaim_abandoned(
     }
 }
 
-#[used]
-static MI_ABANDONED_PAGE_TRY_RECLAIM_KEEP: unsafe fn(
-    crate::core_types::OwnedAbandonedPage,
-    crate::allocator::policy::ReclaimDecision,
-) -> Result<
-    crate::core_types::ActivePage,
-    crate::core_types::OwnedAbandonedPage,
-> = try_reclaim_abandoned;
-
 #[cold]
 #[inline(never)]
 pub(super) unsafe fn collect_after_remote_free(

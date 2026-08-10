@@ -1202,9 +1202,3 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
     // bound the non-32-bit range clear.
     unsafe { mi_page_map_clear_range(idx, sub_idx, slice_count) };
 }
-
-// SAFETY: retained function pointer keeps the local C
-// ABI range-unregister boundary linked without exporting it dynamically.
-#[used]
-static MI_PAGE_MAP_UNREGISTER_RANGE_KEEP: unsafe extern "C" fn(*mut c_void, usize) =
-    _mi_page_map_unregister_range;

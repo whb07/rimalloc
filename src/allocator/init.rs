@@ -572,18 +572,10 @@ pub(crate) unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) ->
     subproc::to_id(SubprocPtr::new(subproc))
 }
 
-// SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-#[used]
-static MI_SUBPROC_TO_ID_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> mi_subproc_id_t =
-    _mi_subproc_to_id;
-
 #[inline(never)]
 pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
     tls::current_thread_id()
 }
-
-#[used]
-static MI_THREAD_ID_KEEP: extern "C" fn() -> mi_threadid_t = _mi_thread_id;
 
 #[inline(always)]
 fn mi_is_main_thread_fast() -> bool {
@@ -715,9 +707,6 @@ pub(crate) unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
     unsafe { subproc::main_ptr() }
 }
 
-#[used]
-static MI_SUBPROC_MAIN_KEEP: unsafe extern "C" fn() -> *mut mi_subproc_t = _mi_subproc_main;
-
 // SAFETY: default thread-heap association validates local ownership before TLS publication.
 /// # Safety
 /// `theap` must be a valid default theap for the current thread.
@@ -734,10 +723,6 @@ pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
     // SAFETY: cached thread-heap association validates local ownership before TLS publication.
     unsafe { tls::theap_cached_set(theap) };
 }
-
-// SAFETY: cached thread-heap association validates local ownership before TLS publication.
-#[used]
-static MI_THEAP_CACHED_SET_KEEP: unsafe extern "C" fn(*mut mi_theap_t) = _mi_theap_cached_set;
 
 // SAFETY: TLD allocation/free and per-thread metadata counters use typed TLD and subproc witnesses.
 #[unsafe(no_mangle)]
@@ -757,11 +742,6 @@ pub(crate) unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
     unsafe { thread::default_safe() }
 }
 
-// SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
-#[used]
-static MI_THEAP_DEFAULT_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t =
-    _mi_theap_default_safe;
-
 // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
 /// # Safety
 /// Returns the process main theap, ensuring the default path initialized it first.
@@ -771,10 +751,6 @@ pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     unsafe { thread::main_safe() }
 }
 
-// SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
-#[used]
-static MI_THEAP_MAIN_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_theap_main_safe;
-
 // SAFETY: empty thread-heap sentinel stays static and typed before TLS exposure.
 /// # Safety
 /// Returns the process-global empty theap sentinel.
@@ -782,10 +758,6 @@ static MI_THEAP_MAIN_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_
 pub(crate) unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
     ptr::addr_of!(_mi_theap_empty).cast_mut()
 }
-
-// SAFETY: empty thread-heap sentinel stays static and typed before TLS exposure.
-#[used]
-static MI_THEAP_EMPTY_GET_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_theap_empty_get;
 
 // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
 /// # Safety
@@ -806,10 +778,6 @@ pub(crate) unsafe extern "C" fn _mi_subproc_from_id(
     // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
     unsafe { subproc::from_id(subproc_id) }
 }
-
-#[used]
-static MI_SUBPROC_FROM_ID_KEEP: unsafe extern "C" fn(mi_subproc_id_t) -> *mut mi_subproc_t =
-    _mi_subproc_from_id;
 
 // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
 #[unsafe(no_mangle)]
@@ -840,10 +808,6 @@ pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     unsafe { subproc::ensure_heap_main(subproc) }
 }
 
-#[used]
-static MI_SUBPROC_HEAP_MAIN_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> *mut mi_heap_t =
-    _mi_subproc_heap_main;
-
 // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
 #[unsafe(no_mangle)]
 /// # Safety
@@ -870,10 +834,6 @@ pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> b
     // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
     unsafe { subproc::is_theap_main(theap) }
 }
-
-// SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-#[used]
-static MI_IS_THEAP_MAIN_KEEP: unsafe extern "C" fn(*const mi_theap_t) -> bool = _mi_is_theap_main;
 
 #[unsafe(no_mangle)]
 /// # Safety
@@ -997,9 +957,6 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     unsafe { crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random)) };
 }
 
-#[used]
-static MI_AUTO_PROCESS_INIT_KEEP: unsafe extern "C" fn() = _mi_auto_process_init;
-
 // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
@@ -1021,9 +978,6 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_done() {
     // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     unsafe { mi_process_done() };
 }
-
-#[used]
-static MI_AUTO_PROCESS_DONE_KEEP: unsafe extern "C" fn() = _mi_auto_process_done;
 
 // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
 #[unsafe(no_mangle)]

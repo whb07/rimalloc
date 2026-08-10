@@ -51,16 +51,6 @@ unsafe fn destroy_meta(subproc: SubprocPtr) {
     }
 }
 
-unsafe fn destroy_meta_raw(subproc: *mut mi_subproc_t) {
-    let Some(subproc) = SubprocPtr::new(subproc) else {
-        return;
-    };
-    // SAFETY: subproc metadata destruction is serialized by the subproc registry lock.
-    unsafe { destroy_meta(subproc) };
-}
-
-const _: unsafe fn(*mut mi_subproc_t) = destroy_meta_raw;
-
 unsafe fn heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
     // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
     unsafe { ptr::addr_of!((*(heap.cast::<MiHeapMainPrefix>())).subproc).read_unaligned() }

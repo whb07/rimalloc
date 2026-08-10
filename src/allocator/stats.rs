@@ -558,12 +558,6 @@ unsafe fn mi_heap_aggregate_visitor_typed(
     true
 }
 
-#[used]
-static MI_HEAP_PRINT_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_print_visitor;
-
-#[used]
-static MI_HEAP_AGGREGATE_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_aggregate_visitor;
-
 /// # Safety
 /// `subproc_id` must identify a live subproc and any output callback must obey the C ABI.
 // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.

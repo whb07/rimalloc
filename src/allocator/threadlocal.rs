@@ -512,9 +512,6 @@ pub extern "C" fn _mi_thread_locals_init() {
     }
 }
 
-#[used]
-static MI_THREAD_LOCALS_INIT_KEEP: extern "C" fn() = _mi_thread_locals_init;
-
 // SAFETY: tears down the global free bitmap
 // under the static lock when dynamic TLS slots were allocated.
 #[inline(never)]
@@ -543,9 +540,6 @@ pub extern "C" fn _mi_thread_locals_done() {
     }
 }
 
-#[used]
-static MI_THREAD_LOCALS_DONE_KEEP: extern "C" fn() = _mi_thread_locals_done;
-
 // SAFETY: stores a value into this thread's TLS
 // slot block or expands that block before storing.
 #[inline(never)]
@@ -571,10 +565,6 @@ pub extern "C" fn _mi_thread_local_set(
     }
 }
 
-#[used]
-static MI_THREAD_LOCAL_SET_KEEP: extern "C" fn(mi_thread_local_t, *mut core::ffi::c_void) -> bool =
-    _mi_thread_local_set;
-
 // SAFETY: reads a value from this thread's TLS
 // slot block only when the key version still matches.
 #[inline(never)]
@@ -599,10 +589,6 @@ pub extern "C" fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut core::ffi
     }
 }
 
-#[used]
-static MI_THREAD_LOCAL_GET_KEEP: extern "C" fn(mi_thread_local_t) -> *mut core::ffi::c_void =
-    _mi_thread_local_get;
-
 // SAFETY: frees only this thread's dynamically
 // allocated TLS slot block and restores the empty sentinel.
 #[inline(never)]
@@ -619,9 +605,6 @@ pub extern "C" fn _mi_thread_locals_thread_done() {
         set_thread_locals_ptr(thread_locals_empty_ptr());
     }
 }
-
-#[used]
-static MI_THREAD_LOCALS_THREAD_DONE_KEEP: extern "C" fn() = _mi_thread_locals_thread_done;
 
 // SAFETY: allocates a versioned TLS key under
 // the global bitmap lock, expanding the bitmap when needed.
@@ -673,9 +656,6 @@ pub extern "C" fn _mi_thread_local_free(key: mi_thread_local_t) {
         mi_lock_release(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
 }
-
-#[used]
-static MI_THREAD_LOCAL_FREE_KEEP: extern "C" fn(mi_thread_local_t) = _mi_thread_local_free;
 
 #[cfg(test)]
 mod tests {

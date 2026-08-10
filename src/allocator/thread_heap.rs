@@ -368,15 +368,6 @@ unsafe fn mi_theap_area_visit_blocks_typed(
 }
 
 // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-#[used]
-static MI_THEAP_AREA_VISIT_BLOCKS_KEEP: unsafe extern "C" fn(
-    *const mi_heap_area_t,
-    *mut mi_page_t,
-    BlockVisitCallback,
-    BlockVisitCallbackArg,
-) -> bool = _mi_theap_area_visit_blocks;
-
-// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 unsafe extern "C" fn mi_theap_visit_areas_page(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -465,9 +456,6 @@ unsafe extern "C" fn mi_theap_area_visitor(
         }
     }
 }
-
-#[used]
-static MI_THEAP_AREA_VISITOR_KEEP: mi_theap_area_visit_fun = mi_theap_area_visitor;
 
 /// # Safety
 ///
@@ -740,19 +728,6 @@ unsafe fn mi_theap_merge_stats_typed(theap: ThreadHeapPtr) {
         _mi_stats_merge_into(heap.stats(), theap.stats());
     }
 }
-
-unsafe fn mi_theap_collect_ex(theap: *mut mi_theap_t, collect: mi_collect_t) {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
-    unsafe {
-        if theap.is_null() || !mi_theap_is_initialized(theap) {
-            return;
-        }
-        let theap = ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap));
-        mi_theap_collect_ex_typed(theap, collect);
-    }
-}
-
-const _: unsafe fn(*mut mi_theap_t, mi_collect_t) = mi_theap_collect_ex;
 
 unsafe fn mi_theap_collect_ex_typed(theap: ThreadHeapLocal, mut collect: mi_collect_t) {
     // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
@@ -1319,14 +1294,3 @@ unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: 
         _mi_theap_free(theap_raw, true, acquire_tld_theaps_lock);
     }
 }
-
-// SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
-#[used]
-static MI_THEAP_CREATE_KEEP: unsafe extern "C" fn(
-    *mut mi_heap_t,
-    *mut mi_tld_t,
-) -> *mut mi_theap_t = _mi_theap_create;
-
-// SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
-#[used]
-static MI_THEAP_DELETE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, bool) = _mi_theap_delete;

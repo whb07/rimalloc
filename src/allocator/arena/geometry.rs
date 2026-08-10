@@ -242,10 +242,6 @@ pub(crate) unsafe extern "C" fn _mi_arenas_contain(p: *const c_void) -> bool {
     unsafe { mi_arenas_contain_ex(InteriorUserPtr::new(p.cast_mut()), None) }
 }
 
-// SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
-#[used]
-static MI_ARENAS_CONTAIN_KEEP: unsafe extern "C" fn(*const c_void) -> bool = _mi_arenas_contain;
-
 /// # Safety
 /// `arena_id` must be null or a valid top-level arena id; `p` may be any pointer value.
 // SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
@@ -273,10 +269,3 @@ pub unsafe extern "C" fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_
         }
     }
 }
-
-#[used]
-static MI_ARENA_SLICE_START_KEEP: unsafe fn(ArenaPtr, SliceIndex) -> crate::types::SliceStart =
-    mi_arena_slice_start;
-#[used]
-static MI_ARENA_PAGE_AT_SLICE_KEEP: unsafe fn(ArenaPtr, crate::types::SliceIndex) -> PagePtr =
-    mi_arena_page_at_slice;

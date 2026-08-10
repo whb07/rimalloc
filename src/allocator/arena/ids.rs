@@ -30,17 +30,6 @@ pub(crate) unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_
     arena
 }
 
-#[used]
-// SAFETY: retaining the function pointer preserves
-// C's local helper boundary without invoking it.
-static MI_ARENA_ID_NONE_KEEP: unsafe extern "C" fn() -> mi_arena_id_t = _mi_arena_id_none;
-
-#[used]
-// SAFETY: retaining the function pointer preserves
-// C's local helper boundary without invoking it.
-static MI_ARENA_FROM_ID_KEEP: unsafe extern "C" fn(mi_arena_id_t) -> *mut mi_arena_t =
-    _mi_arena_from_id;
-
 /// # Safety
 /// `arena` must be null or a valid top-level `mi_arena_t*`.
 // SAFETY: this exported arena-id converter keeps

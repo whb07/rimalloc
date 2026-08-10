@@ -480,7 +480,3 @@ pub(crate) unsafe extern "C" fn _mi_arenas_collect(
         )
     };
 }
-
-#[used]
-static MI_ARENA_PURGE_KEEP: unsafe fn(ArenaPtr, crate::core_types::SliceRange) -> bool =
-    mi_arena_purge;

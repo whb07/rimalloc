@@ -608,19 +608,3 @@ pub unsafe extern "C" fn mi_debug_show_arenas() {
 pub unsafe extern "C" fn mi_arenas_print() {
     unsafe { mi_debug_show_arenas() }
 }
-
-type MiDebugShowChunksFunT = unsafe fn(
-    &str,
-    &str,
-    &str,
-    SliceCount,
-    usize,
-    *mut mi_bchunk_t,
-    *mut mi_bchunkmap_t,
-    bool,
-    ArenaDebugView,
-    bool,
-) -> usize;
-
-#[used]
-static MI_DEBUG_SHOW_CHUNKS_KEEP: MiDebugShowChunksFunT = mi_debug_show_chunks;

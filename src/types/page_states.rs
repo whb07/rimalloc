@@ -636,6 +636,32 @@ impl ThreadHeapLocal {
     pub(crate) fn ptr(self) -> ThreadHeapPtr {
         self.0
     }
+
+    /// Load an immediately available page from this thread heap's direct
+    /// cache. The empty-page sentinel and ordinary pages with an empty current
+    /// `free` head are both fast misses.
+    ///
+    /// # Safety
+    /// This witness must identify the current live local thread heap. Its
+    /// direct-cache slot must be the initialized empty-page sentinel or a live
+    /// locally owned page whose current `free` head is valid to inspect.
+    #[inline(always)]
+    pub(crate) unsafe fn direct_available_page(
+        self,
+        bin: crate::core_types::DirectBin,
+    ) -> Option<AvailablePage> {
+        // SAFETY: the caller proves the direct-cache metadata is initialized.
+        let page = unsafe { self.ptr().direct_page(bin) };
+        // SAFETY: the caller proves either initialized sentinel metadata or a
+        // live local page; a null free head is the shared fast-miss encoding.
+        if unsafe { page.free_raw().is_null() } {
+            None
+        } else {
+            // SAFETY: a non-null direct-cache free head proves immediate
+            // availability on the same locally owned page.
+            Some(unsafe { AvailablePage::new_unchecked(page) })
+        }
+    }
 }
 
 impl PagePtr {

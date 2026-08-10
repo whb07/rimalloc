@@ -432,16 +432,19 @@ pub unsafe fn mi_theap_is_initialized(theap: *const mi_theap_t) -> bool {
     !theap.is_null() && !unsafe { _mi_theap_heap(theap) }.is_null()
 }
 
+/// # Safety
+/// `padded` must derive from a normalized request no larger than
+/// `MI_SMALL_SIZE_MAX`, so its direct bin is in range. `theap` and its
+/// initialized direct cache must remain live and locally owned for the call.
 #[inline]
 pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
     theap: crate::core_types::ThreadHeapLocal,
     padded: crate::core_types::PaddedSize,
-) -> *mut mi_page_t {
+) -> Option<crate::core_types::AvailablePage> {
     // SAFETY: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     unsafe {
-        let theap = theap.ptr().as_ptr();
-        let idx = mi_direct_bin_from_padded(padded).as_usize();
-        (*theap).pages_free_direct[idx]
+        let bin = mi_direct_bin_from_padded(padded);
+        theap.direct_available_page(bin)
     }
 }
 

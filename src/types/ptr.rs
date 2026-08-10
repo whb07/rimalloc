@@ -628,31 +628,32 @@ impl ThreadHeapPtr {
 
     /// # Safety
     /// The thread-heap pointer must refer to initialized thread-heap metadata.
+    /// Every direct-cache slot must contain either the non-null empty-page
+    /// sentinel or a live page pointer.
     // SAFETY: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
-    pub(crate) unsafe fn direct_page(self, bin: DirectBin) -> Option<PagePtr> {
+    pub(crate) unsafe fn direct_page(self, bin: DirectBin) -> PagePtr {
         let raw = self.as_ptr();
-        PagePtr::new(unsafe {
-            ptr::read(ptr::addr_of!((*raw).pages_free_direct[bin.get() as usize]))
-        })
+        // SAFETY: the initialized direct cache never contains null slots.
+        unsafe {
+            PagePtr::new_unchecked(ptr::read(ptr::addr_of!(
+                (*raw).pages_free_direct[bin.get() as usize]
+            )))
+        }
     }
 
     /// # Safety
     /// The thread-heap pointer must refer to writable thread-heap metadata, and
-    /// `start <= end`.
+    /// `start <= end`. `page` must be the initialized empty-page sentinel or a
+    /// live page pointer suitable for every direct-cache slot in the range.
     // SAFETY: caller-proven metadata access stays behind transparent NonNull wrappers.
     #[inline(always)]
-    pub(crate) unsafe fn fill_direct_pages(
-        self,
-        start: DirectBin,
-        end: DirectBin,
-        page: Option<PagePtr>,
-    ) {
+    pub(crate) unsafe fn fill_direct_pages(self, start: DirectBin, end: DirectBin, page: PagePtr) {
         let raw = self.as_ptr();
         let start = start.as_usize();
         let end = end.as_usize();
         crate::internal::mi_assert_internal!(start <= end);
-        let page = page.map(PagePtr::as_ptr).unwrap_or(ptr::null_mut());
+        let page = page.as_ptr();
         // SAFETY: caller-proven metadata access stays behind transparent NonNull wrappers.
         unsafe {
             let pages = ptr::addr_of_mut!((*raw).pages_free_direct).cast::<*mut mi_page_t>();

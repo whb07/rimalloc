@@ -75,25 +75,18 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
         let align_mask = alignment_raw - 1;
         let padded = layout.padded();
         // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
-        let page =
+        let available =
             unsafe { crate::internal::_mi_theap_get_free_small_page_typed(local_theap, padded) };
-        // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
-        if mi_likely(!page.is_null()) {
+        if let Some(available) = available {
             // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
-            let (page_ptr, free) = unsafe {
-                let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
-                (page_ptr, page_ptr.free_raw())
-            };
-            if mi_likely(!free.is_null() && (((free as usize) + offset_raw) & align_mask == 0)) {
+            let page_ptr = available.page();
+            let free = unsafe { page_ptr.free_raw() };
+            if mi_likely(((free as usize) + offset_raw) & align_mask == 0) {
                 // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
                 unsafe {
                     crate::core_types::UsableOut::new(usable)
-                        .write_if_present(mi_page_usable_block_size(page));
+                        .write_if_present(mi_page_usable_block_size(page_ptr.as_ptr()));
                 }
-                // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
-                let active = unsafe { crate::core_types::assume_active_page(page_ptr) };
-                // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
-                let available = unsafe { active.try_available().unwrap_unchecked() };
                 // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
                 let p = unsafe {
                     _mi_page_malloc_zero_typed(

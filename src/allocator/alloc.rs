@@ -278,10 +278,8 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
         // path: `size <= MI_SMALL_SIZE_MAX` (≤ 1024, guarded upstream) and is
         // normalized to non-zero above, so the sum cannot overflow or yield zero.
         let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
-        let page = _mi_theap_get_free_small_page_typed(local_theap, padded);
-        let active =
-            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
-        let p = if let Ok(available) = active.try_available() {
+        let available = _mi_theap_get_free_small_page_typed(local_theap, padded);
+        let p = if let Some(available) = available {
             _mi_page_malloc_zero_typed(theap, available, padded, zeroed, usable)
         } else {
             mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, usable)

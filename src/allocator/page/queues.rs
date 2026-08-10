@@ -631,6 +631,7 @@ mod tests {
         unsafe {
             let theap = theap.as_mut_ptr();
             (*theap).pages = crate::allocator::init::MI_PAGE_QUEUES_EMPTY();
+            (*theap).pages_free_direct = crate::allocator::init::MI_SMALL_PAGES_EMPTY();
             (*theap).page_count = 3;
 
             let block_size = crate::core_types::BlockSize::new_unchecked(64);
@@ -683,7 +684,7 @@ mod tests {
             assert_eq!((*first.as_ptr()).xthread_id, thread_id);
             assert_eq!((*middle.as_ptr()).xthread_id, thread_id);
             assert_eq!((*last.as_ptr()).xthread_id, thread_id);
-            assert_eq!(owner.ptr().direct_page(direct_idx), Some(middle));
+            assert_eq!(owner.ptr().direct_page(direct_idx), middle);
 
             let active = crate::core_types::assume_active_page(last);
             let queued = crate::core_types::QueuedPage::try_queue(active, normal)
@@ -703,7 +704,7 @@ mod tests {
             assert_eq!((*first.as_ptr()).xthread_id, thread_id);
             assert_eq!((*middle.as_ptr()).xthread_id, thread_id);
             assert_eq!((*last.as_ptr()).xthread_id, thread_id);
-            assert_eq!(owner.ptr().direct_page(direct_idx), Some(last));
+            assert_eq!(owner.ptr().direct_page(direct_idx), last);
         }
     }
 }

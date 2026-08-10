@@ -1318,12 +1318,7 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
         let idx = direct_idx.as_usize();
         crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
         let theap_ptr = theap.ptr();
-        if theap_ptr
-            .direct_page(direct_idx)
-            .map(crate::core_types::PagePtr::as_ptr)
-            .unwrap_or(ptr::null_mut())
-            == page
-        {
+        if theap_ptr.direct_page(direct_idx).as_ptr() == page {
             return;
         }
 
@@ -1338,7 +1333,7 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
         theap_ptr.fill_direct_pages(
             direct_start,
             direct_idx,
-            Some(crate::core_types::PagePtr::new_unchecked(page)),
+            crate::core_types::PagePtr::new_unchecked(page),
         );
     }
 }

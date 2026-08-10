@@ -1,7 +1,7 @@
 use super::*;
 use crate::core_types::{
-    BlockPtr, FreeBlock, PageFlags, PageOwnerId, PageThreadId, ThreadFreeOwner, ThreadFreeWord,
-    ThreadHeapPtr, ThreadId,
+    BlockPtr, DirectBin, FreeBlock, PageFlags, PageOwnerId, PageThreadId, ThreadFreeOwner,
+    ThreadFreeWord, ThreadHeapPtr, ThreadId,
 };
 use crate::types::{mi_block_t, mi_page_t, mi_theap_t};
 use core::{mem::MaybeUninit, ptr};
@@ -232,6 +232,45 @@ fn local_page_ensure_available_covers_existing_empty_and_transfer_states() {
         assert_eq!((*raw).free, local_head.as_ptr());
         assert!((*raw).local_free.is_null());
         assert!(!(*raw).free_is_zero);
+    }
+}
+
+#[test]
+fn direct_available_page_decodes_sentinel_and_free_head_states() {
+    let mut raw_theap = MaybeUninit::<mi_theap_t>::zeroed();
+    let mut raw_page = MaybeUninit::<mi_page_t>::zeroed();
+    let mut block = mi_block_t::default();
+    let flags = PageFlags::new(0).expect("zero page flags are valid");
+    let local_thread = ThreadId::new(crate::prim::_mi_prim_thread_id())
+        .expect("platform current-thread id is nonzero and unflagged");
+    let local_id = PageThreadId::from_parts(PageOwnerId::Thread(local_thread), flags).raw();
+    let unowned = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Unowned).raw();
+
+    // SAFETY: the stack fixtures initialize the direct slot and exact page
+    // ownership/free fields read by this owner-coupled boundary.
+    unsafe {
+        let theap_raw = raw_theap.as_mut_ptr();
+        let page_raw = raw_page.as_mut_ptr();
+        let bin = DirectBin::new_unchecked(1);
+        ptr::addr_of_mut!((*theap_raw).pages_free_direct)
+            .write(crate::allocator::init::MI_SMALL_PAGES_EMPTY());
+        let owner = ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap_raw));
+
+        assert!(owner.direct_available_page(bin).is_none());
+
+        ptr::addr_of_mut!((*page_raw).theap).write(theap_raw);
+        ptr::addr_of_mut!((*page_raw).xthread_id).write(local_id);
+        ptr::addr_of_mut!((*page_raw).xthread_free).write(unowned);
+        (*theap_raw).pages_free_direct[bin.as_usize()] = page_raw;
+        assert!(owner.direct_available_page(bin).is_none());
+
+        let free = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
+        ptr::addr_of_mut!((*page_raw).free).write(free.as_ptr());
+        let available = owner
+            .direct_available_page(bin)
+            .expect("non-empty direct page must be immediately available");
+        assert_eq!(available.page().as_ptr(), page_raw);
+        assert_eq!(available.page().free_raw(), free.as_ptr());
     }
 }
 

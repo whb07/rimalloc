@@ -9,7 +9,7 @@ use core::mem::offset_of;
 use core::num::NonZeroU32;
 use core::ptr;
 
-use crate::arena::{MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE, MI_META_PAGE_SIZE};
+use crate::allocator::arena::{MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE, MI_META_PAGE_SIZE};
 use crate::bitmap::{
     MI_BCHUNK_BITS, MI_BCHUNK_SIZE, MI_BFIELD_BITS_SHIFT, mi_bbitmap_init, mi_bbitmap_is_clearN,
     mi_bbitmap_setN, mi_bbitmap_size, mi_bbitmap_t, mi_bbitmap_try_find_and_clearN,

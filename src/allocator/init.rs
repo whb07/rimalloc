@@ -14,16 +14,18 @@ use core::mem::size_of;
 use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
+use crate::allocator::options::{
+    _mi_fputs, _mi_options_post_init, _mi_verbose_message, mi_option_get, mi_option_is_enabled,
+    mi_option_t,
+};
+use crate::allocator::stats::{
+    __mi_stat_increase_mt, mi_stat_count_t, mi_stats_header_init, mi_stats_t,
+};
 use crate::atomic::{
     mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t, mi_lock_init, mi_lock_t,
 };
 use crate::core_types::{BorrowedSubproc, HeapPtr, SubprocPtr};
 use crate::internal::{_mi_allocator_done, _mi_allocator_init, mi_memid_t};
-use crate::options::{
-    _mi_fputs, _mi_options_post_init, _mi_verbose_message, mi_option_get, mi_option_is_enabled,
-    mi_option_t,
-};
-use crate::stats::{__mi_stat_increase_mt, mi_stat_count_t, mi_stats_header_init, mi_stats_t};
 use crate::types::{
     MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_heap_visit_fun,
     mi_page_queue_t, mi_page_t, mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
@@ -100,11 +102,11 @@ pub const fn MI_STATS_NULL() -> mi_stats_t {
         peak: 0,
         current: 0,
     };
-    const ZERO_COUNTER: crate::stats::mi_stat_counter_t =
-        crate::stats::mi_stat_counter_t { total: 0 };
+    const ZERO_COUNTER: crate::allocator::stats::mi_stat_counter_t =
+        crate::allocator::stats::mi_stat_counter_t { total: 0 };
     mi_stats_t {
         size: size_of::<mi_stats_t>(),
-        version: crate::stats::MI_STAT_VERSION,
+        version: crate::allocator::stats::MI_STAT_VERSION,
         pages: ZERO_COUNT,
         reserved: ZERO_COUNT,
         committed: ZERO_COUNT,
@@ -247,7 +249,7 @@ pub static _mi_page_empty: mi_page_t = mi_page_t {
     heap: ptr::null_mut(),
     next: ptr::null_mut(),
     prev: ptr::null_mut(),
-    slice_committed: crate::arena::MI_ARENA_SLICE_SIZE,
+    slice_committed: crate::allocator::arena::MI_ARENA_SLICE_SIZE,
     memid: mi_memid_static(),
 };
 
@@ -335,8 +337,8 @@ const MI_PAGE_QUEUE_WORD_SIZES: [usize; MI_BIN_COUNT] = [
     393_216,
     458_752,
     524_288,
-    crate::stats::MI_LARGE_MAX_OBJ_WSIZE + 1,
-    crate::stats::MI_LARGE_MAX_OBJ_WSIZE + 2,
+    crate::allocator::stats::MI_LARGE_MAX_OBJ_WSIZE + 1,
+    crate::allocator::stats::MI_LARGE_MAX_OBJ_WSIZE + 2,
 ];
 
 #[allow(non_snake_case)]
@@ -939,7 +941,7 @@ unsafe fn mi_process_init_inner() {
             _mi_process_is_initialized = true;
             cpu::mi_detect_cpu_features();
             subproc::main_init();
-            crate::stats::_mi_stats_init();
+            crate::allocator::stats::_mi_stats_init();
             crate::os::_mi_os_init();
             mi_heap_main_init();
             crate::allocator::threadlocal::_mi_thread_locals_init();
@@ -1042,12 +1044,16 @@ pub unsafe extern "C" fn mi_process_done() {
         if mi_option_is_enabled(mi_option_t::mi_option_destroy_on_exit) {
             subproc::unsafe_destroy_all();
         } else {
-            crate::stats::mi_heap_stats_merge_to_subproc(mi_heap_main());
+            crate::allocator::stats::mi_heap_stats_merge_to_subproc(mi_heap_main());
         }
         if mi_option_is_enabled(mi_option_t::mi_option_show_stats)
             || mi_option_is_enabled(mi_option_t::mi_option_verbose)
         {
-            crate::stats::mi_subproc_stats_print_out(mi_subproc_main(), None, ptr::null_mut());
+            crate::allocator::stats::mi_subproc_stats_print_out(
+                mi_subproc_main(),
+                None,
+                ptr::null_mut(),
+            );
         }
         tls::mi_tls_slots_done();
         _mi_allocator_done();

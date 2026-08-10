@@ -7,12 +7,13 @@
 use core::ffi::c_void;
 use core::mem::size_of;
 
-use crate::alloc::{
+use crate::allocator::alloc::{
     _mi_theap_malloc_guarded, _mi_theap_malloc_zero, _mi_theap_malloc_zero_ex,
     calloc_request_or_report,
 };
+use crate::allocator::arena::MI_ARENA_SLICE_SIZE;
+use crate::allocator::options::_mi_error_message_fmt;
 use crate::allocator::tracking::mi_track_align;
-use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
 use crate::core_types::{BorrowedHeap, Errno};
 #[cfg(not(mi_c_malloc_fast))]
@@ -22,7 +23,6 @@ use crate::internal::{
     MI_GUARDED, mi_likely, mi_page_set_has_interior_pointers, mi_page_usable_block_size,
     mi_unlikely,
 };
-use crate::options::_mi_error_message_fmt;
 use crate::page::{
     MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size_typed,
 };
@@ -728,7 +728,7 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
             return core::ptr::null_mut();
         };
         // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
@@ -747,7 +747,11 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -778,7 +782,7 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
     crate::internal::mi_assert!(alignment_raw > 0);
     if alignment_raw <= size_of::<usize>() && offset_raw == 0 {
         // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
-        return unsafe { crate::alloc::mi_theap_realloc_req(theap, request) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_req(theap, request) };
     }
     if p.is_null() {
         let theap = if MI_THEAP_INITASNULL && theap.is_null() {
@@ -892,7 +896,7 @@ pub unsafe fn mi_theap_realloc_zero_aligned(
             return core::ptr::null_mut();
         };
         // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
@@ -918,7 +922,11 @@ pub unsafe fn mi_theap_realloc_zero_aligned(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -947,7 +955,7 @@ pub unsafe fn mi_theap_realloc_aligned_at(
             return core::ptr::null_mut();
         };
         // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
@@ -964,7 +972,11 @@ pub unsafe fn mi_theap_realloc_aligned_at(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -992,7 +1004,7 @@ pub unsafe fn mi_theap_realloc_aligned(
             return core::ptr::null_mut();
         };
         // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
@@ -1014,7 +1026,11 @@ pub unsafe fn mi_theap_realloc_aligned(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1043,7 +1059,7 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
             return core::ptr::null_mut();
         };
         // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
@@ -1053,7 +1069,7 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
             return core::ptr::null_mut();
         };
         // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let offset = crate::core_types::AlignmentOffset::new(offset);
     let Ok(layout) = crate::core_types::LayoutRequest::aligned_at(
@@ -1067,7 +1083,11 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1095,7 +1115,7 @@ pub unsafe fn mi_theap_rezalloc_aligned(
             return core::ptr::null_mut();
         };
         // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
@@ -1117,7 +1137,11 @@ pub unsafe fn mi_theap_rezalloc_aligned(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1148,7 +1172,7 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
         let layout = request.layout();
         // SAFETY: naturally aligned requests use the ordinary realloc path after checked multiplication, matching C mimalloc.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
@@ -1156,7 +1180,7 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     if alignment_typed.get() <= size_of::<usize>() && offset == 0 {
         let layout = request.layout();
         // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let offset = crate::core_types::AlignmentOffset::new(offset);
     let Ok(layout) = crate::core_types::LayoutRequest::aligned_at(
@@ -1170,7 +1194,11 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
         let Some(realloc_request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1216,7 +1244,7 @@ pub unsafe fn mi_theap_recalloc_aligned(
     if alignment != 0 && alignment <= size_of::<usize>() {
         let layout = request.layout();
         // SAFETY: naturally aligned requests use the ordinary realloc path after checked multiplication, matching C mimalloc.
-        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
@@ -1238,7 +1266,11 @@ pub unsafe fn mi_theap_recalloc_aligned(
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: aligned recalloc paths use checked product requests and zeroing metadata.
         let Some(realloc_request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1377,7 +1409,11 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1444,7 +1480,11 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1492,7 +1532,11 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1545,7 +1589,11 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1605,7 +1653,11 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(realloc_request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };
@@ -1685,7 +1737,11 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
         // SAFETY: heap aligned realloc exports borrow heap handles before checked realloc dispatch.
         let Some(realloc_request) = (unsafe {
-            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+            crate::allocator::alloc::mi_realloc_request_from_user(
+                user,
+                layout,
+                core::ptr::null_mut(),
+            )
         }) else {
             return core::ptr::null_mut();
         };

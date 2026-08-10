@@ -7,6 +7,12 @@ use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
+use crate::allocator::options::{
+    mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t,
+};
+use crate::allocator::stats::{
+    MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_OTHER, MI_CBIN_SMALL,
+};
 use crate::allocator::thread_heap::{_mi_heap_area_init, _mi_theap_area_visit_blocks};
 use crate::allocator::tracking::{mi_track_mem_defined, mi_track_mem_undefined};
 use crate::atomic::{mi_atomic_guard_t, mi_lock_acquire, mi_lock_release};
@@ -42,7 +48,6 @@ use crate::internal::{
     mi_slice_count_of_size,
 };
 use crate::mimalloc::{mi_heap_main, mi_heap_theap, mi_heap_zalloc_aligned};
-use crate::options::{mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t};
 use crate::os::{
     _mi_os_alloc_aligned, _mi_os_alloc_aligned_at_offset, _mi_os_alloc_huge_os_pages,
     _mi_os_minimal_purge_size, _mi_os_numa_node_count,
@@ -54,7 +59,6 @@ use crate::page::{
 };
 use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page};
 use crate::prim::_mi_page_associated_theap_peek;
-use crate::stats::{MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_OTHER, MI_CBIN_SMALL};
 use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
     MI_PAGE_MAX_START_BLOCK_ALIGN2, MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE,
@@ -323,7 +327,7 @@ unsafe fn mi_arena_try_alloc_at(
                 // SAFETY: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
                 && !unsafe { mi_mem_is_zero(p, mi_size_of_slices(slice_count)) }
             {
-                crate::options::_mi_error_message_fmt(
+                crate::allocator::options::_mi_error_message_fmt(
                     Errno::EFAULT,
                     format_args!("internal error: arena allocation was not zero-initialized!\n"),
                 );
@@ -1405,7 +1409,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
         // SAFETY: fresh arena page setup initializes metadata, commit state, and layout counters.
         && !unsafe { mi_mem_is_zero(slice_start.cast(), page_noguard_size) }
     {
-        crate::options::_mi_error_message_fmt(
+        crate::allocator::options::_mi_error_message_fmt(
             Errno::EFAULT,
             format_args!("internal error: page memory was not zero initialized.\n"),
         );
@@ -1493,7 +1497,7 @@ unsafe fn mi_arenas_page_regular_alloc(
     }
 
     let commit_on_demand =
-        crate::options::mi_option_get(mi_option_t::mi_option_page_commit_on_demand);
+        crate::allocator::options::mi_option_get(mi_option_t::mi_option_page_commit_on_demand);
     let slice_count_usize = slice_count.get() as usize;
     let commit = slice_count_usize <= mi_slice_count_of_size(MI_PAGE_MIN_COMMIT_SIZE)
         // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.

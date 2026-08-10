@@ -1,1 +1,1 @@
-pub use crate::stats::*;
+pub use crate::allocator::stats::*;

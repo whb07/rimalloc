@@ -32,9 +32,9 @@ use core::cell::Cell;
 use core::ffi::{c_char, c_void};
 use core::ptr;
 
+use crate::allocator::heap::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
 use crate::core_types::{PagePtr, ThreadHeapPtr};
-use crate::heap::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
 #[cfg(any(miri, not(all(target_os = "linux", target_arch = "x86_64"))))]
 use crate::init::_mi_theap_empty;
 use crate::init::{

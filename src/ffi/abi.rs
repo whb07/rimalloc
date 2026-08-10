@@ -18,14 +18,14 @@ pub type c_wchar = u16;
 #[cfg(not(windows))]
 pub type c_wchar = i32;
 
-pub use crate::options::{
+pub use crate::allocator::options::{
     mi_option_abandoned_page_purge, mi_option_abandoned_reclaim_on_free,
     mi_option_decommit_extend_delay, mi_option_eager_commit, mi_option_eager_commit_delay,
     mi_option_eager_region_commit, mi_option_large_os_pages, mi_option_limit_os_alloc,
     mi_option_max_segment_reclaim, mi_option_purge_extend_delay, mi_option_reset_decommits,
     mi_option_reset_delay, mi_option_t,
 };
-pub use crate::stats::{
+pub use crate::allocator::stats::{
     MI_BIN_HUGE, MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_NONE,
     MI_CBIN_OTHER, MI_CBIN_SMALL, MI_STAT_VERSION, mi_chunkbin_t, mi_stat_count_t,
     mi_stat_counter_t, mi_stats_header_init, mi_stats_init, mi_stats_t,
@@ -36,7 +36,7 @@ pub use crate::types::{
     mi_heap_t, mi_heap_visit_fun, mi_output_fun, mi_subproc_id_t, mi_theap_t,
 };
 
-pub const _mi_option_last: mi_option_t = crate::options::mi_option_t::_mi_option_last;
+pub const _mi_option_last: mi_option_t = crate::allocator::options::mi_option_t::_mi_option_last;
 pub const MIMALLOC_H: () = ();
 pub const mi_attr_noexcept: () = ();
 pub const mi_decl_nodiscard: () = ();

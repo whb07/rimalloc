@@ -6,12 +6,14 @@ use core::ffi::c_void;
 use core::ptr;
 use core::sync::atomic::Ordering;
 
+use crate::allocator::arena::_mi_arena_from_id;
+use crate::allocator::arena::{_mi_heap_destroy_pages, _mi_heap_move_pages};
+use crate::allocator::options::{_mi_error_message_fmt, _mi_warning_message_fmt};
+use crate::allocator::stats::{_mi_stats_merge_into, mi_stats_header_init};
 use crate::allocator::thread_heap::{_mi_theap_create, _mi_theap_free};
 use crate::allocator::threadlocal::{
     _mi_thread_local_create, _mi_thread_local_free, _mi_thread_local_get, _mi_thread_local_set,
 };
-use crate::arena::_mi_arena_from_id;
-use crate::arena::{_mi_heap_destroy_pages, _mi_heap_move_pages};
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
 use crate::core_types::{
     BorrowedHeap, Errno, HeapPtr, MainHeap, OwnedHeap, PagePtr, SubprocPtr, ThreadHeapPtr,
@@ -21,11 +23,9 @@ use crate::init::{
 };
 use crate::internal::{__mi_stat_counter_increase_mt, _mi_is_heap_main, mi_page_heap};
 use crate::mimalloc::{mi_free, mi_heap_zalloc};
-use crate::options::{_mi_error_message_fmt, _mi_warning_message_fmt};
 use crate::os::_mi_os_numa_node_count;
 use crate::page_map::_mi_safe_ptr_page;
 use crate::prim::{_mi_heap_theap, _mi_prim_thread_yield};
-use crate::stats::{_mi_stats_merge_into, mi_stats_header_init};
 use crate::types::{mi_arena_id_t, mi_heap_t, mi_page_t, mi_theap_t};
 
 const MI_THEAP_TLS_BUSY: *mut mi_theap_t = core::ptr::dangling_mut::<mi_theap_t>();

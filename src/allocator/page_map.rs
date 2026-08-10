@@ -6,7 +6,11 @@ use core::ffi::c_void;
 use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::arena::MI_ARENA_SLICE_SIZE;
+use crate::allocator::arena::MI_ARENA_SLICE_SIZE;
+use crate::allocator::options::{
+    _mi_error_message_fmt, _mi_warning_message_fmt, mi_option_get_clamp, mi_option_is_enabled,
+    mi_option_t,
+};
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bitmap::MI_BFIELD_BITS;
 #[cfg(target_pointer_width = "32")]
@@ -27,10 +31,6 @@ use crate::internal::{
     MI_PAGE_MAP_COUNT, MI_PAGE_MAP_SUB_COUNT, MI_PAGE_MAP_SUB_SHIFT, mi_memid_mem_t,
     mi_memid_os_info_t, mi_memid_t, mi_memkind_t, mi_page_area, mi_page_slice_start,
     mi_slice_count_of_size, mi_submap_t,
-};
-use crate::options::{
-    _mi_error_message_fmt, _mi_warning_message_fmt, mi_option_get_clamp, mi_option_is_enabled,
-    mi_option_t,
 };
 use crate::os::{_mi_os_alloc_aligned, _mi_os_zalloc};
 use crate::page::MI_LARGE_PAGE_SIZE;

@@ -1,8 +1,8 @@
 use core::mem::size_of;
 use core::ptr;
 
+use crate::allocator::stats::MI_BIN_HUGE;
 use crate::init::_mi_theap_empty;
-use crate::stats::MI_BIN_HUGE;
 use crate::types::{MI_LARGE_MAX_OBJ_WSIZE, mi_theap_t};
 
 const MI_ALIGN4W: bool = cfg!(target_pointer_width = "32");

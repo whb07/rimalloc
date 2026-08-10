@@ -324,7 +324,7 @@ unsafe extern "C" fn mi_cxx_new_fast_slow(
     #[cfg(not(mi_cxx_shim_linked))]
     {
         // SAFETY: the assembly caller supplies its live thread heap and allocation mode.
-        unsafe { crate::alloc::mi_theap_try_new(theap, size, nothrow) }
+        unsafe { crate::allocator::alloc::mi_theap_try_new(theap, size, nothrow) }
     }
 }
 

@@ -39,7 +39,7 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
         return;
     }
 
-    let expire = crate::stats::_mi_clock_now() + delay as i64;
+    let expire = crate::allocator::stats::_mi_clock_now() + delay as i64;
     let mut expire0 = 0i64;
     // SAFETY: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
     if unsafe {
@@ -103,7 +103,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
             if !unsafe { mi_arena_range_is_after_info_slices(arena_ptr, range) }
                 || slice_end > unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
             {
-                crate::options::_mi_error_message_fmt(
+                crate::allocator::options::_mi_error_message_fmt(
                     Errno::EINVAL,
                     format_args!(
                         "trying to free from an invalid arena block: {:p}, size {}\n",
@@ -126,7 +126,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
                 )
             };
             if !all_inuse {
-                crate::options::_mi_error_message_fmt(
+                crate::allocator::options::_mi_error_message_fmt(
                     Errno::EAGAIN,
                     format_args!(
                         "trying to free an already freed arena block: {:p}, size {}\n",
@@ -382,7 +382,7 @@ unsafe fn mi_arenas_try_purge(
         return;
     }
 
-    let now = crate::stats::_mi_clock_now();
+    let now = crate::allocator::stats::_mi_clock_now();
     // SAFETY: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
     let arenas_expire = unsafe {
         crate::core_types::AtomicI64Field::from_raw(

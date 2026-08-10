@@ -1,10 +1,10 @@
 use core::ffi::{c_char, c_void};
 use core::ptr;
 
+use crate::allocator::options::_mi_error_message_fmt;
 use crate::core_types::{BorrowedHeap, Errno};
 use crate::internal::mi_unlikely;
 use crate::mimalloc::mi_malloc_aligned;
-use crate::options::_mi_error_message_fmt;
 use crate::prim::_mi_theap_default;
 use crate::types::{mi_heap_t, mi_theap_t};
 

@@ -1,1 +1,1 @@
-pub use crate::alloc_aligned::*;
+pub use crate::allocator::aligned::*;

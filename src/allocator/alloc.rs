@@ -4,6 +4,7 @@ use core::ffi::{c_char, c_void};
 use core::mem::size_of;
 use core::ptr;
 
+use crate::allocator::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::allocator::tracking::{
     MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
 };
@@ -20,7 +21,6 @@ use crate::internal::{
     mi_unlikely,
 };
 use crate::mimalloc::mi_free;
-use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
     _mi_malloc_generic_typed, _mi_theap_or_default_typed, MI_MAX_ALLOC_SIZE, mi_bin_from_usable,
     mi_good_size_typed,
@@ -1680,12 +1680,12 @@ unsafe fn mi_block_ptr_set_guarded(
         if !(*page).memid.is_pinned && _mi_is_aligned(guard_page.cast(), os_page_size) {
             let ok = crate::os::_mi_os_protect(guard_page.cast(), os_page_size);
             if mi_unlikely(!ok) {
-                crate::options::_mi_warning_message_fmt(format_args!(
+                crate::allocator::options::_mi_warning_message_fmt(format_args!(
                     "failed to set a guard page behind an object (object {block:p} of size {block_size})\n"
                 ));
             }
         } else {
-            crate::options::_mi_warning_message_fmt(format_args!(
+            crate::allocator::options::_mi_warning_message_fmt(format_args!(
                 "unable to set a guard page behind an object due to pinned memory (large OS pages?) (object {block:p} of size {block_size})\n"
             ));
         }

@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 
-use crate::arena::MI_ARENA_SLICE_ALIGN;
+use crate::allocator::arena::MI_ARENA_SLICE_ALIGN;
 use crate::types::mi_page_t;
 
 /// # Safety

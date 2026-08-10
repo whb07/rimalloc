@@ -1,6 +1,6 @@
 use core::sync::atomic::Ordering;
 
-use crate::stats::{
+use crate::allocator::stats::{
     MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_NONE, MI_CBIN_OTHER,
     MI_CBIN_SMALL, mi_chunkbin_t,
 };

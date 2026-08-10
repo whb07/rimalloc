@@ -32,18 +32,11 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
 
-pub(crate) use crate::alloc::{
+pub(crate) use crate::allocator::alloc::{
     _mi_page_malloc_zero, _mi_page_malloc_zero_typed, _mi_theap_malloc_guarded,
     _mi_theap_malloc_zero, _mi_theap_malloc_zero_ex, _mi_theap_realloc_zero,
 };
-pub(crate) use crate::allocator::arena_meta::{
-    _mi_meta_free, _mi_meta_is_meta_page, _mi_meta_zalloc,
-};
-pub(crate) use crate::allocator::thread_heap::{
-    _mi_theap_area_visit_blocks, _mi_theap_collect_abandon, _mi_theap_create, _mi_theap_decref,
-    _mi_theap_delete, _mi_theap_free, _mi_theap_incref, _mi_theap_random_next,
-};
-pub(crate) use crate::arena::{
+pub(crate) use crate::allocator::arena::{
     _mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable, _mi_arenas_alloc,
     _mi_arenas_alloc_aligned, _mi_arenas_collect, _mi_arenas_contain, _mi_arenas_free,
     _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free,
@@ -51,7 +44,29 @@ pub(crate) use crate::arena::{
     _mi_arenas_unsafe_destroy_all, _mi_heap_destroy_pages, _mi_heap_move_pages,
     _mi_heap_visit_blocks,
 };
-pub use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE};
+pub use crate::allocator::arena::{
+    MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
+};
+pub(crate) use crate::allocator::arena_meta::{
+    _mi_meta_free, _mi_meta_is_meta_page, _mi_meta_zalloc,
+};
+pub(crate) use crate::allocator::heap::{
+    _mi_heap_force_destroy, _mi_heap_theap_get_or_init, _mi_heap_theap_get_peek,
+};
+use crate::allocator::options::_mi_error_message_fmt;
+pub(crate) use crate::allocator::options::{
+    _mi_error_message, _mi_option_get_fast, _mi_trace_message, _mi_verbose_message,
+    _mi_warning_message,
+};
+pub(crate) use crate::allocator::stats::{
+    __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
+    __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
+    __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
+};
+pub(crate) use crate::allocator::thread_heap::{
+    _mi_theap_area_visit_blocks, _mi_theap_collect_abandon, _mi_theap_create, _mi_theap_decref,
+    _mi_theap_delete, _mi_theap_free, _mi_theap_incref, _mi_theap_random_next,
+};
 use crate::bits::MI_SIZE_SHIFT;
 pub use crate::bits::{
     MI_ARCH_X64, MI_ARCH_X86, MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB,
@@ -63,9 +78,6 @@ use crate::core_types::{GuardedConfig, GuardedDecision};
 #[cfg(not(mi_c_malloc_fast))]
 pub(crate) use crate::free::_mi_padding_shrink;
 pub(crate) use crate::free::_mi_page_ptr_unalign;
-pub(crate) use crate::heap::{
-    _mi_heap_force_destroy, _mi_heap_theap_get_or_init, _mi_heap_theap_get_peek,
-};
 pub(crate) use crate::init::{
     _mi_auto_process_done, _mi_auto_process_init, _mi_cpu_stosb_max, _mi_is_heap_main,
     _mi_is_theap_main, _mi_preloading, _mi_subproc, _mi_subproc_from_id, _mi_subproc_heap_main,
@@ -76,11 +88,6 @@ pub(crate) use crate::init::{
 pub(crate) use crate::libc::{
     _mi_getenv, _mi_streq, _mi_strlcat, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen,
     _mi_strnstr, _mi_toupper, _mi_vsnprintf,
-};
-use crate::options::_mi_error_message_fmt;
-pub(crate) use crate::options::{
-    _mi_error_message, _mi_option_get_fast, _mi_trace_message, _mi_verbose_message,
-    _mi_warning_message,
 };
 pub(crate) use crate::os::{
     _mi_os_alloc, _mi_os_canuse_large_page, _mi_os_commit, _mi_os_commit_ex, _mi_os_decommit,
@@ -110,11 +117,6 @@ pub(crate) use crate::prim::{_mi_allocator_done, _mi_allocator_init};
 pub(crate) use crate::random::{
     _mi_os_random_weak, _mi_random_init, _mi_random_init_weak, _mi_random_next,
     _mi_random_reinit_if_weak, _mi_random_split,
-};
-pub(crate) use crate::stats::{
-    __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
-    __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
-    __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
 };
 pub use crate::types::*;
 pub use block_link::{
@@ -191,7 +193,7 @@ pub type mi_submap_t = *mut *mut mi_page_t;
 #[cold]
 pub(crate) fn _mi_rust_assert_fail(assertion: *const c_char, fname: *const c_char, line: u32) -> ! {
     // SAFETY: runtime assertion shims forward caller-proven C strings into the audited abort path.
-    unsafe { crate::options::_mi_assert_fail(assertion, fname, line, ptr::null()) }
+    unsafe { crate::allocator::options::_mi_assert_fail(assertion, fname, line, ptr::null()) }
 }
 
 macro_rules! mi_debug_assert {

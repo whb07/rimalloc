@@ -1,9 +1,9 @@
+use crate::allocator::options::_mi_error_message_fmt;
 use crate::core_types::{
     AvailableFreeList, BatchValidationError, BlockPtr, DetachedRemoteList, Errno, LocalFreeList,
     LocalPage, OwnedAbandonedPage, PagePtr, PublishedRemoteHead,
 };
 use crate::internal::mi_block_next;
-use crate::options::_mi_error_message_fmt;
 use crate::types::{mi_block_t, mi_page_t};
 
 #[cfg(test)]

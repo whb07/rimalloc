@@ -649,7 +649,7 @@ fn global_options_mutations_are_process_global_and_restored() {
     GlobalOptions::set(OptionKey::MaxErrors, changed).expect("set max errors");
     assert_eq!(GlobalOptions::get(OptionKey::MaxErrors), changed);
     assert_eq!(
-        crate::options::mi_option_get(OptionKey::MaxErrors.raw_option()),
+        crate::allocator::options::mi_option_get(OptionKey::MaxErrors.raw_option()),
         changed
     );
 
@@ -710,7 +710,7 @@ fn stats_and_process_info_are_typed_and_nonprinting() {
     // the raw process-info API, and `raw_page_faults` is valid writable
     // local storage for the only non-null out-pointer.
     unsafe {
-        crate::stats::mi_process_info(
+        crate::allocator::stats::mi_process_info(
             ptr::null_mut(),
             ptr::null_mut(),
             ptr::null_mut(),
@@ -754,14 +754,14 @@ struct ErrorCallbackRestoreGuard {
 impl ErrorCallbackRestoreGuard {
     fn new() -> Self {
         Self {
-            snapshot: crate::options::registered_error_callback(),
+            snapshot: crate::allocator::options::registered_error_callback(),
         }
     }
 }
 
 impl Drop for ErrorCallbackRestoreGuard {
     fn drop(&mut self) {
-        crate::options::restore_error_callback(self.snapshot);
+        crate::allocator::options::restore_error_callback(self.snapshot);
     }
 }
 
@@ -789,7 +789,7 @@ impl Drop for DeferredFreeCallbackRestoreGuard {
 }
 
 fn trigger_error_callback() {
-    crate::options::_mi_error_message_fmt(
+    crate::allocator::options::_mi_error_message_fmt(
         crate::core_types::Errno::EINVAL,
         format_args!("safe error callback guard test\n"),
     );
@@ -820,7 +820,7 @@ fn error_callback_guard_invokes_and_restores_previous_callback_quietly() {
     let _restore = ErrorCallbackRestoreGuard::new();
     let _quiet_expected_errors = ShowErrorsGuard::disabled();
     PREVIOUS_ERROR_CALLBACK_HITS.store(0, Ordering::SeqCst);
-    crate::options::mi_register_error(Some(previous_error_callback), ptr::null_mut());
+    crate::allocator::options::mi_register_error(Some(previous_error_callback), ptr::null_mut());
 
     let mut hits = 0usize;
     {
@@ -846,7 +846,7 @@ fn nested_error_callback_guards_restore_lifo_previous_callbacks() {
     let _restore = ErrorCallbackRestoreGuard::new();
     let _quiet_expected_errors = ShowErrorsGuard::disabled();
     PREVIOUS_ERROR_CALLBACK_HITS.store(0, Ordering::SeqCst);
-    crate::options::mi_register_error(Some(previous_error_callback), ptr::null_mut());
+    crate::allocator::options::mi_register_error(Some(previous_error_callback), ptr::null_mut());
 
     let outer_hits = AtomicUsize::new(0);
     let inner_hits = AtomicUsize::new(0);

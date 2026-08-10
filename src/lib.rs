@@ -228,9 +228,7 @@ pub mod __bench {
 // Mechanical allocator and raw compatibility code retain these C-shaped
 // module names. Rust-native code must use the owning `allocator` modules.
 #[allow(unused_imports)]
-pub(crate) use allocator::{
-    aligned as alloc_aligned, alloc, arena, free, heap, init, options, page, page_map, stats,
-};
+pub(crate) use allocator::{free, init, page, page_map};
 
 // Raw and translated compatibility code retain these FFI module names.
 pub(crate) use ffi::{abi, headers, libc, mimalloc};

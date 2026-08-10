@@ -312,9 +312,9 @@ impl SamePageBlocks {
         // unrelated parallel tests from redirecting same-size allocations to
         // another page before this fixture reaches the reported capacity.
         unsafe {
-            let heap = crate::heap::mi_heap_new();
+            let heap = crate::allocator::heap::mi_heap_new();
             assert!(!heap.is_null());
-            let first = crate::alloc::mi_heap_malloc(heap, 16).cast::<mi_block_t>();
+            let first = crate::allocator::alloc::mi_heap_malloc(heap, 16).cast::<mi_block_t>();
             assert!(!first.is_null());
             let page = crate::internal::_mi_ptr_page(first.cast());
             let mut fixture = Self {
@@ -334,7 +334,7 @@ impl SamePageBlocks {
                     crate::mimalloc::mi_heap_delete(heap);
                     return fixture;
                 }
-                let block = crate::alloc::mi_heap_malloc(heap, 16).cast::<mi_block_t>();
+                let block = crate::allocator::alloc::mi_heap_malloc(heap, 16).cast::<mi_block_t>();
                 assert!(!block.is_null());
                 assert!(
                     fixture.all_len < MAX_TRACKED_BLOCKS,

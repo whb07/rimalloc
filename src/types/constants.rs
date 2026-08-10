@@ -8,9 +8,9 @@ use core::ffi::c_long;
 use core::ffi::{c_char, c_int, c_void};
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize};
 
+use crate::allocator::stats::mi_stats_t;
 use crate::atomic::mi_lock_t;
 pub use crate::atomic::mi_lock_t as mi_lock_t_pub;
-use crate::stats::mi_stats_t;
 
 pub const MI_TYPES_H: () = ();
 pub const MI_MAX_ALIGN_SIZE: usize = 16;
@@ -52,18 +52,18 @@ const MI_PAGE_META_IS_SEPARATED: usize = if crate::bits::MI_PAGE_MAP_FLAT != 0 {
     1
 };
 pub const MI_PAGE_META_ALIGNED_FREE_SMALL: usize = 0;
-const MI_ARENA_SLICE_ALIGN: usize = crate::arena::MI_ARENA_SLICE_SIZE;
+const MI_ARENA_SLICE_ALIGN: usize = crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_ARENA_MIN_OBJ_SLICES: usize = 1;
 pub const MI_ARENA_MIN_OBJ_SIZE: usize =
-    MI_ARENA_MIN_OBJ_SLICES * crate::arena::MI_ARENA_SLICE_SIZE;
+    MI_ARENA_MIN_OBJ_SLICES * crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
-pub const MI_PAGE_MIN_COMMIT_SIZE: usize = crate::arena::MI_ARENA_SLICE_SIZE;
-pub const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = crate::arena::MI_ARENA_SLICE_SIZE;
+pub const MI_PAGE_MIN_COMMIT_SIZE: usize = crate::allocator::arena::MI_ARENA_SLICE_SIZE;
+pub const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
 pub const MI_PAGE_MAX_START_BLOCK_ALIGN2: usize = 4 * crate::bits::MI_KiB;
 pub const MI_MAX_ARENAS: usize = 160;
 pub const MI_ARENA_MAX_SIZE: usize =
-    crate::bitmap::MI_BITMAP_MAX_BIT_COUNT * crate::arena::MI_ARENA_SLICE_SIZE;
+    crate::bitmap::MI_BITMAP_MAX_BIT_COUNT * crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_ARENA_BIN_COUNT: usize = MI_BIN_COUNT;
 pub const EAGAIN: c_int = 11;
 pub const ENOMEM: c_int = 12;
@@ -86,8 +86,8 @@ pub const MI_MALLOC_VERSION: i32 = 30302;
 pub const MI_ENABLE_LARGE_PAGES: usize = 1;
 pub const MI_SMALL_WSIZE_MAX: usize = 128;
 pub const MI_SMALL_SIZE_MAX: usize = MI_SMALL_WSIZE_MAX * core::mem::size_of::<*const c_void>();
-pub const MI_BIN_HUGE: usize = crate::stats::MI_BIN_HUGE;
-pub const MI_BIN_FULL: usize = crate::stats::MI_BIN_HUGE + 1;
+pub const MI_BIN_HUGE: usize = crate::allocator::stats::MI_BIN_HUGE;
+pub const MI_BIN_FULL: usize = crate::allocator::stats::MI_BIN_HUGE + 1;
 pub const MI_BIN_COUNT: usize = MI_BIN_FULL + 1;
 pub const MI_PAGE_IN_FULL_QUEUE: usize = 0x01;
 pub const MI_PAGE_HAS_INTERIOR_POINTERS: usize = 0x02;
@@ -95,7 +95,7 @@ pub const MI_PAGE_FLAG_MASK: usize = 0x03;
 pub const MI_THREADID_ABANDONED: usize = 0;
 pub const MI_THREADID_ABANDONED_MAPPED: usize = MI_PAGE_FLAG_MASK + 1;
 pub const MI_PAGES_DIRECT: usize = MI_SMALL_WSIZE_MAX + MI_PADDING_WSIZE + 1;
-pub const MI_SMALL_PAGE_SIZE: usize = crate::arena::MI_ARENA_SLICE_SIZE;
+pub const MI_SMALL_PAGE_SIZE: usize = crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_MEDIUM_PAGE_SIZE: usize = 8 * MI_SMALL_PAGE_SIZE;
 pub const MI_LARGE_PAGE_SIZE: usize = core::mem::size_of::<usize>() * MI_MEDIUM_PAGE_SIZE;
 pub const MI_LARGE_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {
@@ -524,7 +524,7 @@ pub type mi_option_init_t = mi_option_init_e;
 pub struct mi_option_desc_t {
     pub value: c_long,
     pub init: mi_option_init_t,
-    pub option: crate::options::mi_option_t,
+    pub option: crate::allocator::options::mi_option_t,
     pub name: *const c_char,
     pub legacy_name: *const c_char,
 }

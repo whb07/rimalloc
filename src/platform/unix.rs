@@ -14,14 +14,14 @@ use core::mem::MaybeUninit;
 use core::ptr;
 use core::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
 
-use crate::arena::MI_ARENA_SLICE_ALIGN;
+use crate::allocator::arena::MI_ARENA_SLICE_ALIGN;
+use crate::allocator::options::{_mi_warning_message_fmt, mi_option_is_enabled, mi_option_t};
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use crate::bits::MI_GiB;
 use crate::bits::MI_MiB;
 use crate::internal::{
     _mi_preloading, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen, _mi_toupper, MI_DEBUG,
 };
-use crate::options::{_mi_warning_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::os::{
     _mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_has_overcommit,
     _mi_os_page_size_typed,

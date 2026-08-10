@@ -5,10 +5,11 @@ mod abandoned;
 use core::ffi::{CStr, c_char, c_void};
 use core::{cmp, ptr};
 
-use crate::allocator::tracking::{mi_track_free_size, mi_track_mem_defined, mi_track_mem_noaccess};
-use crate::arena::{
+use crate::allocator::arena::{
     _mi_arenas_page_free, _mi_arenas_page_try_reabandon_to_mapped_arena, _mi_arenas_page_unabandon,
 };
+use crate::allocator::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
+use crate::allocator::tracking::{mi_track_free_size, mi_track_mem_defined, mi_track_mem_noaccess};
 use crate::bits::MI_INTPTR_SIZE;
 use crate::core_types::Errno;
 use crate::internal::{
@@ -22,7 +23,6 @@ use crate::internal::{
     mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_keys, mi_page_queue,
     mi_page_start, mi_page_thread_free, mi_page_usable_block_size, mi_theap_is_initialized,
 };
-use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
     _mi_page_retire_internal, _mi_page_unfull_internal, _mi_theap_page_reclaim,
     MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned, mi_page_is_huge,
@@ -1256,17 +1256,17 @@ mod tests {
 
     impl ShowErrorsGuard {
         fn disabled() -> Self {
-            let option = crate::options::mi_option_t::mi_option_show_errors;
-            let previous = crate::options::mi_option_get(option);
-            crate::options::mi_option_set(option, 0);
+            let option = crate::allocator::options::mi_option_t::mi_option_show_errors;
+            let previous = crate::allocator::options::mi_option_get(option);
+            crate::allocator::options::mi_option_set(option, 0);
             Self { previous }
         }
     }
 
     impl Drop for ShowErrorsGuard {
         fn drop(&mut self) {
-            crate::options::mi_option_set(
-                crate::options::mi_option_t::mi_option_show_errors,
+            crate::allocator::options::mi_option_set(
+                crate::allocator::options::mi_option_t::mi_option_show_errors,
                 self.previous,
             );
         }

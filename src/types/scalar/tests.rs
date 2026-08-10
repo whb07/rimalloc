@@ -416,10 +416,10 @@ fn bin_rejects_indexes_outside_page_queue_table() {
 fn stats_bin_rejects_indexes_above_huge_bin() {
     assert_eq!(StatsBin::new(0).map(StatsBin::get), Some(0));
     assert_eq!(
-        StatsBin::new(crate::stats::MI_BIN_HUGE as u16).map(StatsBin::get),
-        Some(crate::stats::MI_BIN_HUGE as u16)
+        StatsBin::new(crate::allocator::stats::MI_BIN_HUGE as u16).map(StatsBin::get),
+        Some(crate::allocator::stats::MI_BIN_HUGE as u16)
     );
-    assert!(StatsBin::new((crate::stats::MI_BIN_HUGE + 1) as u16).is_none());
+    assert!(StatsBin::new((crate::allocator::stats::MI_BIN_HUGE + 1) as u16).is_none());
 
     // SAFETY: `3` is within the stats-bin
     // table bounds checked above.

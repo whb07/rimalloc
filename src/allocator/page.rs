@@ -8,12 +8,14 @@ use core::ffi::c_void;
 use core::mem::size_of;
 use core::ptr;
 
-use crate::allocator::tracking::{
-    MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
-};
-use crate::arena::{
+use crate::allocator::arena::{
     _mi_arenas_collect, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free_typed,
     MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
+};
+use crate::allocator::options::_mi_error_message_fmt;
+use crate::allocator::stats::MI_BIN_HUGE;
+use crate::allocator::tracking::{
+    MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::core_types::{Bin, Errno, PageKeys, PagePtr, PageQueuePtr, ThreadHeapPtr};
@@ -28,8 +30,6 @@ use crate::internal::{
     mi_page_set_has_interior_pointers, mi_page_set_keys, mi_page_slice_offset_of,
     mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_theap_is_initialized,
 };
-use crate::options::_mi_error_message_fmt;
-use crate::stats::MI_BIN_HUGE;
 use crate::types::{
     MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_ENCODE_FREELIST, MI_LARGE_MAX_OBJ_WSIZE, MI_PADDING,
     MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_page_queue_t, mi_page_t,

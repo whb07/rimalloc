@@ -8,7 +8,9 @@ mod lists;
 
 use core::{ffi::c_void, mem::size_of, ptr};
 
-use crate::arena::_mi_arenas_collect;
+use crate::allocator::arena::_mi_arenas_collect;
+use crate::allocator::options::_mi_error_message_fmt;
+use crate::allocator::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
 use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::core_types::{
     Bin, BlockVisitCallback, BlockVisitCallbackArg, BorrowedHeap, Errno, HeapPtr, PagePtr,
@@ -22,7 +24,6 @@ use crate::internal::{
     mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::mimalloc::mi_free;
-use crate::options::_mi_error_message_fmt;
 use crate::page::{
     _mi_page_abandon, _mi_page_free, _mi_page_free_collect, _mi_page_is_valid,
     _mi_theap_collect_retired, mi_full_page_queue_is_valid, mi_huge_page_queue_is_valid,
@@ -32,7 +33,6 @@ use crate::prim::{__mi_theap_empty, _mi_theap_default};
 #[cfg(not(any(target_os = "macos", windows)))]
 use crate::random::_mi_random_init;
 use crate::random::{_mi_random_next, _mi_random_split};
-use crate::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
 use crate::types::{
     MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_SMALL_PAGE_SIZE,
     mi_block_visit_fun, mi_heap_area_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_theap_t,
@@ -849,7 +849,8 @@ pub unsafe extern "C" fn mi_heap_collect(heap: *mut mi_heap_t, force: bool) {
 unsafe fn mi_heap_collect_typed(heap: Option<BorrowedHeap>, force: bool) {
     // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
-        let Some(theap) = crate::heap::mi_heap_theap_typed(heap.map(BorrowedHeap::ptr)) else {
+        let Some(theap) = crate::allocator::heap::mi_heap_theap_typed(heap.map(BorrowedHeap::ptr))
+        else {
             return;
         };
         if !mi_theap_is_initialized(theap.as_ptr()) {
@@ -953,7 +954,7 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
         theap.set_tld(Some(tld));
         theap.set_heap(Some(heap));
         crate::internal::mi_assert_internal!(
-            (*theap_raw).stats.size == size_of::<crate::stats::mi_stats_t>()
+            (*theap_raw).stats.size == size_of::<crate::allocator::stats::mi_stats_t>()
         );
 
         _mi_theap_options_init(theap_raw);
@@ -1041,7 +1042,7 @@ unsafe fn _mi_theap_create_typed(heap: HeapPtr, tld: TldPtr) -> Option<ThreadHea
             if !theap.is_null() {
                 let allocated_size = match crate::core_types::MemId::view(memid) {
                     crate::core_types::MemIdView::Arena(a) => {
-                        a.range().count_usize() * crate::arena::MI_ARENA_SLICE_SIZE
+                        a.range().count_usize() * crate::allocator::arena::MI_ARENA_SLICE_SIZE
                     }
                     crate::core_types::MemIdView::Os(os) => os.size.get(),
                     crate::core_types::MemIdView::External(external) => external.size.get(),

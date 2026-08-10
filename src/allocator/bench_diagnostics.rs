@@ -7,7 +7,7 @@ use core::mem;
 use core::ptr;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use crate::options::mi_option_t;
+use crate::allocator::options::mi_option_t;
 use crate::types::{mi_block_t, mi_page_t};
 
 const COUNTER_COUNT: usize = 66;
@@ -770,20 +770,20 @@ pub unsafe extern "C" fn mi_bench_page_occupancy(
     if used_bytes_out.is_null() || capacity_bytes_out.is_null() {
         return false;
     }
-    let mut stats = crate::stats::mi_stats_t::default();
+    let mut stats = crate::allocator::stats::mi_stats_t::default();
     // SAFETY: `stats` is fresh local writable
     // storage and thread initialization takes no caller pointers.
     unsafe {
-        crate::stats::mi_stats_init(ptr::addr_of_mut!(stats));
+        crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(stats));
         crate::init::mi_thread_init();
-        if !crate::stats::mi_stats_get(ptr::addr_of_mut!(stats)) {
+        if !crate::allocator::stats::mi_stats_get(ptr::addr_of_mut!(stats)) {
             return false;
         }
     }
     let mut used_bytes = 0usize;
     let mut capacity_bytes = 0usize;
     for bin in 0..crate::types::MI_BIN_HUGE {
-        let block_size = crate::stats::mi_stats_get_bin_size(bin);
+        let block_size = crate::allocator::stats::mi_stats_get_bin_size(bin);
         let page_size = if block_size <= crate::page::MI_SMALL_MAX_OBJ_SIZE {
             crate::types::MI_SMALL_PAGE_SIZE
         } else if block_size <= crate::page::MI_MEDIUM_MAX_OBJ_SIZE {

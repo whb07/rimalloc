@@ -390,7 +390,7 @@ unsafe fn mi_debug_show_chunks(
     arena: ArenaDebugView,
     narrow: bool,
 ) -> usize {
-    crate::options::_mi_raw_message(format_args!(
+    crate::allocator::options::_mi_raw_message(format_args!(
         "\x1B[37m{}{}{} (use/commit: \x1B[31m0 - 25%\x1B[33m - 50%\x1B[36m - 75%\x1B[32m - 100%\x1B[0m)\n",
         header1, header2, header3
     ));
@@ -410,7 +410,7 @@ unsafe fn mi_debug_show_chunks(
         if bit_count > used_slice_count && i + 2 < chunk_count {
             let diff = chunk_count - 1 - i;
             bit_count += diff * MI_BCHUNK_BITS;
-            crate::options::_mi_raw_message(format_args!("  |\n"));
+            crate::allocator::options::_mi_raw_message(format_args!("  |\n"));
             i = chunk_count - 1;
         }
 
@@ -452,7 +452,7 @@ unsafe fn mi_debug_show_chunks(
             if j > 0 && (j % fields_per_line) == 0 {
                 // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
                 let line = unsafe { core::str::from_utf8_unchecked(&buf[..k]) };
-                crate::options::_mi_raw_message(format_args!("  {}\n\x1B[37m", line));
+                crate::allocator::options::_mi_raw_message(format_args!("  {}\n\x1B[37m", line));
                 buf.fill(0);
                 buf[..5].fill(b' ');
                 k = 5;
@@ -499,10 +499,13 @@ unsafe fn mi_debug_show_chunks(
         }
         // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
         let line = unsafe { core::str::from_utf8_unchecked(&buf[..k]) };
-        crate::options::_mi_raw_message(format_args!("  {}\n\x1B[37m", line));
+        crate::allocator::options::_mi_raw_message(format_args!("  {}\n\x1B[37m", line));
         i += 1;
     }
-    crate::options::_mi_raw_message(format_args!("\x1B[0m  total pages: {}\n", bit_set_count));
+    crate::allocator::options::_mi_raw_message(format_args!(
+        "\x1B[0m  total pages: {}\n",
+        bit_set_count
+    ));
     bit_set_count
 }
 
@@ -531,7 +534,7 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
         // SAFETY: arena diagnostics walk the current subproc arena registry through typed indexes before printing.
         let arena_view = unsafe { ArenaDebugView::new_unchecked(arena) };
         crate::internal::mi_assert!(arena_view.subproc_raw() == subproc);
-        crate::options::_mi_raw_message(format_args!(
+        crate::allocator::options::_mi_raw_message(format_args!(
             "{}arena {} at {:p}: {} slices ({} MiB){}{}, subproc: {:p}, numa: {}\n",
             if arena_view.has_parent() { "(sub)" } else { "" },
             i,
@@ -578,7 +581,10 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
         }
     }
     if show_pages {
-        crate::options::_mi_raw_message(format_args!("total pages in arenas: {}\n", page_total));
+        crate::allocator::options::_mi_raw_message(format_args!(
+            "total pages in arenas: {}\n",
+            page_total
+        ));
     }
 }
 

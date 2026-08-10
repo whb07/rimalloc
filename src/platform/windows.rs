@@ -19,13 +19,13 @@ use core::{
 };
 use std::sync::Once;
 
-use crate::bits::{MI_KiB, MI_MiB, MI_SIZE_BITS, mi_clz};
-use crate::init::_mi_preloading;
-use crate::internal::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_page_size_typed};
-use crate::options::{
+use crate::allocator::options::{
     _mi_verbose_message, _mi_warning_message_fmt, mi_option_get_clamp, mi_option_is_enabled,
     mi_option_t,
 };
+use crate::bits::{MI_KiB, MI_MiB, MI_SIZE_BITS, mi_clz};
+use crate::init::_mi_preloading;
+use crate::internal::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_page_size_typed};
 use crate::prim::{mi_os_mem_config_t, mi_process_info_t};
 use crate::types::{mi_msecs_t, mi_theap_t};
 

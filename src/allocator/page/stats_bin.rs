@@ -1,4 +1,4 @@
-use crate::stats::MI_BIN_HUGE;
+use crate::allocator::stats::MI_BIN_HUGE;
 use crate::types::{MI_BIN_FULL, mi_page_t};
 
 use super::{mi_bin_from_block_size, mi_page_block_size, mi_page_is_huge, mi_page_is_in_full};

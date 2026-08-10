@@ -389,7 +389,9 @@ pub unsafe extern "C" fn mi_aligned_offset_recalloc(
 ) -> *mut c_void {
     // SAFETY: forwards raw arguments to the aligned
     // allocator boundary, which owns product/alignment validation.
-    unsafe { crate::alloc_aligned::mi_recalloc_aligned_at(p, newcount, size, alignment, offset) }
+    unsafe {
+        crate::allocator::aligned::mi_recalloc_aligned_at(p, newcount, size, alignment, offset)
+    }
 }
 
 // SAFETY: exports aligned recalloc as a raw allocation
@@ -410,7 +412,7 @@ pub unsafe extern "C" fn mi_aligned_recalloc(
 ) -> *mut c_void {
     // SAFETY: forwards raw arguments to the aligned
     // allocator boundary, which owns product/alignment validation.
-    unsafe { crate::alloc_aligned::mi_recalloc_aligned(p, newcount, size, alignment) }
+    unsafe { crate::allocator::aligned::mi_recalloc_aligned(p, newcount, size, alignment) }
 }
 
 // SAFETY: exports dupenv_s with raw nullable

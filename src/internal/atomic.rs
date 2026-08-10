@@ -967,7 +967,7 @@ pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
     // an initialized pthread mutex field.
     let err = unsafe { pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex)) };
     if err != 0 {
-        crate::options::_mi_error_message_fmt(
+        crate::allocator::options::_mi_error_message_fmt(
             crate::core_types::Errno::new(err),
             format_args!("internal error: lock cannot be acquired\n"),
         );

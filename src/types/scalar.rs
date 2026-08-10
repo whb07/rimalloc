@@ -1030,7 +1030,7 @@ pub(crate) struct StatsBin(pub(crate) u16);
 impl StatsBin {
     #[inline(always)]
     pub(crate) const fn new(index: u16) -> Option<Self> {
-        if (index as usize) <= crate::stats::MI_BIN_HUGE {
+        if (index as usize) <= crate::allocator::stats::MI_BIN_HUGE {
             Some(Self(index))
         } else {
             None

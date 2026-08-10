@@ -6,7 +6,12 @@ use core::ffi::c_void;
 use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
-use crate::arena::MI_ARENA_SLICE_SIZE;
+use crate::allocator::arena::MI_ARENA_SLICE_SIZE;
+use crate::allocator::options::{
+    _mi_verbose_message, _mi_warning_message_fmt, mi_option_get, mi_option_get_size,
+    mi_option_is_enabled, mi_option_t,
+};
+use crate::allocator::stats::{_mi_clock_end, _mi_clock_start, mi_stats_t};
 use crate::atomic::mi_lock_t;
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB};
 use crate::core_types::{
@@ -19,17 +24,12 @@ use crate::internal::{
     _mi_memzero_aligned, _mi_preloading, _mi_subproc, MI_DEBUG, MI_SECURE, MI_TRACK_ENABLED,
     mi_commit_fun_t, mi_memid_t, mi_theap_is_initialized,
 };
-use crate::options::{
-    _mi_verbose_message, _mi_warning_message_fmt, mi_option_get, mi_option_get_size,
-    mi_option_is_enabled, mi_option_t,
-};
 use crate::prim::mi_os_mem_config_t;
 use crate::prim::{
     _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
     _mi_prim_free, _mi_prim_mem_init, _mi_prim_numa_node, _mi_prim_numa_node_count,
     _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse, _mi_theap_default,
 };
-use crate::stats::{_mi_clock_end, _mi_clock_start, mi_stats_t};
 use crate::types::{mi_arena_t, mi_heap_t, mi_page_t, mi_subproc_t};
 
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_4_GIB: usize = 4 * MI_MiB;

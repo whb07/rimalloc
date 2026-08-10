@@ -5,6 +5,20 @@
 
 use super::*;
 
+pub(super) unsafe fn mi_arena_numa_node(arena: *const mi_arena_t) -> crate::core_types::NumaNode {
+    crate::core_types::NumaNode::new(unsafe { (*arena.cast::<MiArenaPrefix>()).numa_node })
+}
+
+pub(super) unsafe fn mi_arena_set_numa_node(
+    arena: *mut mi_arena_t,
+    numa_node: crate::core_types::NumaNode,
+) {
+    // SAFETY: arena suitability checks keep pinned, requested-arena, and NUMA predicates separate from table mutation.
+    unsafe {
+        (*arena.cast::<MiArenaPrefix>()).numa_node = numa_node.get();
+    }
+}
+
 // SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_arena_min_alignment() -> usize {

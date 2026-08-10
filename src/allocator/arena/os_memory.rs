@@ -3,7 +3,84 @@
 //! The parent arena module keeps allocation/search hot paths; this module owns
 //! reserve growth, public managed-memory entrypoints, and huge-page reservation.
 
+use super::metadata::mi_arena_initialize;
 use super::*;
+
+pub(super) unsafe fn mi_arena_commit(
+    arena: ArenaPtr,
+    range: crate::core_types::SliceRange,
+    commit_size: crate::core_types::CommittedBytes,
+    is_zero: *mut bool,
+    already_committed: crate::core_types::CommittedBytes,
+) -> bool {
+    let arena_raw = arena.as_ptr();
+    // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+    let start = unsafe {
+        mi_arena_slice_start(arena, range.start())
+            .as_ptr()
+            .cast::<c_void>()
+    };
+    let size = commit_size.get();
+    // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+    let commit_fun = unsafe { (*arena_raw.cast::<MiArenaPrefix>()).commit_fun };
+    if let Some(commit_fun) = commit_fun {
+        return unsafe {
+            commit_fun(
+                true,
+                start,
+                size,
+                is_zero,
+                (*arena_raw.cast::<MiArenaPrefix>()).commit_fun_arg,
+            )
+        };
+    }
+    if !already_committed.is_zero() {
+        // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+        unsafe { _mi_os_commit_ex(start, size, is_zero, already_committed) }
+    } else {
+        unsafe { _mi_os_commit(start, size, is_zero) }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct ArenaOsAllocRequest {
+    pub(super) size: usize,
+    pub(super) alignment: usize,
+    pub(super) align_offset: usize,
+}
+
+pub(super) unsafe fn mi_arena_os_alloc_aligned(
+    request: ArenaOsAllocRequest,
+    commit: bool,
+    allow_large: bool,
+    req_arena_id: mi_arena_id_t,
+    memid: *mut mi_memid_t,
+) -> *mut c_void {
+    if mi_option_is_enabled(mi_option_t::mi_option_disallow_os_alloc)
+        // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
+        || req_arena_id != unsafe { _mi_arena_id_none() }
+    {
+        unsafe { mi_set_errno(ENOMEM) };
+        return ptr::null_mut();
+    }
+
+    if request.align_offset > 0 {
+        // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
+        unsafe {
+            _mi_os_alloc_aligned_at_offset(
+                request.size,
+                request.alignment,
+                request.align_offset,
+                commit,
+                allow_large,
+                memid,
+            )
+        }
+    } else {
+        // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
+        unsafe { _mi_os_alloc_aligned(request.size, request.alignment, commit, allow_large, memid) }
+    }
+}
 
 pub(super) unsafe fn mi_arena_reserve(
     subproc: SubprocPtr,

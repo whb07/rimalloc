@@ -4,6 +4,7 @@
 //! back into a thread heap and where the heap-local arena page table is lazily
 //! published for those ownership checks.
 
+use super::metadata::{mi_arena_pages_alloc, mi_arena_pages_size};
 use super::*;
 
 pub(super) unsafe fn mi_abandoned_page_unown(
@@ -215,4 +216,205 @@ pub(super) unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
     };
     crate::internal::mi_assert_internal!(!full || free_is_empty);
     full
+}
+
+pub(super) unsafe fn _mi_arenas_page_abandon_internal(
+    page_wrapper: crate::core_types::PageForAbandon,
+    current_theap: crate::core_types::ThreadHeapLocal,
+) {
+    let page = match page_wrapper {
+        crate::core_types::PageForAbandon::Active(page) => page.page().as_ptr(),
+        crate::core_types::PageForAbandon::Full(page) => page.page().as_ptr(),
+    };
+    let current_theap = current_theap.ptr().as_ptr();
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+        unsafe { mi_page_slice_start(page) }.cast(),
+        MI_PAGE_ALIGN
+    ));
+    crate::internal::mi_assert_internal!(unsafe {
+        crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+    });
+    // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
+    // SAFETY: `page` came from the typed
+    // page-for-abandon wrapper above.
+    let page_ptr = unsafe { PagePtr::new_unchecked(page) };
+    crate::internal::mi_assert_internal!(unsafe {
+        page_ptr.queue_next().is_none() && page_ptr.queue_prev().is_none()
+    });
+
+    // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+    let heap = unsafe { mi_page_heap(page) };
+    crate::internal::mi_assert_internal!(heap == unsafe { _mi_theap_heap(current_theap) });
+    if unsafe { mi_page_memid_is_arena(page) } && !unsafe { mi_page_is_full_local(page) } {
+        let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) });
+        let mut slice_index = 0usize;
+        let mut slice_count = 0usize;
+        let mut arena_pages = ptr::null_mut();
+        // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+        let arena = unsafe {
+            mi_page_arena_pages(
+                PagePtr::new_unchecked(page),
+                &mut slice_index,
+                &mut slice_count,
+                &mut arena_pages,
+            )
+        };
+        let _ = arena;
+        // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+        crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
+        crate::internal::mi_assert_internal!(unsafe {
+            mi_bbitmap_is_clearN(
+                (*arena.cast::<MiArenaPrefix>()).slices_free,
+                slice_index,
+                slice_count,
+            )
+        });
+        // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+        let committed = unsafe { crate::page::mi_page_slice_committed(page) };
+        crate::internal::mi_assert_internal!(
+            !committed.is_zero()
+                || unsafe {
+                    mi_bitmap_is_setN(
+                        (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                        slice_index,
+                        slice_count,
+                    )
+                }
+        );
+        // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+        crate::internal::mi_assert_internal!(unsafe {
+            mi_bitmap_is_setN(
+                (*arena.cast::<MiArenaPrefix>()).slices_dirty,
+                slice_index,
+                slice_count,
+            )
+        });
+
+        let atomic_tid =
+            // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+            unsafe { PagePtr::new_unchecked(page).thread_id_cell() };
+        unsafe { atomic_tid.store_owner(crate::core_types::PageOwnerId::AbandonedMapped) };
+        let was_clear =
+            // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+            unsafe { mi_bitmap_set((*arena_pages).pages_abandoned[bin.as_usize()], slice_index) };
+        crate::internal::MI_UNUSED(&was_clear);
+        crate::internal::mi_assert_internal!(was_clear);
+        unsafe { mi_heap_abandoned_count(heap, bin).fetch_add_relaxed(1) };
+        unsafe { __mi_stat_increase(ptr::addr_of_mut!((*current_theap).stats.pages_abandoned), 1) };
+    } else {
+        // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+        if !unsafe { mi_page_memid_is_arena(page) }
+            && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
+        {
+            // SAFETY: arena page abandon links non-arena pages into the owning heap OS-abandoned list under its lock.
+            unsafe {
+                os_abandoned::push_front(HeapPtr::new_unchecked(heap), PagePtr::new_unchecked(page))
+            };
+        }
+        // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+        unsafe { __mi_stat_increase(ptr::addr_of_mut!((*current_theap).stats.pages_abandoned), 1) };
+    }
+    unsafe {
+        mi_abandoned_page_unown(
+            crate::core_types::assume_abandoned_page(PagePtr::new_unchecked(page)),
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(current_theap),
+            ),
+        )
+    };
+}
+
+pub(super) unsafe fn _mi_arenas_page_unabandon_internal(
+    page: crate::core_types::OwnedAbandonedPage,
+    current_theap: Option<crate::core_types::ThreadHeapLocal>,
+) {
+    let page = page.page().as_ptr();
+    let current_theapx = current_theap
+        .map(|theap| theap.ptr().as_ptr())
+        .unwrap_or(ptr::null_mut());
+
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        // SAFETY: unabandon entry validates raw page and thread-heap witnesses before cleanup.
+        unsafe { mi_page_slice_start(page) }.cast(),
+        MI_PAGE_ALIGN
+    ));
+    crate::internal::mi_assert_internal!(unsafe {
+        crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+    });
+    // SAFETY: unabandon entry validates raw page and thread-heap witnesses before cleanup.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::internal::mi_assert_internal!(
+        current_theapx.is_null()
+            || unsafe { _mi_thread_id() == (*(*current_theapx).tld).thread_id }
+    );
+
+    // SAFETY: unabandon entry validates raw page and thread-heap witnesses before cleanup.
+    let heap = unsafe { mi_page_heap(page) };
+    if unsafe { mi_page_is_abandoned_mapped(page) } {
+        crate::internal::mi_assert_internal!(unsafe { mi_page_memid_is_arena(page) });
+        let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) });
+        let mut slice_index = 0usize;
+        let mut slice_count = 0usize;
+        let mut arena_pages = ptr::null_mut();
+        // SAFETY: mapped unabandon clears arena abandoned bitmaps and heap counters.
+        let arena = unsafe {
+            mi_page_arena_pages(
+                PagePtr::new_unchecked(page),
+                &mut slice_index,
+                &mut slice_count,
+                &mut arena_pages,
+            )
+        };
+        let _ = arena;
+        // SAFETY: mapped unabandon clears arena abandoned bitmaps and heap counters.
+        crate::internal::mi_assert_internal!(unsafe {
+            mi_bbitmap_is_clearN(
+                (*arena.cast::<MiArenaPrefix>()).slices_free,
+                slice_index,
+                slice_count,
+            )
+        });
+        // SAFETY: mapped unabandon clears arena abandoned bitmaps and heap counters.
+        let committed = unsafe { crate::page::mi_page_slice_committed(page) };
+        crate::internal::mi_assert_internal!(
+            !committed.is_zero()
+                || unsafe {
+                    mi_bitmap_is_setN(
+                        (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                        slice_index,
+                        slice_count,
+                    )
+                }
+        );
+        // SAFETY: mapped unabandon clears arena abandoned bitmaps and heap counters.
+        unsafe {
+            mi_bitmap_clear_once_set((*arena_pages).pages_abandoned[bin.as_usize()], slice_index)
+        };
+        unsafe { mi_page_clear_abandoned_mapped(PagePtr::new_unchecked(page)) };
+        unsafe { mi_heap_abandoned_count(heap, bin).fetch_sub_relaxed(1) };
+    // SAFETY: mapped unabandon clears arena abandoned bitmaps and heap counters.
+    } else if !unsafe { mi_page_memid_is_arena(page) }
+        && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
+    {
+        // SAFETY: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
+        unsafe { os_abandoned::remove(HeapPtr::new_unchecked(heap), PagePtr::new_unchecked(page)) };
+    }
+
+    if !current_theapx.is_null() {
+        // SAFETY: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
+        unsafe {
+            __mi_stat_decrease(
+                ptr::addr_of_mut!((*current_theapx).stats.pages_abandoned),
+                1,
+            )
+        };
+    } else {
+        // SAFETY: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
+        unsafe { __mi_stat_decrease_mt(&mut (*heap).stats.pages_abandoned, 1) };
+    }
 }

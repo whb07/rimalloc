@@ -575,26 +575,65 @@ aliases remain explicitly identified and contained.
 
 ### Work
 
-- [ ] Replace broad allocator re-exports in `src/lib.rs` with narrow owning
+- [x] Replace broad allocator re-exports in `src/lib.rs` with narrow owning
       module imports where no compatibility boundary requires the alias.
-- [ ] Replace wildcard re-exports in `src/internal/mod.rs` with explicit imports
+- [x] Replace wildcard re-exports in `src/internal/mod.rs` with explicit imports
       at the actual call sites.
-- [ ] Remove the `src/types/mod.rs::__lint_touch` chain and every subordinate
+- [x] Remove the `src/types/mod.rs::__lint_touch` chain and every subordinate
       `__lint_touch()` helper.
-- [ ] Delete helpers, imports, and constants that become genuinely unused after
+- [x] Delete helpers, imports, and constants that become genuinely unused after
       synthetic reachability is removed.
-- [ ] Retain a compatibility alias only when an actual raw, FFI, assembly, or
+- [x] Retain a compatibility alias only when an actual raw, FFI, assembly, or
       mechanical translation consumer requires it; state that reason locally.
-- [ ] Do not replace one broad re-export with another prelude or facade module.
+- [x] Do not replace one broad re-export with another prelude or facade module.
 
 ### Validation
 
-- [ ] Run Clippy with warnings denied after each module family is disconnected
+- [x] Run Clippy with warnings denied after each module family is disconnected
       from the synthetic-use chain.
-- [ ] Use `rg` to confirm no `__lint_touch` identifier remains.
-- [ ] Run layer, raw-facade, API-boundary, and common Rust validation checks.
-- [ ] Compare release assembly for any allocation/free path whose imports or
+- [x] Use `rg` to confirm no `__lint_touch` identifier remains.
+- [x] Run layer, raw-facade, API-boundary, and common Rust validation checks.
+- [x] Compare release assembly for any allocation/free path whose imports or
       helper reachability changed.
+
+### Completion note (2026-08-10)
+
+- All 14 private allocator crate-root aliases were replaced by owning-module
+  paths, including raw/FFI facade feeds and fast-interpose assembly operands.
+  The `types::*` and `memid::*` internal wildcards were replaced at their call
+  sites. Explicit `internal` compatibility aliases fell from 214 to 98; an
+  exhaustive direct, grouped-import, macro, and child-module audit found a real
+  consumer for every retained alias. No replacement prelude or facade was
+  introduced, and the public Rust and C surfaces are unchanged.
+- The root and 15 subordinate `__lint_touch` functions, their function-pointer
+  router, the adjacent synthetic size tuple, all 149 private `*_KEEP`
+  retention statics, and 17 other reachability-only const witnesses were
+  removed. Genuinely orphaned private helpers, staged wrapper methods, imports,
+  constants, and tests were then deleted or updated while live behavioral,
+  layout, overflow, policy, and packed-word encoding coverage was preserved.
+  Searches
+  now find no `__lint_touch` or `*_KEEP`; the only six remaining `#[used]`
+  records are loader-consumed link-section constructors/interposition tables,
+  and the remaining anonymous witnesses prove typed transitions, cfg-specific
+  ABI signatures, assembly signatures, or numeric invariants.
+- Across this item, 102 files changed by 989 insertions and 4,995 deletions, a
+  net reduction of 4,006 lines. Warnings-denied Clippy passed after each owner
+  family, and the final formatting, workspace/all-target/all-feature Clippy and
+  test gates passed. The no-default library gate, 96-combination feature
+  matrix, behavioral and Unix syscall parity, strict-type and unsafe inventory,
+  layer, raw-facade, safe, API, FFI, public ABI/symbol, static-link, C-link, and
+  internal-probe checks also passed. Fresh-eyes review caught and fixed lost
+  live tests, over-broad retained aliases, remaining synthetic `_KEEP`/const
+  machinery, and an initially weakened assembly-evidence requirement.
+- Clean release evidence compares baseline `8cffc771` with final `e314da7d`.
+  C-ABI `mi_malloc` (52 instructions/144 bytes), `mi_malloc_small` (49/128),
+  `mi_free` (11/16), and `mi_route_free` (181/624) are shape- and size-identical.
+  The inlined local-free region is covered by that unchanged route; interpose
+  still emits `mi_free_block_local` unchanged at 67/208. The raw zero-allocation
+  wrapper is intentionally no longer emitted, while its typed implementation
+  remains identical at 97/288. The interpose `malloc`, `calloc`, and `free`
+  paths and aliases are likewise shape- and size-identical, so removing
+  synthetic reachability introduced no hot-region regression.
 
 ### Completion condition
 

@@ -4,8 +4,8 @@ use core::mem::size_of;
 use crate::allocator::tracking::MI_TRACK_ENABLED;
 use crate::core_types::{PageConstPtr, PagePtr};
 use crate::internal::{
-    _mi_ptr_page, MI_DEBUG, mi_block_next, mi_mem_is_zero, mi_page_block_size,
-    mi_page_contains_address, mi_page_slice_start, mi_page_thread_free, mi_page_usable_block_size,
+    _mi_ptr_page, MI_DEBUG, mi_block_next, mi_mem_is_zero, mi_page_block_size, mi_page_slice_start,
+    mi_page_thread_free, mi_page_usable_block_size,
 };
 use crate::types::{mi_block_t, mi_page_t};
 
@@ -77,11 +77,11 @@ pub(crate) unsafe fn mi_page_list_is_valid(page: PagePtr, mut p: *mut mi_block_t
     unsafe {
         let page_ptr = page;
         let page = page_ptr.as_ptr();
-        let psize = page_ptr.byte_size();
-        let page_area = page_ptr.start().as_ptr().cast::<mi_block_t>();
-        let end = page_area.cast::<u8>().add(psize).cast::<mi_block_t>();
+        let Some(page_area) = page_ptr.area() else {
+            return false;
+        };
         while !p.is_null() {
-            if p < page_area || p >= end {
+            if !page_area.contains(p) {
                 return false;
             }
             p = mi_block_next(page, p);
@@ -179,7 +179,11 @@ pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
                     || mi_page_is_huge(cpage)
                     || mi_page_is_in_full(cpage)
             );
-            crate::internal::mi_assert_internal!(mi_page_contains_address(cpage, cpage.cast()));
+            crate::internal::mi_assert_internal!(
+                page_ptr
+                    .area()
+                    .is_some_and(|area| area.contains(cpage.cast::<c_void>()))
+            );
         }
         true
     }

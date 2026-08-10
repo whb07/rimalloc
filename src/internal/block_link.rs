@@ -9,7 +9,6 @@ use core::ptr;
 
 use crate::allocator::options::_mi_error_message_fmt;
 use crate::internal::bits::{mi_rotl, mi_rotr};
-use crate::internal::page_location::mi_page_contains_address;
 use crate::internal::page_metadata::mi_page_block_size;
 use crate::types::{Errno, MI_ENCODE_FREELIST, mi_block_t, mi_page_t};
 
@@ -20,9 +19,14 @@ use super::{_mi_ptr_page, MI_BIG_ENDIAN};
 /// that page's usable address range.
 #[inline]
 pub unsafe fn mi_is_in_same_page(p: *const c_void, q: *const c_void) -> bool {
-    // SAFETY: encoded block-link helpers preserve free-list provenance, tracking, and same-page checks.
+    // SAFETY: `p` resolves to live initialized allocator page metadata; the
+    // typed area performs geometry-only exposed-address containment for `q`.
     let page = unsafe { _mi_ptr_page(p) };
-    unsafe { mi_page_contains_address(page, q) }
+    unsafe {
+        crate::core_types::PagePtr::new_unchecked(page)
+            .area()
+            .is_some_and(|area| area.contains(q))
+    }
 }
 
 #[inline]

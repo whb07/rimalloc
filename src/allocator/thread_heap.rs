@@ -25,7 +25,7 @@ use crate::internal::memid::mi_memid_t;
 use crate::internal::{
     _mi_align_up, _mi_arenas_alloc, _mi_arenas_free, _mi_deferred_free, _mi_divide_up,
     _mi_is_heap_main, _mi_memcpy_aligned, _mi_meta_free, _mi_meta_zalloc, _mi_subproc,
-    _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_page_all_free, mi_page_area,
+    _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_page_all_free,
     mi_page_block_size, mi_page_block_size_typed, mi_page_heap, mi_page_start,
     mi_page_usable_block_size, mi_theap_is_initialized,
 };
@@ -260,8 +260,11 @@ unsafe fn mi_theap_area_visit_blocks_typed(
                 return true;
             }
 
-            let mut psize = 0usize;
-            let pstart = mi_page_area(page, &mut psize);
+            let Some(page_area) = page_ptr.area() else {
+                crate::internal::mi_assert_internal!(false);
+                return false;
+            };
+            let pstart = page_area.start().as_ptr();
             let heap = HeapPtr::new_unchecked(mi_page_heap(page));
             let bsize = mi_page_block_size(page);
             let ubsize = mi_page_usable_block_size(page);
@@ -300,10 +303,10 @@ unsafe fn mi_theap_area_visit_blocks_typed(
             while !free.is_null() {
                 free_count += 1;
                 let block = free;
-                crate::internal::mi_assert_internal!(
-                    block.cast::<u8>() >= pstart && block.cast::<u8>() < pstart.add(psize)
-                );
-                let offset = block.cast::<u8>() as usize - pstart as usize;
+                let Some(offset) = page_area.offset_of(block) else {
+                    crate::internal::mi_assert_internal!(false);
+                    return false;
+                };
                 crate::internal::mi_assert_internal!(offset.is_multiple_of(bsize));
                 crate::internal::mi_assert_internal!(u32::try_from(offset).is_ok());
                 let blockidx = mi_fast_divide(offset, magic, shift);

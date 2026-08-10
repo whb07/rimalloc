@@ -580,7 +580,12 @@ unsafe fn mi_lookup_pointer_page(
         if MI_DEBUG != 0 || cfg!(feature = "secure") {
             let registered = _mi_safe_ptr_page_registered(p);
             match registered {
-                Some(registered) if registered.page().contains_user(user) => {
+                Some(registered)
+                    if registered
+                        .page()
+                        .area()
+                        .is_some_and(|area| area.contains(user.as_ptr())) =>
+                {
                     Some(registered.page())
                 }
                 _ => None,

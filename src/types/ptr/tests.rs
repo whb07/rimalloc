@@ -55,3 +55,84 @@ fn provenance_address_helpers_match_raw_pointer_math() {
     assert!(ptr_is_aligned(base, 1));
     assert!(ptr_is_aligned(base, 0));
 }
+
+#[test]
+fn page_area_uses_checked_half_open_address_bounds() {
+    let mut bytes = [0u8; 8];
+    // SAFETY: the non-null start points into live stack storage; PageArea only
+    // performs exposed-address calculations and creates no references.
+    let start = unsafe { PageStart::new_unchecked(bytes.as_mut_ptr()) };
+    let start_address = ptr_exposed_addr(start.as_ptr());
+
+    let zero = PageArea::from_start_and_len(start, 0).expect("zero-length range is representable");
+    assert_eq!(zero.start_address(), start_address);
+    assert_eq!(zero.end_address(), start_address);
+    assert!(!zero.contains(start.as_ptr()));
+    assert!(!zero.contains(core::ptr::null::<u8>()));
+
+    let minimum = PageArea::from_start_and_len(start, 1).expect("one-byte range is representable");
+    assert!(minimum.contains(start.as_ptr()));
+    // SAFETY: one-past is valid for address comparison and is not dereferenced.
+    let one_past_minimum = unsafe { start.as_ptr().add(1) };
+    assert!(!minimum.contains(one_past_minimum));
+
+    let area = PageArea::from_start_and_len(start, bytes.len()).expect("stack range is valid");
+    // SAFETY: both pointers stay within or one-past the stack byte buffer and
+    // are used only for address-domain checks.
+    unsafe {
+        assert_eq!(area.offset_of(start.as_ptr().add(1)), Some(1));
+        assert!(area.contains(start.as_ptr().add(bytes.len() - 1)));
+        assert!(!area.contains(start.as_ptr().add(bytes.len())));
+    }
+
+    let mut aligned_words = [0usize; 2];
+    // SAFETY: adding one byte stays within the live stack buffer. PageArea is
+    // geometry-only, so an intentionally misaligned start and interior address
+    // remain valid inputs for half-open address checks.
+    unsafe {
+        let misaligned = PageStart::new_unchecked(aligned_words.as_mut_ptr().cast::<u8>().add(1));
+        assert!(!ptr_exposed_addr(misaligned.as_ptr()).is_multiple_of(size_of::<usize>()));
+        let misaligned_area = PageArea::from_start_and_len(misaligned, size_of::<usize>())
+            .expect("misaligned exposed-address interval does not overflow");
+        assert_eq!(
+            misaligned_area.offset_of(misaligned.as_ptr().add(3)),
+            Some(3)
+        );
+    }
+
+    // PageArea is geometry-only, so this intentionally synthetic maximum
+    // interval tests integer bounds without claiming backing allocation bytes.
+    let max_len = usize::MAX - start_address;
+    let maximum = PageArea::from_start_and_len(start, max_len)
+        .expect("largest non-overflowing exposed-address range is valid");
+    assert_eq!(maximum.end_address(), usize::MAX);
+    assert!(PageArea::from_start_and_len(start, max_len + 1).is_none());
+}
+
+#[test]
+fn page_area_from_page_checks_size_multiplication() {
+    let mut bytes = [0u8; 8];
+    let mut raw_page = MaybeUninit::<mi_page_t>::zeroed();
+    // SAFETY: the stack page fixture is initialized for exactly the metadata
+    // fields read by PageArea and remains live through all range checks.
+    unsafe {
+        let raw = raw_page.as_mut_ptr();
+        ptr::addr_of_mut!((*raw).page_start).write(bytes.as_mut_ptr());
+        ptr::addr_of_mut!((*raw).block_size).write(4);
+        ptr::addr_of_mut!((*raw).reserved).write(2);
+        let page = PagePtr::new_unchecked(raw);
+        let area = page.area().expect("4 * 2 byte page area is valid");
+        assert_eq!(area.start().as_ptr(), bytes.as_mut_ptr());
+        assert_eq!(area.byte_len(), bytes.len());
+
+        ptr::addr_of_mut!((*raw).reserved).write(0);
+        assert_eq!(
+            page.area().expect("zero reserved area is valid").byte_len(),
+            0
+        );
+
+        ptr::addr_of_mut!((*raw).block_size).write(usize::MAX);
+        ptr::addr_of_mut!((*raw).reserved).write(2);
+        assert!(page.area().is_none());
+    }
+}

@@ -397,22 +397,13 @@ impl PagePtr {
     }
 
     /// # Safety
-    /// The page pointer must refer to initialized page metadata.
-    // SAFETY: caller-proven metadata access stays behind transparent NonNull wrappers.
+    /// The page pointer must refer to live initialized page metadata whose
+    /// block-area range is valid for address comparisons.
     #[inline(always)]
-    pub(crate) unsafe fn byte_size(self) -> usize {
-        unsafe { self.block_size().get() * self.reserved().as_usize() }
-    }
-
-    /// # Safety
-    /// The page pointer must refer to initialized page metadata.
-    // SAFETY: caller-proven metadata access stays behind transparent NonNull wrappers.
-    #[inline(always)]
-    pub(crate) unsafe fn contains_user(self, user: UserPtr) -> bool {
-        let start = ptr_exposed_addr(unsafe { self.start() }.as_ptr());
-        let end = start.wrapping_add(unsafe { self.byte_size() });
-        let user = ptr_exposed_addr(user.as_ptr());
-        start <= user && user < end
+    pub(crate) unsafe fn area(self) -> Option<PageArea> {
+        // SAFETY: the caller proves the page metadata and its non-null block
+        // start are initialized for this read-only range projection.
+        unsafe { PageArea::from_page(self) }
     }
 }
 
@@ -1025,6 +1016,75 @@ impl InteriorUserPtr {
 define_ptr_wrapper!(PageStart, u8, "Start of page block area", no_new);
 define_ptr_wrapper!(SliceStart, u8, "Aligned arena slice start", no_new);
 define_ptr_wrapper!(OsMemPtr, c_void, "OS allocation base");
+
+/// Geometry for a non-null start and a non-overflowing half-open exposed-address interval.
+///
+/// This value supports address arithmetic only. It does not prove backing
+/// allocation coverage, provenance, ownership, or liveness, and it creates no
+/// slice or reference.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct PageArea {
+    start: PageStart,
+    byte_len: usize,
+}
+
+impl PageArea {
+    #[inline(always)]
+    fn from_start_and_len(start: PageStart, byte_len: usize) -> Option<Self> {
+        ptr_exposed_addr(start.as_ptr()).checked_add(byte_len)?;
+        Some(Self { start, byte_len })
+    }
+
+    /// # Safety
+    /// `page` must refer to live initialized page metadata whose non-null
+    /// block-area start and reserved block count describe its current range.
+    #[inline(always)]
+    unsafe fn from_page(page: PagePtr) -> Option<Self> {
+        // SAFETY: the caller proves the page metadata and block-area start are
+        // initialized; typed accessors preserve their scalar invariants.
+        let start = unsafe { page.start() };
+        // SAFETY: the caller proves initialized page sizing metadata.
+        let byte_len = unsafe {
+            page.block_size()
+                .get()
+                .checked_mul(page.reserved().as_usize())?
+        };
+        Self::from_start_and_len(start, byte_len)
+    }
+
+    #[inline(always)]
+    pub(crate) fn start(self) -> PageStart {
+        self.start
+    }
+
+    #[inline(always)]
+    pub(crate) fn byte_len(self) -> usize {
+        self.byte_len
+    }
+
+    #[inline(always)]
+    pub(crate) fn start_address(self) -> usize {
+        ptr_exposed_addr(self.start.as_ptr())
+    }
+
+    #[inline(always)]
+    pub(crate) fn end_address(self) -> usize {
+        // Construction proves this addition cannot overflow.
+        self.start_address() + self.byte_len
+    }
+
+    #[inline(always)]
+    pub(crate) fn offset_of<T>(self, ptr: *const T) -> Option<usize> {
+        self.contains(ptr)
+            .then(|| ptr_exposed_addr(ptr) - self.start_address())
+    }
+
+    #[inline(always)]
+    pub(crate) fn contains<T>(self, ptr: *const T) -> bool {
+        let address = ptr_exposed_addr(ptr);
+        self.start_address() <= address && address < self.end_address()
+    }
+}
 
 /// Non-null raw page metadata (read-only view).
 #[repr(transparent)]

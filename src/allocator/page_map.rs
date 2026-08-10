@@ -46,8 +46,8 @@ use crate::internal::{
 };
 use crate::internal::{
     _mi_divide_up, _mi_is_aligned, _mi_memzero_aligned, _mi_os_commit, _mi_os_free_ex,
-    _mi_os_virtual_address_bits, MI_ARENA_SLICE_SHIFT, MI_PAGE_MAP_SUB_COUNT, mi_page_area,
-    mi_page_slice_start, mi_slice_count_of_size,
+    _mi_os_virtual_address_bits, MI_ARENA_SLICE_SHIFT, MI_PAGE_MAP_SUB_COUNT, mi_page_slice_start,
+    mi_slice_count_of_size,
 };
 use crate::os::_mi_os_alloc_aligned;
 #[cfg(not(target_pointer_width = "32"))]
@@ -206,11 +206,12 @@ struct PageMapPageSpan {
 }
 
 unsafe fn mi_page_map_page_span(page: PagePtr) -> Option<PageMapPageSpan> {
+    // SAFETY: `PagePtr` proves live initialized page metadata for the
+    // registered block-area range.
+    let area = unsafe { page.area()? };
+    let page_start = area.start().as_ptr();
+    let mut page_size = area.byte_len();
     let page = page.as_ptr();
-    let mut page_size = 0usize;
-    // SAFETY: `PagePtr` proves live page metadata and
-    // the out-size pointer is stack-local for the area query.
-    let page_start = unsafe { mi_page_area(page, &mut page_size) };
     if page_size > MI_LARGE_PAGE_SIZE {
         page_size = MI_LARGE_PAGE_SIZE - MI_ARENA_SLICE_SIZE;
     }

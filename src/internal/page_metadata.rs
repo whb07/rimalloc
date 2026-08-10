@@ -46,17 +46,6 @@ pub unsafe fn mi_page_heap(page: *const mi_page_t) -> *mut mi_heap_t {
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
-pub unsafe fn mi_page_size(page: *const mi_page_t) -> usize {
-    // SAFETY: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        let block_size = mi_page_block_size(page);
-        block_size * crate::allocator::page::mi_page_reserved_count(page).as_usize()
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
 pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
     // SAFETY: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe { crate::allocator::page::mi_page_reserved_count(page).get() == 1 }
@@ -70,6 +59,18 @@ pub(crate) unsafe fn mi_page_usable_block_size(
     unsafe { mi_page_block_size_typed(page).usable() }
 }
 
+/// Keep the infallible raw committed-size boundary on its historical
+/// caller-proven multiplication. Propagating a fallible page-area result
+/// through that compatibility surface is outside the PageArea migration.
+#[inline]
+unsafe fn mi_page_size_unchecked(page: *const mi_page_t) -> usize {
+    // SAFETY: the caller proves initialized allocator page metadata whose
+    // block size and reserved count describe a representable allocation.
+    unsafe {
+        mi_page_block_size(page) * crate::allocator::page::mi_page_reserved_count(page).as_usize()
+    }
+}
+
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
@@ -79,7 +80,7 @@ pub(crate) unsafe fn mi_page_committed_typed(
     // SAFETY: page size/count accessors project caller-proven metadata into typed scalar domains.
     unsafe {
         crate::core_types::CommittedBytes::new(if (*page).slice_committed == 0 {
-            mi_page_size(page)
+            mi_page_size_unchecked(page)
         } else {
             (*page).slice_committed - super::page_location::mi_page_slice_offset_of(page, 0)
         })

@@ -24,7 +24,7 @@ use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up, _mi_is_heap_main, _mi_os_commit,
     _mi_os_good_alloc_size, _mi_os_page_size_typed, _mi_page_malloc_zero_typed, _mi_ptr_page,
     _mi_theap_heap, _mi_theap_random_next, _mi_wsize_from_size, MI_DEBUG, MI_SECURE,
-    mi_direct_bin_from_size, mi_mem_is_zero, mi_page_all_free, mi_page_area, mi_page_block_size,
+    mi_direct_bin_from_size, mi_mem_is_zero, mi_page_all_free, mi_page_block_size,
     mi_page_committed_typed, mi_page_has_interior_pointers, mi_page_immediate_available,
     mi_page_is_expandable, mi_page_is_mostly_used, mi_page_is_singleton, mi_page_queue,
     mi_page_set_has_interior_pointers, mi_page_set_keys, mi_page_slice_offset_of,
@@ -634,6 +634,15 @@ unsafe fn mi_page_extend_free_typed(
 
         let block_size = page_ptr.block_size();
         let bsize = block_size.get();
+        let track_area = if MI_TRACK_ENABLED != 0 {
+            let Some(area) = page_ptr.area() else {
+                crate::internal::mi_assert_internal!(false);
+                return false;
+            };
+            Some(area)
+        } else {
+            None
+        };
         let Some(extend) = crate::allocator::policy::ActivePolicy::page_extend_count(
             block_size, capacity, reserved,
         ) else {
@@ -691,11 +700,9 @@ unsafe fn mi_page_extend_free_typed(
             );
         }
 
-        if MI_TRACK_ENABLED != 0 {
-            let mut page_size = 0usize;
-            let page_start = mi_page_area(page, &mut page_size);
-            mi_track_mem_undefined(page_start.cast(), page_size);
-            mi_track_mem_noaccess(page_start.cast(), page_size);
+        if let Some(area) = track_area {
+            mi_track_mem_undefined(area.start().as_ptr().cast(), area.byte_len());
+            mi_track_mem_noaccess(area.start().as_ptr().cast(), area.byte_len());
         }
         crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_ptr));
         true
@@ -944,13 +951,17 @@ unsafe fn _mi_page_init_typed(
         };
         mi_page_set_theap(page, theap);
 
-        let mut page_size = 0usize;
-        let page_start = mi_page_area(page, &mut page_size);
-        mi_track_mem_noaccess(page_start.cast(), page_size);
-        crate::internal::mi_assert_internal!(page_size / mi_page_block_size(page) < (1usize << 16));
+        let page_ptr = page_uninit.ptr();
+        let Some(area) = page_ptr.area() else {
+            crate::internal::mi_assert_internal!(false);
+            return false;
+        };
+        mi_track_mem_noaccess(area.start().as_ptr().cast(), area.byte_len());
+        crate::internal::mi_assert_internal!(
+            area.byte_len() / mi_page_block_size(page) < (1usize << 16)
+        );
         crate::internal::mi_assert_internal!(mi_page_reserved_count(page).get() > 0);
 
-        let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
         if MI_PADDING != 0 || MI_ENCODE_FREELIST != 0 {
             mi_page_set_keys(
                 page_ptr,
@@ -962,7 +973,7 @@ unsafe fn _mi_page_init_typed(
             let committed = mi_page_committed_typed(page);
             mi_track_mem_defined((*page).page_start.cast(), committed.get());
             crate::internal::mi_assert_expensive!(mi_mem_is_zero(
-                page_start.cast(),
+                area.start().as_ptr().cast(),
                 committed.get()
             ));
         }

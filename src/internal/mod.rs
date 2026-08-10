@@ -90,8 +90,7 @@ pub use page_flags::{
     mi_page_thread_free,
 };
 pub use page_location::{
-    mi_page_area, mi_page_contains_address, mi_page_meta_is_separated, mi_page_slice_offset_of,
-    mi_page_slice_start, mi_page_start,
+    mi_page_meta_is_separated, mi_page_slice_offset_of, mi_page_slice_start, mi_page_start,
 };
 pub use page_metadata::{
     mi_page_all_free, mi_page_block_size, mi_page_heap, mi_page_immediate_available,

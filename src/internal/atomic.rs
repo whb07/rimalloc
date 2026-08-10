@@ -13,7 +13,7 @@ use core::ptr;
 use core::ptr::read_volatile;
 use core::sync::atomic::{AtomicI64, AtomicIsize, AtomicUsize, Ordering, fence};
 
-use crate::init::_mi_thread_id;
+use crate::allocator::init::_mi_thread_id;
 
 pub const MI_ATOMIC_H: () = ();
 pub const WIN32_LEAN_AND_MEAN: () = ();

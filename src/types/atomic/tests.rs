@@ -333,9 +333,12 @@ fn empty_remote_free_list_collects_through_detached_atomic_path() {
 
         let local_before = LocalFreeList::from_raw((*raw_page).local_free);
         let owned = OwnedAbandonedPage::new_unchecked(page_ptr);
-        let local_after =
-            crate::page::collect_remote_for_owned_abandoned_page(&owned, remote, local_before)
-                .expect("empty detached list is valid");
+        let local_after = crate::allocator::page::collect_remote_for_owned_abandoned_page(
+            &owned,
+            remote,
+            local_before,
+        )
+        .expect("empty detached list is valid");
         assert_eq!(local_after.as_raw(), ptr::addr_of_mut!(local));
     }
 }

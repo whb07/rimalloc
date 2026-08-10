@@ -645,7 +645,7 @@ fn full_collection_matches_c_local_list_cases() {
         (*empty.page_storage).free_is_zero = true;
         let links = empty.next_snapshot();
         let owner = LocalPage::new_unchecked(empty.page());
-        crate::page::collect_page_free_lists_local(&owner, false);
+        crate::allocator::page::collect_page_free_lists_local(&owner, false);
         assert_eq!(empty.head_index(empty.page().free().head()), Some(3));
         assert!(empty.page().local_free().is_empty());
         assert_eq!(empty.page().used().get(), 4);
@@ -665,7 +665,7 @@ fn full_collection_matches_c_local_list_cases() {
         (*transfer.page_storage).free_is_zero = true;
         let links = transfer.next_snapshot();
         let owner = LocalPage::new_unchecked(transfer.page());
-        crate::page::collect_page_free_lists_local(&owner, false);
+        crate::allocator::page::collect_page_free_lists_local(&owner, false);
         assert_eq!(transfer.head_index(transfer.page().free().head()), Some(0));
         assert!(transfer.page().local_free().is_empty());
         assert_eq!(transfer.next_snapshot(), links);
@@ -688,7 +688,7 @@ fn full_collection_matches_c_local_list_cases() {
                 .page()
                 .set_free(AvailableFreeList::from_head(fixture.block(3)));
             let owner = LocalPage::new_unchecked(fixture.page());
-            crate::page::collect_page_free_lists_local(&owner, force);
+            crate::allocator::page::collect_page_free_lists_local(&owner, force);
             if force {
                 assert!(fixture.page().local_free().is_empty());
                 assert_eq!(
@@ -738,10 +738,10 @@ fn full_collection_preserves_local_and_abandoned_owner_state() {
 
             if abandoned {
                 let owner = OwnedAbandonedPage::new_unchecked(fixture.page());
-                crate::page::collect_page_free_lists_abandoned(&owner, false);
+                crate::allocator::page::collect_page_free_lists_abandoned(&owner, false);
             } else {
                 let owner = LocalPage::new_unchecked(fixture.page());
-                crate::page::collect_page_free_lists_local(&owner, false);
+                crate::allocator::page::collect_page_free_lists_local(&owner, false);
             }
 
             assert_eq!(
@@ -773,7 +773,7 @@ fn empty_available_transfer_preserves_secure_encoded_links() {
             .set_local_free(LocalFreeList::from_head(fixture.block(0)));
         let encoded_links = fixture.next_snapshot();
         let owner = LocalPage::new_unchecked(fixture.page());
-        crate::page::collect_page_free_lists_local(&owner, false);
+        crate::allocator::page::collect_page_free_lists_local(&owner, false);
         assert_eq!(fixture.next_snapshot(), encoded_links);
         assert_eq!(
             fixture.order_from(fixture.page().free().head()),

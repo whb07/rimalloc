@@ -41,7 +41,7 @@ pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const m
 pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
     // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
-        let theap = crate::page::mi_page_theap(page);
+        let theap = crate::allocator::page::mi_page_theap(page);
         let pq = super::mi_theap_page_queue_of(theap, page);
         crate::internal::mi_assert_expensive!(mi_page_queue_contains(pq, page));
         pq
@@ -638,7 +638,7 @@ mod tests {
         // and written by the typed normal-queue relink operation.
         unsafe {
             let theap = theap.as_mut_ptr();
-            (*theap).pages = crate::init::MI_PAGE_QUEUES_EMPTY();
+            (*theap).pages = crate::allocator::init::MI_PAGE_QUEUES_EMPTY();
             (*theap).page_count = 3;
 
             let block_size = crate::core_types::BlockSize::new_unchecked(64);

@@ -297,13 +297,16 @@ unsafe extern "C" fn mi_heap_delete_page(
 
     // SAFETY: owned empty pages can be released
     // directly; non-empty destroy paths first reset used-count metadata.
-    if unsafe { crate::page::mi_page_used_count(page).get() == 0 } {
+    if unsafe { crate::allocator::page::mi_page_used_count(page).get() == 0 } {
         unsafe { _mi_arenas_page_free(page, theap) };
     } else if heap_target.is_null() {
         // SAFETY: destroying a non-empty page
         // clears its used count before returning the owned page to the arena.
         unsafe {
-            crate::page::mi_page_set_used_count(page, crate::core_types::UsedBlockCount::new(0))
+            crate::allocator::page::mi_page_set_used_count(
+                page,
+                crate::core_types::UsedBlockCount::new(0),
+            )
         };
         unsafe { _mi_arenas_page_free(page, theap) };
     } else {

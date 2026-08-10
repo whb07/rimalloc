@@ -4,13 +4,17 @@ use core::ffi::{c_char, c_void};
 use core::mem::size_of;
 use core::ptr;
 
+use crate::allocator::free::_mi_usable_size_typed;
+use crate::allocator::init::_mi_theap_empty_wrong;
 use crate::allocator::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
+use crate::allocator::page::{
+    _mi_malloc_generic_typed, _mi_theap_or_default_typed, MI_MAX_ALLOC_SIZE, mi_bin_from_usable,
+    mi_good_size_typed,
+};
 use crate::allocator::tracking::{
     MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
 };
 use crate::core_types::{BorrowedHeap, Errno, PagePtr, ThreadHeapLocal, ThreadHeapPtr, UserPtr};
-use crate::free::_mi_usable_size_typed;
-use crate::init::_mi_theap_empty_wrong;
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up,
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size_typed,
@@ -21,10 +25,6 @@ use crate::internal::{
     mi_unlikely,
 };
 use crate::mimalloc::mi_free;
-use crate::page::{
-    _mi_malloc_generic_typed, _mi_theap_or_default_typed, MI_MAX_ALLOC_SIZE, mi_bin_from_usable,
-    mi_good_size_typed,
-};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{
     MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING_SIZE, MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t,
@@ -100,7 +100,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
             crate::internal::mi_assert_internal!(crate::internal::mi_page_block_size(page) >= size);
             crate::internal::mi_assert_internal!(_mi_is_aligned(
                 mi_page_slice_start(page).cast(),
-                crate::page::MI_OS_PAGE_SIZE
+                crate::allocator::page::MI_OS_PAGE_SIZE
             ));
             crate::internal::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
         }
@@ -192,7 +192,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
                     },
                 ),
             ));
-            if MI_PADDING_CHECK != 0 && !crate::page::mi_page_is_huge(page) {
+            if MI_PADDING_CHECK != 0 && !crate::allocator::page::mi_page_is_huge(page) {
                 let fill = padding_ptr.cast::<u8>().sub(delta);
                 let maxpad = delta.min(MI_MAX_ALIGN_SIZE);
                 for i in 0..maxpad {
@@ -213,7 +213,7 @@ unsafe fn memset_nonhuge(
 ) {
     // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
     unsafe {
-        if !crate::page::mi_page_is_huge(page.as_ptr()) {
+        if !crate::allocator::page::mi_page_is_huge(page.as_ptr()) {
             ptr::write_bytes(block.as_ptr(), MI_DEBUG_UNINIT, usable_size.get());
         }
     }
@@ -904,7 +904,7 @@ unsafe fn mi_validate_ptr_page(
     msg: *const c_char,
 ) -> crate::core_types::PointerLookup {
     // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe { crate::free::mi_validate_pointer(p.cast_mut(), msg) }
+    unsafe { crate::allocator::free::mi_validate_pointer(p.cast_mut(), msg) }
 }
 
 unsafe fn mi_realloc_old_allocation(
@@ -917,7 +917,8 @@ unsafe fn mi_realloc_old_allocation(
             crate::core_types::PointerLookup::Valid(valid) => {
                 let (user, page, location) = valid.into_parts();
                 let block = location.block();
-                let usable = crate::free::mi_usable_size_from_validated_location(page, location);
+                let usable =
+                    crate::allocator::free::mi_usable_size_from_validated_location(page, location);
                 // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and
                 // supplies the block start derived by the validation boundary.
                 Some(crate::core_types::OldAllocation::from_validated_parts(
@@ -1417,7 +1418,7 @@ pub unsafe extern "C" fn mi_reallocf(p: *mut c_void, newsize: usize) -> *mut c_v
             mi_theap_reallocf_req_raw(_mi_theap_default(), p, layout)
         } else {
             if !p.is_null() {
-                crate::free::mi_free(p);
+                crate::allocator::free::mi_free(p);
             }
             core::ptr::null_mut()
         }
@@ -1546,7 +1547,7 @@ pub unsafe extern "C" fn mi_heap_reallocf(
         };
         let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) else {
             if !p.is_null() {
-                crate::free::mi_free(p);
+                crate::allocator::free::mi_free(p);
             }
             return core::ptr::null_mut();
         };

@@ -33,14 +33,14 @@ use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use crate::allocator::heap::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
-use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
-use crate::core_types::{PagePtr, ThreadHeapPtr};
 #[cfg(any(miri, not(all(target_os = "linux", target_arch = "x86_64"))))]
-use crate::init::_mi_theap_empty;
-use crate::init::{
+use crate::allocator::init::_mi_theap_empty;
+use crate::allocator::init::{
     _mi_theap_cached_expansion_slot, _mi_theap_cached_key, _mi_theap_cached_slot,
     _mi_theap_default_expansion_slot, _mi_theap_default_key, _mi_theap_default_slot,
 };
+use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
+use crate::core_types::{PagePtr, ThreadHeapPtr};
 #[cfg(target_os = "emscripten")]
 pub(crate) use crate::types::mi_msecs_t;
 pub(crate) use crate::types::mi_process_info_t;
@@ -361,7 +361,7 @@ pub fn mi_prim_tls_slot_set(slot: usize, value: *mut c_void) {
 pub fn __mi_prim_thread_id() -> mi_threadid_t {
     #[cfg(miri)]
     {
-        crate::init::fallback_thread_id()
+        crate::allocator::init::fallback_thread_id()
     }
     #[cfg(all(
         not(miri),
@@ -392,7 +392,7 @@ pub fn __mi_prim_thread_id() -> mi_threadid_t {
         all(target_os = "macos", target_arch = "aarch64")
     )))]
     {
-        crate::init::fallback_thread_id()
+        crate::allocator::init::fallback_thread_id()
     }
 }
 
@@ -774,7 +774,7 @@ pub(crate) unsafe fn _mi_page_associated_theap_peek(page: PagePtr) -> Option<Thr
     // page metadata, so reading its heap owner is within the page boundary.
     let heap = unsafe { (*page).heap };
     let theap = if heap.is_null() {
-        crate::init::mi_theap_main_tls_peek()
+        crate::allocator::init::mi_theap_main_tls_peek()
     } else {
         // SAFETY: page-owned heap metadata is
         // used only for a non-initializing thread-heap peek.
@@ -783,7 +783,8 @@ pub(crate) unsafe fn _mi_page_associated_theap_peek(page: PagePtr) -> Option<Thr
     crate::internal::mi_assert_internal!(
         // SAFETY: non-null associated thread
         // heaps have initialized TLD metadata owned by this allocator.
-        theap.is_null() || crate::init::_mi_thread_id() == unsafe { (*(*theap).tld).thread_id }
+        theap.is_null()
+            || crate::allocator::init::_mi_thread_id() == unsafe { (*(*theap).tld).thread_id }
     );
     ThreadHeapPtr::new(theap)
 }
@@ -907,7 +908,7 @@ mod tests {
     fn linux_x86_64_prim_thread_id_uses_thread_pointer() {
         let tid = super::__mi_prim_thread_id();
         assert_eq!(tid, super::_mi_prim_thread_id());
-        assert_eq!(tid, crate::init::_mi_thread_id());
+        assert_eq!(tid, crate::allocator::init::_mi_thread_id());
         assert!(tid > 1);
         assert_eq!(tid & crate::internal::MI_PAGE_FLAG_MASK, 0);
 

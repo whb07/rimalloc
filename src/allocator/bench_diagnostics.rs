@@ -579,7 +579,7 @@ impl PageBatchBenchFixture {
         if self.kind == PAGE_BATCH_FORCE {
             // SAFETY: the synthetic page has a
             // valid local list and exclusive current-thread ownership.
-            unsafe { crate::page::_mi_page_free_collect(self.page_storage, true) };
+            unsafe { crate::allocator::page::_mi_page_free_collect(self.page_storage, true) };
             return true;
         }
         // SAFETY: preparation assigns this
@@ -775,7 +775,7 @@ pub unsafe extern "C" fn mi_bench_page_occupancy(
     // storage and thread initialization takes no caller pointers.
     unsafe {
         crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(stats));
-        crate::init::mi_thread_init();
+        crate::allocator::init::mi_thread_init();
         if !crate::allocator::stats::mi_stats_get(ptr::addr_of_mut!(stats)) {
             return false;
         }
@@ -784,11 +784,11 @@ pub unsafe extern "C" fn mi_bench_page_occupancy(
     let mut capacity_bytes = 0usize;
     for bin in 0..crate::types::MI_BIN_HUGE {
         let block_size = crate::allocator::stats::mi_stats_get_bin_size(bin);
-        let page_size = if block_size <= crate::page::MI_SMALL_MAX_OBJ_SIZE {
+        let page_size = if block_size <= crate::allocator::page::MI_SMALL_MAX_OBJ_SIZE {
             crate::types::MI_SMALL_PAGE_SIZE
-        } else if block_size <= crate::page::MI_MEDIUM_MAX_OBJ_SIZE {
+        } else if block_size <= crate::allocator::page::MI_MEDIUM_MAX_OBJ_SIZE {
             crate::types::MI_MEDIUM_PAGE_SIZE
-        } else if block_size <= crate::page::MI_LARGE_MAX_OBJ_SIZE {
+        } else if block_size <= crate::allocator::page::MI_LARGE_MAX_OBJ_SIZE {
             crate::types::MI_LARGE_PAGE_SIZE
         } else {
             0

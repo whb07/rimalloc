@@ -512,7 +512,8 @@ fn raw_product_allocation_failure_is_deterministic_and_null_returning() {
         assert!(crate::mimalloc::mi_mallocn(usize::MAX, 2).is_null());
         assert!(crate::mimalloc::mi_calloc(usize::MAX, 2).is_null());
         assert!(
-            crate::mimalloc::mi_heap_mallocn(crate::init::mi_heap_main(), usize::MAX, 2).is_null()
+            crate::mimalloc::mi_heap_mallocn(crate::allocator::init::mi_heap_main(), usize::MAX, 2)
+                .is_null()
         );
     }
 }
@@ -775,7 +776,7 @@ impl DeferredFreeCallbackRestoreGuard {
             // SAFETY: tests snapshot the current
             // process-global callback state while holding the callback
             // serialization lock.
-            snapshot: unsafe { crate::page::registered_deferred_free_callback() },
+            snapshot: unsafe { crate::allocator::page::registered_deferred_free_callback() },
         }
     }
 }
@@ -784,7 +785,7 @@ impl Drop for DeferredFreeCallbackRestoreGuard {
     fn drop(&mut self) {
         // SAFETY: tests restore the exact callback
         // snapshot captured under the callback serialization lock.
-        unsafe { crate::page::restore_deferred_free_callback(self.snapshot) };
+        unsafe { crate::allocator::page::restore_deferred_free_callback(self.snapshot) };
     }
 }
 
@@ -810,7 +811,7 @@ fn trigger_deferred_free_callback(theap: *mut crate::types::mi_theap_t, force: b
     // SAFETY: `theap` comes from
     // `with_test_thread_heap` and stays live for this synchronous callback
     // trigger.
-    unsafe { crate::page::_mi_deferred_free(theap, force) };
+    unsafe { crate::allocator::page::_mi_deferred_free(theap, force) };
 }
 
 #[test]
@@ -912,12 +913,12 @@ fn deferred_free_callback_guard_registers_and_restores() {
         // only observes registration state without concurrent allocator
         // callback entry.
         let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
-        let current = unsafe { crate::page::registered_deferred_free_callback() };
+        let current = unsafe { crate::allocator::page::registered_deferred_free_callback() };
         assert!(current.0.is_some());
     }
     // SAFETY: the callback test lock is still held
     // and the guard has restored the previous registration.
-    let restored = unsafe { crate::page::registered_deferred_free_callback() };
+    let restored = unsafe { crate::allocator::page::registered_deferred_free_callback() };
     assert_eq!(callback_addr(restored.0), callback_addr(restore.snapshot.0));
     assert_eq!(restored.1, restore.snapshot.1);
 }
@@ -931,7 +932,7 @@ fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
     // SAFETY: this test holds the callback
     // serialization lock and installs a test-only previous callback.
     unsafe {
-        crate::page::mi_register_deferred_free(
+        crate::allocator::page::mi_register_deferred_free(
             Some(previous_deferred_free_callback),
             ptr::null_mut(),
         );

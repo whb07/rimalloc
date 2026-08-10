@@ -552,13 +552,13 @@ core::arch::global_asm!(
     ".globl __libc_calloc",
     ".type __libc_calloc,@function",
     ".set __libc_calloc, calloc",
-    page_map = sym crate::page_map::_mi_page_map,
-    retire = sym crate::page::_mi_page_retire,
-    collect_mt = sym crate::free::mi_free_try_collect_mt,
-    generic_local = sym crate::free::mi_free_generic_local,
-    generic_mt = sym crate::free::mi_free_generic_mt,
-    malloc_generic = sym crate::page::_mi_malloc_generic,
-    stosb_max = sym crate::init::_mi_cpu_stosb_max,
+    page_map = sym crate::allocator::page_map::_mi_page_map,
+    retire = sym crate::allocator::page::_mi_page_retire,
+    collect_mt = sym crate::allocator::free::mi_free_try_collect_mt,
+    generic_local = sym crate::allocator::free::mi_free_generic_local,
+    generic_mt = sym crate::allocator::free::mi_free_generic_mt,
+    malloc_generic = sym crate::allocator::page::_mi_malloc_generic,
+    stosb_max = sym crate::allocator::init::_mi_cpu_stosb_max,
 );
 
 #[repr(C)]
@@ -2267,7 +2267,7 @@ mod tests {
     fn unix_wrappers_can_realloc_and_free_bootstrap_allocations_after_init() {
         // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
         unsafe {
-            crate::init::mi_process_init();
+            crate::allocator::init::mi_process_init();
 
             let p = unix_bootstrap::malloc(8);
             assert!(!p.is_null());

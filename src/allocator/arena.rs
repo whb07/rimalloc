@@ -10,6 +10,14 @@ use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 use crate::allocator::options::{
     mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t,
 };
+use crate::allocator::page::{
+    _mi_page_stats_bin, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE,
+    MI_MEDIUM_PAGE_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE,
+    mi_bin_from_block_size, mi_page_set_theap,
+};
+use crate::allocator::page_map::{
+    _mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page,
+};
 use crate::allocator::stats::{
     MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_OTHER, MI_CBIN_SMALL,
 };
@@ -52,12 +60,6 @@ use crate::os::{
     _mi_os_alloc_aligned, _mi_os_alloc_aligned_at_offset, _mi_os_alloc_huge_os_pages,
     _mi_os_minimal_purge_size, _mi_os_numa_node_count,
 };
-use crate::page::{
-    _mi_page_stats_bin, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE,
-    MI_MEDIUM_PAGE_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE,
-    mi_bin_from_block_size, mi_page_set_theap,
-};
-use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page};
 use crate::prim::_mi_page_associated_theap_peek;
 use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
@@ -1090,13 +1092,13 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                         1,
                     );
                     let owned_page = crate::core_types::assume_owned_abandoned_page(page);
-                    crate::page::collect_page_free_lists_abandoned(&owned_page, false);
+                    crate::allocator::page::collect_page_free_lists_abandoned(&owned_page, false);
                     crate::internal::mi_assert_internal!(mi_bbitmap_is_clearN(
                         (*arena_raw.cast::<MiArenaPrefix>()).slices_free,
                         slice_index.get(),
                         slice_count_usize,
                     ));
-                    let committed = crate::page::mi_page_slice_committed(page_raw);
+                    let committed = crate::allocator::page::mi_page_slice_committed(page_raw);
                     crate::internal::mi_assert_internal!(
                         !committed.is_zero()
                             || mi_bitmap_is_setN(
@@ -1428,7 +1430,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
 
     // SAFETY: fresh arena page setup initializes metadata, commit state, and layout counters.
     unsafe {
-        crate::page::mi_page_set_reserved_count(
+        crate::allocator::page::mi_page_set_reserved_count(
             page,
             crate::core_types::ReservedBlockCount::new(reserved as u16),
         )
@@ -1436,7 +1438,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     // SAFETY: fresh arena page setup initializes metadata, commit state, and layout counters.
     unsafe { (*page).page_start = slice_start.add(block_start) };
     unsafe { (*page).block_size = block_size_raw };
-    unsafe { crate::page::mi_page_set_slice_committed(page, commit_size) };
+    unsafe { crate::allocator::page::mi_page_set_slice_committed(page, commit_size) };
     unsafe { (*page).memid = memid };
     unsafe { (*page).free_is_zero = memid.initially_zero };
     // SAFETY: fresh arena page setup initializes metadata, commit state, and layout counters.
@@ -1523,7 +1525,7 @@ unsafe fn mi_arenas_page_regular_alloc(
         _ => true, // Non-arena allocations trivially pass this slice_count assert
     });
     // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
-    if !unsafe { crate::page::_mi_page_init(theap, page) } {
+    if !unsafe { crate::allocator::page::_mi_page_init(theap, page) } {
         unsafe {
             _mi_arenas_free(
                 page.cast(),
@@ -1564,9 +1566,9 @@ unsafe fn mi_arenas_page_singleton_alloc(
     }
     // SAFETY: singleton arena page setup handles over-aligned or large objects while preserving one-block page invariants.
     crate::internal::mi_assert_internal!(unsafe {
-        crate::page::mi_page_reserved_count(page).get() == 1
+        crate::allocator::page::mi_page_reserved_count(page).get() == 1
     });
-    if !unsafe { crate::page::_mi_page_init(theap, page) } {
+    if !unsafe { crate::allocator::page::_mi_page_init(theap, page) } {
         unsafe {
             _mi_arenas_free(
                 page.cast(),
@@ -1727,7 +1729,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
             )
         });
         // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-        let committed = unsafe { crate::page::mi_page_slice_committed(page) };
+        let committed = unsafe { crate::allocator::page::mi_page_slice_committed(page) };
         crate::internal::mi_assert_internal!(
             !committed.is_zero()
                 || unsafe {
@@ -1770,7 +1772,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
         crate::internal::mi_assert_internal!(!arena_pages.is_null());
         // SAFETY: free release clears arena metadata and returns backing slices after ownership is proven.
         unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
-        let committed = unsafe { crate::page::mi_page_slice_committed(page) };
+        let committed = unsafe { crate::allocator::page::mi_page_slice_committed(page) };
         if !committed.is_zero() {
             let total_slices = committed.get() / MI_ARENA_SLICE_SIZE;
             crate::internal::mi_assert_internal!(slice_count >= total_slices);

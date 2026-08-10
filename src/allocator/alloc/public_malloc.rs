@@ -1,8 +1,8 @@
 use core::ffi::c_void;
 use core::ptr;
 
+use crate::allocator::page::_mi_theap_or_default_typed;
 use crate::core_types::{BorrowedHeap, ThreadHeapLocal};
-use crate::page::_mi_theap_or_default_typed;
 use crate::prim::{_mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{mi_heap_t, mi_theap_t};
 

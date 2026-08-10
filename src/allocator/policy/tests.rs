@@ -1,7 +1,7 @@
 use core::ffi::c_long;
 
+use crate::allocator::page::{MI_MEDIUM_MAX_OBJ_SIZE, MI_SMALL_MAX_OBJ_SIZE};
 use crate::core_types::{BlockSize, PageCapacity, ReservedBlockCount, UsedBlockCount};
-use crate::page::{MI_MEDIUM_MAX_OBJ_SIZE, MI_SMALL_MAX_OBJ_SIZE};
 
 use super::compat::MIN_EXTEND;
 use super::{CompatPolicy, reference};

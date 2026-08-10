@@ -50,13 +50,39 @@ pub use crate::allocator::arena::{
 pub(crate) use crate::allocator::arena_meta::{
     _mi_meta_free, _mi_meta_is_meta_page, _mi_meta_zalloc,
 };
+#[cfg(not(mi_c_malloc_fast))]
+pub(crate) use crate::allocator::free::_mi_padding_shrink;
+pub(crate) use crate::allocator::free::_mi_page_ptr_unalign;
 pub(crate) use crate::allocator::heap::{
     _mi_heap_force_destroy, _mi_heap_theap_get_or_init, _mi_heap_theap_get_peek,
+};
+pub(crate) use crate::allocator::init::{
+    _mi_auto_process_done, _mi_auto_process_init, _mi_cpu_stosb_max, _mi_is_heap_main,
+    _mi_is_theap_main, _mi_preloading, _mi_subproc, _mi_subproc_from_id, _mi_subproc_heap_main,
+    _mi_subproc_main, _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_default_set,
+    _mi_theap_empty_get, _mi_theap_guarded_init, _mi_theap_main_safe, _mi_theap_options_init,
+    _mi_thread_done, _mi_thread_id,
 };
 use crate::allocator::options::_mi_error_message_fmt;
 pub(crate) use crate::allocator::options::{
     _mi_error_message, _mi_option_get_fast, _mi_trace_message, _mi_verbose_message,
     _mi_warning_message,
+};
+pub(crate) use crate::allocator::page::{
+    _mi_deferred_free, _mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire,
+    _mi_theap_collect_retired,
+};
+pub use crate::allocator::page::{
+    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
+    _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, MI_LARGE_MAX_OBJ_SIZE,
+    MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
+    mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full,
+    mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
+};
+pub(crate) use crate::allocator::page_map::{
+    _mi_page_map_base, _mi_page_map_init, _mi_page_map_register, _mi_page_map_unregister,
+    _mi_page_map_unregister_range, _mi_page_map_unsafe_destroy, _mi_safe_ptr_page,
+    _mi_safe_ptr_page_registered,
 };
 pub(crate) use crate::allocator::stats::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
@@ -75,16 +101,6 @@ pub use crate::bits::{
 use crate::core_types::{Errno, PageQueuePtr};
 #[cfg(feature = "guarded")]
 use crate::core_types::{GuardedConfig, GuardedDecision};
-#[cfg(not(mi_c_malloc_fast))]
-pub(crate) use crate::free::_mi_padding_shrink;
-pub(crate) use crate::free::_mi_page_ptr_unalign;
-pub(crate) use crate::init::{
-    _mi_auto_process_done, _mi_auto_process_init, _mi_cpu_stosb_max, _mi_is_heap_main,
-    _mi_is_theap_main, _mi_preloading, _mi_subproc, _mi_subproc_from_id, _mi_subproc_heap_main,
-    _mi_subproc_main, _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_default_set,
-    _mi_theap_empty_get, _mi_theap_guarded_init, _mi_theap_main_safe, _mi_theap_options_init,
-    _mi_thread_done, _mi_thread_id,
-};
 pub(crate) use crate::libc::{
     _mi_getenv, _mi_streq, _mi_strlcat, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen,
     _mi_strnstr, _mi_toupper, _mi_vsnprintf,
@@ -96,22 +112,6 @@ pub(crate) use crate::os::{
     _mi_os_large_page_size, _mi_os_minimal_purge_size, _mi_os_page_size, _mi_os_page_size_typed,
     _mi_os_protect, _mi_os_purge, _mi_os_purge_ex, _mi_os_reset, _mi_os_reuse, _mi_os_unprotect,
     _mi_os_virtual_address_bits, _mi_os_zalloc,
-};
-pub(crate) use crate::page::{
-    _mi_deferred_free, _mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire,
-    _mi_theap_collect_retired,
-};
-pub use crate::page::{
-    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
-    _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, MI_LARGE_MAX_OBJ_SIZE,
-    MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
-    mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full,
-    mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
-};
-pub(crate) use crate::page_map::{
-    _mi_page_map_base, _mi_page_map_init, _mi_page_map_register, _mi_page_map_unregister,
-    _mi_page_map_unregister_range, _mi_page_map_unsafe_destroy, _mi_safe_ptr_page,
-    _mi_safe_ptr_page_registered,
 };
 pub(crate) use crate::prim::{_mi_allocator_done, _mi_allocator_init};
 pub(crate) use crate::random::{
@@ -617,7 +617,7 @@ pub(crate) unsafe fn mi_page_queue(
         let size = block_size.get();
         let pq = ptr::addr_of!(
             (*(theap as *mut mi_theap_t)).pages
-                [crate::page::mi_bin_from_block_size(block_size).as_usize()]
+                [crate::allocator::page::mi_bin_from_block_size(block_size).as_usize()]
         )
         .cast_mut();
         if size <= MI_LARGE_MAX_OBJ_SIZE {
@@ -654,7 +654,9 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
 pub(crate) unsafe fn mi_page_set_abandoned_mapped(page: crate::core_types::PagePtr) {
     // SAFETY: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
-        crate::internal::mi_assert_internal!(crate::page::mi_page_is_abandoned(page.as_ptr()));
+        crate::internal::mi_assert_internal!(crate::allocator::page::mi_page_is_abandoned(
+            page.as_ptr()
+        ));
         let atomic_tid = page.thread_id_cell();
         let mut old = atomic_tid.load();
         loop {
@@ -874,7 +876,7 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 unsafe fn mi_cpu_stosb_max() -> usize {
     // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
-    unsafe { crate::init::_mi_cpu_stosb_max }
+    unsafe { crate::allocator::init::_mi_cpu_stosb_max }
 }
 
 /// # Safety

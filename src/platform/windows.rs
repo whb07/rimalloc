@@ -19,12 +19,12 @@ use core::{
 };
 use std::sync::Once;
 
+use crate::allocator::init::_mi_preloading;
 use crate::allocator::options::{
     _mi_verbose_message, _mi_warning_message_fmt, mi_option_get_clamp, mi_option_is_enabled,
     mi_option_t,
 };
 use crate::bits::{MI_KiB, MI_MiB, MI_SIZE_BITS, mi_clz};
-use crate::init::_mi_preloading;
 use crate::internal::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_page_size_typed};
 use crate::prim::{mi_os_mem_config_t, mi_process_info_t};
 use crate::types::{mi_msecs_t, mi_theap_t};
@@ -952,7 +952,7 @@ unsafe extern "system" fn DllMain(inst: HINSTANCE, reason: DWORD, reserved: LPVO
 unsafe extern "C" fn mi_process_attach() -> c_int {
     unsafe {
         mi_win_main(null_mut(), DLL_PROCESS_ATTACH, null_mut());
-        atexit(Some(crate::init::_mi_auto_process_done));
+        atexit(Some(crate::allocator::init::_mi_auto_process_done));
     }
     0
 }

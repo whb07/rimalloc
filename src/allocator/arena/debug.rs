@@ -251,7 +251,7 @@ unsafe fn mi_page_commit_usage(
     let committed_size = committed_size.get();
     let used_size =
         // SAFETY: arena diagnostics classify page state from allocator-owned page metadata and memid slices.
-        unsafe { crate::page::mi_page_used_count(page).as_usize() * mi_page_block_size(page) };
+        unsafe { crate::allocator::page::mi_page_used_count(page).as_usize() * mi_page_block_size(page) };
     (used_size * 100 / committed_size) as c_int
 }
 

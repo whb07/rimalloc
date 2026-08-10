@@ -189,14 +189,14 @@ impl QueuedPage<NormalQueue> {
         // checks to the existing C-shaped page helpers before accepting the
         // queued-normal witness.
         if unsafe {
-            crate::page::mi_page_queue_contains(queue_ptr, page_ptr)
-                && !crate::page::mi_page_is_in_full(page_ptr)
+            crate::allocator::page::mi_page_queue_contains(queue_ptr, page_ptr)
+                && !crate::allocator::page::mi_page_is_in_full(page_ptr)
                 && (queue
                     .ptr()
                     .block_size()
                     .is_some_and(|block_size| page.page().block_size().get() == block_size.get())
-                    || (crate::page::mi_page_is_huge(page_ptr)
-                        && crate::page::mi_page_queue_is_huge(queue_ptr)))
+                    || (crate::allocator::page::mi_page_is_huge(page_ptr)
+                        && crate::allocator::page::mi_page_queue_is_huge(queue_ptr)))
         } {
             Ok(Self {
                 page: page.page(),
@@ -239,7 +239,7 @@ impl QueuedPage<NormalQueue> {
         // linked in `self.queue`; removal delegates list mutation to the page
         // helper and then restores the active-page witness for the same page.
         unsafe {
-            crate::page::mi_page_queue_remove_typed(self.queue.ptr, self.page);
+            crate::allocator::page::mi_page_queue_remove_typed(self.queue.ptr, self.page);
             crate::core_types::ActivePage::new_unchecked(self.page)
         }
     }
@@ -250,8 +250,13 @@ impl QueuedPage<NormalQueue> {
         // page and `to` proves the full queue; the helper performs the raw list
         // move, after which the in-full bit is set before returning a FullPage.
         unsafe {
-            crate::page::mi_page_queue_enqueue_from_raw(to.ptr(), self.queue.ptr, true, self.page);
-            crate::page::mi_page_set_in_full(self.page.as_ptr(), true);
+            crate::allocator::page::mi_page_queue_enqueue_from_raw(
+                to.ptr(),
+                self.queue.ptr,
+                true,
+                self.page,
+            );
+            crate::allocator::page::mi_page_set_in_full(self.page.as_ptr(), true);
             crate::core_types::FullPage::new_unchecked(self.page)
         }
     }
@@ -270,8 +275,10 @@ impl QueuedPage<FullQueue> {
         // accepts the full-queue witness only when the page is linked in the
         // queue and still marked full by the existing page helpers.
         if unsafe {
-            crate::page::mi_page_queue_contains(queue.ptr().as_ptr(), page.page().as_ptr())
-                && crate::page::mi_page_is_in_full(page.page().as_ptr())
+            crate::allocator::page::mi_page_queue_contains(
+                queue.ptr().as_ptr(),
+                page.page().as_ptr(),
+            ) && crate::allocator::page::mi_page_is_in_full(page.page().as_ptr())
         } {
             Ok(Self {
                 page: page.page(),
@@ -289,8 +296,13 @@ impl QueuedPage<FullQueue> {
         // move, after which the in-full bit is cleared before returning
         // ActivePage.
         unsafe {
-            crate::page::mi_page_queue_enqueue_from_raw(to.ptr(), self.queue.ptr, true, self.page);
-            crate::page::mi_page_set_in_full(self.page.as_ptr(), false);
+            crate::allocator::page::mi_page_queue_enqueue_from_raw(
+                to.ptr(),
+                self.queue.ptr,
+                true,
+                self.page,
+            );
+            crate::allocator::page::mi_page_set_in_full(self.page.as_ptr(), false);
             crate::core_types::ActivePage::new_unchecked(self.page)
         }
     }
@@ -301,7 +313,7 @@ impl QueuedPage<FullQueue> {
         // page is linked in `self.queue`; removal delegates list mutation to
         // the page helper and returns the page to the active witness domain.
         unsafe {
-            crate::page::mi_page_queue_remove_typed(self.queue.ptr, self.page);
+            crate::allocator::page::mi_page_queue_remove_typed(self.queue.ptr, self.page);
             crate::core_types::ActivePage::new_unchecked(self.page)
         }
     }

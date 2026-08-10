@@ -8,7 +8,11 @@ use core::sync::atomic::Ordering;
 
 use crate::allocator::arena::_mi_arena_from_id;
 use crate::allocator::arena::{_mi_heap_destroy_pages, _mi_heap_move_pages};
+use crate::allocator::init::{
+    _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_empty_wrong, mi_heap_main,
+};
 use crate::allocator::options::{_mi_error_message_fmt, _mi_warning_message_fmt};
+use crate::allocator::page_map::_mi_safe_ptr_page;
 use crate::allocator::stats::{_mi_stats_merge_into, mi_stats_header_init};
 use crate::allocator::thread_heap::{_mi_theap_create, _mi_theap_free};
 use crate::allocator::threadlocal::{
@@ -18,13 +22,9 @@ use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release
 use crate::core_types::{
     BorrowedHeap, Errno, HeapPtr, MainHeap, OwnedHeap, PagePtr, SubprocPtr, ThreadHeapPtr,
 };
-use crate::init::{
-    _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_empty_wrong, mi_heap_main,
-};
 use crate::internal::{__mi_stat_counter_increase_mt, _mi_is_heap_main, mi_page_heap};
 use crate::mimalloc::{mi_free, mi_heap_zalloc};
 use crate::os::_mi_os_numa_node_count;
-use crate::page_map::_mi_safe_ptr_page;
 use crate::prim::{_mi_heap_theap, _mi_prim_thread_yield};
 use crate::types::{mi_arena_id_t, mi_heap_t, mi_page_t, mi_theap_t};
 
@@ -565,9 +565,9 @@ unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
     // map; optional `heap` is a live borrowed heap for comparison only.
     unsafe {
         let page_raw = page.as_ptr();
-        let used = crate::page::mi_page_used_count(page_raw);
-        let capacity = crate::page::mi_page_capacity_count(page_raw);
-        let reserved = crate::page::mi_page_reserved_count(page_raw);
+        let used = crate::allocator::page::mi_page_used_count(page_raw);
+        let capacity = crate::allocator::page::mi_page_capacity_count(page_raw);
+        let reserved = crate::allocator::page::mi_page_reserved_count(page_raw);
         if used.get() == capacity.get() || capacity.get() < reserved.get() {
             return false;
         }
@@ -605,7 +605,7 @@ unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap
     // with initialized heap-local metadata.
     unsafe {
         if _mi_is_heap_main(heap) {
-            let theap = crate::init::_mi_theap_main_safe();
+            let theap = crate::allocator::init::_mi_theap_main_safe();
             crate::internal::mi_assert_internal!(
                 !theap.is_null() && _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))
             );
@@ -656,7 +656,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) 
     // pointer with initialized thread-local metadata.
     unsafe {
         if heap.is_null() || _mi_is_heap_main(heap) {
-            crate::init::_mi_theap_main_safe()
+            crate::allocator::init::_mi_theap_main_safe()
         } else {
             _mi_thread_local_get((*heap).theap).cast::<mi_theap_t>()
         }

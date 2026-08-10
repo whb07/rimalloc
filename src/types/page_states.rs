@@ -239,8 +239,13 @@ impl ActivePage {
         // typed source/target queues for an active page that is transitioning
         // into the full queue.
         unsafe {
-            crate::page::mi_page_queue_enqueue_from_raw(to.ptr(), from.ptr(), true, self.page());
-            crate::page::mi_page_set_in_full(self.page().as_ptr(), true);
+            crate::allocator::page::mi_page_queue_enqueue_from_raw(
+                to.ptr(),
+                from.ptr(),
+                true,
+                self.page(),
+            );
+            crate::allocator::page::mi_page_set_in_full(self.page().as_ptr(), true);
             FullPage::new_unchecked(self.page())
         }
     }

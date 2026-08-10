@@ -1,6 +1,6 @@
 use super::*;
 use crate::allocator::heap::mi_heap_new;
-use crate::init::mi_heap_main;
+use crate::allocator::init::mi_heap_main;
 use crate::mimalloc::mi_heap_delete;
 use crate::types::{mi_heap_t, mi_theap_t, mi_tld_t};
 use core::mem::MaybeUninit;

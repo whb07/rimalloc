@@ -81,7 +81,7 @@ unsafe fn release_abandoned_ownership(
             while tf_expect.head().is_some() {
                 #[cfg(feature = "bench-diagnostics")]
                 crate::allocator::bench_diagnostics::ownership_release_nested_collection();
-                crate::page::collect_page_free_lists_abandoned(&page, false);
+                crate::allocator::page::collect_page_free_lists_abandoned(&page, false);
                 page = match try_free_abandoned(page) {
                     Ok(page) => return crate::core_types::AbandonedDisposition::Destroyed(page),
                     Err(page) => page,
@@ -229,9 +229,9 @@ pub(super) unsafe fn collect_after_remote_free(
         ) {
             crate::allocator::policy::RemoteCollectMode::PartialKeepPublishedHead => {
                 crate::internal::mi_assert_internal!(
-                    crate::page::mi_page_reserved_count(page_raw).get() >= 16
+                    crate::allocator::page::mi_page_reserved_count(page_raw).get() >= 16
                 );
-                crate::page::_mi_page_free_collect_partly_typed(&page, published);
+                crate::allocator::page::_mi_page_free_collect_partly_typed(&page, published);
                 crate::core_types::ThreadFreeWord::from_parts(
                     Some(mt_free),
                     crate::core_types::ThreadFreeOwner::Owned,
@@ -239,7 +239,7 @@ pub(super) unsafe fn collect_after_remote_free(
             }
             crate::allocator::policy::RemoteCollectMode::FullDetach => {
                 published.leave_published();
-                crate::page::collect_page_free_lists_abandoned(&page, false);
+                crate::allocator::page::collect_page_free_lists_abandoned(&page, false);
                 crate::core_types::ThreadFreeWord::from_parts(
                     None,
                     crate::core_types::ThreadFreeOwner::Owned,

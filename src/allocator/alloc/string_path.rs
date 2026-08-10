@@ -4,10 +4,10 @@ use core::ffi::{c_char, c_int, c_long, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::allocator::page::{_mi_theap_or_default_typed, MI_MAX_ALLOC_SIZE};
 use crate::core_types::{BorrowedHeap, ThreadHeapLocal};
 use crate::internal::{_mi_memcpy, _mi_strlen, _mi_strnlen};
 use crate::mimalloc::mi_free;
-use crate::page::{_mi_theap_or_default_typed, MI_MAX_ALLOC_SIZE};
 use crate::prim::_mi_theap_default;
 use crate::types::{ENOMEM, mi_heap_t, mi_theap_t};
 

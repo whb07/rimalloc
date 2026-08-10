@@ -66,9 +66,9 @@ pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
     // SAFETY: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
-        let reserved = crate::page::mi_page_reserved_count(page);
+        let reserved = crate::allocator::page::mi_page_reserved_count(page);
         crate::internal::mi_assert_internal!(reserved.get() > 0);
-        crate::page::mi_page_used_count(page).get() < reserved.get()
+        crate::allocator::page::mi_page_used_count(page).get() < reserved.get()
             || !mi_page_thread_free(page).is_null()
     }
 }

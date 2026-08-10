@@ -10,6 +10,11 @@ use core::{ffi::c_void, mem::size_of, ptr};
 
 use crate::allocator::arena::_mi_arenas_collect;
 use crate::allocator::options::_mi_error_message_fmt;
+use crate::allocator::page::{
+    _mi_page_abandon, _mi_page_free, _mi_page_free_collect, _mi_page_is_valid,
+    _mi_theap_collect_retired, mi_full_page_queue_is_valid, mi_huge_page_queue_is_valid,
+    mi_normal_page_queue_is_valid, mi_page_is_abandoned, mi_page_theap,
+};
 use crate::allocator::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
 use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::core_types::{
@@ -24,11 +29,6 @@ use crate::internal::{
     mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::mimalloc::mi_free;
-use crate::page::{
-    _mi_page_abandon, _mi_page_free, _mi_page_free_collect, _mi_page_is_valid,
-    _mi_theap_collect_retired, mi_full_page_queue_is_valid, mi_huge_page_queue_is_valid,
-    mi_normal_page_queue_is_valid, mi_page_is_abandoned, mi_page_theap,
-};
 use crate::prim::{__mi_theap_empty, _mi_theap_default};
 #[cfg(not(any(target_os = "macos", windows)))]
 use crate::random::_mi_random_init;
@@ -176,9 +176,9 @@ unsafe fn mi_heap_area_init_typed(area: *mut mi_heap_area_t, heap: HeapPtr, page
             crate::core_types::FullBlockSize::from_block_size(mi_page_block_size_typed(page));
         let bsize = full_bsize.get();
         let ubsize = mi_page_usable_block_size(page);
-        let reserved = crate::page::mi_page_reserved_count(page);
-        let capacity = crate::page::mi_page_capacity_count(page);
-        let used = crate::page::mi_page_used_count(page);
+        let reserved = crate::allocator::page::mi_page_reserved_count(page);
+        let capacity = crate::allocator::page::mi_page_capacity_count(page);
+        let used = crate::allocator::page::mi_page_used_count(page);
         (*area).reserved = reserved.as_usize() * bsize;
         (*area).committed = capacity.as_usize() * bsize;
         (*area).blocks = mi_page_start(page).cast::<c_void>();
@@ -245,7 +245,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
             let Ok(owner) = abandoned.try_claim_ownership() else {
                 return false;
             };
-            crate::page::collect_page_free_lists_abandoned(&owner, true);
+            crate::allocator::page::collect_page_free_lists_abandoned(&owner, true);
             Some(owner)
         } else {
             crate::internal::mi_assert_internal!(!mi_page_theap(page).is_null());
@@ -254,7 +254,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
         };
         crate::internal::mi_assert_internal!(page_ptr.local_free().is_empty());
         let result = (|| {
-            let used = crate::page::mi_page_used_count(page);
+            let used = crate::allocator::page::mi_page_used_count(page);
             if used.get() == 0 {
                 return true;
             }
@@ -265,7 +265,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
             let bsize = mi_page_block_size(page);
             let ubsize = mi_page_usable_block_size(page);
 
-            let capacity = crate::page::mi_page_capacity_count(page);
+            let capacity = crate::allocator::page::mi_page_capacity_count(page);
             if capacity.get() == 1 {
                 crate::internal::mi_assert_internal!(used.get() == 1 && page_ptr.free().is_empty());
                 return visitor.invoke(heap, area, pstart.cast::<c_void>(), ubsize.get(), arg);
@@ -353,7 +353,7 @@ unsafe fn mi_theap_area_visit_blocks_typed(
                 let mut expected = atomic.load_relaxed();
                 crate::internal::mi_assert_internal!(expected.is_owned());
                 if expected.head().is_some() {
-                    crate::page::collect_page_free_lists_abandoned(&owner, true);
+                    crate::allocator::page::collect_page_free_lists_abandoned(&owner, true);
                     continue;
                 }
                 if atomic.release_acq_rel(&mut expected) {
@@ -641,7 +641,7 @@ unsafe fn mi_theap_page_collect_typed(
         _mi_page_free_collect(page, collect as i32 >= mi_collect_t::MI_FORCE as i32);
 
         if mi_page_all_free(page) {
-            if crate::page::mi_page_is_in_full(page) {
+            if crate::allocator::page::mi_page_is_in_full(page) {
                 let full_page = crate::core_types::assume_full_page(local_page.page());
                 crate::internal::mi_assert_internal!(full_page.try_mark_all_free().is_ok());
             } else {
@@ -649,12 +649,12 @@ unsafe fn mi_theap_page_collect_typed(
                 crate::internal::mi_assert_internal!(active_page.try_mark_all_free().is_ok());
             }
             if collect as i32 >= mi_collect_t::MI_FORCE as i32
-                || crate::page::mi_page_retire_expire(page).is_zero()
+                || crate::allocator::page::mi_page_retire_expire(page).is_zero()
             {
                 _mi_page_free(page, pq);
             }
         } else if collect == mi_collect_t::MI_ABANDON {
-            let _page_for_abandon = if crate::page::mi_page_is_in_full(page) {
+            let _page_for_abandon = if crate::allocator::page::mi_page_is_in_full(page) {
                 crate::core_types::assume_full_page(local_page.page()).into_abandon_candidate()
             } else {
                 crate::core_types::assume_active_page(local_page.page()).into_abandon_candidate()
@@ -875,7 +875,7 @@ pub unsafe extern "C" fn mi_theap_get_default() -> *mut mi_theap_t {
     unsafe {
         let mut theap = _mi_theap_default();
         if !mi_theap_is_initialized(theap) {
-            crate::init::mi_thread_init();
+            crate::allocator::init::mi_thread_init();
             theap = _mi_theap_default();
             crate::internal::mi_assert_internal!(mi_theap_is_initialized(theap));
         }
@@ -903,7 +903,7 @@ pub unsafe extern "C" fn mi_theap_set_default(theap: *mut mi_theap_t) -> *mut mi
 unsafe fn mi_theap_set_default_typed(theap: ThreadHeapLocal) {
     // SAFETY: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
     unsafe {
-        crate::init::_mi_theap_default_set(theap.ptr().as_ptr());
+        crate::allocator::init::_mi_theap_default_set(theap.ptr().as_ptr());
     }
 }
 

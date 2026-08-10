@@ -12,6 +12,7 @@ use crate::allocator::arena::{
     _mi_arenas_collect, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free_typed,
     MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
 };
+use crate::allocator::init::{_mi_page_empty, _mi_theap_empty_wrong};
 use crate::allocator::options::_mi_error_message_fmt;
 use crate::allocator::stats::MI_BIN_HUGE;
 use crate::allocator::tracking::{
@@ -19,7 +20,6 @@ use crate::allocator::tracking::{
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::core_types::{Bin, Errno, PageKeys, PagePtr, PageQueuePtr, ThreadHeapPtr};
-use crate::init::{_mi_page_empty, _mi_theap_empty_wrong};
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up, _mi_is_heap_main, _mi_os_commit,
     _mi_os_good_alloc_size, _mi_os_page_size_typed, _mi_page_malloc_zero_typed, _mi_ptr_page,

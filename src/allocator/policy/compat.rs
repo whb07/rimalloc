@@ -2,10 +2,10 @@ use core::ffi::c_long;
 use core::num::NonZeroU16;
 
 use crate::allocator::options::{_mi_option_get_fast, mi_option_get, mi_option_t};
+use crate::allocator::page::MI_SMALL_MAX_OBJ_SIZE;
 use crate::core_types::{
     BlockSize, PageCapacity, PageReclaimLimit, PageReclaimOnFree, ReservedBlockCount, RetireExpire,
 };
-use crate::page::MI_SMALL_MAX_OBJ_SIZE;
 use crate::types::MI_SMALL_SIZE_MAX;
 
 use super::{

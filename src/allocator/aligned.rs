@@ -12,19 +12,19 @@ use crate::allocator::alloc::{
     calloc_request_or_report,
 };
 use crate::allocator::arena::MI_ARENA_SLICE_SIZE;
+#[cfg(not(mi_c_malloc_fast))]
+use crate::allocator::free::_mi_padding_shrink;
 use crate::allocator::options::_mi_error_message_fmt;
+use crate::allocator::page::{
+    MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size_typed,
+};
 use crate::allocator::tracking::mi_track_align;
 use crate::bits::MI_KiB;
 use crate::core_types::{BorrowedHeap, Errno};
-#[cfg(not(mi_c_malloc_fast))]
-use crate::free::_mi_padding_shrink;
 use crate::internal::{
     _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero, _mi_ptr_page,
     MI_GUARDED, mi_likely, mi_page_set_has_interior_pointers, mi_page_usable_block_size,
     mi_unlikely,
-};
-use crate::page::{
-    MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size_typed,
 };
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_theap_t};

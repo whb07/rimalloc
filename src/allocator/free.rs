@@ -9,6 +9,11 @@ use crate::allocator::arena::{
     _mi_arenas_page_free, _mi_arenas_page_try_reabandon_to_mapped_arena, _mi_arenas_page_unabandon,
 };
 use crate::allocator::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
+use crate::allocator::page::{
+    _mi_page_retire_internal, _mi_page_unfull_internal, _mi_theap_page_reclaim,
+    MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned, mi_page_is_huge,
+    mi_page_queue_count_typed,
+};
 use crate::allocator::tracking::{mi_track_free_size, mi_track_mem_defined, mi_track_mem_noaccess};
 use crate::bits::MI_INTPTR_SIZE;
 use crate::core_types::Errno;
@@ -22,11 +27,6 @@ use crate::internal::{
     mi_page_has_interior_pointers, mi_page_is_abandoned_mapped, mi_page_is_full,
     mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_keys, mi_page_queue,
     mi_page_start, mi_page_thread_free, mi_page_usable_block_size, mi_theap_is_initialized,
-};
-use crate::page::{
-    _mi_page_retire_internal, _mi_page_unfull_internal, _mi_theap_page_reclaim,
-    MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned, mi_page_is_huge,
-    mi_page_queue_count_typed,
 };
 use crate::prim::{
     _mi_page_associated_theap_peek, _mi_prim_thread_id, _mi_theap_default,
@@ -416,7 +416,7 @@ pub(crate) unsafe fn mi_free_block_local(
         // carries the freed block witness for the same page.
         let used = page_wrapper.push_free_block(block_wrapper.into_free_block());
         if used.get() == 0 {
-            if crate::page::mi_page_retire_expire(page).is_zero() {
+            if crate::allocator::page::mi_page_retire_expire(page).is_zero() {
                 let active = crate::core_types::assume_active_page(
                     crate::core_types::PagePtr::new_unchecked(page),
                 );
@@ -426,7 +426,7 @@ pub(crate) unsafe fn mi_free_block_local(
                 };
                 _mi_page_retire_internal(all_free);
             }
-        } else if check_full && crate::page::mi_page_is_in_full(page) {
+        } else if check_full && crate::allocator::page::mi_page_is_in_full(page) {
             let _ = _mi_page_unfull_internal(crate::core_types::assume_full_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             ));
@@ -1170,12 +1170,12 @@ pub unsafe extern "C" fn mi_free_small(p: *mut c_void) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::allocator::init::_mi_thread_id;
     use crate::core_types::{
         AvailableFreeList, BlockPtr, FreePathKind, LocalFreeList, PageFlags, PageFreeOwner,
         PageOwnerId, PagePtr, PageThreadId, PointerInvalidReason, PointerLocation, PointerLookup,
         ThreadFreeOwner, ThreadFreeWord, ThreadId, UserPtr,
     };
-    use crate::init::_mi_thread_id;
     use crate::types::{mi_block_t, mi_page_t};
     use core::{mem::MaybeUninit, ptr};
 

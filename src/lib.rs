@@ -225,11 +225,6 @@ pub mod __bench {
     pub use crate::internal::_mi_memcpy;
 }
 
-// Mechanical allocator and raw compatibility code retain these C-shaped
-// module names. Rust-native code must use the owning `allocator` modules.
-#[allow(unused_imports)]
-pub(crate) use allocator::{free, init, page, page_map};
-
 // Raw and translated compatibility code retain these FFI module names.
 pub(crate) use ffi::{abi, headers, libc, mimalloc};
 

@@ -5,16 +5,16 @@ use core::mem::size_of;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::Ordering;
 
-use crate::arena::_mi_arenas_unsafe_destroy_all;
-use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
-use crate::core_types::{
+use crate::allocator::arena::_mi_arenas_unsafe_destroy_all;
+use crate::allocator::heap::{_mi_heap_force_destroy, mi_heap_destroy};
+use crate::allocator::options::{_mi_options_init, _mi_warning_message_fmt};
+use crate::allocator::stats::{__mi_stat_increase_mt, _mi_stats_merge_into, mi_stats_header_init};
+use crate::internal::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
+use crate::internal::{_mi_meta_free, _mi_meta_zalloc, mi_memid_t};
+use crate::types::{
     BorrowedSubproc, HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainHeap, MainSubproc,
     MiLockGuard, MiLockPtr, SubprocPtr, TldPtr,
 };
-use crate::heap::{_mi_heap_force_destroy, mi_heap_destroy};
-use crate::internal::{_mi_meta_free, _mi_meta_zalloc, mi_memid_t};
-use crate::options::{_mi_options_init, _mi_warning_message_fmt};
-use crate::stats::{__mi_stat_increase_mt, _mi_stats_merge_into, mi_stats_header_init};
 use crate::types::{mi_heap_t, mi_heap_visit_fun, mi_subproc_id_t, mi_subproc_t, mi_theap_t};
 
 use super::{
@@ -102,7 +102,7 @@ pub(super) fn main_init() {
         if !mi_memid_is_static((*main_prefix).memid) {
             _mi_options_init();
             (*main_prefix).memid =
-                crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().into_raw();
+                crate::types::MemId::<crate::types::StaticMem>::static_mem().into_raw();
             (*main_prefix).heaps = ptr::addr_of_mut!(super::heap_main).cast::<mi_heap_t>();
             (*main_prefix).heap_total_count.store(1, Ordering::Relaxed);
             (*main_prefix).heap_count.store(1, Ordering::Relaxed);
@@ -177,7 +177,7 @@ unsafe fn unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_lock: bool)
     if is_main {
         let subproc = subproc_raw;
         // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        unsafe { crate::page_map::_mi_page_map_unsafe_destroy(subproc) };
+        unsafe { crate::allocator::page_map::_mi_page_map_unsafe_destroy(subproc) };
     } else {
         // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
         let main_subproc = unsafe { mi_subproc_prefix_typed(main_subproc) };
@@ -222,7 +222,7 @@ pub(super) unsafe fn main_ptr() -> *mut mi_subproc_t {
 
 unsafe fn current_typed() -> BorrowedSubproc {
     // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    let theap = unsafe { crate::prim::_mi_theap_default_raw() };
+    let theap = unsafe { crate::platform::_mi_theap_default_raw() };
     let subproc = if theap.is_null() {
         // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
         unsafe { main_typed().ptr() }
@@ -292,7 +292,7 @@ unsafe fn ensure_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
 
 pub(super) unsafe fn heap_main() -> *mut mi_heap_t {
     // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
-    let theap = unsafe { crate::prim::_mi_theap_default_raw() };
+    let theap = unsafe { crate::platform::_mi_theap_default_raw() };
     let subproc = if theap.is_null() {
         // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
         unsafe { main_addr() }
@@ -361,7 +361,7 @@ pub(super) unsafe fn new() -> mi_subproc_id_t {
     // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
     unsafe {
         subproc_ptr.write(MiSubprocPrefix::new_with_memid(
-            crate::core_types::SubprocSeq::new(seq),
+            crate::types::SubprocSeq::new(seq),
             memid,
         ))
     };
@@ -429,7 +429,7 @@ pub(super) unsafe fn add_current_thread(subproc_id: mi_subproc_id_t) {
     // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
     unsafe {
         (*tld).subproc = subproc;
-        (*tld).thread_seq = crate::core_types::ThreadSeq::new(
+        (*tld).thread_seq = crate::types::ThreadSeq::new(
             (*subproc_prefix)
                 .thread_total_count
                 .fetch_add(1, Ordering::Relaxed),

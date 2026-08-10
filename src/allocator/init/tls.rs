@@ -18,17 +18,17 @@ use core::ptr;
 ))]
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::atomic::{mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t};
-use crate::bits::MI_SIZE_SIZE;
 #[cfg(any(windows, target_os = "openbsd", target_os = "android"))]
-use crate::core_types::Errno;
-use crate::core_types::{ThreadHeapLocal, ThreadHeapPtr, ThreadId};
-#[cfg(any(windows, target_os = "openbsd", target_os = "android"))]
-use crate::options::_mi_error_message_fmt;
+use crate::allocator::options::_mi_error_message_fmt;
+use crate::internal::atomic::{mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t};
+use crate::internal::bits::MI_SIZE_SIZE;
 #[cfg(windows)]
-use crate::prim::MI_TLS_EXPANSION_SLOT;
+use crate::platform::MI_TLS_EXPANSION_SLOT;
 #[cfg(windows)]
 use crate::types::EFAULT;
+#[cfg(any(windows, target_os = "openbsd", target_os = "android"))]
+use crate::types::Errno;
+use crate::types::{ThreadHeapLocal, ThreadHeapPtr, ThreadId};
 use crate::types::{mi_theap_t, mi_thread_local_t, mi_threadid_t};
 
 const MI_TLS_DIRECT_SLOTS: usize = 64;
@@ -251,7 +251,7 @@ pub(crate) fn fallback_thread_id() -> mi_threadid_t {
 
 #[inline]
 pub(super) fn current_thread_id() -> mi_threadid_t {
-    crate::prim::_mi_prim_thread_id()
+    crate::platform::_mi_prim_thread_id()
 }
 
 // SAFETY: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
@@ -341,7 +341,7 @@ unsafe fn mi_win_tls_slot_set(slot: usize, extended_slot: usize, value: *mut c_v
             || slot == MI_TLS_EXPANSION_SLOT
     );
     if slot < MI_TLS_DIRECT_FIRST + MI_TLS_DIRECT_SLOTS {
-        crate::prim::mi_prim_tls_slot_set(slot, value);
+        crate::platform::mi_prim_tls_slot_set(slot, value);
     } else {
         crate::internal::mi_assert_internal!(extended_slot < MI_TLS_EXPANSION_SLOTS);
         // SAFETY: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
@@ -354,7 +354,7 @@ unsafe fn mi_win_tls_slot_set(_slot: usize, _extended_slot: usize, _value: *mut 
 
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
 unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
-    let key = crate::threadlocal::_mi_thread_local_create();
+    let key = crate::allocator::threadlocal::_mi_thread_local_create();
     if key == 0 {
         EFAULT
     } else {
@@ -438,18 +438,18 @@ pub(super) fn mi_tls_slots_done() {
 
 pub(super) unsafe fn theap_default_set(theap: *mut mi_theap_t) {
     // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    let theap_old = unsafe { crate::prim::_mi_theap_default() };
+    let theap_old = unsafe { crate::platform::_mi_theap_default() };
     crate::internal::mi_assert_internal!(!theap.is_null());
     crate::internal::mi_assert_internal!(
         // SAFETY: default thread-heap association validates local ownership before TLS publication.
         unsafe { (*(*theap).tld).thread_id } == 0
             // SAFETY: default thread-heap association validates local ownership before TLS publication.
-            || unsafe { (*(*theap).tld).thread_id } == crate::init::_mi_thread_id()
+            || unsafe { (*(*theap).tld).thread_id } == crate::allocator::init::_mi_thread_id()
     );
     // SAFETY: default thread-heap association validates local ownership before TLS publication.
     let theap = unsafe { ThreadHeapPtr::new_unchecked(theap) };
     // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+    let current = unsafe { ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id()) };
     // SAFETY: default thread-heap association validates local ownership before TLS publication.
     let theap = match unsafe { theap.try_local(current) } {
         Ok(theap) => theap,
@@ -465,14 +465,14 @@ unsafe fn theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<Thre
     let theap_ptr = theap.ptr();
     let theap_raw = theap_ptr.as_ptr();
     mi_tls_slots_init();
-    if crate::prim::MI_TLS_MODEL_THREAD_LOCAL {
-        crate::prim::mi_prim_thread_local_default_set(Some(theap_ptr));
-    } else if crate::prim::MI_TLS_MODEL_FIXED_SLOT {
-        crate::prim::mi_prim_tls_slot_set(
-            crate::prim::MI_TLS_MODEL_FIXED_SLOT_DEFAULT,
+    if crate::platform::MI_TLS_MODEL_THREAD_LOCAL {
+        crate::platform::mi_prim_thread_local_default_set(Some(theap_ptr));
+    } else if crate::platform::MI_TLS_MODEL_FIXED_SLOT {
+        crate::platform::mi_prim_tls_slot_set(
+            crate::platform::MI_TLS_MODEL_FIXED_SLOT_DEFAULT,
             theap_raw.cast(),
         );
-    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
+    } else if crate::platform::MI_TLS_MODEL_DYNAMIC_WIN32 {
         // SAFETY: default thread-heap publication writes the validated local heap pointer into the selected TLS backend.
         unsafe {
             mi_win_tls_slot_set(
@@ -482,8 +482,10 @@ unsafe fn theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<Thre
             );
         }
     // SAFETY: default thread-heap association validates local ownership before TLS publication.
-    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_default_key } != 0 {
-        let _ = crate::threadlocal::_mi_thread_local_set(
+    } else if crate::platform::MI_TLS_MODEL_DYNAMIC_PTHREADS
+        && unsafe { _mi_theap_default_key } != 0
+    {
+        let _ = crate::allocator::threadlocal::_mi_thread_local_set(
             // SAFETY: default thread-heap publication writes the validated local heap pointer into the selected TLS backend.
             unsafe { _mi_theap_default_key },
             theap_raw.cast(),
@@ -493,9 +495,11 @@ unsafe fn theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<Thre
     // SAFETY: default thread-heap association validates local ownership before TLS publication.
     if unsafe { crate::internal::mi_theap_is_initialized(theap_raw) } {
         // SAFETY: default thread-heap publication writes the validated local heap pointer into the selected TLS backend.
-        unsafe { crate::prim::_mi_prim_thread_associate_default_theap(theap_raw) };
+        unsafe { crate::platform::_mi_prim_thread_associate_default_theap(theap_raw) };
         // SAFETY: default thread-heap association validates local ownership before TLS publication.
-        if unsafe { crate::init::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap_raw)) } {
+        if unsafe {
+            crate::allocator::init::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap_raw))
+        } {
             mi_theap_main_tls_set(Some(theap_ptr));
         }
     }
@@ -506,7 +510,7 @@ unsafe fn theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<Thre
         if unsafe { crate::internal::mi_theap_is_initialized(theap_old) }
             // SAFETY: default thread-heap association validates local ownership before TLS publication.
             && unsafe {
-                crate::init::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap_old))
+                crate::allocator::init::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap_old))
             }
         {
             mi_theap_main_tls_set(ThreadHeapPtr::new(theap_old));
@@ -516,13 +520,13 @@ unsafe fn theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<Thre
 
 pub(super) unsafe fn theap_cached_set(theap: *mut mi_theap_t) {
     // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-    let prev = unsafe { crate::prim::_mi_theap_cached() };
+    let prev = unsafe { crate::platform::_mi_theap_cached() };
     if ptr::eq(prev, theap) {
         return;
     }
     let theap = ThreadHeapPtr::new(theap).map(|theap| {
         // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-        let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+        let current = unsafe { ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id()) };
         // SAFETY: cached thread-heap association validates local ownership before TLS publication.
         match unsafe { theap.try_local(current) } {
             Ok(theap) => theap,
@@ -541,14 +545,14 @@ unsafe fn theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Option<Th
         .map(ThreadHeapPtr::as_ptr)
         .unwrap_or(ptr::null_mut());
     mi_tls_slots_init();
-    if crate::prim::MI_TLS_MODEL_THREAD_LOCAL {
-        crate::prim::mi_prim_thread_local_cached_set(theap_ptr);
-    } else if crate::prim::MI_TLS_MODEL_FIXED_SLOT {
-        crate::prim::mi_prim_tls_slot_set(
-            crate::prim::MI_TLS_MODEL_FIXED_SLOT_CACHED,
+    if crate::platform::MI_TLS_MODEL_THREAD_LOCAL {
+        crate::platform::mi_prim_thread_local_cached_set(theap_ptr);
+    } else if crate::platform::MI_TLS_MODEL_FIXED_SLOT {
+        crate::platform::mi_prim_tls_slot_set(
+            crate::platform::MI_TLS_MODEL_FIXED_SLOT_CACHED,
             theap_raw.cast(),
         );
-    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
+    } else if crate::platform::MI_TLS_MODEL_DYNAMIC_WIN32 {
         // SAFETY: cached thread-heap association validates local ownership before TLS publication.
         unsafe {
             mi_win_tls_slot_set(
@@ -558,8 +562,9 @@ unsafe fn theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Option<Th
             );
         }
     // SAFETY: cached thread-heap association validates local ownership before TLS publication.
-    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_cached_key } != 0 {
-        let _ = crate::threadlocal::_mi_thread_local_set(
+    } else if crate::platform::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_cached_key } != 0
+    {
+        let _ = crate::allocator::threadlocal::_mi_thread_local_set(
             // SAFETY: cached thread-heap association validates local ownership before TLS publication.
             unsafe { _mi_theap_cached_key },
             theap_raw.cast(),

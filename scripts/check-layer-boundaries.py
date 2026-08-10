@@ -14,16 +14,16 @@ SAFE_BACKEND_IMPORT_ALLOWLIST = {
     "src/safe/allocation.rs": set(),
     "src/safe/error.rs": set(),
     "src/safe/heap.rs": {
-        "alloc",
-        "alloc_aligned",
-        "heap",
-        "init",
-        "mimalloc",
+        "allocator::aligned",
+        "allocator::alloc",
+        "allocator::heap",
+        "allocator::init",
+        "ffi::mimalloc",
         "types",
     },
     "src/safe/mod.rs": set(),
-    "src/safe/options.rs": {"options"},
-    "src/safe/stats.rs": {"init", "os", "stats"},
+    "src/safe/options.rs": {"allocator::options"},
+    "src/safe/stats.rs": {"allocator::init", "allocator::stats", "platform::os"},
 }
 
 BACKEND_MODULES = {
@@ -55,6 +55,8 @@ BACKEND_MODULES = {
     "threadlocal",
     "types",
 }
+
+OWNING_BACKEND_ROOTS = {"allocator", "ffi", "internal", "platform", "raw"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -100,6 +102,10 @@ def backend_modules_used(text: str) -> set[str]:
     modules = set()
     for match in re.finditer(r"\bcrate::([A-Za-z_][A-Za-z0-9_]*)::", text):
         module = match.group(1)
+        if module in OWNING_BACKEND_ROOTS:
+            owner = re.match(r"([A-Za-z_][A-Za-z0-9_]*)::", text[match.end() :])
+            modules.add(module if owner is None else f"{module}::{owner.group(1)}")
+            continue
         if module in BACKEND_MODULES:
             modules.add(module)
     return modules
@@ -129,10 +135,15 @@ def main() -> int:
                 f"{rel}: missing={sorted(allowed - actual)} extra={sorted(actual - allowed)}"
             )
 
-    synthetic = "fn bad() { let _ = crate::internal::MI_DEBUG; }"
+    synthetic = (
+        "fn bad() { let _ = crate::internal::MI_DEBUG; "
+        "let _ = crate::allocator::options::mi_option_get; "
+        "let _ = crate::allocator::unknown_owner::bad; }"
+    )
     require(
-        backend_modules_used(synthetic) == {"internal"},
-        "layer-boundary regression failed to detect synthetic backend import",
+        backend_modules_used(synthetic)
+        == {"internal", "allocator::options", "allocator::unknown_owner"},
+        "layer-boundary regression failed to detect synthetic root and owning imports",
     )
     require(
         not offenders,

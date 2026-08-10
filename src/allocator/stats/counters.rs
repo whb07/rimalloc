@@ -2,12 +2,12 @@
 
 use core::{mem::size_of, ptr};
 
-use crate::atomic::{
+use crate::allocator::page::_mi_bin_size;
+use crate::internal::_mi_memzero;
+use crate::internal::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed,
 };
-use crate::core_types::{Bin, StatsBin};
-use crate::internal::_mi_memzero;
-use crate::page::_mi_bin_size;
+use crate::types::{Bin, StatsBin};
 
 use super::{
     MI_BIN_HUGE, MI_STAT, MI_STAT_VERSION, mi_stat_count_t, mi_stat_counter_t, mi_stats_t,

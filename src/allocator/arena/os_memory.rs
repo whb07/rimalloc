@@ -8,10 +8,10 @@ use super::*;
 
 pub(super) unsafe fn mi_arena_commit(
     arena: ArenaPtr,
-    range: crate::core_types::SliceRange,
-    commit_size: crate::core_types::CommittedBytes,
+    range: crate::types::SliceRange,
+    commit_size: crate::types::CommittedBytes,
     is_zero: *mut bool,
-    already_committed: crate::core_types::CommittedBytes,
+    already_committed: crate::types::CommittedBytes,
 ) -> bool {
     let arena_raw = arena.as_ptr();
     // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
@@ -84,8 +84,8 @@ pub(super) unsafe fn mi_arena_os_alloc_aligned(
 
 pub(super) unsafe fn mi_arena_reserve(
     subproc: SubprocPtr,
-    req_size: crate::core_types::ReservedBytes,
-    numa_node: crate::core_types::NumaNode,
+    req_size: crate::types::ReservedBytes,
+    numa_node: crate::types::NumaNode,
     allow_large: bool,
     arena_id: *mut mi_arena_id_t,
 ) -> bool {
@@ -152,7 +152,7 @@ pub(super) unsafe fn mi_arena_reserve(
         unsafe {
             __mi_stat_adjust_decrease_mt(
                 ptr::addr_of_mut!((*subproc).stats.committed),
-                crate::core_types::CommittedBytes::new(arena_reserve).get(),
+                crate::types::CommittedBytes::new(arena_reserve).get(),
             );
         }
     }
@@ -161,11 +161,11 @@ pub(super) unsafe fn mi_arena_reserve(
     let mut err = unsafe {
         mi_reserve_os_memory_ex2(
             subproc_ptr,
-            crate::core_types::ReservedBytes::new(arena_reserve),
+            crate::types::ReservedBytes::new(arena_reserve),
             numa_node,
-            crate::core_types::InitiallyCommitted(arena_commit),
-            crate::core_types::AllowPinned::new(allow_large),
-            crate::core_types::Exclusive::new(false),
+            crate::types::InitiallyCommitted(arena_commit),
+            crate::types::AllowPinned::new(allow_large),
+            crate::types::Exclusive::new(false),
             arena_id,
         )
     };
@@ -175,7 +175,7 @@ pub(super) unsafe fn mi_arena_reserve(
             unsafe {
                 __mi_stat_adjust_increase_mt(
                     ptr::addr_of_mut!((*subproc).stats.committed),
-                    crate::core_types::CommittedBytes::new(arena_reserve).get(),
+                    crate::types::CommittedBytes::new(arena_reserve).get(),
                 );
             }
         }
@@ -186,7 +186,7 @@ pub(super) unsafe fn mi_arena_reserve(
                 unsafe {
                     __mi_stat_adjust_decrease_mt(
                         ptr::addr_of_mut!((*subproc).stats.committed),
-                        crate::core_types::CommittedBytes::new(small_arena_reserve).get(),
+                        crate::types::CommittedBytes::new(small_arena_reserve).get(),
                     );
                 }
             }
@@ -194,11 +194,11 @@ pub(super) unsafe fn mi_arena_reserve(
             err = unsafe {
                 mi_reserve_os_memory_ex2(
                     subproc_ptr,
-                    crate::core_types::ReservedBytes::new(small_arena_reserve),
+                    crate::types::ReservedBytes::new(small_arena_reserve),
                     numa_node,
-                    crate::core_types::InitiallyCommitted(arena_commit),
-                    crate::core_types::AllowPinned::new(allow_large),
-                    crate::core_types::Exclusive::new(false),
+                    crate::types::InitiallyCommitted(arena_commit),
+                    crate::types::AllowPinned::new(allow_large),
+                    crate::types::Exclusive::new(false),
                     arena_id,
                 )
             };
@@ -207,7 +207,7 @@ pub(super) unsafe fn mi_arena_reserve(
                 unsafe {
                     __mi_stat_adjust_increase_mt(
                         ptr::addr_of_mut!((*subproc).stats.committed),
-                        crate::core_types::CommittedBytes::new(small_arena_reserve).get(),
+                        crate::types::CommittedBytes::new(small_arena_reserve).get(),
                     );
                 }
             }
@@ -218,11 +218,11 @@ pub(super) unsafe fn mi_arena_reserve(
 
 unsafe fn mi_reserve_os_memory_ex2(
     subproc: SubprocPtr,
-    size: crate::core_types::ReservedBytes,
-    numa_node: crate::core_types::NumaNode,
-    commit: crate::core_types::InitiallyCommitted,
-    allow_large: crate::core_types::AllowPinned,
-    exclusive: crate::core_types::Exclusive,
+    size: crate::types::ReservedBytes,
+    numa_node: crate::types::NumaNode,
+    commit: crate::types::InitiallyCommitted,
+    allow_large: crate::types::AllowPinned,
+    exclusive: crate::types::Exclusive,
     arena_id: *mut mi_arena_id_t,
 ) -> c_int {
     let subproc = subproc.as_ptr();
@@ -249,16 +249,16 @@ unsafe fn mi_reserve_os_memory_ex2(
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(subproc),
             OsMemPtr::new_unchecked(start),
-            crate::core_types::ReservedBytes::new(size),
+            crate::types::ReservedBytes::new(size),
             numa_node,
-            crate::core_types::Exclusive::new(exclusive),
+            crate::types::Exclusive::new(exclusive),
             memid,
             None,
             ptr::null_mut(),
             arena_id,
         )
     } {
-        crate::options::_mi_verbose_message(format_args!(
+        crate::allocator::options::_mi_verbose_message(format_args!(
             "reserved {} KiB memory{}\n",
             _mi_divide_up(size, 1024),
             if memid.is_pinned {
@@ -271,7 +271,7 @@ unsafe fn mi_reserve_os_memory_ex2(
     } else {
         // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
         unsafe { _mi_os_free_ex(start, size, commit, memid, ptr::null_mut()) };
-        crate::options::_mi_verbose_message(format_args!(
+        crate::allocator::options::_mi_verbose_message(format_args!(
             "failed to reserve {} KiB memory\n",
             _mi_divide_up(size, 1024)
         ));
@@ -294,11 +294,11 @@ pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     unsafe {
         mi_reserve_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
-            crate::core_types::ReservedBytes::new(size),
-            crate::core_types::NumaNode::any(),
-            crate::core_types::InitiallyCommitted(commit),
-            crate::core_types::AllowPinned::new(allow_large),
-            crate::core_types::Exclusive::new(exclusive),
+            crate::types::ReservedBytes::new(size),
+            crate::types::NumaNode::any(),
+            crate::types::InitiallyCommitted(commit),
+            crate::types::AllowPinned::new(allow_large),
+            crate::types::Exclusive::new(exclusive),
             arena_id,
         )
     }
@@ -348,9 +348,9 @@ pub unsafe extern "C" fn mi_manage_os_memory(
 unsafe fn mi_manage_os_memory_ex2(
     subproc: SubprocPtr,
     start: OsMemPtr,
-    size: crate::core_types::ReservedBytes,
-    numa_node: crate::core_types::NumaNode,
-    exclusive: crate::core_types::Exclusive,
+    size: crate::types::ReservedBytes,
+    numa_node: crate::types::NumaNode,
+    exclusive: crate::types::Exclusive,
     mut memid: mi_memid_t,
     commit_fun: Option<mi_commit_fun_t>,
     commit_fun_arg: *mut c_void,
@@ -368,7 +368,7 @@ unsafe fn mi_manage_os_memory_ex2(
         let aligned_start = _mi_align_up(start as usize, MI_ARENA_SLICE_SIZE) as *mut c_void;
         let diff = aligned_start as usize - start as usize;
         if diff >= size || (size - diff) < MI_ARENA_SLICE_SIZE {
-            crate::options::_mi_warning_message_fmt(format_args!(
+            crate::allocator::options::_mi_warning_message_fmt(format_args!(
                 "after alignment, the size of the arena becomes too small (memory at {:p} with size {})\n",
                 start, size
             ));
@@ -381,10 +381,10 @@ unsafe fn mi_manage_os_memory_ex2(
     let mut total_slice_count = (size / MI_ARENA_SLICE_SIZE / MI_BCHUNK_BITS) * MI_BCHUNK_BITS;
     let total_size = mi_size_of_slices(total_slice_count);
     if total_size < MI_ARENA_MIN_SIZE {
-        crate::options::_mi_warning_message_fmt(format_args!(
+        crate::allocator::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is not large enough (size {} KiB, minimum required is {} KiB)",
-            size / crate::bits::MI_KiB,
-            MI_ARENA_MIN_SIZE / crate::bits::MI_KiB
+            size / crate::internal::bits::MI_KiB,
+            MI_ARENA_MIN_SIZE / crate::internal::bits::MI_KiB
         ));
         return false;
     }
@@ -395,7 +395,7 @@ unsafe fn mi_manage_os_memory_ex2(
         if slice_count > MI_BITMAP_MAX_BIT_COUNT {
             slice_count = MI_BITMAP_MAX_BIT_COUNT;
         }
-        let Some(typed_slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+        let Some(typed_slice_count) = crate::types::SliceCount::from_usize(slice_count) else {
             crate::internal::mi_assert_internal!(false);
             return false;
         };
@@ -407,11 +407,7 @@ unsafe fn mi_manage_os_memory_ex2(
                 OsMemPtr::new_unchecked(start),
                 typed_slice_count,
                 parent,
-                crate::core_types::ReservedBytes::new(if parent.is_null() {
-                    total_size
-                } else {
-                    0
-                }),
+                crate::types::ReservedBytes::new(if parent.is_null() { total_size } else { 0 }),
                 numa_node,
                 exclusive,
                 memid,
@@ -442,7 +438,7 @@ unsafe fn mi_manage_os_memory_ex2(
 
         if parent.is_null() {
             parent = arena;
-            memid = crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw();
+            memid = crate::types::MemId::<crate::types::NoneMem>::none().into_raw();
         }
         crate::internal::mi_assert!(slice_count <= total_slice_count);
         total_slice_count -= slice_count;
@@ -472,15 +468,15 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     exclusive: bool,
     arena_id: *mut mi_arena_id_t,
 ) -> bool {
-    let memid = crate::core_types::MemId::<crate::core_types::ExternalMem>::external(
-        crate::core_types::OsMemPtr::new(start),
-        crate::core_types::ReservedBytes::new(size),
-        crate::core_types::InitiallyCommitted(is_committed),
-        crate::core_types::InitiallyZero(is_zero),
-        crate::core_types::Pinned(is_pinned),
+    let memid = crate::types::MemId::<crate::types::ExternalMem>::external(
+        crate::types::OsMemPtr::new(start),
+        crate::types::ReservedBytes::new(size),
+        crate::types::InitiallyCommitted(is_committed),
+        crate::types::InitiallyZero(is_zero),
+        crate::types::Pinned(is_pinned),
     )
     .into_raw();
-    let Some(start_ptr) = crate::core_types::OsMemPtr::new(start) else {
+    let Some(start_ptr) = crate::types::OsMemPtr::new(start) else {
         return false;
     };
     // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
@@ -488,9 +484,9 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
             start_ptr,
-            crate::core_types::ReservedBytes::new(size),
-            crate::core_types::NumaNode::new(numa_node),
-            crate::core_types::Exclusive::new(exclusive),
+            crate::types::ReservedBytes::new(size),
+            crate::types::NumaNode::new(numa_node),
+            crate::types::Exclusive::new(exclusive),
             memid,
             None,
             ptr::null_mut(),
@@ -516,15 +512,15 @@ pub unsafe extern "C" fn mi_manage_memory(
     commit_fun_arg: *mut c_void,
     arena_id: *mut mi_arena_id_t,
 ) -> bool {
-    let memid = crate::core_types::MemId::<crate::core_types::ExternalMem>::external(
-        crate::core_types::OsMemPtr::new(start),
-        crate::core_types::ReservedBytes::new(size),
-        crate::core_types::InitiallyCommitted(is_committed),
-        crate::core_types::InitiallyZero(is_zero),
-        crate::core_types::Pinned(is_pinned),
+    let memid = crate::types::MemId::<crate::types::ExternalMem>::external(
+        crate::types::OsMemPtr::new(start),
+        crate::types::ReservedBytes::new(size),
+        crate::types::InitiallyCommitted(is_committed),
+        crate::types::InitiallyZero(is_zero),
+        crate::types::Pinned(is_pinned),
     )
     .into_raw();
-    let Some(start_ptr) = crate::core_types::OsMemPtr::new(start) else {
+    let Some(start_ptr) = crate::types::OsMemPtr::new(start) else {
         return false;
     };
     // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
@@ -532,9 +528,9 @@ pub unsafe extern "C" fn mi_manage_memory(
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
             start_ptr,
-            crate::core_types::ReservedBytes::new(size),
-            crate::core_types::NumaNode::new(numa_node),
-            crate::core_types::Exclusive::new(exclusive),
+            crate::types::ReservedBytes::new(size),
+            crate::types::NumaNode::new(numa_node),
+            crate::types::Exclusive::new(exclusive),
             memid,
             commit_fun,
             commit_fun_arg,
@@ -562,9 +558,9 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
         return 0;
     }
     let numa_node = if numa_node < -1 {
-        crate::core_types::NumaNode::any()
+        crate::types::NumaNode::any()
     } else {
-        crate::core_types::NumaNode::new(numa_node)
+        crate::types::NumaNode::new(numa_node)
     }
     // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
     .normalize(unsafe { _mi_os_numa_node_count() });
@@ -584,13 +580,13 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
         )
     };
     if p.is_null() || pages_reserved == 0 {
-        crate::options::_mi_warning_message_fmt(format_args!(
+        crate::allocator::options::_mi_warning_message_fmt(format_args!(
             "failed to reserve {} GiB huge pages\n",
             pages
         ));
         return ENOMEM;
     }
-    crate::options::_mi_verbose_message(format_args!(
+    crate::allocator::options::_mi_verbose_message(format_args!(
         "numa node {}: reserved {} GiB huge pages (of the {} GiB requested)\n",
         numa_node_raw, pages_reserved, pages
     ));
@@ -600,9 +596,9 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
             OsMemPtr::new_unchecked(p),
-            crate::core_types::ReservedBytes::new(hsize),
+            crate::types::ReservedBytes::new(hsize),
             numa_node,
-            crate::core_types::Exclusive::new(exclusive),
+            crate::types::Exclusive::new(exclusive),
             memid,
             None,
             ptr::null_mut(),
@@ -693,7 +689,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages(
     max_secs: f64,
     pages_reserved: *mut usize,
 ) -> c_int {
-    crate::options::_mi_warning_message_fmt(format_args!(
+    crate::allocator::options::_mi_warning_message_fmt(format_args!(
         "mi_reserve_huge_os_pages is deprecated: use mi_reserve_huge_os_pages_interleave/at instead\n"
     ));
     if !pages_reserved.is_null() {

@@ -61,8 +61,8 @@ impl<'a, F: FnMut(i32)> ErrorCallbackGuard<'a, F> {
     /// cannot trigger the same callback or violate the required synchronization.
     #[inline]
     pub unsafe fn new(callback: &'a mut F) -> Self {
-        let previous = crate::options::registered_error_callback();
-        crate::options::mi_register_error(
+        let previous = crate::allocator::options::registered_error_callback();
+        crate::allocator::options::mi_register_error(
             Some(error_callback_trampoline::<F>),
             ptr::from_mut(callback).cast::<c_void>(),
         );
@@ -75,7 +75,7 @@ impl<'a, F: FnMut(i32)> ErrorCallbackGuard<'a, F> {
 
 impl<F: FnMut(i32)> Drop for ErrorCallbackGuard<'_, F> {
     fn drop(&mut self) {
-        crate::options::restore_error_callback(self.previous);
+        crate::allocator::options::restore_error_callback(self.previous);
     }
 }
 
@@ -134,12 +134,12 @@ impl<'a, F: FnMut(bool, u64)> DeferredFreeCallbackGuard<'a, F> {
     pub unsafe fn new(callback: &'a mut F) -> Self {
         // SAFETY: this snapshots global callback state
         // before replacing it with a trampoline tied to `callback`.
-        let previous = unsafe { crate::page::registered_deferred_free_callback() };
+        let previous = unsafe { crate::allocator::page::registered_deferred_free_callback() };
         // SAFETY: the guard stores `callback` for at
         // least as long as the registration is active and restores the previous
         // callback in `Drop`.
         unsafe {
-            crate::page::mi_register_deferred_free(
+            crate::allocator::page::mi_register_deferred_free(
                 Some(deferred_free_callback_trampoline::<F>),
                 ptr::from_mut(callback).cast::<c_void>(),
             );
@@ -155,7 +155,7 @@ impl<F: FnMut(bool, u64)> Drop for DeferredFreeCallbackGuard<'_, F> {
     fn drop(&mut self) {
         // SAFETY: restoring the exact callback snapshot
         // captured during guard construction.
-        unsafe { crate::page::restore_deferred_free_callback(self.previous) };
+        unsafe { crate::allocator::page::restore_deferred_free_callback(self.previous) };
     }
 }
 

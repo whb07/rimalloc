@@ -1,6 +1,6 @@
 use core::ptr;
 
-use crate::core_types::SubprocPtr;
+use crate::types::SubprocPtr;
 
 use super::{mi_subproc_prefix_typed, subprocs};
 

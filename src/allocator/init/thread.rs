@@ -7,22 +7,22 @@ use core::mem::size_of;
 use core::ptr;
 use core::sync::atomic::Ordering;
 
-use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
-use crate::core_types::{
+use crate::allocator::options::_mi_error_message_fmt;
+#[cfg(feature = "guarded")]
+use crate::allocator::options::mi_option_get_clamp;
+#[cfg(feature = "guarded")]
+use crate::allocator::options::{mi_option_get, mi_option_t};
+use crate::allocator::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt};
+use crate::allocator::thread_heap::{_mi_theap_collect_abandon, _mi_theap_create, _mi_theap_free};
+use crate::internal::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
+use crate::internal::{_mi_meta_free, _mi_meta_zalloc, mi_memid_t};
+use crate::types::{
     Errno, SubprocPtr, ThreadHeapLocal, ThreadHeapPtr, ThreadHeapState, ThreadId, TldPtr,
 };
 #[cfg(feature = "guarded")]
-use crate::core_types::{
+use crate::types::{
     GuardedConfig, GuardedSampleCount, GuardedSampleRate, GuardedSizeMax, GuardedSizeMin,
 };
-use crate::internal::{_mi_meta_free, _mi_meta_zalloc, mi_memid_t};
-use crate::options::_mi_error_message_fmt;
-#[cfg(feature = "guarded")]
-use crate::options::mi_option_get_clamp;
-#[cfg(feature = "guarded")]
-use crate::options::{mi_option_get, mi_option_t};
-use crate::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt};
-use crate::theap::{_mi_theap_collect_abandon, _mi_theap_create, _mi_theap_free};
 use crate::types::{mi_subproc_t, mi_theap_t, mi_tld_t};
 
 use super::{
@@ -38,7 +38,7 @@ pub(super) unsafe fn done(theap: *mut mi_theap_t) {
         default_theap = mi_theap_main_tls_peek();
         if default_theap.is_null() {
             // SAFETY: thread-done entry resolves the current default thread heap before typed teardown.
-            default_theap = unsafe { crate::prim::_mi_theap_default() };
+            default_theap = unsafe { crate::platform::_mi_theap_default() };
             crate::internal::mi_assert_internal!(
                 // SAFETY: thread-done entry resolves the current default thread heap before typed teardown.
                 default_theap.is_null() || unsafe { _mi_is_theap_main(default_theap) }
@@ -60,12 +60,12 @@ unsafe fn done_typed(default_theap: ThreadHeapPtr) {
         ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return,
     };
     // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
-    let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+    let current = unsafe { ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id()) };
     // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let Ok(default_theap) = (unsafe { theap.try_local(current) }) else {
         return;
     };
-    crate::threadlocal::_mi_thread_locals_thread_done();
+    crate::allocator::threadlocal::_mi_thread_locals_thread_done();
 
     let default_theap = default_theap.ptr().as_ptr();
     // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
@@ -88,7 +88,7 @@ unsafe fn done_typed(default_theap: ThreadHeapPtr) {
     };
 
     // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
-    if unsafe { (*tld).thread_id } != crate::prim::_mi_prim_thread_id() {
+    if unsafe { (*tld).thread_id } != crate::platform::_mi_prim_thread_id() {
         return;
     }
 
@@ -106,7 +106,7 @@ pub(super) unsafe fn guarded_set_sample_rate(
     // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
     unsafe {
         if let Some(theap) = ThreadHeapPtr::new(theap) {
-            let current = ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id());
+            let current = ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id());
             if let Ok(theap) = theap.try_local(current) {
                 guarded_set_sample_rate_typed(theap, GuardedSampleRate::new(sample_rate), seed);
             }
@@ -142,7 +142,7 @@ pub(super) unsafe fn guarded_set_size_bound(theap: *mut mi_theap_t, min: usize, 
     // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
     unsafe {
         if let Some(theap) = ThreadHeapPtr::new(theap) {
-            let current = ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id());
+            let current = ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id());
             if let Ok(theap) = theap.try_local(current) {
                 let min = GuardedSizeMin::new(min);
                 let max = GuardedSizeMax::new(if min.get() > max { min.get() } else { max });
@@ -171,7 +171,7 @@ pub(super) unsafe fn guarded_init(theap: *mut mi_theap_t) {
     // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
     unsafe {
         if let Some(theap) = ThreadHeapPtr::new(theap) {
-            let current = ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id());
+            let current = ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id());
             if let Ok(theap) = theap.try_local(current) {
                 let sample_rate =
                     mi_option_get_clamp(mi_option_t::mi_option_guarded_sample_rate, 0, c_long::MAX)
@@ -228,7 +228,7 @@ unsafe fn guarded_init_typed(theap: ThreadHeapLocal, config: GuardedConfig) {
 pub(super) unsafe fn options_init(theap: *mut mi_theap_t) {
     if let Some(theap) = ThreadHeapPtr::new(theap) {
         // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
-        let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+        let current = unsafe { ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id()) };
         // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
         if let Ok(theap) = unsafe { theap.try_local(current) } {
             // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
@@ -253,7 +253,7 @@ pub(super) fn tld_main_init() {
     // SAFETY: TLD allocation/free and per-thread metadata counters use typed TLD and subproc witnesses.
     unsafe {
         if tld_main.thread_id == 0 {
-            tld_main.thread_id = crate::prim::_mi_prim_thread_id();
+            tld_main.thread_id = crate::platform::_mi_prim_thread_id();
             mi_lock_init(ptr::addr_of_mut!(tld_main.theaps_lock));
         }
     }
@@ -265,7 +265,7 @@ pub(super) fn theap_main_init() {
     unsafe {
         if !mi_memid_is_static(theap_main.memid) {
             theap_main.memid =
-                crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().into_raw();
+                crate::types::MemId::<crate::types::StaticMem>::static_mem().into_raw();
             #[cfg(any(target_os = "macos", windows))]
             crate::internal::_mi_random_init_weak(ptr::addr_of_mut!(theap_main.random));
             #[cfg(not(any(target_os = "macos", windows)))]
@@ -328,15 +328,15 @@ fn tld_alloc_non_main_typed(main_subproc: SubprocPtr) -> Option<TldPtr> {
         tld.set_thread_heaps(None);
         mi_lock_init(tld.thread_heaps_lock());
         tld.set_subproc(Some(main_subproc));
-        tld.set_numa_node(crate::os::_mi_os_numa_node_typed());
+        tld.set_numa_node(crate::platform::os::_mi_os_numa_node_typed());
         tld.set_thread_id(Some(ThreadId::new_unchecked(
-            crate::prim::_mi_prim_thread_id(),
+            crate::platform::_mi_prim_thread_id(),
         )));
         let thread_seq = main_subproc
             .thread_total_count_cell()
             .fetch_add(1, Ordering::Relaxed);
-        tld.set_thread_seq(crate::core_types::ThreadSeq::new(thread_seq));
-        tld.set_is_in_threadpool(crate::prim::_mi_prim_thread_is_in_threadpool());
+        tld.set_thread_seq(crate::types::ThreadSeq::new(thread_seq));
+        tld.set_is_in_threadpool(crate::platform::_mi_prim_thread_is_in_threadpool());
         main_subproc
             .thread_count_cell()
             .fetch_add(1, Ordering::Relaxed);
@@ -374,7 +374,7 @@ pub(super) unsafe fn set_in_threadpool() {
 
 pub(super) unsafe fn default_safe() -> *mut mi_theap_t {
     // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
-    let theap = unsafe { crate::prim::_mi_theap_default() };
+    let theap = unsafe { crate::platform::_mi_theap_default() };
     // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
@@ -382,7 +382,7 @@ pub(super) unsafe fn default_safe() -> *mut mi_theap_t {
     // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
     unsafe { super::mi_thread_init() };
     // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
-    let theap = unsafe { crate::prim::_mi_theap_default() };
+    let theap = unsafe { crate::platform::_mi_theap_default() };
     // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::mi_theap_is_initialized(theap)
@@ -396,7 +396,7 @@ pub(super) unsafe fn main_safe() -> *mut mi_theap_t {
         // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
         unsafe { super::mi_thread_init() };
         // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
-        theap = unsafe { crate::prim::_mi_theap_default() };
+        theap = unsafe { crate::platform::_mi_theap_default() };
         crate::internal::mi_assert_internal!(!theap.is_null());
         // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
         if unsafe { crate::internal::mi_theap_is_initialized(theap) }
@@ -419,7 +419,7 @@ pub(super) unsafe fn main_safe() -> *mut mi_theap_t {
 #[inline(always)]
 pub(super) unsafe fn init_default() -> *mut mi_theap_t {
     // SAFETY: thread init installs a default heap only after process and TLD setup.
-    let mut theap = unsafe { crate::prim::_mi_theap_default() };
+    let mut theap = unsafe { crate::platform::_mi_theap_default() };
     // SAFETY: thread init installs a default heap only after process and TLD setup.
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
@@ -501,7 +501,7 @@ unsafe fn theaps_done(tld: *mut mi_tld_t) {
                 )
             };
             // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-            unsafe { crate::prim::_mi_prim_thread_yield() };
+            unsafe { crate::platform::_mi_prim_thread_yield() };
         } else {
             // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
             crate::internal::mi_assert_internal!(unsafe { (*tld).theaps }.is_null());
@@ -510,7 +510,7 @@ unsafe fn theaps_done(tld: *mut mi_tld_t) {
     }
 
     // SAFETY: thread cleanup resets default, cached, and main TLS state around heap teardown.
-    crate::internal::mi_assert_internal!(unsafe { crate::prim::_mi_theap_default() } == empty);
+    crate::internal::mi_assert_internal!(unsafe { crate::platform::_mi_theap_default() } == empty);
     // SAFETY: thread cleanup resets default, cached, and main TLS state around heap teardown.
     crate::internal::mi_assert_internal!(!unsafe {
         crate::internal::mi_theap_is_initialized(empty)
@@ -521,7 +521,7 @@ pub(super) unsafe fn init() {
     // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
     unsafe { super::mi_process_init() };
     // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
-    if unsafe { crate::prim::_mi_thread_is_initialized() } {
+    if unsafe { crate::platform::_mi_thread_is_initialized() } {
         return;
     }
     // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.

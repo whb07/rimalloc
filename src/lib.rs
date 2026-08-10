@@ -225,23 +225,36 @@ pub mod __bench {
     pub use crate::internal::_mi_memcpy;
 }
 
-// Crate-private compatibility aliases retained for translated mimalloc code.
-// New Rust-facing code should prefer owning-module paths or narrow adapters
-// instead of adding more crate-root aliases.
+// Benchmark instrumentation spans translated and typed hot paths, so its
+// feature-gated compatibility name remains stable across those modules.
 #[cfg(feature = "bench-diagnostics")]
 pub(crate) use allocator::bench_diagnostics;
+
+// Mechanical allocator and raw compatibility code retain these C-shaped
+// module names. Rust-native code must use the owning `allocator` modules.
 #[allow(unused_imports)]
 pub(crate) use allocator::{
-    aligned as alloc_aligned, alloc, arena, arena_meta, free, heap, init, memory, options, page,
-    page_map, static_alloc as static_c, stats, thread_heap as theap, threadlocal,
-    tracking as track,
+    aligned as alloc_aligned, alloc, arena, free, heap, init, options, page, page_map, stats,
+    thread_heap as theap, threadlocal, tracking as track,
 };
+
+// Raw and translated compatibility code retain these FFI module names.
 pub(crate) use ffi::{abi, headers, libc, mimalloc};
-pub(crate) use internal::{atomic, bitmap, bits, provenance, random};
+
+// Translated atomic/bitmap/bit/random helpers retain their upstream module
+// vocabulary. New Rust-native helpers should use owning `internal` paths.
+pub(crate) use internal::{atomic, bitmap, bits, random};
+
+// Platform compatibility code mirrors upstream `prim` and `os` names.
 pub(crate) use platform as prim;
 pub(crate) use platform::os;
-#[allow(unused_imports)]
-pub(crate) use raw::{macros as alloc_override, posix as alloc_posix};
+
+// Internal interposition code retains the translated override-macro path.
+#[allow(unused_imports)] // Used only by target-specific override expansions.
+pub(crate) use raw::macros as alloc_override;
+
+// Mechanical code uses `core_types` as the typed invariant namespace; new
+// Rust-native code should depend on the owning `types` module.
 pub(crate) use types as core_types;
 
 pub use safe::{
@@ -338,9 +351,9 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         // non-zero `Layout`; over-aligned requests use mimalloc's aligned path.
         unsafe {
             if layout.align() <= types::MI_MAX_ALIGN_SIZE {
-                alloc::mi_malloc(layout.size()).cast()
+                allocator::alloc::mi_malloc(layout.size()).cast()
             } else {
-                alloc_aligned::mi_malloc_aligned(layout.size(), layout.align()).cast()
+                allocator::aligned::mi_malloc_aligned(layout.size(), layout.align()).cast()
             }
         }
     }
@@ -352,9 +365,9 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         // the zeroing path selected before returning to the caller.
         unsafe {
             if layout.align() <= types::MI_MAX_ALIGN_SIZE {
-                alloc::mi_zalloc(layout.size()).cast()
+                allocator::alloc::mi_zalloc(layout.size()).cast()
             } else {
-                alloc_aligned::mi_zalloc_aligned(layout.size(), layout.align()).cast()
+                allocator::aligned::mi_zalloc_aligned(layout.size(), layout.align()).cast()
             }
         }
     }
@@ -364,7 +377,7 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: core::alloc::Layout) {
         // SAFETY: `GlobalAlloc` requires `ptr` to be a
         // live allocation from this allocator with its original layout.
-        unsafe { free::mi_free(ptr.cast()) }
+        unsafe { allocator::free::mi_free(ptr.cast()) }
     }
 
     // SAFETY: reallocation keeps the trait's caller-owned
@@ -380,9 +393,9 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         // on success and returns null on failure.
         unsafe {
             if layout.align() <= types::MI_MAX_ALIGN_SIZE {
-                alloc::mi_realloc(ptr.cast(), new_size).cast()
+                allocator::alloc::mi_realloc(ptr.cast(), new_size).cast()
             } else {
-                alloc_aligned::mi_realloc_aligned(ptr.cast(), new_size, layout.align()).cast()
+                allocator::aligned::mi_realloc_aligned(ptr.cast(), new_size, layout.align()).cast()
             }
         }
     }
@@ -393,7 +406,14 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
 fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
     // SAFETY: the no_std panic handler forwards a static
     // message to mimalloc's aborting assertion path and never unwinds.
-    unsafe { options::_mi_assert_fail(c"panic".as_ptr(), c"rust".as_ptr(), 0, core::ptr::null()) }
+    unsafe {
+        allocator::options::_mi_assert_fail(
+            c"panic".as_ptr(),
+            c"rust".as_ptr(),
+            0,
+            core::ptr::null(),
+        )
+    }
 }
 
 #[cfg(all(not(test), target_os = "linux", not(feature = "std")))]

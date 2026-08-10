@@ -36,6 +36,9 @@ pub(crate) use crate::alloc::{
     _mi_page_malloc_zero, _mi_page_malloc_zero_typed, _mi_theap_malloc_guarded,
     _mi_theap_malloc_zero, _mi_theap_malloc_zero_ex, _mi_theap_realloc_zero,
 };
+pub(crate) use crate::allocator::arena_meta::{
+    _mi_meta_free, _mi_meta_is_meta_page, _mi_meta_zalloc,
+};
 pub(crate) use crate::arena::{
     _mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable, _mi_arenas_alloc,
     _mi_arenas_alloc_aligned, _mi_arenas_collect, _mi_arenas_contain, _mi_arenas_free,
@@ -45,7 +48,6 @@ pub(crate) use crate::arena::{
     _mi_heap_visit_blocks,
 };
 pub use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE};
-pub(crate) use crate::arena_meta::{_mi_meta_free, _mi_meta_is_meta_page, _mi_meta_zalloc};
 use crate::bits::MI_SIZE_SHIFT;
 pub use crate::bits::{
     MI_ARCH_X64, MI_ARCH_X86, MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB,

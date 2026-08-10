@@ -129,7 +129,7 @@ impl StatTotal {
 #[derive(Clone, Debug)]
 #[must_use]
 pub struct StatsSnapshot {
-    raw: crate::stats::mi_stats_t,
+    raw: crate::allocator::stats::mi_stats_t,
 }
 
 impl StatsSnapshot {
@@ -145,14 +145,14 @@ impl StatsSnapshot {
     /// Does not panic.
     #[inline]
     pub fn capture() -> Result<Self, StatsError> {
-        let mut raw = crate::stats::mi_stats_t::default();
+        let mut raw = crate::allocator::stats::mi_stats_t::default();
         // SAFETY: `raw` is a fresh writable stats value.
-        unsafe { crate::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
+        unsafe { crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
         // SAFETY: initializes allocator state for the
         // current thread before collecting process stats.
-        unsafe { crate::init::mi_thread_init() };
+        unsafe { crate::allocator::init::mi_thread_init() };
         // SAFETY: `raw` is valid writable stats storage.
-        if unsafe { crate::stats::mi_stats_get(ptr::addr_of_mut!(raw)) } {
+        if unsafe { crate::allocator::stats::mi_stats_get(ptr::addr_of_mut!(raw)) } {
             Ok(Self { raw })
         } else {
             Err(StatsError::Unavailable)
@@ -171,15 +171,17 @@ impl StatsSnapshot {
     /// Does not panic.
     #[inline]
     pub fn for_heap(heap: HeapRef<'_>) -> Result<Self, StatsError> {
-        let mut raw = crate::stats::mi_stats_t::default();
+        let mut raw = crate::allocator::stats::mi_stats_t::default();
         // SAFETY: `raw` is a fresh writable stats value.
-        unsafe { crate::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
+        unsafe { crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
         // SAFETY: initializes allocator state for the
         // current thread before collecting heap stats.
-        unsafe { crate::init::mi_thread_init() };
+        unsafe { crate::allocator::init::mi_thread_init() };
         // SAFETY: `raw` is valid writable stats storage and
         // `heap` is a live borrowed heap handle.
-        if unsafe { crate::stats::mi_heap_stats_get(heap.ptr.as_ptr(), ptr::addr_of_mut!(raw)) } {
+        if unsafe {
+            crate::allocator::stats::mi_heap_stats_get(heap.ptr.as_ptr(), ptr::addr_of_mut!(raw))
+        } {
             Ok(Self { raw })
         } else {
             Err(StatsError::HeapUnavailable)
@@ -276,7 +278,7 @@ impl StatsSnapshot {
         // SAFETY: `output` is writable for its length and
         // `self.raw` is an initialized stats snapshot.
         let ptr = unsafe {
-            crate::stats::mi_stats_get_json_from(
+            crate::allocator::stats::mi_stats_get_json_from(
                 ptr::addr_of!(self.raw),
                 output.len(),
                 output.as_mut_ptr().cast(),
@@ -340,7 +342,7 @@ impl ProcessInfo {
         // SAFETY: all out-pointers are valid local
         // storage for one `usize`.
         unsafe {
-            crate::stats::mi_process_info(
+            crate::allocator::stats::mi_process_info(
                 &mut elapsed_msecs,
                 &mut user_msecs,
                 &mut system_msecs,
@@ -353,7 +355,7 @@ impl ProcessInfo {
         }
         // SAFETY: querying the platform page size
         // reads allocator primitive state and does not dereference caller data.
-        let page_size = unsafe { crate::os::_mi_os_page_size() };
+        let page_size = unsafe { crate::platform::os::_mi_os_page_size() };
         Self {
             elapsed_msecs,
             user_msecs,
@@ -480,7 +482,7 @@ mod tests {
 
     #[test]
     fn stats_snapshot_accessors_match_internal_raw_fields() {
-        let mut raw = crate::stats::mi_stats_t::default();
+        let mut raw = crate::allocator::stats::mi_stats_t::default();
         raw.malloc_requested.total = 111;
         raw.page_searches.total = 21;
         raw.page_searches_count.total = 3;

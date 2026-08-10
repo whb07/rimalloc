@@ -3,15 +3,16 @@
 use core::ffi::{CStr, c_char, c_void};
 use core::{mem::size_of, ptr, str};
 
-use crate::core_types::{RequestedSize, StatsBin};
-use crate::mimalloc::mi_rezalloc;
-use crate::options::{_mi_fprintf, _mi_fputs};
-use crate::os::_mi_os_numa_node_count;
-use crate::page::{
+use crate::allocator::options::{_mi_fprintf, _mi_fputs};
+use crate::allocator::page::{
     MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE, MI_MEDIUM_PAGE_SIZE,
     MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE, mi_good_size_typed,
 };
+use crate::ffi::libc;
+use crate::ffi::mimalloc::{mi_free, mi_rezalloc};
+use crate::platform::os::_mi_os_numa_node_count;
 use crate::types::{MI_MALLOC_VERSION, mi_output_fun};
+use crate::types::{RequestedSize, StatsBin};
 
 use super::counters::{mi_stat_count_add_mt, mi_stats_get_bin_size_typed, stats_bin_iter};
 use super::process::{ProcessInfoOutput, mi_process_info_impl};
@@ -91,7 +92,7 @@ fn format_amount(buf: &mut [c_char; 32], mut n: i64, unit: i64) {
     if pos < base {
         if n != 1 || suffix != "B" {
             let amount_suffix = if n == 0 { "" } else { suffix };
-            crate::libc::mi_vsnprintf_args(
+            libc::mi_vsnprintf_args(
                 buf.as_mut_ptr(),
                 buf.len(),
                 format_args!("{n}   {amount_suffix:<3}"),
@@ -126,7 +127,7 @@ fn format_amount(buf: &mut [c_char; 32], mut n: i64, unit: i64) {
                 _ => "G ",
             }
         };
-        crate::libc::mi_vsnprintf_args(
+        libc::mi_vsnprintf_args(
             buf.as_mut_ptr(),
             buf.len(),
             format_args!("{whole}.{frac1} {unitdesc:<3}"),
@@ -313,7 +314,7 @@ fn mi_stats_print_bins(
                 "H"
             };
             let mut label = [0 as c_char; 64];
-            crate::libc::mi_vsnprintf_args(
+            libc::mi_vsnprintf_args(
                 label.as_mut_ptr(),
                 label.len(),
                 format_args!("bin{pagekind:>2}  {:>3}", bin.as_usize()),
@@ -633,7 +634,7 @@ fn mi_json_buf_print_count_bin(
         0
     };
     let mut buf = [0 as c_char; 128];
-    crate::libc::mi_vsnprintf_args(
+    libc::mi_vsnprintf_args(
         buf.as_mut_ptr(),
         buf.len(),
         format_args!(
@@ -665,7 +666,7 @@ fn mi_json_buf_print_count_cbin(
         _ => " ",
     };
     let mut buf = [0 as c_char; 128];
-    crate::libc::mi_vsnprintf_args(
+    libc::mi_vsnprintf_args(
         buf.as_mut_ptr(),
         buf.len(),
         format_args!(
@@ -687,7 +688,7 @@ fn mi_json_buf_print_count(
 ) {
     let stat = StatCountSnapshot::from_stat(stat);
     let mut buf = [0 as c_char; 128];
-    crate::libc::mi_vsnprintf_args(
+    libc::mi_vsnprintf_args(
         buf.as_mut_ptr(),
         buf.len(),
         format_args!(
@@ -703,7 +704,7 @@ fn mi_json_buf_print_count(
 
 fn mi_json_buf_print_count_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi_stat_count_t) {
     let mut buf = [0 as c_char; 128];
-    crate::libc::mi_vsnprintf_args(buf.as_mut_ptr(), buf.len(), format_args!("  \"{name}\": "));
+    libc::mi_vsnprintf_args(buf.as_mut_ptr(), buf.len(), format_args!("  \"{name}\": "));
     mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
     mi_json_buf_print_count(hbuf, "", stat, true);
 }
@@ -711,7 +712,7 @@ fn mi_json_buf_print_count_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi
 #[inline(never)]
 fn mi_json_buf_print_value(hbuf: &mut mi_json_buf_t, name: &str, val: i64) {
     let mut buf = [0 as c_char; 128];
-    crate::libc::mi_vsnprintf_args(
+    libc::mi_vsnprintf_args(
         buf.as_mut_ptr(),
         buf.len(),
         format_args!("  \"{name}\": {val},\n"),
@@ -724,7 +725,7 @@ static MI_JSON_BUF_PRINT_VALUE_KEEP: fn(&mut mi_json_buf_t, &str, i64) = mi_json
 
 fn mi_json_buf_print_size(hbuf: &mut mi_json_buf_t, name: &str, val: usize, add_comma: bool) {
     let mut buf = [0 as c_char; 128];
-    crate::libc::mi_vsnprintf_args(
+    libc::mi_vsnprintf_args(
         buf.as_mut_ptr(),
         buf.len(),
         format_args!(
@@ -895,7 +896,7 @@ pub(super) unsafe fn mi_stats_get_json_from_impl(
         if hbuf.can_realloc {
             // SAFETY: the buffer came from mimalloc when `can_realloc` is true.
             // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
-            unsafe { crate::mimalloc::mi_free(hbuf.buf.cast()) };
+            unsafe { mi_free(hbuf.buf.cast()) };
         }
         ptr::null_mut()
     } else {

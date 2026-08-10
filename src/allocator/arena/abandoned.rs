@@ -8,8 +8,8 @@ use super::metadata::{mi_arena_pages_alloc, mi_arena_pages_size};
 use super::*;
 
 pub(super) unsafe fn mi_abandoned_page_unown(
-    page: crate::core_types::AbandonedPage,
-    current_theap: crate::core_types::ThreadHeapLocal,
+    page: crate::types::AbandonedPage,
+    current_theap: crate::types::ThreadHeapLocal,
 ) -> bool {
     let page_ptr = page.page();
     let page = page_ptr.as_ptr();
@@ -21,7 +21,7 @@ pub(super) unsafe fn mi_abandoned_page_unown(
         _mi_thread_id() == (*(*current_theap).tld).thread_id
     });
     // SAFETY: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
-    let owned_page = unsafe { crate::core_types::assume_owned_abandoned_page(page_ptr) };
+    let owned_page = unsafe { crate::types::assume_owned_abandoned_page(page_ptr) };
 
     let atomic_tf = unsafe { page_ptr.thread_free_cell() };
     let mut tf_old = atomic_tf.load_relaxed();
@@ -32,7 +32,7 @@ pub(super) unsafe fn mi_abandoned_page_unown(
             let local_free = unsafe { page_ptr.local_free() };
             let detached = unsafe { atomic_tf.detach_head() };
             let local_free = unsafe {
-                match crate::page::collect_remote_for_owned_abandoned_page(
+                match crate::allocator::page::collect_remote_for_owned_abandoned_page(
                     &owned_page,
                     detached,
                     local_free,
@@ -45,7 +45,7 @@ pub(super) unsafe fn mi_abandoned_page_unown(
             if unsafe { page_ptr.free().is_empty() } && !local_free.is_empty() {
                 unsafe {
                     page_ptr.set_free(local_free.into_available());
-                    page_ptr.set_local_free(crate::core_types::LocalFreeList::empty());
+                    page_ptr.set_local_free(crate::types::LocalFreeList::empty());
                 }
             }
             // SAFETY: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
@@ -119,7 +119,7 @@ pub(super) unsafe fn mi_arena_try_claim_abandoned_at(
     };
     // SAFETY: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
-    let abandoned = unsafe { crate::core_types::assume_abandoned_page(page_ptr) };
+    let abandoned = unsafe { crate::types::assume_abandoned_page(page_ptr) };
     if unsafe { mi_page_claim_ownership(abandoned) }.is_none() {
         unsafe { *keep_abandoned = true };
         false
@@ -177,8 +177,7 @@ unsafe fn mi_heap_ensure_arena_pages(
                     unsafe { ptr::addr_of_mut!((*arena_raw.cast::<MiArenaPrefix>()).pages_main) };
             } else {
                 let slice_count = unsafe { arena.slice_count() };
-                let Ok(range) =
-                    crate::core_types::SliceRange::new(0, slice_count.get() as usize, arena)
+                let Ok(range) = crate::types::SliceRange::new(0, slice_count.get() as usize, arena)
                 else {
                     crate::internal::mi_assert_internal!(false);
                     // SAFETY: abandoned-page lookup maintains per-heap arena-page tables before ownership transfer.
@@ -205,12 +204,12 @@ unsafe fn mi_heap_ensure_arena_pages(
 pub(super) unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
     // SAFETY: arena page ownership transitions update owner words, page maps, and visibility only after page metadata invariants hold.
     let full = unsafe {
-        crate::page::mi_page_reserved_count(page).get()
-            == crate::page::mi_page_used_count(page).get()
+        crate::allocator::page::mi_page_reserved_count(page).get()
+            == crate::allocator::page::mi_page_used_count(page).get()
     };
     // SAFETY: arena page ownership transitions update owner words, page maps, and visibility only after page metadata invariants hold.
     let free_is_empty = unsafe {
-        crate::core_types::PagePtr::new_unchecked(page.cast_mut())
+        crate::types::PagePtr::new_unchecked(page.cast_mut())
             .free()
             .is_empty()
     };
@@ -219,12 +218,12 @@ pub(super) unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
 }
 
 pub(super) unsafe fn _mi_arenas_page_abandon_internal(
-    page_wrapper: crate::core_types::PageForAbandon,
-    current_theap: crate::core_types::ThreadHeapLocal,
+    page_wrapper: crate::types::PageForAbandon,
+    current_theap: crate::types::ThreadHeapLocal,
 ) {
     let page = match page_wrapper {
-        crate::core_types::PageForAbandon::Active(page) => page.page().as_ptr(),
-        crate::core_types::PageForAbandon::Full(page) => page.page().as_ptr(),
+        crate::types::PageForAbandon::Active(page) => page.page().as_ptr(),
+        crate::types::PageForAbandon::Full(page) => page.page().as_ptr(),
     };
     let current_theap = current_theap.ptr().as_ptr();
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
@@ -274,7 +273,7 @@ pub(super) unsafe fn _mi_arenas_page_abandon_internal(
             )
         });
         // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
-        let committed = unsafe { crate::page::mi_page_slice_committed(page) };
+        let committed = unsafe { crate::allocator::page::mi_page_slice_committed(page) };
         crate::internal::mi_assert_internal!(
             !committed.is_zero()
                 || unsafe {
@@ -297,7 +296,7 @@ pub(super) unsafe fn _mi_arenas_page_abandon_internal(
         let atomic_tid =
             // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
             unsafe { PagePtr::new_unchecked(page).thread_id_cell() };
-        unsafe { atomic_tid.store_owner(crate::core_types::PageOwnerId::AbandonedMapped) };
+        unsafe { atomic_tid.store_owner(crate::types::PageOwnerId::AbandonedMapped) };
         let was_clear =
             // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
             unsafe { mi_bitmap_set((*arena_pages).pages_abandoned[bin.as_usize()], slice_index) };
@@ -320,17 +319,17 @@ pub(super) unsafe fn _mi_arenas_page_abandon_internal(
     }
     unsafe {
         mi_abandoned_page_unown(
-            crate::core_types::assume_abandoned_page(PagePtr::new_unchecked(page)),
-            crate::core_types::ThreadHeapLocal::new_unchecked(
-                crate::core_types::ThreadHeapPtr::new_unchecked(current_theap),
+            crate::types::assume_abandoned_page(PagePtr::new_unchecked(page)),
+            crate::types::ThreadHeapLocal::new_unchecked(
+                crate::types::ThreadHeapPtr::new_unchecked(current_theap),
             ),
         )
     };
 }
 
 pub(super) unsafe fn _mi_arenas_page_unabandon_internal(
-    page: crate::core_types::OwnedAbandonedPage,
-    current_theap: Option<crate::core_types::ThreadHeapLocal>,
+    page: crate::types::OwnedAbandonedPage,
+    current_theap: Option<crate::types::ThreadHeapLocal>,
 ) {
     let page = page.page().as_ptr();
     let current_theapx = current_theap
@@ -380,7 +379,7 @@ pub(super) unsafe fn _mi_arenas_page_unabandon_internal(
             )
         });
         // SAFETY: mapped unabandon clears arena abandoned bitmaps and heap counters.
-        let committed = unsafe { crate::page::mi_page_slice_committed(page) };
+        let committed = unsafe { crate::allocator::page::mi_page_slice_committed(page) };
         crate::internal::mi_assert_internal!(
             !committed.is_zero()
                 || unsafe {

@@ -85,7 +85,9 @@ impl OptionKey {
             1 => Ok(Self::ShowStats),
             19 => Ok(Self::MaxErrors),
             20 => Ok(Self::MaxWarnings),
-            raw if (0..crate::options::mi_option_t::_mi_option_last.as_i32()).contains(&raw) => {
+            raw if (0..crate::allocator::options::mi_option_t::_mi_option_last.as_i32())
+                .contains(&raw) =>
+            {
                 Err(OptionError::Unsupported)
             }
             _ => Err(OptionError::InvalidKey),
@@ -100,12 +102,12 @@ impl OptionKey {
     }
 
     #[inline]
-    pub(super) const fn raw_option(self) -> crate::options::mi_option_t {
+    pub(super) const fn raw_option(self) -> crate::allocator::options::mi_option_t {
         match self {
-            Self::ShowErrors => crate::options::mi_option_t::mi_option_show_errors,
-            Self::ShowStats => crate::options::mi_option_t::mi_option_show_stats,
-            Self::MaxErrors => crate::options::mi_option_t::mi_option_max_errors,
-            Self::MaxWarnings => crate::options::mi_option_t::mi_option_max_warnings,
+            Self::ShowErrors => crate::allocator::options::mi_option_t::mi_option_show_errors,
+            Self::ShowStats => crate::allocator::options::mi_option_t::mi_option_show_stats,
+            Self::MaxErrors => crate::allocator::options::mi_option_t::mi_option_max_errors,
+            Self::MaxWarnings => crate::allocator::options::mi_option_t::mi_option_max_warnings,
         }
     }
 
@@ -164,7 +166,7 @@ impl GlobalOptions {
     #[inline]
     #[must_use]
     pub fn get(key: OptionKey) -> c_long {
-        crate::options::mi_option_get(key.raw_option())
+        crate::allocator::options::mi_option_get(key.raw_option())
     }
 
     /// Sets a mutable supported option key in the process-global option table.
@@ -182,7 +184,7 @@ impl GlobalOptions {
         if !key.mutable() {
             return Err(OptionError::Unsupported);
         }
-        crate::options::mi_option_set(key.raw_option(), value);
+        crate::allocator::options::mi_option_set(key.raw_option(), value);
         Ok(())
     }
 

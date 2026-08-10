@@ -13,15 +13,15 @@ use core::ptr;
 use core::ptr::{NonNull, addr_of_mut};
 use core::sync::atomic::{AtomicIsize, AtomicPtr, AtomicUsize, Ordering};
 
-use crate::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
-use crate::core_types::{
+use crate::allocator::init::{_mi_is_main_thread, _mi_preloading, _mi_thread_id};
+use crate::ffi::libc::_mi_strnlen;
+use crate::internal::MI_DEBUG;
+use crate::internal::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
+use crate::platform::_mi_prim_out_stderr;
+use crate::types::{
     Errno, ErrorCallback, ErrorCallbackArg, MiLockGuard, MiLockPtr, OutputCallback,
     OutputCallbackArg,
 };
-use crate::init::{_mi_is_main_thread, _mi_preloading, _mi_thread_id};
-use crate::internal::MI_DEBUG;
-use crate::libc::_mi_strnlen;
-use crate::prim::_mi_prim_out_stderr;
 use crate::types::{MI_MALLOC_VERSION, mi_error_fun, mi_output_fun};
 
 use super::{mi_option_t, storage};

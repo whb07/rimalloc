@@ -5,13 +5,13 @@
 
 use super::*;
 
-pub(super) unsafe fn mi_arena_numa_node(arena: *const mi_arena_t) -> crate::core_types::NumaNode {
-    crate::core_types::NumaNode::new(unsafe { (*arena.cast::<MiArenaPrefix>()).numa_node })
+pub(super) unsafe fn mi_arena_numa_node(arena: *const mi_arena_t) -> crate::types::NumaNode {
+    crate::types::NumaNode::new(unsafe { (*arena.cast::<MiArenaPrefix>()).numa_node })
 }
 
 pub(super) unsafe fn mi_arena_set_numa_node(
     arena: *mut mi_arena_t,
-    numa_node: crate::core_types::NumaNode,
+    numa_node: crate::types::NumaNode,
 ) {
     // SAFETY: arena suitability checks keep pinned, requested-arena, and NUMA predicates separate from table mutation.
     unsafe {
@@ -39,7 +39,7 @@ pub(super) unsafe fn mi_arena_info_slices(arena: ArenaPtr) -> usize {
 
 pub(super) unsafe fn mi_arena_range_is_after_info_slices(
     arena: ArenaPtr,
-    range: crate::core_types::SliceRange,
+    range: crate::types::SliceRange,
 ) -> bool {
     // SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
     range.start_usize() >= unsafe { mi_arena_info_slices(arena) }
@@ -92,8 +92,8 @@ pub(super) unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page:
     let arena_idx = unsafe { mi_arena_index(arena) };
     let arena_pages = unsafe { mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire() }
         .cast::<MiArenaPagesPrefix>();
-    match crate::core_types::MemId::view(unsafe { (*page).memid }) {
-        crate::core_types::MemIdView::Arena(a) => {
+    match crate::types::MemId::view(unsafe { (*page).memid }) {
+        crate::types::MemIdView::Arena(a) => {
             a.arena().as_ptr() == arena
                 && !arena_pages.is_null()
                 // SAFETY: heap arena-page table access validates arena indexes and bitmap ownership for page metadata lookup.
@@ -103,24 +103,24 @@ pub(super) unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page:
     }
 }
 
-pub(super) unsafe fn mi_arena_size(arena: ArenaPtr) -> crate::core_types::ReservedBytes {
+pub(super) unsafe fn mi_arena_size(arena: ArenaPtr) -> crate::types::ReservedBytes {
     let arena = arena.as_ptr();
     // SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
-    crate::core_types::ReservedBytes::new(mi_size_of_slices(unsafe {
+    crate::types::ReservedBytes::new(mi_size_of_slices(unsafe {
         (*arena.cast::<MiArenaPrefix>()).slice_count
     }))
 }
 
-pub(super) unsafe fn mi_arena_start(arena: ArenaPtr) -> crate::core_types::SliceStart {
+pub(super) unsafe fn mi_arena_start(arena: ArenaPtr) -> crate::types::SliceStart {
     // SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
-    unsafe { crate::core_types::SliceStart::new_unchecked(arena.as_ptr().cast::<u8>()) }
+    unsafe { crate::types::SliceStart::new_unchecked(arena.as_ptr().cast::<u8>()) }
 }
 
 #[inline(never)]
 pub(super) unsafe fn mi_arena_slice_start(
     arena: ArenaPtr,
-    slice_index: crate::core_types::SliceIndex,
-) -> crate::core_types::SliceStart {
+    slice_index: crate::types::SliceIndex,
+) -> crate::types::SliceStart {
     let arena_raw = arena.as_ptr();
     let slice_index = slice_index.get();
     crate::internal::mi_assert_internal!(
@@ -133,13 +133,13 @@ pub(super) unsafe fn mi_arena_slice_start(
             .add(mi_size_of_slices(slice_index))
     };
     // SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
-    unsafe { crate::core_types::SliceStart::new_unchecked(start) }
+    unsafe { crate::types::SliceStart::new_unchecked(start) }
 }
 
 #[inline(never)]
 pub(super) unsafe fn mi_arena_page_at_slice(
     arena: ArenaPtr,
-    slice_index: crate::core_types::SliceIndex,
+    slice_index: crate::types::SliceIndex,
 ) -> PagePtr {
     let arena = arena.as_ptr();
     let slice_index_usize = slice_index.get();
@@ -275,8 +275,8 @@ pub unsafe extern "C" fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_
 }
 
 #[used]
-static MI_ARENA_SLICE_START_KEEP: unsafe fn(ArenaPtr, SliceIndex) -> crate::core_types::SliceStart =
+static MI_ARENA_SLICE_START_KEEP: unsafe fn(ArenaPtr, SliceIndex) -> crate::types::SliceStart =
     mi_arena_slice_start;
 #[used]
-static MI_ARENA_PAGE_AT_SLICE_KEEP: unsafe fn(ArenaPtr, crate::core_types::SliceIndex) -> PagePtr =
+static MI_ARENA_PAGE_AT_SLICE_KEEP: unsafe fn(ArenaPtr, crate::types::SliceIndex) -> PagePtr =
     mi_arena_page_at_slice;

@@ -47,8 +47,8 @@ impl ThreadFreeWord {
 
         #[cfg(miri)]
         {
-            crate::provenance::resolve_address(ptr_val)
-                .unwrap_or_else(|| crate::provenance::missing_address(ptr_val))
+            crate::internal::provenance::resolve_address(ptr_val)
+                .unwrap_or_else(|| crate::internal::provenance::missing_address(ptr_val))
         }
 
         #[cfg(not(miri))]
@@ -100,7 +100,7 @@ impl ThreadFreeWord {
                 // block address bits needed for the xthread_free packed word.
                 let val = ptr_exposed_addr(ptr.as_ptr());
                 crate::internal::mi_assert_internal!((val & Self::OWNED_BIT) == 0);
-                crate::provenance::remember_address(val, ptr.as_ptr());
+                crate::internal::provenance::remember_address(val, ptr.as_ptr());
                 val
             }
             None => 0,

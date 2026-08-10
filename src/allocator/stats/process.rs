@@ -2,8 +2,8 @@
 
 use core::sync::atomic::{AtomicI64, Ordering};
 
-use crate::init::_mi_subproc_main;
-use crate::prim::{_mi_prim_clock_now, _mi_prim_process_info};
+use crate::allocator::init::_mi_subproc_main;
+use crate::platform::{_mi_prim_clock_now, _mi_prim_process_info};
 use crate::types::mi_process_info_t;
 
 use super::MiSubprocStatsPrefix;

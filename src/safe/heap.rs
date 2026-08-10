@@ -197,7 +197,7 @@ impl Heap {
     pub fn new() -> Result<Self, HeapError> {
         // SAFETY: heap creation initializes allocator runtime
         // as needed and returns either null or an owned heap pointer.
-        let ptr = unsafe { crate::heap::mi_heap_new() };
+        let ptr = unsafe { crate::allocator::heap::mi_heap_new() };
         let ptr = NonNull::new(ptr).ok_or(HeapError::Create)?;
         Ok(Self {
             ptr,
@@ -301,7 +301,7 @@ impl Drop for Heap {
     fn drop(&mut self) {
         // SAFETY: `Heap` owns this non-main heap and Rust
         // lifetimes prevent safe heap-tied allocations from outliving it.
-        unsafe { crate::heap::mi_heap_delete(self.ptr.as_ptr()) };
+        unsafe { crate::allocator::heap::mi_heap_delete(self.ptr.as_ptr()) };
     }
 }
 
@@ -490,7 +490,7 @@ impl MainHeap {
     pub fn get() -> Result<Self, HeapError> {
         // SAFETY: returns the process main heap or null if
         // runtime initialization is unavailable.
-        let ptr = unsafe { crate::init::mi_heap_main() };
+        let ptr = unsafe { crate::allocator::init::mi_heap_main() };
         let ptr = NonNull::new(ptr).ok_or(HeapError::MainUnavailable)?;
         Ok(Self {
             ptr,
@@ -816,18 +816,18 @@ impl<'heap> RawHeapAllocation<'heap> {
         let ptr = unsafe {
             if layout.align() <= crate::types::MI_MAX_ALIGN_SIZE {
                 if zeroed {
-                    crate::alloc::mi_heap_zalloc(heap.as_ptr(), layout.size())
+                    crate::allocator::alloc::mi_heap_zalloc(heap.as_ptr(), layout.size())
                 } else {
-                    crate::alloc::mi_heap_malloc(heap.as_ptr(), layout.size())
+                    crate::allocator::alloc::mi_heap_malloc(heap.as_ptr(), layout.size())
                 }
             } else if zeroed {
-                crate::alloc_aligned::mi_heap_zalloc_aligned(
+                crate::allocator::aligned::mi_heap_zalloc_aligned(
                     heap.as_ptr(),
                     layout.size(),
                     layout.align(),
                 )
             } else {
-                crate::alloc_aligned::mi_heap_malloc_aligned(
+                crate::allocator::aligned::mi_heap_malloc_aligned(
                     heap.as_ptr(),
                     layout.size(),
                     layout.align(),
@@ -874,7 +874,7 @@ impl<'heap> RawHeapAllocation<'heap> {
             if old_size != 0 {
                 // SAFETY: heap allocations are released
                 // through mimalloc free and `ManuallyDrop` prevents double-free.
-                unsafe { crate::mimalloc::mi_free(old.ptr.as_ptr().cast::<c_void>()) };
+                unsafe { crate::ffi::mimalloc::mi_free(old.ptr.as_ptr().cast::<c_void>()) };
             }
             return Ok(Self {
                 ptr: dangling_for(new_layout),
@@ -898,13 +898,13 @@ impl<'heap> RawHeapAllocation<'heap> {
             // mimalloc leaves it valid on realloc failure.
             let ptr = unsafe {
                 if old_layout.align() <= crate::types::MI_MAX_ALIGN_SIZE {
-                    crate::alloc::mi_heap_realloc(
+                    crate::allocator::alloc::mi_heap_realloc(
                         old.heap.as_ptr(),
                         old.ptr.as_ptr().cast::<c_void>(),
                         new_size,
                     )
                 } else {
-                    crate::alloc_aligned::mi_heap_realloc_aligned(
+                    crate::allocator::aligned::mi_heap_realloc_aligned(
                         old.heap.as_ptr(),
                         old.ptr.as_ptr().cast::<c_void>(),
                         new_size,
@@ -950,7 +950,7 @@ impl<'heap> RawHeapAllocation<'heap> {
                     new_allocation.ptr.as_ptr(),
                     old_size.min(new_size),
                 );
-                crate::mimalloc::mi_free(old.ptr.as_ptr().cast::<c_void>());
+                crate::ffi::mimalloc::mi_free(old.ptr.as_ptr().cast::<c_void>());
             }
         }
         if zero_grown_tail && new_size > old_size {
@@ -979,7 +979,7 @@ impl Drop for RawHeapAllocation<'_> {
     fn drop(&mut self) {
         if self.layout.size() != 0 {
             // SAFETY: this value owns a live mimalloc block.
-            unsafe { crate::mimalloc::mi_free(self.ptr.as_ptr().cast::<c_void>()) };
+            unsafe { crate::ffi::mimalloc::mi_free(self.ptr.as_ptr().cast::<c_void>()) };
         }
     }
 }

@@ -86,7 +86,7 @@ impl EncodedPtr<mi_block_t> {
     #[inline(always)]
     pub(crate) fn from_unencoded_raw(block: *const mi_block_t) -> Self {
         let word = ptr_exposed_addr(block);
-        crate::provenance::remember_address(word, block);
+        crate::internal::provenance::remember_address(word, block);
         Self {
             word: EncodedWord::new(word),
             _ty: PhantomData,
@@ -103,8 +103,8 @@ impl EncodedPtr<mi_block_t> {
 
         #[cfg(miri)]
         {
-            crate::provenance::resolve_address(word)
-                .unwrap_or_else(|| crate::provenance::missing_address(word))
+            crate::internal::provenance::resolve_address(word)
+                .unwrap_or_else(|| crate::internal::provenance::missing_address(word))
         }
 
         #[cfg(not(miri))]

@@ -28,8 +28,9 @@ pub(crate) fn mi_ptr_decode(
         if decoded_addr == crate::core_types::ptr_exposed_addr(null) {
             ptr::null_mut()
         } else {
-            crate::provenance::resolve_encoded(x.get(), null, keys)
-                .unwrap_or_else(|| crate::provenance::missing_encoded(x.get(), null, keys))
+            crate::internal::provenance::resolve_encoded(x.get(), null, keys).unwrap_or_else(|| {
+                crate::internal::provenance::missing_encoded(x.get(), null, keys)
+            })
         }
     }
 
@@ -57,7 +58,7 @@ pub(crate) fn mi_ptr_encode(
     };
     let word =
         crate::core_types::EncodedWord::new(mi_rotl(x ^ keys[1], keys[0]).wrapping_add(keys[0]));
-    crate::provenance::remember_encoded(word.get(), null, keys, p);
+    crate::internal::provenance::remember_encoded(word.get(), null, keys, p);
     word
 }
 

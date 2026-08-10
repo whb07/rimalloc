@@ -9,11 +9,8 @@ use super::geometry::mi_arena_set_numa_node;
 use super::*;
 
 pub(super) unsafe fn mi_arena_pages_size(
-    slice_count: crate::core_types::SliceCount,
-) -> (
-    crate::core_types::ReservedBytes,
-    crate::core_types::ReservedBytes,
-) {
+    slice_count: crate::types::SliceCount,
+) -> (crate::types::ReservedBytes, crate::types::ReservedBytes) {
     let slice_count = slice_count.get() as usize;
     crate::internal::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
     let base_size = _mi_align_up(size_of::<mi_arena_pages_t>(), MI_BCHUNK_SIZE);
@@ -22,13 +19,13 @@ pub(super) unsafe fn mi_arena_pages_size(
     let bitmaps_size = bitmaps_count * unsafe { mi_bitmap_size(slice_count, ptr::null_mut()) };
     let size = base_size + bitmaps_size;
     (
-        crate::core_types::ReservedBytes::new(size),
-        crate::core_types::ReservedBytes::new(base_size),
+        crate::types::ReservedBytes::new(size),
+        crate::types::ReservedBytes::new(base_size),
     )
 }
 
 unsafe fn mi_arena_info_slices_needed(
-    slice_count: crate::core_types::SliceCount,
+    slice_count: crate::types::SliceCount,
     bitmap_base: *mut usize,
 ) -> usize {
     let slice_count = slice_count.get() as usize;
@@ -45,8 +42,9 @@ unsafe fn mi_arena_info_slices_needed(
     };
     let size = base_size + bitmaps_size + pages_size;
     // SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
-    let info_size = _mi_align_up(size, unsafe { crate::os::_mi_os_page_size_typed().get() })
-        + unsafe { crate::os::_mi_os_secure_guard_page_size() };
+    let info_size = _mi_align_up(size, unsafe {
+        crate::platform::os::_mi_os_page_size_typed().get()
+    }) + unsafe { crate::platform::os::_mi_os_secure_guard_page_size() };
     let info_slices = mi_slice_count_of_size(info_size);
     if !bitmap_base.is_null() {
         unsafe { *bitmap_base = base_size };
@@ -55,7 +53,7 @@ unsafe fn mi_arena_info_slices_needed(
 }
 
 unsafe fn mi_arena_bitmap_init(
-    slice_count: crate::core_types::SliceCount,
+    slice_count: crate::types::SliceCount,
     base: *mut *mut u8,
 ) -> *mut mi_bitmap_t {
     // SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
@@ -66,7 +64,7 @@ unsafe fn mi_arena_bitmap_init(
 }
 
 unsafe fn mi_arena_bbitmap_init(
-    slice_count: crate::core_types::SliceCount,
+    slice_count: crate::types::SliceCount,
     base: *mut *mut u8,
 ) -> *mut mi_bbitmap_t {
     // SAFETY: arena slice and range projection keeps slice indexes, committed ranges, and address containment within registered arena bounds.
@@ -78,9 +76,9 @@ unsafe fn mi_arena_bbitmap_init(
 
 pub(super) unsafe fn mi_arena_pages_alloc(
     arena: ArenaPtr,
-    range: crate::core_types::SliceRange,
-    alloc_size: crate::core_types::ReservedBytes,
-    bitmap_base: crate::core_types::ReservedBytes,
+    range: crate::types::SliceRange,
+    alloc_size: crate::types::ReservedBytes,
+    bitmap_base: crate::types::ReservedBytes,
 ) -> *mut mi_arena_pages_t {
     crate::internal::mi_assert_internal!(range.start_usize() == 0);
     crate::internal::mi_assert_internal!(
@@ -119,7 +117,7 @@ pub(super) unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
         if !arena.is_null() {
             unsafe {
                 mi_subproc_arena_cell(subproc, arena_idx)
-                    .store(ptr::null_mut(), crate::core_types::MemoryOrder::Release);
+                    .store(ptr::null_mut(), crate::types::MemoryOrder::Release);
             }
             // SAFETY: unsafe arena teardown clears subproc table cells and arena counts while preserving OS-owned arena release rules.
             if mi_memid_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid }) {
@@ -140,7 +138,7 @@ pub(super) unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
     let mut expected = arena_count;
     // SAFETY: unsafe arena teardown clears subproc table cells and arena counts while preserving OS-owned arena release rules.
     let _ = unsafe {
-        crate::core_types::AtomicUsizeField::from_raw(
+        crate::types::AtomicUsizeField::from_raw(
             ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
         )
         .compare_exchange_acq_rel(&mut expected, 0)
@@ -191,7 +189,7 @@ unsafe fn mi_arenas_add(
         let next_count = count + 1;
         // SAFETY: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
         if unsafe {
-            crate::core_types::AtomicUsizeField::from_raw(
+            crate::types::AtomicUsizeField::from_raw(
                 ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
             )
             .compare_exchange_acq_rel(&mut count, next_count)
@@ -239,10 +237,10 @@ unsafe fn mi_arenas_add(
 pub(super) unsafe fn mi_arena_initialize(
     subproc: SubprocPtr,
     start: OsMemPtr,
-    slice_count: crate::core_types::SliceCount,
+    slice_count: crate::types::SliceCount,
     parent: *mut mi_arena_t,
-    total_size: crate::core_types::ReservedBytes,
-    numa_node: crate::core_types::NumaNode,
+    total_size: crate::types::ReservedBytes,
+    numa_node: crate::types::NumaNode,
     exclusive: bool,
     memid: mi_memid_t,
     commit_fun: Option<mi_commit_fun_t>,
@@ -256,7 +254,7 @@ pub(super) unsafe fn mi_arena_initialize(
     crate::internal::mi_assert_internal!(mi_size_of_slices(slice_count_usize) >= MI_ARENA_MIN_SIZE);
 
     if slice_count_usize > MI_BITMAP_MAX_BIT_COUNT {
-        crate::options::_mi_warning_message_fmt(format_args!(
+        crate::allocator::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is too large (size {} MiB, maximum is {} MiB)",
             mi_size_of_slices(slice_count_usize) / (1024 * 1024),
             mi_size_of_slices(MI_BITMAP_MAX_BIT_COUNT) / (1024 * 1024)
@@ -268,14 +266,14 @@ pub(super) unsafe fn mi_arena_initialize(
     // SAFETY: arena initialization lays out metadata, bitmaps, page tables, guard pages, and registry state within the reserved slice range.
     let info_slices = unsafe { mi_arena_info_slices_needed(slice_count, &mut bitmap_base) };
     if slice_count_usize < info_slices + 1 {
-        crate::options::_mi_warning_message_fmt(format_args!(
+        crate::allocator::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is not large enough (size {} KiB, minimum required is {} KiB)",
             mi_size_of_slices(slice_count_usize) / 1024,
             mi_size_of_slices(info_slices + 1) / 1024
         ));
         return ptr::null_mut();
     } else if info_slices >= MI_ARENA_BCHUNK_BITS {
-        crate::options::_mi_warning_message_fmt(format_args!(
+        crate::allocator::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is too large with respect to the maximum object size (size {} MiB, meta-info slices {}, maximum object slices are {})",
             mi_size_of_slices(slice_count_usize) / (1024 * 1024),
             info_slices,
@@ -289,7 +287,7 @@ pub(super) unsafe fn mi_arena_initialize(
         let mut commit_size = mi_size_of_slices(info_slices);
         if !memid.is_pinned {
             // SAFETY: arena initialization lays out metadata, bitmaps, page tables, guard pages, and registry state within the reserved slice range.
-            commit_size -= unsafe { crate::os::_mi_os_secure_guard_page_size() };
+            commit_size -= unsafe { crate::platform::os::_mi_os_secure_guard_page_size() };
         }
         let ok = if let Some(commit_fun) = commit_fun {
             unsafe {
@@ -306,7 +304,7 @@ pub(super) unsafe fn mi_arena_initialize(
             unsafe { _mi_os_commit(arena.cast::<c_void>(), commit_size, ptr::null_mut()) }
         };
         if !ok {
-            crate::options::_mi_warning_message_fmt(format_args!(
+            crate::allocator::options::_mi_warning_message_fmt(format_args!(
                 "unable to commit meta-data for OS memory"
             ));
             return ptr::null_mut();
@@ -314,7 +312,7 @@ pub(super) unsafe fn mi_arena_initialize(
     } else if !memid.is_pinned {
         // SAFETY: arena initialization lays out metadata, bitmaps, page tables, guard pages, and registry state within the reserved slice range.
         unsafe {
-            crate::os::_mi_os_secure_guard_page_set_before(
+            crate::platform::os::_mi_os_secure_guard_page_set_before(
                 arena
                     .cast::<u8>()
                     .add(mi_size_of_slices(info_slices))
@@ -328,7 +326,8 @@ pub(super) unsafe fn mi_arena_initialize(
         unsafe {
             crate::internal::_mi_memzero(
                 arena.cast::<c_void>(),
-                mi_size_of_slices(info_slices) - crate::os::_mi_os_secure_guard_page_size(),
+                mi_size_of_slices(info_slices)
+                    - crate::platform::os::_mi_os_secure_guard_page_size(),
             )
         };
     }
@@ -343,7 +342,7 @@ pub(super) unsafe fn mi_arena_initialize(
         let numa_node = if numa_node.is_any()
             && mi_option_is_enabled(mi_option_t::mi_option_arena_is_numa_local)
         {
-            crate::os::_mi_os_numa_node_typed()
+            crate::platform::os::_mi_os_numa_node_typed()
         } else {
             numa_node
         };

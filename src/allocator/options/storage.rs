@@ -8,13 +8,14 @@ use core::ptr;
 use core::ptr::{NonNull, addr_of_mut};
 use core::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
 
-use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
-use crate::atomic::{mi_lock_s, mi_lock_t};
-use crate::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
-use crate::core_types::{MiLockGuard, MiLockPtr};
-use crate::init::_mi_preloading;
+use crate::allocator::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
+use crate::allocator::init::_mi_preloading;
+use crate::allocator::page::MI_MAX_ALLOC_SIZE;
+use crate::ffi::libc;
 use crate::internal::MI_GUARDED;
-use crate::page::MI_MAX_ALLOC_SIZE;
+use crate::internal::atomic::{mi_lock_s, mi_lock_t};
+use crate::internal::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
+use crate::types::{MiLockGuard, MiLockPtr};
 use crate::types::{mi_option_desc_t, mi_option_init_t};
 
 use super::{MI_OPTION_COUNT, mi_option_t};
@@ -524,7 +525,7 @@ fn get_env_value_stack<'a>(suffix: &[u8], value_buf: &'a mut [c_char; 65]) -> Op
     }
     // SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
     if !unsafe {
-        crate::libc::_mi_getenv(
+        libc::_mi_getenv(
             env_name.as_ptr().cast(),
             value_buf.as_mut_ptr(),
             value_buf.len(),
@@ -765,10 +766,10 @@ pub(super) fn option_get_size(option: mi_option_t, warn: WarningSink) -> usize {
     let mut size = if x < 0 { 0 } else { x as usize };
     if option_has_size_in_kib(option) {
         match size.checked_mul(MI_KiB) {
-            Some(bytes) if bytes <= crate::page::MI_MAX_ALLOC_SIZE => {
+            Some(bytes) if bytes <= MI_MAX_ALLOC_SIZE => {
                 size = bytes;
             }
-            _ => size = crate::page::MI_MAX_ALLOC_SIZE,
+            _ => size = MI_MAX_ALLOC_SIZE,
         }
     }
     size

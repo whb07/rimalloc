@@ -151,6 +151,7 @@ RAW_BRIDGE_CALLERS = {
         "src/allocator/arena/abandoned.rs",
         "src/allocator/arena/heap_pages.rs",
         "src/allocator/page.rs",
+        "src/allocator/thread_heap.rs",
     },
     "assume_owned_abandoned_page": {
         "src/allocator/arena.rs",

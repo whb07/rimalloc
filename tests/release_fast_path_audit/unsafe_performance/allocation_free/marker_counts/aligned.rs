@@ -14,13 +14,14 @@ pub(super) fn assert_aligned_marker_counts(
         ("aligned-global-allocation-export-boundary", 13),
         ("aligned-global-calloc-export-boundary", 4),
         ("aligned-heap-allocation-export-boundary", 15),
-        ("aligned-realloc-request-boundary", 15),
+        ("aligned-realloc-request-boundary", 14),
+        ("aligned-realloc-regular-boundary", 8),
         ("aligned-realloc-copy-boundary", 4),
         ("aligned-recalloc-product-boundary", 8),
         ("aligned-realloc-global-export-boundary", 14),
-        ("aligned-realloc-heap-realloc-boundary", 8),
-        ("aligned-realloc-heap-rezalloc-boundary", 8),
-        ("aligned-realloc-heap-recalloc-boundary", 10),
+        ("aligned-realloc-heap-realloc-boundary", 10),
+        ("aligned-realloc-heap-rezalloc-boundary", 10),
+        ("aligned-realloc-heap-recalloc-boundary", 12),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert_eq!(

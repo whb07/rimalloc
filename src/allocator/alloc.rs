@@ -6,6 +6,7 @@ use core::ptr;
 
 use crate::core_types::{BorrowedHeap, Errno, PagePtr, ThreadHeapLocal, ThreadHeapPtr, UserPtr};
 use crate::free::_mi_usable_size_typed;
+use crate::init::_mi_theap_empty_wrong;
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up,
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size_typed,
@@ -460,8 +461,11 @@ unsafe fn mi_theap_malloc_small_zero_typed(
 
 unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapLocal> {
     unsafe {
-        ThreadHeapPtr::new(_mi_heap_theap(heap.ptr().as_ptr()))
-            .map(|theap| ThreadHeapLocal::new_unchecked(theap))
+        let theap = _mi_heap_theap(heap.ptr().as_ptr());
+        if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
+            return None;
+        }
+        ThreadHeapPtr::new(theap).map(|theap| ThreadHeapLocal::new_unchecked(theap))
     }
 }
 

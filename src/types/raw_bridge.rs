@@ -75,7 +75,7 @@ raw_page_bridge!(
     assume_abandoned_page,
     AbandonedPage,
     "SAFETY[AUDIT:raw-bridge-abandoned-page]",
-    "`page` must be marked abandoned and unowned by a live thread heap. Legal callers: arena lookup/classification and C-shaped abandon entry points."
+    "`page` must be marked abandoned and unowned by a live thread heap. Legal callers: arena lookup/classification, C-shaped abandon entry points, and abandoned block visitation."
 );
 raw_page_bridge!(
     assume_owned_abandoned_page,

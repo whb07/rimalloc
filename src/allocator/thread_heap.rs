@@ -223,18 +223,13 @@ pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
 ) -> bool {
     // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     let page = unsafe { PagePtr::new_unchecked(page) };
-    if unsafe { mi_page_is_abandoned(page.as_ptr()) } {
-        return true;
-    }
-    let theap = unsafe { ThreadHeapPtr::new_unchecked(mi_page_theap(page.as_ptr())) };
     // SAFETY[AUDIT:thread-heap-area-block-boundary]: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    unsafe { mi_theap_area_visit_blocks_typed(area, theap, page, visitor, arg) }
+    unsafe { mi_theap_area_visit_blocks_typed(area, page, visitor, arg) }
 }
 
 unsafe fn mi_theap_area_visit_blocks_typed(
     area: *const mi_heap_area_t,
-    theap: ThreadHeapPtr,
-    page: PagePtr,
+    page_ptr: PagePtr,
     visitor: BlockVisitCallback,
     arg: BlockVisitCallbackArg,
 ) -> bool {
@@ -244,101 +239,130 @@ unsafe fn mi_theap_area_visit_blocks_typed(
         if area.is_null() {
             return true;
         }
-        let page_ptr = page;
         let page = page_ptr.as_ptr();
-        crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.as_ptr());
-
-        _mi_page_free_collect(page, true);
+        let mut abandoned_owner = if mi_page_is_abandoned(page) {
+            let abandoned = crate::core_types::assume_abandoned_page(page_ptr);
+            let Ok(owner) = abandoned.try_claim_ownership() else {
+                return false;
+            };
+            crate::page::collect_page_free_lists_abandoned(&owner, true);
+            Some(owner)
+        } else {
+            crate::internal::mi_assert_internal!(!mi_page_theap(page).is_null());
+            _mi_page_free_collect(page, true);
+            None
+        };
         crate::internal::mi_assert_internal!(page_ptr.local_free().is_empty());
-        let used = crate::page::mi_page_used_count(page);
-        if used.get() == 0 {
-            return true;
-        }
-
-        let mut psize = 0usize;
-        let pstart = mi_page_area(page, &mut psize);
-        let heap = HeapPtr::new_unchecked(mi_page_heap(page));
-        let bsize = mi_page_block_size(page);
-        let ubsize = mi_page_usable_block_size(page);
-
-        let capacity = crate::page::mi_page_capacity_count(page);
-        if capacity.get() == 1 {
-            crate::internal::mi_assert_internal!(used.get() == 1 && page_ptr.free().is_empty());
-            return visitor.invoke(heap, area, pstart.cast::<c_void>(), ubsize.get(), arg);
-        }
-        crate::internal::mi_assert_internal!(u32::try_from(bsize).is_ok());
-
-        if used.get() == capacity.get() {
-            let mut block = pstart;
-            for _ in 0..capacity.as_usize() {
-                if !visitor.invoke(heap, area, block.cast::<c_void>(), ubsize.get(), arg) {
-                    return false;
-                }
-                block = block.add(bsize);
+        let result = (|| {
+            let used = crate::page::mi_page_used_count(page);
+            if used.get() == 0 {
+                return true;
             }
-            return true;
-        }
 
-        let mut free_map = [0usize; MI_MAX_BLOCKS / MI_INTPTR_BITS];
-        let bmapsize = _mi_divide_up(capacity.as_usize(), MI_INTPTR_BITS);
-        if !capacity.as_usize().is_multiple_of(MI_INTPTR_BITS) {
-            let shift = capacity.as_usize() % MI_INTPTR_BITS;
-            free_map[bmapsize - 1] = usize::MAX << shift;
-        }
+            let mut psize = 0usize;
+            let pstart = mi_page_area(page, &mut psize);
+            let heap = HeapPtr::new_unchecked(mi_page_heap(page));
+            let bsize = mi_page_block_size(page);
+            let ubsize = mi_page_usable_block_size(page);
 
-        let mut magic = 0u64;
-        let mut shift = 0usize;
-        mi_get_fast_divisor(bsize, &mut magic, &mut shift);
+            let capacity = crate::page::mi_page_capacity_count(page);
+            if capacity.get() == 1 {
+                crate::internal::mi_assert_internal!(used.get() == 1 && page_ptr.free().is_empty());
+                return visitor.invoke(heap, area, pstart.cast::<c_void>(), ubsize.get(), arg);
+            }
+            crate::internal::mi_assert_internal!(u32::try_from(bsize).is_ok());
 
-        let mut free_count = 0usize;
-        let mut free = page_ptr.free().as_raw();
-        while !free.is_null() {
-            free_count += 1;
-            let block = free;
-            crate::internal::mi_assert_internal!(
-                block.cast::<u8>() >= pstart && block.cast::<u8>() < pstart.add(psize)
-            );
-            let offset = block.cast::<u8>() as usize - pstart as usize;
-            crate::internal::mi_assert_internal!(offset.is_multiple_of(bsize));
-            crate::internal::mi_assert_internal!(u32::try_from(offset).is_ok());
-            let blockidx = mi_fast_divide(offset, magic, shift);
-            crate::internal::mi_assert_internal!(blockidx == offset / bsize);
-            crate::internal::mi_assert_internal!(blockidx < MI_MAX_BLOCKS);
-            let bitidx = blockidx / MI_INTPTR_BITS;
-            let bit = blockidx - (bitidx * MI_INTPTR_BITS);
-            free_map[bitidx] |= 1usize << bit;
-            free = crate::internal::mi_block_next(page, block);
-        }
-        crate::internal::mi_assert_internal!(capacity.as_usize() == free_count + used.as_usize());
-
-        let mut block = pstart;
-        for mask in free_map.iter().take(bmapsize) {
-            if *mask == 0 {
-                for _ in 0..MI_INTPTR_BITS {
+            if used.get() == capacity.get() {
+                let mut block = pstart;
+                for _ in 0..capacity.as_usize() {
                     if !visitor.invoke(heap, area, block.cast::<c_void>(), ubsize.get(), arg) {
                         return false;
                     }
                     block = block.add(bsize);
                 }
-            } else {
-                let mut used_mask = !*mask;
-                while used_mask != 0 {
-                    let bitidx = mi_ctz(used_mask);
-                    if !visitor.invoke(
-                        heap,
-                        area,
-                        block.add(bitidx * bsize).cast::<c_void>(),
-                        ubsize.get(),
-                        arg,
-                    ) {
-                        return false;
-                    }
-                    used_mask &= used_mask - 1;
-                }
-                block = block.add(bsize * MI_INTPTR_BITS);
+                return true;
             }
+
+            let mut free_map = [0usize; MI_MAX_BLOCKS / MI_INTPTR_BITS];
+            let bmapsize = _mi_divide_up(capacity.as_usize(), MI_INTPTR_BITS);
+            if !capacity.as_usize().is_multiple_of(MI_INTPTR_BITS) {
+                let shift = capacity.as_usize() % MI_INTPTR_BITS;
+                free_map[bmapsize - 1] = usize::MAX << shift;
+            }
+
+            let mut magic = 0u64;
+            let mut shift = 0usize;
+            mi_get_fast_divisor(bsize, &mut magic, &mut shift);
+
+            let mut free_count = 0usize;
+            let mut free = page_ptr.free().as_raw();
+            while !free.is_null() {
+                free_count += 1;
+                let block = free;
+                crate::internal::mi_assert_internal!(
+                    block.cast::<u8>() >= pstart && block.cast::<u8>() < pstart.add(psize)
+                );
+                let offset = block.cast::<u8>() as usize - pstart as usize;
+                crate::internal::mi_assert_internal!(offset.is_multiple_of(bsize));
+                crate::internal::mi_assert_internal!(u32::try_from(offset).is_ok());
+                let blockidx = mi_fast_divide(offset, magic, shift);
+                crate::internal::mi_assert_internal!(blockidx == offset / bsize);
+                crate::internal::mi_assert_internal!(blockidx < MI_MAX_BLOCKS);
+                let bitidx = blockidx / MI_INTPTR_BITS;
+                let bit = blockidx - (bitidx * MI_INTPTR_BITS);
+                free_map[bitidx] |= 1usize << bit;
+                free = crate::internal::mi_block_next(page, block);
+            }
+            crate::internal::mi_assert_internal!(
+                capacity.as_usize() == free_count + used.as_usize()
+            );
+
+            let mut block = pstart;
+            for mask in free_map.iter().take(bmapsize) {
+                if *mask == 0 {
+                    for _ in 0..MI_INTPTR_BITS {
+                        if !visitor.invoke(heap, area, block.cast::<c_void>(), ubsize.get(), arg) {
+                            return false;
+                        }
+                        block = block.add(bsize);
+                    }
+                } else {
+                    let mut used_mask = !*mask;
+                    while used_mask != 0 {
+                        let bitidx = mi_ctz(used_mask);
+                        if !visitor.invoke(
+                            heap,
+                            area,
+                            block.add(bitidx * bsize).cast::<c_void>(),
+                            ubsize.get(),
+                            arg,
+                        ) {
+                            return false;
+                        }
+                        used_mask &= used_mask - 1;
+                    }
+                    block = block.add(bsize * MI_INTPTR_BITS);
+                }
+            }
+            true
+        })();
+
+        if let Some(owner) = abandoned_owner.take() {
+            let atomic = page_ptr.thread_free_cell();
+            loop {
+                let mut expected = atomic.load_relaxed();
+                crate::internal::mi_assert_internal!(expected.is_owned());
+                if expected.head().is_some() {
+                    crate::page::collect_page_free_lists_abandoned(&owner, true);
+                    continue;
+                }
+                if atomic.release_acq_rel(&mut expected) {
+                    break;
+                }
+            }
+            let _ = owner.into_abandoned();
         }
-        true
+        result
     }
 }
 

@@ -718,21 +718,21 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
     offset: usize,
     zero: bool,
 ) -> *mut c_void {
-    let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
-        return core::ptr::null_mut();
-    };
-    if alignment_typed.get() <= size_of::<usize>() && offset == 0 {
+    if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
         let layout = if zero {
             crate::core_types::LayoutRequest::zalloc(newsize)
         } else {
             crate::core_types::LayoutRequest::malloc(newsize)
         };
-        return match layout {
-            // SAFETY[AUDIT:aligned-realloc-request-boundary]: aligned realloc request builders validate old user pointers and checked layout inputs.
-            Ok(layout) => unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) },
-            Err(_) => core::ptr::null_mut(),
+        let Ok(layout) = layout else {
+            return core::ptr::null_mut();
         };
+        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
+    let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
     let zeroed = if zero {
         crate::core_types::Zeroed::Yes
     } else {
@@ -882,6 +882,18 @@ pub unsafe fn mi_theap_realloc_zero_aligned(
     alignment: usize,
     zero: bool,
 ) -> *mut c_void {
+    if alignment != 0 && alignment <= size_of::<usize>() {
+        let layout = if zero {
+            crate::core_types::LayoutRequest::zalloc(newsize)
+        } else {
+            crate::core_types::LayoutRequest::malloc(newsize)
+        };
+        let Ok(layout) = layout else {
+            return core::ptr::null_mut();
+        };
+        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+    }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -930,6 +942,13 @@ pub unsafe fn mi_theap_realloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
+    if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
+        let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) else {
+            return core::ptr::null_mut();
+        };
+        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+    }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -968,6 +987,13 @@ pub unsafe fn mi_theap_realloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
+    if alignment != 0 && alignment <= size_of::<usize>() {
+        let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) else {
+            return core::ptr::null_mut();
+        };
+        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+    }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -1012,6 +1038,13 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
+    if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
+        let Ok(layout) = crate::core_types::LayoutRequest::zalloc(newsize) else {
+            return core::ptr::null_mut();
+        };
+        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+    }
     let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -1057,6 +1090,13 @@ pub unsafe fn mi_theap_rezalloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
+    if alignment != 0 && alignment <= size_of::<usize>() {
+        let Ok(layout) = crate::core_types::LayoutRequest::zalloc(newsize) else {
+            return core::ptr::null_mut();
+        };
+        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+    }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -1105,6 +1145,11 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     let Some(request) = calloc_request_or_report(newcount, size) else {
         return core::ptr::null_mut();
     };
+    if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
+        let layout = request.layout();
+        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path after checked multiplication, matching C mimalloc.
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+    }
     let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -1168,6 +1213,11 @@ pub unsafe fn mi_theap_recalloc_aligned(
     let Some(request) = calloc_request_or_report(newcount, size) else {
         return core::ptr::null_mut();
     };
+    if alignment != 0 && alignment <= size_of::<usize>() {
+        let layout = request.layout();
+        // SAFETY[AUDIT:aligned-realloc-regular-boundary]: naturally aligned requests use the ordinary realloc path after checked multiplication, matching C mimalloc.
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+    }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -1307,6 +1357,18 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
+    if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
+        // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned realloc route.
+        return unsafe {
+            mi_theap_realloc_aligned_at(
+                _mi_heap_theap(heap.ptr().as_ptr()),
+                p,
+                newsize,
+                alignment,
+                offset,
+            )
+        };
+    }
     let Some((layout, alignment, offset)) =
         aligned_layout_or_report(newsize, alignment, offset, false)
     else {
@@ -1356,6 +1418,12 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
+    if alignment != 0 && alignment <= size_of::<usize>() {
+        // SAFETY[AUDIT:aligned-realloc-heap-realloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned realloc route.
+        return unsafe {
+            mi_theap_realloc_aligned(_mi_heap_theap(heap.ptr().as_ptr()), p, newsize, alignment)
+        };
+    }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -1404,6 +1472,18 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
+    if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
+        // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned rezalloc route.
+        return unsafe {
+            mi_theap_rezalloc_aligned_at(
+                _mi_heap_theap(heap.ptr().as_ptr()),
+                p,
+                newsize,
+                alignment,
+                offset,
+            )
+        };
+    }
     let Some((layout, alignment, offset)) =
         aligned_layout_or_report(newsize, alignment, offset, true)
     else {
@@ -1439,6 +1519,12 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return core::ptr::null_mut();
     };
+    if alignment != 0 && alignment <= size_of::<usize>() {
+        // SAFETY[AUDIT:aligned-realloc-heap-rezalloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned rezalloc route.
+        return unsafe {
+            mi_theap_rezalloc_aligned(_mi_heap_theap(heap.ptr().as_ptr()), p, newsize, alignment)
+        };
+    }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -1491,6 +1577,19 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     let Some(request) = calloc_request_or_report(newcount, size) else {
         return core::ptr::null_mut();
     };
+    if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
+        // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned recalloc route.
+        return unsafe {
+            mi_theap_recalloc_aligned_at(
+                _mi_heap_theap(heap.ptr().as_ptr()),
+                p,
+                newcount,
+                size,
+                alignment,
+                offset,
+            )
+        };
+    }
     let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };
@@ -1554,6 +1653,18 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     let Some(request) = calloc_request_or_report(newcount, size) else {
         return core::ptr::null_mut();
     };
+    if alignment != 0 && alignment <= size_of::<usize>() {
+        // SAFETY[AUDIT:aligned-realloc-heap-recalloc-boundary]: the borrowed heap supplies its thread heap to the C-compatible naturally aligned recalloc route.
+        return unsafe {
+            mi_theap_recalloc_aligned(
+                _mi_heap_theap(heap.ptr().as_ptr()),
+                p,
+                newcount,
+                size,
+                alignment,
+            )
+        };
+    }
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
     };

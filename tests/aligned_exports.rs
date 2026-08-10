@@ -13,6 +13,23 @@ unsafe fn assert_zeroed(p: *mut c_void, size: usize) {
     assert!(bytes.iter().all(|byte| *byte == 0));
 }
 
+unsafe fn fill_sequence(p: *mut c_void, size: usize) {
+    let bytes = unsafe { core::slice::from_raw_parts_mut(p.cast::<u8>(), size) };
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        *byte = index as u8;
+    }
+}
+
+unsafe fn assert_sequence(p: *mut c_void, size: usize) {
+    let bytes = unsafe { core::slice::from_raw_parts(p.cast::<u8>(), size) };
+    assert!(
+        bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| *byte == index as u8)
+    );
+}
+
 #[test]
 fn global_aligned_exports_link_and_allocate() {
     unsafe {
@@ -76,6 +93,49 @@ fn aligned_realloc_exports_link_and_allocate_from_null() {
         assert_aligned_at(p, 64, 24);
         assert_zeroed(p, 12 * 8);
         mi_free(p);
+    }
+}
+
+#[test]
+fn aligned_realloc_exports_match_c_small_non_power_of_two_fallback() {
+    unsafe {
+        let p = mi_realloc_aligned(ptr::null_mut(), 24, 3);
+        assert!(!p.is_null());
+        mi_free(p);
+
+        let p = mi_realloc_aligned_at(ptr::null_mut(), 24, 3, 0);
+        assert!(!p.is_null());
+        mi_free(p);
+
+        let p = mi_malloc(24);
+        assert!(!p.is_null());
+        fill_sequence(p, 24);
+        let p = mi_realloc_aligned_at(p, 48, 3, 0);
+        assert!(!p.is_null());
+        assert_sequence(p, 24);
+        mi_free(p);
+
+        let p = mi_rezalloc_aligned(ptr::null_mut(), 24, 3);
+        assert!(!p.is_null());
+        assert_zeroed(p, 24);
+        mi_free(p);
+
+        let p = mi_rezalloc_aligned_at(ptr::null_mut(), 24, 3, 0);
+        assert!(!p.is_null());
+        assert_zeroed(p, 24);
+        mi_free(p);
+
+        let p = mi_recalloc_aligned(ptr::null_mut(), 3, 8, 3);
+        assert!(!p.is_null());
+        assert_zeroed(p, 24);
+        mi_free(p);
+
+        let p = mi_recalloc_aligned_at(ptr::null_mut(), 3, 8, 3, 0);
+        assert!(!p.is_null());
+        assert_zeroed(p, 24);
+        mi_free(p);
+
+        assert!(mi_realloc_aligned_at(ptr::null_mut(), 24, 3, 1).is_null());
     }
 }
 
@@ -146,6 +206,52 @@ fn heap_aligned_exports_link_and_allocate_from_requested_heap() {
         assert_zeroed(p, 12 * 8);
         assert!(mi_heap_contains(heap, p));
         mi_free(p);
+
+        mi_heap_delete(heap);
+    }
+}
+
+#[test]
+fn heap_aligned_realloc_exports_match_c_small_non_power_of_two_fallback() {
+    unsafe {
+        let heap = mi_heap_new();
+        assert!(!heap.is_null());
+
+        let p = mi_heap_realloc_aligned(heap, ptr::null_mut(), 24, 3);
+        assert!(!p.is_null());
+        assert!(mi_heap_contains(heap, p));
+        mi_free(p);
+
+        let p = mi_heap_realloc_aligned_at(heap, ptr::null_mut(), 24, 3, 0);
+        assert!(!p.is_null());
+        assert!(mi_heap_contains(heap, p));
+        mi_free(p);
+
+        let p = mi_heap_rezalloc_aligned(heap, ptr::null_mut(), 24, 3);
+        assert!(!p.is_null());
+        assert_zeroed(p, 24);
+        assert!(mi_heap_contains(heap, p));
+        mi_free(p);
+
+        let p = mi_heap_rezalloc_aligned_at(heap, ptr::null_mut(), 24, 3, 0);
+        assert!(!p.is_null());
+        assert_zeroed(p, 24);
+        assert!(mi_heap_contains(heap, p));
+        mi_free(p);
+
+        let p = mi_heap_recalloc_aligned(heap, ptr::null_mut(), 3, 8, 3);
+        assert!(!p.is_null());
+        assert_zeroed(p, 24);
+        assert!(mi_heap_contains(heap, p));
+        mi_free(p);
+
+        let p = mi_heap_recalloc_aligned_at(heap, ptr::null_mut(), 3, 8, 3, 0);
+        assert!(!p.is_null());
+        assert_zeroed(p, 24);
+        assert!(mi_heap_contains(heap, p));
+        mi_free(p);
+
+        assert!(mi_heap_realloc_aligned_at(heap, ptr::null_mut(), 24, 3, 1).is_null());
 
         mi_heap_delete(heap);
     }

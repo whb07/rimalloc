@@ -120,14 +120,8 @@ unsafe fn classify_foreign_link(page: PagePtr, block: BlockPtr) -> BatchValidati
     }
 }
 
-/// Scan a uniquely detached chain using its page-local encoded links.
-///
-/// # Safety
-/// `page` must identify live page metadata and `head` must identify readable
-/// block-link storage. The chain must be uniquely detached for the duration of
-/// the scan.
 #[inline]
-unsafe fn scan_detached_chain(
+unsafe fn scan_detached_chain_impl<const VALIDATE_BLOCKS: bool>(
     page: PagePtr,
     head: BlockPtr,
     capacity: PageCapacity,
@@ -142,15 +136,17 @@ unsafe fn scan_detached_chain(
     let mut current = head;
     let mut observed = 0usize;
     loop {
-        // SAFETY[AUDIT:typed-page-batch-scan]: membership classification reads
-        // only live page metadata and never dereferences a rejected block.
-        if !unsafe { block_belongs_to_page(page, current, capacity) } {
+        // SAFETY[AUDIT:typed-page-batch-scan]: hardened callers classify
+        // membership before dereferencing a block. Trusted callers discharge
+        // the same-page invariant through the detached-list owner proof.
+        if VALIDATE_BLOCKS && !unsafe { block_belongs_to_page(page, current, capacity) } {
             return Err(unsafe { classify_foreign_link(page, current) });
         }
 
         observed += 1;
-        // SAFETY[AUDIT:typed-page-batch-scan]: membership was checked before
-        // reading the encoded link with the owning page's keys.
+        // SAFETY[AUDIT:typed-page-batch-scan]: hardened callers validated
+        // membership above; trusted callers guarantee membership and readable
+        // link storage through the constructor contract.
         let next = unsafe { current.next(page) };
         let Some(next) = next else {
             // SAFETY[AUDIT:typed-page-batch-scan]: observed is in 1..=capacity
@@ -174,6 +170,42 @@ unsafe fn scan_detached_chain(
     }
 }
 
+/// Scan a uniquely detached chain using its page-local encoded links.
+///
+/// # Safety
+/// `page` must identify live page metadata and `head` must identify readable
+/// block-link storage. The chain must be uniquely detached for the duration of
+/// the scan.
+#[inline]
+unsafe fn scan_detached_chain(
+    page: PagePtr,
+    head: BlockPtr,
+    capacity: PageCapacity,
+) -> Result<BatchCore, BatchValidationError> {
+    // SAFETY[AUDIT:typed-page-batch-scan]: the caller provides the live page
+    // and unique detached chain required by the validating scanner.
+    unsafe { scan_detached_chain_impl::<true>(page, head, capacity) }
+}
+
+/// Scan a detached remote chain whose page identity is already proven by its
+/// linear owner and page-owner witness.
+///
+/// # Safety
+/// Every block in the uniquely detached chain must belong to `page`, use its
+/// encoded-link domain, and remain readable for the scan. `capacity` must be
+/// the live page capacity.
+#[inline]
+unsafe fn scan_trusted_detached_chain(
+    page: PagePtr,
+    head: BlockPtr,
+    capacity: PageCapacity,
+) -> Result<BatchCore, BatchValidationError> {
+    // SAFETY[AUDIT:typed-page-batch-trusted-scan]: the caller's detached-list
+    // ownership proof establishes page identity; the scanner retains C's
+    // capacity bound before following more than one page of links.
+    unsafe { scan_detached_chain_impl::<false>(page, head, capacity) }
+}
+
 impl RemoteFreeBatch {
     /// # Safety
     /// `head` must own a uniquely detached chain belonging to `page`.
@@ -188,7 +220,20 @@ impl RemoteFreeBatch {
         // live page metadata and unique traversal access.
         #[cfg(feature = "bench-diagnostics")]
         crate::bench_diagnostics::remote_list_detached();
-        let core = match unsafe { scan_detached_chain(page, head, capacity) } {
+        let core = match if cfg!(any(
+            debug_assertions,
+            feature = "secure",
+            feature = "bench-diagnostics"
+        )) {
+            // SAFETY[AUDIT:typed-page-batch-scan]: hardened builds validate
+            // every block before following its encoded link.
+            unsafe { scan_detached_chain(page, head, capacity) }
+        } else {
+            // SAFETY[AUDIT:typed-page-batch-trusted-scan]: the unsafe
+            // constructor contract requires this uniquely detached chain to
+            // belong to `page`; ordinary release retains C's bounded scan.
+            unsafe { scan_trusted_detached_chain(page, head, capacity) }
+        } {
             Ok(core) => core,
             Err(error) => {
                 #[cfg(feature = "bench-diagnostics")]

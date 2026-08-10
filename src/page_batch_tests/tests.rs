@@ -395,6 +395,27 @@ fn scans_basic_detached_chain_lengths_exactly() {
 }
 
 #[test]
+fn trusted_and_validating_scans_match_for_valid_chains() {
+    // SAFETY[AUDIT:typed-page-batch-test-fixtures]: the fixture owns every
+    // block and supplies a valid page-homogeneous chain to both scanners.
+    unsafe {
+        let fixture = SamePageBlocks::new(16);
+        let capacity = fixture.page.capacity();
+        for len in [1usize, 2, 4, 8, 16] {
+            fixture.link_prefix(len);
+            let validating = scan_detached_chain(fixture.page, fixture.block(0), capacity)
+                .expect("validating scan");
+            let trusted = scan_trusted_detached_chain(fixture.page, fixture.block(0), capacity)
+                .expect("trusted scan");
+            assert_eq!(trusted.page(), validating.page());
+            assert_eq!(trusted.head(), validating.head());
+            assert_eq!(trusted.tail(), validating.tail());
+            assert_eq!(trusted.len(), validating.len());
+        }
+    }
+}
+
+#[test]
 fn scans_capacity_boundary_lengths_exactly() {
     // SAFETY[AUDIT:typed-page-batch-test-fixtures]: the fixture owns a complete
     // page-capacity set of live blocks and page-local encoded links.

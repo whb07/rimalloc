@@ -336,23 +336,39 @@ Purpose: identify real invariant boundaries before moving code.
 
 ### Work
 
-- [ ] For each production Rust file above 1,500 lines, list its distinct
+- [x] For each production Rust file above 1,500 lines, list its distinct
       responsibilities, important state it owns, and callers.
-- [ ] Mark each responsibility as one of: raw ABI, safe facade, allocation hot
+- [x] Mark each responsibility as one of: raw ABI, safe facade, allocation hot
       path, lifecycle, policy, platform primitive, diagnostics, or formatting.
-- [ ] Identify responsibilities already represented by an existing child
+- [x] Identify responsibilities already represented by an existing child
       module; prefer moving code there instead of creating a new module.
-- [ ] Propose a module extraction only when the extracted code owns one
+- [x] Propose a module extraction only when the extracted code owns one
       invariant, lifecycle, or boundary.
-- [ ] Add the final module ownership map to `ARCHITECTURE.md`; keep it concise
+- [x] Add the final module ownership map to `ARCHITECTURE.md`; keep it concise
       and link to existing detailed documents instead of duplicating them.
 
 ### Validation
 
-- [ ] Verify every proposed module name corresponds to an actual responsibility
+- [x] Verify every proposed module name corresponds to an actual responsibility
       and at least two related functions or one complete state lifecycle.
-- [ ] Run the documentation-only validation commands.
-- [ ] Have `rg` confirm that every source path named in the map exists.
+- [x] Run the documentation-only validation commands.
+- [x] Have `rg` confirm that every source path named in the map exists.
+
+### Completion note (2026-08-10)
+
+- `ARCHITECTURE.md` now has a direct subsystem locator and an ownership map for
+  all 12 production Rust files above 1,500 lines at the Phase 0 baseline. Each
+  responsibility is paired with a plan category, important state and callers
+  are named, and source-present Windows code is distinguished from the
+  maintained Linux path.
+- Extraction candidates reuse existing child owners first and otherwise name a
+  complete invariant, ABI family, or lifecycle. This task moved no production
+  code and created no size-only module proposal.
+- Fresh-eyes review found two missing production callers, ambiguous category
+  mapping, missing links to detailed owner documents, and an incomplete Windows
+  state inventory; all were corrected. Every named `src/` and `docs/` path
+  exists, all 12 baseline large files are present in the map, and formatting,
+  documentation, doctest, safe-doc, and benchmark-claim checks passed.
 
 ### Completion condition
 

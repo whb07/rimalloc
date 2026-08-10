@@ -156,6 +156,10 @@ static COUNTERS: [AtomicU64; COUNTER_COUNT] = [const { AtomicU64::new(0) }; COUN
 
 #[inline(always)]
 fn inc(counter: Counter, amount: u64) {
+    #[cfg(test)]
+    if !test_support::enabled() {
+        return;
+    }
     COUNTERS[counter as usize].fetch_add(amount, Ordering::Relaxed);
 }
 
@@ -708,10 +712,34 @@ pub(crate) fn option_read_counts_for_tests() -> (u64, u64, u64, u64, u64) {
 
 #[cfg(test)]
 pub(crate) mod test_support {
+    use std::cell::Cell;
+
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    pub(crate) fn lock() -> std::sync::MutexGuard<'static, ()> {
-        LOCK.lock().expect("bench diagnostics test lock")
+    thread_local! {
+        static ENABLED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(crate) struct Guard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            ENABLED.set(false);
+        }
+    }
+
+    pub(super) fn enabled() -> bool {
+        ENABLED.get()
+    }
+
+    pub(crate) fn lock() -> Guard {
+        let lock = LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        ENABLED.set(true);
+        Guard { _lock: lock }
     }
 }
 
@@ -880,7 +908,7 @@ pub unsafe extern "C" fn mi_bench_diagnostics_json(buf: *mut c_char, buf_len: us
 mod tests {
     use super::*;
 
-    fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    fn test_lock() -> test_support::Guard {
         test_support::lock()
     }
 
@@ -920,6 +948,27 @@ mod tests {
         // for exactly one diagnostic snapshot.
         assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
         assert_eq!(snapshot.values[Counter::RemoteFreeCasRetries as usize], 1);
+        mi_bench_diagnostics_reset();
+    }
+
+    #[test]
+    fn diagnostic_counters_ignore_non_owner_threads() {
+        let _guard = test_lock();
+        mi_bench_diagnostics_reset();
+
+        std::thread::spawn(remote_free_cas_retry)
+            .join()
+            .expect("diagnostic worker thread");
+        assert_eq!(
+            COUNTERS[Counter::RemoteFreeCasRetries as usize].load(Ordering::Relaxed),
+            0
+        );
+
+        remote_free_cas_retry();
+        assert_eq!(
+            COUNTERS[Counter::RemoteFreeCasRetries as usize].load(Ordering::Relaxed),
+            1
+        );
         mi_bench_diagnostics_reset();
     }
 

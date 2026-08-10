@@ -521,22 +521,50 @@ Complete these subitems independently.
 
 ### Work
 
-- [ ] Inventory crate-root compatibility aliases in `src/lib.rs` and identify
+- [x] Inventory crate-root compatibility aliases in `src/lib.rs` and identify
       all internal users of each alias.
-- [ ] For new Rust-native modules, replace broad crate-root aliases with the
+- [x] For new Rust-native modules, replace broad crate-root aliases with the
       owning module path or a narrow import.
-- [ ] Retain aliases required by mechanical translation or raw compatibility;
+- [x] Retain aliases required by mechanical translation or raw compatibility;
       document why they remain next to the alias.
-- [ ] Do not rename C-shaped functions inside compatibility layers in this task.
-- [ ] Do not change crate-root public exports.
+- [x] Do not rename C-shaped functions inside compatibility layers in this task.
+- [x] Do not change crate-root public exports.
 
 ### Validation
 
-- [ ] Run `scripts/check-layer-boundaries.py`,
+- [x] Run `scripts/check-layer-boundaries.py`,
       `scripts/check-safe-boundary.py`, and
       `scripts/check-raw-facade.sh`.
-- [ ] Use `rg` to prove removed aliases have no remaining users.
-- [ ] Run the common Rust validation gate.
+- [x] Use `rg` to prove removed aliases have no remaining users.
+- [x] Run the common Rust validation gate.
+
+### Completion note (2026-08-10)
+
+- The alias inventory traced both ordinary `crate::` paths and exported
+  `$crate::` macro paths. The targeted safe and callback modules and newly
+  extracted initialization, options, statistics, and arena modules now import
+  their owning allocator, FFI, internal, platform, and type modules.
+  Mechanical, raw, platform, benchmark, and typed-witness aliases that still
+  have consumers remain grouped in `lib.rs` with their compatibility reason.
+- The unused private aliases `memory`, `static_c`, `arena_meta`, `provenance`,
+  and `alloc_posix` were removed. Repository-wide searches found no remaining
+  users; the only remaining `alloc_posix` text is a header-macro test that
+  deliberately proves exported macros do not use that private path. No
+  C-shaped function was renamed, and no raw facade item or crate-root public
+  export changed.
+- The layer checker now understands exact nested owning paths and rejects an
+  unknown nested allocator owner instead of silently ignoring it. Fresh-eyes
+  review caught its initial nested-path bypass, a duplicate platform match,
+  misleading compatibility comments, and parallel test contamination of
+  diagnostic counters; each was corrected, including a deterministic
+  cross-thread counter-isolation regression.
+- Layer, safe-boundary, raw-facade, API-inventory, FFI-boundary, no-default
+  library, formatting, full-workspace/all-target/all-feature Clippy, and the
+  corresponding full test suite passed. The runtime-relevant production edits
+  only replace aliases with paths to the same owning items; removed aliases had
+  no users, and the diagnostic stabilization is `cfg(test)`, so no runtime
+  control flow or call target changed and a performance baseline was not
+  required.
 
 ### Completion condition
 

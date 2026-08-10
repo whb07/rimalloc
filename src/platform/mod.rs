@@ -910,13 +910,13 @@ mod tests {
         assert_eq!(tid, super::_mi_prim_thread_id());
         assert_eq!(tid, crate::allocator::init::_mi_thread_id());
         assert!(tid > 1);
-        assert_eq!(tid & crate::internal::MI_PAGE_FLAG_MASK, 0);
+        assert_eq!(tid & crate::types::MI_PAGE_FLAG_MASK, 0);
 
         let child = std::thread::spawn(super::__mi_prim_thread_id)
             .join()
             .unwrap_or(0);
         assert!(child > 1);
-        assert_eq!(child & crate::internal::MI_PAGE_FLAG_MASK, 0);
+        assert_eq!(child & crate::types::MI_PAGE_FLAG_MASK, 0);
         assert_ne!(tid, child);
     }
 

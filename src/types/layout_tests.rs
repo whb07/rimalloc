@@ -199,7 +199,13 @@ fn packed_and_atomic_wrappers_match_raw_layout() {
 
 #[test]
 fn memid_wrapper_matches_raw_layout() {
-    assert_layout!(MemId, crate::internal::mi_memid_t);
-    assert_layout!(memid::MemId<memid::OsMem>, crate::internal::mi_memid_t);
-    assert_layout!(memid::MemId<memid::ArenaMem>, crate::internal::mi_memid_t);
+    assert_layout!(MemId, crate::internal::memid::mi_memid_t);
+    assert_layout!(
+        memid::MemId<memid::OsMem>,
+        crate::internal::memid::mi_memid_t
+    );
+    assert_layout!(
+        memid::MemId<memid::ArenaMem>,
+        crate::internal::memid::mi_memid_t
+    );
 }

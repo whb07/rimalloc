@@ -12,7 +12,8 @@ use crate::core_types::{
     BorrowedHeap, HeapPtr, OutputCallback, OutputCallbackArg, SubprocPtr, ThreadHeapLocal,
     ThreadHeapPtr,
 };
-use crate::internal::{mi_memid_t, mi_theap_is_initialized};
+use crate::internal::memid::mi_memid_t;
+use crate::internal::mi_theap_is_initialized;
 use crate::mimalloc::{mi_heap_main, mi_subproc_current, mi_subproc_visit_heaps};
 use crate::prim::{_mi_heap_theap_peek, _mi_theap_default};
 use crate::types::{

@@ -9,7 +9,7 @@ use super::scalar::{SliceCount, SliceIndex};
 pub(crate) struct ArenaAllocation {
     arena: ArenaPtr,
     range: SliceRange,
-    memid: crate::internal::mi_memid_t,
+    memid: crate::internal::memid::mi_memid_t,
 }
 
 impl ArenaAllocation {
@@ -17,7 +17,7 @@ impl ArenaAllocation {
     pub(crate) const fn new(
         arena: ArenaPtr,
         range: SliceRange,
-        memid: crate::internal::mi_memid_t,
+        memid: crate::internal::memid::mi_memid_t,
     ) -> Self {
         Self {
             arena,
@@ -37,17 +37,17 @@ impl ArenaAllocation {
     }
 
     #[inline(always)]
-    pub(crate) fn memid_mut(&mut self) -> &mut crate::internal::mi_memid_t {
+    pub(crate) fn memid_mut(&mut self) -> &mut crate::internal::memid::mi_memid_t {
         &mut self.memid
     }
 
     #[inline(always)]
-    pub(crate) fn memid(self) -> crate::internal::mi_memid_t {
+    pub(crate) fn memid(self) -> crate::internal::memid::mi_memid_t {
         self.memid
     }
 
     #[inline(always)]
-    pub(crate) fn into_memid(self) -> crate::internal::mi_memid_t {
+    pub(crate) fn into_memid(self) -> crate::internal::memid::mi_memid_t {
         self.memid
     }
 }

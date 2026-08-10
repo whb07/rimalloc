@@ -18,11 +18,11 @@ use crate::core_types::{
     BorrowedSubproc, CommittedBytes, InitiallyCommitted, InitiallyZero, MemId, MemIdView, OsMemId,
     OsMemKind, OsMemPtr, Pinned, ReservedBytes, SubprocPtr,
 };
+use crate::internal::memid::{_mi_memid_none, mi_memid_t};
 use crate::internal::{
     __mi_stat_counter_increase_mt, __mi_stat_decrease_mt, __mi_stat_increase_mt,
-    _mi_align_down_ptr, _mi_align_up, _mi_align_up_ptr, _mi_is_power_of_two, _mi_memid_none,
-    _mi_memzero_aligned, _mi_preloading, _mi_subproc, MI_DEBUG, MI_SECURE, MI_TRACK_ENABLED,
-    mi_commit_fun_t, mi_memid_t, mi_theap_is_initialized,
+    _mi_align_down_ptr, _mi_align_up, _mi_align_up_ptr, _mi_is_power_of_two, _mi_memzero_aligned,
+    _mi_preloading, _mi_subproc, MI_DEBUG, MI_SECURE, MI_TRACK_ENABLED, mi_theap_is_initialized,
 };
 use crate::prim::mi_os_mem_config_t;
 use crate::prim::{
@@ -30,7 +30,7 @@ use crate::prim::{
     _mi_prim_free, _mi_prim_mem_init, _mi_prim_numa_node, _mi_prim_numa_node_count,
     _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse, _mi_theap_default,
 };
-use crate::types::{mi_arena_t, mi_heap_t, mi_page_t, mi_subproc_t};
+use crate::types::{mi_arena_t, mi_commit_fun_t, mi_heap_t, mi_page_t, mi_subproc_t};
 
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_4_GIB: usize = 4 * MI_MiB;
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_32_GIB: usize = 32 * MI_MiB;

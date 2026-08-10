@@ -25,13 +25,15 @@ use crate::bits::{MI_KiB, MI_PAGE_MAP_FLAT, MI_SIZE_BITS};
 use crate::core_types::{Errno, PagePtr, RegisteredPageRange, SliceCount};
 #[cfg(target_pointer_width = "32")]
 use crate::internal::_mi_memzero;
+use crate::internal::memid::{
+    _mi_memid_create_os, _mi_memid_none, mi_memid_mem_t, mi_memid_os_info_t, mi_memid_t,
+    mi_memkind_t,
+};
 use crate::internal::{
-    _mi_align_up, _mi_divide_up, _mi_is_aligned, _mi_memid_create_os, _mi_memid_none,
-    _mi_memzero_aligned, _mi_os_commit, _mi_os_free, _mi_os_free_ex, _mi_os_has_overcommit,
-    _mi_os_virtual_address_bits, _mi_page_map_at, _mi_page_map_index, MI_ARENA_SLICE_SHIFT,
-    MI_PAGE_MAP_COUNT, MI_PAGE_MAP_SUB_COUNT, MI_PAGE_MAP_SUB_SHIFT, mi_memid_mem_t,
-    mi_memid_os_info_t, mi_memid_t, mi_memkind_t, mi_page_area, mi_page_slice_start,
-    mi_slice_count_of_size, mi_submap_t,
+    _mi_align_up, _mi_divide_up, _mi_is_aligned, _mi_memzero_aligned, _mi_os_commit, _mi_os_free,
+    _mi_os_free_ex, _mi_os_has_overcommit, _mi_os_virtual_address_bits, _mi_page_map_at,
+    _mi_page_map_index, MI_ARENA_SLICE_SHIFT, MI_PAGE_MAP_COUNT, MI_PAGE_MAP_SUB_COUNT,
+    MI_PAGE_MAP_SUB_SHIFT, mi_page_area, mi_page_slice_start, mi_slice_count_of_size, mi_submap_t,
 };
 use crate::os::{_mi_os_alloc_aligned, _mi_os_zalloc};
 use crate::types::{MI_PAGE_ALIGN, mi_page_t, mi_subproc_t};

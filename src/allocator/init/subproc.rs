@@ -10,7 +10,8 @@ use crate::allocator::heap::{_mi_heap_force_destroy, mi_heap_destroy};
 use crate::allocator::options::{_mi_options_init, _mi_warning_message_fmt};
 use crate::allocator::stats::{__mi_stat_increase_mt, _mi_stats_merge_into, mi_stats_header_init};
 use crate::internal::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
-use crate::internal::{_mi_meta_free, _mi_meta_zalloc, mi_memid_t};
+use crate::internal::memid::mi_memid_t;
+use crate::internal::{_mi_meta_free, _mi_meta_zalloc};
 use crate::types::{
     BorrowedSubproc, HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainHeap, MainSubproc,
     MiLockGuard, MiLockPtr, SubprocPtr, TldPtr,

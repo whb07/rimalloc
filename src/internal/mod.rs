@@ -118,7 +118,9 @@ pub(crate) use crate::random::{
     _mi_os_random_weak, _mi_random_init, _mi_random_init_weak, _mi_random_next,
     _mi_random_reinit_if_weak, _mi_random_split,
 };
-pub use crate::types::*;
+use crate::types::{
+    mi_block_t, mi_heap_t, mi_output_fun, mi_page_queue_t, mi_page_t, mi_theap_t, mi_thread_free_t,
+};
 pub use block_link::{
     mi_block_next, mi_block_nextx, mi_block_set_next, mi_block_set_nextx, mi_is_in_same_page,
     mi_page_keys,
@@ -127,7 +129,6 @@ pub(crate) use block_link::{
     mi_block_set_next_typed, mi_block_set_nextx_typed, mi_page_set_keys, mi_ptr_decode,
     mi_ptr_encode, mi_ptr_encode_canary,
 };
-pub use memid::*;
 pub use page_flags::{
     mi_page_flags, mi_page_has_any_available, mi_page_has_interior_pointers,
     mi_page_is_abandoned_mapped, mi_page_is_owned, mi_page_thread_free, mi_page_thread_id,

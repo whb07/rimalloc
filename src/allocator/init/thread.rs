@@ -15,7 +15,8 @@ use crate::allocator::options::{mi_option_get, mi_option_t};
 use crate::allocator::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt};
 use crate::allocator::thread_heap::{_mi_theap_collect_abandon, _mi_theap_create, _mi_theap_free};
 use crate::internal::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
-use crate::internal::{_mi_meta_free, _mi_meta_zalloc, mi_memid_t};
+use crate::internal::memid::mi_memid_t;
+use crate::internal::{_mi_meta_free, _mi_meta_zalloc};
 use crate::types::{
     Errno, SubprocPtr, ThreadHeapLocal, ThreadHeapPtr, ThreadHeapState, ThreadId, TldPtr,
 };

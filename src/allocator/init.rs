@@ -25,7 +25,8 @@ use crate::atomic::{
     mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t, mi_lock_init, mi_lock_t,
 };
 use crate::core_types::{BorrowedSubproc, HeapPtr, SubprocPtr};
-use crate::internal::{_mi_allocator_done, _mi_allocator_init, mi_memid_t};
+use crate::internal::memid::mi_memid_t;
+use crate::internal::{_mi_allocator_done, _mi_allocator_init};
 use crate::types::{
     MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_heap_visit_fun,
     mi_page_queue_t, mi_page_t, mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,

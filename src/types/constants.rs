@@ -106,8 +106,8 @@ pub const MI_LARGE_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {
 pub const MI_LARGE_MAX_OBJ_WSIZE: usize = MI_LARGE_MAX_OBJ_SIZE / core::mem::size_of::<usize>();
 
 pub type mi_arena_id_t = *mut c_void;
-pub use crate::internal::mi_memkind_t;
-pub type mi_memkind_e = crate::internal::mi_memkind_t;
+pub use crate::internal::memid::mi_memkind_t;
+pub type mi_memkind_e = crate::internal::memid::mi_memkind_t;
 pub type mi_threadid_t = usize;
 pub type mi_msecs_t = i64;
 pub type mi_thread_local_t = usize;
@@ -352,7 +352,7 @@ pub struct mi_subproc_s {
     pub thread_total_count: AtomicUsize,
     pub heap_count: AtomicUsize,
     pub heap_total_count: AtomicUsize,
-    pub memid: crate::internal::mi_memid_t,
+    pub memid: crate::internal::memid::mi_memid_t,
     pub stats: mi_stats_t,
 }
 
@@ -368,14 +368,14 @@ pub struct mi_tld_s {
     pub theaps_lock: mi_lock_t,
     pub recurse: bool,
     pub is_in_threadpool: bool,
-    pub memid: crate::internal::mi_memid_t,
+    pub memid: crate::internal::memid::mi_memid_t,
 }
 
 pub type mi_tld_t = mi_tld_s;
 
 #[repr(C)]
 pub struct mi_arena_s {
-    pub memid: crate::internal::mi_memid_t,
+    pub memid: crate::internal::memid::mi_memid_t,
     pub subproc: *mut mi_subproc_t,
     pub arena_idx: usize,
     pub slice_count: usize,
@@ -445,7 +445,7 @@ pub struct mi_page_s {
     pub next: *mut mi_page_t,
     pub prev: *mut mi_page_t,
     pub slice_committed: usize,
-    pub memid: crate::internal::mi_memid_t,
+    pub memid: crate::internal::memid::mi_memid_t,
 }
 
 // SAFETY: required only for immutable sentinel page
@@ -485,7 +485,7 @@ pub struct mi_theap_s {
     pub guarded_sample_count: usize,
     pub pages_free_direct: [*mut mi_page_t; MI_PAGES_DIRECT],
     pub pages: [mi_page_queue_t; MI_BIN_COUNT],
-    pub memid: crate::internal::mi_memid_t,
+    pub memid: crate::internal::memid::mi_memid_t,
     pub stats: mi_stats_t,
 }
 

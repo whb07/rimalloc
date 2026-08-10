@@ -21,11 +21,12 @@ use crate::core_types::{
     Bin, BlockVisitCallback, BlockVisitCallbackArg, BorrowedHeap, Errno, HeapPtr, PagePtr,
     PageQueuePtr, ThreadHeapLocal, ThreadHeapPtr, ThreadHeapState, TldPtr,
 };
+use crate::internal::memid::mi_memid_t;
 use crate::internal::{
     _mi_align_up, _mi_arenas_alloc, _mi_arenas_free, _mi_deferred_free, _mi_divide_up,
     _mi_is_heap_main, _mi_memcpy_aligned, _mi_meta_free, _mi_meta_zalloc, _mi_subproc,
-    _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_memid_t, mi_page_all_free,
-    mi_page_area, mi_page_block_size, mi_page_block_size_typed, mi_page_heap, mi_page_start,
+    _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_page_all_free, mi_page_area,
+    mi_page_block_size, mi_page_block_size_typed, mi_page_heap, mi_page_start,
     mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::mimalloc::mi_free;

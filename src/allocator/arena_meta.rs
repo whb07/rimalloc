@@ -16,9 +16,10 @@ use crate::bitmap::{
     mi_bbitmap_unsafe_setN,
 };
 use crate::core_types::{BlockIndex, MemId, MetaMem};
+use crate::internal::memid::mi_memid_t;
 use crate::internal::{
     _mi_align_down_ptr, _mi_align_up, _mi_arenas_alloc_aligned, _mi_arenas_free, _mi_divide_up,
-    _mi_is_aligned, _mi_memzero_aligned, _mi_os_alloc, MI_SECURE, mi_memid_t,
+    _mi_is_aligned, _mi_memzero_aligned, _mi_os_alloc, MI_SECURE,
 };
 use crate::mimalloc::mi_heap_main;
 use crate::os::{

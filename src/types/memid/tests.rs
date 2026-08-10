@@ -167,7 +167,7 @@ fn heap_main_memid_round_trips_through_view() {
     };
     assert_eq!(
         view.as_raw().memkind,
-        crate::internal::mi_memkind_t::MI_MEM_HEAP_MAIN as _
+        crate::internal::memid::mi_memkind_t::MI_MEM_HEAP_MAIN as _
     );
 }
 
@@ -175,9 +175,9 @@ fn heap_main_memid_round_trips_through_view() {
 fn memid_view_returns_unknown_for_null_meta_or_arena_union_pointers() {
     // SAFETY: these raw memids are local
     // invalid-view fixtures that are never published to allocator state.
-    let null_meta = crate::internal::mi_memid_t {
-        mem: crate::internal::mi_memid_mem_t {
-            meta: crate::internal::mi_memid_meta_info_t {
+    let null_meta = crate::internal::memid::mi_memid_t {
+        mem: crate::internal::memid::mi_memid_mem_t {
+            meta: crate::internal::memid::mi_memid_meta_info_t {
                 meta_page: ptr::null_mut(),
                 block_index: 0,
                 block_count: 1,
@@ -186,16 +186,16 @@ fn memid_view_returns_unknown_for_null_meta_or_arena_union_pointers() {
         is_pinned: true,
         initially_committed: true,
         initially_zero: true,
-        memkind: crate::internal::mi_memkind_t::MI_MEM_META as _,
+        memkind: crate::internal::memid::mi_memkind_t::MI_MEM_META as _,
     };
     let MemIdView::Unknown(code) = MemId::<AnyMem>::view(null_meta) else {
         panic!("expected unknown view for null meta page");
     };
     assert_eq!(code, MemKindCode::META);
 
-    let null_arena = crate::internal::mi_memid_t {
-        mem: crate::internal::mi_memid_mem_t {
-            arena: crate::internal::mi_memid_arena_info_t {
+    let null_arena = crate::internal::memid::mi_memid_t {
+        mem: crate::internal::memid::mi_memid_mem_t {
+            arena: crate::internal::memid::mi_memid_arena_info_t {
                 arena: ptr::null_mut(),
                 slice_index: 0,
                 slice_count: 1,
@@ -204,7 +204,7 @@ fn memid_view_returns_unknown_for_null_meta_or_arena_union_pointers() {
         is_pinned: false,
         initially_committed: false,
         initially_zero: false,
-        memkind: crate::internal::mi_memkind_t::MI_MEM_ARENA as _,
+        memkind: crate::internal::memid::mi_memkind_t::MI_MEM_ARENA as _,
     };
     let MemIdView::Unknown(code) = MemId::<AnyMem>::view(null_arena) else {
         panic!("expected unknown view for null arena pointer");
@@ -219,9 +219,9 @@ fn memid_view_returns_unknown_for_invalid_arena_slice_range() {
 
     // SAFETY: these raw memids use a
     // stack-local arena pointer only to exercise invalid range rejection.
-    let zero_count = crate::internal::mi_memid_t {
-        mem: crate::internal::mi_memid_mem_t {
-            arena: crate::internal::mi_memid_arena_info_t {
+    let zero_count = crate::internal::memid::mi_memid_t {
+        mem: crate::internal::memid::mi_memid_mem_t {
+            arena: crate::internal::memid::mi_memid_arena_info_t {
                 arena,
                 slice_index: 0,
                 slice_count: 0,
@@ -230,16 +230,16 @@ fn memid_view_returns_unknown_for_invalid_arena_slice_range() {
         is_pinned: false,
         initially_committed: false,
         initially_zero: false,
-        memkind: crate::internal::mi_memkind_t::MI_MEM_ARENA as _,
+        memkind: crate::internal::memid::mi_memkind_t::MI_MEM_ARENA as _,
     };
     let MemIdView::Unknown(code) = MemId::<AnyMem>::view(zero_count) else {
         panic!("expected unknown view for zero arena slice count");
     };
     assert_eq!(code, MemKindCode::ARENA);
 
-    let overflow = crate::internal::mi_memid_t {
-        mem: crate::internal::mi_memid_mem_t {
-            arena: crate::internal::mi_memid_arena_info_t {
+    let overflow = crate::internal::memid::mi_memid_t {
+        mem: crate::internal::memid::mi_memid_mem_t {
+            arena: crate::internal::memid::mi_memid_arena_info_t {
                 arena,
                 slice_index: u32::MAX,
                 slice_count: 1,
@@ -248,7 +248,7 @@ fn memid_view_returns_unknown_for_invalid_arena_slice_range() {
         is_pinned: false,
         initially_committed: false,
         initially_zero: false,
-        memkind: crate::internal::mi_memkind_t::MI_MEM_ARENA as _,
+        memkind: crate::internal::memid::mi_memkind_t::MI_MEM_ARENA as _,
     };
     let MemIdView::Unknown(code) = MemId::<AnyMem>::view(overflow) else {
         panic!("expected unknown view for overflowing arena slice range");

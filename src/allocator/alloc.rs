@@ -19,16 +19,15 @@ use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up,
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size_typed,
     _mi_ptr_page, _mi_theap_get_free_small_page_typed, _mi_theap_heap, _mi_thread_id, MI_GUARDED,
-    MI_LARGE_MAX_OBJ_SIZE, MI_PADDING, MI_PADDING_CHECK, mi_likely, mi_page_block_size,
-    mi_page_heap, mi_page_keys, mi_page_set_has_interior_pointers, mi_page_slice_start,
-    mi_page_start, mi_page_usable_block_size, mi_theap_is_initialized, mi_theap_malloc_use_guarded,
-    mi_unlikely,
+    MI_LARGE_MAX_OBJ_SIZE, mi_likely, mi_page_block_size, mi_page_heap, mi_page_keys,
+    mi_page_set_has_interior_pointers, mi_page_slice_start, mi_page_start,
+    mi_page_usable_block_size, mi_theap_is_initialized, mi_theap_malloc_use_guarded, mi_unlikely,
 };
 use crate::mimalloc::mi_free;
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{
-    MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING_SIZE, MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t,
-    mi_heap_t, mi_page_t, mi_theap_t,
+    MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING, MI_PADDING_CHECK, MI_PADDING_SIZE,
+    MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_heap_t, mi_page_t, mi_theap_t,
 };
 
 mod cxx_new;

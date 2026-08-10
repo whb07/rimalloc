@@ -41,15 +41,16 @@ use crate::core_types::{
     InteriorUserPtr, MiLockGuard, OsMemPtr, OwnedHeap, PagePtr, ReservedBytes, SliceCount,
     SliceIndex, SubprocPtr, ThreadLocalClaimCallback,
 };
+use crate::internal::memid::{_mi_memid_none, mi_memid_t};
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt,
     __mi_stat_counter_increase, __mi_stat_counter_increase_mt, __mi_stat_decrease,
     __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt, _mi_align_up, _mi_clamp,
-    _mi_divide_up, _mi_is_heap_main, _mi_memid_none, _mi_meta_free, _mi_meta_is_meta_page,
-    _mi_os_commit, _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex, _mi_os_has_overcommit,
+    _mi_divide_up, _mi_is_heap_main, _mi_meta_free, _mi_meta_is_meta_page, _mi_os_commit,
+    _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex, _mi_os_has_overcommit,
     _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc, _mi_theap_heap,
-    _mi_thread_id, _mi_toupper, MI_DEBUG, mi_mem_is_zero, mi_memid_t, mi_mul_overflow,
-    mi_page_all_free, mi_page_block_size, mi_page_block_size_typed, mi_page_claim_ownership,
+    _mi_thread_id, _mi_toupper, MI_DEBUG, mi_mem_is_zero, mi_mul_overflow, mi_page_all_free,
+    mi_page_block_size, mi_page_block_size_typed, mi_page_claim_ownership,
     mi_page_clear_abandoned_mapped, mi_page_committed_typed, mi_page_heap, mi_page_is_abandoned,
     mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned, mi_page_is_singleton,
     mi_page_meta_is_separated, mi_page_slice_start, mi_page_start, mi_size_of_slices,

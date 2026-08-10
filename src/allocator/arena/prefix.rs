@@ -110,7 +110,7 @@ pub(super) unsafe fn mi_arena_from_index_typed(
 
 #[repr(C)]
 pub(super) struct MiArenaPrefix {
-    pub(super) memid: crate::internal::mi_memid_t,
+    pub(super) memid: crate::internal::memid::mi_memid_t,
     pub(super) subproc: *mut mi_subproc_t,
     pub(super) arena_idx: usize,
     pub(super) slice_count: usize,

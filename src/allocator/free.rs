@@ -20,21 +20,22 @@ use crate::core_types::Errno;
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_decrease, _mi_align_down_ptr,
     _mi_arena_memid_is_suitable, _mi_is_power_of_two, _mi_memset_aligned, _mi_os_page_size_typed,
-    _mi_ptr_page, _mi_safe_ptr_page_registered, _mi_theap_heap, MI_DEBUG, MI_ENCODE_FREELIST,
-    MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK, MI_SECURE,
-    MI_TRACK_ENABLED, mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded,
-    mi_block_set_next_typed, mi_is_in_same_page, mi_page_all_free, mi_page_block_size,
-    mi_page_has_interior_pointers, mi_page_is_abandoned_mapped, mi_page_is_full,
-    mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_keys, mi_page_queue,
-    mi_page_start, mi_page_thread_free, mi_page_usable_block_size, mi_theap_is_initialized,
+    _mi_ptr_page, _mi_safe_ptr_page_registered, _mi_theap_heap, MI_DEBUG, MI_GUARDED,
+    MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx,
+    mi_block_ptr_is_guarded, mi_block_set_next_typed, mi_is_in_same_page, mi_page_all_free,
+    mi_page_block_size, mi_page_has_interior_pointers, mi_page_is_abandoned_mapped,
+    mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_keys,
+    mi_page_queue, mi_page_start, mi_page_thread_free, mi_page_usable_block_size,
+    mi_theap_is_initialized,
 };
 use crate::prim::{
     _mi_page_associated_theap_peek, _mi_prim_thread_id, _mi_theap_default,
     _mi_thread_is_initialized,
 };
 use crate::types::{
-    MI_DEBUG_FREED, MI_DEBUG_PADDING, MI_MAX_ALIGN_SIZE, MI_PAGE_META_ALIGNED_FREE_SMALL,
-    MI_SMALL_PAGE_SIZE, MI_SMALL_SIZE_MAX, mi_block_t, mi_page_t, mi_theap_t,
+    MI_DEBUG_FREED, MI_DEBUG_PADDING, MI_ENCODE_FREELIST, MI_MAX_ALIGN_SIZE, MI_PADDING,
+    MI_PADDING_CHECK, MI_PAGE_META_ALIGNED_FREE_SMALL, MI_SMALL_PAGE_SIZE, MI_SMALL_SIZE_MAX,
+    mi_block_t, mi_page_t, mi_theap_t,
 };
 
 use abandoned::collect_after_remote_free;

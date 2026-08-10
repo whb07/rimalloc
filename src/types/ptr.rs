@@ -25,7 +25,7 @@ use super::scalar::{
 use crate::allocator::stats::mi_stats_t;
 use crate::atomic::mi_lock_t;
 use crate::bitmap::{mi_bbitmap_t, mi_bitmap_t};
-use crate::internal::mi_memid_t;
+use crate::internal::memid::mi_memid_t;
 
 macro_rules! define_ptr_wrapper {
     ($name:ident, $raw_type:ty, $doc:expr) => {

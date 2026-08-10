@@ -611,9 +611,9 @@ aliases remain explicitly identified and contained.
   removed. Genuinely orphaned private helpers, staged wrapper methods, imports,
   constants, and tests were then deleted or updated while live behavioral,
   layout, overflow, policy, and packed-word encoding coverage was preserved.
-  Searches
-  now find no `__lint_touch` or `*_KEEP`; the only six remaining `#[used]`
-  records are loader-consumed link-section constructors/interposition tables,
+  Searches now find no `__lint_touch` or `*_KEEP`; the only six remaining
+  `#[used]` records are loader-consumed link-section constructors/interposition
+  tables,
   and the remaining anonymous witnesses prove typed transitions, cfg-specific
   ABI signatures, assembly signatures, or numeric invariants.
 - Across this item, 102 files changed by 989 insertions and 4,995 deletions, a

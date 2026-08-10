@@ -197,6 +197,30 @@ impl PageCollectOwner<'_> {
             },
         }
     }
+
+    #[inline(always)]
+    unsafe fn transfer_local_to_available(&self, local: LocalFreeList) {
+        match self {
+            // SAFETY: the concrete owner and caller-proven list refer to the
+            // same exclusively accessed page.
+            Self::Local(owner) => unsafe { owner.transfer_local_to_available(local) },
+            // SAFETY: the concrete owner and caller-proven list refer to the
+            // same claimed abandoned page.
+            Self::Abandoned(owner) => unsafe { owner.transfer_local_to_available(local) },
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn publish_recycled_available(&self, available: AvailableFreeList) {
+        match self {
+            // SAFETY: the concrete owner and caller-proven list refer to the
+            // same exclusively accessed page.
+            Self::Local(owner) => unsafe { owner.publish_recycled_available(available) },
+            // SAFETY: the concrete owner and caller-proven list refer to the
+            // same claimed abandoned page.
+            Self::Abandoned(owner) => unsafe { owner.publish_recycled_available(available) },
+        }
+    }
 }
 
 /// # Safety
@@ -271,7 +295,6 @@ pub(crate) unsafe fn mi_page_thread_free_collect_typed(
 #[inline]
 unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
     let page_ptr = owner.page();
-    let page = page_ptr.as_ptr();
     // SAFETY: either concrete owner proof
     // grants exclusive collection access to the atomic thread-free head.
     let remote = unsafe { page_ptr.thread_free_cell().detach_head() };
@@ -293,11 +316,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
             // SAFETY: the owner proof grants
             // exclusive access to both page-local list fields. Both typed lists
             // use the same page-encoded links, so moving the head needs no scan.
-            unsafe {
-                page_ptr.set_free(local.into_available());
-                page_ptr.set_local_free(LocalFreeList::empty());
-                (*page).free_is_zero = false;
-            }
+            unsafe { owner.transfer_local_to_available(local) };
             #[cfg(feature = "bench-diagnostics")]
             crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(false);
         } else if force {
@@ -308,12 +327,9 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
                     // SAFETY: the batch was
                     // detached from this owner immediately above.
                     let new_available = unsafe { owner.prepend_to_available(batch, available) };
-                    // SAFETY: the splice
-                    // result is now the owner's unique available-list head.
-                    unsafe { page_ptr.set_free(new_available) };
-                    // SAFETY: the owner
-                    // grants writable access to this page metadata flag.
-                    unsafe { (*page).free_is_zero = false };
+                    // SAFETY: the splice result is now the owner's unique
+                    // recycled available-list head.
+                    unsafe { owner.publish_recycled_available(new_available) };
                     #[cfg(feature = "bench-diagnostics")]
                     crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(true);
                 }
@@ -363,7 +379,7 @@ pub(crate) unsafe fn collect_page_free_lists_abandoned(page: &OwnedAbandonedPage
 }
 
 /// # Safety
-/// `page` must point to page metadata owned by the current allocator state.
+/// `page` must point to live page metadata owned by the current thread heap.
 #[inline]
 pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
     // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
@@ -377,7 +393,8 @@ pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
 }
 
 /// # Safety
-/// `page` must point to page metadata owned by the current allocator state.
+/// `page` must remain owned by the current thread heap, and `available` and
+/// `local` must be the current exact free-list snapshots for that page.
 #[inline]
 pub(crate) unsafe fn mi_page_free_quick_collect_typed(
     page: LocalPage,
@@ -385,12 +402,12 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
     local: LocalFreeList,
 ) -> bool {
     // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe { mi_page_free_quick_collect_raw(page.page(), available, local) }
+    unsafe { mi_page_free_quick_collect_raw(PageCollectOwner::Local(&page), available, local) }
 }
 
 #[inline(always)]
 unsafe fn mi_page_free_quick_collect_raw(
-    page_ptr: PagePtr,
+    owner: PageCollectOwner<'_>,
     available: AvailableFreeList,
     local: LocalFreeList,
 ) -> bool {
@@ -403,12 +420,7 @@ unsafe fn mi_page_free_quick_collect_raw(
         if local.is_empty() {
             return false;
         }
-        let page = page_ptr.as_ptr();
-        let new_available = local.into_available();
-        let new_local = LocalFreeList::empty();
-        page_ptr.set_free(new_available);
-        page_ptr.set_local_free(new_local);
-        (*page).free_is_zero = false;
+        owner.transfer_local_to_available(local);
         true
     }
 }
@@ -469,7 +481,11 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             if !page_ptr.local_free().is_empty() && page_ptr.free().is_empty() {
                 let available = page_ptr.free();
                 let local = page_ptr.local_free();
-                let _ = mi_page_free_quick_collect_raw(page_ptr, available, local);
+                let _ = mi_page_free_quick_collect_raw(
+                    PageCollectOwner::Abandoned(owned_page),
+                    available,
+                    local,
+                );
             }
         }
         remote_head.leave_published();

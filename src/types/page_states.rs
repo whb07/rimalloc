@@ -1,7 +1,8 @@
 //! Required types for page typestate signatures referenced in freelist_wrappers.
 
+use super::freelist_wrappers::{AvailableFreeList, LocalFreeList};
 use super::ptr::{PagePtr, ThreadHeapPtr};
-use core::marker::PhantomData;
+use core::{marker::PhantomData, ptr};
 
 #[derive(Debug)]
 #[must_use = "allocator state capabilities must be consumed or explicitly returned"]
@@ -312,6 +313,32 @@ impl AvailablePage {
 }
 
 impl LocalPage {
+    /// Publish a recycled local list as the page's available list.
+    ///
+    /// # Safety
+    /// `local` must be the current non-empty local free list for this page, the
+    /// current available list must be empty, and the caller must have exclusive
+    /// write access to both page-local list fields and `free_is_zero`.
+    #[inline(always)]
+    pub(crate) unsafe fn transfer_local_to_available(&self, local: LocalFreeList) {
+        // SAFETY: the local owner and caller-proven list identity authorize the
+        // ordered page-local metadata transition.
+        unsafe { transfer_local_to_available(self.page(), local) };
+    }
+
+    /// Publish an already-spliced recycled list as the page's available list.
+    ///
+    /// # Safety
+    /// `available` must be the new non-empty available list for this page, and
+    /// the caller must have exclusive write access to the available-list field
+    /// and `free_is_zero`.
+    #[inline(always)]
+    pub(crate) unsafe fn publish_recycled_available(&self, available: AvailableFreeList) {
+        // SAFETY: the local owner and caller-proven list identity authorize the
+        // ordered available-list publication.
+        unsafe { publish_recycled_available(self.page(), available) };
+    }
+
     #[inline(always)]
     pub(crate) unsafe fn push_free_block(
         self,
@@ -390,6 +417,33 @@ impl AbandonedMappedPageType {
 }
 
 impl OwnedAbandonedPage {
+    /// Publish a recycled local list as the page's available list.
+    ///
+    /// # Safety
+    /// `local` must be the current non-empty local free list for this page, the
+    /// current available list must be empty, and the caller must retain claimed
+    /// ownership and exclusive write access to both page-local list fields and
+    /// `free_is_zero`.
+    #[inline(always)]
+    pub(crate) unsafe fn transfer_local_to_available(&self, local: LocalFreeList) {
+        // SAFETY: claimed abandoned ownership and caller-proven list identity
+        // authorize the ordered page-local metadata transition.
+        unsafe { transfer_local_to_available(self.page(), local) };
+    }
+
+    /// Publish an already-spliced recycled list as the page's available list.
+    ///
+    /// # Safety
+    /// `available` must be the new non-empty available list for this page, and
+    /// the caller must retain claimed ownership and exclusive write access to
+    /// the available-list field and `free_is_zero`.
+    #[inline(always)]
+    pub(crate) unsafe fn publish_recycled_available(&self, available: AvailableFreeList) {
+        // SAFETY: claimed abandoned ownership and caller-proven list identity
+        // authorize the ordered available-list publication.
+        unsafe { publish_recycled_available(self.page(), available) };
+    }
+
     #[inline(always)]
     pub(crate) fn try_mark_all_free(self) -> Result<AllFreePage<Abandoned>, OwnedAbandonedPage> {
         let page = self.page();
@@ -426,6 +480,31 @@ impl OwnedAbandonedPage {
         // SAFETY: the caller has
         // released atomic ownership while preserving abandoned metadata.
         unsafe { AbandonedPageType::new_unchecked(self.page()) }
+    }
+}
+
+#[inline(always)]
+unsafe fn transfer_local_to_available(page: PagePtr, local: LocalFreeList) {
+    let raw = page.as_ptr();
+    // SAFETY: the caller proves exclusive access, that `local` is this page's
+    // current non-empty local list, and that the current available list is
+    // empty. Preserve the allocator publication order: publish free, clear
+    // local_free, then clear zero status.
+    unsafe {
+        page.set_free(local.into_available());
+        page.set_local_free(LocalFreeList::empty());
+        ptr::addr_of_mut!((*raw).free_is_zero).write(false);
+    }
+}
+
+#[inline(always)]
+unsafe fn publish_recycled_available(page: PagePtr, available: AvailableFreeList) {
+    let raw = page.as_ptr();
+    // SAFETY: the caller proves exclusive access and that `available` is this
+    // page's new non-empty recycled list. Preserve free-before-flag ordering.
+    unsafe {
+        page.set_free(available);
+        ptr::addr_of_mut!((*raw).free_is_zero).write(false);
     }
 }
 

@@ -688,6 +688,7 @@ fn full_collection_matches_c_local_list_cases() {
             fixture
                 .page()
                 .set_free(AvailableFreeList::from_head(fixture.block(3)));
+            (*fixture.page_storage).free_is_zero = true;
             let owner = LocalPage::new_unchecked(fixture.page());
             crate::allocator::page::collect_page_free_lists_local(&owner, force);
             if force {
@@ -696,6 +697,7 @@ fn full_collection_matches_c_local_list_cases() {
                     fixture.order_from(fixture.page().free().head()),
                     ListOrder::from_slices(&[0, 1, 2], &[3, 4])
                 );
+                assert!(!(*fixture.page_storage).free_is_zero);
             } else {
                 assert_eq!(
                     fixture.order_from(fixture.page().local_free().head()),
@@ -705,6 +707,7 @@ fn full_collection_matches_c_local_list_cases() {
                     fixture.order_from(fixture.page().free().head()),
                     ListOrder::from_slices(&[3, 4], &[])
                 );
+                assert!((*fixture.page_storage).free_is_zero);
             }
             assert_eq!(fixture.page().used().get(), 4);
             assert_eq!(fixture.page().capacity().get(), SYNTHETIC_CAPACITY as u16);
@@ -736,6 +739,7 @@ fn full_collection_preserves_local_and_abandoned_owner_state() {
                 crate::core_types::ThreadFreeOwner::Owned,
             )
             .raw();
+            (*fixture.page_storage).free_is_zero = true;
 
             if abandoned {
                 let owner = OwnedAbandonedPage::new_unchecked(fixture.page());
@@ -752,6 +756,7 @@ fn full_collection_preserves_local_and_abandoned_owner_state() {
             assert!(fixture.page().thread_free_cell().load_relaxed().is_owned());
             assert_eq!(fixture.head_index(fixture.page().free().head()), Some(0));
             assert!(fixture.page().local_free().is_empty());
+            assert!(!(*fixture.page_storage).free_is_zero);
         }
     }
 }
@@ -772,6 +777,7 @@ fn empty_available_transfer_preserves_secure_encoded_links() {
         fixture
             .page()
             .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+        (*fixture.page_storage).free_is_zero = true;
         let encoded_links = fixture.next_snapshot();
         let owner = LocalPage::new_unchecked(fixture.page());
         crate::allocator::page::collect_page_free_lists_local(&owner, false);
@@ -780,6 +786,62 @@ fn empty_available_transfer_preserves_secure_encoded_links() {
             fixture.order_from(fixture.page().free().head()),
             ListOrder::from_slices(&[0, 1, 2], &[])
         );
+        assert!(!(*fixture.page_storage).free_is_zero);
+    }
+}
+
+#[test]
+fn quick_collection_preserves_or_clears_zero_status_with_publication() {
+    // An existing available list returns immediately without changing either
+    // list or its zero-status promise.
+    let mut available = SyntheticPage::new(3);
+    available.initialize();
+    unsafe {
+        available.link(&[0, 1]);
+        available.link(&[2]);
+        available
+            .page()
+            .set_free(AvailableFreeList::from_head(available.block(0)));
+        available
+            .page()
+            .set_local_free(LocalFreeList::from_head(available.block(2)));
+        (*available.page_storage).free_is_zero = true;
+        let available_head = available.page().free().head();
+        let local_head = available.page().local_free().head();
+        let result = crate::allocator::page::mi_page_free_quick_collect(available.page_storage);
+        assert!(result);
+        assert_eq!(available.page().free().head(), available_head);
+        assert_eq!(available.page().local_free().head(), local_head);
+        assert!((*available.page_storage).free_is_zero);
+    }
+
+    // Empty lists report no availability and preserve the zero-status promise.
+    let mut empty = SyntheticPage::new(3);
+    empty.initialize();
+    unsafe {
+        (*empty.page_storage).free_is_zero = true;
+        let result = crate::allocator::page::mi_page_free_quick_collect(empty.page_storage);
+        assert!(!result);
+        assert!(empty.page().free().is_empty());
+        assert!(empty.page().local_free().is_empty());
+        assert!((*empty.page_storage).free_is_zero);
+    }
+
+    // A recycled local list becomes the exact available head and invalidates
+    // the zero-status promise.
+    let mut transfer = SyntheticPage::new(3);
+    transfer.initialize();
+    unsafe {
+        transfer.link(&[0, 1, 2]);
+        transfer
+            .page()
+            .set_local_free(LocalFreeList::from_head(transfer.block(0)));
+        (*transfer.page_storage).free_is_zero = true;
+        let result = crate::allocator::page::mi_page_free_quick_collect(transfer.page_storage);
+        assert!(result);
+        assert_eq!(transfer.head_index(transfer.page().free().head()), Some(0));
+        assert!(transfer.page().local_free().is_empty());
+        assert!(!(*transfer.page_storage).free_is_zero);
     }
 }
 

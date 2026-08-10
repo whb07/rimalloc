@@ -106,6 +106,61 @@ fn local_push_free_block_updates_local_list_and_used_count() {
 }
 
 #[test]
+fn recycled_available_publication_updates_coupled_page_fields() {
+    let flags = PageFlags::new(0).expect("zero page flags are valid");
+    let local_thread = ThreadId::new(crate::prim::_mi_prim_thread_id())
+        .expect("platform current-thread id is nonzero and unflagged");
+
+    let mut local_page = MaybeUninit::<mi_page_t>::uninit();
+    let mut local_block = mi_block_t::default();
+    // SAFETY: this initializes a distinct stack-local page as current-thread
+    // owned with an unowned thread-free word and the exact list fields touched
+    // by the local transfer. The block remains live throughout the transition.
+    unsafe {
+        let raw = local_page.as_mut_ptr();
+        let page_ptr = PagePtr::new_unchecked(raw);
+        let local_head = BlockPtr::new_unchecked(ptr::addr_of_mut!(local_block));
+        ptr::addr_of_mut!((*raw).xthread_id)
+            .write(PageThreadId::from_parts(PageOwnerId::Thread(local_thread), flags).raw());
+        ptr::addr_of_mut!((*raw).xthread_free)
+            .write(ThreadFreeWord::from_parts(None, ThreadFreeOwner::Unowned).raw());
+        ptr::addr_of_mut!((*raw).free).write(ptr::null_mut());
+        ptr::addr_of_mut!((*raw).local_free).write(local_head.as_ptr());
+        ptr::addr_of_mut!((*raw).free_is_zero).write(true);
+
+        let local_owner = LocalPage::new_unchecked(page_ptr);
+        local_owner.transfer_local_to_available(LocalFreeList::from_head(local_head));
+        assert_eq!((*raw).free, local_head.as_ptr());
+        assert!((*raw).local_free.is_null());
+        assert!(!(*raw).free_is_zero);
+    }
+
+    let mut abandoned_page = MaybeUninit::<mi_page_t>::uninit();
+    let mut spliced_block = mi_block_t::default();
+    // SAFETY: this initializes a separate stack-local page as abandoned with
+    // its thread-free ownership bit already claimed. The spliced block belongs
+    // to this fixture and remains live throughout publication.
+    unsafe {
+        let raw = abandoned_page.as_mut_ptr();
+        let page_ptr = PagePtr::new_unchecked(raw);
+        let spliced_head = BlockPtr::new_unchecked(ptr::addr_of_mut!(spliced_block));
+        ptr::addr_of_mut!((*raw).xthread_id)
+            .write(PageThreadId::from_parts(PageOwnerId::Abandoned, flags).raw());
+        ptr::addr_of_mut!((*raw).xthread_free)
+            .write(ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned).raw());
+        ptr::addr_of_mut!((*raw).free).write(ptr::null_mut());
+        ptr::addr_of_mut!((*raw).local_free).write(ptr::null_mut());
+        ptr::addr_of_mut!((*raw).free_is_zero).write(true);
+
+        let abandoned_owner = OwnedAbandonedPage::new_unchecked(page_ptr);
+        abandoned_owner.publish_recycled_available(AvailableFreeList::from_head(spliced_head));
+        assert_eq!((*raw).free, spliced_head.as_ptr());
+        assert!((*raw).local_free.is_null());
+        assert!(!(*raw).free_is_zero);
+    }
+}
+
+#[test]
 fn all_free_retire_and_arena_free_preserve_page_identity() {
     // SAFETY: the stack-local page is
     // initialized with the exact `used` counts needed to exercise all-free,

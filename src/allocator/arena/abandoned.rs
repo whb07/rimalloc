@@ -43,10 +43,9 @@ pub(super) unsafe fn mi_abandoned_page_unown(
             };
             // SAFETY: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
             if unsafe { page_ptr.free().is_empty() } && !local_free.is_empty() {
-                unsafe {
-                    page_ptr.set_free(local_free.into_available());
-                    page_ptr.set_local_free(crate::types::LocalFreeList::empty());
-                }
+                // SAFETY: `owned_page` retains the claimed abandoned owner and
+                // `local_free` was read from that same page immediately above.
+                unsafe { owned_page.transfer_local_to_available(local_free) };
             }
             // SAFETY: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
             if unsafe { mi_page_all_free(page) } {

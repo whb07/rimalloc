@@ -7,7 +7,8 @@ use super::constants::{
     MI_THREADID_ABANDONED_MAPPED,
 };
 use super::ptr::PagePtr;
-use super::scalar::{PageMapIndex, PageMapSubIndex, SliceCount};
+use super::scalar::{PageMapPrimaryIndex, PageMapSubIndex, SliceCount};
+use core::ffi::c_void;
 
 /// Represents the low bits in `xthread_id` specifying page status flags.
 #[repr(transparent)]
@@ -185,10 +186,68 @@ pub(crate) enum FreePathKind {
     RemoteSlowFlags,
 }
 
+/// Typed page-map coordinates derived from an arbitrary address without
+/// dereferencing it.
+#[cfg(target_pointer_width = "32")]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct PageMapLocation {
+    index: PageMapPrimaryIndex,
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct PageMapLocation {
+    index: PageMapPrimaryIndex,
+    sub_index: PageMapSubIndex,
+}
+
+#[cfg(target_pointer_width = "32")]
+impl PageMapLocation {
+    #[inline(always)]
+    pub(crate) fn from_ptr(ptr: *const c_void) -> Self {
+        let raw = super::ptr::ptr_exposed_addr(ptr) >> crate::internal::MI_ARENA_SLICE_SHIFT;
+        // Every address representable by a 32-bit pointer maps to one of the
+        // complete flat map's slots.
+        let index = super::scalar::PageMapFlatIndex(raw);
+        Self { index }
+    }
+
+    #[inline(always)]
+    pub(crate) const fn index(self) -> PageMapPrimaryIndex {
+        self.index
+    }
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+impl PageMapLocation {
+    #[inline(always)]
+    pub(crate) fn from_ptr(ptr: *const c_void) -> Option<Self> {
+        let slice = super::ptr::ptr_exposed_addr(ptr) >> crate::internal::MI_ARENA_SLICE_SHIFT;
+        let index =
+            super::scalar::PageMapIndex::new(slice / crate::internal::MI_PAGE_MAP_SUB_COUNT)?;
+        let sub_index = PageMapSubIndex::new(slice % crate::internal::MI_PAGE_MAP_SUB_COUNT)?;
+        Some(Self { index, sub_index })
+    }
+
+    #[inline(always)]
+    pub(crate) const fn index(self) -> PageMapPrimaryIndex {
+        self.index
+    }
+
+    #[inline(always)]
+    pub(crate) const fn sub_index(self) -> PageMapSubIndex {
+        self.sub_index
+    }
+}
+
+/// Evidence for one currently registered page-map range.
+///
+/// On 32-bit targets the primary index addresses the flat map and `sub_index`
+/// is always zero. Registration lifetime remains a caller-proven invariant.
 #[derive(Clone, Copy)]
 pub(crate) struct RegisteredPageRange {
     page: PagePtr,
-    index: PageMapIndex,
+    index: PageMapPrimaryIndex,
     sub_index: PageMapSubIndex,
     slice_count: SliceCount,
 }
@@ -203,7 +262,7 @@ impl RegisteredPageRange {
     #[inline(always)]
     pub(crate) unsafe fn new_unchecked(
         page: PagePtr,
-        index: PageMapIndex,
+        index: PageMapPrimaryIndex,
         sub_index: PageMapSubIndex,
         slice_count: SliceCount,
     ) -> Self {
@@ -221,7 +280,7 @@ impl RegisteredPageRange {
     }
 
     #[inline(always)]
-    pub(crate) fn index(self) -> PageMapIndex {
+    pub(crate) fn index(self) -> PageMapPrimaryIndex {
         self.index
     }
 

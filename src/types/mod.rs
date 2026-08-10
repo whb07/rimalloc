@@ -27,12 +27,19 @@ pub(crate) use ptr::{
     ptr_align_up, ptr_exposed_addr, ptr_is_aligned,
 };
 
+#[cfg(all(test, target_pointer_width = "32"))]
+pub(crate) use scalar::PageMapFlatIndex;
+#[cfg(all(test, target_pointer_width = "32"))]
+pub(crate) use scalar::PageMapIndex;
+#[cfg(not(target_pointer_width = "32"))]
+pub(crate) use scalar::PageMapIndex;
 pub(crate) use scalar::{
     Alignment, AlignmentOffset, ArenaIndex, BatchLen, Bin, BlockSize, DirectBin, EffectiveSize,
     Errno, FullBlockSize, GoodSize, HeapSeq, Heartbeat, MaybeAlignment, NumaNode, OsPageSize,
-    PaddedSize, PageCapacity, PageMapIndex, PageMapSubIndex, PageQueueCount, PageReclaimLimit,
-    PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire, SliceCount, SliceIndex,
-    StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount, WordCount,
+    PaddedSize, PageCapacity, PageMapPrimaryIndex, PageMapSubIndex, PageQueueCount,
+    PageReclaimLimit, PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire,
+    SliceCount, SliceIndex, StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount,
+    WordCount,
 };
 
 pub(crate) use layout::{
@@ -41,7 +48,8 @@ pub(crate) use layout::{
 };
 
 pub(crate) use page::{
-    FreePathKind, PageFlags, PageOwnerId, PageThreadId, RegisteredPageRange, ThreadId,
+    FreePathKind, PageFlags, PageMapLocation, PageOwnerId, PageThreadId, RegisteredPageRange,
+    ThreadId,
 };
 
 pub(crate) use freelist::{ThreadFreeOwner, ThreadFreeWord};

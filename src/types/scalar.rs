@@ -775,6 +775,39 @@ impl PageMapIndex {
     }
 }
 
+/// Flat page-map index used by 32-bit targets. Unlike `PageMapIndex`, this
+/// spans every arena-slice slot in the flat byte map.
+#[cfg(target_pointer_width = "32")]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub(crate) struct PageMapFlatIndex(pub(crate) usize);
+
+#[cfg(target_pointer_width = "32")]
+impl PageMapFlatIndex {
+    pub(crate) const COUNT: usize =
+        crate::internal::MI_PAGE_MAP_COUNT * crate::internal::MI_PAGE_MAP_SUB_COUNT;
+
+    #[inline(always)]
+    pub(crate) const fn new(index: usize) -> Option<Self> {
+        if index < Self::COUNT {
+            Some(Self(index))
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) const fn get(self) -> usize {
+        self.0
+    }
+}
+
+#[cfg(target_pointer_width = "32")]
+pub(crate) type PageMapPrimaryIndex = PageMapFlatIndex;
+
+#[cfg(not(target_pointer_width = "32"))]
+pub(crate) type PageMapPrimaryIndex = PageMapIndex;
+
 /// Submap index. Must be within `MI_PAGE_MAP_SUB_COUNT`.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

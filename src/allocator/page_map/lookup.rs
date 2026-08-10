@@ -30,11 +30,8 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
     if p >= unsafe { mi_page_map_max_address } {
         return None;
     }
-    let idx = _mi_page_map_index(p);
-    let Some(idx) = mi_page_map_index(idx) else {
-        crate::internal::mi_assert_internal!(false);
-        return None;
-    };
+    let location = PageMapLocation::from_ptr(p);
+    let idx = location.index();
     // SAFETY: optional bitmap is initialized with the
     // byte-map and is checked before reading uncommitted page-map bytes.
     if unsafe { !mi_page_map_commit.is_null() }
@@ -110,24 +107,18 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
     if p >= unsafe { mi_page_map_max_address } {
         return None;
     }
-    let mut sub_idx = 0usize;
-    // SAFETY: arbitrary pointer and stack-local
-    // sub-index out pointer are converted to typed page-map domains below.
-    let idx = unsafe { _mi_page_map_index(p, &mut sub_idx) };
-    let Some(idx) = mi_page_map_index(idx) else {
+    let Some(location) = PageMapLocation::from_ptr(p) else {
         crate::internal::mi_assert_internal!(false);
         return None;
     };
-    let Some(sub_idx) = mi_page_map_sub_index(sub_idx) else {
-        crate::internal::mi_assert_internal!(false);
-        return None;
-    };
+    let idx = location.index();
+    let sub_idx = location.sub_index();
     if !mi_page_map_is_committed(idx, ptr::null_mut()) {
         return None;
     }
     // SAFETY: committed top-level index can be loaded
     // through the audited page-map accessor.
-    let sub = unsafe { _mi_page_map_at(idx.get()) };
+    let sub = unsafe { _mi_page_map_at(idx) };
     if sub.is_null() {
         return None;
     }

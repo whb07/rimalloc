@@ -446,33 +446,17 @@ pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
     }
 }
 
-#[cfg(target_pointer_width = "32")]
-#[inline]
-pub fn _mi_page_map_index(p: *const c_void) -> usize {
-    crate::core_types::ptr_exposed_addr(p) >> MI_ARENA_SLICE_SHIFT
-}
-
 #[cfg(not(target_pointer_width = "32"))]
 /// # Safety
-/// If non-null, `sub_idx` must be valid for a `usize` write.
+/// The page map must be initialized and remain live for the returned load.
+/// `idx` must also be below the active runtime page-map count and identify a
+/// committed top-level slot, as established by a registered range or an
+/// address below `mi_page_map_max_address`.
 #[inline]
-pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize {
-    let u = crate::core_types::ptr_exposed_addr(p) / MI_ARENA_SLICE_SIZE;
-    if !sub_idx.is_null() {
-        // SAFETY: page-map lookup helpers convert allocator addresses through validated submap indexes.
-        unsafe { *sub_idx = u % MI_PAGE_MAP_SUB_COUNT };
-    }
-    u / MI_PAGE_MAP_SUB_COUNT
-}
-
-#[cfg(not(target_pointer_width = "32"))]
-/// # Safety
-/// `idx` must be within the initialized page-map base range.
-#[inline]
-pub unsafe fn _mi_page_map_at(idx: usize) -> mi_submap_t {
+pub unsafe fn _mi_page_map_at(idx: crate::core_types::PageMapPrimaryIndex) -> mi_submap_t {
     // SAFETY: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
-        crate::core_types::AtomicPtrField::from_raw(_mi_page_map_base().add(idx))
+        crate::core_types::AtomicPtrField::from_raw(_mi_page_map_base().add(idx.get()))
             .load(crate::core_types::MemoryOrder::Acquire)
     }
 }
@@ -482,7 +466,8 @@ pub unsafe fn _mi_page_map_at(idx: usize) -> mi_submap_t {
 /// `p` must be a pointer in the allocator's page-map domain, and `valid` must be null or writable.
 #[inline]
 pub unsafe fn _mi_ptr_page_ex(p: *const c_void, valid: *mut bool) -> *mut mi_page_t {
-    let idx = _mi_page_map_index(p);
+    let location = crate::core_types::PageMapLocation::from_ptr(p);
+    let idx = location.index().get();
     let ofs = *_mi_page_map_base().add(idx) as usize;
     if !valid.is_null() {
         *valid = ofs != 0;
@@ -516,9 +501,10 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
     // SAFETY: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
-        let mut sub_idx = 0usize;
-        let idx = _mi_page_map_index(p, &mut sub_idx);
-        _mi_page_map_at(idx).add(sub_idx).read()
+        let location = crate::core_types::PageMapLocation::from_ptr(p).unwrap_unchecked();
+        _mi_page_map_at(location.index())
+            .add(location.sub_index().get())
+            .read()
     }
 }
 
@@ -529,13 +515,14 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
     // SAFETY: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
-        let mut sub_idx = 0usize;
-        let idx = _mi_page_map_index(p, &mut sub_idx);
-        let sub = _mi_page_map_at(idx);
+        let Some(location) = crate::core_types::PageMapLocation::from_ptr(p) else {
+            return ptr::null_mut();
+        };
+        let sub = _mi_page_map_at(location.index());
         if sub.is_null() {
             ptr::null_mut()
         } else {
-            *sub.add(sub_idx)
+            *sub.add(location.sub_index().get())
         }
     }
 }

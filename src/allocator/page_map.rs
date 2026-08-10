@@ -4,6 +4,7 @@
 
 use core::ffi::c_void;
 use core::ptr;
+#[cfg(not(target_pointer_width = "32"))]
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::allocator::arena::MI_ARENA_SLICE_SIZE;
@@ -12,7 +13,9 @@ use crate::allocator::options::{
     mi_option_t,
 };
 use crate::allocator::page::MI_LARGE_PAGE_SIZE;
+#[cfg(not(target_pointer_width = "32"))]
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
+#[cfg(not(target_pointer_width = "32"))]
 use crate::bitmap::MI_BFIELD_BITS;
 #[cfg(target_pointer_width = "32")]
 use crate::bitmap::{
@@ -21,21 +24,32 @@ use crate::bitmap::{
 };
 #[cfg(target_pointer_width = "32")]
 use crate::bits::MI_MiB;
-use crate::bits::{MI_KiB, MI_PAGE_MAP_FLAT, MI_SIZE_BITS};
-use crate::core_types::{Errno, PagePtr, RegisteredPageRange, SliceCount};
+#[cfg(not(target_pointer_width = "32"))]
+use crate::bits::MI_PAGE_MAP_FLAT;
+use crate::bits::{MI_KiB, MI_SIZE_BITS};
+#[cfg(target_pointer_width = "32")]
+use crate::core_types::PageMapPrimaryIndex;
+use crate::core_types::{Errno, PageMapLocation, PagePtr, RegisteredPageRange, SliceCount};
 #[cfg(target_pointer_width = "32")]
 use crate::internal::_mi_memzero;
+#[cfg(not(target_pointer_width = "32"))]
+use crate::internal::memid::_mi_memid_create_os;
 use crate::internal::memid::{
-    _mi_memid_create_os, _mi_memid_none, mi_memid_mem_t, mi_memid_os_info_t, mi_memid_t,
-    mi_memkind_t,
+    _mi_memid_none, mi_memid_mem_t, mi_memid_os_info_t, mi_memid_t, mi_memkind_t,
+};
+#[cfg(not(target_pointer_width = "32"))]
+use crate::internal::{
+    _mi_align_up, _mi_os_free, _mi_os_has_overcommit, _mi_page_map_at, MI_PAGE_MAP_COUNT,
+    MI_PAGE_MAP_SUB_SHIFT, mi_submap_t,
 };
 use crate::internal::{
-    _mi_align_up, _mi_divide_up, _mi_is_aligned, _mi_memzero_aligned, _mi_os_commit, _mi_os_free,
-    _mi_os_free_ex, _mi_os_has_overcommit, _mi_os_virtual_address_bits, _mi_page_map_at,
-    _mi_page_map_index, MI_ARENA_SLICE_SHIFT, MI_PAGE_MAP_COUNT, MI_PAGE_MAP_SUB_COUNT,
-    MI_PAGE_MAP_SUB_SHIFT, mi_page_area, mi_page_slice_start, mi_slice_count_of_size, mi_submap_t,
+    _mi_divide_up, _mi_is_aligned, _mi_memzero_aligned, _mi_os_commit, _mi_os_free_ex,
+    _mi_os_virtual_address_bits, MI_ARENA_SLICE_SHIFT, MI_PAGE_MAP_SUB_COUNT, mi_page_area,
+    mi_page_slice_start, mi_slice_count_of_size,
 };
-use crate::os::{_mi_os_alloc_aligned, _mi_os_zalloc};
+use crate::os::_mi_os_alloc_aligned;
+#[cfg(not(target_pointer_width = "32"))]
+use crate::os::_mi_os_zalloc;
 use crate::types::{MI_PAGE_ALIGN, mi_page_t, mi_subproc_t};
 
 mod lookup;
@@ -44,6 +58,7 @@ pub(crate) use lookup::{_mi_safe_ptr_page, _mi_safe_ptr_page_registered};
 
 pub const MI_PAGE_MAP_SUB_SIZE: usize =
     MI_PAGE_MAP_SUB_COUNT * core::mem::size_of::<*mut mi_page_t>();
+#[cfg(not(target_pointer_width = "32"))]
 const MI_PAGE_MAP_ENTRIES_PER_CBIT: usize = if MI_PAGE_MAP_COUNT < MI_BFIELD_BITS {
     1
 } else {
@@ -100,6 +115,7 @@ static mut mi_page_map_memid: mi_memid_t = mi_memid_t {
     initially_committed: false,
     initially_zero: false,
 };
+#[cfg(not(target_pointer_width = "32"))]
 static mut mi_page_map_lock: mi_lock_t = mi_lock_t::new();
 #[cfg(target_pointer_width = "32")]
 static mut mi_page_map_commit: *mut mi_bitmap_t = ptr::null_mut();
@@ -131,18 +147,20 @@ fn mi_page_map_cannot_commit() {
     ));
 }
 
+#[cfg(not(target_pointer_width = "32"))]
 #[inline]
 fn mi_page_map_index(raw: usize) -> Option<crate::core_types::PageMapIndex> {
     crate::core_types::PageMapIndex::new(raw)
 }
 
+#[cfg(not(target_pointer_width = "32"))]
 #[inline]
 fn mi_page_map_sub_index(raw: usize) -> Option<crate::core_types::PageMapSubIndex> {
     crate::core_types::PageMapSubIndex::new(raw)
 }
 
 #[cfg(target_pointer_width = "32")]
-type PageMapGetIndex = (crate::core_types::PageMapIndex, *mut u8, SliceCount);
+type PageMapGetIndex = (PageMapPrimaryIndex, *mut u8, SliceCount);
 
 #[cfg(not(target_pointer_width = "32"))]
 type PageMapGetIndex = (
@@ -182,10 +200,8 @@ unsafe fn mi_page_map_get_idx_from_span(
     page: PagePtr,
     span: PageMapPageSpan,
 ) -> Option<PageMapGetIndex> {
-    // SAFETY: typed page witness bounds the pointer in
-    // the 32-bit page-map index domain.
-    let idx = unsafe { _mi_page_map_index(page.as_ptr().cast::<c_void>()) };
-    Some((mi_page_map_index(idx)?, span.page_start, span.slice_count))
+    let location = PageMapLocation::from_ptr(page.as_ptr().cast::<c_void>());
+    Some((location.index(), span.page_start, span.slice_count))
 }
 
 #[cfg(not(target_pointer_width = "32"))]
@@ -193,15 +209,8 @@ unsafe fn mi_page_map_get_idx_from_span(
     _page: PagePtr,
     span: PageMapPageSpan,
 ) -> Option<PageMapGetIndex> {
-    let mut sub_idx = 0usize;
-    // SAFETY: span start is derived from a live page and
-    // the stack-local sub-index out pointer is writable.
-    let idx = unsafe { _mi_page_map_index(span.page_start.cast::<c_void>(), &mut sub_idx) };
-    Some((
-        mi_page_map_index(idx)?,
-        mi_page_map_sub_index(sub_idx)?,
-        span.slice_count,
-    ))
+    let location = PageMapLocation::from_ptr(span.page_start.cast::<c_void>())?;
+    Some((location.index(), location.sub_index(), span.slice_count))
 }
 
 unsafe fn mi_page_map_get_idx(page: PagePtr) -> Option<PageMapGetIndex> {
@@ -213,6 +222,7 @@ unsafe fn mi_page_map_get_idx(page: PagePtr) -> Option<PageMapGetIndex> {
     unsafe { mi_page_map_get_idx_from_span(page, span) }
 }
 
+#[cfg(not(target_pointer_width = "32"))]
 #[inline]
 fn mi_page_map_is_committed(idx: crate::core_types::PageMapIndex, pbit_idx: *mut usize) -> bool {
     let commit = mi_page_map_commit.load(Ordering::Relaxed);
@@ -231,7 +241,7 @@ const MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT: usize = MI_ARENA_SLICE_SIZE;
 
 #[cfg(target_pointer_width = "32")]
 unsafe fn mi_page_map_ensure_committed(
-    idx: crate::core_types::PageMapIndex,
+    idx: PageMapPrimaryIndex,
     slice_count: crate::core_types::SliceCount,
 ) -> bool {
     let slice_count = slice_count.get() as usize;
@@ -373,7 +383,8 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     }
     // SAFETY: zero index and one-slice witnesses are
     // constants inside the page-map domains used to reserve null-pointer lookup.
-    let zero_index = unsafe { crate::core_types::PageMapIndex::new_unchecked(0) };
+    let zero_location = PageMapLocation::from_ptr(ptr::null());
+    let zero_index = zero_location.index();
     let one_slice = unsafe { crate::core_types::SliceCount::new_unchecked(1) };
     // SAFETY: initialization commits the null-page
     // sentinel byte before writing it.
@@ -483,7 +494,7 @@ unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
 #[cfg(target_pointer_width = "32")]
 unsafe fn mi_page_map_register_range_typed(
     page: PagePtr,
-    idx: crate::core_types::PageMapIndex,
+    idx: PageMapPrimaryIndex,
     slice_count: crate::core_types::SliceCount,
 ) -> Option<RegisteredPageRange> {
     // SAFETY: range commit is bounded by the typed
@@ -571,11 +582,8 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
         crate::internal::mi_assert_internal!(size == 0);
         return;
     };
-    let index = _mi_page_map_index(start.cast_const());
-    let Some(index) = mi_page_map_index(index) else {
-        crate::internal::mi_assert_internal!(false);
-        return;
-    };
+    let location = PageMapLocation::from_ptr(start.cast_const());
+    let index = location.index();
     // SAFETY: typed index/count bounds the commit check
     // for the 32-bit byte-map range.
     if !unsafe { mi_page_map_ensure_committed(index, slice_count) } {
@@ -626,7 +634,7 @@ unsafe fn mi_page_map_ensure_committed(
     // SAFETY: committed top-level index can be read via
     // `_mi_page_map_at` and published to the caller's out slot.
     unsafe {
-        *submap = _mi_page_map_at(idx.get());
+        *submap = _mi_page_map_at(idx);
     }
     true
 }
@@ -803,7 +811,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
         if mi_page_map_is_committed(map_idx, ptr::null_mut()) {
             // SAFETY: committed top-level index can be
             // loaded through the audited page-map accessor.
-            let sub = unsafe { _mi_page_map_at(map_idx.get()) };
+            let sub = unsafe { _mi_page_map_at(map_idx) };
             if !sub.is_null() {
                 // SAFETY: non-null submap was allocated
                 // as a page-map submap and can be described by an OS memid.
@@ -1186,19 +1194,11 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
         crate::internal::mi_assert_internal!(size == 0);
         return;
     };
-    let mut sub_idx = 0usize;
-    // SAFETY: raw start and stack-local sub-index out
-    // pointer are converted to typed page-map domains below.
-    let idx = unsafe { _mi_page_map_index(start.cast_const(), &mut sub_idx) };
-    let Some(idx) = mi_page_map_index(idx) else {
-        crate::internal::mi_assert_internal!(false);
-        return;
-    };
-    let Some(sub_idx) = mi_page_map_sub_index(sub_idx) else {
+    let Some(location) = PageMapLocation::from_ptr(start.cast_const()) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
     // SAFETY: typed index/sub-index/count witnesses
     // bound the non-32-bit range clear.
-    unsafe { mi_page_map_clear_range(idx, sub_idx, slice_count) };
+    unsafe { mi_page_map_clear_range(location.index(), location.sub_index(), slice_count) };
 }

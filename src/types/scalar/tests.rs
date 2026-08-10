@@ -295,6 +295,23 @@ fn page_map_indexes_enforce_domain_bounds() {
     assert!(PageMapSubIndex::new(usize::MAX).is_none());
 }
 
+#[cfg(target_pointer_width = "32")]
+#[test]
+fn flat_page_map_index_covers_all_32_bit_slice_slots() {
+    assert_eq!(PageMapFlatIndex::new(0).map(PageMapFlatIndex::get), Some(0));
+    assert_eq!(PageMapIndex::new(16), None);
+    assert_eq!(
+        PageMapFlatIndex::new(16).map(PageMapFlatIndex::get),
+        Some(16)
+    );
+    assert_eq!(
+        PageMapFlatIndex::new(PageMapFlatIndex::COUNT - 1).map(PageMapFlatIndex::get),
+        Some(PageMapFlatIndex::COUNT - 1)
+    );
+    assert!(PageMapFlatIndex::new(PageMapFlatIndex::COUNT).is_none());
+    assert!(PageMapFlatIndex::new(usize::MAX).is_none());
+}
+
 #[test]
 fn alignment_accepts_only_nonzero_power_of_two() {
     assert_eq!(Alignment::new(1).map(Alignment::get), Some(1));

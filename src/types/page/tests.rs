@@ -116,7 +116,10 @@ fn registered_page_range_preserves_registration_domain() {
     // SAFETY: This fixture uses stack-local
     // page metadata only to exercise `RegisteredPageRange` witness accessors.
     let page = unsafe { PagePtr::new_unchecked(raw.as_mut_ptr()) };
-    let index = PageMapIndex::new(7).expect("valid page-map index");
+    let index = PageMapPrimaryIndex::new(7).expect("valid page-map index");
+    #[cfg(target_pointer_width = "32")]
+    let sub_index = PageMapSubIndex::new(0).expect("flat page maps use sub-index zero");
+    #[cfg(not(target_pointer_width = "32"))]
     let sub_index = PageMapSubIndex::new(3).expect("valid page-map sub-index");
     let slice_count = SliceCount::from_usize(5).expect("valid slice count");
 
@@ -129,4 +132,100 @@ fn registered_page_range_preserves_registration_domain() {
     assert_eq!(range.index(), index);
     assert_eq!(range.sub_index(), sub_index);
     assert_eq!(range.slice_count(), slice_count);
+}
+
+#[test]
+fn page_map_location_maps_null_and_slice_edges() {
+    let slice_size = 1usize << crate::internal::MI_ARENA_SLICE_SHIFT;
+    #[cfg(target_pointer_width = "32")]
+    let zero = PageMapLocation::from_ptr(core::ptr::null());
+    #[cfg(not(target_pointer_width = "32"))]
+    let zero = PageMapLocation::from_ptr(core::ptr::null()).expect("null slot is representable");
+    assert_eq!(zero.index().get(), 0);
+    #[cfg(not(target_pointer_width = "32"))]
+    assert_eq!(zero.sub_index().get(), 0);
+
+    #[cfg(target_pointer_width = "32")]
+    let before_edge = PageMapLocation::from_ptr(core::ptr::without_provenance(slice_size - 1));
+    #[cfg(not(target_pointer_width = "32"))]
+    let before_edge = PageMapLocation::from_ptr(core::ptr::without_provenance(slice_size - 1))
+        .expect("last byte of zero slice is representable");
+    assert_eq!(before_edge.index().get(), 0);
+    #[cfg(not(target_pointer_width = "32"))]
+    assert_eq!(before_edge.sub_index().get(), 0);
+
+    #[cfg(target_pointer_width = "32")]
+    let at_edge = PageMapLocation::from_ptr(core::ptr::without_provenance(slice_size));
+    #[cfg(not(target_pointer_width = "32"))]
+    let at_edge = PageMapLocation::from_ptr(core::ptr::without_provenance(slice_size))
+        .expect("first byte of next slice is representable");
+    #[cfg(target_pointer_width = "32")]
+    {
+        assert_eq!(at_edge.index().get(), 1);
+    }
+    #[cfg(not(target_pointer_width = "32"))]
+    {
+        assert_eq!(at_edge.index().get(), 0);
+        assert_eq!(at_edge.sub_index().get(), 1);
+    }
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[test]
+fn page_map_location_handles_submap_rollover_and_domain_end() {
+    let slice_shift = crate::internal::MI_ARENA_SLICE_SHIFT;
+    let last_sub_slice = crate::internal::MI_PAGE_MAP_SUB_COUNT - 1;
+    let before_rollover =
+        PageMapLocation::from_ptr(core::ptr::without_provenance(last_sub_slice << slice_shift))
+            .expect("last submap slot is representable");
+    assert_eq!(before_rollover.index().get(), 0);
+    assert_eq!(before_rollover.sub_index().get(), last_sub_slice);
+
+    let rollover = PageMapLocation::from_ptr(core::ptr::without_provenance(
+        crate::internal::MI_PAGE_MAP_SUB_COUNT << slice_shift,
+    ))
+    .expect("first slot in the next submap is representable");
+    assert_eq!(rollover.index().get(), 1);
+    assert_eq!(rollover.sub_index().get(), 0);
+
+    let total_slices = crate::internal::MI_PAGE_MAP_COUNT * crate::internal::MI_PAGE_MAP_SUB_COUNT;
+    let max_valid = PageMapLocation::from_ptr(core::ptr::without_provenance(
+        (total_slices - 1) << slice_shift,
+    ))
+    .expect("final page-map slot is representable");
+    assert_eq!(
+        max_valid.index().get(),
+        crate::internal::MI_PAGE_MAP_COUNT - 1
+    );
+    assert_eq!(
+        max_valid.sub_index().get(),
+        crate::internal::MI_PAGE_MAP_SUB_COUNT - 1
+    );
+    assert!(
+        PageMapLocation::from_ptr(core::ptr::without_provenance(total_slices << slice_shift))
+            .is_none()
+    );
+    assert!(PageMapLocation::from_ptr(core::ptr::without_provenance(usize::MAX)).is_none());
+}
+
+#[cfg(target_pointer_width = "32")]
+#[test]
+fn page_map_location_spans_the_complete_flat_map() {
+    assert!(super::super::scalar::PageMapFlatIndex::new(16).is_some());
+    assert!(
+        super::super::scalar::PageMapFlatIndex::new(
+            super::super::scalar::PageMapFlatIndex::COUNT - 1
+        )
+        .is_some()
+    );
+    assert!(
+        super::super::scalar::PageMapFlatIndex::new(super::super::scalar::PageMapFlatIndex::COUNT)
+            .is_none()
+    );
+
+    let max = PageMapLocation::from_ptr(core::ptr::without_provenance(usize::MAX));
+    assert_eq!(
+        max.index().get(),
+        super::super::scalar::PageMapFlatIndex::COUNT - 1
+    );
 }

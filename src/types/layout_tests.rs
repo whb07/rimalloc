@@ -112,6 +112,8 @@ fn scalar_wrappers_match_raw_layout() {
     assert_layout!(OsPageSize, NonZeroUsize);
     assert_layout!(Errno, core::ffi::c_int);
     assert_layout!(PageMapIndex, usize);
+    #[cfg(target_pointer_width = "32")]
+    assert_layout!(PageMapFlatIndex, usize);
     assert_layout!(PageMapSubIndex, usize);
     assert_layout!(MaybeAlignment, usize);
     assert_layout!(Bin, u16);

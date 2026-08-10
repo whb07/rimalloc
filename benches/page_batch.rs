@@ -88,10 +88,12 @@ fn benchmark_page_batches(c: &mut Criterion) {
     let mut forced = c.benchmark_group(format!("page_batch/{encoding}/forced_page_free_collect"));
     configure_group(&mut forced);
     forced.throughput(Throughput::Elements(128));
-    let mut fixture = Fixture::new(FORCE, 128, 3);
-    forced.bench_function("len128/nonempty_destination", |b| {
-        b.iter_custom(|iterations| measure_prepared_transition(&mut fixture, iterations));
-    });
+    for (destination, destination_len) in [("empty", 0), ("nonempty", 3)] {
+        let mut fixture = Fixture::new(FORCE, 128, destination_len);
+        forced.bench_function(format!("len128/{destination}_destination"), |b| {
+            b.iter_custom(|iterations| measure_prepared_transition(&mut fixture, iterations));
+        });
+    }
     forced.finish();
 
     for (name, kind) in [("local_to_available", LOCAL), ("detached_remote", REMOTE)] {

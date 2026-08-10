@@ -289,9 +289,18 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
         // SAFETY[AUDIT:page-free-list-owner-dispatch]: the owner proof grants
         // exclusive access to the available-list field.
         let available = unsafe { page_ptr.free() };
-        if available.is_empty() || force {
+        if available.is_empty() {
+            // SAFETY[AUDIT:page-free-list-owner-dispatch]: the owner proof grants
+            // exclusive access to both page-local list fields. Both typed lists
+            // use the same page-encoded links, so moving the head needs no scan.
+            unsafe {
+                page_ptr.set_free(local.into_available());
+                page_ptr.set_local_free(LocalFreeList::empty());
+                (*page).free_is_zero = false;
+            }
             #[cfg(feature = "bench-diagnostics")]
-            let appended = !available.is_empty();
+            crate::bench_diagnostics::page_free_collect_moved_to_free(false);
+        } else if force {
             // SAFETY[AUDIT:page-free-list-owner-dispatch]: dispatch retains the
             // concrete owner proof while detaching and moving the local batch.
             match unsafe { owner.detach_local_free_batch() } {
@@ -306,7 +315,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
                     // grants writable access to this page metadata flag.
                     unsafe { (*page).free_is_zero = false };
                     #[cfg(feature = "bench-diagnostics")]
-                    crate::bench_diagnostics::page_free_collect_moved_to_free(appended);
+                    crate::bench_diagnostics::page_free_collect_moved_to_free(true);
                 }
                 Ok(None) => {}
                 Err(error) => {
@@ -334,7 +343,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
 #[inline]
 pub(crate) unsafe fn collect_page_free_lists_local(page: &LocalPage, force: bool) {
     #[cfg(feature = "bench-diagnostics")]
-    crate::bench_diagnostics::page_free_collect_call(force);
+    crate::bench_diagnostics::page_free_collect_local_call(force);
     // SAFETY[AUDIT:page-free-list-owner-dispatch]: LocalPage is preserved in
     // the owner enum rather than reconstructed from a raw pointer.
     unsafe { collect_page_free_lists(PageCollectOwner::Local(page), force) };
@@ -347,7 +356,7 @@ pub(crate) unsafe fn collect_page_free_lists_local(page: &LocalPage, force: bool
 #[inline]
 pub(crate) unsafe fn collect_page_free_lists_abandoned(page: &OwnedAbandonedPage, force: bool) {
     #[cfg(feature = "bench-diagnostics")]
-    crate::bench_diagnostics::page_free_collect_call(force);
+    crate::bench_diagnostics::page_free_collect_abandoned_call(force);
     // SAFETY[AUDIT:page-free-list-owner-dispatch]: OwnedAbandonedPage is
     // preserved in the owner enum rather than weakened to LocalPage.
     unsafe { collect_page_free_lists(PageCollectOwner::Abandoned(page), force) };

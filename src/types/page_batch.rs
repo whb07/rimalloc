@@ -186,12 +186,26 @@ impl RemoteFreeBatch {
     ) -> Result<Self, BatchValidationError> {
         // SAFETY[AUDIT:typed-page-batch-scan]: the detached-list owner provides
         // live page metadata and unique traversal access.
-        let core = unsafe { scan_detached_chain(page, head, capacity) }?;
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::remote_list_detached();
+        let core = match unsafe { scan_detached_chain(page, head, capacity) } {
+            Ok(core) => core,
+            Err(error) => {
+                #[cfg(feature = "bench-diagnostics")]
+                crate::bench_diagnostics::remote_validation_failure(error);
+                return Err(error);
+            }
+        };
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::remote_list_scanned(core.len().get() as usize);
         if core.len().get() > used.get() {
-            return Err(BatchValidationError::ExceedsUsed {
+            let error = BatchValidationError::ExceedsUsed {
                 len: core.len(),
                 used,
-            });
+            };
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::remote_validation_failure(error);
+            return Err(error);
         }
         Ok(Self(core))
     }
@@ -330,6 +344,8 @@ unsafe fn detach_local_free_batch(
     // SAFETY[AUDIT:typed-page-batch-local-detach]: the current local list
     // remains published and unchanged throughout the bounded scan.
     let core = unsafe { scan_detached_chain(page, head, capacity) }?;
+    #[cfg(feature = "bench-diagnostics")]
+    crate::bench_diagnostics::local_tail_scan(core.len().get() as usize);
     // SAFETY[AUDIT:typed-page-batch-local-detach]: validation succeeded, so
     // clearing the field uniquely transfers the complete chain to the batch.
     unsafe { page.set_local_free(LocalFreeList::empty()) };

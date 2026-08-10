@@ -10,7 +10,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use crate::options::mi_option_t;
 use crate::types::{mi_block_t, mi_page_t};
 
-const COUNTER_COUNT: usize = 37;
+const COUNTER_COUNT: usize = 66;
 
 #[repr(usize)]
 #[derive(Clone, Copy)]
@@ -52,6 +52,35 @@ enum Counter {
     OptionReadsPageCrossThreadMaxReclaim,
     OptionReadsPageMaxCandidates,
     RemoteFreeCasRetries,
+    PageFreeCollectLocalForce,
+    PageFreeCollectLocalNoForce,
+    PageFreeCollectAbandonedForce,
+    PageFreeCollectAbandonedNoForce,
+    RemoteListsDetached,
+    RemoteListBlocksScanned,
+    RemoteListLen1,
+    RemoteListLen2To4,
+    RemoteListLen5To8,
+    RemoteListLen9To16,
+    RemoteListLen17To32,
+    RemoteListLen33To64,
+    RemoteListLen65Plus,
+    RemoteValidationTooLong,
+    RemoteValidationExceedsUsed,
+    RemoteValidationDifferentPage,
+    RemoteValidationInvalidLink,
+    LocalTailScanCalls,
+    LocalTailBlocksScanned,
+    OwnershipReleaseCasAttempts,
+    OwnershipReleaseCasRetries,
+    OwnershipReleaseNestedCollections,
+    ReabandonFailArenaReject,
+    PageQueueFreshAllocations,
+    PageQueueRetries,
+    PageQueueSelectedFirst,
+    PageQueueSelected2To4,
+    PageQueueSelected5To8,
+    PageQueueSelected9Plus,
 }
 
 const COUNTER_NAMES: [&str; COUNTER_COUNT] = [
@@ -92,6 +121,35 @@ const COUNTER_NAMES: [&str; COUNTER_COUNT] = [
     "option_reads_page_cross_thread_max_reclaim",
     "option_reads_page_max_candidates",
     "remote_free_cas_retries",
+    "page_free_collect_local_force",
+    "page_free_collect_local_no_force",
+    "page_free_collect_abandoned_force",
+    "page_free_collect_abandoned_no_force",
+    "remote_lists_detached",
+    "remote_list_blocks_scanned",
+    "remote_list_len_1",
+    "remote_list_len_2_to_4",
+    "remote_list_len_5_to_8",
+    "remote_list_len_9_to_16",
+    "remote_list_len_17_to_32",
+    "remote_list_len_33_to_64",
+    "remote_list_len_65_plus",
+    "remote_validation_too_long",
+    "remote_validation_exceeds_used",
+    "remote_validation_different_page",
+    "remote_validation_invalid_link",
+    "local_tail_scan_calls",
+    "local_tail_blocks_scanned",
+    "ownership_release_cas_attempts",
+    "ownership_release_cas_retries",
+    "ownership_release_nested_collections",
+    "reabandon_fail_arena_reject",
+    "page_queue_fresh_allocations",
+    "page_queue_retries",
+    "page_queue_selected_first",
+    "page_queue_selected_2_to_4",
+    "page_queue_selected_5_to_8",
+    "page_queue_selected_9_plus",
 ];
 
 static COUNTERS: [AtomicU64; COUNTER_COUNT] = [const { AtomicU64::new(0) }; COUNTER_COUNT];
@@ -102,7 +160,7 @@ fn inc(counter: Counter, amount: u64) {
 }
 
 #[inline(always)]
-pub(crate) fn page_free_collect_call(force: bool) {
+fn page_free_collect_call(force: bool, local_owner: bool) {
     inc(Counter::PageFreeCollectCalls, 1);
     inc(
         if force {
@@ -112,6 +170,25 @@ pub(crate) fn page_free_collect_call(force: bool) {
         },
         1,
     );
+    inc(
+        match (local_owner, force) {
+            (true, true) => Counter::PageFreeCollectLocalForce,
+            (true, false) => Counter::PageFreeCollectLocalNoForce,
+            (false, true) => Counter::PageFreeCollectAbandonedForce,
+            (false, false) => Counter::PageFreeCollectAbandonedNoForce,
+        },
+        1,
+    );
+}
+
+#[inline(always)]
+pub(crate) fn page_free_collect_local_call(force: bool) {
+    page_free_collect_call(force, true);
+}
+
+#[inline(always)]
+pub(crate) fn page_free_collect_abandoned_call(force: bool) {
+    page_free_collect_call(force, false);
 }
 
 #[inline(always)]
@@ -229,6 +306,98 @@ pub(crate) fn page_queue_search(candidates_scanned: usize, success: bool, failed
 #[inline(always)]
 pub(crate) fn remote_free_cas_retry() {
     inc(Counter::RemoteFreeCasRetries, 1);
+}
+
+#[inline(always)]
+pub(crate) fn remote_list_detached() {
+    inc(Counter::RemoteListsDetached, 1);
+}
+
+#[inline(always)]
+pub(crate) fn remote_list_scanned(blocks: usize) {
+    inc(Counter::RemoteListBlocksScanned, blocks as u64);
+    inc(
+        match blocks {
+            1 => Counter::RemoteListLen1,
+            2..=4 => Counter::RemoteListLen2To4,
+            5..=8 => Counter::RemoteListLen5To8,
+            9..=16 => Counter::RemoteListLen9To16,
+            17..=32 => Counter::RemoteListLen17To32,
+            33..=64 => Counter::RemoteListLen33To64,
+            _ => Counter::RemoteListLen65Plus,
+        },
+        1,
+    );
+}
+
+#[inline(always)]
+pub(crate) fn remote_validation_failure(error: crate::core_types::BatchValidationError) {
+    inc(
+        match error {
+            crate::core_types::BatchValidationError::TooLong { .. } => {
+                Counter::RemoteValidationTooLong
+            }
+            crate::core_types::BatchValidationError::ExceedsUsed { .. } => {
+                Counter::RemoteValidationExceedsUsed
+            }
+            crate::core_types::BatchValidationError::DifferentPage => {
+                Counter::RemoteValidationDifferentPage
+            }
+            crate::core_types::BatchValidationError::InvalidLink => {
+                Counter::RemoteValidationInvalidLink
+            }
+        },
+        1,
+    );
+}
+
+#[inline(always)]
+pub(crate) fn local_tail_scan(blocks: usize) {
+    inc(Counter::LocalTailScanCalls, 1);
+    inc(Counter::LocalTailBlocksScanned, blocks as u64);
+}
+
+#[inline(always)]
+pub(crate) fn ownership_release_cas_attempt() {
+    inc(Counter::OwnershipReleaseCasAttempts, 1);
+}
+
+#[inline(always)]
+pub(crate) fn ownership_release_cas_retry() {
+    inc(Counter::OwnershipReleaseCasRetries, 1);
+}
+
+#[inline(always)]
+pub(crate) fn ownership_release_nested_collection() {
+    inc(Counter::OwnershipReleaseNestedCollections, 1);
+}
+
+#[inline(always)]
+pub(crate) fn reabandon_fail_arena_reject() {
+    inc(Counter::ReabandonFailArenaReject, 1);
+}
+
+#[inline(always)]
+pub(crate) fn page_queue_fresh_allocation() {
+    inc(Counter::PageQueueFreshAllocations, 1);
+}
+
+#[inline(always)]
+pub(crate) fn page_queue_retry() {
+    inc(Counter::PageQueueRetries, 1);
+}
+
+#[inline(always)]
+pub(crate) fn page_queue_selected(position: usize) {
+    inc(
+        match position {
+            1 => Counter::PageQueueSelectedFirst,
+            2..=4 => Counter::PageQueueSelected2To4,
+            5..=8 => Counter::PageQueueSelected5To8,
+            _ => Counter::PageQueueSelected9Plus,
+        },
+        1,
+    );
 }
 
 #[inline(always)]
@@ -751,6 +920,80 @@ mod tests {
         // for exactly one diagnostic snapshot.
         assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
         assert_eq!(snapshot.values[Counter::RemoteFreeCasRetries as usize], 1);
+        mi_bench_diagnostics_reset();
+    }
+
+    #[test]
+    fn collection_counter_relationships_and_histograms_are_consistent() {
+        let _guard = test_lock();
+        mi_bench_diagnostics_reset();
+
+        page_free_collect_local_call(true);
+        page_free_collect_local_call(false);
+        page_free_collect_abandoned_call(false);
+        for blocks in [1, 4, 65] {
+            remote_list_detached();
+            remote_list_scanned(blocks);
+        }
+        local_tail_scan(7);
+        ownership_release_cas_attempt();
+        ownership_release_cas_attempt();
+        ownership_release_cas_retry();
+        page_queue_selected(1);
+        page_queue_selected(3);
+        page_queue_selected(6);
+        page_queue_selected(9);
+
+        let mut snapshot = mi_bench_diagnostics_snapshot_t {
+            values: [0; COUNTER_COUNT],
+        };
+        // SAFETY[AUDIT:bench-diagnostics-ffi]: `snapshot` is writable storage
+        // for exactly one diagnostic snapshot.
+        assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
+        let value = |counter: Counter| snapshot.values[counter as usize];
+        assert_eq!(value(Counter::PageFreeCollectCalls), 3);
+        assert_eq!(value(Counter::PageFreeCollectForce), 1);
+        assert_eq!(value(Counter::PageFreeCollectNoForce), 2);
+        assert_eq!(value(Counter::PageFreeCollectLocalForce), 1);
+        assert_eq!(value(Counter::PageFreeCollectLocalNoForce), 1);
+        assert_eq!(value(Counter::PageFreeCollectAbandonedNoForce), 1);
+        assert_eq!(value(Counter::RemoteListsDetached), 3);
+        assert_eq!(value(Counter::RemoteListBlocksScanned), 70);
+        assert_eq!(value(Counter::RemoteListLen1), 1);
+        assert_eq!(value(Counter::RemoteListLen2To4), 1);
+        assert_eq!(value(Counter::RemoteListLen65Plus), 1);
+        assert_eq!(value(Counter::LocalTailScanCalls), 1);
+        assert_eq!(value(Counter::LocalTailBlocksScanned), 7);
+        assert_eq!(value(Counter::OwnershipReleaseCasAttempts), 2);
+        assert_eq!(value(Counter::OwnershipReleaseCasRetries), 1);
+        assert_eq!(value(Counter::PageQueueSelectedFirst), 1);
+        assert_eq!(value(Counter::PageQueueSelected2To4), 1);
+        assert_eq!(value(Counter::PageQueueSelected5To8), 1);
+        assert_eq!(value(Counter::PageQueueSelected9Plus), 1);
+        mi_bench_diagnostics_reset();
+    }
+
+    #[test]
+    fn validation_failure_reasons_are_distinct() {
+        let _guard = test_lock();
+        mi_bench_diagnostics_reset();
+        remote_validation_failure(crate::core_types::BatchValidationError::DifferentPage);
+        remote_validation_failure(crate::core_types::BatchValidationError::InvalidLink);
+
+        let mut snapshot = mi_bench_diagnostics_snapshot_t {
+            values: [0; COUNTER_COUNT],
+        };
+        // SAFETY[AUDIT:bench-diagnostics-ffi]: `snapshot` is writable storage
+        // for exactly one diagnostic snapshot.
+        assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
+        assert_eq!(
+            snapshot.values[Counter::RemoteValidationDifferentPage as usize],
+            1
+        );
+        assert_eq!(
+            snapshot.values[Counter::RemoteValidationInvalidLink as usize],
+            1
+        );
         mi_bench_diagnostics_reset();
     }
 

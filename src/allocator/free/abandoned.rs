@@ -49,8 +49,12 @@ unsafe fn try_reabandon_mapped(
         crate::internal::mi_assert!(!mi_page_is_full(page_raw));
         let reabandoned = _mi_arenas_page_try_reabandon_to_mapped_arena(page, arena_memid);
         #[cfg(feature = "bench-diagnostics")]
-        if reabandoned.is_ok() {
-            crate::bench_diagnostics::reabandon_success();
+        {
+            if reabandoned.is_ok() {
+                crate::bench_diagnostics::reabandon_success();
+            } else {
+                crate::bench_diagnostics::reabandon_fail_arena_reject();
+            }
         }
         reabandoned
     }
@@ -68,9 +72,15 @@ unsafe fn release_abandoned_ownership(
         crate::internal::mi_assert_internal!(!mi_page_all_free(page_raw));
 
         let atomic_tf = page.page().thread_free_cell();
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::ownership_release_cas_attempt();
         while !atomic_tf.release_acq_rel(&mut tf_expect) {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::ownership_release_cas_retry();
             crate::internal::mi_assert_internal!(tf_expect.is_owned());
             while tf_expect.head().is_some() {
+                #[cfg(feature = "bench-diagnostics")]
+                crate::bench_diagnostics::ownership_release_nested_collection();
                 crate::page::collect_page_free_lists_abandoned(&page, false);
                 page = match try_free_abandoned(page) {
                     Ok(page) => return crate::core_types::AbandonedDisposition::Destroyed(page),
@@ -83,6 +93,8 @@ unsafe fn release_abandoned_ownership(
                 tf_expect = atomic_tf.load_relaxed();
             }
             crate::internal::mi_assert_internal!(tf_expect.head().is_none());
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::ownership_release_cas_attempt();
         }
         crate::core_types::AbandonedDisposition::StillAbandoned(page.into_abandoned())
     }

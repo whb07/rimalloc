@@ -65,6 +65,8 @@ pub use flags::{
     mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full,
     mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
 };
+#[cfg(test)]
+pub(crate) use lifecycle::collect_page_free_lists_local;
 #[allow(unused_imports)]
 pub use lifecycle::{
     _mi_page_free_collect, _mi_page_free_collect_partly, mi_page_free_quick_collect,
@@ -568,6 +570,8 @@ unsafe fn mi_page_free_list_extend_typed(
     unsafe {
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::free_list_extend(extend);
         if MI_SECURE < 3 {
             crate::internal::mi_assert_internal!(page.free().is_empty());
             crate::internal::mi_assert_internal!(page.local_free().is_empty());
@@ -1421,6 +1425,8 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             .unwrap_or(ptr::null_mut());
         #[cfg(feature = "bench-diagnostics")]
         let mut failed_extend = false;
+        #[cfg(feature = "bench-diagnostics")]
+        let mut selected_position = 0usize;
 
         while !page.is_null() {
             let next = (*page).next;
@@ -1444,6 +1450,10 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             } else {
                 if page_candidate.is_null() {
                     page_candidate = page;
+                    #[cfg(feature = "bench-diagnostics")]
+                    {
+                        selected_position = count.get();
+                    }
                     candidate_limit =
                         crate::allocator::policy::ActivePolicy::page_candidate_limit();
                 } else if mi_page_all_free(page_candidate) {
@@ -1453,10 +1463,18 @@ unsafe fn mi_page_queue_find_free_ex_typed(
                     let all_free = active.try_mark_all_free().unwrap_unchecked();
                     let _ = _mi_page_free_active_internal(all_free, queue);
                     page_candidate = page;
+                    #[cfg(feature = "bench-diagnostics")]
+                    {
+                        selected_position = count.get();
+                    }
                 } else if mi_page_used_count(page) >= mi_page_used_count(page_candidate)
                     && !mi_page_is_mostly_used(page)
                 {
                     page_candidate = page;
+                    #[cfg(feature = "bench-diagnostics")]
+                    {
+                        selected_position = count.get();
+                    }
                 }
                 if immediate_available || candidate_limit.is_exhausted() {
                     crate::internal::mi_assert_internal!(!page_candidate.is_null());
@@ -1503,12 +1521,16 @@ unsafe fn mi_page_queue_find_free_ex_typed(
                 return None;
             };
             if let Some(fresh) = mi_page_fresh_typed(theap, queue, block_size, slice_count) {
+                #[cfg(feature = "bench-diagnostics")]
+                crate::bench_diagnostics::page_queue_fresh_allocation();
                 crate::internal::mi_assert_internal!(mi_page_immediate_available(
                     fresh.page().as_ptr()
                 ));
                 return Some(fresh);
             }
             if first_try {
+                #[cfg(feature = "bench-diagnostics")]
+                crate::bench_diagnostics::page_queue_retry();
                 let page = mi_page_queue_find_free_ex_typed(theap, queue, block_size, false);
                 crate::internal::mi_assert_internal!(
                     page.as_ref()
@@ -1529,7 +1551,10 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             let _ = mi_page_queue_move_to_front_typed(theap, queue, queued);
             mi_page_reset_retire_expire(page);
             #[cfg(feature = "bench-diagnostics")]
-            crate::bench_diagnostics::page_queue_search(count.get(), true, failed_extend);
+            {
+                crate::bench_diagnostics::page_queue_search(count.get(), true, failed_extend);
+                crate::bench_diagnostics::page_queue_selected(selected_position);
+            }
         }
         crate::internal::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
 

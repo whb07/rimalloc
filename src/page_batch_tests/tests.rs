@@ -612,6 +612,156 @@ fn local_batch_splices_destinations_without_changing_used() {
 }
 
 #[test]
+fn full_collection_matches_c_local_list_cases() {
+    // Empty local list leaves the available head and page fields unchanged.
+    let mut empty = SyntheticPage::new(4);
+    empty.initialize();
+    unsafe {
+        empty.link(&[3, 4]);
+        empty
+            .page()
+            .set_free(AvailableFreeList::from_head(empty.block(3)));
+        (*empty.page_storage).free_is_zero = true;
+        let links = empty.next_snapshot();
+        let owner = LocalPage::new_unchecked(empty.page());
+        crate::page::collect_page_free_lists_local(&owner, false);
+        assert_eq!(empty.head_index(empty.page().free().head()), Some(3));
+        assert!(empty.page().local_free().is_empty());
+        assert_eq!(empty.page().used().get(), 4);
+        assert_eq!(empty.page().capacity().get(), SYNTHETIC_CAPACITY as u16);
+        assert!((*empty.page_storage).free_is_zero);
+        assert_eq!(empty.next_snapshot(), links);
+    }
+
+    // Empty available list receives the exact local head without touching links.
+    let mut transfer = SyntheticPage::new(4);
+    transfer.initialize();
+    unsafe {
+        transfer.link(&[0, 1, 2]);
+        transfer
+            .page()
+            .set_local_free(LocalFreeList::from_head(transfer.block(0)));
+        (*transfer.page_storage).free_is_zero = true;
+        let links = transfer.next_snapshot();
+        let owner = LocalPage::new_unchecked(transfer.page());
+        crate::page::collect_page_free_lists_local(&owner, false);
+        assert_eq!(transfer.head_index(transfer.page().free().head()), Some(0));
+        assert!(transfer.page().local_free().is_empty());
+        assert_eq!(transfer.next_snapshot(), links);
+        assert_eq!(transfer.page().used().get(), 4);
+        assert_eq!(transfer.page().capacity().get(), SYNTHETIC_CAPACITY as u16);
+        assert!(!(*transfer.page_storage).free_is_zero);
+    }
+
+    // A nonempty destination is untouched unless force is requested.
+    for force in [false, true] {
+        let mut fixture = SyntheticPage::new(4);
+        fixture.initialize();
+        unsafe {
+            fixture.link(&[0, 1, 2]);
+            fixture.link(&[3, 4]);
+            fixture
+                .page()
+                .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+            fixture
+                .page()
+                .set_free(AvailableFreeList::from_head(fixture.block(3)));
+            let owner = LocalPage::new_unchecked(fixture.page());
+            crate::page::collect_page_free_lists_local(&owner, force);
+            if force {
+                assert!(fixture.page().local_free().is_empty());
+                assert_eq!(
+                    fixture.order_from(fixture.page().free().head()),
+                    ListOrder::from_slices(&[0, 1, 2], &[3, 4])
+                );
+            } else {
+                assert_eq!(
+                    fixture.order_from(fixture.page().local_free().head()),
+                    ListOrder::from_slices(&[0, 1, 2], &[])
+                );
+                assert_eq!(
+                    fixture.order_from(fixture.page().free().head()),
+                    ListOrder::from_slices(&[3, 4], &[])
+                );
+            }
+            assert_eq!(fixture.page().used().get(), 4);
+            assert_eq!(fixture.page().capacity().get(), SYNTHETIC_CAPACITY as u16);
+        }
+    }
+}
+
+#[test]
+fn full_collection_preserves_local_and_abandoned_owner_state() {
+    for abandoned in [false, true] {
+        let mut fixture = SyntheticPage::new(3);
+        fixture.initialize();
+        unsafe {
+            fixture.link(&[0, 1]);
+            fixture
+                .page()
+                .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+            let thread_id = crate::core_types::ThreadId::new(crate::prim::_mi_prim_thread_id())
+                .expect("current thread id is nonzero and unflagged");
+            let page_owner = if abandoned {
+                crate::core_types::PageOwnerId::Abandoned
+            } else {
+                crate::core_types::PageOwnerId::Thread(thread_id)
+            };
+            fixture.page().thread_id_cell().store_owner(page_owner);
+            let owner_bits = fixture.page().thread_id_cell().load().owner_bits();
+            (*fixture.page_storage).xthread_free = crate::core_types::ThreadFreeWord::from_parts(
+                None,
+                crate::core_types::ThreadFreeOwner::Owned,
+            )
+            .raw();
+
+            if abandoned {
+                let owner = OwnedAbandonedPage::new_unchecked(fixture.page());
+                crate::page::collect_page_free_lists_abandoned(&owner, false);
+            } else {
+                let owner = LocalPage::new_unchecked(fixture.page());
+                crate::page::collect_page_free_lists_local(&owner, false);
+            }
+
+            assert_eq!(
+                fixture.page().thread_id_cell().load().owner_bits(),
+                owner_bits
+            );
+            assert!(fixture.page().thread_free_cell().load_relaxed().is_owned());
+            assert_eq!(fixture.head_index(fixture.page().free().head()), Some(0));
+            assert!(fixture.page().local_free().is_empty());
+        }
+    }
+}
+
+#[cfg(feature = "secure")]
+#[test]
+fn empty_available_transfer_preserves_secure_encoded_links() {
+    let mut fixture = SyntheticPage::new(3);
+    fixture.initialize();
+    unsafe {
+        fixture
+            .page()
+            .set_keys(crate::core_types::PageKeys::from_raw([
+                0x9e37_79b9_7f4a_7c15,
+                0xd1b5_4a32_d192_ed03,
+            ]));
+        fixture.link(&[0, 1, 2]);
+        fixture
+            .page()
+            .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+        let encoded_links = fixture.next_snapshot();
+        let owner = LocalPage::new_unchecked(fixture.page());
+        crate::page::collect_page_free_lists_local(&owner, false);
+        assert_eq!(fixture.next_snapshot(), encoded_links);
+        assert_eq!(
+            fixture.order_from(fixture.page().free().head()),
+            ListOrder::from_slices(&[0, 1, 2], &[])
+        );
+    }
+}
+
+#[test]
 fn abandoned_owner_detaches_and_splices_local_batch_without_local_proof() {
     let mut fixture = SyntheticPage::new(4);
     fixture.initialize();

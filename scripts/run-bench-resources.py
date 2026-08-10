@@ -45,32 +45,40 @@ def enrich(record: dict[str, object]) -> None:
     )
 
 
-def build_ld_preload_probe(artifact_dir: Path) -> tuple[Path, Path]:
+def build_ld_preload_probe(
+    artifact_dir: Path, existing_library: Path | None = None
+) -> tuple[Path, Path]:
     if not sys.platform.startswith("linux"):
         raise SystemExit("ld-preload-interpose resource evidence requires Linux")
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
         raise SystemExit("no C compiler found; set CC")
-    environment = {**os.environ, "CARGO_TARGET_DIR": str(artifact_dir)}
-    subprocess.run(
-        [
-            "cargo", "rustc", "--release", "--features", "interpose", "--lib", "--",
-            "--crate-type", "cdylib",
-        ],
-        check=True,
-        cwd=ROOT,
-        env=environment,
-    )
-    libraries = list((artifact_dir / "release").glob("libmechanical_mimalloc*.so"))
-    libraries.extend(
-        (artifact_dir / "release" / "deps").glob("libmechanical_mimalloc*.so")
-    )
-    if not libraries:
-        raise SystemExit("release interpose cdylib was not produced")
-    library = max(libraries, key=lambda path: path.stat().st_mtime)
-    deployed_library = artifact_dir / "interpose-cdylib.so"
-    shutil.copy2(library, deployed_library)
+    if existing_library is None:
+        environment = {**os.environ, "CARGO_TARGET_DIR": str(artifact_dir)}
+        subprocess.run(
+            [
+                "cargo", "rustc", "--release", "--features", "interpose", "--lib", "--",
+                "--crate-type", "cdylib",
+            ],
+            check=True,
+            cwd=ROOT,
+            env=environment,
+        )
+        libraries = list((artifact_dir / "release").glob("libmechanical_mimalloc*.so"))
+        libraries.extend(
+            (artifact_dir / "release" / "deps").glob("libmechanical_mimalloc*.so")
+        )
+        if not libraries:
+            raise SystemExit("release interpose cdylib was not produced")
+        library = max(libraries, key=lambda path: path.stat().st_mtime)
+        deployed_library = artifact_dir / "interpose-cdylib.so"
+        shutil.copy2(library, deployed_library)
+    else:
+        deployed_library = existing_library.resolve()
+        if not deployed_library.is_file():
+            raise SystemExit(f"preload library does not exist: {deployed_library}")
     executable = artifact_dir / "release" / "ld_preload_resource_probe"
+    executable.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
             cc, "-O2", "-std=c11", "-Wall", "-Wextra", "-Werror", "-pthread",
@@ -97,18 +105,24 @@ def main() -> None:
     parser.add_argument("--live-set", type=int, default=4096)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--ld-preload", action="store_true")
+    parser.add_argument("--preload-library")
     args = parser.parse_args()
 
     artifact_dir = Path(args.artifact_dir).resolve()
     target_dir = artifact_dir
     feature_csv = ",".join(sorted(args.features))
     preload_library = None
+    existing_library = Path(args.preload_library) if args.preload_library else None
+    if existing_library is not None and not args.ld_preload:
+        raise SystemExit("--preload-library requires --ld-preload")
     if args.ld_preload:
-        if args.artifact_mode != "ld-preload-interpose" or args.features != ["interpose"]:
-            raise SystemExit("--ld-preload requires mode ld-preload-interpose and feature interpose")
+        if existing_library is None and args.artifact_mode != "ld-preload-interpose":
+            raise SystemExit("default --ld-preload build requires mode ld-preload-interpose")
+        if args.features != ["interpose"]:
+            raise SystemExit("--ld-preload requires feature interpose")
         if args.allocators and args.allocators != ["preloaded-libc"]:
             raise SystemExit("--ld-preload supports only the preloaded-libc allocator label")
-        executable, preload_library = build_ld_preload_probe(artifact_dir)
+        executable, preload_library = build_ld_preload_probe(artifact_dir, existing_library)
     else:
         subprocess.run(
             [

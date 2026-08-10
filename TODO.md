@@ -339,26 +339,27 @@ absent.
 
 ## E00 — Establish a fresh current-HEAD C parity baseline
 
-Status: [ ] not started
+Status: [x] completed 2026-08-09; see `PERFORMANCE_WORKLOG.md` and
+`target/perf-experiments/E00-current-head-baseline/`
 
 Purpose: replace the pre-fix `8baba5e` full-suite numbers with authoritative
 current-HEAD evidence.
 
 ### Work
 
-- [ ] Build a fresh C mimalloc 3.3.2 release shared library.
-- [ ] Build a fresh current Rust `interpose` release shared library.
-- [ ] Record artifact hashes, dynamic dependencies, exported symbols, toolchain,
+- [x] Build a fresh C mimalloc 3.3.2 release shared library.
+- [x] Build a fresh current Rust `interpose` release shared library.
+- [x] Record artifact hashes, dynamic dependencies, exported symbols, toolchain,
       host state, and exact commands.
-- [ ] Run `allt` with C first/Rust second for five repetitions.
-- [ ] Run `allt` with Rust first/C second for five repetitions.
-- [ ] Run both Larson variants in a separate ten-sample balanced comparison.
-- [ ] Run alloc-test1/N in a separate ten-sample balanced comparison to confirm
+- [x] Run `allt` with C first/Rust second for five repetitions.
+- [x] Run `allt` with Rust first/C second for five repetitions.
+- [x] Run both Larson variants in a separate ten-sample balanced comparison.
+- [x] Run alloc-test1/N in a separate ten-sample balanced comparison to confirm
       whether the repaired C++ path removed the old 6% to 7% loss.
-- [ ] Collect `perf stat` for Larson sized/unsized, xmalloc, alloc-test1/N,
+- [x] Collect `perf stat` for Larson sized/unsized, xmalloc, alloc-test1/N,
       glibc-simple/thread, and malloc-large.
-- [ ] Run the repository resource probes for both artifacts.
-- [ ] Publish a per-workload table with mean, median, standard deviation,
+- [x] Run the repository resource probes for both artifacts.
+- [x] Publish a per-workload table with mean, median, standard deviation,
       coefficient of variation, order split, Rust/C ratio, RSS, and page faults.
 
 ### Completion condition
@@ -368,7 +369,7 @@ artifact hashes. Do not begin optimization from the old full-suite report.
 
 ## E01 — Improve non-production observability of collection work
 
-Status: [ ] blocked on E00
+Status: [x] complete; diagnostics retained; E02 unblocked
 
 Purpose: distinguish excessive call frequency from excessive work per call
 before changing collection logic.
@@ -383,17 +384,17 @@ before changing collection logic.
 
 ### Counters to add or verify
 
-- [ ] Full collection calls split by local/abandoned owner and force/non-force.
-- [ ] Partial collection calls and final-head collection calls.
-- [ ] Remote lists detached, total blocks scanned, and length histogram buckets.
-- [ ] Local-to-available moves split between empty-available O(1) moves and
+- [x] Full collection calls split by local/abandoned owner and force/non-force.
+- [x] Partial collection calls and final-head collection calls.
+- [x] Remote lists detached, total blocks scanned, and length histogram buckets.
+- [x] Local-to-available moves split between empty-available O(1) moves and
       force append scans.
-- [ ] Local-list blocks scanned solely to find a tail.
-- [ ] Remote-list validation failures by reason.
-- [ ] Ownership-release CAS attempts and retries.
-- [ ] Reclaim attempts/success/failure by reason, including thread-uninitialized.
-- [ ] Reabandon attempts/success/failure by reason.
-- [ ] Queue searches, candidates scanned, selected position, failed extension,
+- [x] Local-list blocks scanned solely to find a tail.
+- [x] Remote-list validation failures by reason.
+- [x] Ownership-release CAS attempts and retries.
+- [x] Reclaim attempts/success/failure by reason, including thread-uninitialized.
+- [x] Reabandon attempts/success/failure by reason.
+- [x] Queue searches, candidates scanned, selected position, failed extension,
       fresh-page allocation, and retry.
 
 Prefer per-thread diagnostics accumulation where possible. Use atomics only
@@ -402,12 +403,12 @@ rate and scaling are exact and tested.
 
 ### Validation
 
-- [ ] Add tests for reset, snapshot, JSON output, and counter relationships.
-- [ ] Build default release without `bench-diagnostics` and prove with `nm`,
+- [x] Add tests for reset, snapshot, JSON output, and counter relationships.
+- [x] Build default release without `bench-diagnostics` and prove with `nm`,
       `.text` size, and hot-path assembly that diagnostics add no production
       symbols or instructions.
-- [ ] Run diagnostic builds of Larson, xmalloc, glibc-thread, and page-batch.
-- [ ] Normalize counts per allocator operation and record which branches or
+- [x] Run diagnostic builds of Larson, xmalloc, glibc-thread, and page-batch.
+- [x] Normalize counts per allocator operation and record which branches or
       scans dominate.
 
 ### Completion condition
@@ -417,7 +418,9 @@ entirely out of default release. Diagnostics timing is never a speed claim.
 
 ## E02 — Eliminate the redundant empty-available local-list scan
 
-Status: [ ] blocked on E01
+Status: [x] original attempt rejected 2026-08-09; corrected experiment E02R
+**ACCEPTED** 2026-08-10 after root-causing the configuration-dependent forced
+splice defect; production O(1) transfer retained; see `PERFORMANCE_WORKLOG.md`
 
 Priority: highest current production candidate.
 
@@ -444,39 +447,39 @@ count and link encoding without reading the tail.
 
 ### Candidate modification
 
-- [ ] Split local collection into the same cases as C:
+- [x] Split local collection into the same cases as C:
   1. `local_free` empty: do nothing;
   2. `free` empty: transfer `local_free` to `free` in O(1), clear
      `local_free`, and clear `free_is_zero`;
   3. `free` nonempty and `force == true`: perform the validated tail scan and
      prepend/append exactly as required;
   4. `free` nonempty and not forced: leave `local_free` in place.
-- [ ] Do not alter remote-list collection, used-count accounting, force
+- [x] Do not alter remote-list collection, used-count accounting, force
       semantics, corruption handling, or list encoding in this experiment.
-- [ ] Do not add a new abstraction if existing typed list conversions can
+- [x] Do not add a new abstraction if existing typed list conversions can
       express the transfer.
 
 ### Tests to add before timing
 
-- [ ] Empty local list leaves every field unchanged.
-- [ ] Nonempty local plus empty available transfers the exact head, clears
+- [x] Empty local list leaves every field unchanged.
+- [x] Nonempty local plus empty available transfers the exact head, clears
       local, preserves every link, preserves used/capacity, and clears
       `free_is_zero`.
-- [ ] Nonempty local plus nonempty available and `force == false` does not
+- [x] Nonempty local plus nonempty available and `force == false` does not
       splice lists.
-- [ ] Forced nonempty/nonempty collection preserves every block exactly once.
-- [ ] Both `LocalPage` and `OwnedAbandonedPage` owner paths preserve their
+- [x] Forced nonempty/nonempty collection preserves every block exactly once.
+- [x] Both `LocalPage` and `OwnedAbandonedPage` owner paths preserve their
       ownership state.
-- [ ] Secure encoded-link mode passes the same cases.
-- [ ] Corrupted forced lists still report failure without an out-of-bounds
+- [x] Secure encoded-link mode passes the same cases.
+- [x] Corrupted forced lists still report failure without an out-of-bounds
       read.
 
 ### Mechanism validation
 
-- [ ] Assembly shows no local-list traversal in the empty-available branch.
-- [ ] Diagnostics show fewer local-list nodes scanned, with unchanged remote
+- [x] Assembly shows no local-list traversal in the empty-available branch.
+- [x] Diagnostics show fewer local-list nodes scanned, with unchanged remote
       blocks collected and used counts.
-- [ ] No new call, owner-discriminant test, or locked instruction appears in
+- [x] No new call, owner-discriminant test, or locked instruction appears in
       the common branch.
 
 ### Performance validation
@@ -492,7 +495,7 @@ weakened rather than made redundant by ownership.
 
 ## E03 — Match C's abandoned-page decision spine
 
-Status: [ ] blocked on E02 decision
+Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
 
 General hypothesis: Rust performs the same collect → free → reclaim → reabandon
 → unown policy as C, but linear ownership return shapes may leave additional
@@ -508,12 +511,12 @@ branches, moves, calls, or spills in `collect_after_remote_free`.
 
 ### Investigation
 
-- [ ] Produce annotated Rust/C control-flow graphs or side-by-side assembly.
-- [ ] Count function bytes, calls, control transfers, stack frame size, spills,
+- [x] Produce annotated Rust/C control-flow graphs or side-by-side assembly.
+- [x] Count function bytes, calls, control transfers, stack frame size, spills,
       page-field reloads, and reconstruction of thread-free words.
-- [ ] Attribute each extra Rust instruction to a required invariant, an
+- [x] Attribute each extra Rust instruction to a required invariant, an
       optimizer/code-layout effect, or redundant source work.
-- [ ] Use E01 counters to confirm the hot outcomes and their frequencies.
+- [x] Use E01 counters to confirm the hot outcomes and their frequencies.
 
 ### Candidate modification
 
@@ -534,20 +537,22 @@ single obvious owner for every success and failure edge.
 
 ### Tests and validation
 
-- [ ] Add transition-table tests for destroyed, reclaimed, mapped, and
-      still-abandoned outcomes.
-- [ ] Add concurrent remote frees during ownership release to the loom or
-      concurrency-model coverage.
-- [ ] Confirm unchanged atomic orderings and CAS success/failure behavior.
-- [ ] Confirm assembly removes the exact targeted work.
-- [ ] Run the cross-thread primary and held-out workload families.
+- [x] Verify transition coverage for destroyed, reclaimed, mapped, and
+      still-abandoned outcomes. (Existing typed disposition/state tests retained;
+      no candidate required new behavior tests.)
+- [x] Verify concurrent remote frees during ownership release in loom or
+      concurrency-model coverage. (Existing release-vs-push model retained.)
+- [x] Confirm unchanged atomic orderings and CAS success/failure behavior.
+- [x] Confirm assembly removes the exact targeted work. (`N/A`: no candidate.)
+- [x] Run the cross-thread primary and held-out workload families. (`N/A`: no candidate.)
 
 Reject if samples merely move between helper symbols or code size grows enough
 to erase the intended instruction reduction.
 
 ## E04 — Re-evaluate early uninitialized-thread reclaim rejection
 
-Status: [ ] blocked on E03 decision
+Status: [x] completed 2026-08-09; **REJECTED** at balanced focused screen;
+see `PERFORMANCE_WORKLOG.md`
 
 General hypothesis: a thread that is not initialized cannot reclaim an
 abandoned page. Existing diagnostics previously showed this outcome for about
@@ -559,32 +564,34 @@ apparent effect. Do not keep it without stronger evidence now.
 
 ### Candidate modification
 
-- [ ] Preserve the order: collect remote blocks, then try to free a now-empty
+- [x] Preserve the order: collect remote blocks, then try to free a now-empty
       page first.
-- [ ] Only after `try_free_abandoned` fails, test whether the current thread is
+- [x] Only after `try_free_abandoned` fails, test whether the current thread is
       initialized before reading or constructing reclaim-only policy state.
-- [ ] If uninitialized, skip only reclaim. Continue with the unchanged
+- [x] If uninitialized, skip only reclaim. Continue with the unchanged
       reabandon and ownership-release paths.
-- [ ] Do not initialize TLS as a side effect and do not cache option values
+- [x] Do not initialize TLS as a side effect and do not cache option values
       across public allocator calls.
 
 ### Validation
 
-- [ ] Tests cover initialized and uninitialized freeing threads, including TLS
-      destructor timing.
-- [ ] Diagnostics show identical disposition counts and fewer reclaim-policy
+- [x] Verify existing tests cover initialized and uninitialized freeing threads,
+      including TLS destructor timing; no new behavior surface was introduced.
+- [x] Diagnostics show identical disposition counts and fewer reclaim-policy
       reads on the uninitialized path.
-- [ ] Assembly shows the avoided option/policy work and no larger return-value
-      spill.
-- [ ] Measure both a workload with uninitialized releasing threads and one with
+- [x] Inspect assembly for the avoided option/policy work and return-value
+      spills. (Option work moved as intended, but total function size grew.)
+- [x] Measure both a workload with uninitialized releasing threads and one with
       initialized cross-thread reclaim. The second must remain neutral.
-- [ ] Run lifecycle, thread shutdown, C++ TLS, stress, and full guard suites.
+- [x] Run the proportionate lifecycle/concurrency gate before timing. (Focused
+      concurrency passed; the complete release gate was intentionally not run
+      after the candidate failed its balanced performance rejection screen.)
 
 Reject again if two balanced comparisons do not reproduce the same direction.
 
 ## E05 — Remove any second traversal of a detached remote batch
 
-Status: [ ] blocked on E04 decision
+Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
 
 General hypothesis: each detached remote chain should be traversed at most once
 to validate it, find its tail, and count its blocks. That one traversal should
@@ -593,51 +600,48 @@ subsequent splice and used-count update.
 
 ### Investigation
 
-- [ ] Trace full local collection, full abandoned collection, and partial
+- [x] Trace full local collection, full abandoned collection, and partial
       abandoned collection separately.
-- [ ] With E01 counters and annotated assembly, determine whether any path
+- [x] With E01 counters and annotated assembly, determine whether any path
       traverses the same links twice.
-- [ ] Distinguish a second traversal from the already-rejected idea of merely
+- [x] Distinguish a second traversal from the already-rejected idea of merely
       deleting per-node membership validation.
 
 ### Candidate modification
 
 Proceed only if a real second traversal is measured.
 
-- [ ] Make the first successful scan return and retain the existing typed
-      `RemoteFreeBatch` metadata.
-- [ ] Pass that batch directly to the splice/update operation.
-- [ ] Do not rediscover tail, length, page, capacity, or used count after the
-      scan unless an intervening mutation invalidates it.
-- [ ] Preserve all current scan bounds and corruption classifications.
-- [ ] Do not widen a common return value if that introduces spills; confirm the
-      ABI/codegen before benchmarking.
+- [x] Candidate steps were evaluated and found already implemented: the first
+      successful scan returns `RemoteFreeBatch`, and splice/accounting consume
+      that metadata without rediscovery.
+- [x] Existing scan bounds, corruption classifications, and return ABI were
+      preserved; no candidate source change was warranted.
 
 ### Validation
 
-- [ ] Counter relationships prove one scan per detached batch.
-- [ ] Property/fuzz tests cover lengths 1, capacity, over-capacity, cycles,
+- [x] Counter relationships prove one scan per detached batch.
+- [x] Property/fuzz tests cover lengths 1, capacity, over-capacity, cycles,
       foreign-page links, invalid encoded links, and `len > used`.
-- [ ] Secure and ordinary link modes pass.
-- [ ] Instructions per collected block decrease without increasing branch
-      misses or code size materially.
+- [x] Secure and ordinary link modes pass.
+- [x] Assembly confirmed there is no second traversal to remove; therefore the
+      candidate-only instruction/branch/code-size criterion is not applicable.
 
 If no second traversal exists after E02, record `NO CHANGE` and continue.
 
 ## E06 — Tighten the ownership-release CAS loop
 
-Status: [ ] blocked on E05 decision
+Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
 
 General hypothesis: Rust and C implement the same ownership-release protocol,
 but typed state construction or reloads may add work on CAS failure/retry edges.
 
 ### Work
 
-- [ ] Compare `release_abandoned_ownership` with C
+- [x] Compare `release_abandoned_ownership` with C
       `mi_abandoned_page_unown_from_free` instruction by instruction.
-- [ ] Use diagnostics to record CAS attempts, retries, and nested collections.
-- [ ] Confirm whether the common case is first-attempt success.
-- [ ] Identify repeated construction of `(head, owned)` words, redundant loads,
+- [x] Use diagnostics to record CAS attempts, retries, and nested collections.
+- [x] Confirm whether the common case is first-attempt success.
+- [x] Identify repeated construction of `(head, owned)` words, redundant loads,
       or conversions that survive optimization.
 
 ### Candidate modification
@@ -648,16 +652,17 @@ Do not change ordering for an x86-only instruction-count claim.
 
 ### Validation
 
-- [ ] Loom/concurrency models cover remote push racing with owner release,
+- [x] Loom/concurrency models cover remote push racing with owner release,
       multiple retries, a newly nonempty list, page destruction, and reabandon.
-- [ ] Assembly removes the targeted load/construction/branch.
-- [ ] CAS retry counts and page dispositions remain logically identical.
-- [ ] Cross-thread workloads improve or remain neutral; local-only workloads
-      and code layout do not regress.
+- [x] Assembly proved the suspected repeated construction/load does not survive
+      optimization, so there was no targeted instruction to remove.
+- [x] CAS retry counts and page dispositions were recorded and conserved.
+- [x] Cross-thread and local controls were measured; no candidate was created
+      after the mechanism gate failed.
 
 ## E07 — Reassess reclaim and reabandon input derivation
 
-Status: [ ] blocked on E06 decision
+Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
 
 General hypothesis: successful or late-stage reclaim/reabandon paths may
 rederive arena identity, slice range, page ownership, thread-pool state, or
@@ -672,37 +677,40 @@ so widening the common failure path is likely harmful.
 
 ### Candidate modification
 
-- [ ] Select one repeated derivation visible in assembly and counters.
-- [ ] Carry the smallest scalar/newtype proof that removes it.
-- [ ] Do not introduce a context struct across the common failure path unless
-      assembly proves it stays in registers.
-- [ ] Preserve arena suitability, page-map, bitmap, and abandonment validation.
+- [x] Select one repeated derivation visible in assembly and counters.
+      (`NO CHANGE`: none survives the evidence gate.)
+- [x] No repeated derivation survived the evidence gate, so no scalar/newtype or
+      context object was introduced.
+- [x] Arena suitability, page-map, bitmap, and abandonment validation remained
+      unchanged.
 
 ### Validation
 
-- [ ] Measure a workload that actually reaches successful/late reclaim plus
-      held-out workloads dominated by early failure.
-- [ ] Confirm no additional spill or larger error return on early exits.
-- [ ] Record arena rollback, purge, reclaim, reabandon, and RSS changes.
+- [x] Measured Larson successful/late reclaim and xmalloc early-failure control.
+- [x] Assembly confirmed no candidate spill or larger early-exit return because
+      no source change was made.
+- [x] Recorded reclaim/reabandon dispositions and RSS; arena rollback and purge
+      policy were unchanged and the final production artifact matches B00.
 
 If the evidence gate is not met, record `NO CHANGE`.
 
 ## E08 — Inspect the residual page-queue search difference
 
-Status: [ ] blocked on E07 decision
+Status: [x] completed 2026-08-09; **REJECTED** after two balanced screens;
+see `PERFORMANCE_WORKLOG.md`
 
 Priority: secondary. The retained in-place relink already removed the largest
 known queue mismatch and all locked instructions from normal move-to-front.
 
 ### Work
 
-- [ ] Compare `mi_page_queue_find_free_ex_typed` with C
+- [x] Compare `mi_page_queue_find_free_ex_typed` with C
       `mi_page_queue_find_free_ex` in source and annotated assembly.
-- [ ] Separate queue scanning, collection calls, candidate selection, page
+- [x] Separate queue scanning, collection calls, candidate selection, page
       extension, fresh-page allocation, and move-to-front costs.
-- [ ] Use E01 counters to compare candidates scanned and outcome frequency with
+- [x] Use E01 counters to compare candidates scanned and outcome frequency with
       C where equivalent instrumentation is possible.
-- [ ] Identify one extra load, transition, option read, or proof reconstruction
+- [x] Identify one extra load, transition, option read, or proof reconstruction
       on a common outcome.
 
 ### Candidate modification
@@ -714,15 +722,15 @@ order, and update direct-page caches correctly.
 
 ### Required tests
 
-- [ ] Empty queue and fresh-page path.
-- [ ] Immediate first-page success.
-- [ ] Expandable candidate.
-- [ ] Multiple candidates and candidate limit.
-- [ ] All-free candidate disposal.
-- [ ] Full-page movement and retain policy.
-- [ ] Failed extension and first-try retry.
-- [ ] Middle/tail move-to-front with direct cache updates.
-- [ ] Queue/heap counts, links, owner words, and flags after every transition.
+- [x] Empty queue and fresh-page path.
+- [x] Immediate first-page success.
+- [x] Expandable candidate.
+- [x] Multiple candidates and candidate limit.
+- [x] All-free candidate disposal.
+- [x] Full-page movement and retain policy.
+- [x] Failed extension and first-try retry.
+- [x] Middle/tail move-to-front with direct cache updates.
+- [x] Queue/heap counts, links, owner words, and flags after every transition.
 
 Reject source-only simplifications that do not reduce emitted work. Do not
 retry whole-function forced inlining, generic classification simplification,
@@ -730,21 +738,21 @@ or power-of-two membership masks; they have already regressed measured cases.
 
 ## E09 — Verify every C++ allocation/deallocation fast boundary
 
-Status: [ ] blocked on E08 decision
+Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
 
 Purpose: ensure the earlier `_Znwm`/`_Znam` repair generalizes across the full
 C++ ABI instead of only the Larson-imported symbols.
 
 ### Work
 
-- [ ] Inventory scalar/array, throwing/nothrow, sized/unsized, and aligned
+- [x] Inventory scalar/array, throwing/nothrow, sized/unsized, and aligned
       `new`/`delete` symbols for supported Itanium ABI builds.
-- [ ] Confirm symbol ownership with `nm`, `readelf`, and `dladdr` tests.
-- [ ] Compare Rust and C entry assembly for every overload.
-- [ ] Confirm common successful ordinary allocations use the assembly allocator
+- [x] Confirm symbol ownership with `nm`, `readelf`, and `dladdr` tests.
+- [x] Compare Rust and C entry assembly for every overload.
+- [x] Confirm common successful ordinary allocations use the assembly allocator
       fast path and reach the optimized C++ helper only when semantics require
       failure handling.
-- [ ] Confirm delete overloads tail-call the correct free route without
+- [x] Confirm delete overloads tail-call the correct free route without
       duplicate size/usable-size work in release.
 
 ### Candidate modification
@@ -756,16 +764,16 @@ nothrow behavior.
 
 ### Validation
 
-- [ ] C++11, C++14, C++17, and C++20 semantic parity.
-- [ ] Dynamic, static, and standalone preload artifacts.
-- [ ] Throwing, nothrow, zero-size, OOM, over-aligned, sized-delete, and array
+- [x] C++11, C++14, C++17, and C++20 semantic parity.
+- [x] Dynamic, static, and standalone preload artifacts.
+- [x] Throwing, nothrow, zero-size, OOM, over-aligned, sized-delete, and array
       cases.
-- [ ] alloc-test1/N and Larson sized/unsized as primary probes.
-- [ ] Redis, glibc-simple/thread, RocksDB, and complete `allt` as guards.
+- [x] alloc-test1/N and Larson sized/unsized as primary probes.
+- [x] Redis, glibc-simple/thread, RocksDB, and complete `allt` as guards.
 
 ## E10 — Revisit page refill/extension only if the new baseline identifies it
 
-Status: [ ] blocked on E09 decision and E00 evidence
+Status: [x] completed 2026-08-09; `NO CHANGE`; see `PERFORMANCE_WORKLOG.md`
 
 The ordinary refill loop already closely matches C and previous unrolling,
 nonnull specialization, and alternate loop forms were neutral or slower.
@@ -778,37 +786,38 @@ gap after normalizing by blocks extended.
 
 ### Work if the gate is met
 
-- [ ] Compare blocks extended per call and calls per operation before comparing
+- [x] Compare blocks extended per call and calls per operation before comparing
       function samples.
-- [ ] Compare Rust/C loop-carried dependencies, link store order, address
+- [x] Compare Rust/C loop-carried dependencies, link store order, address
       arithmetic, spills, and secure/default compile-time separation.
-- [ ] Check whether the difference is policy frequency or cost per block.
-- [ ] Select one surplus instruction or reload as the candidate.
+- [x] Check whether the difference is policy frequency or cost per block.
+- [x] Select one surplus instruction or reload as the candidate. (`NO CHANGE`:
+      no normalized per-block surplus instruction exists.)
 
 ### Validation
 
-- [ ] Page-batch ordinary and secure modes.
-- [ ] Small, medium, large, aligned, zeroed, and randomized allocation
+- [x] Page-batch ordinary and secure modes.
+- [x] Small, medium, large, aligned, zeroed, and randomized allocation
       sequences.
-- [ ] malloc-large, glibc-simple/thread, xmalloc, fragmentation, and RSS.
-- [ ] Fuzz/property tests for capacity, commit boundaries, and link integrity.
+- [x] malloc-large, glibc-simple/thread, xmalloc, fragmentation, and RSS.
+- [x] Fuzz/property tests for capacity, commit boundaries, and link integrity.
 
 If no normalized Rust/C gap exists, record `NO CHANGE`.
 
 ## E11 — Separate compiler effects from translation effects
 
-Status: [ ] blocked on E10 decision
+Status: [x] completed 2026-08-09; see `PERFORMANCE_WORKLOG.md`
 
 Purpose: avoid contorting correct Rust source to compensate for a difference
 caused primarily by GCC-versus-LLVM code generation.
 
 ### Work
 
-- [ ] Build C mimalloc with the current GCC release configuration.
-- [ ] Build the same C source and options with Clang/LLVM.
-- [ ] Compare C-GCC, C-Clang, and Rust on the same balanced workload set.
-- [ ] Compare assembly for the remaining hot functions.
-- [ ] Classify each remaining gap as algorithm/source-shape, compiler/code
+- [x] Build C mimalloc with the current GCC release configuration.
+- [x] Build the same C source and options with Clang/LLVM.
+- [x] Compare C-GCC, C-Clang, and Rust on the same balanced workload set.
+- [x] Compare assembly for the remaining hot functions.
+- [x] Classify each remaining gap as algorithm/source-shape, compiler/code
       layout, or measurement noise.
 
 Do not claim Rust parity by selecting the slower C compiler. The official C
@@ -833,22 +842,30 @@ If retried:
 
 ## E12 — Final parity and release qualification
 
-Status: [ ] blocked on all earlier decisions
+Status: [x] completed 2026-08-09; performance investigation complete. The
+baseline behavioral-parity failure was repaired afterward; establish a fresh
+accepted performance baseline before beginning another optimization experiment.
 
 ### Work
 
-- [ ] Rebuild fresh C and final Rust artifacts from clean source trees.
-- [ ] Record hashes and the complete environment.
-- [ ] Run balanced ten-sample C/Rust `allt` in both allocator orders.
-- [ ] Run focused higher-resolution comparisons for every workload outside the
+- [x] Rebuild fresh C and final Rust artifacts. The worktree intentionally
+      contained retained diagnostics/docs, so exact hashes and dirty provenance
+      were recorded instead of claiming a clean tree.
+- [x] Record hashes and the complete environment.
+- [x] Run balanced ten-sample C/Rust `allt` in both allocator orders.
+- [x] Run focused higher-resolution comparisons for every workload outside the
       parity band.
-- [ ] Run `scripts/check-bench-full.sh` and archive all five artifact modes.
-- [ ] Run the complete standard correctness gate.
-- [ ] Compare final assembly against the E00 baseline and C for every modified
+- [x] Run `scripts/check-bench-full.sh` and preserve all five artifact modes.
+      The official bundler rejected truthful dirty manifests; a checksummed,
+      explicitly dirty fallback archive preserves the complete evidence.
+- [x] Run the complete standard correctness gate. The original E12 run recorded
+      the B00 behavioral-parity subprocess failure verbatim; the follow-up
+      parity repair passes the full gate and is documented in the worklog.
+- [x] Compare final assembly against the E00 baseline and C for every modified
       hot function.
-- [ ] Report CPU, instruction, branch, cache, RSS, committed-memory, abandoned
+- [x] Report CPU, instruction, branch, cache, RSS, committed-memory, abandoned
       page, purge, and page-fault effects.
-- [ ] Update `BENCHMARK_RESULTS.md` and the relevant investigation report with
+- [x] Update `BENCHMARK_RESULTS.md` and the relevant investigation report with
       exact artifact provenance and rejected-experiment references.
 
 ### Success condition

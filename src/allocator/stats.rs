@@ -142,10 +142,9 @@ mod process;
 mod render;
 
 pub(crate) use counters::{
-    __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
-    __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
-    __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
-    _mi_stats_merge_into,
+    __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt,
+    __mi_stat_counter_increase, __mi_stat_counter_increase_mt, __mi_stat_decrease,
+    __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt, _mi_stats_merge_into,
 };
 use counters::{initialized_stats, mi_stats_add_into, mi_stats_copy};
 pub use counters::{mi_stats_header_init, mi_stats_init};

@@ -15,8 +15,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::allocator::arena::MI_ARENA_BCHUNK_BITS;
 use crate::allocator::stats::{
-    MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_NONE, MI_CBIN_OTHER,
-    MI_CBIN_SMALL, mi_chunkbin_t,
+    MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_MEDIUM, MI_CBIN_NONE, MI_CBIN_SMALL, mi_chunkbin_t,
 };
 use crate::bits::{MI_SIZE_BITS, MI_SIZE_SHIFT, MI_SIZE_SIZE, mi_ctz, mi_popcount};
 use crate::core_types::{

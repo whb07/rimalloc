@@ -133,13 +133,12 @@ use abandoned::{
     _mi_arenas_page_abandon_internal, _mi_arenas_page_unabandon_internal,
     mi_arena_try_claim_abandoned, mi_heap_ensure_arena_pages_from_raw, mi_page_is_full_local,
 };
-pub(crate) use geometry::_mi_arenas_contain;
 use geometry::{
     mi_arena_info_slices, mi_arena_numa_node, mi_arena_page_at_slice,
     mi_arena_range_is_after_info_slices, mi_arena_size, mi_arena_slice_start, mi_arena_start,
     mi_heap_arena_pages, mi_heap_has_page, mi_page_arena_pages,
 };
-pub(crate) use heap_pages::{_mi_heap_destroy_pages, _mi_heap_move_pages, _mi_heap_visit_blocks};
+pub(crate) use heap_pages::{_mi_heap_destroy_pages, _mi_heap_move_pages};
 pub(crate) use ids::{_mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable};
 use ids::{
     mi_arena_from_memid, mi_arena_id_from_arena_typed, mi_arena_is_suitable, mi_memid_create_arena,

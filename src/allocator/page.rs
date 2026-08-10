@@ -62,8 +62,8 @@ pub(crate) use deferred::{
     _mi_deferred_free, registered_deferred_free_callback, restore_deferred_free_callback,
 };
 pub use flags::{
-    mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full,
-    mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
+    mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full, mi_page_set_in_full,
+    mi_page_set_theap, mi_page_theap,
 };
 #[cfg(test)]
 pub(crate) use lifecycle::collect_page_free_lists_local;
@@ -78,7 +78,6 @@ pub(crate) use lifecycle::{
     mi_page_reset_retire_expire, mi_page_retire_expire, mi_page_set_retire_expire,
     mi_page_set_slice_committed, mi_page_slice_committed,
 };
-pub use queues::_mi_page_queue_append;
 pub use queues::{mi_page_queue_contains, mi_page_queue_of};
 pub(crate) use queues::{
     mi_page_queue_enqueue_from, mi_page_queue_enqueue_from_full, mi_page_queue_enqueue_from_raw,

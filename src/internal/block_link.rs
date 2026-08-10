@@ -8,11 +8,12 @@ use core::mem::size_of;
 use core::ptr;
 
 use crate::allocator::options::_mi_error_message_fmt;
+use crate::internal::bits::{mi_rotl, mi_rotr};
+use crate::internal::page_location::mi_page_contains_address;
+use crate::internal::page_metadata::mi_page_block_size;
 use crate::types::{Errno, MI_ENCODE_FREELIST, mi_block_t, mi_page_t};
 
-use super::{
-    _mi_ptr_page, MI_BIG_ENDIAN, mi_page_block_size, mi_page_contains_address, mi_rotl, mi_rotr,
-};
+use super::{_mi_ptr_page, MI_BIG_ENDIAN};
 
 /// # Safety
 /// `p` must be a pointer in the allocator's page-map domain, and `q` must be comparable against

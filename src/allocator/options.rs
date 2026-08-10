@@ -13,9 +13,8 @@ use crate::core_types::Errno;
 use crate::types::{MI_MALLOC_VERSION, mi_error_fun, mi_output_fun};
 
 pub(crate) use diagnostics::{
-    _mi_error_message_fmt, _mi_fprintf, _mi_fputs, _mi_raw_message, _mi_trace_message,
-    _mi_verbose_message, _mi_warning_message_fmt, registered_error_callback,
-    restore_error_callback,
+    _mi_error_message_fmt, _mi_fprintf, _mi_fputs, _mi_raw_message, _mi_verbose_message,
+    _mi_warning_message_fmt, registered_error_callback, restore_error_callback,
 };
 
 #[inline(never)]

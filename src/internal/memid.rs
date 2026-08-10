@@ -3,7 +3,7 @@
 //! This module owns the C-compatible `mi_memid_t` layout and the narrow helper
 //! functions that classify or construct memory-origin identifiers. The typed
 //! Rust view lives in `crate::core_types::MemId`; translated allocator code
-//! reaches these definitions through the stable `crate::internal::*` re-export.
+//! imports these definitions from this owning module.
 
 #![allow(non_camel_case_types)]
 

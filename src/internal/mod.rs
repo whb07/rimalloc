@@ -7,8 +7,7 @@
     non_camel_case_types,
     non_snake_case,
     non_upper_case_globals,
-    uninhabited_static,
-    unused_imports
+    uninhabited_static
 )]
 
 pub(crate) mod atomic;
@@ -32,116 +31,73 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
 
-pub(crate) use crate::allocator::alloc::{
-    _mi_page_malloc_zero, _mi_page_malloc_zero_typed, _mi_theap_malloc_guarded,
-    _mi_theap_malloc_zero, _mi_theap_malloc_zero_ex, _mi_theap_realloc_zero,
-};
+pub use self::bits::MI_MiB;
+use self::bits::{MI_MAX_VABITS, MI_PAGE_MAP_FLAT, MI_SIZE_SHIFT};
+#[cfg(not(any(target_os = "macos", windows)))]
+pub(crate) use self::random::_mi_random_init;
+#[cfg(any(target_os = "macos", windows))]
+pub(crate) use self::random::_mi_random_init_weak;
+pub(crate) use crate::allocator::alloc::_mi_page_malloc_zero_typed;
+use crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 pub(crate) use crate::allocator::arena::{
-    _mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable, _mi_arenas_alloc,
-    _mi_arenas_alloc_aligned, _mi_arenas_collect, _mi_arenas_contain, _mi_arenas_free,
-    _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free,
-    _mi_arenas_page_try_reabandon_to_mapped, _mi_arenas_page_unabandon,
-    _mi_arenas_unsafe_destroy_all, _mi_heap_destroy_pages, _mi_heap_move_pages,
-    _mi_heap_visit_blocks,
-};
-pub use crate::allocator::arena::{
-    MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
+    _mi_arena_memid_is_suitable, _mi_arenas_alloc, _mi_arenas_alloc_aligned, _mi_arenas_free,
 };
 pub(crate) use crate::allocator::arena_meta::{
     _mi_meta_free, _mi_meta_is_meta_page, _mi_meta_zalloc,
 };
-#[cfg(not(mi_c_malloc_fast))]
-pub(crate) use crate::allocator::free::_mi_padding_shrink;
-pub(crate) use crate::allocator::free::_mi_page_ptr_unalign;
-pub(crate) use crate::allocator::heap::{
-    _mi_heap_force_destroy, _mi_heap_theap_get_or_init, _mi_heap_theap_get_peek,
-};
 pub(crate) use crate::allocator::init::{
-    _mi_auto_process_done, _mi_auto_process_init, _mi_cpu_stosb_max, _mi_is_heap_main,
-    _mi_is_theap_main, _mi_preloading, _mi_subproc, _mi_subproc_from_id, _mi_subproc_heap_main,
-    _mi_subproc_main, _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_default_set,
-    _mi_theap_empty_get, _mi_theap_guarded_init, _mi_theap_main_safe, _mi_theap_options_init,
-    _mi_thread_done, _mi_thread_id,
+    _mi_auto_process_done, _mi_auto_process_init, _mi_is_heap_main, _mi_preloading, _mi_subproc,
+    _mi_theap_guarded_init, _mi_theap_options_init, _mi_thread_done, _mi_thread_id,
 };
 use crate::allocator::options::_mi_error_message_fmt;
-pub(crate) use crate::allocator::options::{
-    _mi_error_message, _mi_option_get_fast, _mi_trace_message, _mi_verbose_message,
-    _mi_warning_message,
-};
-pub(crate) use crate::allocator::page::{
-    _mi_deferred_free, _mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire,
-    _mi_theap_collect_retired,
-};
-pub use crate::allocator::page::{
-    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
-    _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, MI_LARGE_MAX_OBJ_SIZE,
-    MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
-    mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full,
-    mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
-};
-pub(crate) use crate::allocator::page_map::{
-    _mi_page_map_base, _mi_page_map_init, _mi_page_map_register, _mi_page_map_unregister,
-    _mi_page_map_unregister_range, _mi_page_map_unsafe_destroy, _mi_safe_ptr_page,
-    _mi_safe_ptr_page_registered,
-};
+pub(crate) use crate::allocator::page::_mi_deferred_free;
+pub use crate::allocator::page::{MI_LARGE_MAX_OBJ_SIZE, MI_OS_PAGE_SIZE, mi_page_is_abandoned};
+use crate::allocator::page_map::_mi_page_map_base;
+pub(crate) use crate::allocator::page_map::_mi_safe_ptr_page_registered;
 pub(crate) use crate::allocator::stats::{
-    __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
-    __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
-    __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
+    __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt,
+    __mi_stat_counter_increase, __mi_stat_counter_increase_mt, __mi_stat_decrease,
+    __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
 };
 pub(crate) use crate::allocator::thread_heap::{
-    _mi_theap_area_visit_blocks, _mi_theap_collect_abandon, _mi_theap_create, _mi_theap_decref,
-    _mi_theap_delete, _mi_theap_free, _mi_theap_incref, _mi_theap_random_next,
-};
-use crate::bits::MI_SIZE_SHIFT;
-pub use crate::bits::{
-    MI_ARCH_X64, MI_ARCH_X86, MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB,
-    MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
+    _mi_theap_decref, _mi_theap_incref, _mi_theap_random_next,
 };
 use crate::core_types::{Errno, PageQueuePtr};
 #[cfg(feature = "guarded")]
 use crate::core_types::{GuardedConfig, GuardedDecision};
-pub(crate) use crate::libc::{
-    _mi_getenv, _mi_streq, _mi_strlcat, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen,
-    _mi_strnstr, _mi_toupper, _mi_vsnprintf,
+pub(crate) use crate::ffi::libc::{
+    _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen, _mi_toupper,
 };
-pub(crate) use crate::os::{
-    _mi_os_alloc, _mi_os_canuse_large_page, _mi_os_commit, _mi_os_commit_ex, _mi_os_decommit,
-    _mi_os_free, _mi_os_free_ex, _mi_os_get_aligned_hint, _mi_os_good_alloc_size,
-    _mi_os_guard_page_size, _mi_os_has_overcommit, _mi_os_has_virtual_reserve, _mi_os_init,
-    _mi_os_large_page_size, _mi_os_minimal_purge_size, _mi_os_page_size, _mi_os_page_size_typed,
-    _mi_os_protect, _mi_os_purge, _mi_os_purge_ex, _mi_os_reset, _mi_os_reuse, _mi_os_unprotect,
-    _mi_os_virtual_address_bits, _mi_os_zalloc,
+pub(crate) use crate::platform::os::{
+    _mi_os_alloc, _mi_os_commit, _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex,
+    _mi_os_good_alloc_size, _mi_os_has_overcommit, _mi_os_has_virtual_reserve,
+    _mi_os_page_size_typed, _mi_os_purge_ex, _mi_os_reuse, _mi_os_virtual_address_bits,
 };
-pub(crate) use crate::prim::{_mi_allocator_done, _mi_allocator_init};
-pub(crate) use crate::random::{
-    _mi_os_random_weak, _mi_random_init, _mi_random_init_weak, _mi_random_next,
-    _mi_random_reinit_if_weak, _mi_random_split,
-};
+#[cfg(windows)]
+pub(crate) use crate::platform::os::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint};
+pub(crate) use crate::platform::{_mi_allocator_done, _mi_allocator_init};
 use crate::types::{
     mi_block_t, mi_heap_t, mi_output_fun, mi_page_queue_t, mi_page_t, mi_theap_t, mi_thread_free_t,
 };
+#[cfg(test)]
+pub use block_link::mi_block_set_nextx;
 pub use block_link::{
-    mi_block_next, mi_block_nextx, mi_block_set_next, mi_block_set_nextx, mi_is_in_same_page,
-    mi_page_keys,
+    mi_block_next, mi_block_nextx, mi_block_set_next, mi_is_in_same_page, mi_page_keys,
 };
 pub(crate) use block_link::{
-    mi_block_set_next_typed, mi_block_set_nextx_typed, mi_page_set_keys, mi_ptr_decode,
-    mi_ptr_encode, mi_ptr_encode_canary,
+    mi_block_set_next_typed, mi_page_set_keys, mi_ptr_decode, mi_ptr_encode, mi_ptr_encode_canary,
 };
 pub use page_flags::{
-    mi_page_flags, mi_page_has_any_available, mi_page_has_interior_pointers,
-    mi_page_is_abandoned_mapped, mi_page_is_owned, mi_page_thread_free, mi_page_thread_id,
-    mi_page_xthread_id,
+    mi_page_flags, mi_page_has_interior_pointers, mi_page_is_abandoned_mapped, mi_page_is_owned,
+    mi_page_thread_free,
 };
 pub use page_location::{
-    mi_page_area, mi_page_contains_address, mi_page_is_in_arena, mi_page_meta_is_separated,
-    mi_page_slice_offset_of, mi_page_slice_start, mi_page_start,
+    mi_page_area, mi_page_contains_address, mi_page_meta_is_separated, mi_page_slice_offset_of,
+    mi_page_slice_start, mi_page_start,
 };
 pub use page_metadata::{
-    mi_page_all_free, mi_page_block_size, mi_page_committed, mi_page_heap,
-    mi_page_immediate_available, mi_page_is_expandable, mi_page_is_full, mi_page_is_mostly_used,
-    mi_page_is_singleton, mi_page_is_used_at_frac, mi_page_size, mi_page_tld,
+    mi_page_all_free, mi_page_block_size, mi_page_heap, mi_page_immediate_available,
+    mi_page_is_expandable, mi_page_is_full, mi_page_is_mostly_used, mi_page_is_singleton,
 };
 pub(crate) use page_metadata::{
     mi_page_block_size_typed, mi_page_committed_typed, mi_page_usable_block_size,

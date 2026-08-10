@@ -226,7 +226,7 @@ pub mod __bench {
 }
 
 // Raw and translated compatibility code retain these FFI module names.
-pub(crate) use ffi::{abi, headers, libc, mimalloc};
+pub(crate) use ffi::{abi, headers, mimalloc};
 
 // Translated atomic/bitmap/bit/random helpers retain their upstream module
 // vocabulary. New Rust-native helpers should use owning `internal` paths.

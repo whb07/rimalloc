@@ -1,0 +1,1068 @@
+# Mechanical mimalloc performance worklog
+
+This is the durable decision log for the experiments in `TODO.md`. Raw build,
+benchmark, counter, and assembly artifacts live under
+`target/perf-experiments/<experiment-id>/`; this file records their provenance
+and the conclusion drawn from them.
+
+## Rules used for every experiment
+
+- Start from the latest accepted implementation and change one mechanism only.
+- Preserve raw results, including failed and noisy runs.
+- Use balanced order (`baseline -> candidate`, then `candidate -> baseline`).
+- Treat focused runs as rejection screens, never as sufficient evidence to keep
+  a change.
+- Keep a production change only after mechanism evidence, two balanced timing
+  comparisons, held-out workloads, resource checks, and the complete correctness
+  gate agree.
+- If a production change is kept, establish and record a fresh baseline before
+  starting the next experiment.
+- `NO CHANGE`, `REJECT`, and `INCONCLUSIVE` are valid outcomes and are not
+  rewritten as wins.
+
+## Accepted-baseline ledger
+
+| Baseline | Source commit | Reason established | Artifact directory | Status |
+|---|---|---|---|---|
+| B00 | `72fe0f4db7e2a3a6c8caafdb56944102554c7144` | Fresh current-HEAD C 3.3.2 parity baseline before E01 | `target/perf-experiments/E00-current-head-baseline/` | Accepted baseline |
+| B01 | `f6989ea2740e2aacb4026f08f5a290ac67eae010` plus the E02R working-tree diff | Behavioral-parity repairs plus accepted C-equivalent O(1) local-list transfer | `target/perf-experiments/E02R-corrected-local-o1-transfer/` | Accepted locally; commit pending |
+| B02 | `f018285` | Accepted C-equivalent trusted detached-remote scan | `target/perf-experiments/X02-trusted-remote-batch-scan/` | Accepted and committed |
+
+## Experiment ledger
+
+| ID | Hypothesis | Candidate | Decision | Evidence |
+|---|---|---|---|---|
+| E00 | Establish authoritative current-HEAD C/Rust parity | Measurement only | Complete | `target/perf-experiments/E00-current-head-baseline/` |
+| E01 | Diagnostics can identify collection and abandonment costs without changing production artifacts | 66 feature-gated counters plus reproducible JSONL runners/summarizer | Keep diagnostics; no production change | `target/perf-experiments/E01-observability/` |
+| E02 | Avoid a redundant local-list scan when the available list is empty | Direct typed head transfer; production diff reverted | **REJECT**: strong speedup, but candidate hit the forced-collection invariant after cross-thread stress | `target/perf-experiments/E02-local-o1-transfer/` |
+| E02R | Reopen E02 after reproducing and fixing its configuration-dependent forced-splice defect | C-equivalent direct head transfer with an unconditional forced nonempty splice | **KEEP**: correctness gates pass; mechanism is 7.6x–9.0x faster; Larson improves 2.5%–4.3%; no stable candidate regression | `target/perf-experiments/E02R-corrected-local-o1-transfer/` |
+| E03 | Remove demonstrated surplus work from the abandoned-page decision spine | Assembly/CFG and outcome-frequency investigation only | **NO CHANGE**: no single safe redundant source operation demonstrated | `target/perf-experiments/E03-abandoned-decision-spine/` |
+| E04 | Reject impossible reclaim work earlier for uninitialized freeing threads | Initialization gate before reclaim policy read; reverted | **REJECT**: mechanism worked but all targeted timings regressed | `target/perf-experiments/E04-uninitialized-reclaim-gate/` |
+| E05 | Reuse validated detached-batch metadata instead of traversing twice | Full/partial local and abandoned path trace | **NO CHANGE**: every detached remote batch is already scanned once | `target/perf-experiments/E01-observability/diagnostic-runs/` |
+| E06 | Remove demonstrated redundant work from ownership-release CAS retries | Instruction/counter/ordering comparison | **NO CHANGE**: expected word stays in-register; no repeated construction survives | `target/perf-experiments/E06-ownership-release-cas/` |
+| E07 | Reuse one frequently reached reclaim/reabandon derivation | Frequency-gated source/assembly trace | **NO CHANGE**: late paths are frequent, but inputs are already derived once | `target/perf-experiments/E03-abandoned-decision-spine/investigation/` |
+| E08 | Remove one measured residual page-queue search difference | Outline fresh-page calculation behind existing boundary; reverted | **REJECT**: mixed wins, stable Larson regressions | `target/perf-experiments/E08-page-queue-search/` |
+| E09 | Match C++ fast-boundary code generation for every supported overload | 20-symbol ABI/assembly/semantic inventory | **NO CHANGE**: no Rust overload has a demonstrated extra successful-path detour | `target/perf-experiments/E09-cxx-boundaries/` |
+| E10 | Remove refill/extension surplus work only if normalized evidence exists | Added missing ordinary diagnostic count; normalized assembly gate | **NO CHANGE**: Rust and C both emit five loop instructions per block | `target/perf-experiments/E10-page-refill-evidence/` |
+| E11 | Attribute remaining gaps to source shape versus compiler behavior | GCC/Clang/Rust Latin-order comparison | Complete: remaining Larson gap is translation/source-shape, not GCC-vs-LLVM | `target/perf-experiments/E11-compiler-effects/` |
+| E12 | Complete final parity and release qualification | Final B00-equivalent production artifact plus retained diagnostics | Complete investigation; baseline parity blocker repaired afterward and awaiting a fresh accepted performance baseline | `target/perf-experiments/E12-final-qualification/` |
+| X01 | Root-cause the remaining xmalloc gap without changing production source | Thread/size sweeps, normalized counters, profiles, diagnostics, and C source/assembly comparison | Complete: per-block detached-chain validation dominates the low-contention excess | `target/perf-experiments/X01-xmalloc-investigation/` |
+| X02 | Make the ordinary detached-remote scan match C while retaining hardened validation | Trusted bounded release scan; validating debug/secure/diagnostic scan | **KEEP**: +7.15% focused throughput, -6.16% instructions/free, full safety and held-out gates pass | `target/perf-experiments/X02-trusted-remote-batch-scan/` |
+| X03 | Establish the authoritative post-X02 full Rust/C scoreboard | Fresh committed B02 artifact; complete `allt` suite in both orders plus 20-sample outlier reruns | Complete: broad parity, clear xmalloc/glibc-simple wins, stable ~1% glibc-thread gap, rptest/sh8 remain noisy | `target/perf-experiments/X03-b02-full-c-comparison/` |
+
+## E02 — O(1) empty-available local-list transfer
+
+Started and decided: 2026-08-09
+
+### Candidate and invariant
+
+The candidate matched C `_mi_page_free_collect`: when `free` was empty it
+stored the existing `LocalFreeList` head as `AvailableFreeList`, cleared
+`local_free`, and cleared `free_is_zero`, without reading a block link. The
+typed owner already exclusively controlled both page fields; both list domains
+use the page's existing encoded links, and neither `used` nor `capacity` changes
+during this ownership transfer. Remote collection and the forced nonempty-list
+splice were unchanged.
+
+Focused tests covered empty, transfer, non-forced, forced splice, local and
+claimed-abandoned ownership, and secure encoded links. The existing bounded
+scanner corruption test was retained after an attempted end-to-end corrupted
+collector test correctly aborted under the default corruption policy instead
+of returning to the test. The complete Rust gate (`fmt`, workspace/all-target/
+all-feature `clippy`, and workspace/all-target/all-feature `test`) passed.
+
+### Mechanism and measurements
+
+- Plain page-batch forced collection of 128 blocks fell from about 177 ns to
+  23 ns (about 7.7x); secure mode was neutral at about 23.4 ns.
+- Empty-destination diagnostics fell from 128,000 scanned nodes in 1,000
+  collections to zero. The nonempty forced case remained 128,000/1,000.
+- Native local nodes per collection fell from 1.83 to approximately zero in
+  both Larson variants and from 3.00 to zero in glibc-thread. Remote detach and
+  collection counts did not materially change.
+- Assembly showed direct metadata stores in the empty-available branch, with no
+  new call, owner dispatch, or locked instruction.
+- The balanced focused screen improved Larson unsized 2.55% and sized 2.42%.
+  Balanced `perf stat` reduced instructions 1.02%/2.95%, branches 5.75%/7.30%,
+  and branch misses 12.32%/14.13% for unsized/sized respectively.
+- The balanced full screen (five repetitions in both orders) improved Larson
+  unsized 2.92%. Other stable workloads were essentially neutral; apparent
+  Redis, rptest, and sh6 movements had high variance or conflicting order
+  splits. Malloc-large time and commit/RSS accounting were unchanged. The
+  fragmentation order split showed run drift and no stable regression.
+
+### Correctness failure and decision
+
+`scripts/check-behavioral-parity.py` exposed a candidate debug abort after its
+cross-thread stress wave at the final forced-collection invariant
+`!force || page.local_free.is_empty()`. A debugger captured a zero-used page
+with both `free` and `local_free` nonempty. The unchanged B00 harness also has
+pre-existing nonzero parity cases (and the wrapper therefore exits 1), but two
+unchanged direct runs did not reproduce this assertion abort, whereas the
+candidate did. Changing remote collection, validation, or corruption behavior
+to pursue the failure would violate E02's one-mechanism scope.
+
+Decision: **REJECT**. The production transfer was reverted; E01 diagnostics and
+the generally useful invariant/page-batch tests remain. No accepted allocator
+change exists, so B00 remains the baseline and no baseline rerun is required.
+Raw timing, counters, resources, assembly, debugger captures, failed attempts,
+and gate logs are preserved in the E02 artifact directory.
+
+## E02R — Corrected O(1) empty-available local-list transfer
+
+Reopened: 2026-08-09. Decided: 2026-08-10.
+
+### Why the original rejection was not evidence against the algorithm
+
+The original E02 failure was fully reproduced and traced to the experiment's
+source shape, not to the O(1) transfer. Its diagnostics attribute placement
+made the forced nonempty-destination splice configuration-dependent: the splice
+was present with `bench-diagnostics`, but absent from the default build. The
+cross-thread parity probe eventually reached forced collection with both
+`free` and `local_free` nonempty, so the final invariant correctly aborted.
+That explains all of the previous observations: diagnostics and mechanism
+measurements looked correct, while the production/default artifact could leave
+the local list behind.
+
+E02R keeps the two semantic decisions in ordinary, unconditional control flow:
+`free.is_empty()` performs the direct transfer; otherwise `force` performs the
+existing validated detach-and-splice. Diagnostics annotate the result inside
+those branches and cannot decide whether either branch exists. A default-build
+regression test now executes all four C cases, including the formerly missing
+`free` nonempty plus `force == true` case. The old E02 rejection remains above
+as historical evidence; it is superseded by this corrected experiment.
+
+### Candidate and provenance
+
+The production change is confined to `collect_page_free_lists`. When the
+available list is empty, the owner writes the existing typed local head to
+`free`, clears `local_free`, and clears `free_is_zero`; it does not read a block
+link. The nonempty forced case retains the existing validated tail scan and
+splice. Remote collection, accounting, encoding, corruption policy, atomic
+ordering, and ownership dispatch are unchanged.
+
+- Frozen pre-change release SHA-256:
+  `7de82434047e409872347e828e15b61cfd7a9589b0a5fee8a408e98ddd5f2778`.
+- Candidate release SHA-256:
+  `3ac9ab5a5b916fe627c56faf3bfa0d809a8599a338a620dffc5887b16e51bb7b`.
+- Both artifacts were built from the same `f6989ea` source base in separate
+  target directories. Allocator-order files reference those immutable paths.
+- The retained disassemblies show a direct-store empty branch. Function size
+  changed from 925 bytes to 958 bytes because the direct and validated splice
+  paths are now distinct; no locked instruction was added.
+
+### Correctness, safety, and concurrency
+
+- The configuration-independent local-list test covers empty local, exact-head
+  transfer with unchanged links and counts, non-forced nonempty destination,
+  forced nonempty splice, local and claimed-abandoned owners, and secure encoded
+  links. Focused default and all-feature runs passed.
+- The complete behavioral-parity driver passed, followed by five direct parity
+  executable runs. The release C-ABI thread stress, six Loom concurrency models,
+  Valgrind (zero errors and leaks), and manually linked ASan probe passed.
+- Current-nightly TSan reports a race between `_mi_theap_create` and
+  `_mi_thread_done`. The exact frozen pre-change artifact reproduces the same
+  report at the same boundary under the same sustained probe. Neither stack
+  contains the changed collector, so this is a pre-existing thread-lifecycle
+  issue and is tracked separately rather than attributed to E02R.
+- `cargo fmt --all`, workspace/all-target/all-feature Clippy, and workspace/
+  all-target/all-feature tests passed from isolated target directories. The
+  first focused test invocation accidentally reused stale shared-target test
+  artifacts and hit duplicate `panic_impl`; the isolated rerun passed and the
+  complete clean gate independently confirmed the result.
+
+### Mechanism and candidate-versus-baseline performance
+
+The direct page-batch mechanism benchmark used the same rebuilt source and the
+same 128-node empty-destination fixture in balanced alternating order:
+
+- plain: about 176 ns before versus 23.2 ns after, approximately 7.6x faster;
+- secure: about 207 ns before versus 23.1 ns after, approximately 9.0x faster.
+
+The earlier statement that secure mode was neutral came from a contaminated
+measurement and is superseded by these freshly rebuilt artifacts. Preserving
+encoded links requires no decoding because only the already encoded head is
+moved.
+
+In the balanced five-repetition focused screen, candidate/baseline median
+ratios were 0.9752 for Larson, 0.9688 for Larson-sized, 1.0127 for xmalloc, and
+0.9986 for glibc-thread. Both order halves agreed on the Larson improvements.
+The short xmalloc warning did not reproduce in the broader screen.
+
+The balanced three-repetition complete `allt` screen confirmed Larson-sized at
+0.9570, alloc-test1 at 0.9773, xmalloc at 0.9869, and glibc-thread at 0.9857.
+Stable controls were neutral or better. mstress and rptest had high variation
+or opposite order splits; sh6 was also noisy. No held-out workload showed a
+repeatable candidate regression. In balanced `perf stat`, Larson branches fell
+4.09%/4.41% and branch misses fell 12.26%/12.58% for unsized/sized; task clock
+was flat and cycles fell 0.17%/0.54%. That agrees with the removed traversal.
+
+### Fresh accepted Rust-versus-C baseline
+
+Because E02R is kept, B01 was measured against the retained GCC release build
+of C mimalloc 3.3.2 in both allocator orders. The focused ten-sample-per-
+allocator results are:
+
+| Workload | Rust/C median | C CV | Rust CV | Interpretation |
+|---|---:|---:|---:|---|
+| Larson | 0.9959 | 0.79% | 1.27% | parity |
+| Larson-sized | 0.9875 | 0.92% | 0.95% | Rust 1.25% faster |
+| xmalloc | 1.0112 | 1.87% | 1.49% | small remaining warning |
+| glibc-thread | 1.0012 | 0.65% | 0.54% | parity |
+
+The broader balanced `allt` reset used three repetitions in each order. Stable
+longer workloads were at parity or better, including Larson-sized 0.9861,
+alloc-test1 0.9952, alloc-testN 0.9859, glibc-thread 1.0012, and RocksDB 0.9978.
+The sh8 row was 1.0629, but E02R candidate/baseline was exactly 1.0000 there and
+the prior 20-sample C comparison had 4%–7% CV and conflicting order halves;
+therefore it is an existing/noisy C comparison, not a candidate regression.
+Redis, rptest, sh6, and the 60 ms cache-scratch row also had material variation
+or order effects and are not used as acceptance claims.
+
+### Decision
+
+`KEEP` — E02R exactly restores C's O(1) ownership transfer, removes a measured
+general-purpose traversal, passes the complete correctness gates, improves the
+workloads that exercise it, and has no repeatable held-out regression. B01 is
+the new local accepted baseline. The TSan thread-lifecycle report remains a
+separate pre-existing correctness investigation; it is not hidden or counted
+as an E02R pass.
+
+## E03 — Abandoned-page decision spine
+
+Started and decided: 2026-08-09
+
+The B00 Rust `collect_after_remote_free` symbol is 892 bytes/245 instructions,
+with 11 calls, 40 conditional branches, 12 unconditional jumps, and 17 stack
+references. C `mi_free_try_collect_mt` is 390 bytes/104 instructions, with 8
+calls, 18 conditional branches, 6 jumps, and no `%rsp` references. Rust's
+separate reclaim helper is 500 bytes/136 instructions versus C's 382 bytes/101
+instructions. Annotated disassembly and static counts are archived under the
+E03 investigation directory.
+
+The difference is not a single repeated page/block-size extraction: LLVM keeps
+the page in `%rbx` and loads block size once into `%r14`. Ownership release also
+already receives the constructed expected thread-free word and compiles to an
+owner-bit clear feeding the same acquire/release CAS loop as C. The main extra
+text is attributable to:
+
+- bounded page-membership, capacity, encoded-link, and corruption validation in
+  partial remote collection (required Rust safety invariant);
+- typed `Result` ownership returns and cold error formatting (invariant/ABI);
+- reabandon eligibility checks duplicated in the initial and post-concurrent-
+  collection paths (required because collection changes page state);
+- a few constant discriminant tests that survive optimization (compiler/layout
+  effect, not a demonstrated removable source operation).
+
+E01 outcome frequencies show why a broad rewrite would be risky. Larson reclaim
+succeeds on about 97.56% of attempts, while xmalloc reclaim succeeds effectively
+never: roughly 99.35% fail because the freeing thread is uninitialized. Larson
+reabandon is attempted only after reclaim failure and succeeds about 0.33%; in
+xmalloc it is almost always attempted but does not succeed. Ownership-release
+CAS retries are only about 0.1% of attempts in Larson and 0.01% in xmalloc.
+Existing loom coverage already races ownership release with remote publication
+and verifies that heads are preserved; atomic orderings match C (`AcqRel` CAS,
+`Acquire` failure, relaxed reload).
+
+Decision: **NO CHANGE**. Removing the validation work would weaken corruption
+handling, while changing the typed return ABI or all reabandon helpers would
+violate the one-mechanism constraint. No candidate was built or timed and B00
+remains the accepted baseline.
+
+## E04 — Early uninitialized-thread reclaim rejection
+
+Started and decided: 2026-08-09
+
+The candidate preserved collect and all-free destruction ordering, then tested
+`_mi_thread_is_initialized()` before reading `page_reclaim_on_free`. An
+uninitialized thread skipped reclaim only and continued through the unchanged
+reabandon and ownership-release paths. The reclaim helper retained its own
+defensive initialization check, so no atomic, ownership, TLS side effect, or
+initialized-path policy was changed.
+
+Mechanism evidence was strong: normalized xmalloc reclaim-policy reads/attempts
+fell by about 99.35% (roughly 916 million to 5.9 million per million frees).
+Reabandon and ownership-release frequencies remained consistent, all diagnostic
+relationships passed, and Larson continued to exercise successful initialized
+reclaim. Focused concurrency tests and production/diagnostic builds passed.
+
+The production codegen moved the option call behind the initialization branch
+but grew `collect_after_remote_free` from 892 to 923 bytes (+31); the separately
+retained reclaim helper was unchanged. A balanced three-repeat, both-order
+screen produced candidate/baseline mean ratios of 1.0129 for Larson, 1.0190 for
+Larson-sized, 1.0298 for xmalloc, and 1.0019 for glibc-thread. Both order splits
+were slower for both Larson variants and xmalloc; thus the primary workloads
+all moved in the wrong direction despite the counter reduction.
+
+Decision: **REJECT** at the focused screen. The source diff was reverted and no
+full-suite time was spent on a broadly slower candidate. B00 remains accepted.
+Two command/setup failures are retained in the artifacts: the first benchmark
+path was formed relative to `mimalloc-bench`, the second invocation used the
+repository rather than `out/bench` working directory, and the first summary
+attempt used obsolete CLI arguments. All were corrected without discarding raw
+measurements.
+
+## E05 — Detached remote-batch traversal count
+
+Decided: 2026-08-09
+
+Source and counter tracing found no second traversal. Full local and full owned-
+abandoned collection detach the atomic head once, call
+`RemoteFreeBatch::from_detached` once, and retain its head, tail, page, and length
+for splice and used-count subtraction. Partial abandoned collection keeps the
+published head, uniquely detaches only its old tail, scans that detached tail
+once, and reuses the batch metadata. Its possible final collection processes
+the separately retained published head after the used count reaches one; it is
+not a rescan of the detached tail.
+
+E01 fixture relationships show exactly one `remote_lists_detached` and one
+length-accounted scan for batches of 1, 8, 32, and 128 blocks, with zero
+validation failures. Native Larson and xmalloc records likewise report remote
+blocks per detach near one because nearly all real batches have length one;
+there is no second counter increment or second link loop in assembly. Existing
+property/fuzz coverage exercises capacity bounds, cycles, foreign/invalid
+links, secure encoding, and `len > used` at the one scanner boundary.
+
+Decision: **NO CHANGE**. The prerequisite evidence for a candidate is absent,
+so no source, assembly, or timing candidate was produced. B00 remains accepted.
+
+## E06 — Ownership-release CAS loop
+
+Decided: 2026-08-09
+
+The instruction-by-instruction Rust/C comparison found the same essential
+protocol: expected owned word in a register, one owner-bit transformation,
+AcqRel weak CAS with Acquire failure observation, nested collection only after
+a newly nonempty observed head, and relaxed reload after collection. Rust does
+not reconstruct `(head, owned)` or reload the atomic before its first CAS.
+
+Rust retains one defensive `expected.is_owned()` test inside the shared typed
+atomic method. Removing it would weaken the method contract (tests deliberately
+exercise an unowned expected word), while adding a second unchecked API/proof
+type for this rare cold path is not a demonstrated net simplification. E01
+shows first-attempt success above 99.9%: retry/attempt is about 0.0010 Larson,
+0.0009 Larson-sized, and 0.0001 xmalloc. Existing loom release-vs-push coverage
+preserves remote heads and the required orderings.
+
+Decision: **NO CHANGE**. No candidate was produced; B00 remains accepted.
+
+## E07 — Reclaim/reabandon input derivation
+
+Decided: 2026-08-09
+
+The frequency gate is met for Larson: about 97.56% of reclaim attempts succeed.
+The source and B00 assembly nevertheless show no repeated derivation suitable
+for a one-mechanism candidate. `try_reclaim_abandoned` extracts page, block size,
+associated thread heap, thread-pool state, and arena suitability once on each
+mutually exclusive path; LLVM retains the hot values in registers. The
+arena-specific reabandon helper already receives the validated `ArenaMemId`.
+Its ownership/mapping checks protect a distinct arena mutation boundary and
+cannot be deleted merely because the caller made an earlier policy check.
+
+Decision: **NO CHANGE**. Carrying a context object or weakening the arena entry
+would widen common failure returns or remove boundary validation without
+eliminating a measured repeated computation. B00 remains accepted.
+
+## E08 — Residual page-queue search difference
+
+Started and decided: 2026-08-09
+
+B00 Rust `mi_page_queue_find_free_ex_typed` is 1,568 bytes/396 instructions
+versus C's 1,464 bytes/360 instructions. Annotated source/assembly showed one
+specific mismatch: LLVM hoisted `mi_slice_count_of_size(block_size)` from the
+fresh-page path to the Rust function entry, so existing-page searches paid the
+calculation. C keeps it behind `mi_page_fresh`.
+
+The candidate made the existing Rust `mi_page_fresh` boundary non-inlined and
+called it only after search/extension failed. Assembly removed the hoisted
+slice calculation from the entry, added the expected cold-path call, preserved
+the queue loop/order, and reduced the search symbol by 16 bytes (1,568 to 1,552).
+Focused queue tests and the production build passed.
+
+The first balanced 3+3 screen was neutral: Larson 1.0004, sized 1.0006,
+xmalloc 0.9977, glibc-thread 0.9977 candidate/baseline. The independent 5+5
+screen added alloc-test and resolved the tradeoff: Larson 1.0183 and sized
+1.0109 (both slower in both order splits), xmalloc 0.9935, glibc-thread 1.0019,
+alloc-test1 0.9968, and alloc-testN 0.9919. Thus outlining helped some
+fresh/refill-heavy cases but stably harmed the important Larson family.
+
+Decision: **REJECT**. This is a real codegen improvement in isolation but not a
+general allocator improvement. The source diff was reverted; B00 remains the
+baseline. Raw logs, both summaries, assembly, builds, and the initial obsolete-
+path invocation failures are retained.
+
+## E09 — C++ allocation/deallocation boundaries
+
+Decided: 2026-08-09
+
+Both exact B00 Rust and C release artifacts export the same 20 supported
+Itanium ABI symbols: scalar/array new; throwing/nothrow and aligned variants;
+and unsized, sized, aligned, nothrow, and array delete variants. `nm -D` and
+`readelf -Ws` confirm ownership by each allocator artifact. The full per-symbol
+assembly table is archived.
+
+No Rust overload has an extra successful-path semantic detour. Ordinary scalar
+and array new share the repaired allocator fast boundary; nothrow variants are
+tail aliases; aligned throwing paths retain only required alignment/new-handler
+work. Delete aliases tail-route to the allocator free implementation, and sized
+forms introduce no usable-size recomputation. Where direct instruction counts
+are comparable, Rust is equal or smaller (for example array throwing new 19
+instructions versus C 38, and the primary array delete entry 44 versus 48).
+Zero-length alias symbols in `objdump --disassemble` share another exported
+entry address and are not missing code.
+
+`check-cxx-operator-new-parity.py` passed C++11/14/17/20 throwing, nothrow,
+zero-size, OOM, alignment, sized-delete, and array semantics.
+`check-release-cxx-artifacts.py` passed the dynamic/static/standalone artifact
+ownership checks, and `check-release-ld-preload.py` passed focused standalone
+interposition. E00/E08 already cover alloc-test and Larson probes plus full
+guards for this unchanged B00 code.
+
+Decision: **NO CHANGE**. No overload warrants modification; B00 remains
+accepted.
+
+## E10 — Page refill/extension evidence gate
+
+Decided: 2026-08-09
+
+The E01 extension counters had only been called by secure refill, causing
+ordinary diagnostic workloads to report zero. The same feature-gated call was
+added to ordinary `mi_page_free_list_extend_typed`; this is retained as an E01
+visibility correction and compiles out of production builds.
+
+Fresh diagnostics show average blocks/call of 9.60 Larson, 9.61 Larson-sized,
+63.92 xmalloc, 45.84 glibc-thread, and 64.09 glibc-simple. B00 ordinary refill
+assembly is 90 bytes versus C's 74, but the actual link loop is five
+instructions per block in both. Rust stores a separately incremented next
+pointer and advances two independent registers; C copies current, advances one
+dependent register, then stores it. Rust's extra text is one-time address/range
+setup and does not establish a normalized per-block instruction gap.
+
+Decision: **NO CHANGE**. The evidence gate forbids another loop-form candidate;
+prior unrolling/non-null/alternate forms were already neutral or slower. B00
+remains accepted. Diagnostic JSONL, counts, and both assembly listings are
+archived.
+
+## E11 — Compiler effects versus translation effects
+
+Completed: 2026-08-09
+
+Vendored C 3.3.2 was rebuilt with Clang 20.1.8 using the official GCC 13.3
+Release configuration (`-O3 -DNDEBUG`). A three-order Latin rotation gave nine
+samples per allocator/workload, with every allocator in every position.
+
+Mean time ratios:
+
+| Workload | C-Clang/C-GCC | Rust/C-GCC | Rust/C-Clang | Classification |
+|---|---:|---:|---:|---|
+| Larson | 1.0018 | 1.0320 | 1.0302 | Translation/source-shape gap |
+| Larson sized | 1.0041 | 1.0291 | 1.0249 | Translation/source-shape gap |
+| xmalloc | 0.9853 | 0.9644 | 0.9789 | Rust broadly faster |
+| glibc-thread | 1.0244 | 1.0036 | 0.9798 | Rust at official GCC parity |
+| alloc-test1 | 1.0079 | 1.0179 | 1.0099 | Mixed; mostly translation gap |
+| alloc-testN | 1.0045 | 0.9970 | 0.9925 | Rust at/better than parity |
+
+All CVs were at most 1.47%. Assembly supports the classification. Ordinary C
+refill is 74 bytes with GCC but 90 with Clang, exactly Rust's 90, so that size
+difference is backend-specific. In contrast, page-queue search is 1,464 bytes
+GCC, 1,109 Clang, and 1,568 Rust; abandoned collection is 390 GCC, 266 Clang,
+and 892 Rust. Those remaining Rust gaps are dominated by typed validation,
+ownership-result layout, and translation source shape—not LLVM's ability to
+optimize equivalent C.
+
+No PGO attempt was made: the prior unresolved interposition profiling-runtime
+problem remains, and no deployed-equivalent mixed training artifact was
+available. The official parity baseline remains GCC C.
+
+## E00 — Fresh current-HEAD C parity baseline
+
+Started: 2026-08-09
+
+### Hypothesis and purpose
+
+The existing ten-run full-suite comparison predates retained C++ and page-queue
+improvements. Fresh C mimalloc 3.3.2 and Rust interposition artifacts built from
+the current accepted source are required before attributing any later change.
+
+### Source state
+
+- Rust commit: `72fe0f4db7e2a3a6c8caafdb56944102554c7144`
+- Branch: `master`
+- C reference: repository copy of mimalloc 3.3.2
+- Pre-existing untracked files were left untouched.
+
+### Planned evidence
+
+- Artifact hashes, dependencies, symbols, compiler versions, CPU/host state.
+- Balanced five-plus-five `allt` comparison in both allocator orders.
+- Separate balanced Larson sized/unsized and alloc-test1/N comparisons.
+- `perf stat` for the focused workloads listed in E00.
+- Resource probes and release assembly.
+
+### Observations
+
+- Fresh release artifacts built and passed `ldd -r` and `LD_PRELOAD=/bin/true`
+  smoke checks. Both artifacts export malloc/free and the expected Itanium C++
+  allocation/deallocation symbols.
+- Rust SHA-256: `435643a94708df2ef1aa115d2177d708c721b17597f89a0d2e0cc3926fd7ca1a`.
+- C SHA-256: `3f21eb1b182896f980ac9711897cd588c395aa8c4b4677bfd031a48491e140e4`.
+- The balanced `allt` screen completed five C-first and five Rust-first
+  repetitions. Raw logs and a ten-sample median/mean/min/max/CV table are under
+  `target/perf-experiments/E00-current-head-baseline/full-results/`.
+- Dedicated five-plus-five reversed-order probes produced these medians:
+
+  | Workload | C | Rust | Rust versus C |
+  |---|---:|---:|---:|
+  | Larson unsized | 2.0540 s | 2.1235 s | 3.38% slower |
+  | Larson sized | 2.0555 s | 2.1065 s | 2.48% slower |
+  | alloc-test1 | 2.1000 s | 2.1350 s | 1.67% slower |
+  | alloc-testN | 2.2200 s | 2.2100 s | 0.45% faster |
+
+- The separate probe variation was controlled: Larson CV was 0.86% C versus
+  1.01% Rust unsized and 0.91% C versus 0.92% Rust sized. The alloc-test1 gap is
+  substantially smaller than the earlier pre-fix 6% to 7% loss, while the
+  multithreaded form is at parity.
+- Five-repeat `perf stat` on unsized Larson reported C/Rust instruction counts
+  of 477,922,083,570 / 489,991,165,865 (+2.53%) and branch counts of
+  56,701,427,001 / 61,925,155,418 (+9.21%). Branch misses were
+  698,200,219 / 810,120,991 (+16.03%).
+- Five-repeat `perf stat` on sized Larson reported C/Rust instruction counts of
+  484,506,460,727 / 496,361,792,112 (+2.45%) and branch counts of
+  58,755,109,956 / 64,204,261,895 (+9.27%). Branch misses were
+  694,651,391 / 807,595,267 (+16.27%).
+- These counters support investigating collection and abandoned-page control
+  flow. They do not support cache-layout or memory-policy changes: task-clock,
+  cycles, migrations, and page-fault totals were close in the paired Larson
+  counter runs.
+- The xmalloc cross-thread probe was faster in elapsed time for Rust but retired
+  substantially more work: 639,977,496,904 versus 496,317,278,666 instructions
+  (+28.94%) and 149,019,891,680 versus 122,483,057,029 branches (+21.67%). Rust
+  had fewer branch misses and roughly half as many context switches. This is a
+  mechanism signal, not a claim that reducing instructions alone will improve
+  xmalloc wall time.
+- alloc-test1 was close in instruction count (+0.18%) but Rust retired 4.58%
+  more branches and 2.69% more cycles. At 16 threads Rust retired 2.21% fewer
+  instructions, essentially the same branches, and 0.33% fewer cycles.
+- glibc-simple was effectively equal in instructions and branches; Rust used
+  0.59% more cycles in this counter run. glibc-thread retired 1.46% more
+  instructions, 1.25% more branches, and 1.07% more cycles in Rust.
+- malloc-large favored Rust on emitted work: 3.93% fewer instructions, 4.66%
+  fewer branches, and 0.10% fewer cycles. This argues against touching the
+  large-allocation policy for the current residual problem.
+- Release assembly for the documented public hot symbols was captured under
+  the E00 assembly directory.
+- The repository resource probe was run three times for local alloc/free and
+  remote-free against both exact hashed libraries. All 12 records passed
+  `check-bench-resources.py`. Local median wall time was 106.28 ms C versus
+  106.01 ms Rust; peak commit and end-minus-start commit were identical.
+  Remote median wall time was 264.27 ms C versus 273.44 ms Rust; both reported
+  3,997,696-byte peak commit, at most 393,216-byte commit growth, and zero page
+  faults during the measured phase. Rust remote-free CV was 7.90%, so these
+  resource runs establish memory behavior but are not timing evidence.
+- The first external resource-harness attempt failed before executing a probe
+  because the external-library path did not create its `release/` output
+  directory. The measurement-only tool was corrected to create the directory;
+  the failed attempt produced no result record. Its original build-own-Rust
+  path was rerun successfully as a regression check.
+- An initial ad hoc combined-table command incorrectly reported 15 samples per
+  allocator because parser state carried across input files and counted the
+  second transcript's live rows plus its final table. That table was discarded.
+  `scripts/summarize-mimalloc-bench-logs.py` now parses only each transcript's
+  final result table, enforces five samples per allocator per order, and emits
+  the required statistics. A deliberate six-sample expectation correctly
+  failed on these five-sample logs.
+- Host evidence records all 32 CPUs using the `performance` governor and
+  `performance` energy preference, full CPU affinity, toolchains, kernel, and
+  load after measurement. Temperature capture was attempted, but the host has
+  no `sensors` command; that environmental limitation is preserved in
+  `host/sensors-after.txt`.
+- The full screen exposed high variation in short `sh6bench`, `sh8bench`, and
+  multithreaded `rptest` rows. Those rows will not be used alone to accept a
+  candidate.
+
+### Decision
+
+`COMPLETE` — B00 is the accepted source and measurement baseline for E01. Every
+result is traceable to the hashes above; no allocator implementation changed.
+
+## E01 — Non-production observability of collection work
+
+Started and completed: 2026-08-09
+
+### Hypothesis
+
+Feature-gated counters can identify whether the remaining collection overhead
+comes from call frequency, list traversal, reclaim/reabandon decisions, or queue
+searches, while compiling entirely out of the production allocator.
+
+### Candidate and provenance
+
+- Added or verified 66 `bench-diagnostics` counters covering every E01 outcome,
+  validation reason, histogram bucket, scan, queue result, and ownership CAS.
+- Added `scripts/run-page-batch-diagnostics.py` to exercise all 18 fixture
+  combinations and `scripts/summarize-bench-diagnostics.py` to normalize work
+  by its corresponding allocator-internal operation and enforce conservation
+  relationships for every JSONL record.
+- Final default-release SHA-256:
+  `435643a94708df2ef1aa115d2177d708c721b17597f89a0d2e0cc3926fd7ca1a`.
+  This is byte-for-byte identical to B00.
+- Final diagnostic SHA-256:
+  `d3a8b71b546f8ddb2c165423662a06c11e35891387a9b2f714ea42c3794fe1c8`.
+- The final rebuild reproduced both hashes from the retained source. Therefore
+  the earlier diagnostic workload records remain traceable to the exact final
+  diagnostic bytes after the instrumentation-placement correction.
+
+### Measurements and observations
+
+- Larson unsized and sized each produced 11 independently reset snapshots.
+  Local moves occurred on 34.71%/34.72% of full collections and scanned an
+  average 5.2783/5.2797 blocks solely to find the local tail. Only 0.0013% of
+  collections required the nonempty-destination force splice. This is direct
+  evidence for E02: almost all of that local-tail traversal is avoidable when
+  transferring the head to an empty available list.
+- glibc-thread moved a local batch on 30.38% of collections and averaged 9.8728
+  blocks per tail scan. It performed no force splices. This independently
+  confirms that E02 is general collection work, not a Larson-specific trick.
+- xmalloc moved a local batch on only 0.1543% of collections and averaged 3.5591
+  blocks per tail scan. It is therefore a held-out regression workload for E02,
+  not the reason to make the change.
+- Detached remote batches averaged 1.0189/1.0206 blocks in Larson and 1.0306 in
+  xmalloc. The length-one bucket contained 99.92%/99.92%/99.98% of detached
+  lists. E05 must not be justified as a broad scan win from current evidence.
+- Larson queue searches scanned 2.6747/2.6746 candidates per search and
+  succeeded 99.97% of the time; almost every selected page was at position 2–4.
+  xmalloc scanned 2.9888 candidates and succeeded 93.78%; its successful choice
+  was essentially always first. No measured workload recorded a queue retry or
+  failed extension. E08 remains conditional rather than automatically useful.
+- Larson reclaim attempts succeeded about 97.56%; xmalloc reclaim attempts
+  almost always failed because the freeing thread was uninitialized. This gives
+  E04 a concrete mechanism signal, but E04 must still pass its own timing and
+  correctness experiment before any production change is retained.
+- Ownership-release CAS retry/attempt ratios were about 0.10% in Larson and
+  0.01% in xmalloc. That frequency is too small to justify E06 without stronger
+  per-retry evidence.
+- All observed remote-list validation-failure counters were zero. All per-record
+  relationships passed: collection force/owner splits, detached-list histogram,
+  reclaim outcomes, reabandon outcomes, selected queue positions, bitmap
+  outcomes, and tracked option reads exactly conserved their totals.
+- The page-batch fixture recorded exactly the requested 1, 8, 32, or 128 scanned
+  blocks per transition across empty and nonempty destinations, proving the
+  scan counters reflect list length rather than Criterion iteration structure.
+- Counts are normalized by their corresponding allocator operation (for
+  example, blocks per tail scan, blocks per remote detach, candidates per queue
+  search, and successes per attempt). Diagnostic elapsed times are deliberately
+  excluded from performance conclusions.
+
+### Compile-out and correctness validation
+
+- Production `.text` remained 197,436 bytes and contained no `mi_bench_*`
+  symbols. The diagnostic artifact had 430,465 bytes of `.text` and eight
+  benchmark-only exports, as expected for a non-production feature.
+- B00 and final E01 production `mi_malloc` and `mi_free` disassemblies compare
+  byte-for-byte after removing the object filename header. Since the complete
+  shared-library hashes also match, diagnostics introduced no production
+  storage, symbols, branches, atomics, or instructions.
+- Reset, snapshot, JSON sizing/termination, histogram relationships, validation
+  failure distinctions, and all page-batch fixtures have focused tests.
+- `cargo fmt --all`: passed.
+- `cargo clippy --workspace --all-targets --all-features`: passed. The first
+  attempt found one redundant test-only `u64` cast; it was removed before the
+  successful full rerun.
+- `cargo test --workspace --all-targets --all-features`: passed. The first
+  attempt found that changing a CAS `while` to `loop` violated a source-shape
+  release audit. Instrumentation was repositioned around the original `while`
+  without changing counter meaning, then the entire gate was rerun successfully.
+
+### Decision
+
+`KEEP DIAGNOSTICS / NO PRODUCTION CHANGE` — E01 directly prioritizes E02 and
+provides rejection evidence against speculative remote-list and CAS work. B00
+remains the accepted performance baseline because the default production
+artifact is identical; no baseline rerun is required before E02.
+
+## E12 — Final parity and release qualification
+
+Completed: 2026-08-09
+
+### Provenance and controls
+
+- Source commit: `72fe0f4db7e2a3a6c8caafdb56944102554c7144` on `master`.
+  The worktree contained the retained E01 diagnostics and investigation
+  documentation, so it was recorded as dirty rather than represented as clean.
+- C mimalloc 3.3.2 SHA-256:
+  `aaa9798f271f176ce37d75f9a7d8a2af2c5200699883ccb97a8903781df43750`.
+- Final Rust interpose SHA-256:
+  `435643a94708df2ef1aa115d2177d708c721b17597f89a0d2e0cc3926fd7ca1a`.
+  It is byte-for-byte identical to B00. The complete normalized disassembly is
+  also identical; only `objdump`'s input-filename header differed.
+- Host: AMD Ryzen 9 5950X, 32 logical CPUs, Linux 6.17; Rust 1.92.0,
+  GCC 13.3.0, and CMake 4.2.1. Exact environment and hashes are in
+  `target/perf-experiments/E12-final-qualification/environment-and-hashes.txt`.
+
+No production candidate survived E02-E10. B00 therefore remains the accepted
+baseline and no post-acceptance baseline reset was necessary.
+
+### Balanced wall-time results
+
+The complete `allt` suite ran ten C-first and ten Rust-first repetitions: 20
+samples per allocator and workload. Stable broad-suite ratios were at parity or
+better except Larson sized (Rust/C 1.0395) and alloc-test1 (1.0189). Dedicated
+20-sample reversed-order reruns confirmed Larson unsized at 1.0281, Larson
+sized at 1.0312, and alloc-test1 at 1.0219. Both order halves agreed. The same
+focused rerun put alloc-testN at 0.9926 and Lua at 1.0074. sh8's 1.0082 ratio had
+4.08%/6.96% CV and conflicting order halves, so it is noise rather than a
+retained regression.
+
+The remaining full-suite workloads were broadly neutral: cfrac 0.9964,
+espresso 1.0017, barnes 0.9991, Redis 1.0003, mstress 1.0034, xmalloc 0.9965,
+glibc-simple 0.9982, glibc-thread 1.0000, and RocksDB 0.9977. rptest and sh6
+had high CVs and contradictory order splits. Raw transcripts and both summary
+tables are in the E12 artifact directory.
+
+### CPU and memory attribution
+
+Four fresh balanced `perf stat` repetitions per allocator showed:
+
+| Workload | Task-clock | Cycles | Instructions | Branches | Branch misses | Cache refs | Cache misses |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Larson | -0.13% | +0.34% | +0.88% | +7.47% | +14.09% | +0.26% | -0.52% |
+| Larson sized | +0.04% | +0.11% | +1.40% | +8.14% | +14.83% | +1.10% | +0.40% |
+| alloc-test1 | +2.96% | +2.45% | +0.18% | +4.60% | +0.36% | +3.43% | -0.68% |
+| glibc-thread | +0.00% | +0.42% | +0.73% | +0.53% | +0.33% | +3.31% | +29.04% |
+
+The Larson deficit is a control-flow/translation-shape problem, not a cache
+layout signal. glibc-thread's cache-miss delta did not move elapsed time and is
+not an optimization justification by itself. E11 independently showed that
+Clang-built C retains Larson parity with GCC C, so the gap is not explained by
+GCC versus LLVM alone.
+
+Five resource repetitions per allocator and scenario reported identical commit
+behavior: 3,801,088-byte local and 3,997,696-byte remote peaks, 262,144-byte
+local and 393,216-byte remote growth, and zero measured page faults. Rust peak
+RSS was 14,352,384 bytes versus C's 14,614,528 in both scenarios. Local wall
+time was 105.34 ms Rust versus 104.73 ms C. Remote timing was 288.12 ms versus
+265.72 ms, but its 9.8%/16.6% CV is too high for a timing conclusion.
+
+External preload probes cannot read allocator-private committed, abandoned, or
+purge counters. E01's direct diagnostics therefore provide the disposition
+evidence: Larson reclaim succeeded about 97.56%, reabandon succeeded about
+0.33%, and xmalloc reclaim/reabandon almost always exited early. Purge and arena
+rollback policy were not changed. Since final production bytes equal B00, their
+effect relative to the accepted baseline is exactly zero; no unsupported
+absolute C/Rust purge-count claim is made.
+
+### Five-mode benchmark and correctness gates
+
+`scripts/check-bench-full.sh` exercised default Rust, feature-linked interpose,
+LD_PRELOAD interpose, plain page-batch, and secure page-batch modes. Default
+threshold status was `pass`; interpose was correctly `not-applicable`. All
+page-batch rows passed hard limits, while 10 plain and 13 secure diagnostic rows
+crossed the investigation threshold and are marked `review-required`. Those
+rows include `bench-diagnostics` counter overhead and do not exist in the
+byte-identical production artifact.
+
+The official archive command refused the truthful `dirty: true` manifests.
+All five validated directories and assembly were instead preserved without
+manifest alteration in
+`archive/five-mode-dirty-evidence.tar.zst` (SHA-256
+`54fc6a57cace1b1ddce32d2e79c16bc34bfbca78d262a04ab2c453b113db3404`).
+
+`cargo fmt --all -- --check`, workspace/all-target/all-feature Clippy, workspace/
+all-target/all-feature tests, safety stress, concurrency models, layout, public
+ABI, atomic-ordering audit, C++ operator parity, release C++ artifacts,
+LD_PRELOAD, and release integrity all passed. Behavioral parity remains a
+release blocker: C accepts `mi_realloc_aligned(NULL, 24, 3)` and
+`mi_realloc_aligned_at(NULL, 24, 3, 0)`, while Rust rejects both non-power-of-two
+alignment requests. Those two failed checks make the unchanged B00 Rust test
+executable exit 1 before the Python driver can compare complete output. The
+exact traceback and captured Rust fields are in `validation/`; this
+investigation did not suppress or reclassify the mismatch.
+
+### Decision
+
+`COMPLETE INVESTIGATION / NO PRODUCTION CHANGE / RELEASE BLOCKED` — Rust is
+broadly at C parity and wins several held-out cases, but a reproducible 2.8% to
+3.1% Larson gap and 2.2% alloc-test1 gap remain. Every attempted production
+change was either unnecessary or rejected on correctness/performance evidence.
+The retained diagnostics compile entirely out of release. Future work should
+target a provably equivalent reduction in Larson's collection/queue branch
+shape and must separately repair the baseline behavioral-parity subprocess
+failure before release qualification can pass.
+
+### Behavioral-parity remediation addendum
+
+Completed locally: 2026-08-09
+
+The E12 failure was repaired as a correctness change, not as a benchmark
+candidate. The first mismatch was C mimalloc's regular-realloc shortcut for
+nonzero alignments no larger than a machine word: C selects that route before
+requiring a power-of-two aligned-allocation value. Rust had performed the
+power-of-two conversion first. Regression coverage now exercises realloc,
+rezalloc, and recalloc, including heap and `_at` variants, preservation,
+zero-extension, and nonzero-offset rejection. The implementation retains the C
+ordering while routing through Rust's checked `LayoutRequest` boundary.
+
+Completing the full parity driver exposed two failures that the original early
+exit had masked. Abandoned and huge pages reported areas but no live blocks
+because the typed migration had unconditionally skipped abandoned pages. The
+visitor now atomically claims an abandoned page, collects its free lists,
+visits the live blocks, drains concurrent remote publications, and returns the
+page to the abandoned state. A separate arena-exhaustion case crashed because
+the read-only `_mi_theap_empty_wrong` failure sentinel was treated as a local
+thread heap; the borrowed-heap allocation boundary now rejects that sentinel
+and returns the C-compatible null result.
+
+Validation passed after the final implementation:
+
+- `cargo fmt --all`
+- `cargo clippy --workspace --all-targets --all-features`
+- `cargo test --workspace --all-targets --all-features`
+- `python3 scripts/check-behavioral-parity.py`
+- `python3 scripts/check-strict-types.py`
+- `bash scripts/check-layout.sh`
+- `python3 scripts/check-ffi-boundary.py`
+- `python3 scripts/check-safe-boundary.py`
+- `bash scripts/check-raw-facade.sh`
+- `python3 scripts/check-release-integrity.py`
+
+The parity repair changes the production source even though it does not target
+the benchmark hot paths. If it is accepted into the branch, establish a fresh
+B01 C/Rust performance baseline before resuming optimization experiments; do
+not compare later candidates directly against B00. E02R's accepted-baseline
+reset above satisfies this requirement.
+
+## X01/X02 — Root-cause and repair xmalloc detached-chain scan overhead
+
+Investigated and decided: 2026-08-10.
+
+### Baseline and hypothesis
+
+X01 used the accepted E02R Rust production artifact as its immutable baseline:
+
+- source `987d463`, equal to `origin/master` at capture;
+- Rust SHA-256
+  `3ac9ab5a5b916fe627c56faf3bfa0d809a8599a338a620dffc5887b16e51bb7b`;
+- C mimalloc 3.3.2 SHA-256
+  `aaa9798f271f176ce37d75f9a7d8a2af2c5200699883ccb97a8903781df43750`.
+
+The standard 32-producer/32-releaser xmalloc run was already at timing parity,
+but work-normalized counters showed 20.2% more Rust instructions per free. A
+thread-count sweep exposed the actual allocator deficit: Rust/C throughput was
+0.8244 at 1+1, 0.8861 at 4+4, 0.9829 at 8+8, 1.0222 at 16+16, and 1.0079 at
+32+32. Queue contention and scheduling therefore hid excess allocator work in
+the standard saturated result.
+
+At 1+1 with 64-byte objects, the remote-free collection group retired about
+98.4M Rust versus 72.4M C instructions and 25.6M versus 19.8M cycles per one
+million frees. Allocation work itself was effectively equal. Diagnostics found
+zero validation failures and 99.98% length-one detached chains.
+
+### Root cause
+
+Rust's `scan_detached_chain` classified every detached block before decoding
+its link. Each iteration loaded page geometry, checked subtraction and
+multiplication overflow, checked the committed range, and performed dynamic
+block-size alignment modulo. The alignment check compiled to division in the
+loop. Ordinary release C `_mi_page_free_collect_partly` instead follows the
+already detached page-local links and enforces capacity/used bounds; its deep
+corruption checks belong to hardened configurations.
+
+The checks were redundant on the production ingress. `AtomicThreadFree`
+publishes page-local remote frees, its compare-exchange detachment returns a
+linear `DetachedRemoteList`, and conversion requires the matching `LocalPage`
+or claimed `OwnedAbandonedPage` witness. Those unsafe contracts already require
+every uniquely owned node to belong to that page and use its encoded-link
+domain. Rechecking the same fact on every collection did not add a recoverable
+safety guarantee in ordinary release, because violating that unsafe contract
+is already outside the valid state space.
+
+### Candidate and preserved invariants
+
+X02 factors the common traversal into one const-specialized implementation.
+Debug, `secure`, and `bench-diagnostics` builds select the validating scanner.
+Ordinary release selects a trusted scanner whose safety contract explicitly
+requires the detached list's page identity, encoded-link domain, readability,
+and unique ownership.
+
+Both scanners retain the capacity bound before following more than one page of
+links. `RemoteFreeBatch` retains the independent `len <= used` bound. Local-list
+scans remain validating in every build. No atomic ordering, publication,
+detachment, splice, allocation, reclamation, purge, or memory-retention policy
+changed. A focused differential test proves that trusted and validating scans
+produce identical page/head/tail/length metadata for valid chain lengths 1, 2,
+4, 8, and 16.
+
+The immutable X02 candidate artifact SHA-256 is
+`a75d08896625d8028b675c29efa710f00692f9a6bb16ef4f16c002a88feb0553`.
+In `collect_after_remote_free`, static instructions fell from 458 to 353,
+dynamic-division sites from eight to zero, and symbol size from `0x6e8` to
+`0x590`. The complete artifact `.text` shrank 848 bytes. Call and locked-
+instruction counts did not increase.
+
+### Direct baseline/candidate measurement
+
+Eight interleaved 1+1, 64-byte, five-second samples used the order
+`base,candidate,candidate,base` twice and normalized counters by exact completed
+frees:
+
+| Metric | B01 baseline | X02 candidate | Change |
+|---|---:|---:|---:|
+| Throughput | 88.640M frees/s | 94.978M frees/s | **+7.15%** |
+| Cycles/free | 83.932 | 80.188 | **-4.46%** |
+| Instructions/free | 282.813 | 265.384 | **-6.16%** |
+| Branches/free | 64.996 | 60.096 | **-7.54%** |
+| Branch misses/M frees | 104,024 | 103,865 | -0.15% |
+| Cache misses/M frees | 450,581 | 414,677 | -7.97% |
+
+The direction agrees across wall time, retired work, code shape, and the exact
+source mechanism.
+
+### C comparison across contention and sizes
+
+Two balanced samples per allocator and point compared the accepted candidate
+directly with C. At 64 bytes, candidate/C throughput was 0.890 at 1+1, 0.908 at
+4+4, 0.976 at 8+8, 1.009 at 16+16, and 1.044 at 32+32. This materially closes
+the old 0.824/0.886 low-contention ratios without sacrificing saturated
+performance.
+
+At 1+1, candidate/C throughput ratios for 8, 64, 1024, 2048, and mixed
+8..2048-byte allocations were 0.988, 0.901, 0.862, 0.893, and 0.980.
+Candidate/C instruction ratios were 1.001, 1.114, 1.138, 1.132, and 1.050,
+improving from the X01 baseline ratios 1.151, 1.182, 1.194, 1.178, and 1.126.
+The remaining 64..2048-byte gap is real and is not claimed solved by X02.
+
+### Held-out and resource validation
+
+Six balanced observations per allocator covered Larson-sized, mstress,
+glibc-thread, alloc-test single/multithread, and sh6 in both orders. Candidate/
+baseline elapsed ratios were 1.006, 1.003, 1.008, 1.001, 1.004, and 0.883;
+the sh6 samples are only 0.10--0.16 seconds and not a standalone claim. RSS was
+neutral or lower except a noise-level 0.4% glibc-thread movement.
+
+The complete 17-workload `allt` suite then ran three repetitions in each
+allocator order. Stable ratios included xmalloc 0.998, rptest 0.963, mstress
+0.997, glibc-simple 0.964, Larson-sized 1.006, RocksDB 1.004, alloc-test1 1.003,
+and alloc-testN 1.008. Redis initially appeared 2.1% slower and the 0.25-second
+sh8 test 4.7% slower, so both were rerun for five repetitions in each order.
+Redis resolved to 1.0007 over ten samples. sh8 reversed from 1.104 in baseline-
+first order to 0.954 in candidate-first order, demonstrating order/noise rather
+than a repeatable regression. No allocation policy changed, full-suite RSS did
+not show a coherent increase, and Valgrind reported zero bytes live at exit.
+
+### Correctness and safety gates
+
+All of the following passed on the final source:
+
+- validating/trusted differential tests in debug and ordinary release;
+- all production and secure page-batch tests;
+- six Loom concurrency models;
+- strict-type audit (335 sites);
+- behavioral parity against C;
+- release C-ABI cross-thread stress;
+- ASan allocation/API suite and TSan stress/fuzz/thread-stat suite;
+- Valgrind full leak/error checking of the release stress probe;
+- `cargo fmt --all`;
+- `cargo clippy --workspace --all-targets --all-features`;
+- `cargo test --workspace --all-targets --all-features`.
+
+The first ASan invocation hit the current nightly's pre-existing
+`unused_unsafe` lint on `__cpuid_count`. It was rerun successfully with only
+`-Aunused-unsafe`, the established repository sanitizer workaround; allocator
+source was not changed for the toolchain lint.
+
+### Decision
+
+**KEEP.** Committed as `f018285`. X02 removes redundant dynamic work proven by the typed/unsafe
+ownership boundary, follows ordinary C mimalloc's algorithm, retains hardened
+validation and universal traversal bounds, produces a repeatable general
+remote-free improvement, and has no repeatable correctness, memory, or held-out
+regression. Promote the committed X02 artifact to B02 before the next
+performance experiment; do not compare future candidates directly to B01.
+
+## X03 — Authoritative B02 versus C full-suite comparison
+
+Completed: 2026-08-10.
+
+### Provenance and protocol
+
+A fresh interposition library was built directly from committed B02
+`f0182851f357e8fd00e8cd4cfefc6fd5f29443c8`. Its SHA-256 is
+`a75d08896625d8028b675c29efa710f00692f9a6bb16ef4f16c002a88feb0553`,
+byte-for-byte identical to the accepted X02 candidate. C mimalloc 3.3.2 used
+SHA-256
+`aaa9798f271f176ce37d75f9a7d8a2af2c5200699883ccb97a8903781df43750`.
+Both libraries passed `ldd -r`, `LD_PRELOAD=/bin/true`, and export smoke checks.
+The host was quiet and used the `performance` governor before measurement.
+
+The complete `allt` suite ran three repetitions with C first and three with
+Rust first, producing six samples per allocator for all 19 reported workload
+rows. The outlying rptest, glibc-thread, Lua, and sh8 rows then ran ten
+repetitions in each allocator order, producing 20 samples per allocator.
+Benchmark arguments, operation counts, and allocator policies were unchanged.
+
+### Complete-suite results
+
+Ratios below are Rust/C elapsed time, so values below 1.0 favor Rust.
+
+| Workload | Rust/C median | Mean ratio/order evidence | Classification |
+|---|---:|---|---|
+| xmalloc-testN | **0.9725** | 0.9771 C-first, 0.9755 Rust-first | Stable Rust win, about 2.5%--2.8% |
+| glibc-simple | **0.9670** | 0.9658, 0.9634 | Stable Rust win, about 3.3%--3.6% |
+| RocksDB | **0.9946** | 0.9938, 0.9893 | Small consistent Rust win |
+| alloc-testN | **0.9955** | 1.0000, 0.9924 | Parity/slight Rust win |
+| Larson-sized | **0.9956** | 1.0016, 0.9943 | Parity |
+| espresso | 0.9983 | 0.9989, 1.0011 | Parity |
+| barnes | 0.9976 | 0.9984, 1.0016 | Parity |
+| mstressN | 1.0000 | 1.0021, 1.0021 | Parity |
+| alloc-test1 | 1.0024 | 1.0016, 1.0000 | Parity |
+| Redis | 1.0072 | 1.0025, 1.0023 by means | Parity; median granularity exaggerates gap |
+| cfrac | 1.0055 | 1.0123, 0.9964 | Parity; order halves disagree |
+| cache-scratch1 | 1.0060 | 1.0000, 1.0080 | Parity |
+
+The descriptive sum of per-workload mean times was C 27.7693 seconds and Rust
+27.8253 seconds, Rust/C 1.0020. This is not treated as an aggregate score
+because workloads have different semantics and noisy short tests can distort
+it; it only confirms there is no broad suite-wide shift.
+
+### Qualified outliers
+
+The 20-sample follow-up found:
+
+- **glibc-thread is a small real remaining gap.** Rust/C median is 1.0106 and
+  mean is 1.0104. Both order halves agree at 1.0123 and 1.0087, with 0.83% Rust
+  CV. Rust is about 1.0%--1.1% slower than C here.
+- **Lua is near parity with a small directional gap.** Rust/C median is 1.0062;
+  order halves are 1.0037 and 1.0062. The approximately 0.5% mean difference is
+  smaller than each allocator's 1.0%--1.3% CV.
+- **rptest is inconclusive, not 9% slower.** The six-sample full-suite median
+  suggested Rust/C 1.0919, but 20 samples produce median 0.9777 and mean 1.0195.
+  CV remains 7.81% C and 6.07% Rust, and order halves conflict at 0.9668 and
+  1.0759. No allocator ranking is justified.
+- **sh8 remains noisy but directionally favors C.** Rust/C median is 1.0417 and
+  mean is 1.0242; order halves are 1.0327 and 1.0159. Both allocators have about
+  6.5% CV on a 0.24--0.25 second test, so this is recorded as an unresolved
+  possible gap rather than a stable 4% regression.
+- sh6 and cache-scratchN are likewise too short/noisy for percentage claims.
+
+### Memory observations
+
+No leak, fault, or failure appeared. RSS is workload-dependent rather than a
+uniform Rust increase: Rust is about 21.4 MiB lower on RocksDB and 5.7 MiB lower
+on mstress, equal on Larson-sized and alloc-test1, but commonly 1--3 MiB higher
+for small processes. It is about 8.5 MiB higher on saturated xmalloc and about
+5.8 MiB higher in the dedicated sh8 run. These are process-RSS observations,
+not allocator-private committed-memory counts; the Rust artifact also carries
+different runtime/link dependencies. X03 changed no memory policy and makes no
+causal memory-regression claim from these cross-implementation RSS values.
+
+### Overall standing
+
+B02 is at broad workload parity with C mimalloc 3.3.2 and now clearly wins the
+standard saturated xmalloc and glibc-simple tests. It remains ahead or at parity
+on Larson-sized, RocksDB, mstress, and alloc-test. The clearest stable broad-
+suite deficit is glibc-thread at about 1%. The separate X02 low-contention
+xmalloc sweep remains the more important optimization target: B02 is 0.890x C
+throughput at 1+1 for 64-byte uniform remote frees and 0.862x at 1024 bytes,
+despite reaching or beating C under high contention. Future performance work
+should target that remaining low-contention instruction burden without giving
+back the saturated xmalloc win or the general-suite parity established here.

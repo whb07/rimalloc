@@ -45,135 +45,213 @@ fn mi_set_errno(err: c_int) {
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
 fn mi_set_errno(_err: c_int) {}
 
+/// # Safety
+/// The allocator process/TLS lifecycle must permit current-thread
+/// initialization and default-heap lookup, with no concurrent teardown or
+/// mutation of this thread's default TLS slot. Synchronous initialization
+/// callbacks and their opaque arguments must remain valid, must not unwind,
+/// and must not incompatibly reenter thread initialization.
 unsafe fn mi_theap_default_local() -> Option<ThreadHeapLocal> {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY: the caller permits current-thread initialization and keeps the
+    // default TLS slot stable while it is read and resolved.
     let theap = unsafe { _mi_theap_or_default_typed(_mi_theap_default()) }?;
     // SAFETY: `_mi_theap_or_default_typed` returned a non-null thread-heap
     // pointer for the current/default thread heap.
     Some(unsafe { ThreadHeapLocal::new_unchecked(theap) })
 }
 
+/// # Safety
+/// `s` must be null or point to a readable NUL-terminated string whose readable
+/// prefix remains live and stable through allocation and copying. `theap` must
+/// remain a live current-thread heap with exclusive access to its local
+/// allocation state; protocol atomic remote-free publication is permitted.
+/// Allocator callbacks and their opaque arguments reached synchronously must
+/// remain valid, must not unwind, and must not incompatibly reenter heap
+/// mutation. A nonnull result is allocator-owned and may be released with
+/// `mi_free`.
 unsafe fn mi_theap_strdup_typed(theap: ThreadHeapLocal, s: *const c_char) -> *mut c_char {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    if s.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: the caller keeps `s` readable through its NUL terminator.
+    let len = unsafe { _mi_strlen(s) };
+    if len > MI_MAX_ALLOC_SIZE - 1 {
+        return ptr::null_mut();
+    }
+    // SAFETY: `theap` remains live, current-thread owned, and locally
+    // exclusive; the checked bound makes `len + 1` representable.
+    let t = unsafe { mi_theap_malloc(theap.ptr().as_ptr(), len + 1) }.cast::<c_char>();
+    if t.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: `s` is readable for the `len` bytes preceding its terminator and
+    // `t` is a distinct live allocation writable for `len + 1` bytes. The
+    // zero-length copy remains valid, and `t.add(len)` is the final byte.
     unsafe {
-        if s.is_null() {
-            return ptr::null_mut();
-        }
-        let len = _mi_strlen(s);
-        if len > MI_MAX_ALLOC_SIZE - 1 {
-            return ptr::null_mut();
-        }
-        let t = mi_theap_malloc(theap.ptr().as_ptr(), len + 1).cast::<c_char>();
-        if t.is_null() {
-            return ptr::null_mut();
-        }
         _mi_memcpy(t.cast::<c_void>(), s.cast::<c_void>(), len);
         *t.add(len) = 0;
-        t
     }
+    t
 }
 
+/// # Safety
+/// If `n` is nonzero, `s` must be null or readable for `n` bytes or through the
+/// first NUL byte, whichever comes first, and that readable prefix must remain
+/// live and stable through allocation and copying. If `n` is zero, no source
+/// byte is accessed and `s` may be null or any nonnull, possibly dangling,
+/// pointer value. `theap` must remain a live current-thread heap with exclusive
+/// access to its local allocation state; protocol atomic remote-free
+/// publication is permitted. Allocator callbacks and their opaque arguments
+/// reached synchronously must remain valid, must not unwind, and must not
+/// incompatibly reenter heap mutation. A nonnull result is allocator-owned and
+/// may be released with `mi_free`.
 unsafe fn mi_theap_strndup_typed(
     theap: ThreadHeapLocal,
     s: *const c_char,
     n: usize,
 ) -> *mut c_char {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    if s.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: for nonzero `n`, the caller keeps `s` readable and stable for the
+    // bounded scan, stopping at an earlier NUL byte when present. For zero
+    // `n`, `_mi_strnlen` performs no pointer access.
+    let len = unsafe { _mi_strnlen(s, n) };
+    if len > MI_MAX_ALLOC_SIZE - 1 {
+        return ptr::null_mut();
+    }
+    // SAFETY: `theap` remains live, current-thread owned, and locally
+    // exclusive; the checked bound makes `len + 1` representable.
+    let t = unsafe { mi_theap_malloc(theap.ptr().as_ptr(), len + 1) }.cast::<c_char>();
+    if t.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: the bounded scan proves `s` readable for `len` bytes and `t` is a
+    // distinct live allocation writable for `len + 1` bytes. The zero-length
+    // copy remains valid, and `t.add(len)` is the final byte.
     unsafe {
-        if s.is_null() {
-            return ptr::null_mut();
-        }
-        let len = _mi_strnlen(s, n);
-        if len > MI_MAX_ALLOC_SIZE - 1 {
-            return ptr::null_mut();
-        }
-        let t = mi_theap_malloc(theap.ptr().as_ptr(), len + 1).cast::<c_char>();
-        if t.is_null() {
-            return ptr::null_mut();
-        }
         _mi_memcpy(t.cast::<c_void>(), s.cast::<c_void>(), len);
         *t.add(len) = 0;
-        t
     }
+    t
 }
 
 /// # Safety
-/// `s` must be null or point to a valid NUL-terminated C string.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// `s` must be null or point to a readable NUL-terminated C string whose
+/// readable prefix remains live and stable through allocation and copying. The
+/// allocator process/TLS lifecycle must permit initialization and keep this
+/// thread's default heap live and locally exclusive for allocation; protocol
+/// atomic remote-free publication is permitted. Synchronous allocator
+/// callbacks and their opaque arguments must remain valid, must not unwind,
+/// and must not incompatibly reenter heap mutation. A nonnull result is
+/// allocator-owned and may be released with `mi_free`.
+// SAFETY: this exported entry preserves the raw string ABI and delegates after
+// resolving the allocator's current default heap.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_strdup(s: *const c_char) -> *mut c_char {
-    unsafe {
-        let Some(theap) = mi_theap_default_local() else {
-            return ptr::null_mut();
-        };
-        mi_theap_strdup_typed(theap, s)
-    }
+    // SAFETY: allocator lifecycle permits default-heap initialization and
+    // keeps the current TLS slot stable. This intentionally occurs before the
+    // typed helper's null-string check, matching the original entry ordering.
+    let Some(theap) = (unsafe { mi_theap_default_local() }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the public contract keeps `s` readable and stable while the
+    // resolved default heap remains live and locally exclusive for the
+    // duplication transaction.
+    unsafe { mi_theap_strdup_typed(theap, s) }
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. `s` must be null or point to a valid NUL-terminated C
-/// string.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// `heap` must identify a live initialized heap owned by the current thread,
+/// with a stable thread-heap association and exclusive access to local
+/// allocation state; protocol atomic remote-free publication is permitted.
+/// `s` must be null or point to a readable NUL-terminated C string whose
+/// readable prefix remains live and stable through allocation and copying.
+/// Synchronous allocator callbacks and their opaque arguments must remain
+/// valid, must not unwind, and must not incompatibly reenter heap mutation. A
+/// nonnull result is allocator-owned and may be released with `mi_free`.
+// SAFETY: this exported heap entry validates and localizes the caller's raw
+// heap before delegating string access and allocation under its contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_strdup(heap: *mut mi_heap_t, s: *const c_char) -> *mut c_char {
-    unsafe {
+    // SAFETY: the caller keeps the raw heap live, current-thread owned, and
+    // locally exclusive while it is classified and localized. This occurs
+    // before the typed helper's null-string check, preserving entry ordering.
+    let Some(theap) = (unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
         };
-        mi_heap_strdup_typed(heap, s)
-    }
-}
-
-unsafe fn mi_heap_strdup_typed(heap: BorrowedHeap, s: *const c_char) -> *mut c_char {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_strdup_typed(theap, s)
-    }
+        mi_heap_borrowed_theap_local(heap)
+    }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the public contract keeps `s` readable and stable while the
+    // localized heap remains live and locally exclusive for the duplication
+    // transaction.
+    unsafe { mi_theap_strdup_typed(theap, s) }
 }
 
 /// # Safety
-/// `s` must be null or readable for at most `n` bytes up to a NUL terminator.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// If `n` is nonzero, `s` must be null or readable for at most `n` bytes up to
+/// a NUL terminator, and that readable prefix must remain live and stable
+/// through allocation and copying. If `n` is zero, no source byte is accessed
+/// and `s` may be null or any nonnull, possibly dangling, pointer value. The
+/// allocator process/TLS lifecycle must permit initialization and keep this
+/// thread's default heap live and locally exclusive for allocation; protocol
+/// atomic remote-free publication is permitted. Synchronous allocator
+/// callbacks and their opaque arguments must remain valid, must not unwind,
+/// and must not incompatibly reenter heap mutation. A nonnull result is
+/// allocator-owned and may be released with `mi_free`.
+// SAFETY: this exported entry preserves the bounded raw string ABI and
+// delegates after resolving the allocator's current default heap.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_strndup(s: *const c_char, n: usize) -> *mut c_char {
-    unsafe {
-        let Some(theap) = mi_theap_default_local() else {
-            return ptr::null_mut();
-        };
-        mi_theap_strndup_typed(theap, s, n)
-    }
+    // SAFETY: allocator lifecycle permits default-heap initialization and
+    // keeps the current TLS slot stable. This intentionally occurs before the
+    // typed helper's null-string check, matching the original entry ordering.
+    let Some(theap) = (unsafe { mi_theap_default_local() }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: for nonzero `n`, the public contract keeps `s` readable and
+    // stable for its bounded scan and copy; zero `n` performs no source access.
+    // The resolved default heap remains live and locally exclusive.
+    unsafe { mi_theap_strndup_typed(theap, s, n) }
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. `s` must be null or readable for at most `n` bytes up to a
-/// NUL terminator.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// `heap` must identify a live initialized heap owned by the current thread,
+/// with a stable thread-heap association and exclusive access to local
+/// allocation state; protocol atomic remote-free publication is permitted.
+/// If `n` is nonzero, `s` must be null or readable for at most `n` bytes up to
+/// a NUL terminator, and that readable prefix must remain live and stable
+/// through allocation and copying. If `n` is zero, no source byte is accessed
+/// and `s` may be null or any nonnull, possibly dangling, pointer value.
+/// Synchronous allocator callbacks and their opaque arguments must remain
+/// valid, must not unwind, and must not incompatibly reenter heap mutation. A
+/// nonnull result is allocator-owned and may be released with `mi_free`.
+// SAFETY: this exported heap entry validates and localizes the caller's raw
+// heap before delegating bounded string access and allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_strndup(
     heap: *mut mi_heap_t,
     s: *const c_char,
     n: usize,
 ) -> *mut c_char {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
+    // SAFETY: the caller keeps the raw heap live, current-thread owned, and
+    // locally exclusive while it is classified and localized. This occurs
+    // before the typed helper's null-string check, preserving entry ordering.
+    let Some(theap) = (unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
         };
-        mi_heap_strndup_typed(heap, s, n)
-    }
-}
-
-unsafe fn mi_heap_strndup_typed(heap: BorrowedHeap, s: *const c_char, n: usize) -> *mut c_char {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_strndup_typed(theap, s, n)
-    }
+        mi_heap_borrowed_theap_local(heap)
+    }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: for nonzero `n`, the public contract keeps `s` readable and
+    // stable for its bounded scan and copy; zero `n` performs no source access.
+    // The localized heap remains live and locally exclusive.
+    unsafe { mi_theap_strndup_typed(theap, s, n) }
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]

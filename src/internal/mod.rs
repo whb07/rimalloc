@@ -49,7 +49,6 @@ pub(crate) use crate::allocator::init::{
     _mi_auto_process_done, _mi_auto_process_init, _mi_is_heap_main, _mi_preloading, _mi_subproc,
     _mi_theap_guarded_init, _mi_theap_options_init, _mi_thread_done, _mi_thread_id,
 };
-use crate::allocator::options::_mi_error_message_fmt;
 pub(crate) use crate::allocator::page::_mi_deferred_free;
 pub use crate::allocator::page::{MI_LARGE_MAX_OBJ_SIZE, MI_OS_PAGE_SIZE, mi_page_is_abandoned};
 use crate::allocator::page_map::_mi_page_map_base;
@@ -62,7 +61,7 @@ pub(crate) use crate::allocator::stats::{
 pub(crate) use crate::allocator::thread_heap::{
     _mi_theap_decref, _mi_theap_incref, _mi_theap_random_next,
 };
-use crate::core_types::{Errno, PageQueuePtr};
+use crate::core_types::PageQueuePtr;
 #[cfg(feature = "guarded")]
 use crate::core_types::{GuardedConfig, GuardedDecision};
 pub(crate) use crate::ffi::libc::{
@@ -391,25 +390,6 @@ pub fn mi_mul_overflow(count: usize, size: usize, total: &mut usize) -> bool {
             *total = usize::MAX;
             true
         }
-    }
-}
-
-/// # Safety
-/// This mirrors the C helper; callers must provide a valid `total` output reference.
-#[inline]
-pub unsafe fn mi_count_size_overflow(count: usize, size: usize, total: &mut usize) -> bool {
-    if count == 1 {
-        *total = size;
-        false
-    } else if !mi_mul_overflow(count, size, total) {
-        false
-    } else {
-        _mi_error_message_fmt(
-            Errno::EOVERFLOW,
-            format_args!("allocation request is too large ({count} * {size} bytes)\n"),
-        );
-        *total = usize::MAX;
-        true
     }
 }
 

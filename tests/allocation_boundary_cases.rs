@@ -118,6 +118,8 @@ fn product_allocation_paths_preserve_overflow_and_zero_product_behavior() {
         assert!(mi_calloc(usize::MAX, 2).is_null());
         assert!(mi_mallocn(usize::MAX, 2).is_null());
 
+        assert_freeable(mi_calloc(1, 32));
+        assert_freeable(mi_mallocn(1, 32));
         assert_freeable(mi_calloc(0, usize::MAX));
         assert_freeable(mi_calloc(usize::MAX, 0));
         assert_freeable(mi_mallocn(0, usize::MAX));
@@ -129,6 +131,8 @@ fn product_allocation_paths_preserve_overflow_and_zero_product_behavior() {
         assert!(mi_heap_calloc(heap, usize::MAX, 2).is_null());
         assert!(mi_heap_mallocn(heap, usize::MAX, 2).is_null());
 
+        assert_freeable(mi_heap_calloc(heap, 1, 32));
+        assert_freeable(mi_heap_mallocn(heap, 1, 32));
         assert_freeable(mi_heap_calloc(heap, 0, usize::MAX));
         assert_freeable(mi_heap_calloc(heap, usize::MAX, 0));
         assert_freeable(mi_heap_mallocn(heap, 0, usize::MAX));

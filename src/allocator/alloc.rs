@@ -656,11 +656,19 @@ fn product_size_or_report(
     count: crate::core_types::ItemCount,
     size: crate::core_types::RequestedSize,
 ) -> Option<crate::core_types::RequestedSize> {
-    let mut total = 0;
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    if unsafe { crate::internal::mi_count_size_overflow(count.get(), size.get(), &mut total) } {
+    let count = count.get();
+    let size = size.get();
+    let total = if count == 1 {
+        size
+    } else if let Some(total) = count.checked_mul(size) {
+        total
+    } else {
+        _mi_error_message_fmt(
+            Errno::EOVERFLOW,
+            format_args!("allocation request is too large ({count} * {size} bytes)\n"),
+        );
         return None;
-    }
+    };
     Some(crate::core_types::RequestedSize::new(total))
 }
 

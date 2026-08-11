@@ -316,6 +316,141 @@ impl Drop for ClaimedArenaSlices {
     }
 }
 
+struct PendingFreshPage {
+    start: core::ptr::NonNull<u8>,
+    alloc_size: usize,
+    memid: mi_memid_t,
+    heap_page_bit: Option<(core::ptr::NonNull<mi_arena_pages_t>, SliceIndex)>,
+    separate_page_meta: Option<PagePtr>,
+}
+
+impl PendingFreshPage {
+    /// # Safety
+    ///
+    /// `start` must be a live allocation described by `alloc_size` and `memid`.
+    /// Its arena/heap metadata must outlive this pending value, with concurrent
+    /// teardown excluded.
+    unsafe fn new(start: *mut u8, alloc_size: usize, memid: mi_memid_t) -> Self {
+        // SAFETY: required by this constructor's contract.
+        let start = unsafe { core::ptr::NonNull::new_unchecked(start) };
+        Self {
+            start,
+            alloc_size,
+            memid,
+            heap_page_bit: None,
+            separate_page_meta: None,
+        }
+    }
+
+    #[inline(always)]
+    fn start(&self) -> *mut u8 {
+        self.start.as_ptr()
+    }
+
+    #[inline(always)]
+    fn memid(&self) -> mi_memid_t {
+        self.memid
+    }
+
+    #[inline(always)]
+    fn memid_mut(&mut self) -> &mut mi_memid_t {
+        &mut self.memid
+    }
+
+    /// # Safety
+    /// `arena_pages` must remain live until publication or rollback, and this
+    /// pending allocation must exclusively own its currently clear page bit.
+    unsafe fn install_heap_page_bit(
+        &mut self,
+        arena_pages: *mut mi_arena_pages_t,
+        index: SliceIndex,
+    ) -> bool {
+        let Some(arena_pages) = core::ptr::NonNull::new(arena_pages) else {
+            return false;
+        };
+        // SAFETY: the caller provides a live heap arena-pages bitmap and the
+        // allocation's checked arena slice index. A true result proves this
+        // transaction changed the bit from clear to set.
+        if !unsafe { mi_bitmap_set((*arena_pages.as_ptr()).pages, index.get()) } {
+            crate::internal::mi_assert_internal!(false);
+            return false;
+        }
+        self.heap_page_bit = Some((arena_pages, index));
+        true
+    }
+
+    #[inline(always)]
+    fn set_separate_page_meta(&mut self, page: PagePtr) {
+        self.separate_page_meta = Some(page);
+    }
+
+    /// # Safety
+    /// The pending page metadata and ownership word must be fully initialized,
+    /// and the page-map lifecycle must remain initialized through registration.
+    unsafe fn register(self, page: PagePtr) -> Option<RegisteredFreshPage> {
+        // SAFETY: the caller guarantees initialized live page metadata.
+        if unsafe { _mi_page_map_register(page.as_ptr()) } {
+            Some(RegisteredFreshPage {
+                _pending: self,
+                page,
+            })
+        } else {
+            None
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    /// # Safety
+    /// This may be called exactly once, and only while this value is being
+    /// dropped. It releases every resource still owned by the transaction
+    /// without disarming the fields.
+    unsafe fn rollback(&mut self) {
+        if let Some((arena_pages, index)) = self.heap_page_bit {
+            // SAFETY: the transaction installed and still owns this exact bit.
+            unsafe { mi_bitmap_clear((*arena_pages.as_ptr()).pages, index.get()) };
+        }
+        if let Some(page) = self.separate_page_meta {
+            // SAFETY: the pending allocation exclusively initialized this
+            // arena-owned metadata slot, which outlives the transaction.
+            unsafe {
+                crate::internal::_mi_memzero_aligned(page.as_ptr().cast(), size_of::<mi_page_t>())
+            };
+        }
+        // SAFETY: the transaction still owns this allocation and its memid.
+        unsafe { _mi_arenas_free(self.start().cast(), self.alloc_size, self.memid()) };
+    }
+}
+
+impl Drop for PendingFreshPage {
+    fn drop(&mut self) {
+        // SAFETY: Drop runs exactly once and does not access the transaction
+        // after rollback releases its remaining resources.
+        unsafe { self.rollback() };
+    }
+}
+
+struct RegisteredFreshPage {
+    _pending: PendingFreshPage,
+    page: PagePtr,
+}
+
+impl RegisteredFreshPage {
+    #[inline(always)]
+    fn publish(self) -> *mut mi_page_t {
+        let registered = core::mem::ManuallyDrop::new(self);
+        registered.page.as_ptr()
+    }
+}
+
+impl Drop for RegisteredFreshPage {
+    fn drop(&mut self) {
+        // SAFETY: construction proves this exact page is registered; the
+        // pending allocation remains live until its field drops afterward.
+        unsafe { _mi_page_map_unregister(self.page.as_ptr()) };
+    }
+}
+
 unsafe fn mi_arena_try_alloc_at(
     arena: ArenaPtr,
     slice_count: crate::core_types::SliceCount,
@@ -1205,8 +1340,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     block_alignment: crate::core_types::MaybeAlignment,
     os_align: bool,
     commit: bool,
-    memid: *mut mi_memid_t,
-) -> *mut u8 {
+) -> Option<PendingFreshPage> {
     let block_alignment = block_alignment.get();
     let allow_large = true;
     let page_alignment = MI_ARENA_SLICE_ALIGN;
@@ -1225,8 +1359,9 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     };
 
     let mut start = ptr::null_mut::<u8>();
+    let mut arena_pending = None;
+    let mut memid = unsafe { _mi_memid_none() };
     // SAFETY: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
-    unsafe { *memid = _mi_memid_none() };
     let slice_count_usize = slice_count.get() as usize;
     let alloc_size = mi_size_of_slices(slice_count_usize);
     if !mi_option_is_enabled(mi_option_t::mi_option_disallow_arena_alloc)
@@ -1236,7 +1371,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     {
         let Some(heap_ptr) = HeapPtr::new(heap) else {
             crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
+            return None;
         };
         // SAFETY: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
         let page_alignment = unsafe { crate::core_types::Alignment::new_unchecked(page_alignment) };
@@ -1250,31 +1385,32 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
                 ArenaPtr::new(req_arena),
                 crate::core_types::ThreadSeq::new((*tld).thread_seq),
                 numa_node,
-                memid,
+                &mut memid,
             )
             .cast::<u8>()
         };
         if !start.is_null() {
+            // SAFETY: successful arena allocation returned live backing and a
+            // matching memid owned by this pending transaction.
+            let mut pending = unsafe { PendingFreshPage::new(start, alloc_size, memid) };
             // SAFETY: heap arena-page publication installs or updates per-heap arena page bitmaps before page ownership becomes visible.
-            match crate::core_types::MemId::view(unsafe { *memid }) {
+            match crate::core_types::MemId::view(memid) {
                 crate::core_types::MemIdView::Arena(a) => {
                     let arena = a.arena().as_ptr();
                     let arena_pages = unsafe { mi_heap_ensure_arena_pages_from_raw(heap, arena) };
-                    if arena_pages.is_null() {
-                        // SAFETY: heap arena-page publication installs or updates per-heap arena page bitmaps before page ownership becomes visible.
-                        unsafe { _mi_arenas_free(start.cast(), alloc_size, *memid) };
+                    let slice_index = a.range().start();
+                    // SAFETY: the ensured bitmap belongs to this live heap and
+                    // arena; the pending allocation owns its clear start bit.
+                    if !unsafe { pending.install_heap_page_bit(arena_pages, slice_index) } {
+                        drop(pending);
                         start = ptr::null_mut();
                     } else {
-                        let slice_idx = a.range().start_usize();
-                        crate::internal::mi_assert_internal!(unsafe {
-                            !mi_bitmap_is_setN((*arena_pages).pages, slice_idx, 1)
-                        });
-                        // SAFETY: heap arena-page publication installs or updates per-heap arena page bitmaps before page ownership becomes visible.
-                        unsafe { mi_bitmap_set((*arena_pages).pages, slice_idx) };
+                        arena_pending = Some(pending);
                     }
                 }
                 _ => {
                     // Fallback for non-arena allocations that bypassed the arena path above.
+                    arena_pending = Some(pending);
                 }
             }
         }
@@ -1293,7 +1429,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
                     commit,
                     allow_large,
                     req_arena.cast(),
-                    memid,
+                    &mut memid,
                 )
                 .cast::<u8>()
             }
@@ -1309,7 +1445,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
                     commit,
                     allow_large,
                     req_arena.cast(),
-                    memid,
+                    &mut memid,
                 )
                 .cast::<u8>()
             }
@@ -1317,7 +1453,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     }
 
     if start.is_null() {
-        return ptr::null_mut();
+        return None;
     }
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
         start.cast(),
@@ -1331,7 +1467,13 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
                 block_alignment
             )
     );
-    start
+    if let Some(pending) = arena_pending {
+        Some(pending)
+    } else {
+        // SAFETY: successful OS allocation returned live backing and matching
+        // memid, now owned by the pending transaction.
+        Some(unsafe { PendingFreshPage::new(start, alloc_size, memid) })
+    }
 }
 
 unsafe fn mi_page_block_start(block_size: crate::core_types::BlockSize, os_align: bool) -> usize {
@@ -1364,9 +1506,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     let os_align = block_alignment_raw > MI_PAGE_MAX_OVERALLOC_ALIGN;
     let slice_count_usize = slice_count.get() as usize;
     let alloc_size = mi_size_of_slices(slice_count_usize);
-    // SAFETY: fresh arena page setup initializes metadata, commit state, and layout counters.
-    let mut memid = unsafe { _mi_memid_none() };
-    let slice_start = unsafe {
+    let Some(mut pending) = (unsafe {
         mi_arenas_page_alloc_fresh_area(
             theap,
             slice_count,
@@ -1374,12 +1514,12 @@ unsafe fn mi_arenas_page_alloc_fresh(
             block_alignment,
             os_align,
             commit,
-            &mut memid,
         )
-    };
-    if slice_start.is_null() {
+    }) else {
         return ptr::null_mut();
-    }
+    };
+    let slice_start = pending.start();
+    let mut memid = pending.memid();
 
     let page_noguard_size = alloc_size;
     let mut page = ptr::null_mut::<mi_page_t>();
@@ -1419,6 +1559,11 @@ unsafe fn mi_arenas_page_alloc_fresh(
         // SAFETY: fresh arena page setup initializes metadata, commit state, and layout counters.
         block_start = unsafe { mi_page_block_start(block_size, os_align) };
     }
+    if page_meta_is_separate {
+        // SAFETY: the selected separate arena metadata slot is non-null and
+        // remains live through publication or rollback.
+        pending.set_separate_page_meta(unsafe { PagePtr::new_unchecked(page) });
+    }
 
     let mut commit_size = crate::core_types::CommittedBytes::new(0);
     if !memid.initially_committed {
@@ -1435,7 +1580,6 @@ unsafe fn mi_arenas_page_alloc_fresh(
                 crate::core_types::MemIdView::Arena(a) => (a.arena(), a.range()),
                 _ => {
                     crate::internal::mi_assert_internal!(false);
-                    _mi_arenas_free(slice_start.cast(), alloc_size, memid);
                     return ptr::null_mut();
                 }
             };
@@ -1447,8 +1591,6 @@ unsafe fn mi_arenas_page_alloc_fresh(
                 crate::core_types::CommittedBytes::new(0),
             )
         } {
-            // SAFETY: fresh arena page setup initializes metadata, commit state, and layout counters.
-            unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
             return ptr::null_mut();
         }
     }
@@ -1525,10 +1667,12 @@ unsafe fn mi_arenas_page_alloc_fresh(
     // SAFETY: arena page ownership transitions update owner words, page maps, and visibility only after page metadata invariants hold.
     let claimed = unsafe { page_ptr.thread_free_cell().claim_acq_rel() };
     crate::internal::mi_assert_internal!(claimed);
-    if !unsafe { _mi_page_map_register(page) } {
-        unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
+    // Keep memid diagnostics and page metadata synchronized before the pending
+    // transaction enters registered state.
+    *pending.memid_mut() = memid;
+    let Some(registered) = (unsafe { pending.register(page_ptr) }) else {
         return ptr::null_mut();
-    }
+    };
 
     // SAFETY: arena page ownership transitions update owner words, page maps, and visibility only after page metadata invariants hold.
     unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.pages), 1) };
@@ -1548,7 +1692,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
 
-    page
+    registered.publish()
 }
 
 unsafe fn mi_arenas_page_regular_alloc(
@@ -2084,5 +2228,81 @@ mod claim_tests {
             // Restore the fixture's free bits before releasing bitmap storage.
             assert!(unsafe { mi_bbitmap_setN(bitmap, 5, 3) });
         });
+    }
+
+    #[cfg(not(miri))]
+    #[test]
+    fn pending_fresh_page_rollback_clears_heap_bit_and_separate_metadata() {
+        let bitmap_layout = Layout::new::<mi_bitmap_t>();
+        // SAFETY: all raw fixtures are initialized and remain live through the
+        // pending transaction; the None memid makes backing release a no-op.
+        unsafe {
+            let bitmap = alloc_zeroed(bitmap_layout).cast::<mi_bitmap_t>();
+            assert!(!bitmap.is_null());
+            mi_bitmap_init(bitmap, 16, true);
+
+            let mut arena_pages = MaybeUninit::<mi_arena_pages_t>::zeroed();
+            ptr::addr_of_mut!((*arena_pages.as_mut_ptr()).pages).write(bitmap);
+            let mut backing = MaybeUninit::<u8>::uninit();
+            let mut page_meta = MaybeUninit::<mi_page_t>::zeroed();
+            ptr::addr_of_mut!((*page_meta.as_mut_ptr()).block_size).write(128);
+
+            let mut pending = PendingFreshPage::new(
+                backing.as_mut_ptr(),
+                1,
+                crate::internal::memid::_mi_memid_none(),
+            );
+            assert!(pending.install_heap_page_bit(arena_pages.as_mut_ptr(), SliceIndex::new(5)));
+            pending.set_separate_page_meta(PagePtr::new_unchecked(page_meta.as_mut_ptr()));
+            assert!(mi_bitmap_is_setN(bitmap, 5, 1));
+
+            drop(pending);
+            assert!(mi_bitmap_is_clearN(bitmap, 5, 1));
+            assert_eq!((*page_meta.as_ptr()).block_size, 0);
+
+            ptr::addr_of_mut!((*page_meta.as_mut_ptr()).block_size).write(256);
+            let mut reused = PendingFreshPage::new(
+                backing.as_mut_ptr(),
+                1,
+                crate::internal::memid::_mi_memid_none(),
+            );
+            assert!(reused.install_heap_page_bit(arena_pages.as_mut_ptr(), SliceIndex::new(5)));
+            reused.set_separate_page_meta(PagePtr::new_unchecked(page_meta.as_mut_ptr()));
+            drop(reused);
+            assert!(mi_bitmap_is_clearN(bitmap, 5, 1));
+            assert_eq!((*page_meta.as_ptr()).block_size, 0);
+            dealloc(bitmap.cast(), bitmap_layout);
+        }
+    }
+
+    #[test]
+    fn pending_fresh_page_drop_restores_heap_bit_for_reuse() {
+        let bitmap_layout = Layout::new::<mi_bitmap_t>();
+        // SAFETY: raw bitmap fixtures remain initialized and live through both
+        // pending transactions; the None memid makes backing release a no-op.
+        unsafe {
+            let bitmap = alloc_zeroed(bitmap_layout).cast::<mi_bitmap_t>();
+            assert!(!bitmap.is_null());
+            mi_bitmap_init(bitmap, 16, true);
+            let mut arena_pages = MaybeUninit::<mi_arena_pages_t>::zeroed();
+            ptr::addr_of_mut!((*arena_pages.as_mut_ptr()).pages).write(bitmap);
+            let mut backing = MaybeUninit::<u8>::uninit();
+
+            for _ in 0..2 {
+                let mut pending = PendingFreshPage::new(
+                    backing.as_mut_ptr(),
+                    1,
+                    crate::internal::memid::_mi_memid_none(),
+                );
+                assert!(
+                    pending.install_heap_page_bit(arena_pages.as_mut_ptr(), SliceIndex::new(5))
+                );
+                assert!(mi_bitmap_is_setN(bitmap, 5, 1));
+                drop(pending);
+                assert!(mi_bitmap_is_clearN(bitmap, 5, 1));
+            }
+
+            dealloc(bitmap.cast(), bitmap_layout);
+        }
     }
 }

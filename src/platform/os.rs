@@ -3,7 +3,7 @@
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::c_void;
-use core::ptr;
+use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 use crate::allocator::arena::MI_ARENA_SLICE_SIZE;
@@ -16,13 +16,13 @@ use crate::atomic::mi_lock_t;
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB};
 use crate::core_types::{
     BorrowedSubproc, CommittedBytes, InitiallyCommitted, InitiallyZero, MemId, MemIdView, OsMemId,
-    OsMemKind, OsMemPtr, Pinned, ReservedBytes, SubprocPtr,
+    OsMemKind, OsMemPtr, OsPageSize, Pinned, ReservedBytes, SubprocPtr, ptr_exposed_addr,
 };
 use crate::internal::memid::{_mi_memid_none, mi_memid_t};
 use crate::internal::{
-    __mi_stat_counter_increase_mt, __mi_stat_decrease_mt, __mi_stat_increase_mt,
-    _mi_align_down_ptr, _mi_align_up, _mi_align_up_ptr, _mi_is_power_of_two, _mi_memzero_aligned,
-    _mi_preloading, _mi_subproc, MI_DEBUG, MI_SECURE, MI_TRACK_ENABLED, mi_theap_is_initialized,
+    __mi_stat_counter_increase_mt, __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_align_up,
+    _mi_align_up_ptr, _mi_is_power_of_two, _mi_memzero_aligned, _mi_preloading, _mi_subproc,
+    MI_DEBUG, MI_SECURE, MI_TRACK_ENABLED, mi_theap_is_initialized,
 };
 use crate::prim::mi_os_mem_config_t;
 use crate::prim::{
@@ -63,6 +63,83 @@ static mut mi_os_mem_config: mi_os_mem_config_t = mi_os_mem_config_t {
     has_virtual_reserve: true,
     has_transparent_huge_pages: false,
 };
+
+/// A nonempty, page-aligned exposed-address interval.
+///
+/// This is geometry only: it does not prove backing allocation coverage, provenance,
+/// ownership, liveness, or that the interval may be accessed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct OsPageRange {
+    start: NonNull<c_void>,
+    size: ReservedBytes,
+}
+
+impl OsPageRange {
+    #[inline]
+    fn covering(addr: *mut c_void, size: ReservedBytes, page_size: OsPageSize) -> Option<Self> {
+        if size.get() == 0 {
+            return None;
+        }
+        let start = NonNull::new(addr)?;
+        let address = ptr_exposed_addr(addr);
+        let end = address.checked_add(size.get())?;
+        let alignment = page_size.get();
+        let aligned_start = address - (address % alignment);
+        let remainder = end % alignment;
+        let aligned_end = if remainder == 0 {
+            end
+        } else {
+            end.checked_add(alignment - remainder)?
+        };
+        Self::from_bounds(start, aligned_start, aligned_end)
+    }
+
+    #[inline]
+    fn contained(addr: *mut c_void, size: ReservedBytes, page_size: OsPageSize) -> Option<Self> {
+        if size.get() == 0 {
+            return None;
+        }
+        let start = NonNull::new(addr)?;
+        let address = ptr_exposed_addr(addr);
+        let end = address.checked_add(size.get())?;
+        let alignment = page_size.get();
+        let remainder = address % alignment;
+        let aligned_start = if remainder == 0 {
+            address
+        } else {
+            address.checked_add(alignment - remainder)?
+        };
+        let aligned_end = end - (end % alignment);
+        Self::from_bounds(start, aligned_start, aligned_end)
+    }
+
+    #[inline]
+    fn from_bounds(
+        start: NonNull<c_void>,
+        aligned_start: usize,
+        aligned_end: usize,
+    ) -> Option<Self> {
+        let size = aligned_end.checked_sub(aligned_start)?;
+        if size == 0 {
+            return None;
+        }
+        let aligned = start.as_ptr().map_addr(|_| aligned_start);
+        Some(Self {
+            start: NonNull::new(aligned)?,
+            size: ReservedBytes::new(size),
+        })
+    }
+
+    #[inline]
+    fn start(self) -> *mut c_void {
+        self.start.as_ptr()
+    }
+
+    #[inline]
+    fn size(self) -> ReservedBytes {
+        self.size
+    }
+}
 
 // SAFETY: OS memory config readers preserve process-global memory configuration invariants.
 #[inline]
@@ -294,61 +371,6 @@ pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usi
     hint as *mut c_void
 }
 
-#[inline]
-fn mi_os_page_align_areax(
-    conservative: bool,
-    addr: *mut c_void,
-    size: usize,
-    newsize: *mut usize,
-) -> *mut c_void {
-    crate::internal::mi_assert!(!addr.is_null() && size > 0);
-    if !newsize.is_null() {
-        // SAFETY: page alignment helpers validate nullable out-pointers and initialized page-size configuration.
-        unsafe { *newsize = 0 };
-    }
-    if addr.is_null() || size == 0 {
-        return core::ptr::null_mut();
-    }
-
-    // SAFETY: page alignment helpers validate nullable out-pointers and initialized page-size configuration.
-    let page_size = unsafe { _mi_os_page_size_typed().get() };
-    let start = if conservative {
-        _mi_align_up_ptr(addr.cast_const(), page_size)
-    } else {
-        _mi_align_down_ptr(addr.cast_const(), page_size)
-    };
-    // SAFETY: page alignment helpers validate nullable out-pointers and initialized page-size configuration.
-    let end_addr = unsafe { addr.cast::<u8>().add(size) };
-    let end = if conservative {
-        _mi_align_down_ptr(end_addr.cast::<c_void>().cast_const(), page_size)
-    } else {
-        _mi_align_up_ptr(end_addr.cast::<c_void>().cast_const(), page_size)
-    };
-
-    let diff = (end as usize).wrapping_sub(start as usize);
-    if end as usize <= start as usize {
-        return core::ptr::null_mut();
-    }
-
-    crate::internal::mi_assert_internal!(
-        (conservative && diff <= size) || (!conservative && diff >= size)
-    );
-    if !newsize.is_null() {
-        // SAFETY: page alignment helpers validate nullable out-pointers and initialized page-size configuration.
-        unsafe { *newsize = diff };
-    }
-    start
-}
-
-#[inline]
-fn mi_os_page_align_area_conservative(
-    addr: *mut c_void,
-    size: usize,
-    newsize: *mut usize,
-) -> *mut c_void {
-    mi_os_page_align_areax(true, addr, size, newsize)
-}
-
 /// # Safety
 /// The OS memory configuration must have been initialized.
 // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
@@ -499,11 +521,13 @@ pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
             __mi_stat_counter_increase_mt(ptr::addr_of_mut!(stats.commit_calls), 1);
         }
 
-        let mut csize = 0;
-        let start = mi_os_page_align_areax(false, addr, size, &mut csize);
-        if csize == 0 {
+        let Some(range) =
+            OsPageRange::covering(addr, ReservedBytes::new(size), _mi_os_page_size_typed())
+        else {
             return true;
-        }
+        };
+        let start = range.start();
+        let csize = range.size().get();
 
         let mut os_is_zero = false;
         let err = _mi_prim_commit(start, csize, &mut os_is_zero);
@@ -549,11 +573,13 @@ unsafe fn mi_os_decommit_ex(
     unsafe {
         crate::internal::mi_assert_internal!(!needs_recommit.is_null());
 
-        let mut csize = 0;
-        let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
-        if csize == 0 {
+        let Some(range) =
+            OsPageRange::contained(addr, ReservedBytes::new(size), _mi_os_page_size_typed())
+        else {
             return true;
-        }
+        };
+        let start = range.start();
+        let csize = range.size().get();
 
         *needs_recommit = true;
         let err = _mi_prim_decommit(start, csize, needs_recommit);
@@ -588,11 +614,13 @@ pub unsafe extern "C" fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool
 // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
     unsafe {
-        let mut csize = 0;
-        let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
-        if csize == 0 {
+        let Some(range) =
+            OsPageRange::contained(addr, ReservedBytes::new(size), _mi_os_page_size_typed())
+        else {
             return true;
-        }
+        };
+        let start = range.start();
+        let csize = range.size().get();
 
         let subproc = _mi_subproc();
         if !subproc.is_null() {
@@ -621,11 +649,13 @@ pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
 // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
-    let mut csize = 0;
-    let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
-    if csize == 0 {
+    let Some(range) = OsPageRange::contained(addr, ReservedBytes::new(size), unsafe {
+        _mi_os_page_size_typed()
+    }) else {
         return;
-    }
+    };
+    let start = range.start();
+    let csize = range.size().get();
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let err = unsafe { _mi_prim_reuse(start, csize) };
     if err != 0 {
@@ -686,11 +716,13 @@ pub unsafe extern "C" fn _mi_os_purge(p: *mut c_void, size: usize) -> bool {
 // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline]
 unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool {
-    let mut csize = 0;
-    let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
-    if csize == 0 {
+    let Some(range) = OsPageRange::contained(addr, ReservedBytes::new(size), unsafe {
+        _mi_os_page_size_typed()
+    }) else {
         return false;
-    }
+    };
+    let start = range.start();
+    let csize = range.size().get();
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let err = unsafe { _mi_prim_protect(start, csize, protect) };
     if err != 0 {
@@ -1197,8 +1229,8 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
         }
     }
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-    let os_page_size = unsafe { _mi_os_page_size_typed().get() };
-    if memid.is_null() || offset > size || !alignment.is_multiple_of(os_page_size) {
+    let os_page_size = unsafe { _mi_os_page_size_typed() };
+    if memid.is_null() || offset > size || !alignment.is_multiple_of(os_page_size.get()) {
         return core::ptr::null_mut();
     }
     if offset == 0 {
@@ -1223,19 +1255,20 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     crate::internal::mi_assert!(unsafe {
         crate::internal::_mi_is_aligned(p.cast::<u8>().add(offset).cast(), alignment)
     });
-    if commit && extra >= unsafe { _mi_os_page_size_typed().get() } {
-        let mut dsize = 0usize;
-        let dstart = mi_os_page_align_areax(false, start, extra, &mut dsize);
-        if !dstart.is_null() && dsize > 0 {
-            let mut needs_recommit = false;
-            // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-            let err = unsafe { _mi_prim_decommit(dstart, dsize, &mut needs_recommit) };
-            if err != 0 {
-                _mi_warning_message_fmt(format_args!(
-                    "unable to decommit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
-                    err, err, dstart, dsize
-                ));
-            }
+    if commit
+        && extra >= os_page_size.get()
+        && let Some(range) = OsPageRange::covering(start, ReservedBytes::new(extra), os_page_size)
+    {
+        let dstart = range.start();
+        let dsize = range.size().get();
+        let mut needs_recommit = false;
+        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+        let err = unsafe { _mi_prim_decommit(dstart, dsize, &mut needs_recommit) };
+        if err != 0 {
+            _mi_warning_message_fmt(format_args!(
+                "unable to decommit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
+                err, err, dstart, dsize
+            ));
         }
     }
     p
@@ -1698,4 +1731,139 @@ pub unsafe extern "C" fn mi_os_free(p: *mut c_void, size: usize) {
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_decommit(p: *mut c_void, size: usize) {
     let _ = unsafe { _mi_os_decommit(p, size) };
+}
+
+#[cfg(test)]
+mod tests {
+    use core::mem::size_of;
+
+    use super::*;
+
+    fn page_size(size: usize) -> OsPageSize {
+        // SAFETY: every test page size is explicitly nonzero.
+        unsafe { OsPageSize::new_unchecked(size) }
+    }
+
+    fn aligned_ptr(storage: &mut [u8], alignment: usize) -> *mut c_void {
+        let base = storage.as_mut_ptr();
+        let address = ptr_exposed_addr(base);
+        let remainder = address % alignment;
+        let aligned = if remainder == 0 {
+            address
+        } else {
+            address + alignment - remainder
+        };
+        base.map_addr(|_| aligned).cast()
+    }
+
+    fn assert_range(range: OsPageRange, start: usize, size: usize) {
+        assert_eq!(ptr_exposed_addr(range.start()), start);
+        assert_eq!(range.size(), ReservedBytes::new(size));
+    }
+
+    #[test]
+    fn os_page_range_rejects_null_and_zero() {
+        let page = page_size(16);
+        assert!(OsPageRange::covering(ptr::null_mut(), ReservedBytes::new(16), page).is_none());
+        assert!(OsPageRange::contained(ptr::null_mut(), ReservedBytes::new(16), page).is_none());
+
+        let mut storage = [0u8; 64];
+        let aligned = aligned_ptr(&mut storage, page.get());
+        let misaligned = aligned.map_addr(|address| address + 1);
+        assert!(OsPageRange::covering(aligned, ReservedBytes::new(0), page).is_none());
+        assert!(OsPageRange::contained(aligned, ReservedBytes::new(0), page).is_none());
+        assert!(OsPageRange::covering(misaligned, ReservedBytes::new(0), page).is_none());
+        assert!(OsPageRange::contained(misaligned, ReservedBytes::new(0), page).is_none());
+    }
+
+    #[test]
+    fn os_page_range_handles_exact_and_straddled_intervals() {
+        let page = page_size(16);
+        let mut storage = [0u8; 128];
+        let aligned = aligned_ptr(&mut storage, page.get());
+        let start = ptr_exposed_addr(aligned);
+
+        assert_range(
+            OsPageRange::covering(aligned, ReservedBytes::new(16), page).unwrap(),
+            start,
+            16,
+        );
+        assert_range(
+            OsPageRange::contained(aligned, ReservedBytes::new(16), page).unwrap(),
+            start,
+            16,
+        );
+
+        let misaligned = aligned.map_addr(|address| address + 3);
+        assert_range(
+            OsPageRange::covering(misaligned, ReservedBytes::new(30), page).unwrap(),
+            start,
+            48,
+        );
+        assert_range(
+            OsPageRange::contained(misaligned, ReservedBytes::new(30), page).unwrap(),
+            start + 16,
+            16,
+        );
+    }
+
+    #[test]
+    fn os_page_range_rejects_interior_subpage_and_tracks_one_past() {
+        let page = page_size(16);
+        let mut storage = [0u8; 64];
+        let aligned = aligned_ptr(&mut storage, page.get());
+        let start = ptr_exposed_addr(aligned);
+        let interior = aligned.map_addr(|address| address + 1);
+
+        assert!(OsPageRange::contained(interior, ReservedBytes::new(14), page).is_none());
+        let range = OsPageRange::covering(interior, ReservedBytes::new(14), page).unwrap();
+        assert_eq!(
+            ptr_exposed_addr(range.start()) + range.size().get(),
+            start + 16
+        );
+    }
+
+    #[test]
+    fn os_page_range_supports_non_power_of_two_pages() {
+        let page = page_size(6);
+        let mut storage = [0u8; 64];
+        let aligned = aligned_ptr(&mut storage, page.get());
+        let start = ptr_exposed_addr(aligned);
+        let interior = aligned.map_addr(|address| address + 1);
+
+        assert_range(
+            OsPageRange::covering(interior, ReservedBytes::new(11), page).unwrap(),
+            start,
+            12,
+        );
+        assert_range(
+            OsPageRange::contained(interior, ReservedBytes::new(11), page).unwrap(),
+            start + 6,
+            6,
+        );
+    }
+
+    #[test]
+    fn os_page_range_rejects_end_and_alignment_overflow() {
+        let page = page_size(16);
+        let mut storage = [0u8; 64];
+        let aligned = aligned_ptr(&mut storage, page.get());
+        let address = ptr_exposed_addr(aligned);
+
+        assert!(OsPageRange::covering(aligned, ReservedBytes::new(usize::MAX), page).is_none());
+        assert!(OsPageRange::contained(aligned, ReservedBytes::new(usize::MAX), page).is_none());
+        let end_at_max = ReservedBytes::new(usize::MAX - address);
+        assert!(OsPageRange::covering(aligned, end_at_max, page).is_none());
+
+        let near_zero = ptr::without_provenance_mut::<c_void>(1);
+        assert!(OsPageRange::covering(near_zero, ReservedBytes::new(1), page).is_none());
+
+        let near_max = ptr::without_provenance_mut::<c_void>(usize::MAX - 1);
+        assert!(OsPageRange::contained(near_max, ReservedBytes::new(1), page).is_none());
+    }
+
+    #[test]
+    fn os_page_range_has_compact_geometry_layout() {
+        assert_eq!(size_of::<OsPageRange>(), 2 * size_of::<usize>());
+    }
 }

@@ -60,7 +60,7 @@ pub(super) unsafe fn mi_arena_os_alloc_aligned(
         // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
         || req_arena_id != unsafe { _mi_arena_id_none() }
     {
-        unsafe { mi_set_errno(ENOMEM) };
+        mi_set_errno(ENOMEM);
         return ptr::null_mut();
     }
 

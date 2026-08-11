@@ -21,29 +21,27 @@ unsafe extern "C" {
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-unsafe fn mi_set_errno(err: c_int) {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        unsafe extern "C" {
-            fn __errno_location() -> *mut c_int;
-        }
-        *__errno_location() = err;
+fn mi_set_errno(err: c_int) {
+    // SAFETY: this declaration matches the Linux/Android libc ABI.
+    unsafe extern "C" {
+        fn __errno_location() -> *mut c_int;
     }
+    // SAFETY: `__errno_location` returns this thread's writable errno slot.
+    unsafe { *__errno_location() = err };
 }
 
 #[cfg(target_vendor = "apple")]
-unsafe fn mi_set_errno(err: c_int) {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        unsafe extern "C" {
-            fn __error() -> *mut c_int;
-        }
-        *__error() = err;
+fn mi_set_errno(err: c_int) {
+    // SAFETY: this declaration matches the Apple libc ABI.
+    unsafe extern "C" {
+        fn __error() -> *mut c_int;
     }
+    // SAFETY: `__error` returns this thread's writable errno slot.
+    unsafe { *__error() = err };
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
-unsafe fn mi_set_errno(_err: c_int) {}
+fn mi_set_errno(_err: c_int) {}
 
 unsafe fn mi_theap_default_local() -> Option<ThreadHeapLocal> {
     // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.

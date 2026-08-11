@@ -18,7 +18,7 @@ const ALLOWED_EMPTY_LINES: [&str; 10] = [
     "pub const fn MI_UNUSED_RELEASE<T>(_x: &T) {}",
     "pub(crate) unsafe extern \"C\" fn _mi_allocator_done() {}",
     "unsafe fn mi_win_tls_slot_set(_slot: usize, _extended_slot: usize, _value: *mut c_void) {}",
-    "unsafe fn mi_set_errno(_err: c_int) {}",
+    "fn mi_set_errno(_err: c_int) {}",
     "unsafe fn unix_mprotect_hint(_err: c_int) {}",
     "pub unsafe extern \"C\" fn _mi_prim_thread_done_auto_done() {}",
 ];

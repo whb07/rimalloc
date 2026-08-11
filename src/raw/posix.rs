@@ -19,9 +19,10 @@ unsafe extern "C" {
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-// SAFETY: Linux/Android errno publication uses the
-// platform thread-local errno slot exactly as the C compatibility layer does.
-unsafe fn mi_set_errno(err: c_int) {
+// Linux/Android errno publication uses the platform thread-local errno slot
+// exactly as the C compatibility layer does.
+fn mi_set_errno(err: c_int) {
+    // SAFETY: this declaration matches the Linux/Android libc ABI.
     unsafe extern "C" {
         fn __errno_location() -> *mut c_int;
     }
@@ -31,9 +32,10 @@ unsafe fn mi_set_errno(err: c_int) {
 }
 
 #[cfg(target_vendor = "apple")]
-// SAFETY: Apple errno publication uses the platform
-// thread-local errno slot exactly as the C compatibility layer does.
-unsafe fn mi_set_errno(err: c_int) {
+// Apple errno publication uses the platform thread-local errno slot exactly
+// as the C compatibility layer does.
+fn mi_set_errno(err: c_int) {
+    // SAFETY: this declaration matches the Apple libc ABI.
     unsafe extern "C" {
         fn __error() -> *mut c_int;
     }
@@ -43,9 +45,9 @@ unsafe fn mi_set_errno(err: c_int) {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
-// SAFETY: unsupported errno targets intentionally keep
-// the C-compatible helper as a no-op fallback.
-unsafe fn mi_set_errno(_err: c_int) {}
+// Unsupported errno targets intentionally keep the C-compatible helper as a
+// no-op fallback.
+fn mi_set_errno(_err: c_int) {}
 
 // SAFETY: exports the POSIX usable-size compatibility
 // symbol without changing its raw pointer contract.
@@ -205,15 +207,11 @@ pub unsafe extern "C" fn mi_reallocarray(p: *mut c_void, count: usize, size: usi
         // contract and the requested total was checked above.
         let newp = unsafe { mi_realloc(p, req.total().get()) };
         if newp.is_null() {
-            // SAFETY: publishes POSIX allocation
-            // failure through the platform errno shim.
-            unsafe { mi_set_errno(ENOMEM) };
+            mi_set_errno(ENOMEM);
         }
         newp
     } else {
-        // SAFETY: publishes POSIX product overflow
-        // through the platform errno shim.
-        unsafe { mi_set_errno(EOVERFLOW) };
+        mi_set_errno(EOVERFLOW);
         ptr::null_mut()
     }
 }
@@ -231,16 +229,12 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
     crate::internal::mi_assert!(size != 0);
     crate::internal::mi_assert!(!ptrp.is_null());
     if ptrp.is_null() || size == 0 {
-        // SAFETY: publishes POSIX invalid-argument
-        // failure through the platform errno shim.
-        unsafe { mi_set_errno(EINVAL) };
+        mi_set_errno(EINVAL);
         return EINVAL;
     }
 
     let Ok(req) = crate::core_types::CallocRequest::new(count, size) else {
-        // SAFETY: publishes POSIX product overflow
-        // through the platform errno shim.
-        unsafe { mi_set_errno(EOVERFLOW) };
+        mi_set_errno(EOVERFLOW);
         return EOVERFLOW;
     };
     let total = req.total().get();
@@ -265,9 +259,7 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
     // allocation pointer and `total` was checked above.
     let newp = unsafe { mi_realloc(oldp, total) };
     if newp.is_null() {
-        // SAFETY: publishes POSIX allocation failure
-        // through the platform errno shim.
-        unsafe { mi_set_errno(ENOMEM) };
+        mi_set_errno(ENOMEM);
         return ENOMEM;
     }
     // SAFETY: `ptrp` is valid for one pointer and
@@ -288,9 +280,7 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
 pub unsafe extern "C" fn mi__expand(p: *mut c_void, newsize: usize) -> *mut c_void {
     let res = unsafe { mi_expand(p, newsize) };
     if res.is_null() {
-        // SAFETY: publishes POSIX allocation failure
-        // through the platform errno shim.
-        unsafe { mi_set_errno(ENOMEM) };
+        mi_set_errno(ENOMEM);
     }
     res
 }

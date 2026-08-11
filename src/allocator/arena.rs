@@ -183,25 +183,27 @@ unsafe fn mi_arenas_get_count_typed(subproc: SubprocPtr) -> usize {
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-unsafe fn mi_set_errno(err: c_int) {
-    // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
+fn mi_set_errno(err: c_int) {
+    // SAFETY: this declaration matches the Linux/Android libc ABI.
     unsafe extern "C" {
         fn __errno_location() -> *mut c_int;
     }
+    // SAFETY: `__errno_location` returns this thread's writable errno slot.
     unsafe { *__errno_location() = err };
 }
 
 #[cfg(target_vendor = "apple")]
-unsafe fn mi_set_errno(err: c_int) {
-    // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
+fn mi_set_errno(err: c_int) {
+    // SAFETY: this declaration matches the Apple libc ABI.
     unsafe extern "C" {
         fn __error() -> *mut c_int;
     }
+    // SAFETY: `__error` returns this thread's writable errno slot.
     unsafe { *__error() = err };
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
-unsafe fn mi_set_errno(_err: c_int) {}
+fn mi_set_errno(_err: c_int) {}
 
 unsafe fn mi_arena_max_object_size() -> usize {
     let max_size = _mi_align_up(
@@ -1774,8 +1776,7 @@ unsafe fn mi_arenas_page_singleton_alloc(
     };
     let slice_count = mi_slice_count_of_size(info_size + block_size_raw);
     let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
-        // SAFETY: singleton arena page setup handles over-aligned or large objects while preserving one-block page invariants.
-        unsafe { mi_set_errno(ENOMEM) };
+        mi_set_errno(ENOMEM);
         return ptr::null_mut();
     };
     let Some(page_uninit) = (unsafe {

@@ -183,7 +183,7 @@ unsafe fn mi_heap_ensure_arena_pages(
                     unsafe { mi_lock_release(heap.ptr().arena_pages_lock()) };
                     return ptr::null_mut();
                 };
-                let (alloc_size, bitmap_base) = unsafe { mi_arena_pages_size(slice_count) };
+                let (alloc_size, bitmap_base) = mi_arena_pages_size(slice_count);
                 arena_pages =
                     // SAFETY: abandoned-page lookup maintains per-heap arena-page tables before ownership transfer.
                     unsafe { mi_arena_pages_alloc(arena, range, alloc_size, bitmap_base) };

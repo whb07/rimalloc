@@ -22,9 +22,9 @@ pub(crate) mod validation_extra;
 pub use constants::*;
 
 pub(crate) use ptr::{
-    ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageConstPtr, PagePtr, PageQueuePtr,
-    SliceStart, SubprocPtr, ThreadHeapPtr, TldPtr, UserPtr, ptr_addr_diff, ptr_align_down,
-    ptr_align_up, ptr_exposed_addr, ptr_is_aligned,
+    ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageBlockLayout, PageBlockRange,
+    PageConstPtr, PagePtr, PageQueuePtr, SliceStart, SubprocPtr, ThreadHeapPtr, TldPtr, UserPtr,
+    ptr_addr_diff, ptr_align_down, ptr_align_up, ptr_exposed_addr, ptr_is_aligned,
 };
 
 #[cfg(all(test, target_pointer_width = "32"))]

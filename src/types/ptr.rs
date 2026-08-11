@@ -1087,6 +1087,146 @@ impl PageArea {
     }
 }
 
+/// Non-owning snapshot of a page's fixed-size block geometry.
+///
+/// This value validates the reserved block interval and can derive raw block
+/// pointers within it. It does not extend the backing allocation lifetime or
+/// prove ownership, initialization of block contents, or permission to access
+/// a returned pointer.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct PageBlockLayout {
+    area: PageArea,
+    block_size: BlockSize,
+    reserved: ReservedBlockCount,
+}
+
+/// Validated non-empty block-index interval within a [`PageBlockLayout`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct PageBlockRange {
+    first: BlockPtr,
+    block_size: BlockSize,
+    block_count: usize,
+}
+
+impl PageBlockLayout {
+    #[inline(always)]
+    fn from_parts(
+        start: PageStart,
+        block_size: BlockSize,
+        reserved: ReservedBlockCount,
+    ) -> Option<Self> {
+        let alignment = core::mem::align_of::<mi_block_t>();
+        if !ptr_is_aligned(start.as_ptr(), alignment) || !block_size.get().is_multiple_of(alignment)
+        {
+            return None;
+        }
+        let byte_len = block_size.get().checked_mul(reserved.as_usize())?;
+        let area = PageArea::from_start_and_len(start, byte_len)?;
+        Some(Self {
+            area,
+            block_size,
+            reserved,
+        })
+    }
+
+    /// # Safety
+    /// `page` must refer to live initialized page metadata whose non-null block
+    /// start, block size, and reserved count describe the current backing
+    /// allocation. Concurrent mutation or teardown must be excluded while the
+    /// snapshot and pointers derived from it are used.
+    #[inline(always)]
+    pub(crate) unsafe fn from_page(page: PagePtr, expected: BlockSize) -> Option<Self> {
+        // SAFETY: the caller proves all three page geometry fields are
+        // initialized and stable for this snapshot.
+        let (start, block_size, reserved) =
+            unsafe { (page.start(), page.block_size(), page.reserved()) };
+        if block_size != expected {
+            return None;
+        }
+        Self::from_parts(start, block_size, reserved)
+    }
+
+    #[inline(always)]
+    pub(crate) fn area(self) -> PageArea {
+        self.area
+    }
+
+    #[inline(always)]
+    fn block_at_validated(self, index: usize) -> BlockPtr {
+        let byte_offset = index * self.block_size.get();
+        let address = self.area.start_address() + byte_offset;
+        let block = self
+            .area
+            .start()
+            .as_ptr()
+            .map_addr(|_| address)
+            .cast::<mi_block_t>();
+        // SAFETY: construction validated the full non-overflowing reserved
+        // interval, and `index` is inside it.
+        unsafe { BlockPtr::new_unchecked(block) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn nonempty_range(
+        self,
+        first_index: usize,
+        block_count: usize,
+    ) -> Option<PageBlockRange> {
+        if block_count == 0 {
+            return None;
+        }
+        let end = first_index.checked_add(block_count)?;
+        if end > self.reserved.as_usize() {
+            return None;
+        }
+        Some(PageBlockRange {
+            first: self.block_at_validated(first_index),
+            block_size: self.block_size,
+            block_count,
+        })
+    }
+}
+
+impl PageBlockRange {
+    #[inline(always)]
+    pub(crate) fn block_size(self) -> BlockSize {
+        self.block_size
+    }
+
+    #[inline(always)]
+    pub(crate) fn block_count(self) -> usize {
+        self.block_count
+    }
+
+    #[inline(always)]
+    pub(crate) fn first(self) -> BlockPtr {
+        self.first
+    }
+
+    #[inline(always)]
+    pub(crate) fn last(self) -> BlockPtr {
+        // SAFETY: every constructed range is non-empty.
+        unsafe { self.block_at_offset_unchecked(self.block_count - 1) }
+    }
+
+    /// # Safety
+    /// `offset` must be strictly less than this range's block count.
+    #[inline(always)]
+    unsafe fn block_at_offset_unchecked(self, offset: usize) -> BlockPtr {
+        let byte_offset = offset * self.block_size.get();
+        let address = ptr_exposed_addr(self.first.as_ptr()) + byte_offset;
+        let block = self
+            .first
+            .as_ptr()
+            .cast::<u8>()
+            .map_addr(|_| address)
+            .cast::<mi_block_t>();
+        // SAFETY: the caller bounds the offset; range construction proved the
+        // full interval, alignment, and non-overflowing address arithmetic.
+        unsafe { BlockPtr::new_unchecked(block) }
+    }
+}
+
 /// Non-null raw page metadata (read-only view).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

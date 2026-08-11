@@ -32,8 +32,8 @@ use crate::internal::{
 };
 use crate::types::{
     MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_ENCODE_FREELIST, MI_LARGE_MAX_OBJ_WSIZE, MI_PADDING,
-    MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_page_queue_t, mi_page_t,
-    mi_theap_t,
+    MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_STAT, PageBlockLayout, PageBlockRange,
+    mi_block_t, mi_page_queue_t, mi_page_t, mi_theap_t,
 };
 
 pub use crate::types::MI_PADDING_SIZE;
@@ -91,8 +91,8 @@ use queues::{
 pub(crate) use stats_bin::mi_page_bin_typed;
 #[allow(unused_imports)]
 pub use stats_bin::{_mi_page_stats_bin, mi_page_bin};
+pub use validation::_mi_page_is_valid;
 pub(crate) use validation::mi_page_is_valid_init;
-pub use validation::{_mi_page_is_valid, mi_page_block_at};
 
 pub const MI_OS_PAGE_SIZE: usize = 4096;
 pub const MI_SMALL_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
@@ -451,37 +451,18 @@ unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLo
 }
 
 #[inline]
-unsafe fn mi_page_free_list_extend_secure(
-    theap: crate::core_types::ThreadHeapLocal,
-    page: crate::core_types::PagePtr,
-    bsize: usize,
-    extend: usize,
-) {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        mi_page_free_list_extend_secure_typed(
-            theap,
-            page,
-            crate::core_types::BlockSize::new_unchecked(bsize),
-            extend,
-        );
-    }
-}
-
-#[inline]
 unsafe fn mi_page_free_list_extend_secure_typed(
     theap: crate::core_types::ThreadHeapLocal,
     page: crate::core_types::PagePtr,
-    bsize: crate::core_types::BlockSize,
-    extend: usize,
+    block_range: PageBlockRange,
 ) {
     // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = theap.ptr().as_ptr();
-        let page_raw = page.as_ptr();
-        let bsize = bsize.get();
+        let bsize = block_range.block_size().get();
+        let extend = block_range.block_count();
         #[cfg(feature = "bench-diagnostics")]
-        crate::allocator::bench_diagnostics::free_list_extend(extend);
+        crate::allocator::bench_diagnostics::free_list_extend(block_range.block_count());
         if MI_SECURE < 3 {
             crate::internal::mi_assert_internal!(page.free().is_empty());
             crate::internal::mi_assert_internal!(page.local_free().is_empty());
@@ -490,9 +471,6 @@ unsafe fn mi_page_free_list_extend_secure_typed(
         crate::internal::mi_assert_internal!(
             capacity.as_usize() + extend <= page.reserved().as_usize()
         );
-        crate::internal::mi_assert_internal!(bsize == page.block_size().get());
-        let page_area = page.start().as_ptr().cast::<c_void>();
-
         let mut shift = MI_MAX_SLICE_SHIFT;
         while (extend >> shift) == 0 {
             shift -= 1;
@@ -503,14 +481,15 @@ unsafe fn mi_page_free_list_extend_secure_typed(
 
         let mut blocks = [ptr::null_mut::<mi_block_t>(); 1 << MI_MAX_SLICE_SHIFT];
         let mut counts = [0usize; 1 << MI_MAX_SLICE_SHIFT];
+        let head_step = slice_extend * bsize;
+        let mut head = block_range.first().as_ptr();
         for i in 0..slice_count {
-            blocks[i] = mi_page_block_at(
-                page_raw,
-                page_area,
-                bsize,
-                capacity.as_usize() + i * slice_extend,
-            );
+            blocks[i] = head;
             counts[i] = slice_extend;
+            // SAFETY: the prevalidated range contains `extend` blocks, and
+            // `slice_count * slice_extend <= extend`, so each recurrence stays
+            // within or one-past the live backing block interval.
+            head = head.cast::<u8>().add(head_step).cast::<mi_block_t>();
         }
         counts[slice_count - 1] += extend % slice_count;
 
@@ -547,53 +526,31 @@ unsafe fn mi_page_free_list_extend_secure_typed(
     }
 }
 
-// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
-unsafe extern "C" fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: usize) {
-    unsafe {
-        mi_page_free_list_extend_typed(
-            crate::core_types::PagePtr::new_unchecked(page),
-            crate::core_types::BlockSize::new_unchecked(bsize),
-            extend,
-        );
-    }
-}
-
-#[inline]
 unsafe fn mi_page_free_list_extend_typed(
     page: crate::core_types::PagePtr,
-    bsize: crate::core_types::BlockSize,
-    extend: usize,
+    block_range: PageBlockRange,
 ) {
     // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
-        let page_raw = page.as_ptr();
-        let bsize = bsize.get();
+        let bsize = block_range.block_size().get();
         #[cfg(feature = "bench-diagnostics")]
-        crate::allocator::bench_diagnostics::free_list_extend(extend);
+        crate::allocator::bench_diagnostics::free_list_extend(block_range.block_count());
         if MI_SECURE < 3 {
             crate::internal::mi_assert_internal!(page.free().is_empty());
             crate::internal::mi_assert_internal!(page.local_free().is_empty());
         }
-        let capacity = page.capacity();
-        crate::internal::mi_assert_internal!(
-            capacity.as_usize() + extend <= page.reserved().as_usize()
-        );
-        crate::internal::mi_assert_internal!(bsize == page.block_size().get());
-        let page_area = page.start().as_ptr().cast::<c_void>();
-        let start = mi_page_block_at(page_raw, page_area, bsize, capacity.as_usize());
-        let last = mi_page_block_at(page_raw, page_area, bsize, capacity.as_usize() + extend - 1);
-        let mut block = start;
-        while block < last {
+        let start = block_range.first();
+        let last = block_range.last();
+        let mut block = start.as_ptr();
+        while block < last.as_ptr() {
             let next = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
             crate::core_types::BlockPtr::new_unchecked(block)
                 .set_next(page, crate::core_types::BlockPtr::new(next));
             block = next;
         }
-        crate::core_types::BlockPtr::new_unchecked(last).set_next(page, page.free().head());
-        page.set_free(crate::core_types::AvailableFreeList::from_head(
-            crate::core_types::BlockPtr::new_unchecked(start),
-        ));
+        last.set_next(page, page.free().head());
+        page.set_free(crate::core_types::AvailableFreeList::from_head(start));
     }
 }
 
@@ -634,15 +591,6 @@ unsafe fn mi_page_extend_free_typed(
 
         let block_size = page_ptr.block_size();
         let bsize = block_size.get();
-        let track_area = if MI_TRACK_ENABLED != 0 {
-            let Some(area) = page_ptr.area() else {
-                crate::internal::mi_assert_internal!(false);
-                return false;
-            };
-            Some(area)
-        } else {
-            None
-        };
         let Some(extend) = crate::allocator::policy::ActivePolicy::page_extend_count(
             block_size, capacity, reserved,
         ) else {
@@ -653,6 +601,20 @@ unsafe fn mi_page_extend_free_typed(
         crate::internal::mi_assert_internal!(extend > 0);
         crate::internal::mi_assert_internal!(extend + capacity.as_usize() <= reserved.as_usize());
         crate::internal::mi_assert_internal!(u16::try_from(extend).is_ok());
+
+        let Some(block_layout) = PageBlockLayout::from_page(page_ptr, block_size) else {
+            crate::internal::mi_assert_internal!(false);
+            return false;
+        };
+        let Some(block_range) = block_layout.nonempty_range(capacity.as_usize(), extend) else {
+            crate::internal::mi_assert_internal!(false);
+            return false;
+        };
+        let track_area = if MI_TRACK_ENABLED != 0 {
+            Some(block_layout.area())
+        } else {
+            None
+        };
 
         let committed = mi_page_slice_committed(page);
         if !committed.is_zero() {
@@ -688,9 +650,9 @@ unsafe fn mi_page_extend_free_typed(
         }
 
         if extend < MI_MIN_SLICES || MI_SECURE < 2 {
-            mi_page_free_list_extend(page, bsize, extend);
+            mi_page_free_list_extend_typed(page_ptr, block_range);
         } else {
-            mi_page_free_list_extend_secure(theap_local, page_ptr, bsize, extend);
+            mi_page_free_list_extend_secure_typed(theap_local, page_ptr, block_range);
         }
         mi_page_add_capacity_count(page, extend as u16);
         if MI_STAT > 0 {

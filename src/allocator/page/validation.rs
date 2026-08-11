@@ -16,30 +16,6 @@ use super::{
 };
 
 /// # Safety
-/// `page` must be valid, `page_start` must be that page's block area, and `i * block_size` must
-/// stay within the reserved block range.
-#[inline]
-pub unsafe fn mi_page_block_at(
-    page: *const mi_page_t,
-    page_start: *mut c_void,
-    block_size: usize,
-    i: usize,
-) -> *mut mi_block_t {
-    // SAFETY: callers supply page metadata and
-    // a block-area start for the same page; reserved-count bounds protect the
-    // raw block offset calculation.
-    unsafe {
-        crate::internal::MI_UNUSED(&page);
-        crate::internal::mi_assert_internal!(!page.is_null());
-        crate::internal::mi_assert_internal!(i <= mi_page_reserved_count(page).as_usize());
-        page_start
-            .cast::<u8>()
-            .add(i * block_size)
-            .cast::<mi_block_t>()
-    }
-}
-
-/// # Safety
 /// `page` must be valid, and `head` must be null or a block list belonging to `page`.
 #[inline]
 pub(crate) unsafe fn mi_page_list_count(page: PagePtr, mut head: *mut mi_block_t) -> usize {

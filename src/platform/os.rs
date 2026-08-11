@@ -15,8 +15,8 @@ use crate::allocator::stats::{_mi_clock_end, _mi_clock_start, mi_stats_t};
 use crate::atomic::mi_lock_t;
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB};
 use crate::core_types::{
-    BorrowedSubproc, CommittedBytes, MemId, MemIdView, OsMemId, OsMemKind, OsMemPtr, OsPageSize,
-    ReservedBytes, SubprocPtr, ptr_exposed_addr,
+    BorrowedSubproc, CommittedBytes, InitiallyZero, MemId, MemIdView, OsMemId, OsMemKind, OsMemPtr,
+    OsPageSize, Pinned, ReservedBytes, SubprocPtr, ptr_exposed_addr,
 };
 use crate::internal::memid::{_mi_memid_none, mi_memid_t};
 use crate::internal::{
@@ -51,6 +51,16 @@ const MI_MAX_ARENAS: usize = 160;
 static ALIGNED_BASE: AtomicUsize = AtomicUsize::new(0);
 static MI_HUGE_START: AtomicUsize = AtomicUsize::new(0);
 static MI_NUMA_NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+/// A successful primitive OS allocation result.
+///
+/// This records the returned base and flags only; it does not own the mapping
+/// or provide automatic release.
+struct PrimitiveOsAllocation {
+    base: OsMemPtr,
+    initially_zero: InitiallyZero,
+    pinned: Pinned,
+}
 
 static mut mi_os_mem_config: mi_os_mem_config_t = mi_os_mem_config_t {
     page_size: 4096,
@@ -1004,26 +1014,28 @@ pub(crate) unsafe extern "C" fn _mi_os_free(p: *mut c_void, size: usize, memid: 
     unsafe { _mi_os_free_ex(p, size, true, memid, core::ptr::null_mut()) };
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// # Safety
+///
+/// The OS configuration must be initialized. `size` must be nonzero and a
+/// whole number of OS pages. The primitive allocator and current subprocess
+/// statistics must remain live for this synchronous allocation attempt. A
+/// non-null primitive result is returned with its reported large/zero flags
+/// even when the primitive also reports a diagnostic error code.
 #[inline]
-unsafe fn mi_os_prim_alloc_at(
-    hint_addr: *mut c_void,
+unsafe fn mi_os_prim_alloc(
     size: usize,
     mut try_alignment: usize,
     commit: bool,
     mut allow_large: bool,
-    is_large: *mut bool,
-    is_zero: *mut bool,
-) -> *mut c_void {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+) -> Option<PrimitiveOsAllocation> {
+    // SAFETY: the caller supplies initialized OS configuration and page-sized
+    // geometry; raw primitive outputs remain local to this allocation epoch.
     unsafe {
         crate::internal::mi_assert_internal!(
             size > 0 && size.is_multiple_of(_mi_os_page_size_typed().get())
         );
-        crate::internal::mi_assert_internal!(!is_zero.is_null());
-        crate::internal::mi_assert_internal!(!is_large.is_null());
         if size == 0 {
-            return core::ptr::null_mut();
+            return None;
         }
         if !commit {
             allow_large = false;
@@ -1034,7 +1046,6 @@ unsafe fn mi_os_prim_alloc_at(
 
         let large_page_size = (*mi_os_mem_config_ptr()).large_page_size;
         if large_page_size > 0
-            && hint_addr.is_null()
             && size >= 8 * large_page_size
             && _mi_is_power_of_two(try_alignment)
             && try_alignment < large_page_size
@@ -1042,30 +1053,38 @@ unsafe fn mi_os_prim_alloc_at(
             try_alignment = large_page_size;
         }
 
-        *is_zero = false;
+        let mut is_large = false;
+        let mut is_zero = false;
         let mut p = core::ptr::null_mut();
         let err = _mi_prim_alloc(
-            hint_addr,
+            core::ptr::null_mut(),
             size,
             try_alignment,
             commit,
             allow_large,
-            is_large,
-            is_zero,
+            &mut is_large,
+            &mut is_zero,
             &mut p,
         );
         if err != 0 {
             _mi_warning_message_fmt(format_args!(
                 "unable to allocate OS memory (error: {} (0x{:x}), addr: {:p}, size: 0x{:x} bytes, align: 0x{:x}, commit: {}, allow large: {})\n",
-                err, err, hint_addr, size, try_alignment, commit as i32, allow_large as i32
+                err,
+                err,
+                core::ptr::null_mut::<c_void>(),
+                size,
+                try_alignment,
+                commit as i32,
+                allow_large as i32
             ));
         }
 
+        let p = NonNull::new(p);
         let subproc = _mi_subproc();
         if !subproc.is_null() {
             let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
             __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).mmap_calls), 1);
-            if !p.is_null() {
+            if p.is_some() {
                 let reserved = ReservedBytes::new(size);
                 __mi_stat_increase_mt(ptr::addr_of_mut!((*stats).reserved), reserved.get());
                 if commit {
@@ -1074,31 +1093,12 @@ unsafe fn mi_os_prim_alloc_at(
                 }
             }
         }
-        p
-    }
-}
-
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-#[inline]
-unsafe fn mi_os_prim_alloc(
-    size: usize,
-    try_alignment: usize,
-    commit: bool,
-    allow_large: bool,
-    is_large: *mut bool,
-    is_zero: *mut bool,
-) -> *mut c_void {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-    unsafe {
-        mi_os_prim_alloc_at(
-            core::ptr::null_mut(),
-            size,
-            try_alignment,
-            commit,
-            allow_large,
-            is_large,
-            is_zero,
-        )
+        let p = p?;
+        Some(PrimitiveOsAllocation {
+            base: OsMemPtr::new(p.as_ptr())?,
+            initially_zero: InitiallyZero(is_zero),
+            pinned: Pinned(is_large),
+        })
     }
 }
 
@@ -1136,17 +1136,18 @@ unsafe fn mi_os_alloc_aligned_memid(
     let mut p: *mut c_void = core::ptr::null_mut();
 
     if try_direct_alloc {
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        p = unsafe {
-            mi_os_prim_alloc(
-                size,
-                alignment.get(),
-                commit,
-                allow_large,
-                &mut os_is_large,
-                &mut os_is_zero,
-            )
-        };
+        // SAFETY: normalized `size` is a nonzero page multiple; OS configuration
+        // and current subprocess statistics remain live for the attempt.
+        if let Some(PrimitiveOsAllocation {
+            base,
+            initially_zero,
+            pinned,
+        }) = unsafe { mi_os_prim_alloc(size, alignment.get(), commit, allow_large) }
+        {
+            p = base.as_ptr();
+            os_is_large = pinned.0;
+            os_is_zero = initially_zero.0;
+        }
     }
 
     if !p.is_null() && (p as usize & (alignment.get() - 1)) == 0 {
@@ -1168,19 +1169,20 @@ unsafe fn mi_os_alloc_aligned_memid(
         };
         // SAFETY: over-reserve fallback preserves partial-free, commit, and trimmed range contracts.
         if unsafe { !(*mi_os_mem_config_ptr()).has_partial_free } {
-            p = unsafe {
-                mi_os_prim_alloc(
-                    over_size,
-                    1,
-                    false,
-                    false,
-                    &mut os_is_large,
-                    &mut os_is_zero,
-                )
-            };
-            if p.is_null() {
+            // SAFETY: checked `over_size` remains a nonzero page multiple; OS
+            // configuration and subprocess statistics are live for the attempt.
+            let allocation = unsafe { mi_os_prim_alloc(over_size, 1, false, false) };
+            let Some(PrimitiveOsAllocation {
+                base,
+                initially_zero,
+                pinned,
+            }) = allocation
+            else {
                 return (core::ptr::null_mut(), memid);
-            }
+            };
+            p = base.as_ptr();
+            os_is_large = pinned.0;
+            os_is_zero = initially_zero.0;
 
             os_base = p;
             os_size = over_size;
@@ -1199,20 +1201,20 @@ unsafe fn mi_os_alloc_aligned_memid(
                 return (core::ptr::null_mut(), memid);
             }
         } else {
-            // SAFETY: over-reserve fallback preserves partial-free, commit, and trimmed range contracts.
-            p = unsafe {
-                mi_os_prim_alloc(
-                    over_size,
-                    1,
-                    commit,
-                    false,
-                    &mut os_is_large,
-                    &mut os_is_zero,
-                )
-            };
-            if p.is_null() {
+            // SAFETY: checked `over_size` remains a nonzero page multiple; OS
+            // configuration and subprocess statistics are live for the attempt.
+            let allocation = unsafe { mi_os_prim_alloc(over_size, 1, commit, false) };
+            let Some(PrimitiveOsAllocation {
+                base,
+                initially_zero,
+                pinned,
+            }) = allocation
+            else {
                 return (core::ptr::null_mut(), memid);
-            }
+            };
+            p = base.as_ptr();
+            os_is_large = pinned.0;
+            os_is_zero = initially_zero.0;
 
             let aligned_p = _mi_align_up_ptr(p, alignment.get());
             let pre_size = aligned_p as usize - p as usize;
@@ -1305,12 +1307,18 @@ pub(crate) unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t
 
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let size = unsafe { _mi_os_good_alloc_size(size) };
-    let mut os_is_large = false;
-    let mut os_is_zero = false;
-    let p = unsafe { mi_os_prim_alloc(size, 0, true, false, &mut os_is_large, &mut os_is_zero) };
-    if p.is_null() {
+    // SAFETY: normalized nonzero `size` is page-multiple; OS configuration and
+    // current subprocess statistics remain live for this allocation attempt.
+    let allocation = unsafe { mi_os_prim_alloc(size, 0, true, false) };
+    let Some(PrimitiveOsAllocation {
+        base,
+        initially_zero,
+        pinned,
+    }) = allocation
+    else {
         return core::ptr::null_mut();
-    }
+    };
+    let p = base.as_ptr();
 
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     unsafe {
@@ -1318,8 +1326,8 @@ pub(crate) unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t
             crate::core_types::OsMemPtr::new(p),
             crate::core_types::ReservedBytes::new(size),
             crate::core_types::InitiallyCommitted(true),
-            crate::core_types::InitiallyZero(os_is_zero),
-            crate::core_types::Pinned(os_is_large),
+            initially_zero,
+            pinned,
         )
         .into_raw();
     }

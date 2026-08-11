@@ -55,6 +55,7 @@ scripts/check-asan-tracking-parity.py
 scripts/check-valgrind-tracking-parity.py
 scripts/check-unsafe-inventory.py --verify-builds
 scripts/check-strict-types.py
+scripts/check-unsafe-proofs.py --report
 scripts/check-concurrency-models.sh
 scripts/check-safety-stress.sh
 scripts/check-fuzz-smoke.sh

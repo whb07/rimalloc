@@ -8,4 +8,5 @@ run cargo doc --no-deps --features std
 run cargo test --doc --features std
 run cargo test --doc --features "std c-header-macros"
 run scripts/check-safe-docs.py
+run scripts/check-unsafe-proofs.py --report
 run scripts/check-benchmark-doc-claims.py

@@ -162,19 +162,3 @@ pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
         reserved.get() - used.get() <= frac
     }
 }
-
-/// # Safety
-/// `page` must be null or point to page metadata owned by this allocator. `n` must be nonzero.
-#[inline]
-pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
-    // SAFETY: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        if page.is_null() {
-            return true;
-        }
-        let reserved = crate::allocator::page::mi_page_reserved_count(page);
-        let used = crate::allocator::page::mi_page_used_count(page);
-        let frac = reserved.get() / n;
-        reserved.get() - used.get() <= frac
-    }
-}

@@ -342,37 +342,56 @@ pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_b
     }
 }
 
+/// Return the usable size of one validated block, excluding padding or its
+/// trailing guard page as applicable.
+///
+/// # Safety
+/// `page` must identify live initialized page metadata with stable block-size
+/// and usable-size fields. When padding is enabled and `is_guarded` is false,
+/// `block` must be the aligned start of a live block in `page`; its initialized
+/// padding trailer and the page keys used by its canary must remain readable
+/// and stable, with no concurrent free, realloc, or user write to that trailer.
+/// When `is_guarded` is true, it must truthfully classify the block and the
+/// page's block size must cover its trailing OS guard page; allocator OS-page
+/// configuration must be initialized and stable. The page registration,
+/// metadata, and backing must not be concurrently torn down or released.
 pub(crate) unsafe fn mi_page_usable_size_of_typed(
     page: *const mi_page_t,
     block: *const mi_block_t,
     is_guarded: bool,
 ) -> crate::core_types::UsableSize {
-    // SAFETY: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
-    unsafe {
-        if MI_PADDING == 0 {
-            let _ = block;
-            let _ = is_guarded;
-            return mi_page_usable_block_size(page);
-        }
+    if MI_PADDING == 0 {
+        let _ = block;
+        let _ = is_guarded;
+        // SAFETY: the caller keeps the live page's initialized usable block
+        // size readable and stable for this query.
+        return unsafe { mi_page_usable_block_size(page) };
+    }
 
-        if is_guarded {
-            let bsize = mi_page_block_size(page);
+    if is_guarded {
+        // SAFETY: the caller keeps this guarded page's initialized block size
+        // and the process OS-page configuration stable; the block covers the
+        // trailing guard page removed by the checked subtraction below.
+        let (bsize, os_page_size) =
+            unsafe { (mi_page_block_size(page), _mi_os_page_size_typed().get()) };
+        crate::core_types::UsableSize::new(bsize)
+            .checked_sub(os_page_size)
+            .unwrap_or_else(|_| crate::core_types::UsableSize::new(0))
+    } else {
+        let mut bsize = 0usize;
+        let mut delta = 0usize;
+        // SAFETY: `block` is the matching live block start in `page`; its
+        // initialized padding trailer and page canary keys remain readable and
+        // stable while the helper balances its tracking visibility changes.
+        let ok = unsafe { mi_page_decode_padding(page, block, &mut delta, &mut bsize) };
+        crate::internal::mi_assert_internal!(ok);
+        crate::internal::mi_assert_internal!(delta <= bsize);
+        if ok {
             crate::core_types::UsableSize::new(bsize)
-                .checked_sub(_mi_os_page_size_typed().get())
+                .checked_sub(delta)
                 .unwrap_or_else(|_| crate::core_types::UsableSize::new(0))
         } else {
-            let mut bsize = 0usize;
-            let mut delta = 0usize;
-            let ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
-            crate::internal::mi_assert_internal!(ok);
-            crate::internal::mi_assert_internal!(delta <= bsize);
-            if ok {
-                crate::core_types::UsableSize::new(bsize)
-                    .checked_sub(delta)
-                    .unwrap_or_else(|_| crate::core_types::UsableSize::new(0))
-            } else {
-                crate::core_types::UsableSize::new(0)
-            }
+            crate::core_types::UsableSize::new(0)
         }
     }
 }
@@ -962,38 +981,62 @@ pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *
     }
 }
 
+/// Resolve a user pointer and return its remaining usable size.
+///
+/// # Safety
+/// `p` may be null. In configurations without registered pointer validation, a
+/// nonnull `p` must identify a live allocation returned by this allocator. If
+/// lookup resolves `p` to a page, that page's registration, backing, initialized
+/// geometry, padding, and guard metadata must remain live and stable, with no
+/// concurrent free or realloc of `p`, page-map teardown, or backing release.
+/// Protocol atomic remote-free publication remains permitted. `msg` must point
+/// to a live NUL-terminated UTF-8 diagnostic string whenever validation can use
+/// it. Registered diagnostic callbacks and their opaque arguments must remain
+/// valid for synchronous invocation, must not incompatibly reenter pointer
+/// validation, and must not unwind.
 pub(crate) unsafe fn mi_route_usable_size_typed(
     p: *const c_void,
     msg: *const c_char,
 ) -> crate::core_types::UsableSize {
-    // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
-    unsafe {
-        if p.is_null() {
+    if p.is_null() {
+        return crate::core_types::UsableSize::new(0);
+    }
+    if MI_DEBUG == 0 && !cfg!(feature = "secure") && MI_GUARDED == 0 {
+        let Some(user) = crate::core_types::UserPtr::new(p.cast_mut()) else {
             return crate::core_types::UsableSize::new(0);
-        }
-        if MI_DEBUG == 0 && !cfg!(feature = "secure") && MI_GUARDED == 0 {
-            let Some(user) = crate::core_types::UserPtr::new(p.cast_mut()) else {
-                return crate::core_types::UsableSize::new(0);
-            };
-            let Some(page) = mi_lookup_pointer_page(user) else {
-                return crate::core_types::UsableSize::new(0);
-            };
-            return _mi_usable_size_typed(p, page.as_ptr());
-        }
-        match mi_validate_pointer(p.cast_mut(), msg) {
-            crate::core_types::PointerLookup::Valid(valid) => {
-                let (_, page, location) = valid.into_parts();
-                let located = location.located_block();
+        };
+        // SAFETY: this unchecked release configuration requires `p` to name a
+        // live allocator allocation; the page map and its registration remain
+        // initialized and stable against teardown for lookup.
+        let Some(page) = (unsafe { mi_lookup_pointer_page(user) }) else {
+            return crate::core_types::UsableSize::new(0);
+        };
+        // SAFETY: lookup couples `p` to this live page; its allocation geometry,
+        // padding, guard metadata, and backing remain stable for the size query.
+        return unsafe { _mi_usable_size_typed(p, page.as_ptr()) };
+    }
+    // SAFETY: the caller provides the conditional live-allocation and
+    // diagnostic-string obligations required by pointer validation; page-map
+    // and allocation metadata remain stable throughout this query.
+    let lookup = unsafe { mi_validate_pointer(p.cast_mut(), msg) };
+    match lookup {
+        crate::core_types::PointerLookup::Valid(valid) => {
+            let (_, page, location) = valid.into_parts();
+            let located = location.located_block();
+            // SAFETY: successful validation couples the page to this located
+            // block and guard classification; their usable-size and padding
+            // metadata remain live, readable, and stable for this access.
+            let size = unsafe {
                 mi_page_usable_size_of_typed(
                     page.as_ptr(),
                     located.block().as_ptr(),
                     located.was_guarded() == crate::core_types::WasGuarded::Yes,
                 )
-                .checked_sub(located.offset().0)
+            };
+            size.checked_sub(located.offset().0)
                 .unwrap_or_else(|_| crate::core_types::UsableSize::new(0))
-            }
-            _ => crate::core_types::UsableSize::new(0),
         }
+        _ => crate::core_types::UsableSize::new(0),
     }
 }
 

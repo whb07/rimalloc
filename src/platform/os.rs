@@ -427,24 +427,31 @@ pub(crate) unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
 }
 
 /// # Safety
-/// Must be called during process initialization before concurrent OS allocation use.
-// SAFETY: OS memory config initialization updates the process-global memory configuration before concurrent OS allocation use.
+/// Must be called during process initialization while the global OS
+/// configuration and primitive dynamic-dispatch statics are uniquely writable.
+/// Initialization must complete and those statics must be frozen before any
+/// concurrent OS allocation or primitive reader becomes reachable.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_init() {
+    // SAFETY: the caller provides the unique epoch in which the primitive may
+    // initialize both its dynamic-dispatch statics (including Windows slots)
+    // and this writable configuration output; all are frozen before readers.
     unsafe { _mi_prim_mem_init(core::ptr::addr_of_mut!(mi_os_mem_config)) };
 }
 
 /// # Safety
-/// The OS memory configuration must be initialized; secure/release randomized hints also require
-/// an initialized default theap.
-// SAFETY: aligned hint generation reads initialized memory config and the initialized default thread heap.
+/// OS configuration must be initialized and stable. In secure or release
+/// builds, the current thread's default heap must remain live and initialized
+/// while its random state is advanced.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usize) -> *mut c_void {
+    // SAFETY: the caller keeps initialized configuration stable while this
+    // scalar field is read.
     if MI_INTPTR_SIZE < 8 || try_alignment <= unsafe { (*mi_os_mem_config_ptr()).alloc_granularity }
     {
         return core::ptr::null_mut();
     }
-    // SAFETY: aligned hint generation reads initialized memory config and the initialized default thread heap.
+    // SAFETY: the caller keeps the initialized virtual-address width stable.
     let virtual_address_bits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
     if try_alignment > MI_HINT_ALIGN || virtual_address_bits < 46 {
         return core::ptr::null_mut();
@@ -459,11 +466,16 @@ pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usi
     if hint == 0 || hint > MI_HINT_MAX {
         let mut init = MI_HINT_BASE;
         if cfg!(feature = "secure") || cfg!(not(debug_assertions)) {
-            // SAFETY: aligned hint generation reads initialized memory config and the initialized default thread heap.
+            // SAFETY: the caller keeps the current thread's default heap live
+            // for this non-initializing lookup.
             let theap = unsafe { _mi_theap_default() };
+            // SAFETY: the lookup returned the current default-heap slot, whose
+            // initialized-state field remains readable during this operation.
             if unsafe { !mi_theap_is_initialized(theap) } {
                 return core::ptr::null_mut();
             }
+            // SAFETY: the initialized default heap is current-thread owned and
+            // remains live while its random state is advanced.
             let r = unsafe { crate::allocator::thread_heap::_mi_theap_random_next(theap) };
             init += (MI_HINT_ALIGN * ((r >> 17) & 0xFFFFF)) % MI_HINT_AREA;
         }
@@ -482,12 +494,13 @@ pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usi
 }
 
 /// # Safety
-/// The OS memory configuration must have been initialized.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// OS page configuration must be initialized and stable for this query.
 #[inline(never)]
 #[allow(clippy::absurd_extreme_comparisons)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_size() -> usize {
     if MI_SECURE > 0 {
+        // SAFETY: the caller keeps initialized page configuration stable for
+        // this guard-size query.
         unsafe { _mi_os_guard_page_size() }
     } else {
         0
@@ -495,8 +508,12 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_size() -> usize {
 }
 
 /// # Safety
-/// `addr`, when non-null, must designate the guard page associated with `memid`.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// `addr`, when non-null, must designate the live guard page associated with
+/// `memid`. For arena memory, the arena prefix and stored callback/argument must
+/// remain live and stable, tolerate concurrent arena commit operations, and be
+/// valid for a synchronous decommit request. The managed-arena lifecycle must
+/// keep the range and argument valid for any later use retained by the callback,
+/// and the callback must not unwind.
 #[inline(never)]
 #[allow(clippy::absurd_extreme_comparisons)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
@@ -512,9 +529,14 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
             _ => core::ptr::null_mut(),
         };
         if !arena.is_null() {
-            // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+            // SAFETY: the decoded arena MemId and caller contract keep the live
+            // prefix and its callback field readable for this operation.
             let commit_fun = unsafe { (*arena.cast::<MiArenaCommitPrefix>()).commit_fun };
             if let Some(commit_fun) = commit_fun {
+                // SAFETY: the caller keeps the guard range and stored opaque
+                // argument valid for this synchronous decommit callback and
+                // for any later retained use under the managed-arena lifecycle;
+                // the callback does not unwind.
                 return unsafe {
                     commit_fun(
                         false,
@@ -532,15 +554,20 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
 }
 
 /// # Safety
-/// `addr` must be at least one secure guard page past the page to protect, and `memid` must
-/// describe that allocation.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// `addr` must be at least one secure guard page past the live guard range, and
+/// `memid` must describe that allocation. OS page configuration must remain
+/// initialized and stable. For arena memory, the arena prefix and stored
+/// callback/argument must remain live and stable, tolerate concurrent arena
+/// commits, and be valid for the synchronous decommit request. The managed-arena
+/// lifecycle must cover any later retained use, and the callback must not unwind.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_set_before(
     addr: *mut c_void,
     memid: mi_memid_t,
 ) -> bool {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY: the caller keeps the preceding guard range and OS page size valid;
+    // the downstream decommit callback, arena prefix, and opaque argument meet
+    // the propagated lifecycle, concurrency, retention, and unwind contract.
     unsafe {
         _mi_os_secure_guard_page_set_at(
             addr.cast::<u8>()
@@ -552,8 +579,13 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_before(
 }
 
 /// # Safety
-/// `addr`, when non-null, must designate the guard page associated with `memid`.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// `addr`, when non-null, must designate the live guard page associated with
+/// `memid`. For arena memory, the arena prefix and stored callback/argument must
+/// remain live and stable, tolerate concurrent arena commit operations, and be
+/// valid for a synchronous commit request. The managed-arena lifecycle must keep
+/// the range and argument valid for any later use retained by the callback, and
+/// the callback must not unwind. Without a callback, the page-covering range
+/// must be suitable for the active primitive commit operation.
 #[inline(never)]
 #[allow(clippy::absurd_extreme_comparisons)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
@@ -569,9 +601,14 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
             _ => core::ptr::null_mut(),
         };
         if !arena.is_null() {
-            // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+            // SAFETY: the decoded arena MemId and caller contract keep the live
+            // prefix and its callback field readable for this operation.
             let commit_fun = unsafe { (*arena.cast::<MiArenaCommitPrefix>()).commit_fun };
             if let Some(commit_fun) = commit_fun {
+                // SAFETY: the caller keeps the guard range and stored opaque
+                // argument valid for this synchronous commit callback and for
+                // any later retained use under the managed-arena lifecycle;
+                // the callback does not unwind.
                 return unsafe {
                     commit_fun(
                         true,
@@ -583,22 +620,30 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
                 };
             }
         }
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+        // SAFETY: without a managed callback, the caller keeps this live guard
+        // range suitable for primitive commitment and accounting.
         return unsafe { _mi_os_commit(addr, _mi_os_secure_guard_page_size()) }.success();
     }
     true
 }
 
 /// # Safety
-/// `addr` must be at least one secure guard page past the page to reset, and `memid` must
-/// describe that allocation.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// `addr` must be at least one secure guard page past the live guard range, and
+/// `memid` must describe that allocation. OS page configuration must remain
+/// initialized and stable. For arena memory, the arena prefix and stored
+/// callback/argument must remain live and stable, tolerate concurrent arena
+/// commits, and be valid for the synchronous commit request. The managed-arena
+/// lifecycle must cover any later retained use, and the callback must not unwind.
+/// Without a callback, the page-covering guard range must remain suitable for
+/// primitive commitment and accounting.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_before(
     addr: *mut c_void,
     memid: mi_memid_t,
 ) -> bool {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY: the caller keeps the preceding guard range and OS page size valid;
+    // the downstream callback or primitive commit path meets the propagated
+    // arena-lifecycle, concurrency, accounting, retention, and unwind contract.
     unsafe {
         _mi_os_secure_guard_page_reset_at(
             addr.cast::<u8>()
@@ -729,45 +774,61 @@ pub unsafe extern "C" fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool
 }
 
 /// # Safety
-/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// A nonempty contained portion of `addr..addr+size` must remain a live
+/// caller-controlled range suitable for primitive reset. In high-debug builds
+/// it must also be writable. OS configuration, current subprocess statistics,
+/// and primitive dispatch must remain initialized and stable. Null, empty, or
+/// subpage input is accepted as a successful no-op.
 pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
-    unsafe {
-        let Some(range) =
-            OsPageRange::contained(addr, ReservedBytes::new(size), _mi_os_page_size_typed())
-        else {
-            return true;
-        };
-        let start = range.start();
-        let csize = range.size().get();
+    // SAFETY: the caller keeps initialized OS page configuration stable while
+    // the contained reset geometry is derived.
+    let page_size = unsafe { _mi_os_page_size_typed() };
+    let Some(range) = OsPageRange::contained(addr, ReservedBytes::new(size), page_size) else {
+        return true;
+    };
+    let start = range.start();
+    let csize = range.size().get();
 
-        let subproc = _mi_subproc();
-        if !subproc.is_null() {
+    // SAFETY: allocator lifecycle keeps current-subprocess lookup and registry
+    // metadata live during this synchronous statistics update.
+    let subproc = unsafe { _mi_subproc() };
+    if !subproc.is_null() {
+        // SAFETY: the live subprocess prefix contains aligned atomic statistics;
+        // all concurrent accesses to these fields use the atomic MT protocol.
+        unsafe {
             let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
             __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).reset), csize);
             __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).reset_calls), 1);
         }
-
-        if MI_DEBUG > 1 && MI_SECURE == 0 && MI_TRACK_ENABLED == 0 {
-            core::ptr::write_bytes(start, 0, csize);
-        }
-
-        let err = _mi_prim_reset(start, csize);
-        if err != 0 {
-            _mi_warning_message_fmt(format_args!(
-                "cannot reset OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
-                err, err, start, csize
-            ));
-        }
-        err == 0
     }
+
+    if MI_DEBUG > 1 && MI_SECURE == 0 && MI_TRACK_ENABLED == 0 {
+        // SAFETY: the caller keeps the contained reset range writable in the
+        // configuration where debug reset poisoning is enabled.
+        unsafe { core::ptr::write_bytes(start, 0, csize) };
+    }
+
+    // SAFETY: the validated contained range remains live and suitable for the
+    // initialized primitive reset operation.
+    let err = unsafe { _mi_prim_reset(start, csize) };
+    if err != 0 {
+        _mi_warning_message_fmt(format_args!(
+            "cannot reset OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
+            err, err, start, csize
+        ));
+    }
+    err == 0
 }
 
 /// # Safety
-/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// A nonempty contained portion of `addr..addr+size` must remain a live
+/// caller-controlled range suitable for primitive reuse. OS configuration and
+/// primitive dispatch must remain initialized and stable. Null, empty, or
+/// subpage input is accepted as a no-op.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
+    // SAFETY: the caller keeps initialized page configuration stable while the
+    // contained reuse geometry is derived.
     let Some(range) = OsPageRange::contained(addr, ReservedBytes::new(size), unsafe {
         _mi_os_page_size_typed()
     }) else {
@@ -775,7 +836,8 @@ pub(crate) unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
     };
     let start = range.start();
     let csize = range.size().get();
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY: the validated contained range remains live and suitable for the
+    // initialized primitive reuse operation.
     let err = unsafe { _mi_prim_reuse(start, csize) };
     if err != 0 {
         _mi_warning_message_fmt(format_args!(
@@ -853,9 +915,17 @@ pub unsafe extern "C" fn _mi_os_purge(p: *mut c_void, size: usize) -> bool {
     unsafe { _mi_os_purge_ex(p, size, true, size, None, core::ptr::null_mut()) }
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// Apply or remove primitive protection on the contained whole-page range.
+///
+/// # Safety
+/// A nonempty contained portion of `addr..addr+size` must remain a live
+/// caller-controlled mapping suitable for the requested primitive protection
+/// transition. OS configuration and primitive dispatch must remain initialized
+/// and stable, and incompatible concurrent access to the range must be excluded.
 #[inline]
 unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool {
+    // SAFETY: the caller keeps initialized page configuration stable while the
+    // contained protection geometry is derived.
     let Some(range) = OsPageRange::contained(addr, ReservedBytes::new(size), unsafe {
         _mi_os_page_size_typed()
     }) else {
@@ -863,7 +933,8 @@ unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool 
     };
     let start = range.start();
     let csize = range.size().get();
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY: the validated contained mapping remains live and exclusively
+    // controlled for this initialized primitive protection transition.
     let err = unsafe { _mi_prim_protect(start, csize, protect) };
     if err != 0 {
         _mi_warning_message_fmt(format_args!(
@@ -879,18 +950,24 @@ unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool 
 }
 
 /// # Safety
-/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// A nonempty contained portion of `addr..addr+size` must remain a live mapping
+/// suitable for primitive protection. OS configuration and dispatch must remain
+/// stable, and incompatible concurrent access must be excluded.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_protect(addr: *mut c_void, size: usize) -> bool {
+    // SAFETY: the caller's live-range and concurrency contract permits the
+    // requested protect transition.
     unsafe { mi_os_protectx(addr, size, true) }
 }
 
 /// # Safety
-/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// A nonempty contained portion of `addr..addr+size` must remain a live mapping
+/// suitable for removing primitive protection. OS configuration and dispatch
+/// must remain stable, and incompatible concurrent access must be excluded.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_unprotect(addr: *mut c_void, size: usize) -> bool {
+    // SAFETY: the caller's live-range and concurrency contract permits the
+    // requested unprotect transition.
     unsafe { mi_os_protectx(addr, size, false) }
 }
 
@@ -2013,10 +2090,15 @@ unsafe fn mi_os_alloc_aligned_ex(
 }
 
 /// # Safety
-/// Preserves the exported C ABI wrapper from `src/os.c`.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// For nonempty input, the whole page-covering primitive interval obtained by
+/// aligning around `p..p+size` must remain a live caller-controlled mapping
+/// suitable for commitment. OS configuration, current subprocess statistics,
+/// and primitive dispatch must remain initialized and stable. Null or empty
+/// input is accepted as a no-op.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_commit(p: *mut c_void, size: usize) {
+    // SAFETY: the caller keeps the complete page-covering mapping and allocator
+    // OS/accounting state valid for this full-size committed-byte transaction.
     let _ = unsafe { _mi_os_commit(p, size) };
 }
 
@@ -2116,10 +2198,15 @@ pub unsafe extern "C" fn mi_os_free(p: *mut c_void, size: usize) {
 }
 
 /// # Safety
-/// Preserves the exported C ABI wrapper from `src/os.c`.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// A nonempty contained portion of `p..p+size` must remain a live
+/// caller-controlled mapping suitable for primitive decommit. OS configuration,
+/// current subprocess statistics, and primitive dispatch must remain initialized
+/// and stable; the full size must match committed accounting. Null, empty, or
+/// subpage input is accepted as a no-op.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_decommit(p: *mut c_void, size: usize) {
+    // SAFETY: the caller keeps the mapping live and supplies its full committed
+    // accounting to the primitive decommit boundary.
     let _ = unsafe { _mi_os_decommit(p, size) };
 }
 

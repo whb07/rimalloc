@@ -113,7 +113,7 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
     };
     let idx = location.index();
     let sub_idx = location.sub_index();
-    if !mi_page_map_is_committed(idx, ptr::null_mut()) {
+    if !mi_page_map_commit_status(idx).is_committed() {
         return None;
     }
     // SAFETY: committed top-level index can be loaded

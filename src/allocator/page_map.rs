@@ -96,6 +96,67 @@ impl PublishedSubmap {
     }
 }
 
+/// Snapshot of the commit bit covering one typed top-level page-map index.
+#[cfg(not(target_pointer_width = "32"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PageMapCommitStatus {
+    bit_index: usize,
+    committed: bool,
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+impl PageMapCommitStatus {
+    #[inline(always)]
+    fn from_index_and_word(idx: crate::core_types::PageMapIndex, commit: usize) -> Self {
+        let bit_index = idx.get() / MI_PAGE_MAP_ENTRIES_PER_CBIT;
+        crate::internal::mi_assert_internal!(bit_index < MI_BFIELD_BITS);
+        Self {
+            bit_index,
+            committed: (commit & (1usize << bit_index)) != 0,
+        }
+    }
+
+    #[inline(always)]
+    fn is_committed(self) -> bool {
+        self.committed
+    }
+
+    #[inline(always)]
+    fn mask(self) -> usize {
+        1usize << self.bit_index
+    }
+
+    #[inline(always)]
+    fn byte_offset(self) -> usize {
+        self.bit_index * MI_PAGE_MAP_ENTRIES_PER_CBIT * core::mem::size_of::<mi_submap_t>()
+    }
+}
+
+/// Non-owning snapshot of a committed top-level slot. This does not extend the
+/// page-map allocation lifetime or protect against lifecycle teardown.
+#[cfg(not(target_pointer_width = "32"))]
+enum CommittedSubmapSlot {
+    Empty,
+    Published(PublishedSubmap),
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+impl CommittedSubmapSlot {
+    /// # Safety
+    /// If `submap` is non-null, it must be a published full-size submap that
+    /// remains live while this snapshot is used. Concurrent teardown must be
+    /// excluded. Null is accepted as an empty committed slot.
+    #[inline(always)]
+    unsafe fn from_raw(submap: mi_submap_t) -> Self {
+        // SAFETY: the caller supplies the same conditional allocation and
+        // lifecycle proof required by `PublishedSubmap::from_raw`.
+        match unsafe { PublishedSubmap::from_raw(submap) } {
+            Some(submap) => Self::Published(submap),
+            None => Self::Empty,
+        }
+    }
+}
+
 #[cfg(not(target_pointer_width = "32"))]
 // SAFETY: process-global page-map base is mutated only
 // during allocator lifecycle init/destroy and read by audited page-map helpers.
@@ -256,16 +317,9 @@ unsafe fn mi_page_map_get_idx(page: PagePtr) -> Option<PageMapGetIndex> {
 
 #[cfg(not(target_pointer_width = "32"))]
 #[inline]
-fn mi_page_map_is_committed(idx: crate::core_types::PageMapIndex, pbit_idx: *mut usize) -> bool {
+fn mi_page_map_commit_status(idx: crate::core_types::PageMapIndex) -> PageMapCommitStatus {
     let commit = mi_page_map_commit.load(Ordering::Relaxed);
-    let bit_idx = idx.get() / MI_PAGE_MAP_ENTRIES_PER_CBIT;
-    crate::internal::mi_assert_internal!(bit_idx < MI_BFIELD_BITS);
-    if !pbit_idx.is_null() {
-        // SAFETY: nullable out pointer is checked before
-        // writing the derived commit-bit index.
-        unsafe { *pbit_idx = bit_idx };
-    }
-    (commit & (1usize << bit_idx)) != 0
+    PageMapCommitStatus::from_index_and_word(idx, commit)
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -631,23 +685,23 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
     };
 }
 
+/// # Safety
+/// The process-global page map must be initialized and remain live. `idx` must
+/// be below the active runtime page-map count. Concurrent unsafe destruction
+/// must be excluded while the returned slot snapshot is used.
 #[cfg(not(target_pointer_width = "32"))]
 unsafe fn mi_page_map_ensure_committed(
     idx: crate::core_types::PageMapIndex,
-    submap: *mut mi_submap_t,
-) -> bool {
-    // SAFETY: caller provides a writable out slot that
-    // is still null before commit/publication fills it.
-    crate::internal::mi_assert_internal!(!submap.is_null() && unsafe { (*submap).is_null() });
-    let mut bit_idx = 0usize;
-    if !mi_page_map_is_committed(idx, &mut bit_idx) {
+) -> Option<CommittedSubmapSlot> {
+    let commit = mi_page_map_commit_status(idx);
+    if !commit.is_committed() {
         // SAFETY: committed bit index maps to a
         // page-map chunk inside the reserved top-level submap table.
         let start = unsafe {
             (&raw mut _mi_page_map)
                 .read()
                 .cast::<u8>()
-                .add(bit_idx * MI_PAGE_MAP_ENTRIES_PER_CBIT * core::mem::size_of::<mi_submap_t>())
+                .add(commit.byte_offset())
         };
         // SAFETY: commits exactly the top-level
         // page-map chunk represented by the validated commit bit.
@@ -659,16 +713,14 @@ unsafe fn mi_page_map_ensure_committed(
             )
         } {
             mi_page_map_cannot_commit();
-            return false;
+            return None;
         }
-        mi_page_map_commit.fetch_or(1usize << bit_idx, Ordering::AcqRel);
+        mi_page_map_commit.fetch_or(commit.mask(), Ordering::AcqRel);
     }
-    // SAFETY: committed top-level index can be read via
-    // `_mi_page_map_at` and published to the caller's out slot.
-    unsafe {
-        *submap = _mi_page_map_at(idx);
-    }
-    true
+    // SAFETY: the committed slot load through the audited accessor is null or
+    // a published full-size submap, and the caller excludes concurrent
+    // lifecycle teardown.
+    Some(unsafe { CommittedSubmapSlot::from_raw(_mi_page_map_at(idx)) })
 }
 
 /// # Safety
@@ -789,13 +841,12 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         unsafe { _mi_memzero_aligned(sub0.cast::<c_void>(), submap_size) };
     }
 
-    let mut nullsub: mi_submap_t = ptr::null_mut();
     // SAFETY: zero index is within the top-level
     // page-map domain for the null-pointer sentinel submap.
     let zero_index = unsafe { crate::core_types::PageMapIndex::new_unchecked(0) };
     // SAFETY: initialization commits/publishes the
     // top-level zero entry before installing the first submap.
-    if !unsafe { mi_page_map_ensure_committed(zero_index, &mut nullsub) } {
+    if unsafe { mi_page_map_ensure_committed(zero_index) }.is_none() {
         mi_page_map_cannot_commit();
         return false;
     }
@@ -840,7 +891,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
             crate::internal::mi_assert_internal!(false);
             continue;
         };
-        if mi_page_map_is_committed(map_idx, ptr::null_mut()) {
+        if mi_page_map_commit_status(map_idx).is_committed() {
             // SAFETY: committed top-level index can be
             // loaded through the audited page-map accessor.
             let sub = unsafe { _mi_page_map_at(map_idx) };
@@ -901,13 +952,14 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
 unsafe fn mi_page_map_ensure_submap_at(
     idx: crate::core_types::PageMapIndex,
 ) -> Option<PublishedSubmap> {
-    let mut sub = ptr::null_mut();
     // SAFETY: typed top-level index bounds the commit
     // check and initial submap slot load.
-    if !unsafe { mi_page_map_ensure_committed(idx, &mut sub) } {
-        return None;
+    let committed = unsafe { mi_page_map_ensure_committed(idx) }?;
+    if let CommittedSubmapSlot::Published(submap) = committed {
+        return Some(submap);
     }
-    if sub.is_null() {
+    let sub;
+    {
         // SAFETY: global page-map growth lock protects
         // submap allocation/publication for this slot.
         let lock = unsafe { NonNull::new_unchecked(&raw mut mi_page_map_lock) };
@@ -920,8 +972,8 @@ unsafe fn mi_page_map_ensure_submap_at(
             crate::core_types::AtomicPtrField::from_raw(unsafe { _mi_page_map.add(idx.get()) });
         // SAFETY: acquire load observes any submap
         // published for this top-level slot.
-        sub = unsafe { atomic_submap.load(crate::core_types::MemoryOrder::Acquire) };
-        if sub.is_null() {
+        let mut loaded = unsafe { atomic_submap.load(crate::core_types::MemoryOrder::Acquire) };
+        if loaded.is_null() {
             // SAFETY: local memid starts empty and will
             // be filled by the OS zero-allocation helper on success.
             let mut memid = unsafe { _mi_memid_none() };
@@ -941,15 +993,16 @@ unsafe fn mi_page_map_ensure_submap_at(
                     // SAFETY: failed publication means
                     // another submap owns the slot, so the new backing range is freed.
                     unsafe { _mi_os_free(new_sub.cast::<c_void>(), MI_PAGE_MAP_SUB_SIZE, memid) };
-                    sub = expect;
+                    loaded = expect;
                 } else {
-                    sub = new_sub;
+                    loaded = new_sub;
                 }
             }
         }
-        if sub.is_null() {
+        if loaded.is_null() {
             return None;
         }
+        sub = loaded;
     }
     // SAFETY: the non-null submap was loaded from or published into the
     // process-global page map and remains live until lifecycle teardown.
@@ -1234,7 +1287,73 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
 #[cfg(all(test, not(target_pointer_width = "32")))]
 mod tests {
     use super::*;
+    use crate::types::PageMapIndex;
     use core::mem::size_of;
+
+    #[test]
+    fn commit_status_maps_chunk_edges_and_commit_words() {
+        let status = PageMapCommitStatus::from_index_and_word(
+            PageMapIndex::new(0).expect("zero is a valid top-level index"),
+            0,
+        );
+        assert!(!status.is_committed());
+        assert_eq!(status.mask(), 1);
+        assert_eq!(status.byte_offset(), 0);
+
+        let last_in_first_chunk = (MI_PAGE_MAP_ENTRIES_PER_CBIT - 1).min(MI_PAGE_MAP_COUNT - 1);
+        let status = PageMapCommitStatus::from_index_and_word(
+            PageMapIndex::new(last_in_first_chunk)
+                .expect("last index in the first commit chunk is valid"),
+            1,
+        );
+        assert!(status.is_committed());
+        assert_eq!(status.mask(), 1);
+
+        if MI_PAGE_MAP_COUNT > MI_PAGE_MAP_ENTRIES_PER_CBIT {
+            let rollover = PageMapCommitStatus::from_index_and_word(
+                PageMapIndex::new(MI_PAGE_MAP_ENTRIES_PER_CBIT)
+                    .expect("first index in the second commit chunk is valid"),
+                1,
+            );
+            assert!(!rollover.is_committed());
+            assert_eq!(rollover.mask(), 2);
+            assert_eq!(
+                rollover.byte_offset(),
+                MI_PAGE_MAP_ENTRIES_PER_CBIT * size_of::<mi_submap_t>()
+            );
+            let committed = PageMapCommitStatus::from_index_and_word(
+                PageMapIndex::new(MI_PAGE_MAP_ENTRIES_PER_CBIT)
+                    .expect("first index in the second commit chunk is valid"),
+                2,
+            );
+            assert!(committed.is_committed());
+        }
+
+        let last_index = MI_PAGE_MAP_COUNT - 1;
+        let final_clear = PageMapCommitStatus::from_index_and_word(
+            PageMapIndex::new(last_index).expect("final top-level index is valid"),
+            0,
+        );
+        assert!(!final_clear.is_committed());
+        let final_status = PageMapCommitStatus::from_index_and_word(
+            PageMapIndex::new(last_index).expect("final top-level index is valid"),
+            usize::MAX,
+        );
+        assert!(final_status.is_committed());
+        assert_eq!(
+            final_status.mask(),
+            1usize << (last_index / MI_PAGE_MAP_ENTRIES_PER_CBIT)
+        );
+    }
+
+    #[test]
+    fn committed_submap_slot_classifies_empty_slot() {
+        // SAFETY: null is explicitly accepted as an empty committed slot.
+        assert!(matches!(
+            unsafe { CommittedSubmapSlot::from_raw(ptr::null_mut()) },
+            CommittedSubmapSlot::Empty
+        ));
+    }
 
     #[test]
     fn published_submap_rejects_null() {
@@ -1258,8 +1377,10 @@ mod tests {
         let base = slots.as_mut_ptr();
         // SAFETY: the boxed slice provides every submap slot and remains live
         // until after all derived slot pointers are checked.
-        let submap = unsafe { PublishedSubmap::from_raw(base) }
-            .expect("boxed full-size submap must have a non-null base");
+        let committed = unsafe { CommittedSubmapSlot::from_raw(base) };
+        let CommittedSubmapSlot::Published(submap) = committed else {
+            panic!("boxed full-size submap must classify as published");
+        };
         let first = PageMapSubIndex::new(0).expect("zero is a valid submap index");
         let last = PageMapSubIndex::new(MI_PAGE_MAP_SUB_COUNT - 1)
             .expect("last in-range submap index must be valid");

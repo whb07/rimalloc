@@ -1772,21 +1772,42 @@ pub unsafe extern "C" fn mi_heap_recalloc(
     }
 }
 
+/// # Safety
+/// `block` must identify a live exclusively owned allocated block. When guarded allocation is
+/// enabled, it must be the block start in a live initialized page whose block size contains the
+/// object size, block header, and trailing OS guard page, with those sizes' additions representable.
+/// Its guarded block tag must already be initialized. The page/block backing, page geometry, MemId,
+/// and OS page-size configuration must remain stable through the operation; the caller must
+/// exclusively own non-atomic page metadata mutation. The derived offset
+/// `block_size - os_page_size - obj_size` must exceed one block header and be at most
+/// `MI_PAGE_MAX_OVERALLOC_ALIGN`. The prospective guard range must be the aligned, live trailing
+/// page within that backing and be suitable for the OS protection primitive when the memory is not
+/// pinned. Registered diagnostic callbacks used by protection failure reporting must remain valid
+/// for synchronous invocation, must not retain transient formatting state or reenter operations
+/// that mutate this block, page, or heap, and must not unwind. This call consumes the guarded-block
+/// transition: on an internal size-geometry failure it frees the block exactly once and returns
+/// `None`; otherwise the returned user pointer lies within the block and the caller retains
+/// allocation ownership.
 unsafe fn mi_block_ptr_set_guarded(
     block: crate::core_types::GuardedBlock,
     obj_size: crate::core_types::UsableSize,
 ) -> Option<UserPtr> {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let block = block.block().as_ptr();
-        let obj_size = obj_size.get();
-        if MI_GUARDED == 0 {
-            let _ = obj_size;
-            return Some(UserPtr::new_unchecked(block.cast()));
-        }
+    let block = block.block().as_ptr();
+    let obj_size = obj_size.get();
+    if MI_GUARDED == 0 {
+        let _ = obj_size;
+        // SAFETY: the consumed guarded-block witness carries a nonnull block pointer, which is the
+        // unchanged user address when guarded allocation support is disabled.
+        return Some(unsafe { UserPtr::new_unchecked(block.cast()) });
+    }
+    // SAFETY: this coherent page/backing epoch derives the caller-provided live block's stable page,
+    // exclusively marks its interior-pointer state, validates its representable header/object/guard
+    // geometry, and either terminally frees the unpublished block or protects its aligned trailing
+    // page. The initialized MemId and OS-page configuration remain stable; diagnostics cannot
+    // retain transient state, reenter mutation of this allocation, or unwind.
+    let (block_size, os_page_size, guard_page) = unsafe {
         let page = _mi_ptr_page(block.cast());
         mi_page_set_has_interior_pointers(crate::core_types::PagePtr::new_unchecked(page), true);
-
         let block_size = mi_page_block_size(page);
         let os_page_size = _mi_os_page_size_typed().get();
         crate::internal::mi_assert_internal!(
@@ -1812,12 +1833,20 @@ unsafe fn mi_block_ptr_set_guarded(
                 "unable to set a guard page behind an object due to pinned memory (large OS pages?) (object {block:p} of size {block_size})\n"
             ));
         }
+        (block_size, os_page_size, guard_page)
+    };
 
-        let mut offset = block_size - os_page_size - obj_size;
-        crate::internal::mi_assert_internal!(offset > size_of::<mi_block_t>());
-        if offset > crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN {
-            offset = crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN;
-        }
+    let mut offset = block_size - os_page_size - obj_size;
+    crate::internal::mi_assert_internal!(offset > size_of::<mi_block_t>());
+    crate::internal::mi_assert_internal!(offset <= crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN);
+    if offset > crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN {
+        offset = crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN;
+    }
+    // SAFETY: this coherent publication epoch uses the validated, bounded offset to derive the
+    // in-block nonnull user address; the equivalent guard-relative address remains within the same
+    // backing. Tracking sees the live allocation, object bounds, and initialized block header
+    // before the user pointer is published.
+    unsafe {
         let p = block.cast::<u8>().add(offset).cast::<c_void>();
         crate::internal::mi_assert_internal!(p.cast::<u8>() == guard_page.sub(obj_size));
         mi_track_align(block.cast(), p, offset, obj_size);
@@ -1826,31 +1855,50 @@ unsafe fn mi_block_ptr_set_guarded(
     }
 }
 
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// # Safety
+/// `theap` may be null only where the supported lazy/default heap protocol accepts it; otherwise
+/// it must identify a live initialized current-thread heap with exclusive mutation of its local
+/// TLD, caches, page queues, free lists, and statistics. Protocol atomic remote-free publication
+/// is permitted; heap teardown or non-protocol mutation must not race this operation. Allocator
+/// initialization must have frozen the OS page-size configuration and keep option storage live;
+/// concurrent protocol option updates are permitted and the sampled guarded-precision value
+/// governs this call. The selected heap/statistics association must remain stable. Any allocator
+/// or diagnostic callbacks invoked synchronously during allocation or failure reporting, together
+/// with their opaque arguments, must remain valid, must not retain transient formatting state or
+/// reenter incompatible mutation of the allocation, page, or selected heap, and must not unwind.
+///
+/// Oversized or failed requests return null without publishing an allocation. On success the
+/// returned pointer identifies `size` usable bytes, zeroed exactly when `zero` is true, within a
+/// live allocator allocation. Protection is attempted for a suitable unpinned trailing page; an
+/// `_mi_os_protect` failure is reported but the allocation remains valid. If guarded user-pointer
+/// initialization rejects the backing geometry, that helper frees the unpublished backing exactly
+/// once before this call returns null.
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
     theap: *mut mi_theap_t,
     size: usize,
     zero: bool,
 ) -> *mut c_void {
-    // SAFETY: guarded allocation receives the
-    // raw thread-heap pointer and allocation request through the C ABI shim.
-    unsafe {
-        if MI_GUARDED == 0 {
-            let _ = mi_block_ptr_set_guarded
-                as unsafe fn(
-                    crate::core_types::GuardedBlock,
-                    crate::core_types::UsableSize,
-                ) -> Option<UserPtr>;
-            return _mi_theap_malloc_zero(theap, size, zero, ptr::null_mut());
-        }
-        if mi_unlikely(size >= MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE) {
-            _mi_error_message_fmt(
-                Errno::EOVERFLOW,
-                format_args!("(guarded) allocation request is too large ({size} bytes)\n"),
-            );
-            return ptr::null_mut();
-        }
+    if MI_GUARDED == 0 {
+        // SAFETY: the caller supplies the supported raw current-thread heap lifecycle; the
+        // disabled guarded path delegates unchanged size/zero policy with no usable output.
+        return unsafe { _mi_theap_malloc_zero(theap, size, zero, ptr::null_mut()) };
+    }
+    if mi_unlikely(size >= MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE) {
+        _mi_error_message_fmt(
+            Errno::EOVERFLOW,
+            format_args!("(guarded) allocation request is too large ({size} bytes)\n"),
+        );
+        return ptr::null_mut();
+    }
 
+    // SAFETY: this coherent backing-allocation epoch reads the frozen nonzero OS-page config and
+    // an atomic guarded-precision option snapshot. The maximum-size rejection bounds every
+    // alignment addition, yielding a normalized padded layout containing header, object, and guard
+    // page. The raw heap satisfies the supported lazy/default or live current-thread protocol;
+    // successful localization establishes exclusive local allocation mutation, and failure
+    // publishes nothing. Any synchronous allocator callbacks obey the caller-provided lifecycle,
+    // reentrancy, and unwind constraints.
+    let (block, obj_size, req_size) = unsafe {
         let os_page_size = _mi_os_page_size_typed().get();
         let obj_size = if mi_option_is_enabled(mi_option_t::mi_option_guarded_precise) {
             size
@@ -1882,6 +1930,15 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
         if block.is_null() {
             return ptr::null_mut();
         }
+        (block, obj_size, req_size)
+    };
+    // SAFETY: this coherent guarded-publication epoch owns the nonnull unpublished generic block
+    // and its page. It initializes the block tag, then the guarded request construction and
+    // allocator size-class bounds establish
+    // `header < block_size - os_page_size - obj_size <= MI_PAGE_MAX_OVERALLOC_ALIGN` for the helper.
+    // The helper consumes the guarded transition and frees once on rejection. On success `p`
+    // identifies `obj_size` writable bytes; optional zeroing and tracking finish before publication.
+    let p = unsafe {
         let block_ptr = crate::core_types::BlockPtr::new_unchecked(block);
         crate::core_types::BlockTag::write_guarded_to(block_ptr);
         let Some(user) = mi_block_ptr_set_guarded(
@@ -1894,8 +1951,13 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
         if zero {
             _mi_memzero_aligned(p, obj_size);
         }
-
         mi_track_malloc(p, obj_size, zero);
+        p
+    };
+    // SAFETY: the caller-provided raw heap is either initialized or a supported default/lazy
+    // value. Allocator lifecycle keeps the selected default heap live; this current-thread epoch
+    // exclusively updates its guarded and requested statistics.
+    unsafe {
         let theap = if mi_theap_is_initialized(theap) {
             theap
         } else {
@@ -1911,6 +1973,6 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
                 __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_requested), size);
             }
         }
-        p
     }
+    p
 }

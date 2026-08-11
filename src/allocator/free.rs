@@ -224,11 +224,17 @@ pub(crate) unsafe extern "C" fn _mi_padding_shrink(
     }
 }
 
+/// # Safety
+///
+/// `page` must be a live initialized page and `block` must be a live allocated
+/// block owned by that page. Their padding metadata and the trailing bytes
+/// covered by the padding check must be initialized, readable, and remain
+/// stable for the call, with no concurrent mutation or free of the block.
 unsafe fn mi_verify_padding(
     page: *const mi_page_t,
     block: *const mi_block_t,
-    size: *mut usize,
-    wrong: *mut usize,
+    size: &mut usize,
+    wrong: &mut usize,
 ) -> bool {
     // SAFETY: padding decode/shrink/check operations use typed padding metadata on validated blocks.
     unsafe {
@@ -260,24 +266,28 @@ unsafe fn mi_verify_padding(
 }
 
 /// # Safety
-/// `page` and `block` must refer to a valid block owned by that page.
+///
+/// `page` must be a live initialized page and `block` must be a live allocated
+/// block owned by that page. Their padding metadata and the trailing bytes
+/// covered by the padding check must be initialized, readable, and remain
+/// stable for the call, with no concurrent mutation or free of the block.
 pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t) {
-    // SAFETY: padding decode/shrink/check operations use typed padding metadata on validated blocks.
-    unsafe {
-        if MI_PADDING == 0 || MI_PADDING_CHECK == 0 {
-            return;
-        }
+    if MI_PADDING == 0 || MI_PADDING_CHECK == 0 {
+        return;
+    }
 
-        let mut size = 0usize;
-        let mut wrong = 0usize;
-        if !mi_verify_padding(page, block, &mut size, &mut wrong) {
-            _mi_error_message_fmt(
-                Errno::EFAULT,
-                format_args!(
-                    "buffer overflow in theap block {block:p} of size {size}: write after {wrong} bytes\n"
-                ),
-            );
-        }
+    let mut size = 0usize;
+    let mut wrong = 0usize;
+    // SAFETY: the caller supplies the matching live page and allocated block,
+    // and keeps their padding metadata and checked trailing bytes stable.
+    let valid = unsafe { mi_verify_padding(page, block, &mut size, &mut wrong) };
+    if !valid {
+        _mi_error_message_fmt(
+            Errno::EFAULT,
+            format_args!(
+                "buffer overflow in theap block {block:p} of size {size}: write after {wrong} bytes\n"
+            ),
+        );
     }
 }
 

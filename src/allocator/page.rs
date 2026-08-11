@@ -1568,35 +1568,57 @@ unsafe fn mi_huge_page_alloc_typed(
 }
 
 #[inline(always)]
+/// Select an available page for a validated padded allocation request.
+///
+/// # Safety
+/// `theap` must remain the live current-thread heap, with exclusive access to
+/// its local direct cache, page queues, free lists, random state, and statistics
+/// while protocol atomic remote-free publication and abandoned-page claims may
+/// proceed. `size` must be the exact nonzero padded size for the request and
+/// `huge_alignment` its validated optional huge alignment. The heap's TLD and
+/// subprocess association, queue links and page metadata, arena/page-map
+/// registries, backing allocations, and initialized OS configuration must remain
+/// live and stable against teardown, relinking, or non-protocol mutation.
+/// Registered diagnostic, release, purge, and commit callbacks and their opaque
+/// arguments must remain valid for synchronous invocation, must not unwind, and
+/// must not incompatibly reenter mutation of the participating heap, queue,
+/// page, arena, or backing.
 unsafe fn mi_find_page_typed(
     theap: crate::core_types::ThreadHeapLocal,
     size: crate::core_types::PaddedSize,
     huge_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<crate::core_types::AvailablePage> {
-    // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
-    unsafe {
-        let req_size = size.get().wrapping_sub(MI_PADDING_SIZE);
-        if req_size > MI_MAX_ALLOC_SIZE {
-            _mi_error_message_fmt(
-                Errno::EOVERFLOW,
-                format_args!("allocation request is too large ({req_size} bytes)\n"),
-            );
-            return None;
-        }
+    let req_size = size.get().wrapping_sub(MI_PADDING_SIZE);
+    if req_size > MI_MAX_ALLOC_SIZE {
+        _mi_error_message_fmt(
+            Errno::EOVERFLOW,
+            format_args!("allocation request is too large ({req_size} bytes)\n"),
+        );
+        return None;
+    }
 
-        let queue_block_size = if huge_alignment.get() > 0 {
-            MI_LARGE_MAX_OBJ_SIZE + 1
-        } else {
-            size.get()
-        };
-        let pq = mi_page_queue(
+    let queue_block_size = if huge_alignment.get() > 0 {
+        MI_LARGE_MAX_OBJ_SIZE + 1
+    } else {
+        size.get()
+    };
+    // SAFETY: the caller keeps the live current-thread heap and its queue array
+    // stable; `size` is nonzero and the huge-bin selector is also nonzero, so
+    // the block-size materialization and nonnull queue projection/classification
+    // are valid for reuse by exactly one selected branch below.
+    let (pq, is_huge) = unsafe {
+        let pq = crate::core_types::PageQueuePtr::new_unchecked(mi_page_queue(
             theap.ptr().as_ptr(),
             crate::core_types::BlockSize::new_unchecked(queue_block_size),
-        );
-        if mi_page_queue_is_huge(pq) || req_size > MI_MAX_ALLOC_SIZE {
-            let Some(queue) = crate::core_types::HugePageQueue::new(
-                crate::core_types::PageQueuePtr::new_unchecked(pq),
-            ) else {
+        ));
+        (pq, mi_page_queue_is_huge(pq.as_ptr()))
+    };
+    if is_huge || req_size > MI_MAX_ALLOC_SIZE {
+        // SAFETY: queue lookup selected the live huge queue for this heap. The
+        // caller keeps OS configuration, heap/arena registries, backing, stats,
+        // and synchronous callbacks valid through size rounding and allocation.
+        unsafe {
+            let Some(queue) = crate::core_types::HugePageQueue::new(pq) else {
                 crate::internal::mi_assert_internal!(false);
                 return None;
             };
@@ -1606,10 +1628,13 @@ unsafe fn mi_find_page_typed(
                 crate::core_types::Zeroed::No,
             );
             mi_huge_page_alloc_typed(theap, layout, huge_alignment, queue)
-        } else {
-            let Some(queue) = crate::core_types::NormalPageQueue::new(
-                crate::core_types::PageQueuePtr::new_unchecked(pq),
-            ) else {
+        }
+    } else {
+        // SAFETY: queue lookup selected a live ordinary size-class queue owned
+        // by `theap`; its metadata and linked pages remain stable under the
+        // caller's exclusive local allocation epoch through the page search.
+        unsafe {
+            let Some(queue) = crate::core_types::NormalPageQueue::new(pq) else {
                 crate::internal::mi_assert_internal!(false);
                 return None;
             };

@@ -21,7 +21,7 @@ use crate::allocator::page_map::{
 use crate::allocator::stats::{
     MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_OTHER, MI_CBIN_SMALL,
 };
-use crate::allocator::thread_heap::{_mi_heap_area_init, _mi_theap_area_visit_blocks};
+use crate::allocator::thread_heap::{_mi_theap_area_visit_blocks, heap_area_for_page};
 use crate::allocator::tracking::{mi_track_mem_defined, mi_track_mem_undefined};
 use crate::atomic::{mi_atomic_guard_t, mi_lock_acquire, mi_lock_release};
 use crate::bitmap::{

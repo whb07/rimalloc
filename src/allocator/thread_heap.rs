@@ -18,16 +18,15 @@ use crate::allocator::page::{
 use crate::allocator::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
 use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::core_types::{
-    Bin, BlockVisitCallback, BlockVisitCallbackArg, BorrowedHeap, Errno, HeapPtr, PagePtr,
-    PageQueuePtr, ThreadHeapLocal, ThreadHeapPtr, ThreadHeapState, TldPtr,
+    Bin, BlockVisitCallback, BlockVisitCallbackArg, BorrowedHeap, Errno, HeapPtr, PageBlockLayout,
+    PagePtr, PageQueuePtr, ThreadHeapLocal, ThreadHeapPtr, ThreadHeapState, TldPtr,
 };
 use crate::internal::memid::mi_memid_t;
 use crate::internal::{
     _mi_align_up, _mi_arenas_alloc, _mi_arenas_free, _mi_deferred_free, _mi_divide_up,
     _mi_is_heap_main, _mi_memcpy_aligned, _mi_meta_free, _mi_meta_zalloc, _mi_subproc,
     _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_page_all_free,
-    mi_page_block_size, mi_page_block_size_typed, mi_page_heap, mi_page_start,
-    mi_page_usable_block_size, mi_theap_is_initialized,
+    mi_page_block_size, mi_page_heap, mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::mimalloc::mi_free;
 use crate::prim::{__mi_theap_empty, _mi_theap_default};
@@ -153,41 +152,30 @@ type mi_visit_blocks_args_t = mi_visit_blocks_args_s;
 
 /// # Safety
 ///
-/// `area` must point to writable heap-area storage and `page` must point to a
-/// valid page owned by this allocator.
-// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_heap_area_init(
-    area: *mut mi_heap_area_t,
-    page: *mut mi_page_t,
-) {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    let page = unsafe { PagePtr::new_unchecked(page) };
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    let heap = unsafe { HeapPtr::new_unchecked(mi_page_heap(page.as_ptr())) };
-    unsafe { mi_heap_area_init_typed(area, heap, page) };
-}
+/// `page` must have initialized geometry and count metadata that remain stable
+/// during construction. The page metadata and block backing must remain live,
+/// and its geometry must remain stable, for every use of the returned value or
+/// any pointer carried in it. The value itself does not extend either lifetime
+/// or grant access to the block backing.
+pub(crate) unsafe fn heap_area_for_page(page: PagePtr) -> Option<mi_heap_area_t> {
+    // SAFETY: the caller keeps all page geometry stable for this snapshot.
+    let layout = unsafe { PageBlockLayout::from_current_page(page) }?;
+    let page_area = layout.area();
+    let block_size = layout.block_size();
+    // SAFETY: the caller also proves initialized, stable page counts.
+    let (capacity, used) = unsafe { (page.capacity(), page.used()) };
+    let committed = block_size.get().checked_mul(capacity.as_usize())?;
+    let full_block_size = crate::core_types::FullBlockSize::from_block_size(block_size);
 
-unsafe fn mi_heap_area_init_typed(area: *mut mi_heap_area_t, heap: HeapPtr, page: PagePtr) {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    unsafe {
-        crate::internal::MI_UNUSED(&heap);
-        let page = page.as_ptr();
-        let full_bsize =
-            crate::core_types::FullBlockSize::from_block_size(mi_page_block_size_typed(page));
-        let bsize = full_bsize.get();
-        let ubsize = mi_page_usable_block_size(page);
-        let reserved = crate::allocator::page::mi_page_reserved_count(page);
-        let capacity = crate::allocator::page::mi_page_capacity_count(page);
-        let used = crate::allocator::page::mi_page_used_count(page);
-        (*area).reserved = reserved.as_usize() * bsize;
-        (*area).committed = capacity.as_usize() * bsize;
-        (*area).blocks = mi_page_start(page).cast::<c_void>();
-        (*area).used = used.as_usize();
-        (*area).block_size = ubsize.get();
-        (*area).full_block_size = full_bsize.get();
-        (*area).reserved1 = page.cast::<c_void>();
-    }
+    Some(mi_heap_area_t {
+        blocks: page_area.start().as_ptr().cast(),
+        reserved: page_area.byte_len(),
+        committed,
+        used: used.as_usize(),
+        block_size: block_size.usable().get(),
+        full_block_size: full_block_size.get(),
+        reserved1: page.as_ptr().cast(),
+    })
 }
 
 unsafe fn mi_get_fast_divisor(divisor: usize, magic: *mut u64, shift: *mut usize) {
@@ -397,12 +385,16 @@ unsafe fn mi_theap_visit_areas_page_typed(
     // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_theap(page.as_ptr()) == theap.as_ptr());
-        let page = page.as_ptr();
-        let mut xarea = mi_theap_area_ex_t {
-            page,
-            ..mi_theap_area_ex_t::default()
+        // SAFETY: page traversal keeps the page metadata and block backing
+        // live, with stable geometry, through the callback invocation below.
+        let Some(area) = heap_area_for_page(page) else {
+            crate::internal::mi_assert_internal!(false);
+            return false;
         };
-        _mi_heap_area_init(ptr::addr_of_mut!(xarea.area), page);
+        let xarea = mi_theap_area_ex_t {
+            area,
+            page: page.as_ptr(),
+        };
         visitor.invoke(theap, ptr::addr_of!(xarea), arg)
     }
 }
@@ -1295,5 +1287,63 @@ unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: 
         _mi_theap_collect_abandon(theap_raw);
         crate::internal::mi_assert_internal!((*theap_raw).page_count == 0);
         _mi_theap_free(theap_raw, true, acquire_tld_theaps_lock);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::mi_block_t;
+    use core::mem::{MaybeUninit, align_of};
+
+    #[test]
+    fn heap_area_for_page_preserves_all_callback_fields() {
+        let mut blocks = [MaybeUninit::<mi_block_t>::uninit(); 8];
+        let mut raw_page = MaybeUninit::<mi_page_t>::zeroed();
+        let full_block_size = 2 * size_of::<mi_block_t>();
+
+        // SAFETY: the fixture initializes every page geometry/count field read
+        // by the projection, and its complete block backing remains live.
+        unsafe {
+            let raw = raw_page.as_mut_ptr();
+            ptr::addr_of_mut!((*raw).page_start).write(blocks.as_mut_ptr().cast());
+            ptr::addr_of_mut!((*raw).block_size).write(full_block_size);
+            ptr::addr_of_mut!((*raw).reserved).write(4);
+            ptr::addr_of_mut!((*raw).capacity).write(2);
+            ptr::addr_of_mut!((*raw).used).write(1);
+            let page = PagePtr::new_unchecked(raw);
+            let area = heap_area_for_page(page).expect("valid page projects a heap area");
+
+            assert_eq!(area.blocks, blocks.as_mut_ptr().cast());
+            assert_eq!(area.reserved, 4 * full_block_size);
+            assert_eq!(area.committed, 2 * full_block_size);
+            assert_eq!(area.used, 1);
+            assert_eq!(
+                area.block_size,
+                full_block_size - crate::types::MI_PADDING_SIZE
+            );
+            assert_eq!(area.full_block_size, full_block_size);
+            assert_eq!(area.reserved1, raw.cast());
+        }
+    }
+
+    #[test]
+    fn heap_area_for_page_rejects_overflowing_geometry() {
+        let mut raw_page = MaybeUninit::<mi_page_t>::zeroed();
+        let alignment = align_of::<mi_block_t>();
+        let overflowing_block_size = usize::MAX - (usize::MAX % alignment);
+
+        // SAFETY: PageBlockLayout is geometry-only and rejects the overflowing
+        // reserved-byte product before deriving or accessing block storage.
+        unsafe {
+            let raw = raw_page.as_mut_ptr();
+            ptr::addr_of_mut!((*raw).page_start)
+                .write(ptr::without_provenance_mut::<u8>(alignment));
+            ptr::addr_of_mut!((*raw).block_size).write(overflowing_block_size);
+            ptr::addr_of_mut!((*raw).reserved).write(2);
+            ptr::addr_of_mut!((*raw).capacity).write(0);
+            ptr::addr_of_mut!((*raw).used).write(0);
+            assert!(heap_area_for_page(PagePtr::new_unchecked(raw)).is_none());
+        }
     }
 }

@@ -24,12 +24,18 @@ struct mi_heap_delete_visit_info_t {
 }
 
 unsafe fn mi_heap_visit_page(page: PagePtr, vinfo: *mut mi_heap_visit_info_t) -> bool {
-    let page = page.as_ptr();
-    let mut area = mi_heap_area_t::default();
-    // SAFETY: `PagePtr` proves `page` is live
-    // page metadata, and `vinfo` is the callback state owned by the visitor.
-    unsafe { _mi_heap_area_init(ptr::addr_of_mut!(area), page) };
-    crate::internal::mi_assert_internal!(unsafe { (*vinfo).heap.as_ptr() == mi_page_heap(page) });
+    // SAFETY: the page visitor keeps this page's initialized geometry and
+    // counts stable while projecting the callback value, and keeps its page
+    // metadata and block backing live with stable geometry through both
+    // callback invocations below.
+    let Some(area) = (unsafe { heap_area_for_page(page) }) else {
+        crate::internal::mi_assert_internal!(false);
+        return false;
+    };
+    let page_raw = page.as_ptr();
+    crate::internal::mi_assert_internal!(unsafe {
+        (*vinfo).heap.as_ptr() == mi_page_heap(page_raw)
+    });
     if !unsafe {
         (*vinfo).visitor.invoke(
             (*vinfo).heap,
@@ -45,7 +51,12 @@ unsafe fn mi_heap_visit_page(page: PagePtr, vinfo: *mut mi_heap_visit_info_t) ->
     // above and the visitor callback is the caller-provided C ABI callback.
     if unsafe { (*vinfo).visit_blocks } {
         unsafe {
-            _mi_theap_area_visit_blocks(ptr::addr_of!(area), page, (*vinfo).visitor, (*vinfo).arg)
+            _mi_theap_area_visit_blocks(
+                ptr::addr_of!(area),
+                page_raw,
+                (*vinfo).visitor,
+                (*vinfo).arg,
+            )
         }
     } else {
         true

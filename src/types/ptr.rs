@@ -1135,20 +1135,38 @@ impl PageBlockLayout {
     /// allocation. Concurrent mutation or teardown must be excluded while the
     /// snapshot and pointers derived from it are used.
     #[inline(always)]
-    pub(crate) unsafe fn from_page(page: PagePtr, expected: BlockSize) -> Option<Self> {
+    pub(crate) unsafe fn from_current_page(page: PagePtr) -> Option<Self> {
         // SAFETY: the caller proves all three page geometry fields are
         // initialized and stable for this snapshot.
         let (start, block_size, reserved) =
             unsafe { (page.start(), page.block_size(), page.reserved()) };
-        if block_size != expected {
+        Self::from_parts(start, block_size, reserved)
+    }
+
+    /// # Safety
+    /// `page` must refer to live initialized page metadata whose non-null block
+    /// start, block size, and reserved count describe the current backing
+    /// allocation. Concurrent mutation or teardown must be excluded while the
+    /// snapshot and pointers derived from it are used.
+    #[inline(always)]
+    pub(crate) unsafe fn from_page(page: PagePtr, expected: BlockSize) -> Option<Self> {
+        // SAFETY: the caller provides the live, stable page geometry required
+        // by the delegated snapshot constructor.
+        let layout = unsafe { Self::from_current_page(page) }?;
+        if layout.block_size != expected {
             return None;
         }
-        Self::from_parts(start, block_size, reserved)
+        Some(layout)
     }
 
     #[inline(always)]
     pub(crate) fn area(self) -> PageArea {
         self.area
+    }
+
+    #[inline(always)]
+    pub(crate) fn block_size(self) -> BlockSize {
+        self.block_size
     }
 
     #[inline(always)]

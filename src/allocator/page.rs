@@ -1083,14 +1083,29 @@ unsafe fn mi_page_fresh_typed(
 }
 
 #[inline(never)]
-pub(crate) unsafe fn try_reclaim_abandoned(
+/// # Safety
+/// `page_wrapper` must carry the caller's active ownership claim for a live initialized abandoned
+/// page that is detached from thread-owned queues and not concurrently claimed, destroyed, or
+/// non-protocol mutated. Its slice/block geometry, backing, encoded keys, and abandoned/local/
+/// remote free-list metadata must remain stable; protocol atomic remote-free publication is
+/// permitted. `target` must remain the live current-thread heap selected to receive the page, with
+/// exclusive mutation of its local queues, page association, free lists, and statistics and no
+/// concurrent teardown or relinking. The target queue derived from the page block size must remain
+/// live and belong to `target`. Any registered diagnostic callback reached while collecting lists
+/// must remain valid for synchronous invocation and must not unwind. This call consumes the owned-
+/// abandoned transition, reassigns the owner, publishes the page in the target normal queue, and
+/// returns the resulting active-page witness.
+pub(crate) unsafe fn _mi_theap_page_reclaim(
     page_wrapper: crate::core_types::OwnedAbandonedPage,
     target: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::ActivePage {
-    // SAFETY: abandoned-page reclaim reattaches pages to target thread-heap queues.
-    unsafe {
-        let page = page_wrapper.page().as_ptr();
-        let theap = target.ptr().as_ptr();
+    let page = page_wrapper.page().as_ptr();
+    let theap = target.ptr().as_ptr();
+    // SAFETY: the caller supplies the live exclusively claimed abandoned page, stable geometry and
+    // free-list metadata, plus the live current-thread target with exclusive queue mutation. This
+    // coherent epoch validates the claim/geometry, reassigns ownership, collects protocol remote
+    // frees, derives the target queue, and consumes the claim into its sole queue publication.
+    let queued = unsafe {
         crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
             mi_page_slice_start(page).cast(),
             MI_PAGE_ALIGN,
@@ -1104,41 +1119,16 @@ pub(crate) unsafe fn try_reclaim_abandoned(
         collect_page_free_lists_abandoned(&page_wrapper, false);
         let pq = mi_theap_page_queue_of(theap, page);
         let queued = mi_page_queue_push_at_end_typed(
-            crate::core_types::ThreadHeapLocal::new_unchecked(
-                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-            ),
+            target,
             crate::core_types::NormalPageQueue::new_unchecked(
                 crate::core_types::PageQueuePtr::new_unchecked(pq),
             ),
             page_wrapper.into_reclaimed(target),
         );
-        crate::internal::mi_assert_expensive!(_mi_page_is_valid(page));
-        queued.into_active()
-    }
-}
-
-#[inline(never)]
-pub(crate) unsafe fn _mi_theap_page_reclaim(
-    page: crate::core_types::OwnedAbandonedPage,
-    target: crate::core_types::ThreadHeapLocal,
-) -> crate::core_types::ActivePage {
-    // SAFETY: abandoned-page reclaim reattaches pages to target thread-heap queues.
-    unsafe { try_reclaim_abandoned(page, target) }
-}
-
-/// # Safety
-/// C-ABI-shaped keep boundary for page reclaim. The caller must ensure `theap`
-/// and `page` are valid, and that `page` is an owned abandoned page.
-// SAFETY: abandoned-page reclaim reattaches pages to target thread-heap queues.
-#[inline(never)]
-unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mut mi_page_t) {
-    unsafe {
-        let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
-        let wrapper = crate::core_types::assume_owned_abandoned_page(page_ptr);
-        let theap_ptr = crate::core_types::ThreadHeapPtr::new_unchecked(theap);
-        let theap_wrapper = crate::core_types::ThreadHeapLocal::new_unchecked(theap_ptr);
-        let _ = _mi_theap_page_reclaim(wrapper, theap_wrapper);
-    }
+        crate::internal::mi_assert_expensive!(_mi_page_is_valid(queued.page().as_ptr()));
+        queued
+    };
+    queued.into_active()
 }
 
 /// # Safety

@@ -55,6 +55,7 @@ RAW_BRIDGE_CALLERS = {
         "src/allocator/page.rs",
         "src/allocator/thread_heap.rs",
     },
+    "assume_retired_page": {"src/allocator/page.rs"},
     "assume_all_free_abandoned": {"src/allocator/arena.rs"},
     "assume_full_page": {
         "src/allocator/arena.rs",
@@ -92,7 +93,7 @@ RAW_BRIDGE_CALLERS = {
     "assume_destroyed_after_arena_free": {"src/allocator/arena.rs"},
 }
 RAW_BRIDGE_CALL_RE = re.compile(
-    r"\b(?P<name>assume_(?:uninit_page|active_page|all_free_abandoned|full_page|"
+    r"\b(?P<name>assume_(?:uninit_page|active_page|retired_page|all_free_abandoned|full_page|"
     r"local_page|foreign_page|abandoned_page|owned_abandoned_page|"
     r"mapped_after_reabandon|destroyed_after_arena_free))\s*\("
 )

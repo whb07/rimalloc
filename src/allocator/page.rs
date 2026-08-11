@@ -438,8 +438,19 @@ pub(crate) unsafe fn _mi_page_retire_internal(
     }
 }
 
-// SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.
+/// # Safety
+/// `theap` must be nonnull and identify a live initialized current-thread heap. The caller must
+/// exclusively own its local page queues, retirement countdowns, and retirement-bound fields; the
+/// stored bounds must be the empty sentinel or a bounded normal-bin interval. Queue heads, queued
+/// page metadata, backing, owner association, and TLD/arena state must remain live and stable.
+/// Protocol atomic remote-free publication is permitted, but queue relinking, non-protocol page
+/// mutation, and heap/page/TLD/arena teardown must not race this collection. Any release or purge
+/// callback reached while freeing an expired page and its opaque argument must remain valid for
+/// synchronous invocation, must not incompatibly reenter and mutate this heap or its queues, and
+/// must not unwind.
 pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool) {
+    // SAFETY: the caller supplies the nonnull live current-thread heap and exclusive retired-queue
+    // epoch required to construct the local witness and synchronously delegate collection.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -449,50 +460,78 @@ pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t
 }
 
 #[inline]
+/// # Safety
+/// `theap` must remain the live current-thread heap with exclusive mutation of its local queues,
+/// retirement countdowns, and bounded retirement min/max fields. Each nonempty retired-bin head
+/// and its page metadata, owner association, keys, geometry, and backing must remain live and
+/// stable until that bin is processed. Protocol atomic remote-free publication is permitted, but
+/// queue relinking, non-protocol page mutation, and heap/page/TLD/arena teardown must not race the
+/// scan. Release and purge callbacks reached by terminal page freeing must remain valid for
+/// synchronous invocation, must not incompatibly reenter and mutate this heap or queues, and must
+/// not unwind. An expired page consumed by terminal release must not be accessed afterward.
 unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLocal, force: bool) {
-    // SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.
-    unsafe {
-        let theap_ptr = theap.ptr();
-        let theap = theap_ptr.as_ptr();
-        let mut min = MI_BIN_FULL;
-        let mut max = 0usize;
-        for bin in (*theap).page_retired_min..=(*theap).page_retired_max {
+    let theap_ptr = theap.ptr();
+    let theap_raw = theap_ptr.as_ptr();
+    // SAFETY: the caller keeps the live current-thread heap stable and exclusively owns its
+    // initialized retirement bounds while they are snapshotted for this scan.
+    let (retired_min, retired_max) =
+        unsafe { ((*theap_raw).page_retired_min, (*theap_raw).page_retired_max) };
+    crate::internal::mi_assert_internal!(retired_min <= MI_BIN_FULL);
+    crate::internal::mi_assert_internal!(retired_max < MI_BIN_FULL);
+
+    let mut min = MI_BIN_FULL;
+    let mut max = 0usize;
+    for bin in retired_min..=retired_max {
+        // SAFETY: the bounded bin belongs to the caller-owned live heap. Its queue head and any
+        // retired page remain stable for this coherent countdown/reset-or-terminal-free epoch.
+        // A terminal free consumes the page and this block returns without accessing it again.
+        let remains_retired = unsafe {
             let queue_ptr = theap_ptr.page_queue(Bin::new_unchecked(bin as u16));
-            let pq = queue_ptr.as_ptr();
-            let page = queue_ptr
-                .first()
-                .map(PagePtr::as_ptr)
-                .unwrap_or(ptr::null_mut());
-            if !page.is_null() && !mi_page_retire_expire(page).is_zero() {
+            let Some(page_ptr) = queue_ptr.first() else {
+                continue;
+            };
+            let page = page_ptr.as_ptr();
+            if mi_page_retire_expire(page).is_zero() {
+                false
+            } else {
+                let retired = crate::core_types::assume_retired_page(page_ptr);
                 if mi_page_all_free(page) {
                     let expire = mi_page_decrement_retire_expire(page);
                     if expire.is_zero() || force {
-                        let active = crate::core_types::assume_active_page(
-                            crate::core_types::PagePtr::new_unchecked(page),
-                        );
-                        let Ok(all_free) = active.try_mark_all_free() else {
+                        if !expire.is_zero() {
+                            mi_page_reset_retire_expire(page);
+                        }
+                        let active = retired.into_active_after_countdown_cleared();
+                        if let Ok(all_free) = active.try_mark_all_free() {
+                            let queue =
+                                crate::core_types::NormalPageQueue::new_unchecked(queue_ptr);
+                            let _ = _mi_page_free_active_internal(all_free, queue);
+                        } else {
                             crate::internal::mi_assert_internal!(false);
-                            continue;
-                        };
-                        let queue = crate::core_types::NormalPageQueue::new_unchecked(
-                            crate::core_types::PageQueuePtr::new_unchecked(pq),
-                        );
-                        let _ = _mi_page_free_active_internal(all_free, queue);
+                        }
+                        false
                     } else {
-                        if bin < min {
-                            min = bin;
-                        }
-                        if bin > max {
-                            max = bin;
-                        }
+                        true
                     }
                 } else {
                     mi_page_reset_retire_expire(page);
+                    let _ = retired.into_active_after_countdown_cleared();
+                    false
                 }
             }
+        };
+
+        if remains_retired {
+            min = min.min(bin);
+            max = max.max(bin);
         }
-        (*theap).page_retired_min = min;
-        (*theap).page_retired_max = max;
+    }
+
+    // SAFETY: the caller exclusively owns these live heap fields. All page epochs are complete, so
+    // publishing the recomputed bounded range cannot access any page released during the scan.
+    unsafe {
+        (*theap_raw).page_retired_min = min;
+        (*theap_raw).page_retired_max = max;
     }
 }
 

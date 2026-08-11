@@ -276,18 +276,25 @@ fn direct_available_page_decodes_sentinel_and_free_head_states() {
 
 #[test]
 fn all_free_and_retire_preserve_page_identity() {
-    // SAFETY: the stack-local page is
-    // initialized with the exact `used` counts needed to exercise all-free,
-    // and retired witness transitions.
-    with_page(0, |page| unsafe {
+    let flags = PageFlags::new(0).expect("zero page flags are valid");
+    let current = ThreadId::new(crate::prim::_mi_prim_thread_id())
+        .expect("platform current-thread id is nonzero and unflagged");
+    let owner = PageThreadId::from_parts(PageOwnerId::Thread(current), flags).raw();
+    // SAFETY: the stack-local page is current-thread owned and initialized with the exact used and
+    // countdown states needed to exercise all-free, retired, and countdown-cleared transitions.
+    with_page(owner, |page| unsafe {
         ptr::addr_of_mut!((*page.as_ptr()).used).write(0);
         let active = ActivePage::new_unchecked(page);
         let all_free = active.try_mark_all_free().expect("used == 0");
         let retired = all_free.into_retired();
         assert_eq!(retired.page().as_ptr(), page.as_ptr());
+        ptr::addr_of_mut!((*page.as_ptr()).retire_expire).write(1);
+        ptr::addr_of_mut!((*page.as_ptr()).retire_expire).write(0);
+        let active = retired.into_active_after_countdown_cleared();
+        assert_eq!(active.page().as_ptr(), page.as_ptr());
 
         ptr::addr_of_mut!((*page.as_ptr()).used).write(1);
-        let active = ActivePage::new_unchecked(page)
+        let active = active
             .try_mark_all_free()
             .expect_err("used page remains active");
         assert_eq!(active.page().as_ptr(), page.as_ptr());

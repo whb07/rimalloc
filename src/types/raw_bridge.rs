@@ -6,7 +6,7 @@
 //! instead of returning through this module. These helpers inspect no metadata
 //! and perform no mutation; each caller establishes the stated invariant.
 
-use super::page_states::Abandoned;
+use super::page_states::{Abandoned, RetiredPage};
 use super::{
     AbandonedMappedPageType, AbandonedPage, ActivePage, AllFreePage, DestroyedPage, ForeignPage,
     FullPage, LocalPage, OwnedAbandonedPage, Page, PagePtr, Uninit,
@@ -42,6 +42,12 @@ raw_page_bridge!(
     ActivePage,
     "SAFETY",
     "`page` must be initialized, locally owned, active, and not full. Legal callers: C-shaped allocation/page entry points, initialization, and queue lookup."
+);
+raw_page_bridge!(
+    assume_retired_page,
+    RetiredPage,
+    "SAFETY",
+    "`page` must be a live initialized current-thread page linked at the head of its stable normal queue with a nonzero retirement countdown. Legal caller: retired-bin collection."
 );
 
 /// # Safety

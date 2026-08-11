@@ -445,6 +445,21 @@ impl AllFreePage<Active> {
     }
 }
 
+impl RetiredPage {
+    /// Leave the retired state after its countdown has been cleared.
+    ///
+    /// # Safety
+    /// This page must remain live, initialized, locally owned, and not full. Its retirement
+    /// countdown must already be zero, and the caller must exclusively own the countdown/state
+    /// transition while preventing queue relink or teardown.
+    #[inline(always)]
+    pub(crate) unsafe fn into_active_after_countdown_cleared(self) -> ActivePage {
+        // SAFETY: the caller has completed the external countdown-clear mutation; consuming the
+        // retired witness leaves exactly one active capability for the same live queued page.
+        unsafe { ActivePage::new_unchecked(self.page()) }
+    }
+}
+
 impl AbandonedPageType {
     /// Atomically refine an abandoned-page witness into temporary ownership.
     /// The consumed abandoned witness carries the live atomic-field protocol.

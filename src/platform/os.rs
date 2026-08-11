@@ -15,8 +15,8 @@ use crate::allocator::stats::{_mi_clock_end, _mi_clock_start, mi_stats_t};
 use crate::atomic::mi_lock_t;
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB};
 use crate::core_types::{
-    BorrowedSubproc, CommittedBytes, InitiallyCommitted, InitiallyZero, MemId, MemIdView, OsMemId,
-    OsMemKind, OsMemPtr, OsPageSize, Pinned, ReservedBytes, SubprocPtr, ptr_exposed_addr,
+    BorrowedSubproc, CommittedBytes, MemId, MemIdView, OsMemId, OsMemKind, OsMemPtr, OsPageSize,
+    ReservedBytes, SubprocPtr, ptr_exposed_addr,
 };
 use crate::internal::memid::{_mi_memid_none, mi_memid_t};
 use crate::internal::{
@@ -754,26 +754,27 @@ pub unsafe extern "C" fn _mi_os_unprotect(addr: *mut c_void, size: usize) -> boo
     unsafe { mi_os_protectx(addr, size, false) }
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// # Safety
+/// When present, `addr..addr+size` must be a primitive OS range that may be
+/// released. The OS configuration must be initialized, `size` must be page
+/// aligned, `commit_size` must match the committed accounting for the range,
+/// and `subproc` must remain live when supplied.
 #[inline]
-unsafe fn mi_os_prim_free(
-    memid: OsMemId,
+unsafe fn mi_os_prim_free_range(
+    addr: Option<NonNull<c_void>>,
+    size: ReservedBytes,
     commit_size: CommittedBytes,
     subproc: Option<BorrowedSubproc>,
 ) {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY: the caller preserves the primitive range and accounting contracts above.
     unsafe {
-        let size = memid.size;
         crate::internal::mi_assert_internal!(
             size.get().is_multiple_of(_mi_os_page_size_typed().get())
         );
-        let Some(addr) = memid.base else {
+        let Some(addr) = addr else {
             return;
         };
         let addr = addr.as_ptr();
-        if addr.is_null() {
-            return;
-        }
         let err = _mi_prim_free(addr, size.get());
         if err != 0 {
             _mi_warning_message_fmt(format_args!(
@@ -921,7 +922,8 @@ unsafe fn _mi_os_free_ex_typed(
             unsafe { mi_os_free_huge_os_pages(Some(base), size, subproc) };
         }
         OsFreeBackingRange::Primitive { memid, committed } => {
-            unsafe { mi_os_prim_free(memid, committed, subproc) };
+            let addr = memid.base.and_then(|base| NonNull::new(base.as_ptr()));
+            unsafe { mi_os_prim_free_range(addr, memid.size, committed, subproc) };
         }
     }
 }
@@ -1083,7 +1085,14 @@ unsafe fn mi_os_alloc_aligned_memid(
     } else {
         if !p.is_null() {
             // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-            let _ = unsafe { _mi_prim_free(p, size) };
+            unsafe {
+                mi_os_prim_free_range(
+                    NonNull::new(p),
+                    ReservedBytes::new(size),
+                    CommittedBytes::new(if commit { size } else { 0 }),
+                    None,
+                )
+            };
         }
         if size >= usize::MAX - alignment {
             return (core::ptr::null_mut(), memid);
@@ -1112,7 +1121,14 @@ unsafe fn mi_os_alloc_aligned_memid(
 
             // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
             if commit && !unsafe { _mi_os_commit(p, size, core::ptr::null_mut()) } {
-                let _ = unsafe { _mi_prim_free(os_base, over_size) };
+                unsafe {
+                    mi_os_prim_free_range(
+                        NonNull::new(os_base),
+                        ReservedBytes::new(over_size),
+                        CommittedBytes::new(0),
+                        None,
+                    )
+                };
                 return (core::ptr::null_mut(), memid);
             }
         } else {
@@ -1138,12 +1154,26 @@ unsafe fn mi_os_alloc_aligned_memid(
             let post_size = over_size - pre_size - mid_size;
 
             if pre_size > 0 {
-                let _ = unsafe { _mi_prim_free(p, pre_size) };
+                unsafe {
+                    mi_os_prim_free_range(
+                        NonNull::new(p),
+                        ReservedBytes::new(pre_size),
+                        CommittedBytes::new(if commit { pre_size } else { 0 }),
+                        None,
+                    )
+                };
             }
             if post_size > 0 {
                 // SAFETY: over-reserve fallback preserves partial-free, commit, and trimmed range contracts.
                 let post = unsafe { aligned_p.cast::<u8>().add(mid_size) }.cast::<c_void>();
-                let _ = unsafe { _mi_prim_free(post, post_size) };
+                unsafe {
+                    mi_os_prim_free_range(
+                        NonNull::new(post),
+                        ReservedBytes::new(post_size),
+                        CommittedBytes::new(if commit { post_size } else { 0 }),
+                        None,
+                    )
+                };
             }
 
             p = aligned_p;
@@ -1405,15 +1435,12 @@ unsafe fn mi_os_free_huge_os_pages(
     while size >= MI_HUGE_OS_PAGE_SIZE {
         // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
         unsafe {
-            let memid = OsMemId {
-                base: OsMemPtr::new(base.cast::<c_void>()),
-                size: ReservedBytes::new(MI_HUGE_OS_PAGE_SIZE),
-                initially_committed: InitiallyCommitted(true),
-                initially_zero: InitiallyZero(false),
-                pinned: Pinned(true),
-                kind: OsMemKind::Huge,
-            };
-            mi_os_prim_free(memid, CommittedBytes::new(MI_HUGE_OS_PAGE_SIZE), subproc)
+            mi_os_prim_free_range(
+                NonNull::new(base.cast::<c_void>()),
+                ReservedBytes::new(MI_HUGE_OS_PAGE_SIZE),
+                CommittedBytes::new(MI_HUGE_OS_PAGE_SIZE),
+                subproc,
+            )
         };
         size -= MI_HUGE_OS_PAGE_SIZE;
         // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
@@ -1546,15 +1573,12 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
                         "could not allocate contiguous huge OS page {} at {:p}\n",
                         page, addr
                     ));
-                    let memid = OsMemId {
-                        base: OsMemPtr::new(p),
-                        size: ReservedBytes::new(MI_HUGE_OS_PAGE_SIZE),
-                        initially_committed: InitiallyCommitted(true),
-                        initially_zero: InitiallyZero(false),
-                        pinned: Pinned(true),
-                        kind: OsMemKind::Huge,
-                    };
-                    mi_os_prim_free(memid, CommittedBytes::new(MI_HUGE_OS_PAGE_SIZE), None);
+                    mi_os_prim_free_range(
+                        NonNull::new(p),
+                        ReservedBytes::new(MI_HUGE_OS_PAGE_SIZE),
+                        CommittedBytes::new(MI_HUGE_OS_PAGE_SIZE),
+                        None,
+                    );
                 }
                 break;
             }
@@ -1795,6 +1819,7 @@ mod tests {
     use core::mem::size_of;
 
     use super::*;
+    use crate::core_types::{InitiallyCommitted, InitiallyZero, Pinned};
 
     fn page_size(size: usize) -> OsPageSize {
         // SAFETY: every test page size is explicitly nonzero.

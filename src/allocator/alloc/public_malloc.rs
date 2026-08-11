@@ -7,16 +7,19 @@ use crate::prim::{_mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{mi_heap_t, mi_theap_t};
 
 use super::{
-    _mi_theap_malloc_zero, malloc_layout_or_report, mi_heap_malloc_small_typed,
-    mi_heap_malloc_typed, mi_heap_zalloc_small_typed, mi_theap_malloc_small_zero,
-    mi_theap_malloc_small_zero_typed, mi_theap_malloc_typed,
+    _mi_theap_malloc_zero, malloc_layout_or_report, mi_heap_borrowed_theap_local,
+    mi_heap_malloc_typed, mi_theap_malloc_small_zero, mi_theap_malloc_small_zero_typed,
+    mi_theap_malloc_typed,
 };
 
 /// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
+/// `size` must not exceed `MI_SMALL_SIZE_MAX`. A nonnull result is allocator-owned
+/// and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
+    // SAFETY: the caller-provided bound and allocator lifecycle keep the default
+    // heap's local queues, direct cache, free lists, and stats exclusively owned
+    // while the small allocation runs.
     unsafe {
         mi_theap_malloc_small_zero(
             _mi_theap_default(),
@@ -28,11 +31,14 @@ pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
 }
 
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// Returned memory must be released through this allocator.
-// SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
+/// `size` must not exceed `MI_SMALL_SIZE_MAX`. `theap` may be null only when lazy
+/// thread-heap initialization is enabled; otherwise it must be a live initialized
+/// current-thread heap, with exclusive access to its local allocation state. A
+/// nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
+    // SAFETY: the caller-provided bound and heap contract keep the selected
+    // current-thread allocation state exclusively owned through dispatch.
     unsafe {
         mi_theap_malloc_small_zero(
             theap,
@@ -44,16 +50,29 @@ pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usi
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
+/// `heap` must identify a live initialized heap owned by the current thread and
+/// remain stable without concurrent teardown. The caller must have exclusive
+/// mutation rights over its local allocation state; protocol atomic remote-free
+/// publication is permitted. `size` must not exceed `MI_SMALL_SIZE_MAX`. A
+/// nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
+    // SAFETY: the caller keeps the heap live and current-thread owned while it
+    // is classified, localized, and used for the bounded small allocation.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
         };
         let size = crate::core_types::RequestedSize::new(size);
-        mi_heap_malloc_small_typed(heap, size)
+        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
+            return ptr::null_mut();
+        };
+        mi_theap_malloc_small_zero_typed(
+            theap,
+            size,
+            crate::core_types::Zeroed::No,
+            ptr::null_mut(),
+        )
     }
 }
 
@@ -102,10 +121,13 @@ pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *m
 }
 
 /// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+/// `size` must not exceed `MI_SMALL_SIZE_MAX`. A nonnull result is allocator-owned
+/// and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
+    // SAFETY: the caller-provided bound and allocator lifecycle keep the default
+    // heap's local queues, direct cache, free lists, and stats exclusively owned
+    // while the zeroing small allocation runs.
     unsafe {
         mi_theap_malloc_small_zero(
             _mi_theap_default(),
@@ -117,11 +139,14 @@ pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
 }
 
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// Returned memory must be released through this allocator.
-// SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+/// `size` must not exceed `MI_SMALL_SIZE_MAX`. `theap` may be null only when lazy
+/// thread-heap initialization is enabled; otherwise it must be a live initialized
+/// current-thread heap, with exclusive access to its local allocation state. A
+/// nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
+    // SAFETY: the caller-provided bound and heap contract keep the selected
+    // current-thread allocation state exclusively owned through zeroing dispatch.
     unsafe {
         if theap.is_null() && MI_THEAP_INITASNULL {
             return mi_theap_malloc_small_zero(
@@ -144,15 +169,28 @@ pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usi
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+/// `heap` must identify a live initialized heap owned by the current thread and
+/// remain stable without concurrent teardown. The caller must have exclusive
+/// mutation rights over its local allocation state; protocol atomic remote-free
+/// publication is permitted. `size` must not exceed `MI_SMALL_SIZE_MAX`. A
+/// nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
+    // SAFETY: the caller keeps the heap live and current-thread owned while it
+    // is classified, localized, and used for the bounded zeroing allocation.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
         };
         let size = crate::core_types::RequestedSize::new(size);
-        mi_heap_zalloc_small_typed(heap, size)
+        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
+            return ptr::null_mut();
+        };
+        mi_theap_malloc_small_zero_typed(
+            theap,
+            size,
+            crate::core_types::Zeroed::Yes,
+            ptr::null_mut(),
+        )
     }
 }

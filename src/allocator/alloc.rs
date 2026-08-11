@@ -218,13 +218,24 @@ unsafe fn memset_nonhuge(
     }
 }
 
-unsafe fn mi_theap_malloc_small_zero_nonnull(
+/// # Safety
+/// `theap` must be a live current-thread heap whose TLD, page queues, and small
+/// page metadata remain initialized for this allocation. The caller must hold
+/// exclusive current-thread mutation rights over its direct-page cache, local
+/// page queues and free lists, and local statistics; protocol atomic remote-free
+/// publication is permitted. `size` must not exceed `MI_SMALL_SIZE_MAX`. If
+/// nonnull, `usable` must be aligned and uniquely writable for one `usize` for
+/// the duration of the call.
+unsafe fn mi_theap_malloc_small_zero_typed(
     theap: ThreadHeapLocal,
     size: crate::core_types::RequestedSize,
     zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY: the caller keeps the current-thread heap, its TLD, queues, and
+    // selected page metadata live and stable; the bounded requested size yields
+    // a fitting padded size, and `usable` satisfies its optional out-pointer
+    // contract throughout the allocation and tracking epoch.
     unsafe {
         let local_theap = theap;
         let theap = local_theap.ptr().as_ptr();
@@ -357,47 +368,24 @@ fn malloc_layout_or_report(size: usize, zero: bool) -> Option<crate::core_types:
     }
 }
 
-unsafe fn mi_theap_malloc_zero_req(
-    theap: *mut mi_theap_t,
-    layout: crate::core_types::LayoutRequest,
-    huge_alignment: crate::core_types::MaybeAlignment,
-    usable: *mut usize,
-) -> *mut c_void {
-    // SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
-    unsafe {
-        let requested = layout.requested();
-        let size = requested.get();
-        if size <= MI_SMALL_SIZE_MAX {
-            crate::internal::mi_assert_internal!(huge_alignment.get() == 0);
-            let Some(theap) = _mi_theap_or_default_typed(theap) else {
-                return ptr::null_mut();
-            };
-            mi_theap_malloc_small_zero_nonnull(
-                ThreadHeapLocal::new_unchecked(theap),
-                requested,
-                layout.zeroed(),
-                usable,
-            )
-        } else {
-            let flags = crate::core_types::MallocGenericFlags::new(
-                layout.zeroed(),
-                crate::core_types::MaybeHugeAlignment::new(huge_alignment.get()),
-            );
-            let Some(theap) = _mi_theap_or_default_typed(theap) else {
-                return ptr::null_mut();
-            };
-            mi_theap_malloc_generic(ThreadHeapLocal::new_unchecked(theap), layout, flags, usable)
-        }
-    }
-}
-
+/// # Safety
+/// Unless lazy null-thread-heap initialization is enabled and `theap` is null,
+/// `theap` must identify the current thread's live initialized heap. Its TLD,
+/// queues, and page metadata must remain live without teardown. The caller must
+/// have exclusive mutation rights over its direct-page cache, local page queues
+/// and free lists, and local statistics; protocol atomic remote-free publication
+/// is permitted. `size` must not exceed `MI_SMALL_SIZE_MAX`. If nonnull, `usable`
+/// must be aligned and uniquely writable for one `usize` for the duration of the
+/// call.
 unsafe fn mi_theap_malloc_small_zero(
     theap: *mut mi_theap_t,
     size: crate::core_types::RequestedSize,
     zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
+    // SAFETY: the caller supplies the current-thread heap epoch and optional
+    // writable output; lazy null initialization is completed before either the
+    // bounded small-page path or generic allocation path uses heap metadata.
     unsafe {
         if MI_THEAP_INITASNULL && !theap.is_null() {
             let Some(theap) = _mi_theap_or_default_typed(theap) else {
@@ -410,7 +398,34 @@ unsafe fn mi_theap_malloc_small_zero(
                 usable,
             )
         } else if MI_THEAP_INITASNULL {
-            mi_theap_malloc_zero_nonnull_lazy(theap, size, zeroed, no_alignment(), usable)
+            let layout = match zeroed {
+                crate::core_types::Zeroed::No => {
+                    crate::core_types::LayoutRequest::malloc(size.get())
+                }
+                crate::core_types::Zeroed::Yes => {
+                    crate::core_types::LayoutRequest::zalloc(size.get())
+                }
+            };
+            let Ok(layout) = layout else {
+                _mi_error_message_fmt(
+                    Errno::EOVERFLOW,
+                    format_args!("allocation request is too large ({} bytes)\n", size.get()),
+                );
+                return ptr::null_mut();
+            };
+            let Some(theap) = _mi_theap_or_default_typed(theap) else {
+                return ptr::null_mut();
+            };
+            let theap = ThreadHeapLocal::new_unchecked(theap);
+            if size.get() <= MI_SMALL_SIZE_MAX {
+                mi_theap_malloc_small_zero_typed(theap, size, zeroed, usable)
+            } else {
+                let flags = crate::core_types::MallocGenericFlags::new(
+                    zeroed,
+                    crate::core_types::MaybeHugeAlignment::new(0),
+                );
+                mi_theap_malloc_generic(theap, layout, flags, usable)
+            }
         } else {
             let Some(theap) = _mi_theap_or_default_typed(theap) else {
                 return ptr::null_mut();
@@ -425,66 +440,19 @@ unsafe fn mi_theap_malloc_small_zero(
     }
 }
 
-unsafe fn mi_theap_malloc_small_zero_typed(
-    theap: ThreadHeapLocal,
-    size: crate::core_types::RequestedSize,
-    zeroed: crate::core_types::Zeroed,
-    usable: *mut usize,
-) -> *mut c_void {
-    // SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
-    unsafe { mi_theap_malloc_small_zero_nonnull(theap, size, zeroed, usable) }
-}
-
+/// # Safety
+/// `heap` must identify a live initialized heap owned by the current thread. Its
+/// thread-heap association must remain stable without concurrent reassignment or
+/// teardown for the returned local witness's use.
 unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapLocal> {
+    // SAFETY: the caller keeps the heap and association live and current-thread
+    // owned while the raw thread heap is projected and classified.
     unsafe {
         let theap = _mi_heap_theap(heap.ptr().as_ptr());
         if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
             return None;
         }
         ThreadHeapPtr::new(theap).map(|theap| ThreadHeapLocal::new_unchecked(theap))
-    }
-}
-
-unsafe fn mi_heap_malloc_small_typed(
-    heap: BorrowedHeap,
-    size: crate::core_types::RequestedSize,
-) -> *mut c_void {
-    // SAFETY: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
-    unsafe {
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_malloc_small_zero_nonnull(
-            theap,
-            size,
-            crate::core_types::Zeroed::No,
-            ptr::null_mut(),
-        )
-    }
-}
-
-unsafe fn mi_theap_malloc_zero_nonnull_lazy(
-    theap: *mut mi_theap_t,
-    size: crate::core_types::RequestedSize,
-    zeroed: crate::core_types::Zeroed,
-    huge_alignment: crate::core_types::MaybeAlignment,
-    usable: *mut usize,
-) -> *mut c_void {
-    // SAFETY: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
-    unsafe {
-        let layout = match zeroed {
-            crate::core_types::Zeroed::No => crate::core_types::LayoutRequest::malloc(size.get()),
-            crate::core_types::Zeroed::Yes => crate::core_types::LayoutRequest::zalloc(size.get()),
-        };
-        if let Ok(layout) = layout {
-            mi_theap_malloc_zero_req(theap, layout, huge_alignment, usable)
-        } else {
-            _mi_error_message_fmt(
-                Errno::EOVERFLOW,
-                format_args!("allocation request is too large ({} bytes)\n", size.get()),
-            );
-            ptr::null_mut()
-        }
     }
 }
 
@@ -541,7 +509,7 @@ unsafe fn _mi_theap_malloc_zero_ex_typed(
         let size = requested.get();
         if size <= MI_SMALL_SIZE_MAX {
             crate::internal::mi_assert_internal!(huge_alignment.get() == 0);
-            mi_theap_malloc_small_zero_nonnull(theap, requested, layout.zeroed(), usable)
+            mi_theap_malloc_small_zero_typed(theap, requested, layout.zeroed(), usable)
         } else {
             let flags = crate::core_types::MallocGenericFlags::new(
                 layout.zeroed(),
@@ -605,24 +573,6 @@ unsafe fn mi_heap_malloc_typed(
     }
 }
 
-unsafe fn mi_heap_zalloc_small_typed(
-    heap: BorrowedHeap,
-    size: crate::core_types::RequestedSize,
-) -> *mut c_void {
-    // SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
-    unsafe {
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_malloc_small_zero_nonnull(
-            theap,
-            size,
-            crate::core_types::Zeroed::Yes,
-            ptr::null_mut(),
-        )
-    }
-}
-
 unsafe fn mi_theap_calloc_req(
     theap: ThreadHeapLocal,
     req: crate::core_types::CallocRequest,
@@ -669,10 +619,13 @@ fn alloc_product_or_report(count: usize, size: usize) -> Option<crate::core_type
 }
 
 /// # Safety
-/// If `usable` is non-null it must be writable for one `usize`.
-// SAFETY: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
+/// `size` must not exceed `MI_SMALL_SIZE_MAX`. If nonnull, `usable` must be
+/// aligned and uniquely writable for one `usize` throughout the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_umalloc_small(size: usize, usable: *mut usize) -> *mut c_void {
+    // SAFETY: the caller-provided bound/output contract and allocator lifecycle
+    // keep the default heap's local allocation state exclusively owned and the
+    // optional result slot writable through the small allocation.
     unsafe {
         mi_theap_malloc_small_zero(
             _mi_theap_default(),
@@ -684,10 +637,13 @@ pub unsafe extern "C" fn mi_umalloc_small(size: usize, usable: *mut usize) -> *m
 }
 
 /// # Safety
-/// If `usable` is non-null it must be writable for one `usize`.
-// SAFETY: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
+/// `size` must not exceed `MI_SMALL_SIZE_MAX`. If nonnull, `usable` must be
+/// aligned and uniquely writable for one `usize` throughout the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_uzalloc_small(size: usize, usable: *mut usize) -> *mut c_void {
+    // SAFETY: the caller-provided bound/output contract and allocator lifecycle
+    // keep the default heap's local allocation state exclusively owned and the
+    // optional result slot writable through the zeroing small allocation.
     unsafe {
         mi_theap_malloc_small_zero(
             _mi_theap_default(),

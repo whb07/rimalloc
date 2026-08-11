@@ -902,7 +902,7 @@ unsafe fn mi_process_init_inner() {
                 let heap = mi_heap_main();
                 if !heap.is_null() {
                     __mi_stat_increase_mt(
-                        &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads,
+                        ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
                         1,
                     );
                 }

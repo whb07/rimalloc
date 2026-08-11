@@ -564,8 +564,8 @@ pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
         }
         let subproc = _mi_subproc();
         if !subproc.is_null() {
-            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
-            __mi_stat_counter_increase_mt(ptr::addr_of_mut!(stats.commit_calls), 1);
+            let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
+            __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).commit_calls), 1);
         }
 
         let Some(range) =
@@ -589,8 +589,8 @@ pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
             *is_zero = true;
         }
         if !subproc.is_null() {
-            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
-            __mi_stat_increase_mt(ptr::addr_of_mut!(stats.committed), stat_size.get());
+            let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
+            __mi_stat_increase_mt(ptr::addr_of_mut!((*stats).committed), stat_size.get());
         }
         true
     }
@@ -638,8 +638,8 @@ unsafe fn mi_os_decommit_ex(
         } else if *needs_recommit {
             let subproc = _mi_subproc();
             if !subproc.is_null() {
-                let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
-                __mi_stat_decrease_mt(ptr::addr_of_mut!(stats.committed), stat_size.get());
+                let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
+                __mi_stat_decrease_mt(ptr::addr_of_mut!((*stats).committed), stat_size.get());
             }
         }
         crate::internal::mi_assert_internal!(err == 0);
@@ -671,9 +671,9 @@ pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
 
         let subproc = _mi_subproc();
         if !subproc.is_null() {
-            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
-            __mi_stat_counter_increase_mt(ptr::addr_of_mut!(stats.reset), csize);
-            __mi_stat_counter_increase_mt(ptr::addr_of_mut!(stats.reset_calls), 1);
+            let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
+            __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).reset), csize);
+            __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).reset_calls), 1);
         }
 
         if MI_DEBUG > 1 && MI_SECURE == 0 && MI_TRACK_ENABLED == 0 {
@@ -731,9 +731,9 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
         }
         let subproc = _mi_subproc();
         if !subproc.is_null() {
-            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
-            __mi_stat_counter_increase_mt(ptr::addr_of_mut!(stats.purge_calls), 1);
-            __mi_stat_counter_increase_mt(ptr::addr_of_mut!(stats.purged), size);
+            let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
+            __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).purge_calls), 1);
+            __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).purged), size);
         }
 
         if let Some(commit_fun) = commit_fun {
@@ -1041,14 +1041,14 @@ unsafe fn mi_os_prim_alloc_at(
 
         let subproc = _mi_subproc();
         if !subproc.is_null() {
-            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
-            __mi_stat_counter_increase_mt(ptr::addr_of_mut!(stats.mmap_calls), 1);
+            let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
+            __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).mmap_calls), 1);
             if !p.is_null() {
                 let reserved = ReservedBytes::new(size);
-                __mi_stat_increase_mt(ptr::addr_of_mut!(stats.reserved), reserved.get());
+                __mi_stat_increase_mt(ptr::addr_of_mut!((*stats).reserved), reserved.get());
                 if commit {
                     let committed = CommittedBytes::new(size);
-                    __mi_stat_increase_mt(ptr::addr_of_mut!(stats.committed), committed.get());
+                    __mi_stat_increase_mt(ptr::addr_of_mut!((*stats).committed), committed.get());
                 }
             }
         }
@@ -1639,11 +1639,11 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
             page += 1;
             let subproc = _mi_subproc();
             if !subproc.is_null() {
-                let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
+                let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
                 let committed = CommittedBytes::new(MI_HUGE_OS_PAGE_SIZE);
                 let reserved = ReservedBytes::new(MI_HUGE_OS_PAGE_SIZE);
-                __mi_stat_increase_mt(ptr::addr_of_mut!(stats.committed), committed.get());
-                __mi_stat_increase_mt(ptr::addr_of_mut!(stats.reserved), reserved.get());
+                __mi_stat_increase_mt(ptr::addr_of_mut!((*stats).committed), committed.get());
+                __mi_stat_increase_mt(ptr::addr_of_mut!((*stats).reserved), reserved.get());
             }
 
             if max_msecs > 0 {

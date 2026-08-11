@@ -544,7 +544,9 @@ unsafe fn mi_arena_try_alloc_at(
                 // SAFETY: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
                 unsafe {
                     __mi_stat_increase_mt(
-                        &mut (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed,
+                        ptr::addr_of_mut!(
+                            (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed
+                        ),
                         crate::internal::mi_committed_bytes_of_slices(touched_slices).get(),
                     )
                 };
@@ -1905,9 +1907,14 @@ unsafe fn _mi_arenas_page_free_internal<S>(
         let heap = unsafe { mi_page_heap(page) };
         // SAFETY: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
         unsafe {
-            crate::internal::__mi_stat_decrease_mt(&mut (*heap).stats.page_bins[stats_bin], 1)
+            crate::internal::__mi_stat_decrease_mt(
+                ptr::addr_of_mut!((*heap).stats.page_bins[stats_bin]),
+                1,
+            )
         };
-        unsafe { crate::internal::__mi_stat_decrease_mt(&mut (*heap).stats.pages, 1) };
+        unsafe {
+            crate::internal::__mi_stat_decrease_mt(ptr::addr_of_mut!((*heap).stats.pages), 1)
+        };
     }
 
     if MI_DEBUG > 1
@@ -2000,7 +2007,9 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 // SAFETY: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
                 unsafe {
                     crate::internal::__mi_stat_decrease_mt(
-                        &mut (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed,
+                        ptr::addr_of_mut!(
+                            (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed
+                        ),
                         crate::core_types::CommittedBytes::new(extra).get(),
                     )
                 };

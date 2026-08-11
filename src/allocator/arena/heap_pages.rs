@@ -361,8 +361,8 @@ unsafe extern "C" fn mi_heap_delete_page(
             // SAFETY: cross-thread heap stats use
             // the existing atomic/stat helpers for the source heap.
             unsafe {
-                __mi_stat_decrease_mt(&mut (*heap).stats.page_bins[sbin], 1);
-                __mi_stat_decrease_mt(&mut (*heap).stats.pages, 1);
+                __mi_stat_decrease_mt(ptr::addr_of_mut!((*heap).stats.page_bins[sbin]), 1);
+                __mi_stat_decrease_mt(ptr::addr_of_mut!((*heap).stats.pages), 1);
             }
         }
         // SAFETY: delete state owns the target

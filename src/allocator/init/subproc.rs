@@ -98,7 +98,7 @@ pub(super) fn main_init() {
             (*main_prefix).heap_total_count.store(1, Ordering::Relaxed);
             (*main_prefix).heap_count.store(1, Ordering::Relaxed);
             (*main_prefix).heap_main = ptr::addr_of_mut!(super::heap_main).cast::<mi_heap_t>();
-            __mi_stat_increase_mt(&mut (*main_prefix).stats.heaps, 1);
+            __mi_stat_increase_mt(ptr::addr_of_mut!((*main_prefix).stats.heaps), 1);
             mi_stats_header_init(ptr::addr_of_mut!((*main_prefix).stats));
             mi_lock_init(ptr::addr_of_mut!((*main_prefix).arena_reserve_lock));
             mi_lock_init(ptr::addr_of_mut!((*main_prefix).heaps_lock));

@@ -937,7 +937,7 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
         }
         (*theap_raw).cookie = _mi_random_next(ptr::addr_of_mut!((*theap_raw).random)) | 1;
         _mi_theap_guarded_init(theap_raw);
-        __mi_stat_increase_mt(&mut (*_mi_subproc()).stats.theaps, 1);
+        __mi_stat_increase_mt(ptr::addr_of_mut!((*_mi_subproc()).stats.theaps), 1);
 
         lists::push_heap_front(heap, theap);
     }
@@ -1081,7 +1081,7 @@ unsafe fn mi_theap_free_mem_typed(
     // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
     unsafe {
         let raw = theap.ptr().as_ptr();
-        __mi_stat_decrease_mt(&mut (*_mi_subproc()).stats.theaps, 1);
+        __mi_stat_decrease_mt(ptr::addr_of_mut!((*_mi_subproc()).stats.theaps), 1);
         match memid {
             crate::core_types::MemIdView::HeapMain => {
                 let theap = raw;

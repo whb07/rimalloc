@@ -413,6 +413,6 @@ pub(super) unsafe fn _mi_arenas_page_unabandon_internal(
         };
     } else {
         // SAFETY: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
-        unsafe { __mi_stat_decrease_mt(&mut (*heap).stats.pages_abandoned, 1) };
+        unsafe { __mi_stat_decrease_mt(ptr::addr_of_mut!((*heap).stats.pages_abandoned), 1) };
     }
 }

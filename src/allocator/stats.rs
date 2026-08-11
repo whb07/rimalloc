@@ -371,13 +371,14 @@ unsafe fn mi_stats_merge_theap_to_heap_typed(
     theap: ThreadHeapLocal,
     heap: HeapPtr,
 ) -> *const mi_stats_t {
-    // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-    let stats = unsafe { &mut (*theap.ptr().as_ptr()).stats };
-    // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-    let heap_stats = unsafe { &mut (*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats };
+    // SAFETY: typed witnesses keep both stats allocations live through the merge.
+    let stats = unsafe { ptr::addr_of_mut!((*theap.ptr().as_ptr()).stats) };
+    // SAFETY: typed witnesses keep both stats allocations live through the merge.
+    let heap_stats =
+        unsafe { ptr::addr_of_mut!((*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats) };
     // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
     unsafe { _mi_stats_merge_into(heap_stats, stats) };
-    heap_stats as *const mi_stats_t
+    heap_stats.cast_const()
 }
 
 unsafe fn mi_heap_get_stats(heap: *mut mi_heap_t) -> *const mi_stats_t {
@@ -433,7 +434,7 @@ pub unsafe extern "C" fn mi_heap_stats_merge_to_subproc(heap: *mut mi_heap_t) {
 
 unsafe fn mi_heap_stats_merge_to_subproc_typed(heap: BorrowedHeap, subproc: SubprocPtr) {
     // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
-    unsafe { _mi_stats_merge_into(&mut *subproc.stats(), &mut *heap.ptr().stats()) };
+    unsafe { _mi_stats_merge_into(subproc.stats(), heap.ptr().stats()) };
 }
 
 /// # Safety

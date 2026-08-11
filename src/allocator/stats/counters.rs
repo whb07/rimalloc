@@ -59,17 +59,17 @@ pub(super) fn initialized_stats() -> mi_stats_t {
     stats
 }
 
-fn mi_stat_update_mt(stat: &mut mi_stat_count_t, amount: i64) {
+unsafe fn mi_stat_update_mt(stat: *mut mi_stat_count_t, amount: i64) {
     if amount == 0 {
         return;
     }
-    // SAFETY: `stat` points to valid `i64` fields and these helpers operate atomically on them.
-    // SAFETY: multithreaded stats counter updates use atomic-compatible counter fields.
+    // SAFETY: `stat` points to valid atomic-compatible `i64` fields. Raw field
+    // projection avoids creating an exclusive reference to shared storage.
     unsafe {
-        let current = mi_atomic_addi64_relaxed(&mut stat.current, amount);
-        mi_atomic_maxi64_relaxed(&mut stat.peak, current + amount);
+        let current = mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).current), amount);
+        mi_atomic_maxi64_relaxed(ptr::addr_of_mut!((*stat).peak), current + amount);
         if amount > 0 {
-            mi_atomic_addi64_relaxed(&mut stat.total, amount);
+            mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).total), amount);
         }
     }
 }
@@ -88,7 +88,8 @@ fn mi_stat_update(stat: &mut mi_stat_count_t, amount: i64) {
 }
 
 /// # Safety
-/// `stat` must point to valid writable counter storage.
+/// `stat` must point to live, correctly aligned, atomic-compatible counter
+/// storage, and all concurrent access to its fields must be atomic.
 // SAFETY: multithreaded stats counter updates use atomic-compatible counter fields.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_counter_increase_mt(
@@ -117,12 +118,14 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
 }
 
 /// # Safety
-/// `stat` must point to valid writable count storage.
+/// `stat` must point to live, correctly aligned, atomic-compatible count
+/// storage, and all concurrent access to its fields must be atomic.
 // SAFETY: multithreaded stats counter updates use atomic-compatible counter fields.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_increase_mt(stat: *mut mi_stat_count_t, amount: usize) {
     // SAFETY: multithreaded stats counter updates use atomic-compatible counter fields.
-    mi_stat_update_mt(unsafe { &mut *stat }, amount as i64);
+    // SAFETY: the caller provides atomic-compatible storage under the MT access protocol.
+    unsafe { mi_stat_update_mt(stat, amount as i64) };
 }
 
 /// # Safety
@@ -135,12 +138,14 @@ pub(crate) unsafe extern "C" fn __mi_stat_increase(stat: *mut mi_stat_count_t, a
 }
 
 /// # Safety
-/// `stat` must point to valid writable count storage.
+/// `stat` must point to live, correctly aligned, atomic-compatible count
+/// storage, and all concurrent access to its fields must be atomic.
 // SAFETY: multithreaded stats counter updates use atomic-compatible counter fields.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_decrease_mt(stat: *mut mi_stat_count_t, amount: usize) {
     // SAFETY: multithreaded stats counter updates use atomic-compatible counter fields.
-    mi_stat_update_mt(unsafe { &mut *stat }, -(amount as i64));
+    // SAFETY: the caller provides atomic-compatible storage under the MT access protocol.
+    unsafe { mi_stat_update_mt(stat, -(amount as i64)) };
 }
 
 /// # Safety
@@ -152,15 +157,15 @@ pub(crate) unsafe extern "C" fn __mi_stat_decrease(stat: *mut mi_stat_count_t, a
     mi_stat_update(unsafe { &mut *stat }, -(amount as i64));
 }
 
-fn mi_stat_adjust_mt(stat: &mut mi_stat_count_t, amount: i64) {
+unsafe fn mi_stat_adjust_mt(stat: *mut mi_stat_count_t, amount: i64) {
     if amount == 0 {
         return;
     }
-    // SAFETY: `stat` points to valid `i64` fields and these helpers operate atomically on them.
-    // SAFETY: stats adjust helpers update current and total counters without peak tracking.
+    // SAFETY: `stat` points to valid atomic-compatible `i64` fields. Raw field
+    // projection avoids creating an exclusive reference to shared storage.
     unsafe {
-        mi_atomic_addi64_relaxed(&mut stat.current, amount);
-        mi_atomic_addi64_relaxed(&mut stat.total, amount);
+        mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).current), amount);
+        mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).total), amount);
     }
 }
 
@@ -173,7 +178,8 @@ fn mi_stat_adjust(stat: &mut mi_stat_count_t, amount: i64) {
 }
 
 /// # Safety
-/// `stat` must point to valid writable count storage.
+/// `stat` must point to live, correctly aligned, atomic-compatible count
+/// storage, and all concurrent access to its fields must be atomic.
 // SAFETY: stats adjust helpers update current and total counters without peak tracking.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase_mt(
@@ -181,7 +187,8 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase_mt(
     amount: usize,
 ) {
     // SAFETY: stats adjust helpers update current and total counters without peak tracking.
-    mi_stat_adjust_mt(unsafe { &mut *stat }, amount as i64);
+    // SAFETY: the caller provides atomic-compatible storage under the MT access protocol.
+    unsafe { mi_stat_adjust_mt(stat, amount as i64) };
 }
 
 /// # Safety
@@ -197,7 +204,8 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase(
 }
 
 /// # Safety
-/// `stat` must point to valid writable count storage.
+/// `stat` must point to live, correctly aligned, atomic-compatible count
+/// storage, and all concurrent access to its fields must be atomic.
 // SAFETY: stats adjust helpers update current and total counters without peak tracking.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease_mt(
@@ -205,7 +213,8 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease_mt(
     amount: usize,
 ) {
     // SAFETY: stats adjust helpers update current and total counters without peak tracking.
-    mi_stat_adjust_mt(unsafe { &mut *stat }, -(amount as i64));
+    // SAFETY: the caller provides atomic-compatible storage under the MT access protocol.
+    unsafe { mi_stat_adjust_mt(stat, -(amount as i64)) };
 }
 
 /// # Safety
@@ -380,8 +389,73 @@ pub(super) fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_sta
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use core::{cell::UnsafeCell, ptr};
+    use std::sync::Arc;
+
+    use super::{
+        __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt, __mi_stat_decrease_mt,
+        __mi_stat_increase_mt, mi_stat_count_t,
+    };
+
+    struct SharedStatCount(UnsafeCell<mi_stat_count_t>);
+
+    // SAFETY: concurrent access in this test is restricted to the MT helpers,
+    // which access each counter field atomically. Reads occur only after join.
+    unsafe impl Sync for SharedStatCount {}
+
+    #[test]
+    fn mt_stat_updates_share_atomic_fields() {
+        const THREADS: usize = 2;
+        const ITERATIONS: usize = 8;
+
+        let stat = Arc::new(SharedStatCount(UnsafeCell::new(mi_stat_count_t::default())));
+        std::thread::scope(|scope| {
+            for _ in 0..THREADS {
+                let stat = Arc::clone(&stat);
+                scope.spawn(move || {
+                    for _ in 0..ITERATIONS {
+                        // SAFETY: `stat` remains live through the scoped join and
+                        // all concurrent access uses the atomic MT helper.
+                        unsafe { __mi_stat_increase_mt(stat.0.get(), 1) };
+                    }
+                });
+            }
+        });
+
+        // SAFETY: both scoped threads have joined, so no concurrent access remains.
+        let stat = unsafe { &*stat.0.get() };
+        let expected = (THREADS * ITERATIONS) as i64;
+        assert_eq!(stat.current, expected);
+        assert_eq!(stat.total, expected);
+        assert_eq!(stat.peak, expected);
+    }
+
+    #[test]
+    fn mt_stat_adjustments_update_the_intended_fields() {
+        let mut stat = mi_stat_count_t::default();
+        let stat_ptr = ptr::addr_of_mut!(stat);
+
+        // SAFETY: `stat_ptr` designates live, exclusively owned counter storage.
+        unsafe {
+            __mi_stat_adjust_increase_mt(stat_ptr, 3);
+            __mi_stat_increase_mt(stat_ptr, 2);
+            __mi_stat_decrease_mt(stat_ptr, 1);
+            __mi_stat_adjust_decrease_mt(stat_ptr, 1);
+        }
+
+        assert_eq!(stat.current, 3);
+        assert_eq!(stat.total, 4);
+        assert_eq!(stat.peak, 5);
+    }
+}
+
 /// # Safety
-/// `to` and `from` must point to valid writable `mi_stats_t` values.
+/// `to` must point to live, correctly aligned, atomic-compatible `mi_stats_t`
+/// storage, and all concurrent access to its fields must be atomic. `from`
+/// must point to live, writable `mi_stats_t` storage that is exclusively owned
+/// for the duration of the merge and reset.
 // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi_stats_t) {

@@ -60,7 +60,7 @@ pub(super) unsafe fn push_front(subproc: SubprocPtr, heap: HeapPtr) {
         mi_lock_release(subproc.heaps_lock().as_ptr());
 
         subproc.heap_count_cell().fetch_add(1, Ordering::Relaxed);
-        __mi_stat_increase_mt(&mut (*subproc.stats()).heaps, 1);
+        __mi_stat_increase_mt(ptr::addr_of_mut!((*subproc.stats()).heaps), 1);
     }
 }
 
@@ -72,7 +72,7 @@ pub(super) unsafe fn remove(subproc: SubprocPtr, heap: HeapPtr) {
     // unlinking the heap from the subprocess heap list.
     unsafe {
         subproc.heap_count_cell().fetch_sub(1, Ordering::Relaxed);
-        __mi_stat_decrease_mt(&mut (*subproc.stats()).heaps, 1);
+        __mi_stat_decrease_mt(ptr::addr_of_mut!((*subproc.stats()).heaps), 1);
 
         mi_lock_acquire(subproc.heaps_lock().as_ptr());
         let next = heap_next(heap);

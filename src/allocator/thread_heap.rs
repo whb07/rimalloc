@@ -646,20 +646,35 @@ unsafe fn mi_theap_page_collect_typed(
 
 /// # Safety
 ///
-/// `theap` must point to an initialized thread heap.
+/// `theap` must point to a live initialized thread heap. The caller must own
+/// its local queue mutation, either through current-thread local ownership or
+/// exclusive initialization/teardown access. Queue links, page backing, and
+/// page geometry must remain valid and must not be concurrently destroyed or
+/// relinked during validation. Protocol-compliant remote atomic frees remain
+/// permitted.
 pub unsafe fn mi_theap_is_valid(theap: *mut mi_theap_t) -> bool {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
-    unsafe {
-        let Some(theap) = ThreadHeapPtr::new(theap) else {
-            crate::internal::mi_assert_internal!(false);
-            return false;
-        };
-        mi_theap_is_valid_typed(theap)
-    }
+    let Some(theap) = ThreadHeapPtr::new(theap) else {
+        crate::internal::mi_assert_internal!(false);
+        return false;
+    };
+
+    // SAFETY: the caller supplies the live initialized heap, owns its local
+    // queue mutation, and keeps queue links, page backing, and geometry stable
+    // against destruction or relinking while typed validation traverses them.
+    unsafe { mi_theap_is_valid_typed(theap) }
 }
 
+/// # Safety
+///
+/// `theap` must identify a live initialized thread heap. The caller must own
+/// its local queue mutation through current-thread local ownership or exclusive
+/// initialization/teardown access. Queue links, page backing, and page geometry
+/// must remain valid and must not be concurrently destroyed or relinked during
+/// validation. Protocol-compliant remote atomic frees remain permitted.
 unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: the caller's queue ownership and stability contract permits the
+    // synchronous page traversal and unchecked classification of each queue by
+    // its fixed bin index; protocol remote frees preserve those invariants.
     unsafe {
         let state = TheapPageVisitState {
             visitor: TheapPageVisitCallback::new(Some(mi_theap_page_is_valid)),

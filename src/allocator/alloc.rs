@@ -893,6 +893,21 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
     }
 }
 
+/// # Safety
+/// `theap` must identify a live current-thread heap whose local allocation state
+/// is exclusively mutable for this call; protocol atomic remote-free publication
+/// is permitted. If `old` is present, it must identify a live allocator
+/// allocation whose page and block metadata remain stable with no concurrent free
+/// or realloc until this call returns or frees it. The Copy witness does not
+/// extend those lifetimes. `zero_new_tail` must agree with `layout`. Each nonnull
+/// usable-size output must be valid, aligned, and writable for one `usize` when
+/// accessed, and must not overlap allocator metadata. The outputs may alias each
+/// other or lie within the live old allocation's user storage because every
+/// output write occurs before a moved-success release of that storage.
+///
+/// On allocation failure, an existing old allocation remains live. On in-place
+/// success it remains the returned allocation. On moved success this call copies
+/// the preserved prefix and frees the old allocation before returning the new one.
 #[inline(always)]
 unsafe fn mi_theap_realloc_validated_core(
     theap: ThreadHeapLocal,
@@ -902,13 +917,17 @@ unsafe fn mi_theap_realloc_validated_core(
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    let p = old
+        .map(|old| old.ptr().as_ptr())
+        .unwrap_or(core::ptr::null_mut());
+    let new_requested = layout.requested();
+    let newsize = new_requested.get();
+
+    // SAFETY: the caller keeps any old allocation and its page metadata live and
+    // stable. Both optional outputs are valid when written; these writes precede
+    // every possible old-user-storage release. The current-thread heap remains
+    // exclusively available for the same-heap in-place decision.
     unsafe {
-        let p = old
-            .map(|old| old.ptr().as_ptr())
-            .unwrap_or(core::ptr::null_mut());
-        let new_requested = layout.requested();
-        let newsize = new_requested.get();
         let (page, size) = if let Some(old) = old {
             let page = old.page().as_ptr();
             let size = old.usable();
@@ -935,9 +954,17 @@ unsafe fn mi_theap_realloc_validated_core(
             }
             return p;
         }
+    }
 
-        let newp = mi_theap_umalloc_typed(theap, layout, usable_post);
-        if mi_likely(!newp.is_null()) {
+    // SAFETY: the caller keeps the current-thread heap's local allocation state
+    // exclusive, `layout` is validated, and `usable_post` is valid when accessed.
+    let newp = unsafe { mi_theap_umalloc_typed(theap, layout, usable_post) };
+    if mi_likely(!newp.is_null()) {
+        // SAFETY: `newp` is the newly allocated writable block. The caller keeps
+        // any old allocation readable and stable until this transaction finishes;
+        // the validated sizes bound tail initialization and the preserved copy.
+        // Tracking is restored before the terminal old-allocation free.
+        unsafe {
             let preserve =
                 old.map(|old| crate::core_types::PreserveBytes::new(old.usable(), new_requested));
             let preserved = preserve.map_or(0, |preserve| preserve.get());
@@ -962,8 +989,8 @@ unsafe fn mi_theap_realloc_validated_core(
                 mi_free(p);
             }
         }
-        newp
     }
+    newp
 }
 
 unsafe fn mi_realloc_old_from_ptr(

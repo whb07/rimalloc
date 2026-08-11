@@ -24,7 +24,7 @@ use crate::core_types::{
 use crate::internal::memid::mi_memid_t;
 use crate::internal::{
     _mi_align_up, _mi_arenas_alloc, _mi_arenas_free, _mi_deferred_free, _mi_divide_up,
-    _mi_is_heap_main, _mi_memcpy_aligned, _mi_meta_free, _mi_meta_zalloc, _mi_subproc,
+    _mi_is_heap_main, _mi_memcpy, _mi_meta_free, _mi_meta_zalloc, _mi_subproc,
     _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_page_all_free, mi_page_heap,
     mi_page_usable_block_size, mi_theap_is_initialized,
 };
@@ -957,7 +957,7 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
     // SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
     unsafe {
         let memid = (*theap_raw).memid;
-        _mi_memcpy_aligned(
+        _mi_memcpy(
             theap_raw.cast(),
             __mi_theap_empty().cast_const().cast(),
             size_of::<mi_theap_t>(),

@@ -20,7 +20,7 @@ pub(crate) mod guarded;
 mod memcpy;
 pub(crate) mod memid;
 #[cfg(target_arch = "x86_64")]
-pub use memcpy::{_mi_memcpy, _mi_memcpy_aligned};
+pub use memcpy::_mi_memcpy;
 mod page_flags;
 mod page_location;
 mod page_metadata;
@@ -752,11 +752,14 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 }
 
 /// # Safety
-/// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges.
+/// For `n > 0`, `src` must point to `n` initialized readable bytes and `dst` to
+/// `n` writable bytes; the regions must be disjoint. No alignment is required.
+/// For `n == 0`, neither pointer is accessed and each may be null or dangling.
 #[cfg(not(target_arch = "x86_64"))]
 #[inline]
 pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void {
-    // SAFETY: copy helpers operate on caller-proven byte ranges.
+    // SAFETY: the caller provides the initialized source and disjoint writable
+    // destination ranges required by copy_nonoverlapping.
     unsafe {
         ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
     }
@@ -778,19 +781,6 @@ pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
         }
         ptr::write_bytes(dst, val as u8, n);
     }
-}
-
-/// # Safety
-/// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges aligned as required
-/// by callers of the aligned helper.
-#[cfg(not(target_arch = "x86_64"))]
-#[inline]
-pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void {
-    // SAFETY: copy helpers operate on caller-proven byte ranges.
-    unsafe {
-        ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
-    }
-    dst
 }
 
 /// # Safety

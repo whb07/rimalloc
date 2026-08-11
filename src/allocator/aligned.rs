@@ -22,9 +22,8 @@ use crate::allocator::tracking::mi_track_align;
 use crate::bits::MI_KiB;
 use crate::core_types::{BorrowedHeap, Errno};
 use crate::internal::{
-    _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero, _mi_ptr_page,
-    MI_GUARDED, mi_likely, mi_page_set_has_interior_pointers, mi_page_usable_block_size,
-    mi_unlikely,
+    _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy, _mi_memzero, _mi_ptr_page, MI_GUARDED,
+    mi_likely, mi_page_set_has_interior_pointers, mi_page_usable_block_size, mi_unlikely,
 };
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_theap_t};
@@ -867,7 +866,7 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
         }
         // SAFETY: aligned realloc copy preserves bounded old contents before freeing the validated old block.
         unsafe {
-            _mi_memcpy_aligned(newp, p, preserve.get());
+            _mi_memcpy(newp, p, preserve.get());
             crate::mimalloc::mi_free(p);
         }
     }

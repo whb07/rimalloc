@@ -993,15 +993,24 @@ unsafe fn mi_theap_realloc_validated_core(
     newp
 }
 
+/// # Safety
+/// If `p` is nonnull, it must identify a live allocation returned by this allocator. Its page and
+/// block metadata must remain stable, without concurrent free or realloc, for as long as the
+/// returned `OldAllocation` is used; copying that witness does not extend this lifetime. If
+/// nonnull, `usable_pre` must be aligned and writable for one `usize` when accessed and must not
+/// overlap allocator metadata. It may point within the old user allocation if that storage is
+/// still live at the access.
 unsafe fn mi_realloc_old_from_ptr(
     p: *mut c_void,
     usable_pre: *mut usize,
 ) -> Option<Option<crate::core_types::OldAllocation>> {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    let Some(_user) = crate::core_types::UserPtr::new(p) else {
+        return Some(None);
+    };
+    // SAFETY: the caller keeps this nonnull allocator allocation and its page/block metadata
+    // stable through use of the returned witness. The optional failure output is writable at the
+    // access and does not overlap allocator metadata.
     unsafe {
-        let Some(_user) = crate::core_types::UserPtr::new(p) else {
-            return Some(None);
-        };
         let Some(old) = mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) else {
             if !usable_pre.is_null() {
                 *usable_pre = 0;
@@ -1012,47 +1021,63 @@ unsafe fn mi_realloc_old_from_ptr(
     }
 }
 
+/// # Safety
+/// If `p` is nonnull, it must identify a live allocation returned by this allocator. Its page and
+/// block metadata must remain stable, without concurrent free or realloc, for as long as the
+/// returned request is used; the returned request does not extend this lifetime. If nonnull,
+/// `usable_pre` must be aligned and writable for one `usize` when accessed and must not overlap
+/// allocator metadata. It may point within the old user allocation if that storage is still live
+/// at the access.
 unsafe fn mi_realloc_request_from_ptr(
     p: *mut c_void,
     layout: crate::core_types::LayoutRequest,
     usable_pre: *mut usize,
 ) -> Option<crate::core_types::ReallocRequest> {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        match mi_realloc_old_from_ptr(p, usable_pre)? {
-            Some(old) => Some(crate::core_types::ReallocRequest::from_existing(
-                old,
-                layout,
-                layout.zeroed(),
-            )),
-            None => Some(crate::core_types::ReallocRequest::from_null(
-                layout,
-                layout.zeroed(),
-            )),
-        }
+    // SAFETY: the caller supplies the allocator allocation lifetime and metadata stability needed
+    // by the returned request, and any failure output is valid at its access.
+    let old = unsafe { mi_realloc_old_from_ptr(p, usable_pre)? };
+    match old {
+        Some(old) => Some(crate::core_types::ReallocRequest::from_existing(
+            old,
+            layout,
+            layout.zeroed(),
+        )),
+        None => Some(crate::core_types::ReallocRequest::from_null(
+            layout,
+            layout.zeroed(),
+        )),
     }
 }
 
+/// # Safety
+/// `user` must identify a live allocation returned by this allocator. Its page and block metadata
+/// must remain stable, without concurrent free or realloc, for as long as the returned request is
+/// used; the returned request does not extend this lifetime. If nonnull, `usable_pre` must be
+/// aligned and writable for one `usize` when accessed and must not overlap allocator metadata. It
+/// may point within the user allocation if that storage is still live at the access.
 pub(crate) unsafe fn mi_realloc_request_from_user(
     user: crate::core_types::UserPtr,
     layout: crate::core_types::LayoutRequest,
     usable_pre: *mut usize,
 ) -> Option<crate::core_types::ReallocRequest> {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let p = user.as_ptr();
+    let p = user.as_ptr();
+    // SAFETY: the caller keeps the typed nonnull user allocation and its page/block metadata live
+    // and stable through use of the returned request. The optional failure output is writable at
+    // the access and does not overlap allocator metadata.
+    let old = unsafe {
         let Some(old) = mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) else {
             if !usable_pre.is_null() {
                 *usable_pre = 0;
             }
             return None;
         };
-        Some(crate::core_types::ReallocRequest::from_existing(
-            old,
-            layout,
-            layout.zeroed(),
-        ))
-    }
+        old
+    };
+    Some(crate::core_types::ReallocRequest::from_existing(
+        old,
+        layout,
+        layout.zeroed(),
+    ))
 }
 
 /// # Safety

@@ -297,6 +297,20 @@ impl ActivePage {
     pub(crate) fn into_abandon_candidate(self) -> PageForAbandon {
         PageForAbandon::Active(self)
     }
+
+    /// Complete the externally performed detach-and-owner-clear transition.
+    ///
+    /// # Safety
+    /// This live initialized page must be detached with empty queue links, marked abandoned after
+    /// its current-thread owner was cleared, and retain the claimed thread-free owner bit. Its
+    /// former heap association, page metadata, and remote-free atomic protocol must remain live and
+    /// stable, with competing claim, relink, mutation, and teardown excluded.
+    #[inline(always)]
+    pub(crate) unsafe fn into_owned_abandoned_after_owner_clear(self) -> OwnedAbandonedPage {
+        // SAFETY: the caller completed queue detach and abandoned-owner publication while retaining
+        // the thread-free claim; consuming Active leaves the sole replacement ownership capability.
+        unsafe { OwnedAbandonedPage::new_unchecked(self.page()) }
+    }
 }
 
 impl FullPage {
@@ -319,6 +333,19 @@ impl FullPage {
     #[inline(always)]
     pub(crate) fn into_abandon_candidate(self) -> PageForAbandon {
         PageForAbandon::Full(self)
+    }
+
+    /// Complete a raw full-queue removal that cleared the page's full flag.
+    ///
+    /// # Safety
+    /// This page must remain live, initialized, and current-thread owned after being removed from
+    /// its full queue. Its queue links must be empty, its full flag must be clear, and the caller
+    /// must exclusively own the detach/state transition while excluding relink or teardown.
+    #[inline(always)]
+    pub(crate) unsafe fn into_active_after_detach(self) -> ActivePage {
+        // SAFETY: raw queue removal completed the full-to-detached-active metadata transition;
+        // consuming Full leaves one replacement Active capability for the same page.
+        unsafe { ActivePage::new_unchecked(self.page()) }
     }
 }
 
@@ -349,6 +376,34 @@ impl AvailablePage {
 }
 
 impl LocalPage {
+    /// Consume a locally owned page after classifying it as full.
+    ///
+    /// # Safety
+    /// This live initialized page must remain current-thread owned and its stable `in_full`
+    /// classification must prove that it is linked in the owning heap's full queue. The caller
+    /// must exclusively own local page and queue mutation, excluding relink or teardown while the
+    /// returned capability is used. Protocol atomic remote-free publication remains permitted.
+    #[inline(always)]
+    pub(crate) unsafe fn into_full_after_classification(self) -> FullPage {
+        // SAFETY: the caller-proven stable full classification refines the consumed local-page
+        // capability into the corresponding full-page capability without duplicating ownership.
+        unsafe { FullPage::new_unchecked(self.page()) }
+    }
+
+    /// Consume a locally owned page after classifying it as active and non-full.
+    ///
+    /// # Safety
+    /// This live initialized page must remain current-thread owned and its stable classification
+    /// must prove that it is active rather than full, retired, abandoned, or destroyed. The caller
+    /// must exclusively own local page and queue mutation, excluding relink or teardown while the
+    /// returned capability is used. Protocol atomic remote-free publication remains permitted.
+    #[inline(always)]
+    pub(crate) unsafe fn into_active_after_classification(self) -> ActivePage {
+        // SAFETY: the caller-proven stable active classification refines the consumed local-page
+        // capability into the corresponding active-page capability without duplicating ownership.
+        unsafe { ActivePage::new_unchecked(self.page()) }
+    }
+
     /// Ensure this locally owned page has an available block.
     ///
     /// # Safety

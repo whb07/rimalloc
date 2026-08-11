@@ -129,10 +129,9 @@ mod os_memory;
 mod prefix;
 mod purge;
 
-pub(crate) use abandoned::_mi_arenas_page_unabandon_internal;
+pub(crate) use abandoned::{_mi_arenas_page_abandon_internal, _mi_arenas_page_unabandon_internal};
 use abandoned::{
-    _mi_arenas_page_abandon_internal, mi_arena_try_claim_abandoned,
-    mi_heap_ensure_arena_pages_from_raw, mi_page_is_full_local,
+    mi_arena_try_claim_abandoned, mi_heap_ensure_arena_pages_from_raw, mi_page_is_full_local,
 };
 use geometry::{
     PageArenaMembership, mi_arena_info_slices, mi_arena_page_at_slice,

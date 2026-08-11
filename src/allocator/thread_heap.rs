@@ -11,7 +11,7 @@ use core::{ffi::c_void, mem::size_of, ptr};
 use crate::allocator::arena::_mi_arenas_collect;
 use crate::allocator::options::_mi_error_message_fmt;
 use crate::allocator::page::{
-    _mi_page_abandon, _mi_page_free, _mi_page_free_collect, _mi_page_is_valid,
+    _mi_page_abandon_internal, _mi_page_free, _mi_page_free_collect, _mi_page_is_valid,
     _mi_theap_collect_retired, mi_full_page_queue_is_valid, mi_huge_page_queue_is_valid,
     mi_normal_page_queue_is_valid, mi_page_is_abandoned, mi_page_theap,
 };
@@ -632,12 +632,19 @@ unsafe fn mi_theap_page_collect_typed(
                 _mi_page_free(page, pq);
             }
         } else if collect == mi_collect_t::MI_ABANDON {
-            let _page_for_abandon = if crate::allocator::page::mi_page_is_in_full(page) {
-                crate::core_types::assume_full_page(local_page.page()).into_abandon_candidate()
+            let page_for_abandon = if crate::allocator::page::mi_page_is_in_full(page) {
+                local_page
+                    .into_full_after_classification()
+                    .into_abandon_candidate()
             } else {
-                crate::core_types::assume_active_page(local_page.page()).into_abandon_candidate()
+                local_page
+                    .into_active_after_classification()
+                    .into_abandon_candidate()
             };
-            _mi_page_abandon(page, pq);
+            // SAFETY: the current-thread collection epoch keeps page ownership and its full/active
+            // classification stable. The consumed capability and owning queue remain live through
+            // detach and arena publication, with local relink and teardown excluded.
+            let _ = _mi_page_abandon_internal(page_for_abandon, queue);
         }
 
         true

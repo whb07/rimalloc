@@ -336,7 +336,7 @@ pub(super) unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
 /// the page and its stats. Page geometry, MemId, lists, heap and arena table
 /// membership must remain stable; the caller excludes concurrent relink,
 /// reclaim, or teardown while protocol remote frees may publish atomically.
-pub(super) unsafe fn _mi_arenas_page_abandon_internal(
+pub(crate) unsafe fn _mi_arenas_page_abandon_internal(
     page: crate::types::OwnedAbandonedPage,
     current_theap: crate::types::ThreadHeapLocal,
 ) -> crate::types::PageAbandonOutcome {

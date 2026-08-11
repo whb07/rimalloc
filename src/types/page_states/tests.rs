@@ -337,6 +337,47 @@ fn abandon_and_reclaim_transitions_preserve_page_identity() {
 }
 
 #[test]
+fn detach_and_owner_clear_transitions_preserve_one_page_capability() {
+    let current = ThreadId::new(crate::prim::_mi_prim_thread_id())
+        .expect("platform current-thread id is nonzero and unflagged");
+    let local = PageThreadId::from_parts(PageOwnerId::Thread(current), PageFlags::new(0).unwrap());
+    let full = PageThreadId::from_parts(PageOwnerId::Thread(current), PageFlags::IN_FULL_QUEUE);
+    let abandoned = PageThreadId::from_parts(PageOwnerId::Abandoned, PageFlags::new(0).unwrap());
+    let mut page = MaybeUninit::<mi_page_t>::zeroed();
+    let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
+    let page_raw = page.as_mut_ptr();
+    let theap_raw = theap.as_mut_ptr();
+    // SAFETY: these stack fixtures remain live for the complete identity-only transition. The page
+    // starts current-thread/full with an owned thread-free word; the test models raw queue removal
+    // by clearing links/full state, then models owner clearing while retaining the former heap.
+    unsafe {
+        ptr::addr_of_mut!((*page_raw).xthread_id).write(full.raw());
+        ptr::addr_of_mut!((*page_raw).xthread_free)
+            .write(ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned).raw());
+        ptr::addr_of_mut!((*page_raw).theap).write(theap_raw);
+        let page_ptr = PagePtr::new_unchecked(page_raw);
+        page_ptr.set_queue_next(None);
+        page_ptr.set_queue_prev(None);
+
+        let full = LocalPage::new_unchecked(page_ptr).into_full_after_classification();
+        ptr::addr_of_mut!((*page_raw).xthread_id).write(local.raw());
+        let active = full.into_active_after_detach();
+        assert_eq!(active.page().as_ptr(), page_raw);
+
+        ptr::addr_of_mut!((*page_raw).xthread_id).write(abandoned.raw());
+        let owned = active.into_owned_abandoned_after_owner_clear();
+        assert_eq!(owned.page().as_ptr(), page_raw);
+
+        let mut active_page = MaybeUninit::<mi_page_t>::zeroed();
+        let active_raw = active_page.as_mut_ptr();
+        ptr::addr_of_mut!((*active_raw).xthread_id).write(local.raw());
+        let active_ptr = PagePtr::new_unchecked(active_raw);
+        let active = LocalPage::new_unchecked(active_ptr).into_active_after_classification();
+        assert_eq!(active.page().as_ptr(), active_raw);
+    }
+}
+
+#[test]
 fn abandoned_claim_ownership_uses_thread_free_ownership_bit() {
     // SAFETY: the fixture writes a
     // concrete unowned thread-free word into stack-local page metadata before

@@ -9,8 +9,8 @@ use core::mem::size_of;
 use core::ptr;
 
 use crate::allocator::arena::{
-    _mi_arenas_collect, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free_typed,
-    MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
+    _mi_arenas_collect, _mi_arenas_page_abandon_internal, _mi_arenas_page_alloc,
+    _mi_arenas_page_free_typed, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
 };
 use crate::allocator::init::{_mi_page_empty, _mi_theap_empty_wrong};
 use crate::allocator::options::_mi_error_message_fmt;
@@ -817,46 +817,40 @@ unsafe fn mi_page_extend_free_typed(
     true
 }
 
-// SAFETY: abandon transitions detach active/full pages before arena abandon publication.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    unsafe {
-        let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
-        let queue = crate::core_types::PageQueuePtr::new_unchecked(pq);
-        let _ = _mi_page_abandon_typed(page_ptr, queue);
-    }
-}
-
-#[inline]
-unsafe fn _mi_page_abandon_typed(
-    page_ptr: crate::core_types::PagePtr,
-    queue: crate::core_types::PageQueuePtr,
-) -> crate::core_types::PageAbandonOutcome {
-    // SAFETY: abandon transitions detach active/full pages before arena abandon publication.
-    unsafe {
-        let page_wrapper = if mi_page_is_in_full(page_ptr.as_ptr()) {
-            crate::core_types::assume_full_page(page_ptr).into_abandon_candidate()
-        } else {
-            crate::core_types::assume_active_page(page_ptr).into_abandon_candidate()
-        };
-        _mi_page_abandon_internal(page_wrapper, queue)
-    }
-}
-
+/// Detach and abandon a current-thread page, or terminally release it when collection makes every
+/// block free.
+///
+/// # Safety
+/// `page_wrapper` must identify a live initialized current-thread page linked in `queue`, whose
+/// variant matches its active/full state. The caller must exclusively own local queue links, page
+/// lists and metadata, owner association, heap statistics, and the abandon transition. Page
+/// geometry, backing, keys, MemId, page-map/arena publication, the owning heap, and its nonnull TLD
+/// must remain live and stable. Protocol atomic remote-free publication is permitted, but competing
+/// claim, queue relink, non-protocol mutation, and page/heap/TLD/subprocess/arena teardown must not
+/// race this call. Stored release, purge, or commit callbacks and their arguments must remain valid
+/// for synchronous invocation, must not incompatibly reenter and mutate this page, queue, or heap,
+/// and must not unwind. The input capability is consumed; the result reports whether arena abandon
+/// publication retained the page or terminal release destroyed it.
 pub(crate) unsafe fn _mi_page_abandon_internal(
     page_wrapper: crate::core_types::PageForAbandon,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::PageAbandonOutcome {
-    // SAFETY: abandon transitions detach active/full pages before arena abandon publication.
-    unsafe {
-        let page_ptr = match &page_wrapper {
-            crate::core_types::PageForAbandon::Active(page) => page.page(),
-            crate::core_types::PageForAbandon::Full(page) => page.page(),
-        };
-        let page = page_ptr.as_ptr();
-        let pq = queue.as_ptr();
+    let page_ptr = match &page_wrapper {
+        crate::core_types::PageForAbandon::Active(page) => page.page(),
+        crate::core_types::PageForAbandon::Full(page) => page.page(),
+    };
+    let page = page_ptr.as_ptr();
+    let pq = queue.as_ptr();
+    // SAFETY: the caller keeps this live locally owned page and its free-list metadata stable while
+    // protocol remote frees are collected and the terminal all-free decision is snapshotted.
+    let all_free = unsafe {
         _mi_page_free_collect(page, false);
-        if mi_page_all_free(page) {
+        mi_page_all_free(page)
+    };
+    if all_free {
+        // SAFETY: the caller-proven queue/page epoch remains exclusive. Each arm consumes the
+        // all-free capability through queue removal and terminal release, with no later page use.
+        unsafe {
             let destroyed = match page_wrapper {
                 crate::core_types::PageForAbandon::Full(page) => {
                     let Ok(all_free) = page.try_mark_all_free() else {
@@ -874,54 +868,85 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
                     if let Some(queue) = crate::core_types::NormalPageQueue::new(queue) {
                         _mi_page_free_active_internal(all_free, queue)
                     } else {
-                        mi_page_queue_remove_raw(pq, page_ptr.as_ptr());
+                        mi_page_queue_remove_raw(pq, all_free.page().as_ptr());
                         _mi_page_free_after_remove(all_free)
                     }
                 }
             };
             let _ = destroyed;
             crate::core_types::PageAbandonOutcome::Destroyed
-        } else {
+        }
+    } else {
+        // SAFETY: the input capability and live queue still describe the same exclusively owned
+        // page. Successful typed removal returns Active; fallback raw removal clears links and the
+        // full flag before consuming the retained PageForAbandon into the same detached state.
+        let detached = unsafe {
             match page_wrapper {
                 crate::core_types::PageForAbandon::Full(page) => {
-                    if let Some(queue) = crate::core_types::FullPageQueue::new(queue) {
+                    if let Some(full_queue) = crate::core_types::FullPageQueue::new(queue) {
                         match crate::core_types::QueuedPage::<
                             crate::core_types::FullQueue,
-                        >::try_queue_full(page, queue) {
-                            Ok(queued) => { let _ = queued.remove(); }
-                            Err(_page) => {
+                        >::try_queue_full(page, full_queue) {
+                            Ok(queued) => queued.remove(),
+                            Err(page) => {
                                 crate::internal::mi_assert_internal!(false);
-                                mi_page_queue_remove_raw(pq, page_ptr.as_ptr());
+                                mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                                page.into_active_after_detach()
                             }
                         }
                     } else {
                         mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                        page.into_active_after_detach()
                     }
                 }
                 crate::core_types::PageForAbandon::Active(page) => {
-                    if let Some(queue) = crate::core_types::NormalPageQueue::new(queue) {
+                    if let Some(normal_queue) = crate::core_types::NormalPageQueue::new(queue) {
                         match crate::core_types::QueuedPage::<
                             crate::core_types::NormalQueue,
-                        >::try_queue(page, queue) {
-                            Ok(queued) => { let _ = queued.remove(); }
-                            Err(_page) => {
+                        >::try_queue(page, normal_queue) {
+                            Ok(queued) => queued.remove(),
+                            Err(page) => {
                                 crate::internal::mi_assert_internal!(false);
-                                mi_page_queue_remove_raw(pq, page_ptr.as_ptr());
+                                mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                                page
                             }
                         }
                     } else {
                         mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                        page
                     }
                 }
             }
-            let theap = (*page).theap;
-            mi_page_set_theap(page, ptr::null_mut());
-            // Preserve the original theap pointer so same-theap reclaim-on-free can still work.
-            (*page).theap = theap;
-            let outcome = _mi_arenas_page_abandon(page, theap);
-            _mi_arenas_collect(false, false, (*theap).tld);
-            outcome
-        }
+        };
+        let detached_page = detached.page();
+        let detached_raw = detached_page.as_ptr();
+        // SAFETY: the detached page retains its live current-thread association. Snapshot the
+        // matching local heap and nonnull TLD before owner mutation and possible terminal release.
+        let (owner, tld) = unsafe {
+            let theap = (*detached_raw).theap;
+            crate::internal::mi_assert_internal!(!theap.is_null());
+            let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            );
+            let tld = (*theap).tld;
+            crate::internal::mi_assert_internal!(!tld.is_null());
+            (owner, crate::core_types::TldPtr::new_unchecked(tld))
+        };
+        // SAFETY: the page is detached and exclusively locally owned. Clearing its owner publishes
+        // abandoned state while retaining the claimed thread-free bit; restoring only the legacy
+        // associated-heap pointer preserves same-heap reclaim, then the Active witness is consumed.
+        let owned = unsafe {
+            mi_page_set_theap(detached_raw, ptr::null_mut());
+            (*detached_raw).theap = owner.ptr().as_ptr();
+            detached.into_owned_abandoned_after_owner_clear()
+        };
+        // SAFETY: the typed owned-abandoned page and matching current-thread heap cover synchronous
+        // arena publication/unown; the outcome consumes the page capability.
+        let outcome = unsafe { _mi_arenas_page_abandon_internal(owned, owner) };
+        // SAFETY: the captured TLD and subprocess association remain live independently of a
+        // possibly destroyed page; collection does not access the consumed page capability.
+        unsafe { _mi_arenas_collect(false, false, tld.as_ptr()) };
+        outcome
     }
 }
 

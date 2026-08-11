@@ -727,8 +727,22 @@ unsafe fn mi_theap_merge_stats_typed(theap: ThreadHeapPtr) {
     }
 }
 
+/// # Safety
+///
+/// `theap` must identify a live initialized thread heap under current-thread
+/// local ownership or exclusive teardown ownership. Its TLD, backing heap,
+/// page queues, page metadata, and page backing must remain live and stable for
+/// the call, with no concurrent destroy or queue relinking. Protocol remote
+/// frees may publish through the allocator's atomic remote-free lists. Any
+/// registered deferred-free callback and opaque argument must remain valid for
+/// invocation on this thread, tolerate allocator reentry, preserve the thread
+/// heap and page topology needed after it returns, and must not unwind.
 unsafe fn mi_theap_collect_ex_typed(theap: ThreadHeapLocal, mut collect: mi_collect_t) {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: the caller's local or exclusive-teardown ownership keeps the TLD,
+    // backing heap, queues, pages, and stats live for this collection epoch.
+    // Protocol remote frees remain atomic, while the registered deferred-free
+    // callback is valid on this thread, reentry-safe, topology-preserving, and
+    // non-unwinding.
     unsafe {
         let theap_ptr = theap.ptr();
         let theap = theap_ptr.as_ptr();
@@ -754,46 +768,58 @@ unsafe fn mi_theap_collect_ex_typed(theap: ThreadHeapLocal, mut collect: mi_coll
 
 /// # Safety
 ///
-/// `theap` must be null or point to an initialized thread heap that can be
-/// collected and abandoned.
-// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+/// `theap` must be null or identify a live initialized thread heap under
+/// current-thread local ownership or exclusive teardown ownership. Its TLD,
+/// backing heap, queues, pages, and registered deferred-free callback state
+/// must satisfy `mi_theap_collect_ex_typed` for the call. No concurrent destroy
+/// or queue relinking is permitted; protocol remote frees remain allowed.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_collect_abandon(theap: *mut mi_theap_t) {
-    unsafe {
-        if theap.is_null() || !mi_theap_is_initialized(theap) {
-            return;
-        }
-        let theap = ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap));
-        mi_theap_collect_abandon_typed(theap);
+    let Some(theap) = ThreadHeapPtr::new(theap) else {
+        return;
+    };
+    // SAFETY: the caller keeps this thread heap live and stable while its
+    // initialized state is read under local or exclusive teardown ownership.
+    if !unsafe { mi_theap_is_initialized(theap.as_ptr()) } {
+        return;
     }
-}
-
-unsafe fn mi_theap_collect_abandon_typed(theap: ThreadHeapLocal) {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: the caller's ownership proves the initialized thread heap is
+    // local for this operation; the collection core's lifecycle and callback
+    // requirements hold through abandonment.
     unsafe {
-        mi_theap_collect_ex_typed(theap, mi_collect_t::MI_ABANDON);
-    }
+        mi_theap_collect_ex_typed(
+            ThreadHeapLocal::new_unchecked(theap),
+            mi_collect_t::MI_ABANDON,
+        )
+    };
 }
 
 /// # Safety
 ///
-/// `theap` must be null or point to an initialized thread heap owned by this
-/// allocator.
-// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+/// `theap` must be null or identify a live initialized thread heap under
+/// current-thread local ownership or exclusive teardown ownership. Its TLD,
+/// backing heap, queues, pages, and registered deferred-free callback state
+/// must satisfy `mi_theap_collect_ex_typed` for the call. No concurrent destroy
+/// or queue relinking is permitted; protocol remote frees remain allowed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_collect(theap: *mut mi_theap_t, force: bool) {
-    unsafe {
-        if theap.is_null() || !mi_theap_is_initialized(theap) {
-            return;
-        }
-        let collect = if force {
-            mi_collect_t::MI_FORCE
-        } else {
-            mi_collect_t::MI_NORMAL
-        };
-        let theap = ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap));
-        mi_theap_collect_ex_typed(theap, collect);
+    let Some(theap) = ThreadHeapPtr::new(theap) else {
+        return;
+    };
+    // SAFETY: the caller keeps this thread heap live and stable while its
+    // initialized state is read under local or exclusive teardown ownership.
+    if !unsafe { mi_theap_is_initialized(theap.as_ptr()) } {
+        return;
     }
+    let collect = if force {
+        mi_collect_t::MI_FORCE
+    } else {
+        mi_collect_t::MI_NORMAL
+    };
+    // SAFETY: the caller's ownership proves the initialized thread heap is
+    // local for this operation, and the collection core's lifecycle and
+    // callback requirements hold for the selected mode.
+    unsafe { mi_theap_collect_ex_typed(ThreadHeapLocal::new_unchecked(theap), collect) };
 }
 
 /// # Safety
@@ -819,24 +845,37 @@ pub unsafe extern "C" fn mi_heap_collect(heap: *mut mi_heap_t, force: bool) {
     }
 }
 
+/// # Safety
+///
+/// `heap` must be `None` or identify a live allocator heap whose associated
+/// thread heap is under current-thread local ownership or exclusive teardown
+/// ownership. The associated thread heap's TLD, backing heap, queues, pages,
+/// and registered deferred-free callback state must remain valid as required
+/// by `mi_theap_collect_ex_typed`. No concurrent destroy or queue relinking is
+/// permitted; protocol remote frees remain allowed.
 #[inline]
 unsafe fn mi_heap_collect_typed(heap: Option<BorrowedHeap>, force: bool) {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
-    unsafe {
-        let Some(theap) = crate::allocator::heap::mi_heap_theap_typed(heap.map(BorrowedHeap::ptr))
-        else {
-            return;
-        };
-        if !mi_theap_is_initialized(theap.as_ptr()) {
-            return;
-        }
-        let collect = if force {
-            mi_collect_t::MI_FORCE
-        } else {
-            mi_collect_t::MI_NORMAL
-        };
-        mi_theap_collect_ex_typed(ThreadHeapLocal::new_unchecked(theap), collect);
+    // SAFETY: the caller keeps the optional heap live while its associated
+    // thread heap is resolved.
+    let Some(theap) =
+        (unsafe { crate::allocator::heap::mi_heap_theap_typed(heap.map(BorrowedHeap::ptr)) })
+    else {
+        return;
+    };
+    // SAFETY: the caller keeps the associated thread heap live and stable
+    // while its initialized state is read.
+    if !unsafe { mi_theap_is_initialized(theap.as_ptr()) } {
+        return;
     }
+    let collect = if force {
+        mi_collect_t::MI_FORCE
+    } else {
+        mi_collect_t::MI_NORMAL
+    };
+    // SAFETY: the caller's ownership proves the initialized associated thread
+    // heap is local for this operation, and the collection core's lifecycle
+    // and callback requirements hold for the selected mode.
+    unsafe { mi_theap_collect_ex_typed(ThreadHeapLocal::new_unchecked(theap), collect) };
 }
 
 /// # Safety

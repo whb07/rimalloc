@@ -1236,6 +1236,15 @@ unsafe fn mi_theap_realloc_request_raw(
     }
 }
 
+/// # Safety
+/// `theap` must remain a live current-thread heap with exclusive mutation of its local allocation
+/// state; protocol atomic remote-free publication is permitted. `req` must retain
+/// `product.layout()` as its full checked new layout and its non-zeroing new-tail policy. If `req`
+/// contains an old allocation, that allocation and its page and block metadata must remain live
+/// and stable, without concurrent free or realloc, until this call returns or consumes it; the
+/// request does not extend those lifetimes. Allocation failure leaves the old allocation live,
+/// in-place success returns it, and moved success copies the preserved prefix, frees the old
+/// allocation, and returns the new one.
 unsafe fn mi_theap_reallocn_req(
     theap: ThreadHeapLocal,
     product: crate::core_types::AllocProduct,
@@ -1244,34 +1253,51 @@ unsafe fn mi_theap_reallocn_req(
     crate::internal::mi_debug_assert!(
         product.layout().requested().get() == req.new_layout().requested().get()
     );
-    // SAFETY: reallocn paths validate checked products and preserve raw pointer ownership semantics.
+    // SAFETY: the caller keeps the current-thread heap locally exclusive and any old allocation
+    // metadata stable through disposition. The caller preserves the full checked-product layout
+    // and non-zeroing policy in the request; the assertion cross-checks its requested size.
     unsafe { mi_theap_realloc_typed(theap, req) }
 }
 
+/// # Safety
+/// `theap` may be null only where the supported lazy/default heap protocol accepts it; otherwise
+/// it must resolve to a live initialized current-thread heap with exclusive local allocation
+/// mutation and no concurrent teardown or non-protocol mutation. Protocol atomic remote-free
+/// publication is permitted. `p` must be null or identify a live allocator allocation whose page
+/// and block metadata remain stable, without concurrent free or realloc, until this operation
+/// returns or consumes it. The internally constructed request does not extend those lifetimes and
+/// must retain the full checked `req` layout and its non-zeroing new-tail policy.
+/// Request-validation or heap-localization failure returns null with the old allocation live.
+/// Allocation failure also leaves it live; in-place success returns it; moved success copies the
+/// preserved prefix, frees it, and returns the new allocation.
 unsafe fn mi_theap_reallocn_req_raw(
     theap: *mut mi_theap_t,
     p: *mut c_void,
     req: crate::core_types::AllocProduct,
 ) -> *mut c_void {
-    // SAFETY: reallocn paths validate checked products and preserve raw pointer ownership semantics.
-    unsafe {
-        let Some(realloc_req) = mi_realloc_request_from_ptr(p, req.layout(), ptr::null_mut())
-        else {
-            return ptr::null_mut();
+    // SAFETY: the caller keeps the optional old allocation metadata stable while the checked
+    // product layout is attached; the null output pointer requires no writable storage.
+    let Some(realloc_req) =
+        (unsafe { mi_realloc_request_from_ptr(p, req.layout(), ptr::null_mut()) })
+    else {
+        return ptr::null_mut();
+    };
+    if theap.is_null() && MI_THEAP_INITASNULL {
+        // SAFETY: the supported lazy-null heap protocol receives the validated request while any
+        // old allocation remains live and stable through its allocation disposition.
+        return unsafe {
+            mi_theap_realloc_request_raw(theap, realloc_req, ptr::null_mut(), ptr::null_mut())
         };
-        if theap.is_null() && MI_THEAP_INITASNULL {
-            return mi_theap_realloc_request_raw(
-                theap,
-                realloc_req,
-                ptr::null_mut(),
-                ptr::null_mut(),
-            );
-        }
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_reallocn_req(ThreadHeapLocal::new_unchecked(theap), req, realloc_req)
     }
+    // SAFETY: the raw heap satisfies the supported default/live current-thread protocol;
+    // localization failure does not consume the validated old allocation.
+    let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: localization establishes the current-thread heap witness and exclusive local
+    // mutation. The request retains the full checked product layout and non-zeroing policy, and
+    // any old allocation remains stable through the typed disposition.
+    unsafe { mi_theap_reallocn_req(ThreadHeapLocal::new_unchecked(theap), req, realloc_req) }
 }
 
 /// # Safety
@@ -1343,44 +1369,69 @@ unsafe fn mi_theap_reallocf_req_raw(
     unsafe { mi_theap_reallocf_req(ThreadHeapLocal::new_unchecked(theap), req) }
 }
 
+/// # Safety
+/// `theap` must remain a live current-thread heap with exclusive mutation of its local allocation
+/// state; protocol atomic remote-free publication is permitted. `req.layout()` and
+/// `realloc_req.new_layout()` must describe the same requested size, and the realloc request must
+/// retain the calloc layout's zero-new-tail policy. If `realloc_req` contains an old allocation,
+/// it and its page and block metadata must remain live and stable, without concurrent free or
+/// realloc, until this call returns or consumes it; the request does not extend those lifetimes.
+/// Allocation failure leaves the old allocation live and in-place success returns it. Moved
+/// success returns a new allocation with the preserved prefix and zeroed new tail after freeing
+/// the old allocation.
 unsafe fn mi_theap_recalloc(
     theap: ThreadHeapLocal,
     req: crate::core_types::CallocRequest,
     realloc_req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
-    unsafe {
-        crate::internal::mi_debug_assert!(
-            req.layout().requested().get() == realloc_req.new_layout().requested().get()
-        );
-        mi_theap_realloc_typed(theap, realloc_req)
-    }
+    crate::internal::mi_debug_assert!(
+        req.layout().requested().get() == realloc_req.new_layout().requested().get()
+    );
+    // SAFETY: the caller keeps the current-thread heap locally exclusive and any old allocation
+    // metadata stable through disposition. The caller preserves the checked calloc layout and
+    // zero-new-tail policy in the request; the assertion cross-checks its requested size.
+    unsafe { mi_theap_realloc_typed(theap, realloc_req) }
 }
 
+/// # Safety
+/// `theap` may be null only where the supported lazy/default heap protocol accepts it; otherwise
+/// it must resolve to a live initialized current-thread heap with exclusive local allocation
+/// mutation and no concurrent teardown or non-protocol mutation. Protocol atomic remote-free
+/// publication is permitted. `p` must be null or identify a live allocator allocation whose page
+/// and block metadata remain stable, without concurrent free or realloc, until this operation
+/// returns or consumes it. The internally constructed request does not extend those lifetimes and
+/// must retain `req`'s checked layout and zero-new-tail policy. Request-validation or
+/// heap-localization failure returns null with the old allocation live. Allocation failure also
+/// leaves it live and in-place success returns it. Moved success returns a new allocation with the
+/// preserved prefix and zeroed new tail after freeing the old allocation.
 unsafe fn mi_theap_recalloc_raw(
     theap: *mut mi_theap_t,
     p: *mut c_void,
     req: crate::core_types::CallocRequest,
 ) -> *mut c_void {
-    // SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
-    unsafe {
-        let Some(realloc_req) = mi_realloc_request_from_ptr(p, req.layout(), ptr::null_mut())
-        else {
-            return ptr::null_mut();
+    // SAFETY: the caller keeps the optional old allocation metadata stable while the checked
+    // calloc layout and zero-new-tail policy are attached; no output storage is requested.
+    let Some(realloc_req) =
+        (unsafe { mi_realloc_request_from_ptr(p, req.layout(), ptr::null_mut()) })
+    else {
+        return ptr::null_mut();
+    };
+    if theap.is_null() && MI_THEAP_INITASNULL {
+        // SAFETY: the supported lazy-null heap protocol receives the validated zero-tail request
+        // while any old allocation remains live and stable through its allocation disposition.
+        return unsafe {
+            mi_theap_realloc_request_raw(theap, realloc_req, ptr::null_mut(), ptr::null_mut())
         };
-        if theap.is_null() && MI_THEAP_INITASNULL {
-            return mi_theap_realloc_request_raw(
-                theap,
-                realloc_req,
-                ptr::null_mut(),
-                ptr::null_mut(),
-            );
-        }
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_recalloc(ThreadHeapLocal::new_unchecked(theap), req, realloc_req)
     }
+    // SAFETY: the raw heap satisfies the supported default/live current-thread protocol;
+    // localization failure does not consume the validated old allocation.
+    let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: localization establishes the current-thread heap witness and exclusive local
+    // mutation. The request retains the checked calloc layout and zero-tail policy, and any old
+    // allocation remains stable through the typed disposition.
+    unsafe { mi_theap_recalloc(ThreadHeapLocal::new_unchecked(theap), req, realloc_req) }
 }
 
 /// # Safety
@@ -1398,16 +1449,21 @@ pub unsafe extern "C" fn mi_realloc(p: *mut c_void, newsize: usize) -> *mut c_vo
 }
 
 /// # Safety
-/// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY: reallocn paths validate checked products and preserve raw pointer ownership semantics.
+/// `p` must be null or identify a live allocation returned by this allocator. Its page and block
+/// metadata must remain stable, without concurrent free or realloc, until this operation returns
+/// or consumes it. Product overflow returns null with the old allocation live. Request-validation,
+/// heap-localization, or allocation failure also leaves it live. A null `p` requests a new checked-
+/// product allocation. In-place success returns the still-live old allocation; moved success
+/// copies the preserved prefix, frees the old allocation, and returns the new one.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reallocn(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
-    unsafe {
-        if let Some(req) = alloc_product_or_report(count, size) {
-            mi_theap_reallocn_req_raw(_mi_theap_default(), p, req)
-        } else {
-            core::ptr::null_mut()
-        }
+    if let Some(req) = alloc_product_or_report(count, size) {
+        // SAFETY: allocator lifecycle supplies the live current-thread default heap and exclusive
+        // local mutation. The caller keeps the optional old allocation stable through the checked-
+        // product disposition.
+        unsafe { mi_theap_reallocn_req_raw(_mi_theap_default(), p, req) }
+    } else {
+        core::ptr::null_mut()
     }
 }
 
@@ -1467,16 +1523,21 @@ pub unsafe extern "C" fn mi_rezalloc(p: *mut c_void, newsize: usize) -> *mut c_v
 }
 
 /// # Safety
-/// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
+/// `p` must be null or identify a live allocation returned by this allocator. Its page and block
+/// metadata must remain stable, without concurrent free or realloc, until this operation returns
+/// or consumes it. Product overflow returns null with the old allocation live. Request-validation,
+/// heap-localization, or allocation failure also leaves it live. A null `p` requests a new checked
+/// zeroed allocation. In-place success returns the still-live old allocation. Moved success returns
+/// a new allocation with the preserved prefix and zeroed new tail after freeing the old allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
-    unsafe {
-        let Some(req) = calloc_request_or_report(count, size) else {
-            return ptr::null_mut();
-        };
-        mi_theap_recalloc_raw(_mi_theap_default(), p, req)
-    }
+    let Some(req) = calloc_request_or_report(count, size) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: allocator lifecycle supplies the live current-thread default heap and exclusive
+    // local mutation. The caller keeps the optional old allocation stable through the checked
+    // calloc disposition, and `req` carries the zero-new-tail policy.
+    unsafe { mi_theap_recalloc_raw(_mi_theap_default(), p, req) }
 }
 
 /// # Safety

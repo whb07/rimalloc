@@ -76,12 +76,21 @@ core::arch::global_asm!(
     ".size mi_free_aligned, .-mi_free_aligned",
 );
 
+/// # Safety
+///
+/// `page` must identify live initialized page metadata with stable encoded-list
+/// keys. `list` must be null or a readable, well-formed, terminating encoded
+/// list of aligned blocks from that page; its head and links must remain stable
+/// for the traversal, or be a protocol-safe remote snapshot whose published
+/// links remain readable and are not relinked. `elem` is used only for pointer
+/// comparison and need not be dereferenceable.
 unsafe fn mi_list_contains(
     page: *const mi_page_t,
     mut list: *const mi_block_t,
     elem: *const mi_block_t,
 ) -> bool {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY: the caller keeps the page keys and this well-formed same-page
+    // encoded list readable and stable for the traversal.
     unsafe {
         while !list.is_null() {
             if ptr::eq(elem, list) {
@@ -113,8 +122,19 @@ pub(crate) unsafe extern "C" fn _mi_page_ptr_unalign(
     }
 }
 
+/// # Safety
+///
+/// `page` must identify live initialized page metadata and `block` must be a
+/// readable, aligned block location in that page; the block may already be
+/// free. The caller must locally own the page or hold its abandoned-page claim.
+/// Its encoded keys and local free-list heads and links must remain stable, and
+/// a remote-list snapshot must contain fully initialized readable links that
+/// are not relinked after publication. Any registered diagnostic callback must
+/// not unwind.
 unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_block_t) -> bool {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY: the caller provides stable page keys and local lists plus a
+    // protocol-safe remote snapshot, all as readable same-page encoded lists.
+    // The diagnostic path may invoke only a non-unwinding registered callback.
     unsafe {
         let page_ptr = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
         if mi_list_contains(page, page_ptr.free().as_raw(), block)
@@ -292,14 +312,24 @@ pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t)
 }
 
 /// # Safety
-/// `page` and `block` must refer to a valid block owned by that page.
+/// `page` must identify live initialized page metadata and `block` must identify
+/// a readable, aligned block location in that page; the block may already be
+/// free. The page backing, encoded-list keys, and local free-list heads and
+/// links must remain stable and readable for the call. The caller must locally
+/// own the page or hold its abandoned-page claim. Concurrent protocol
+/// remote-free publication may update the remote head only after initializing
+/// each readable link and must not relink an already-published node. Any
+/// registered diagnostic callback must not unwind.
 pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_block_t) -> bool {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
-    unsafe {
-        if MI_ENCODE_FREELIST == 0 || (crate::internal::MI_SECURE < 4 && MI_DEBUG == 0) {
-            return false;
-        }
+    if MI_ENCODE_FREELIST == 0 || (crate::internal::MI_SECURE < 4 && MI_DEBUG == 0) {
+        return false;
+    }
 
+    // SAFETY: the caller supplies a live page and a matching readable aligned
+    // block location, possibly already free, owns or has claimed the page,
+    // keeps its keys and local lists stable, and permits only protocol
+    // publication of initialized remote links during this coherent traversal.
+    unsafe {
         let keys = mi_page_keys(page);
         let n = mi_block_nextx(page.cast::<c_void>(), block, &keys);
         if ((n as usize) & (MI_INTPTR_SIZE - 1)) == 0
@@ -404,6 +434,10 @@ pub(crate) unsafe fn mi_free_block_local(
         let block = block_wrapper.block().as_ptr();
         let was_guarded = block_wrapper.is_guarded();
         let check_full = mode.check_full();
+        // SAFETY: the typed witnesses identify a live locally owned page and a
+        // matching readable aligned block location, possibly already free;
+        // page keys and local lists are stable, remote publication follows the
+        // allocator protocol, and registered diagnostics cannot unwind.
         if mi_check_is_double_free(page, block) {
             return;
         }

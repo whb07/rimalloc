@@ -62,6 +62,17 @@ struct PrimitiveOsAllocation {
     pinned: Pinned,
 }
 
+/// A successful plain OS allocation that is already committed.
+///
+/// This records mapping status only; it does not own the mapping or release it
+/// automatically.
+struct CommittedOsAllocation {
+    base: OsMemPtr,
+    size: ReservedBytes,
+    initially_zero: InitiallyZero,
+    pinned: Pinned,
+}
+
 /// Result of an OS commit attempt, including whether the committed bytes were
 /// reported as initially zero. This is a status value, not mapping ownership.
 pub(crate) struct OsCommitResult {
@@ -1367,51 +1378,60 @@ unsafe fn mi_os_alloc_aligned_memid(
     Some((p, memid))
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// Allocate committed OS backing for a plain allocation request.
+///
+/// # Safety
+/// OS configuration, primitive dispatch, and current subprocess statistics
+/// must remain live and initialized for this synchronous allocation attempt.
+/// A successful result records its mapping status but provides no automatic
+/// release or exclusive ownership.
 #[inline]
-unsafe fn mi_os_ensure_zero(p: *mut c_void, size: usize, memid: *mut mi_memid_t) -> *mut c_void {
-    if p.is_null() || size == 0 {
-        return p;
+unsafe fn mi_os_alloc_committed(size: usize) -> Option<CommittedOsAllocation> {
+    if size == 0 {
+        return None;
     }
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-    if !unsafe { (*memid).initially_committed } {
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        let commit = unsafe { _mi_os_commit(p, size) };
-        if !commit.success() {
-            unsafe { _mi_os_free(p, size, *memid) };
-            return core::ptr::null_mut();
-        }
-        unsafe { (*memid).initially_committed = true };
-    }
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-    if unsafe { (*memid).initially_zero } {
-        return p;
-    }
-    unsafe { _mi_memzero_aligned(p, size) };
-    unsafe { (*memid).initially_zero = true };
-    p
+    // SAFETY: stable initialized OS configuration supplies the page size used
+    // to normalize this nonzero allocation request.
+    let size = unsafe { _mi_os_good_alloc_size(size) };
+    // SAFETY: normalized `size` is a nonzero page multiple, and the caller keeps
+    // primitive configuration and subprocess statistics live for the attempt.
+    let allocation = unsafe { mi_os_prim_alloc(size, 0, true, false) };
+    let PrimitiveOsAllocation {
+        base,
+        initially_zero,
+        pinned,
+    } = allocation?;
+    Some(CommittedOsAllocation {
+        base,
+        size: ReservedBytes::new(size),
+        initially_zero,
+        pinned,
+    })
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// # Safety
+/// `memid` must be null or point to aligned uniquely writable MemId storage. OS
+/// configuration, primitive dispatch, and current subprocess statistics must
+/// remain live and initialized. On success, the caller must eventually release
+/// the returned mapping with the published MemId. A nonnull output is set to
+/// NONE before validation and remains NONE on failure.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
     if !memid.is_null() {
-        unsafe {
-            *memid = _mi_memid_none();
-        }
+        // SAFETY: the boundary contract makes the nonnull output uniquely writable.
+        unsafe { *memid = _mi_memid_none() };
     }
     if size == 0 || memid.is_null() {
         return core::ptr::null_mut();
     }
 
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-    let size = unsafe { _mi_os_good_alloc_size(size) };
-    // SAFETY: normalized nonzero `size` is page-multiple; OS configuration and
-    // current subprocess statistics remain live for this allocation attempt.
-    let allocation = unsafe { mi_os_prim_alloc(size, 0, true, false) };
-    let Some(PrimitiveOsAllocation {
+    // SAFETY: the boundary keeps OS configuration, primitive dispatch, and
+    // subprocess statistics live for this committed allocation attempt.
+    let allocation = unsafe { mi_os_alloc_committed(size) };
+    let Some(CommittedOsAllocation {
         base,
+        size,
         initially_zero,
         pinned,
     }) = allocation
@@ -1420,11 +1440,12 @@ pub(crate) unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t
     };
     let p = base.as_ptr();
 
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY: the output remains uniquely writable, and the committed status
+    // supplies metadata for exactly the mapping returned to the caller.
     unsafe {
-        *memid = crate::core_types::MemId::<crate::core_types::OsMem>::os(
-            crate::core_types::OsMemPtr::new(p),
-            crate::core_types::ReservedBytes::new(size),
+        *memid = MemId::<OsMem>::os(
+            Some(base),
+            size,
             crate::core_types::InitiallyCommitted(true),
             initially_zero,
             pinned,
@@ -1434,11 +1455,54 @@ pub(crate) unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t
     p
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// # Safety
+/// `memid` must be null or point to aligned uniquely writable MemId storage. OS
+/// configuration, primitive dispatch, and current subprocess statistics must
+/// remain live and initialized. On success, the caller must eventually release
+/// the returned mapping with the published MemId. A nonnull output is set to
+/// NONE before validation and remains NONE on failure.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
-    let p = unsafe { _mi_os_alloc(size, memid) };
-    unsafe { mi_os_ensure_zero(p, size, memid) }
+    if !memid.is_null() {
+        // SAFETY: the boundary contract makes the nonnull output uniquely writable.
+        unsafe { *memid = _mi_memid_none() };
+    }
+    if size == 0 || memid.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    // SAFETY: the boundary keeps OS configuration, primitive dispatch, and
+    // subprocess statistics live for this committed allocation attempt.
+    let allocation = unsafe { mi_os_alloc_committed(size) };
+    let Some(CommittedOsAllocation {
+        base,
+        size: backing_size,
+        initially_zero,
+        pinned,
+    }) = allocation
+    else {
+        return core::ptr::null_mut();
+    };
+    let p = base.as_ptr();
+    if !initially_zero.0 {
+        // SAFETY: the successful committed mapping is writable for at least the
+        // original requested `size`, matching the legacy zalloc zeroing extent.
+        unsafe { _mi_memzero_aligned(p, size) };
+    }
+
+    // SAFETY: the output remains uniquely writable, and zalloc has established
+    // zeroed requested bytes before publishing the matching committed MemId.
+    unsafe {
+        *memid = MemId::<OsMem>::os(
+            Some(base),
+            backing_size,
+            crate::core_types::InitiallyCommitted(true),
+            InitiallyZero(true),
+            pinned,
+        )
+        .into_raw();
+    }
+    p
 }
 
 /// # Safety
@@ -2126,6 +2190,34 @@ mod tests {
         // attempting any primitive allocation.
         let result = unsafe { mi_os_alloc_aligned_memid(0, 1, true, false) };
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn plain_allocators_publish_none_for_zero_size() {
+        let os_memid = || {
+            MemId::<OsMem>::os(
+                None,
+                ReservedBytes::new(16),
+                InitiallyCommitted(true),
+                InitiallyZero(false),
+                Pinned(false),
+            )
+            .into_raw()
+        };
+
+        let mut alloc_memid = os_memid();
+        // SAFETY: `alloc_memid` is uniquely writable; zero size rejects before
+        // consulting OS configuration or invoking a primitive allocation.
+        let alloc = unsafe { _mi_os_alloc(0, &mut alloc_memid) };
+        assert!(alloc.is_null());
+        assert!(matches!(MemId::view(alloc_memid), MemIdView::None));
+
+        let mut zalloc_memid = os_memid();
+        // SAFETY: `zalloc_memid` is uniquely writable; zero size rejects before
+        // consulting OS configuration or invoking a primitive allocation.
+        let zalloc = unsafe { _mi_os_zalloc(0, &mut zalloc_memid) };
+        assert!(zalloc.is_null());
+        assert!(matches!(MemId::view(zalloc_memid), MemIdView::None));
     }
 
     fn assert_range(range: OsPageRange, start: usize, size: usize) {

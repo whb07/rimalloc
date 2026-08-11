@@ -1719,55 +1719,84 @@ pub(crate) unsafe fn _mi_theap_or_default_typed(
     Some(unsafe { crate::core_types::ThreadHeapPtr::new_unchecked(theap) })
 }
 
+/// Allocate from the generic page path for a current-thread heap.
+///
+/// # Safety
+/// `theap` must identify a live initialized heap owned by the current thread. The caller must
+/// exclude concurrent local mutation of its counters, TLD, page queues, free lists, and stats;
+/// protocol atomic remote-free publication is permitted. `layout` must describe a supported
+/// padded allocation request, and `flags` must agree with its zeroing policy and contain either no
+/// huge alignment or a valid huge alignment. Heap collection, deferred-free, arena commit/purge,
+/// and error callbacks plus their opaque arguments must remain valid for synchronous invocation,
+/// must not incompatibly reenter this heap's local allocation state, and must not unwind. If
+/// nonnull, `usable` must be aligned and writable for one `usize` when accessed and must not
+/// overlap allocator metadata.
 pub(crate) unsafe fn _mi_malloc_generic_typed(
     theap: crate::core_types::ThreadHeapPtr,
     layout: crate::core_types::LayoutRequest,
     flags: crate::core_types::MallocGenericFlags,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
-    unsafe {
-        let local_theap = crate::core_types::ThreadHeapLocal::new_unchecked(theap);
-        let theap = local_theap.ptr().as_ptr();
-        let size = layout.padded().get();
-        let zero = flags.zeroed() == crate::core_types::Zeroed::Yes;
-        let Some(huge_alignment) =
-            crate::core_types::MaybeAlignment::new(flags.huge_alignment().get())
-        else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
+    let size = layout.padded().get();
+    let zeroed = flags.zeroed();
+    let Some(huge_alignment) = crate::core_types::MaybeAlignment::new(flags.huge_alignment().get())
+    else {
+        crate::internal::mi_assert_internal!(false);
+        return ptr::null_mut();
+    };
 
-        (*theap).generic_count += 1;
-        if (*theap).generic_count
+    // SAFETY: the contract keeps `theap` live, initialized, current-thread owned, and exclusively
+    // mutable for local allocator state. This epoch preserves the original counter update order,
+    // then performs deferred-free, retired-page, and optional full collection synchronously while
+    // their callbacks and heap metadata remain valid and incompatible reentry is excluded.
+    let local_theap = unsafe {
+        let local_theap = crate::core_types::ThreadHeapLocal::new_unchecked(theap);
+        let raw_theap = local_theap.ptr().as_ptr();
+        (*raw_theap).generic_count += 1;
+        if (*raw_theap).generic_count
             >= crate::allocator::policy::ActivePolicy::generic_maintenance_interval().get()
         {
-            (*theap).generic_collect_count += (*theap).generic_count;
-            (*theap).generic_count = 0;
-            _mi_deferred_free(theap, false);
-            _mi_theap_collect_retired(theap, false);
+            (*raw_theap).generic_collect_count += (*raw_theap).generic_count;
+            (*raw_theap).generic_count = 0;
+            _mi_deferred_free(raw_theap, false);
+            _mi_theap_collect_retired(raw_theap, false);
 
             let generic_collect = crate::allocator::policy::ActivePolicy::generic_collect_limit();
-            if generic_collect.reached_by((*theap).generic_collect_count) {
-                (*theap).generic_collect_count = 0;
-                crate::mimalloc::mi_theap_collect(theap, false);
+            if generic_collect.reached_by((*raw_theap).generic_collect_count) {
+                (*raw_theap).generic_collect_count = 0;
+                crate::mimalloc::mi_theap_collect(raw_theap, false);
             }
         }
+        local_theap
+    };
 
+    // SAFETY: the current-thread heap, queue registry, arenas, backing, and synchronous callbacks
+    // remain live through this search epoch. Preserve the original first search, forced collection
+    // only on failure, and single retry order; concurrent remote frees remain protocol-atomic.
+    let available = unsafe {
         let mut available = mi_find_page_typed(local_theap, layout.padded(), huge_alignment);
         if available.is_none() {
-            crate::mimalloc::mi_theap_collect(theap, true);
+            crate::mimalloc::mi_theap_collect(local_theap.ptr().as_ptr(), true);
             available = mi_find_page_typed(local_theap, layout.padded(), huge_alignment);
         }
+        available
+    };
 
-        let Some(available) = available else {
-            let req_size = size.wrapping_sub(MI_PADDING_SIZE);
-            _mi_error_message_fmt(
-                Errno::ENOMEM,
-                format_args!("unable to allocate memory ({req_size} bytes)\n"),
-            );
-            return ptr::null_mut();
-        };
+    let Some(available) = available else {
+        let req_size = size.wrapping_sub(MI_PADDING_SIZE);
+        _mi_error_message_fmt(
+            Errno::ENOMEM,
+            format_args!("unable to allocate memory ({req_size} bytes)\n"),
+        );
+        return ptr::null_mut();
+    };
+
+    // SAFETY: `available` was selected from this exclusively locally mutated heap and keeps its
+    // live page/free-list/backing relation through allocation. The layout supplies the required
+    // padded-size fit; the optional output is valid at its write, which intentionally precedes the
+    // allocation attempt. Block allocation and zeroing consume `available`, after which the page
+    // remains live for the original large-page fullness test and possible queue transition.
+    unsafe {
         let page = available.page().as_ptr();
 
         crate::internal::mi_assert_internal!(mi_page_block_size(page) >= size);
@@ -1778,14 +1807,11 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
         crate::internal::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
 
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
-        // SAFETY: `available` was found from `local_theap` during its exclusive
-        // allocation epoch; the checks above establish the padded-size fit and
-        // backing geometry, while its page/free-list metadata remains live.
         let p = _mi_page_malloc_zero_typed(
             local_theap,
             available,
             layout.padded(),
-            crate::core_types::Zeroed::from_bool(zero),
+            zeroed,
             ptr::null_mut(),
         );
         crate::internal::mi_assert_internal!(!p.is_null());

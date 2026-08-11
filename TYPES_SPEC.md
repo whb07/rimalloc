@@ -477,7 +477,7 @@ pub(crate) struct RetiredPage(PagePtr);
 7.2 Required page states
 
 State	Raw field interpretation	Valid typed operations
-UninitPage	Metadata exists but allocation lists and ownership are not ready	initialize(theap)
+Page<Uninit>	Metadata exists but allocation lists and ownership are not ready	initialize(theap)
 ActivePage	Owned by a thread heap, in a normal page queue, may allocate/free	malloc_from_free, free_local, to_full, retire, abandon
 AvailablePage	Active and free != null	pop_free_block
 FullPage	Active and in full queue; full flag set	unfull, free_local, abandon
@@ -504,7 +504,7 @@ Abandoned page reclaimed	reclaim	OwnedAbandonedPage + ThreadHeapLocal	ActivePage
 Abandoned page reabandoned as mapped	try_reabandon_to_mapped	OwnedAbandonedPage	AbandonedMappedPage or unchanged
 Page freed to arena	free_to_arena	AllFreePage<_>	DestroyedPage
 
-The current _mi_page_init establishes a page’s heap, thread heap, keys, page area, ownership, empty free lists, zero used, owned xthread_free, and then extends the free list.  That should become the only constructor from UninitPage to ActivePage.
+The current mi_page_init_typed establishes a page’s heap, thread heap, keys, page area, ownership, empty free lists, zero used, owned xthread_free, and then extends the free list. It is the only constructor from Page<Uninit> to ActivePage.
 
 The current reclaim path asserts that the page is owned and abandoned, then sets the thread heap, collects frees, finds the queue, and pushes at the end.  That should become the only transition from OwnedAbandonedPage to ActivePage.
 

@@ -437,9 +437,11 @@ struct RegisteredFreshPage {
 
 impl RegisteredFreshPage {
     #[inline(always)]
-    fn publish(self) -> *mut mi_page_t {
+    fn publish(self) -> crate::core_types::Page<crate::core_types::Uninit> {
         let registered = core::mem::ManuallyDrop::new(self);
-        registered.page.as_ptr()
+        // SAFETY: registration publishes fully prepared page metadata, while
+        // this consuming boundary retains exclusive initialization ownership.
+        unsafe { crate::core_types::assume_uninit_page(registered.page) }
     }
 }
 
@@ -1502,13 +1504,13 @@ unsafe fn mi_arenas_page_alloc_fresh(
     block_size: crate::core_types::BlockSize,
     block_alignment: crate::core_types::MaybeAlignment,
     commit: bool,
-) -> *mut mi_page_t {
+) -> Option<crate::core_types::Page<crate::core_types::Uninit>> {
     let block_size_raw = block_size.get();
     let block_alignment_raw = block_alignment.get();
     let os_align = block_alignment_raw > MI_PAGE_MAX_OVERALLOC_ALIGN;
     let slice_count_usize = slice_count.get() as usize;
     let alloc_size = mi_size_of_slices(slice_count_usize);
-    let Some(mut pending) = (unsafe {
+    let mut pending = (unsafe {
         mi_arenas_page_alloc_fresh_area(
             theap,
             slice_count,
@@ -1517,9 +1519,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
             os_align,
             commit,
         )
-    }) else {
-        return ptr::null_mut();
-    };
+    })?;
     let slice_start = pending.start();
     let mut memid = pending.memid();
 
@@ -1582,7 +1582,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
                 crate::core_types::MemIdView::Arena(a) => (a.arena(), a.range()),
                 _ => {
                     crate::internal::mi_assert_internal!(false);
-                    return ptr::null_mut();
+                    return None;
                 }
             };
             mi_arena_commit(
@@ -1593,7 +1593,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
                 crate::core_types::CommittedBytes::new(0),
             )
         } {
-            return ptr::null_mut();
+            return None;
         }
     }
     if !memid.initially_zero && !page_meta_is_separate {
@@ -1672,9 +1672,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     // Keep memid diagnostics and page metadata synchronized before the pending
     // transaction enters registered state.
     *pending.memid_mut() = memid;
-    let Some(registered) = (unsafe { pending.register(page_ptr) }) else {
-        return ptr::null_mut();
-    };
+    let registered = (unsafe { pending.register(page_ptr) })?;
 
     // SAFETY: arena page ownership transitions update owner words, page maps, and visibility only after page metadata invariants hold.
     unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.pages), 1) };
@@ -1694,7 +1692,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
 
-    registered.publish()
+    Some(registered.publish())
 }
 
 unsafe fn mi_arenas_page_regular_alloc(
@@ -1703,7 +1701,7 @@ unsafe fn mi_arenas_page_regular_alloc(
     block_size: crate::core_types::BlockSize,
 ) -> *mut mi_page_t {
     // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
-    let mut page = unsafe { mi_arenas_page_try_find_abandoned(theap, slice_count, block_size) };
+    let page = unsafe { mi_arenas_page_try_find_abandoned(theap, slice_count, block_size) };
     if !page.is_null() {
         return page;
     }
@@ -1715,7 +1713,7 @@ unsafe fn mi_arenas_page_regular_alloc(
         // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
         || (commit_on_demand == 2 && unsafe { _mi_os_has_overcommit() })
         || commit_on_demand == 0;
-    page = unsafe {
+    let Some(page_uninit) = (unsafe {
         mi_arenas_page_alloc_fresh(
             theap,
             slice_count,
@@ -1723,10 +1721,10 @@ unsafe fn mi_arenas_page_regular_alloc(
             crate::core_types::MaybeAlignment::new_unchecked(0),
             commit,
         )
-    };
-    if page.is_null() {
+    }) else {
         return ptr::null_mut();
-    }
+    };
+    let page = page_uninit.ptr().as_ptr();
     // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
     crate::internal::mi_assert_internal!(match crate::core_types::MemId::view(unsafe {
         (*page).memid
@@ -1735,17 +1733,29 @@ unsafe fn mi_arenas_page_regular_alloc(
         _ => true, // Non-arena allocations trivially pass this slice_count assert
     });
     // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
-    if !unsafe { crate::allocator::page::_mi_page_init(theap, page) } {
-        unsafe {
-            _mi_arenas_free(
-                page.cast(),
-                mi_page_full_size(PagePtr::new_unchecked(page)).get(),
-                (*page).memid,
-            )
-        };
-        return ptr::null_mut();
+    // SAFETY: the current thread heap exclusively owns this registered fresh
+    // page through the consuming uninitialized-page witness.
+    match unsafe {
+        crate::allocator::page::mi_page_init_typed(
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            ),
+            page_uninit,
+        )
+    } {
+        Ok(active) => active.page().as_ptr(),
+        Err(page_uninit) => {
+            let page = page_uninit.ptr();
+            unsafe {
+                _mi_arenas_free(
+                    page.as_ptr().cast(),
+                    mi_page_full_size(page).get(),
+                    (*page.as_ptr()).memid,
+                )
+            };
+            ptr::null_mut()
+        }
     }
-    page
 }
 
 #[inline(never)]
@@ -1768,27 +1778,39 @@ unsafe fn mi_arenas_page_singleton_alloc(
         unsafe { mi_set_errno(ENOMEM) };
         return ptr::null_mut();
     };
-    let page = unsafe {
+    let Some(page_uninit) = (unsafe {
         mi_arenas_page_alloc_fresh(theap, slice_count, block_size, block_alignment, true)
-    };
-    if page.is_null() {
+    }) else {
         return ptr::null_mut();
-    }
+    };
+    let page = page_uninit.ptr().as_ptr();
     // SAFETY: singleton arena page setup handles over-aligned or large objects while preserving one-block page invariants.
     crate::internal::mi_assert_internal!(unsafe {
         crate::allocator::page::mi_page_reserved_count(page).get() == 1
     });
-    if !unsafe { crate::allocator::page::_mi_page_init(theap, page) } {
-        unsafe {
-            _mi_arenas_free(
-                page.cast(),
-                mi_page_full_size(PagePtr::new_unchecked(page)).get(),
-                (*page).memid,
-            )
-        };
-        return ptr::null_mut();
+    // SAFETY: the current thread heap exclusively owns this registered fresh
+    // singleton through the consuming uninitialized-page witness.
+    match unsafe {
+        crate::allocator::page::mi_page_init_typed(
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            ),
+            page_uninit,
+        )
+    } {
+        Ok(active) => active.page().as_ptr(),
+        Err(page_uninit) => {
+            let page = page_uninit.ptr();
+            unsafe {
+                _mi_arenas_free(
+                    page.as_ptr().cast(),
+                    mi_page_full_size(page).get(),
+                    (*page.as_ptr()).memid,
+                )
+            };
+            ptr::null_mut()
+        }
     }
-    page
 }
 
 /// # Safety

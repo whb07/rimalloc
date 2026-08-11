@@ -14,7 +14,7 @@ use super::{
 
 /// # Safety
 /// `page` must identify exclusively held page metadata that has not yet been
-/// initialized. Legal callers: C-shaped page initialization entry points.
+/// initialized. Legal callers: registered fresh-page publication.
 #[inline(always)]
 pub(crate) unsafe fn assume_uninit_page(page: PagePtr) -> Page<Uninit> {
     // SAFETY: the initialization ingress owns

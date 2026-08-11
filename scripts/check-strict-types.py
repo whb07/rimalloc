@@ -46,7 +46,7 @@ ALLOWED_XTHREAD_FREE = {
 }
 
 RAW_BRIDGE_CALLERS = {
-    "assume_uninit_page": {"src/allocator/page.rs"},
+    "assume_uninit_page": {"src/allocator/arena.rs"},
     "assume_active_page": {
         "src/allocator/aligned/thread_heap.rs",
         "src/allocator/alloc.rs",

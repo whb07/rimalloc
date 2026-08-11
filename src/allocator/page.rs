@@ -877,30 +877,15 @@ unsafe fn mi_page_fresh_alloc_typed(
     }
 }
 
-// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+/// # Safety
+/// `owner` must be the live current-thread owner of the registered fresh page,
+/// and no other page-state witness or concurrent access may exist during
+/// initialization.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_page_init(
-    theap: *mut mi_theap_t,
-    page: *mut mi_page_t,
-) -> bool {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        crate::internal::mi_assert!(!page.is_null());
-        crate::internal::mi_assert!(!theap.is_null());
-        _mi_page_init_typed(
-            crate::core_types::ThreadHeapLocal::new_unchecked(
-                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-            ),
-            crate::core_types::assume_uninit_page(crate::core_types::PagePtr::new_unchecked(page)),
-        )
-    }
-}
-
-#[inline]
-unsafe fn _mi_page_init_typed(
+pub(crate) unsafe fn mi_page_init_typed(
     owner: crate::core_types::ThreadHeapLocal,
     page_uninit: crate::core_types::Page<crate::core_types::Uninit>,
-) -> bool {
+) -> Result<crate::core_types::ActivePage, crate::core_types::Page<crate::core_types::Uninit>> {
     // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
         let theap = owner.ptr().as_ptr();
@@ -916,7 +901,7 @@ unsafe fn _mi_page_init_typed(
         let page_ptr = page_uninit.ptr();
         let Some(area) = page_ptr.area() else {
             crate::internal::mi_assert_internal!(false);
-            return false;
+            return Err(page_uninit);
         };
         mi_track_mem_noaccess(area.start().as_ptr().cast(), area.byte_len());
         crate::internal::mi_assert_internal!(
@@ -971,11 +956,11 @@ unsafe fn _mi_page_init_typed(
         crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_uninit.ptr()));
 
         if !mi_page_extend_free(theap, page) {
-            return false;
+            return Err(page_uninit);
         }
         let active = page_uninit.initialize(owner);
         crate::internal::mi_assert!(mi_page_immediate_available(active.page().as_ptr()));
-        true
+        Ok(active)
     }
 }
 

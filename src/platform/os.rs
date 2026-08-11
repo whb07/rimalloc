@@ -64,6 +64,53 @@ static mut mi_os_mem_config: mi_os_mem_config_t = mi_os_mem_config_t {
     has_transparent_huge_pages: false,
 };
 
+/// A checked power-of-two OS allocation alignment normalized to whole pages.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct OsAlignment(usize);
+
+impl OsAlignment {
+    #[inline]
+    fn normalized(requested: usize, page_size: OsPageSize) -> Option<Self> {
+        let page_size = page_size.get();
+        let remainder = requested % page_size;
+        let normalized = if remainder == 0 {
+            requested
+        } else {
+            requested.checked_add(page_size - remainder)?
+        };
+        if normalized < page_size || !normalized.is_power_of_two() {
+            return None;
+        }
+        Some(Self(normalized))
+    }
+
+    #[inline]
+    fn from_page_multiple(requested: usize, page_size: OsPageSize) -> Option<Self> {
+        if !requested.is_multiple_of(page_size.get()) {
+            return None;
+        }
+        Self::normalized(requested, page_size)
+    }
+
+    #[inline]
+    fn get(self) -> usize {
+        self.0
+    }
+
+    #[inline]
+    fn align_up(self, value: usize) -> Option<usize> {
+        let mask = self.0 - 1;
+        value.checked_add(mask).map(|sum| sum & !mask)
+    }
+
+    #[inline]
+    fn overreserve(self, size: usize) -> Option<usize> {
+        let total = size.checked_add(self.0)?;
+        (total < usize::MAX).then_some(total)
+    }
+}
+
 /// A nonempty, page-aligned exposed-address interval.
 ///
 /// This is geometry only: it does not prove backing allocation coverage, provenance,
@@ -1050,14 +1097,14 @@ unsafe fn mi_os_alloc_aligned_memid(
     let size = unsafe { _mi_os_good_alloc_size(size) };
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let os_page_size = unsafe { _mi_os_page_size_typed() };
-    let alignment = _mi_align_up(alignment, os_page_size.get());
-    if alignment < os_page_size.get() || (alignment & (alignment - 1)) != 0 {
+    let Some(alignment) = OsAlignment::normalized(alignment, os_page_size) else {
         return (core::ptr::null_mut(), memid);
-    }
+    };
 
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let try_direct_alloc = unsafe {
-        alignment <= (*mi_os_mem_config_ptr()).alloc_granularity || alignment <= size / 4
+        alignment.get() <= (*mi_os_mem_config_ptr()).alloc_granularity
+            || alignment.get() <= size / 4
     };
 
     let mut os_is_large = false;
@@ -1071,7 +1118,7 @@ unsafe fn mi_os_alloc_aligned_memid(
         p = unsafe {
             mi_os_prim_alloc(
                 size,
-                alignment,
+                alignment.get(),
                 commit,
                 allow_large,
                 &mut os_is_large,
@@ -1080,7 +1127,7 @@ unsafe fn mi_os_alloc_aligned_memid(
         };
     }
 
-    if !p.is_null() && (p as usize & (alignment - 1)) == 0 {
+    if !p.is_null() && (p as usize & (alignment.get() - 1)) == 0 {
         os_base = p;
     } else {
         if !p.is_null() {
@@ -1094,11 +1141,9 @@ unsafe fn mi_os_alloc_aligned_memid(
                 )
             };
         }
-        if size >= usize::MAX - alignment {
+        let Some(over_size) = alignment.overreserve(size) else {
             return (core::ptr::null_mut(), memid);
-        }
-
-        let over_size = size + alignment;
+        };
         // SAFETY: over-reserve fallback preserves partial-free, commit, and trimmed range contracts.
         if unsafe { !(*mi_os_mem_config_ptr()).has_partial_free } {
             p = unsafe {
@@ -1117,7 +1162,7 @@ unsafe fn mi_os_alloc_aligned_memid(
 
             os_base = p;
             os_size = over_size;
-            p = _mi_align_up_ptr(p, alignment);
+            p = _mi_align_up_ptr(p, alignment.get());
 
             // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
             if commit && !unsafe { _mi_os_commit(p, size, core::ptr::null_mut()) } {
@@ -1147,7 +1192,7 @@ unsafe fn mi_os_alloc_aligned_memid(
                 return (core::ptr::null_mut(), memid);
             }
 
-            let aligned_p = _mi_align_up_ptr(p, alignment);
+            let aligned_p = _mi_align_up_ptr(p, alignment.get());
             let pre_size = aligned_p as usize - p as usize;
             // SAFETY: over-reserve fallback preserves partial-free, commit, and trimmed range contracts.
             let mid_size = unsafe { _mi_align_up(size, _mi_os_page_size_typed().get()) };
@@ -1317,21 +1362,29 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     }
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let os_page_size = unsafe { _mi_os_page_size_typed() };
-    if memid.is_null() || offset > size || !alignment.is_multiple_of(os_page_size.get()) {
+    if memid.is_null() || offset > size {
         return core::ptr::null_mut();
     }
+    let Some(alignment) = OsAlignment::from_page_multiple(alignment, os_page_size) else {
+        return core::ptr::null_mut();
+    };
     if offset == 0 {
         // SAFETY: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
-        return unsafe { _mi_os_alloc_aligned(size, alignment, commit, allow_large, memid) };
+        return unsafe { _mi_os_alloc_aligned(size, alignment.get(), commit, allow_large, memid) };
     }
 
-    let extra = _mi_align_up(offset, alignment) - offset;
-    if size >= usize::MAX - extra {
+    let Some(extra) = alignment
+        .align_up(offset)
+        .and_then(|aligned| aligned.checked_sub(offset))
+    else {
         return core::ptr::null_mut();
-    }
-    let oversize = size + extra;
+    };
+    let Some(oversize) = size.checked_add(extra).filter(|total| *total < usize::MAX) else {
+        return core::ptr::null_mut();
+    };
     // SAFETY: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
-    let start = unsafe { _mi_os_alloc_aligned(oversize, alignment, commit, allow_large, memid) };
+    let start =
+        unsafe { _mi_os_alloc_aligned(oversize, alignment.get(), commit, allow_large, memid) };
     if start.is_null() {
         return core::ptr::null_mut();
     }
@@ -1340,7 +1393,7 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     let p = unsafe { start.cast::<u8>().add(extra) }.cast::<c_void>();
     // SAFETY: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
     crate::internal::mi_assert!(unsafe {
-        crate::internal::_mi_is_aligned(p.cast::<u8>().add(offset).cast(), alignment)
+        crate::internal::_mi_is_aligned(p.cast::<u8>().add(offset).cast(), alignment.get())
     });
     if commit
         && extra >= os_page_size.get()
@@ -1859,6 +1912,46 @@ mod tests {
             panic!("expected primitive OS free plan")
         };
         (memid.base.unwrap(), memid.size, committed)
+    }
+
+    #[test]
+    fn os_alignment_normalizes_checked_page_geometry() {
+        let page = page_size(16);
+        assert!(OsAlignment::normalized(0, page).is_none());
+        assert_eq!(OsAlignment::normalized(1, page).unwrap().get(), 16);
+        assert_eq!(OsAlignment::normalized(16, page).unwrap().get(), 16);
+        assert_eq!(OsAlignment::normalized(17, page).unwrap().get(), 32);
+        assert!(OsAlignment::normalized(48, page).is_none());
+        assert!(OsAlignment::normalized(usize::MAX, page).is_none());
+    }
+
+    #[test]
+    fn os_alignment_preserves_offset_page_multiple_boundary() {
+        let page = page_size(16);
+        assert!(OsAlignment::from_page_multiple(0, page).is_none());
+        assert!(OsAlignment::from_page_multiple(1, page).is_none());
+        assert_eq!(OsAlignment::from_page_multiple(16, page).unwrap().get(), 16);
+        assert!(OsAlignment::from_page_multiple(17, page).is_none());
+        assert!(OsAlignment::from_page_multiple(48, page).is_none());
+        assert!(OsAlignment::from_page_multiple(usize::MAX, page).is_none());
+    }
+
+    #[test]
+    fn os_alignment_checks_align_up_and_overreserve_overflow() {
+        let alignment = OsAlignment::normalized(32, page_size(16)).unwrap();
+        assert_eq!(alignment.align_up(0), Some(0));
+        assert_eq!(alignment.align_up(1), Some(32));
+        assert_eq!(alignment.align_up(32), Some(32));
+        assert_eq!(alignment.align_up(33), Some(64));
+        assert_eq!(alignment.align_up(usize::MAX), None);
+        assert_eq!(alignment.overreserve(usize::MAX - 33), Some(usize::MAX - 1));
+        assert_eq!(alignment.overreserve(usize::MAX - 32), None);
+        assert_eq!(alignment.overreserve(usize::MAX - 31), None);
+    }
+
+    #[test]
+    fn os_alignment_has_scalar_layout() {
+        assert_eq!(size_of::<OsAlignment>(), size_of::<usize>());
     }
 
     #[test]

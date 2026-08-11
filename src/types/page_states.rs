@@ -643,6 +643,21 @@ impl AllFreePage<Full> {
             },
         }
     }
+
+    /// Complete a raw full-queue removal that cleared the page's full flag.
+    ///
+    /// # Safety
+    /// This all-free page must remain live, initialized, and current-thread owned after being
+    /// removed from its full queue. Its queue links must be empty, its full flag must be clear,
+    /// and the caller must exclusively own the detach/state transition while excluding relink or
+    /// teardown.
+    #[inline(always)]
+    pub(crate) unsafe fn into_active_after_detach(self) -> AllFreePage<Active> {
+        // SAFETY: raw queue removal completed the full-to-detached-active metadata transition;
+        // consuming the full all-free witness leaves one active all-free capability for the same
+        // live page.
+        unsafe { AllFreePage::active_unchecked(ActivePage::new_unchecked(self.page())) }
+    }
 }
 
 #[must_use = "allocator state capabilities must be consumed or explicitly returned"]

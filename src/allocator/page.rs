@@ -206,46 +206,25 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     }
 }
 
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    // SAFETY: all-free pages are removed from queues before arena release.
-    unsafe {
-        if mi_page_queue_is_full(pq) {
-            if !mi_page_is_in_full(page) {
-                mi_page_set_in_full(page, true);
-            }
-            let queue = crate::core_types::FullPageQueue::new_unchecked(
-                crate::core_types::PageQueuePtr::new_unchecked(pq),
-            );
-            let full = crate::core_types::assume_full_page(
-                crate::core_types::PagePtr::new_unchecked(page),
-            );
-            let Ok(all_free) = full.try_mark_all_free() else {
-                crate::internal::mi_assert_internal!(false);
-                return;
-            };
-            let _ = _mi_page_free_full_internal(all_free, queue);
-            return;
-        }
-
-        let queue = crate::core_types::NormalPageQueue::new_unchecked(
-            crate::core_types::PageQueuePtr::new_unchecked(pq),
-        );
-        let active =
-            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
-        let Ok(all_free) = active.try_mark_all_free() else {
-            crate::internal::mi_assert_internal!(false);
-            return;
-        };
-        let _ = _mi_page_free_active_internal(all_free, queue);
-    }
-}
-
+/// Detach an all-free active page from its owning source queue and release it terminally.
+///
+/// # Safety
+/// `page_wrapper` must represent a live initialized registered current-thread page with zero used
+/// blocks, linked in `queue`, with a stable owner association, geometry, MemId, page-map/arena
+/// registration, backing, keys, free lists, and thread-free claim. `queue` must be the owning
+/// compatible normal or huge source queue. The caller must exclusively own local queue links,
+/// counts, direct cache, page metadata, heap statistics, and release, excluding competing claim,
+/// relink, non-protocol mutation, and page/heap/TLD/subprocess/arena teardown; protocol atomic
+/// remote-free publication remains permitted. Stored release, purge, or commit callbacks and their
+/// arguments reached synchronously must remain valid and must not unwind. The page capability is
+/// consumed and the returned identity must not be used to access released metadata.
 pub(crate) unsafe fn _mi_page_free_active_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
     queue: crate::core_types::NormalPageQueue,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY: all-free pages are removed from queues before arena release.
+    // SAFETY: the caller-proven all-free page remains linked in this exact live source queue under
+    // exclusive local mutation. Clear auxiliary classification, detach once, then consume the sole
+    // all-free capability through terminal arena release without later page access.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -260,11 +239,26 @@ pub(crate) unsafe fn _mi_page_free_active_internal(
     }
 }
 
+/// Detach an all-free full page from its owning full queue and release it terminally.
+///
+/// # Safety
+/// `page_wrapper` must represent a live initialized registered current-thread page with zero used
+/// blocks, linked in `queue` and marked full, with a stable owner association, geometry, MemId,
+/// page-map/arena registration, backing, keys, free lists, and thread-free claim. `queue` must be
+/// its owning heap's live full queue. The caller must exclusively own local queue links, counts,
+/// direct cache, full flag, page metadata, heap statistics, and release, excluding competing claim,
+/// relink, non-protocol mutation, and page/heap/TLD/subprocess/arena teardown; protocol atomic
+/// remote-free publication remains permitted. Stored release, purge, or commit callbacks and their
+/// arguments reached synchronously must remain valid and must not unwind. The page capability is
+/// consumed and the returned identity must not be used to access released metadata.
 pub(crate) unsafe fn _mi_page_free_full_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Full>,
     queue: crate::core_types::FullPageQueue,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY: all-free pages are removed from queues before arena release.
+    // SAFETY: the caller-proven all-free full page remains linked in this exact live full queue
+    // under exclusive local mutation. Clear auxiliary classification, detach the original witness
+    // once, then consume it through terminal arena release without constructing an alias or later
+    // accessing the page.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let pq = queue.ptr().as_ptr();
@@ -274,18 +268,11 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
         crate::internal::mi_assert_internal!(mi_page_all_free(page));
 
         mi_page_set_has_interior_pointers(page_wrapper.page(), false);
-        let full = crate::core_types::assume_full_page(page_wrapper.page());
-        let Ok(queued) =
-            crate::core_types::QueuedPage::<crate::core_types::FullQueue>::try_queue_full(
-                full, queue,
-            )
-        else {
-            crate::internal::mi_assert_internal!(false);
-            mi_page_queue_remove_raw(pq, page);
-            return _mi_page_free_after_remove(page_wrapper);
-        };
-        let _ = queued.remove();
+        mi_page_queue_remove_raw(pq, page);
 
+        // SAFETY: the raw full-queue removal above cleared both queue links and the full flag while
+        // retaining current-thread ownership and the original all-free capability.
+        let page_wrapper = page_wrapper.into_active_after_detach();
         _mi_page_free_after_remove(page_wrapper)
     }
 }

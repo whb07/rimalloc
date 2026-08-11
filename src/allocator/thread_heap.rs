@@ -11,9 +11,10 @@ use core::{ffi::c_void, mem::size_of, ptr};
 use crate::allocator::arena::_mi_arenas_collect;
 use crate::allocator::options::_mi_error_message_fmt;
 use crate::allocator::page::{
-    _mi_page_abandon_internal, _mi_page_free, _mi_page_free_collect, _mi_page_is_valid,
-    _mi_theap_collect_retired, mi_full_page_queue_is_valid, mi_huge_page_queue_is_valid,
-    mi_normal_page_queue_is_valid, mi_page_is_abandoned, mi_page_theap,
+    _mi_page_abandon_internal, _mi_page_free_active_internal, _mi_page_free_collect,
+    _mi_page_free_full_internal, _mi_page_is_valid, _mi_theap_collect_retired,
+    mi_full_page_queue_is_valid, mi_huge_page_queue_is_valid, mi_normal_page_queue_is_valid,
+    mi_page_is_abandoned, mi_page_theap,
 };
 use crate::allocator::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
 use crate::bits::{MI_INTPTR_BITS, mi_ctz};
@@ -615,21 +616,35 @@ unsafe fn mi_theap_page_collect_typed(
 
         let local_page = crate::core_types::assume_local_page(page);
         let page = local_page.page().as_ptr();
-        let pq = queue.as_ptr();
         _mi_page_free_collect(page, collect as i32 >= mi_collect_t::MI_FORCE as i32);
 
         if mi_page_all_free(page) {
-            if crate::allocator::page::mi_page_is_in_full(page) {
-                let full_page = crate::core_types::assume_full_page(local_page.page());
-                crate::internal::mi_assert_internal!(full_page.try_mark_all_free().is_ok());
-            } else {
-                let active_page = crate::core_types::assume_active_page(local_page.page());
-                crate::internal::mi_assert_internal!(active_page.try_mark_all_free().is_ok());
-            }
             if collect as i32 >= mi_collect_t::MI_FORCE as i32
                 || crate::allocator::page::mi_page_retire_expire(page).is_zero()
             {
-                _mi_page_free(page, pq);
+                if crate::allocator::page::mi_page_is_in_full(page) {
+                    // SAFETY: the release predicate is evaluated after retired-page collection, so
+                    // this local page is not retired. Its stable full flag and the visitor's owning
+                    // queue identity classify it as Full in the compatible full queue.
+                    let full = local_page.into_full_after_classification();
+                    let Ok(all_free) = full.try_mark_all_free() else {
+                        crate::internal::mi_assert_internal!(false);
+                        return true;
+                    };
+                    let full_queue = crate::core_types::FullPageQueue::new_unchecked(queue);
+                    let _ = _mi_page_free_full_internal(all_free, full_queue);
+                } else {
+                    // SAFETY: the release predicate is evaluated after retired-page collection, so
+                    // this local page is not retired. Its clear full flag and the visitor's owning
+                    // queue identity classify it as Active in the compatible normal or huge queue.
+                    let active = local_page.into_active_after_classification();
+                    let Ok(all_free) = active.try_mark_all_free() else {
+                        crate::internal::mi_assert_internal!(false);
+                        return true;
+                    };
+                    let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(queue);
+                    let _ = _mi_page_free_active_internal(all_free, normal_queue);
+                }
             }
         } else if collect == mi_collect_t::MI_ABANDON {
             let page_for_abandon = if crate::allocator::page::mi_page_is_in_full(page) {

@@ -378,6 +378,52 @@ fn detach_and_owner_clear_transitions_preserve_one_page_capability() {
 }
 
 #[test]
+fn local_active_classification_refines_all_free_without_duplicating_identity() {
+    let current = ThreadId::new(crate::prim::_mi_prim_thread_id())
+        .expect("platform current-thread id is nonzero and unflagged");
+    let local = PageThreadId::from_parts(PageOwnerId::Thread(current), PageFlags::new(0).unwrap());
+    let full = PageThreadId::from_parts(PageOwnerId::Thread(current), PageFlags::IN_FULL_QUEUE);
+    let mut empty_page = MaybeUninit::<mi_page_t>::zeroed();
+    let mut used_page = MaybeUninit::<mi_page_t>::zeroed();
+    let mut full_page = MaybeUninit::<mi_page_t>::zeroed();
+    // SAFETY: all three stack-local fixtures remain live through their consuming identity
+    // transitions. The first two owner/state words classify current-thread active pages, with
+    // `used` initialized to the exact zero/nonzero value tested. The third starts full and
+    // all-free with zeroed queue links; writing its current-thread active owner word models raw
+    // detach clearing the full flag, while the zeroed links satisfy the detach precondition.
+    unsafe {
+        let empty_raw = empty_page.as_mut_ptr();
+        ptr::addr_of_mut!((*empty_raw).xthread_id).write(local.raw());
+        ptr::addr_of_mut!((*empty_raw).used).write(0);
+        let empty = LocalPage::new_unchecked(PagePtr::new_unchecked(empty_raw))
+            .into_active_after_classification()
+            .try_mark_all_free()
+            .expect("zero-used local page refines to all-free");
+        assert_eq!(empty.page().as_ptr(), empty_raw);
+
+        let used_raw = used_page.as_mut_ptr();
+        ptr::addr_of_mut!((*used_raw).xthread_id).write(local.raw());
+        ptr::addr_of_mut!((*used_raw).used).write(1);
+        let active = LocalPage::new_unchecked(PagePtr::new_unchecked(used_raw))
+            .into_active_after_classification()
+            .try_mark_all_free()
+            .expect_err("nonzero-used local page retains its active capability");
+        assert_eq!(active.page().as_ptr(), used_raw);
+
+        let full_raw = full_page.as_mut_ptr();
+        ptr::addr_of_mut!((*full_raw).xthread_id).write(full.raw());
+        ptr::addr_of_mut!((*full_raw).used).write(0);
+        let full_all_free = LocalPage::new_unchecked(PagePtr::new_unchecked(full_raw))
+            .into_full_after_classification()
+            .try_mark_all_free()
+            .expect("zero-used full page refines to all-free");
+        ptr::addr_of_mut!((*full_raw).xthread_id).write(local.raw());
+        let active_all_free = full_all_free.into_active_after_detach();
+        assert_eq!(active_all_free.page().as_ptr(), full_raw);
+    }
+}
+
+#[test]
 fn abandoned_claim_ownership_uses_thread_free_ownership_bit() {
     // SAFETY: the fixture writes a
     // concrete unowned thread-free word into stack-local page metadata before

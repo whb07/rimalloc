@@ -748,47 +748,71 @@ pub(crate) unsafe extern "C" fn _mi_free_generic(
     }
 }
 
+/// # Safety
+///
+/// `p` may be null. In configurations without registered pointer validation, a
+/// nonnull `p` must point into a live allocation returned by this allocator. If
+/// lookup resolves `p` to a page, that page's registration, backing, initialized
+/// block geometry, and guard metadata must remain live and stable while it is
+/// classified; `p` must not be concurrently freed or reallocated. Page-map
+/// teardown or backing release must not race this operation;
+/// protocol atomic remote-free publication remains permitted. `msg` must point
+/// to a live NUL-terminated UTF-8 diagnostic string whenever an error path can use it.
+/// Registered diagnostic callbacks and their opaque arguments must remain valid
+/// for synchronous invocation, must not incompatibly reenter pointer validation,
+/// and must not unwind.
 pub(crate) unsafe fn mi_validate_pointer(
     p: *mut c_void,
     msg: *const c_char,
 ) -> crate::core_types::PointerLookup {
-    // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
-    unsafe {
-        use crate::core_types::{PointerLookup, UserPtr};
-        if p.is_null() {
-            return PointerLookup::Null;
-        }
-        let user_ptr = UserPtr::new_unchecked(p);
+    use crate::core_types::{PointerLookup, UserPtr};
+    if p.is_null() {
+        return PointerLookup::Null;
+    }
+    // SAFETY: the null case returned above; `UserPtr` adds no dereference or
+    // allocation-liveness claim beyond recording this nonnull address.
+    let user_ptr = unsafe { UserPtr::new_unchecked(p) };
 
-        if (MI_DEBUG != 0 || cfg!(feature = "secure"))
-            && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
-            && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
-        {
-            let msg_str = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
+    if (MI_DEBUG != 0 || cfg!(feature = "secure"))
+        && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
+        && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
+    {
+        // SAFETY: this diagnostic branch is the first access to `msg`; the
+        // caller keeps its NUL-terminated bytes live, and the synchronous error
+        // callback satisfies the validity, reentry, and non-unwind contract.
+        let msg_str = unsafe { core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes()) };
+        _mi_error_message_fmt(
+            Errno::EINVAL,
+            format_args!("{msg_str}: invalid (unaligned) pointer: {p:p}\n"),
+        );
+        return PointerLookup::Invalid;
+    }
+
+    // SAFETY: the allocator page map is initialized and stable against
+    // teardown. In unchecked configurations the caller supplies a live
+    // allocator pointer; registered configurations validate arbitrary input.
+    let registered_page = unsafe { mi_lookup_pointer_page(user_ptr) };
+
+    let Some(page_ptr) = registered_page else {
+        if MI_DEBUG != 0 || cfg!(feature = "secure") {
+            // SAFETY: this diagnostic branch is the first access to `msg`; the
+            // caller keeps its NUL-terminated bytes live, and the synchronous
+            // error callback satisfies the function contract.
+            let msg_str = unsafe { core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes()) };
             _mi_error_message_fmt(
                 Errno::EINVAL,
-                format_args!("{msg_str}: invalid (unaligned) pointer: {p:p}\n"),
+                format_args!("{msg_str}: invalid pointer: {p:p}\n"),
             );
-            return PointerLookup::Invalid;
         }
+        return PointerLookup::Invalid;
+    };
 
-        let registered_page = mi_lookup_pointer_page(user_ptr);
+    // SAFETY: successful lookup couples `user_ptr` to this live registered
+    // page. Its initialized block geometry and guard metadata remain readable
+    // and stable while the exact block and interior offset are classified.
+    let location = unsafe { mi_pointer_location(page_ptr, user_ptr, false, false) };
 
-        let Some(page_ptr) = registered_page else {
-            if MI_DEBUG != 0 || cfg!(feature = "secure") {
-                let msg_str = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
-                _mi_error_message_fmt(
-                    Errno::EINVAL,
-                    format_args!("{msg_str}: invalid pointer: {p:p}\n"),
-                );
-            }
-            return PointerLookup::Invalid;
-        };
-
-        let location = mi_pointer_location(page_ptr, user_ptr, false, false);
-
-        PointerLookup::valid(user_ptr, page_ptr, location)
-    }
+    PointerLookup::valid(user_ptr, page_ptr, location)
 }
 
 #[inline(always)]

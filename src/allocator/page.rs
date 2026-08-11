@@ -303,22 +303,46 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
     }
 }
 
+/// Consume a queue-detached all-free page through terminal arena release.
+///
+/// # Safety
+/// `page_wrapper` must represent a live initialized registered page with zero used blocks, no
+/// queue links, and the thread-free ownership claim held for this release. Its current `theap`
+/// must identify the live current-thread owner and statistics account, with a nonnull initialized
+/// TLD whose subprocess association remains stable. Page geometry, MemId, page-map registration,
+/// heap arena bit, arena metadata, and backing must remain valid until release completes. The
+/// caller must exclusively own local page/heap mutation and exclude queue relinking, competing
+/// claims, non-protocol metadata mutation, and heap/TLD/subprocess/arena teardown; protocol atomic
+/// remote-free publication remains permitted. Stored release, purge, or commit callbacks and their
+/// arguments reached synchronously must remain valid and must not unwind. The returned witness is
+/// terminal identity only; the released page must not be accessed again.
 unsafe fn _mi_page_free_after_remove<S>(
     page_wrapper: crate::core_types::AllFreePage<S>,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY: all-free pages are removed from queues before arena release.
-    unsafe {
-        let page = page_wrapper.page().as_ptr();
+    let page = page_wrapper.page().as_ptr();
+    // SAFETY: the caller keeps the detached all-free page and its current-thread owner/TLD live
+    // and stable. Snapshot both owner capabilities before the terminal page transition begins.
+    let (owner, tld) = unsafe {
         let theap = mi_page_theap(page);
         crate::internal::mi_assert_internal!(!theap.is_null());
         let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
         );
+        let tld = (*theap).tld;
+        crate::internal::mi_assert_internal!(!tld.is_null());
+        let tld = crate::core_types::TldPtr::new_unchecked(tld);
+        (owner, tld)
+    };
+    // SAFETY: the captured owner and caller-proven page state cover this coherent terminal epoch:
+    // clear the page association, then consume the all-free page exactly once through arena release.
+    let destroyed = unsafe {
         mi_page_set_theap(page, ptr::null_mut());
-        let destroyed = _mi_arenas_page_free_typed(page_wrapper, owner);
-        _mi_arenas_collect(false, false, (*theap).tld);
-        destroyed
-    }
+        _mi_arenas_page_free_typed(page_wrapper, owner)
+    };
+    // SAFETY: the captured live current-thread TLD and stable subprocess association outlive the
+    // released page; collection is synchronous and does not access the terminal page identity.
+    unsafe { _mi_arenas_collect(false, false, tld.as_ptr()) };
+    destroyed
 }
 
 // SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.

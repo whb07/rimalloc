@@ -1170,20 +1170,39 @@ pub(crate) unsafe fn mi_theap_realloc_req(
     unsafe { mi_theap_realloc_request_raw(theap, req, ptr::null_mut(), ptr::null_mut()) }
 }
 
+/// # Safety
+/// `theap` may be null only where the supported lazy/default heap protocol accepts it; otherwise
+/// it must resolve to a live initialized heap owned by the current thread, with exclusive local
+/// allocation mutation and no concurrent teardown or non-protocol mutation. Protocol atomic
+/// remote-free publication is permitted. `p` must be null or identify a live allocator allocation
+/// whose page and block metadata remain stable, without concurrent free or realloc, until this
+/// operation returns or consumes it. The temporary `OldAllocation` witness does not extend those
+/// lifetimes. `layout.zeroed()` specifies whether newly added bytes must be zeroed.
+///
+/// Invalid pointer validation returns null without freeing `p`. Heap-localization or core
+/// allocation failure after valid pointer classification leaves the old allocation live. A null
+/// `p` requests a new allocation. An in-place success returns the still-live old allocation; a
+/// moved success copies the preserved prefix, frees the old allocation, and returns the new one.
 #[inline(always)]
 pub(crate) unsafe fn mi_theap_realloc_layout(
     theap: *mut mi_theap_t,
     p: *mut c_void,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
+    // SAFETY: the caller keeps the optional old allocator allocation and its metadata live and
+    // stable through disposition; the null usable output requires no writable storage.
+    let Some(old) = (unsafe { mi_realloc_old_from_ptr(p, ptr::null_mut()) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the raw heap satisfies the supported lazy/default or live current-thread protocol.
+    // Localization failure does not consume the already validated old allocation.
+    let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: localization establishes a live current-thread heap whose local allocation state is
+    // exclusively mutable. The optional old allocation remains live and stable through the core
+    // disposition, and `layout.zeroed()` carries the typed zero-new-tail policy exactly.
     unsafe {
-        let Some(old) = mi_realloc_old_from_ptr(p, ptr::null_mut()) else {
-            return ptr::null_mut();
-        };
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
-        };
         mi_theap_realloc_validated_core(
             ThreadHeapLocal::new_unchecked(theap),
             old,

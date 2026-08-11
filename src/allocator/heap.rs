@@ -101,29 +101,21 @@ unsafe fn mi_heap_set_numa_affinity_typed(heap: HeapPtr, numa_node: crate::core_
 
 /// # Safety
 ///
-/// `heap` may be null. A non-null heap must be live and its stats must not be
-/// concurrently mutated outside the allocator synchronization rules.
+/// `heap` may be null. A non-null heap and its initialized statistics must
+/// remain live, and the caller must own exclusive access to its source counters
+/// for this destructive merge/reset. The live main heap's destination statistics
+/// must remain available through the allocator statistics protocol. Heap/main
+/// teardown and concurrent source-stat updates must not race.
 // SAFETY: stats merge accepts nullable heap
 // metadata and immediately converts it to a borrowed heap witness.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
-    // SAFETY: the raw heap pointer is borrowed
-    // only for this stats merge and null is ignored.
+    // SAFETY: the caller keeps the optional heap and its stats live under the
+    // allocator stats protocol; the main heap remains live for the same merge.
     unsafe {
         let Some(heap) = BorrowedHeap::from_lookup_raw(heap) else {
             return;
         };
-        mi_heap_stats_merge_to_main_typed(heap);
-    }
-}
-
-// SAFETY: the typed stats merge keeps raw stat
-// pointers derived from live heap witnesses.
-#[inline]
-unsafe fn mi_heap_stats_merge_to_main_typed(heap: BorrowedHeap) {
-    // SAFETY: both stats pointers come from live
-    // heap metadata accepted by the allocator runtime.
-    unsafe {
         let Some(main) = HeapPtr::new(mi_heap_main()) else {
             return;
         };
@@ -207,12 +199,19 @@ pub unsafe extern "C" fn mi_heap_new() -> *mut mi_heap_t {
     unsafe { mi_heap_new_in_arena(ptr::null_mut()) }
 }
 
-// SAFETY: thread-heap teardown walks only the
-// live heap's thread-heap list while holding its list lock.
+/// Drain and free every thread heap currently attached to `heap`.
+///
+/// # Safety
+/// `heap` must remain live with initialized thread-heap list, lock, statistics,
+/// and list nodes. The caller must own the heap delete/destroy epoch: no new
+/// thread heap may attach and no competing teardown or list relink may occur.
+/// Existing users may finish only through the thread-heap refcount protocol;
+/// this function waits until those references are released.
 unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
     let heap = heap.as_ptr();
-    // SAFETY: callers pass a live heap whose
-    // thread heaps are being deleted or destroyed.
+    // SAFETY: the exclusive teardown epoch keeps the list, nodes, lock, and
+    // counter live. The lock serializes each traversal while refcount failures
+    // are retried only after releasing it.
     unsafe {
         loop {
             let mut all_freed = true;
@@ -238,20 +237,33 @@ unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
     }
 }
 
-// SAFETY: owned heap teardown cannot target the
-// process main heap and delegates to the lock-protected list walker.
+/// Drain all thread heaps attached to an owned non-main heap.
+///
+/// # Safety
+/// The owned heap must remain live with initialized thread-heap metadata, and
+/// the caller must hold its exclusive delete/destroy epoch. No new thread heap,
+/// competing teardown, or non-protocol list mutation may race; existing users
+/// may finish through the thread-heap refcount protocol.
 unsafe fn mi_heap_free_theaps(heap: OwnedHeap) {
-    // SAFETY: `OwnedHeap` proves non-main live
-    // heap metadata for thread-heap teardown.
+    // SAFETY: the caller supplies the exclusive teardown epoch; `OwnedHeap`
+    // additionally excludes the main-heap lifetime policy.
     unsafe { mi_heap_free_theaps_in(heap.ptr()) };
 }
 
-// SAFETY: final owned heap cleanup unregisters
-// the heap, frees page tables, releases TLS state, and frees metadata.
+/// Unregister and release an already-drained owned heap.
+///
+/// # Safety
+/// `heap` must be live, non-main, and exclusively owned for final teardown. Its
+/// thread heaps must already be drained and its pages moved or destroyed. The
+/// arena-page table/lock, statistics, TLS slot, locks, subprocess association,
+/// and subprocess heap-list links must remain initialized and valid. The main
+/// heap and subprocess must remain live, with no concurrent heap relink,
+/// teardown, arena-table access, or other metadata use.
 unsafe fn mi_heap_free(heap: OwnedHeap) {
     let heap = heap.ptr().as_ptr();
-    // SAFETY: callers pass a non-main heap that
-    // is no longer reachable by mutators.
+    // SAFETY: the caller's final-teardown epoch keeps every projected field,
+    // lock, registry link, and allocator target live until their ordered release;
+    // metadata is freed only after all dependent state is detached or destroyed.
     unsafe {
         crate::internal::mi_assert_internal!(!heap.is_null() && !_mi_is_heap_main(heap));
 
@@ -283,7 +295,11 @@ unsafe fn mi_heap_free(heap: OwnedHeap) {
 /// # Safety
 ///
 /// `heap` may be null. A non-null heap must be live, must not be the main heap,
-/// and must not be used again after this call returns.
+/// and the caller must own its exclusive delete epoch from call entry: no
+/// concurrent allocation, thread-heap attachment, page/queue/list relink,
+/// teardown, or other heap use may occur. Its metadata, locks, TLS slot,
+/// subprocess links, pages, and backing must remain initialized until released.
+/// The allocator runtime, subprocess, and main heap must remain live throughout.
 // SAFETY: heap deletion rejects main heaps,
 // moves pages to main heap, and then frees owned heap metadata.
 #[unsafe(no_mangle)]
@@ -297,18 +313,10 @@ pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
         _mi_warning_message_fmt(format_args!("cannot delete the main heap\n"));
         return;
     };
-    // SAFETY: heap deletion owns the non-main
-    // heap teardown sequence.
-    unsafe { mi_heap_delete_typed(heap) };
-}
-
-// SAFETY: typed heap delete moves live pages
-// away before freeing the owned heap metadata.
-#[inline]
-unsafe fn mi_heap_delete_typed(heap: OwnedHeap) {
     let heap_raw = heap.ptr().as_ptr();
-    // SAFETY: heap deletion owns the non-main
-    // heap teardown sequence.
+    // SAFETY: the caller grants exclusive delete ownership of this live
+    // non-main heap. Thread heaps are drained before pages move to the live main
+    // heap, and metadata is freed only after both transitions complete.
     unsafe {
         mi_heap_free_theaps(heap);
         _mi_heap_move_pages(heap_raw, mi_heap_main());
@@ -338,26 +346,39 @@ pub(crate) unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
     }
 }
 
-// SAFETY: force-destroy of the main heap keeps
-// metadata ownership and destroys only pages and thread heaps.
+/// Force-destroy all allocations attached to the main heap without freeing its
+/// static heap metadata.
+///
+/// # Safety
+/// The main heap and all attached thread heaps, pages, queues, locks, and page
+/// backing must remain live and initialized. The caller must own an exclusive
+/// process/subprocess teardown epoch: no new attachment, allocation, queue/list
+/// relink, or competing destroy may occur. Protocol remote-free publication may
+/// complete only as permitted by the page-destroy traversal contract.
 #[inline]
 unsafe fn mi_heap_force_destroy_main(heap: MainHeap) {
     let heap = heap.ptr();
-    // SAFETY: force-destroy owns teardown of
-    // this main heap.
+    // SAFETY: the exclusive process teardown first drains thread heaps, then
+    // destroys pages while the permanent main-heap metadata remains live.
     unsafe {
         mi_heap_free_theaps_in(heap);
         _mi_heap_destroy_pages(heap.as_ptr());
     }
 }
 
-// SAFETY: force-destroy of an owned heap frees
-// thread heaps, destroys pages, then releases owned heap metadata.
+/// Force-destroy allocations and then release an owned non-main heap.
+///
+/// # Safety
+/// The owned heap and all attached thread heaps, pages, queues, locks, backing,
+/// TLS state, and subprocess links must remain live and initialized. The caller
+/// must own its exclusive destroy epoch: no new attachment, allocation,
+/// queue/list relink, or competing teardown may occur. Protocol remote-free
+/// publication may complete only as permitted by page destruction.
 #[inline]
 unsafe fn mi_heap_force_destroy_owned(heap: OwnedHeap) {
     let heap_ptr = heap.ptr();
-    // SAFETY: force-destroy owns teardown of
-    // this non-main heap.
+    // SAFETY: the exclusive epoch orders thread-heap drain before page
+    // destruction and delays metadata release until both are complete.
     unsafe {
         mi_heap_free_theaps(heap);
         _mi_heap_destroy_pages(heap_ptr.as_ptr());
@@ -459,43 +480,8 @@ pub unsafe extern "C" fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_v
     let Some(heap) = (unsafe { BorrowedHeap::from_lookup_raw(heap) }) else {
         return false;
     };
-    // SAFETY: heap and pointer arguments remain
-    // valid for ownership inspection.
-    unsafe { mi_heap_check_owned_typed(heap, p) }
-}
-
-// SAFETY: typed ownership check preserves the
-// main-heap and owned-heap distinction without retaining pointer state.
-#[inline]
-unsafe fn mi_heap_check_owned_typed(heap: BorrowedHeap, p: *const c_void) -> bool {
-    // SAFETY: `heap` is a live heap borrowed for
-    // this ownership check.
-    if let Some(heap) = unsafe { OwnedHeap::new(heap.ptr()) } {
-        // SAFETY: non-main heap and pointer
-        // remain valid for ownership inspection.
-        unsafe { mi_heap_check_owned_owned(heap, p) }
-    } else {
-        // SAFETY: main heap and pointer remain
-        // valid for ownership inspection.
-        unsafe { mi_heap_check_owned_borrowed(heap, p) }
-    }
-}
-
-// SAFETY: owned-heap ownership check compares
-// only the heap metadata pointer against allocator page ownership.
-#[inline]
-unsafe fn mi_heap_check_owned_owned(heap: OwnedHeap, p: *const c_void) -> bool {
-    // SAFETY: forwards this API's
-    // ownership-inspection contract.
-    core::ptr::eq(heap.ptr().as_ptr().cast_const(), unsafe { mi_heap_of(p) })
-}
-
-// SAFETY: borrowed main-heap ownership check
-// compares only the heap metadata pointer against allocator page ownership.
-#[inline]
-unsafe fn mi_heap_check_owned_borrowed(heap: BorrowedHeap, p: *const c_void) -> bool {
-    // SAFETY: forwards this API's
-    // ownership-inspection contract.
+    // SAFETY: the public contract keeps `p` suitable for allocator page-map
+    // lookup and stabilizes the resolved page ownership and borrowed heap.
     core::ptr::eq(heap.ptr().as_ptr().cast_const(), unsafe { mi_heap_of(p) })
 }
 
@@ -525,7 +511,11 @@ pub unsafe extern "C" fn mi_check_owned(p: *const c_void) -> bool {
 /// # Safety
 ///
 /// `heap` may be null. A non-null `p` must be suitable for mimalloc's safe page
-/// lookup, and the owning page and heap must not be concurrently destroyed.
+/// lookup. The resolved page must remain live and initialized with stable
+/// used/capacity/reserved counts, queue links, and heap association. A non-null
+/// `heap` must remain live and initialized. Page/heap teardown, reassignment,
+/// queue relink, and non-protocol metadata mutation must not race; protocol
+/// remote-free publication is permitted while these inspected fields stay stable.
 // SAFETY: under-utilized inspection converts
 // raw heap/page metadata to typed witnesses before reading page counters.
 #[unsafe(no_mangle)]
@@ -553,16 +543,24 @@ pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
     }
 }
 
-// SAFETY: typed under-utilized inspection reads
-// page counters and optional heap ownership without allocating or retaining.
+/// Inspect utilization and optional heap ownership for a mapped page.
+///
+/// # Safety
+/// `page` must remain live and initialized with stable used/capacity/reserved
+/// counts, queue links, and heap association satisfying allocator invariants.
+/// If present, `heap` must remain live and initialized. Page/heap teardown,
+/// reassignment, queue relink, and non-protocol metadata mutation must not race;
+/// protocol remote-free publication is permitted while these fields remain
+/// stable. Neither witness is retained.
 #[inline]
 unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
     heap: Option<BorrowedHeap>,
     page: PagePtr,
     perc_threshold: usize,
 ) -> bool {
-    // SAFETY: `page` comes from the safe page
-    // map; optional `heap` is a live borrowed heap for comparison only.
+    // SAFETY: the caller stabilizes the initialized page counters, queue links,
+    // and heap association, plus the optional borrowed heap, for this one
+    // synchronous classification.
     unsafe {
         let page_raw = page.as_ptr();
         let used = crate::allocator::page::mi_page_used_count(page_raw);

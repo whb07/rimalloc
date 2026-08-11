@@ -871,7 +871,23 @@ unsafe fn mi_realloc_old_allocation(
     }
 }
 
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// # Safety
+/// `theap` may be null only where the supported lazy/default heap protocol accepts it; otherwise
+/// it must resolve to a live initialized heap owned by the current thread, with exclusive local
+/// allocation mutation and no concurrent teardown or non-protocol mutation. Protocol atomic
+/// remote-free publication is permitted. `p` must be null or identify a live allocator allocation
+/// whose page and block metadata remain stable, without concurrent free or realloc, until this
+/// operation returns or consumes it. The internally constructed request does not extend those
+/// lifetimes. Each nonnull `usable_pre` and `usable_post` must be aligned and writable for one
+/// `usize` when accessed and must not overlap allocator metadata. They may mutually alias or point
+/// within the old user allocation while that storage remains live at the access.
+///
+/// Invalid layout or request validation returns null without consuming an old allocation. Heap
+/// localization or allocation failure also leaves it live. An in-place success returns the
+/// still-live old allocation; a moved success frees the old allocation inside realloc and returns
+/// the new allocation. Layout failure leaves both outputs untouched. Request-validation failure
+/// clears only a nonnull `usable_pre`; after a valid request, heap-localization failure leaves both
+/// outputs untouched. All output writes precede a moved-success release of old user storage.
 pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -880,16 +896,20 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let Some(layout) = malloc_layout_or_report(newsize, zero) else {
-            return ptr::null_mut();
-        };
-        if let Some(req) = mi_realloc_request_from_ptr(p, layout, usable_pre) {
-            mi_theap_realloc_request_raw(theap, req, usable_pre, usable_post)
-        } else {
-            ptr::null_mut()
-        }
+    let Some(layout) = malloc_layout_or_report(newsize, zero) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the caller keeps the optional old allocation metadata stable through disposition.
+    // The optional pre-size output is writable for one usize at this validation access and does
+    // not overlap allocator metadata.
+    if let Some(req) = unsafe { mi_realloc_request_from_ptr(p, layout, usable_pre) } {
+        // SAFETY: the raw heap satisfies the supported lazy/default or live current-thread
+        // protocol, with exclusive local mutation. The request's old allocation remains live and
+        // stable through dispatch, and both optional outputs are valid at each access before any
+        // moved-success free.
+        unsafe { mi_theap_realloc_request_raw(theap, req, usable_pre, usable_post) }
+    } else {
+        ptr::null_mut()
     }
 }
 

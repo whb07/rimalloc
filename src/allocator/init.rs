@@ -733,22 +733,21 @@ pub unsafe extern "C" fn mi_thread_set_in_threadpool() {
     unsafe { thread::set_in_threadpool() };
 }
 
-// SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
-/// # Safety
-/// Returns the current thread default theap, initializing thread state when needed.
+/// Returns the current-thread default theap after successful initialization, or
+/// the static empty sentinel if initialization cannot provide one. The raw
+/// pointer carries no lifetime or dereference permission.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
-    // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
-    unsafe { thread::default_safe() }
+pub(crate) extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
+    thread::default_safe()
 }
 
-// SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
-/// # Safety
-/// Returns the process main theap, ensuring the default path initialized it first.
+/// Returns the current thread's theap associated with the main heap after
+/// successful initialization, or the static empty sentinel if initialization
+/// cannot provide one. The raw pointer carries no lifetime or dereference
+/// permission.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
-    // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
-    unsafe { thread::main_safe() }
+pub(crate) extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
+    thread::main_safe()
 }
 
 // SAFETY: empty thread-heap sentinel stays static and typed before TLS exposure.

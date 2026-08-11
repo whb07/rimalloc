@@ -368,8 +368,7 @@ pub(super) unsafe fn add_current_thread(subproc_id: mi_subproc_id_t) {
     if candidate.is_null() {
         return;
     }
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let theap = unsafe { _mi_theap_default_safe() };
+    let theap = _mi_theap_default_safe();
     if theap.is_null() {
         return;
     }

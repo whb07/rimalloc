@@ -344,43 +344,62 @@ fn tld_free(tld: *mut mi_tld_t) {
 }
 
 pub(super) unsafe fn set_in_threadpool() {
-    // SAFETY: TLD allocation/free and per-thread metadata counters use typed TLD and subproc witnesses.
-    let theap = unsafe { super::_mi_theap_default_safe() };
+    let theap = super::_mi_theap_default_safe();
     // SAFETY: TLD allocation/free and per-thread metadata counters use typed TLD and subproc witnesses.
     unsafe {
         (*(*theap).tld).is_in_threadpool = true;
     }
 }
 
-pub(super) unsafe fn default_safe() -> *mut mi_theap_t {
-    // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
+/// Return the allocator-managed default thread heap for the current thread,
+/// initializing its thread-local state when necessary. On initialization
+/// failure, the static empty sentinel is returned. The raw pointer carries no
+/// lifetime or dereference permission.
+pub(super) fn default_safe() -> *mut mi_theap_t {
+    // SAFETY: the bootstrap TLS lookup tolerates unset dynamic keys/slots and
+    // normalizes a null current-thread value to the static empty sentinel; any
+    // nonnull TLS value is allocator-owned current-thread metadata.
     let theap = unsafe { crate::platform::_mi_theap_default() };
-    // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
+    // SAFETY: the allocator-owned TLS value is a static sentinel or live
+    // current-thread heap whose heap-pointer field is readable for this probe.
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
     }
-    // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
+    // SAFETY: initialization owns mutation of this thread's allocator TLS and
+    // establishes any primitive dispatch needed by subsequent reads.
     unsafe { super::mi_thread_init() };
-    // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
+    // SAFETY: initialization either published this thread's live default heap
+    // or left the static empty sentinel when no heap could be provided; the
+    // lookup reads only that current-thread slot.
     let theap = unsafe { crate::platform::_mi_theap_default() };
-    // SAFETY: safe accessors expose current-thread heap TLS through typed witnesses.
+    // SAFETY: the post-initialization TLS value is either the live current-thread
+    // default heap or the static empty sentinel, and its heap-pointer field is
+    // readable for this assertion.
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::mi_theap_is_initialized(theap)
     });
     theap
 }
 
-pub(super) unsafe fn main_safe() -> *mut mi_theap_t {
+/// Return the current thread's theap associated with the main heap, initializing
+/// and caching its TLS association when necessary. On initialization failure,
+/// the static empty sentinel is returned. The raw pointer carries no lifetime
+/// or dereference permission.
+pub(super) fn main_safe() -> *mut mi_theap_t {
     let mut theap = mi_theap_main_tls_peek();
     if theap.is_null() {
-        // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
+        // SAFETY: initialization owns this thread's allocator TLS mutation and
+        // establishes the process main heap and primitive dispatch before use.
         unsafe { super::mi_thread_init() };
-        // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
+        // SAFETY: initialization published a static sentinel or live current-
+        // thread default heap through the allocator-owned TLS slot.
         theap = unsafe { crate::platform::_mi_theap_default() };
         crate::internal::mi_assert_internal!(!theap.is_null());
-        // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
+        // SAFETY: the allocator-owned TLS value remains live while its
+        // initialized heap pointer and process-main identity are inspected.
         if unsafe { crate::internal::mi_theap_is_initialized(theap) }
-            // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
+            // SAFETY: the successful initialization probe makes the heap
+            // pointer field readable; process-main metadata remains published.
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
         {
             mi_theap_main_tls_set(ThreadHeapPtr::new(theap));
@@ -388,9 +407,13 @@ pub(super) unsafe fn main_safe() -> *mut mi_theap_t {
     }
     crate::internal::mi_assert_internal!(
         !theap.is_null()
-            // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
+            // SAFETY: the cached or newly published allocator-owned TLS value
+            // remains live for this final identity check; successful
+            // initialization makes it initialized, while failure leaves the
+            // static empty sentinel.
             && unsafe { crate::internal::mi_theap_is_initialized(theap) }
-            // SAFETY: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
+            // SAFETY: the preceding initialized probe makes its heap pointer
+            // readable; process-main metadata remains published and stable.
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
     );
     theap

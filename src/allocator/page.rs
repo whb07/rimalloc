@@ -1292,10 +1292,10 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
 /// `theap` must be the live current-thread owner of `queue`, and `queue` must be its live normal
 /// queue for `block_size`. Every linked page, its backing, geometry, keys, free lists, queue links,
 /// owner association, retirement state, and commit metadata must remain valid through the search.
-/// The caller must exclusively own local queue, direct-cache, free-list, page-state, and statistics
-/// mutation and exclude teardown, relinking, or other non-protocol page mutation; protocol atomic
-/// remote-free publication and abandoned-page claims remain permitted. TLD, subprocess, arena and
-/// page-map registries, OS configuration, and any stored release, purge, or commit callbacks and
+/// The caller must exclusively own local queue, direct-cache, free-list, page-state, random-state,
+/// and statistics mutation and exclude teardown, relinking, or other non-protocol page mutation;
+/// protocol atomic remote-free publication and abandoned-page claims remain permitted. TLD,
+/// subprocess, arena and page-map registries, OS configuration, and any stored release, purge, or commit callbacks and
 /// their opaque arguments reached during extension, collection, or fresh allocation must remain
 /// valid. Synchronous callbacks must not unwind or incompatibly reenter operations that mutate the
 /// participating heap, queue, page, arena, or backing. A successful result is the sole active
@@ -1477,21 +1477,19 @@ unsafe fn mi_page_queue_find_free_ex_active(
     }
 }
 
-#[inline]
-unsafe fn mi_page_queue_find_free_ex_typed(
-    theap: crate::core_types::ThreadHeapLocal,
-    queue: crate::core_types::NormalPageQueue,
-    block_size: crate::core_types::BlockSize,
-    first_try: bool,
-) -> Option<crate::core_types::AvailablePage> {
-    // SAFETY: the active search preserves page ownership and establishes an
-    // immediately available page before returning a successful producer.
-    unsafe {
-        mi_page_queue_find_free_ex_active(theap, queue, block_size, first_try)
-            .and_then(|active| active.try_available().ok())
-    }
-}
-
+/// Return an available page from the front of a normal queue or from the complete queue-search
+/// and fresh-page fallback.
+///
+/// # Safety
+/// `theap` must be the live current-thread owner of `queue`, and `queue` must be its live normal
+/// queue for `block_size`. Every linked page, its backing, geometry, keys, free lists, queue links,
+/// owner association, retirement state, and commit metadata must remain valid. The caller must
+/// exclusively own local queue, direct-cache, free-list, page-state, random-state, and statistics
+/// mutation while excluding teardown, relinking, or non-protocol metadata mutation; protocol
+/// atomic remote-free publication and abandoned-page claims remain permitted. TLD, subprocess,
+/// arena/page-map registries, OS configuration, and stored release, purge, and commit callbacks
+/// and their opaque arguments must remain valid. Synchronous callbacks must not unwind or
+/// incompatibly reenter mutation of the participating heap, queue, page, arena, or backing.
 #[inline]
 #[allow(clippy::absurd_extreme_comparisons)]
 unsafe fn mi_find_free_page_typed(
@@ -1516,7 +1514,10 @@ unsafe fn mi_find_free_page_typed(
                 return Some(available);
             }
         }
-        mi_page_queue_find_free_ex_typed(theap, queue, block_size, true)
+        // SAFETY: the caller-proven current-thread queue epoch covers the complete active search;
+        // success establishes immediate availability before this consumed refinement.
+        mi_page_queue_find_free_ex_active(theap, queue, block_size, true)
+            .and_then(|active| active.try_available().ok())
     }
 }
 

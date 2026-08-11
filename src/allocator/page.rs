@@ -451,12 +451,22 @@ unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLo
 }
 
 #[inline]
+/// # Safety
+/// `theap` must remain the live current-thread owner of `page`, with exclusive mutation of its
+/// random state, local page free lists, capacity, and statistics; protocol atomic remote-free
+/// publication is permitted. `page` must be live and initialized with stable encoded-list keys and
+/// backing geometry. `block_range` must be a nonempty range for that same page, containing distinct
+/// aligned block headers in writable committed backing, and extending current capacity without
+/// exceeding reserved blocks. Existing local/free heads and link words must remain stable except
+/// for this publication epoch, and tracking state must permit the balanced link accesses.
 unsafe fn mi_page_free_list_extend_secure_typed(
     theap: crate::core_types::ThreadHeapLocal,
     page: crate::core_types::PagePtr,
     block_range: PageBlockRange,
 ) {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: the caller provides the same-page writable block range, stable encoded keys and
+    // existing heads, exclusive local-list/random-state publication, and balanced tracking access
+    // for every link word constructed in this coherent randomized-list epoch.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let bsize = block_range.block_size().get();
@@ -527,11 +537,20 @@ unsafe fn mi_page_free_list_extend_secure_typed(
 }
 
 #[inline(never)]
+/// # Safety
+/// `page` must be live and initialized, locally owned for exclusive free-list mutation, and have
+/// stable encoded-list keys and backing geometry; protocol atomic remote-free publication is
+/// permitted. `block_range` must be a nonempty range for that same page, containing distinct
+/// aligned block headers in writable committed backing and extending current capacity without
+/// exceeding reserved blocks. Existing local/free heads and link words must remain stable except
+/// for this publication epoch, and tracking state must permit the balanced link accesses.
 unsafe fn mi_page_free_list_extend_typed(
     page: crate::core_types::PagePtr,
     block_range: PageBlockRange,
 ) {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: the caller provides the same-page writable block range, stable encoded keys and
+    // existing heads, exclusive local-list publication, and balanced tracking access for every
+    // link word constructed in this coherent sequential-list epoch.
     unsafe {
         let bsize = block_range.block_size().get();
         #[cfg(feature = "bench-diagnostics")]
@@ -554,9 +573,19 @@ unsafe fn mi_page_free_list_extend_typed(
     }
 }
 
-// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+/// # Safety
+/// `theap` and `page` must be nonnull and live, with `theap` the current-thread owner of the
+/// initialized page. The caller must exclusively own local free-list, capacity, commitment, and
+/// statistics mutation while keeping page geometry, encoded keys, backing, and the heap/page
+/// association stable; protocol atomic remote-free publication is permitted. Any OS commit
+/// callback and opaque argument reached by extension must remain valid for synchronous invocation,
+/// obey its threading/reentrancy contract, and not unwind. Tracking must permit balanced access to
+/// newly linked blocks followed by final undefined/no-access restoration over the complete reserved
+/// [`PageBlockLayout::area`].
 #[inline(never)]
 unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
+    // SAFETY: the caller supplies the matching live current-thread heap/page pair, exclusive local
+    // extension ownership, stable backing/keys, valid commit callbacks, and balanced tracking.
     unsafe {
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
@@ -566,56 +595,80 @@ unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_p
 }
 
 #[inline]
+/// # Safety
+/// `theap` must remain the live current-thread owner of `page_ptr`. The page must be initialized
+/// with stable block geometry, encoded-list keys, backing, and
+/// `used <= capacity <= reserved`. The caller must exclusively own its local free-list, capacity,
+/// commitment, and heap statistics mutation; protocol atomic remote-free publication is permitted.
+/// The not-yet-capacity block interval must be writable if already committed or suitable for the
+/// page-covering OS commit operation. Any OS commit callback and opaque argument must remain valid
+/// for synchronous invocation, obey its threading/reentrancy contract, and not unwind. Tracking
+/// must permit link initialization in the new range followed by undefined/no-access restoration
+/// over the complete reserved [`PageBlockLayout::area`].
 unsafe fn mi_page_extend_free_typed(
     theap: crate::core_types::ThreadHeapLocal,
     page_ptr: PagePtr,
 ) -> bool {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let theap_local = theap;
-        let theap = theap.ptr().as_ptr();
-        let page = page_ptr.as_ptr();
+    let theap_local = theap;
+    let theap = theap.ptr().as_ptr();
+    let page = page_ptr.as_ptr();
+    // SAFETY: the caller supplies a live initialized page owned by this current-thread heap and
+    // keeps its geometry, keys, counts, and local list heads stable. This snapshot performs no
+    // mutation and reads every field used by the following safe extension policy.
+    let (capacity, reserved, block_size) = unsafe {
         crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_ptr));
         if MI_SECURE < 3 {
-            crate::internal::mi_assert!(page_ptr.free().is_empty());
+            let free_empty = page_ptr.free().is_empty();
+            crate::internal::mi_assert!(free_empty);
             crate::internal::mi_assert!(page_ptr.local_free().is_empty());
-            if !page_ptr.free().is_empty() {
+            if !free_empty {
                 return true;
             }
         }
-        let capacity = page_ptr.capacity();
-        let reserved = page_ptr.reserved();
-        if capacity.get() >= reserved.get() {
-            return true;
-        }
+        (
+            page_ptr.capacity(),
+            page_ptr.reserved(),
+            page_ptr.block_size(),
+        )
+    };
+    if capacity.get() >= reserved.get() {
+        return true;
+    }
 
-        let block_size = page_ptr.block_size();
-        let bsize = block_size.get();
-        let Some(extend) = crate::allocator::policy::ActivePolicy::page_extend_count(
-            block_size, capacity, reserved,
-        ) else {
-            return true;
-        };
-        let extend = usize::from(extend.get());
+    let bsize = block_size.get();
+    let Some(extend) =
+        crate::allocator::policy::ActivePolicy::page_extend_count(block_size, capacity, reserved)
+    else {
+        return true;
+    };
+    let extend = usize::from(extend.get());
 
-        crate::internal::mi_assert_internal!(extend > 0);
-        crate::internal::mi_assert_internal!(extend + capacity.as_usize() <= reserved.as_usize());
-        crate::internal::mi_assert_internal!(u16::try_from(extend).is_ok());
+    crate::internal::mi_assert_internal!(extend > 0);
+    crate::internal::mi_assert_internal!(extend + capacity.as_usize() <= reserved.as_usize());
+    crate::internal::mi_assert_internal!(u16::try_from(extend).is_ok());
 
-        let Some(block_layout) = PageBlockLayout::from_page(page_ptr, block_size) else {
-            crate::internal::mi_assert_internal!(false);
-            return false;
-        };
-        let Some(block_range) = block_layout.nonempty_range(capacity.as_usize(), extend) else {
-            crate::internal::mi_assert_internal!(false);
-            return false;
-        };
-        let track_area = if MI_TRACK_ENABLED != 0 {
-            Some(block_layout.area())
-        } else {
-            None
-        };
+    // SAFETY: the caller keeps the initialized page start/block-size/reserved geometry and backing
+    // stable; `block_size` is the value snapshotted from this same page.
+    let Some(block_layout) = (unsafe { PageBlockLayout::from_page(page_ptr, block_size) }) else {
+        crate::internal::mi_assert_internal!(false);
+        return false;
+    };
+    let Some(block_range) = block_layout.nonempty_range(capacity.as_usize(), extend) else {
+        crate::internal::mi_assert_internal!(false);
+        return false;
+    };
+    let track_area = if MI_TRACK_ENABLED != 0 {
+        Some(block_layout.area())
+    } else {
+        None
+    };
 
+    // SAFETY: this coherent commitment epoch reads the live page's stable current committed
+    // boundary. The page-slice start and backing remain live, and the page-covering range requested
+    // from the capacity/extension size lies within that page allocation and is suitable for commit.
+    // The caller supplies valid non-unwinding callback state, excludes teardown, and exclusively
+    // publishes the updated committed boundary.
+    unsafe {
         let committed = mi_page_slice_committed(page);
         if !committed.is_zero() {
             let needed_size = (capacity.as_usize() + extend) * bsize;
@@ -645,7 +698,14 @@ unsafe fn mi_page_extend_free_typed(
                 );
             }
         }
+    }
 
+    // SAFETY: this coherent link/accounting/tracking publication epoch exclusively owns the
+    // current-thread heap stats and page local-list/capacity fields. `block_range` is the same-page
+    // nonempty range now backed by writable committed memory; page keys and existing heads remain
+    // stable, remote publication is confined to its atomic protocol, and tracking permits link
+    // accesses followed by restoration of the complete reserved page area.
+    unsafe {
         if MI_STAT > 0 {
             __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_extended), 1);
         }
@@ -668,8 +728,8 @@ unsafe fn mi_page_extend_free_typed(
             mi_track_mem_noaccess(area.start().as_ptr().cast(), area.byte_len());
         }
         crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_ptr));
-        true
     }
+    true
 }
 
 // SAFETY: abandon transitions detach active/full pages before arena abandon publication.

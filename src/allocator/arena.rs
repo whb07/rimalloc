@@ -29,11 +29,11 @@ use crate::bitmap::{
     MI_BFIELD_BITS, MI_BITMAP_MAX_BIT_COUNT, mi_bbitmap_bsr_inv, mi_bbitmap_chunk_count,
     mi_bbitmap_debug_get_bin, mi_bbitmap_init, mi_bbitmap_is_clearN, mi_bbitmap_is_setN,
     mi_bbitmap_setN, mi_bbitmap_size, mi_bbitmap_t, mi_bbitmap_try_clearNC,
-    mi_bbitmap_try_find_and_clearN, mi_bbitmap_unsafe_setN, mi_bchunk_t, mi_bchunkmap_t,
-    mi_bfield_t, mi_bitmap_clear, mi_bitmap_clear_once_set, mi_bitmap_clearN,
-    mi_bitmap_forall_set_typed, mi_bitmap_init, mi_bitmap_is_all_clear, mi_bitmap_is_clearN,
-    mi_bitmap_is_set, mi_bitmap_is_setN, mi_bitmap_popcountN, mi_bitmap_set, mi_bitmap_setN,
-    mi_bitmap_size, mi_bitmap_t, mi_bitmap_try_find_and_claim, mi_bitmap_unsafe_setN,
+    mi_bbitmap_try_find_and_clearN, mi_bbitmap_unsafe_setN, mi_bchunkmap_t, mi_bitmap_clear,
+    mi_bitmap_clear_once_set, mi_bitmap_clearN, mi_bitmap_forall_set_typed, mi_bitmap_init,
+    mi_bitmap_is_all_clear, mi_bitmap_is_clearN, mi_bitmap_is_set, mi_bitmap_is_setN,
+    mi_bitmap_popcountN, mi_bitmap_set, mi_bitmap_setN, mi_bitmap_size, mi_bitmap_t,
+    mi_bitmap_try_find_and_claim, mi_bitmap_unsafe_setN,
 };
 use crate::bits::{MI_INTPTR_BITS, MI_MiB};
 use crate::core_types::{

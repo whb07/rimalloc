@@ -82,12 +82,14 @@ struct ArenaDebugPrefixSnapshot {
 
 impl ArenaDebugView {
     /// # Safety
-    /// `arena` must be non-null and point to live arena metadata for the
-    /// duration of the diagnostic render.
+    /// `arena` must be non-null and point to live initialized arena metadata. All prefix fields and
+    /// bitmap pointers copied here, plus their backing, must remain valid and stable while the view
+    /// is used; teardown/backing invalidation must not race. Atomic bitmap updates remain permitted.
     #[inline]
     unsafe fn new_unchecked(arena: *mut mi_arena_t) -> Self {
         let prefix = arena.cast::<MiArenaPrefix>();
-        // SAFETY: arena diagnostics snapshot arena metadata and slice bitmaps for read-only rendering.
+        // SAFETY: the constructor contract keeps the complete initialized prefix readable; the
+        // non-null arena pointer and copied scalar/bitmap fields form one diagnostic snapshot.
         let (arena, prefix) = unsafe {
             (
                 ArenaPtr::new_unchecked(arena),
@@ -170,7 +172,8 @@ impl ArenaDebugView {
 
     #[inline]
     fn slice_start(self, slice: SliceIndex) -> *mut c_void {
-        // SAFETY: arena diagnostics snapshot arena metadata and slice bitmaps for read-only rendering.
+        // SAFETY: the view contract keeps arena backing live and `slice` within its typed slice
+        // domain; this projects the corresponding exposed start address without dereferencing it.
         unsafe {
             mi_arena_slice_start(self.ptr(), slice)
                 .as_ptr()
@@ -185,64 +188,54 @@ impl ArenaDebugView {
 
     #[inline]
     fn is_free_slice(self, slice: SliceIndex) -> bool {
-        // SAFETY: arena diagnostics snapshot arena metadata and slice bitmaps for read-only rendering.
+        // SAFETY: the view keeps the initialized free bbitmap live, and the caller supplies a slice
+        // index in its covered arena domain; this is an atomic snapshot.
         unsafe { mi_bbitmap_is_setN(self.slices_free(), slice.get(), 1) }
     }
 
     #[inline]
     fn is_purge_slice(self, slice: SliceIndex) -> bool {
-        // SAFETY: arena diagnostics snapshot arena metadata and slice bitmaps for read-only rendering.
+        // SAFETY: the view keeps the initialized purge bitmap live and covering this arena slice;
+        // this is an atomic snapshot.
         unsafe { mi_bitmap_is_set(self.slices_purge(), slice.get()) }
     }
 
     #[inline]
     fn is_committed_slice(self, slice: SliceIndex) -> bool {
-        // SAFETY: arena diagnostics snapshot arena metadata and slice bitmaps for read-only rendering.
+        // SAFETY: the view keeps the initialized committed bitmap live and covering this arena
+        // slice; this is an atomic snapshot.
         unsafe { mi_bitmap_is_set(self.slices_committed(), slice.get()) }
     }
 }
 
 fn mi_arena_used_slices(arena: ArenaDebugView) -> usize {
     let mut idx = 0usize;
-    // SAFETY: arena diagnostics snapshot arena metadata and slice bitmaps for read-only rendering.
+    // SAFETY: the view keeps the initialized free bbitmap live; the helper writes its result to the
+    // valid local and atomically snapshots the highest non-free slice.
     if unsafe { mi_bbitmap_bsr_inv(arena.slices_free(), &mut idx) } {
         idx + 1
     } else {
+        // SAFETY: the view keeps the live arena's initialized information-slice count stable for
+        // the fallback read.
         unsafe { mi_arena_info_slices(arena.ptr()) }
     }
 }
 
-unsafe fn mi_debug_show_bfield(field: mi_bfield_t, buf: *mut u8, k: *mut usize) -> usize {
-    let mut bit_set_count = 0usize;
-    for bit in 0..MI_BFIELD_BITS {
-        let is_set = ((1usize << bit) & field) != 0;
-        if is_set {
-            bit_set_count += 1;
-        }
-        // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
-        unsafe {
-            *buf.add(*k) = if is_set { b'x' } else { b'.' };
-            *k += 1;
-        }
-    }
-    bit_set_count
-}
-
-unsafe fn mi_debug_color(buf: *mut u8, k: *mut usize, color: mi_ansi_color_t) {
+fn mi_debug_color(buf: &mut [u8], k: &mut usize, color: mi_ansi_color_t) {
     let code = color as i32;
     let tens = ((code / 10) as u8) + b'0';
     let ones = ((code % 10) as u8) + b'0';
-    // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
-    unsafe {
-        *buf.add(*k) = 0x1B;
-        *buf.add(*k + 1) = b'[';
-        *buf.add(*k + 2) = tens;
-        *buf.add(*k + 3) = ones;
-        *buf.add(*k + 4) = b'm';
-        *k += 5;
-    }
+    buf[*k] = 0x1B;
+    buf[*k + 1] = b'[';
+    buf[*k + 2] = tens;
+    buf[*k + 3] = ones;
+    buf[*k + 4] = b'm';
+    *k += 5;
 }
 
+/// # Safety
+/// `page` must identify a live initialized page whose used count and block-size fields remain
+/// readable and stable for this snapshot.
 unsafe fn mi_page_commit_usage(
     page: PagePtr,
     committed_size: crate::core_types::CommittedBytes,
@@ -250,27 +243,39 @@ unsafe fn mi_page_commit_usage(
     let page = page.as_ptr();
     let committed_size = committed_size.get();
     let used_size =
-        // SAFETY: arena diagnostics classify page state from allocator-owned page metadata and memid slices.
+        // SAFETY: the contract keeps both initialized count and block-size fields readable and
+        // stable for this diagnostic calculation.
         unsafe { crate::allocator::page::mi_page_used_count(page).as_usize() * mi_page_block_size(page) };
     (used_size * 100 / committed_size) as c_int
 }
 
-fn mi_debug_page_state(page: PagePtr) -> (u8, mi_ansi_color_t, isize) {
+/// # Safety
+/// `page` must identify a live initialized arena page with stable owner flags, used/block/commit
+/// accounting, and arena MemId for this diagnostic snapshot.
+unsafe fn mi_debug_page_state(page: PagePtr) -> (u8, mi_ansi_color_t, isize) {
     let raw = page.as_ptr();
     let mut c = b'p';
-    // SAFETY: arena diagnostics classify page state from allocator-owned page metadata and memid slices.
+    // SAFETY: the live initialized page keeps its singleton flag stable for this classification.
     if unsafe { mi_page_is_singleton(raw) } {
         c = b's';
-    } else if unsafe { mi_page_is_full(raw) } {
-        c = b'f';
+    } else {
+        // SAFETY: the same page keeps its full-state flag stable for this mutually exclusive
+        // fallback.
+        if unsafe { mi_page_is_full(raw) } {
+            c = b'f';
+        }
     }
-    // SAFETY: arena diagnostics classify page state from allocator-owned page metadata and memid slices.
+    // SAFETY: the live page's initialized atomic owner state remains readable for abandoned/local
+    // case selection.
     if !unsafe { mi_page_is_abandoned(raw) } {
         c = _mi_toupper(c as i8) as u8;
     }
-    let commit_usage =
-        // SAFETY: arena diagnostics classify page state from allocator-owned page metadata and memid slices.
-        unsafe { mi_page_commit_usage(page, mi_page_committed_typed(raw)) };
+    // SAFETY: the initialized page's committed accounting remains stable and readable for this
+    // diagnostic snapshot.
+    let committed = unsafe { mi_page_committed_typed(raw) };
+    // SAFETY: the page contract keeps its used and block-size fields stable while the matching
+    // committed snapshot is converted to a percentage.
+    let commit_usage = unsafe { mi_page_commit_usage(page, committed) };
     let color = if commit_usage < 25 {
         MI_MAROON
     } else if commit_usage < 50 {
@@ -280,7 +285,8 @@ fn mi_debug_page_state(page: PagePtr) -> (u8, mi_ansi_color_t, isize) {
     } else {
         MI_DARKGREEN
     };
-    // SAFETY: arena diagnostics classify page state from allocator-owned page metadata and memid slices.
+    // SAFETY: the live arena page's initialized MemId remains stable and readable for decoding its
+    // typed arena range length.
     let page_slice_count = match crate::core_types::MemId::view(unsafe { (*raw).memid }) {
         crate::core_types::MemIdView::Arena(a) => a.range().count_usize() as isize,
         _ => {
@@ -291,18 +297,19 @@ fn mi_debug_page_state(page: PagePtr) -> (u8, mi_ansi_color_t, isize) {
     (c, color, page_slice_count)
 }
 
+/// # Safety
+/// `arena` must retain live initialized arena metadata, backing, page-map entries, and free/purge/
+/// committed bitmaps covering the displayed field. Page metadata and geometry encountered during
+/// lookup must remain readable and stable for this synchronous render; teardown/relink is excluded.
 unsafe fn mi_debug_show_page_bfield(
-    buf: *mut u8,
-    k: *mut usize,
+    buf: &mut [u8],
+    k: &mut usize,
     arena: ArenaDebugView,
     slice_index: SliceIndex,
-    pbit_of_page: *mut isize,
-    pcolor_of_page: *mut mi_ansi_color_t,
+    bit_of_page: &mut isize,
+    color: &mut mi_ansi_color_t,
 ) -> usize {
     let mut bit_set_count = 0usize;
-    // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
-    let mut bit_of_page = unsafe { *pbit_of_page };
-    let mut color = unsafe { *pcolor_of_page };
     let mut prev_color = MI_GRAY;
     for bit in 0..MI_BFIELD_BITS {
         let Some(slice) = slice_index.checked_add(bit) else {
@@ -310,83 +317,85 @@ unsafe fn mi_debug_show_page_bfield(
             break;
         };
         let start = arena.slice_start(slice);
-        // SAFETY: arena diagnostics classify page state from allocator-owned page metadata and memid slices.
+        // SAFETY: the arena/page-map backing remains live; safe lookup returns either null or the
+        // initialized metadata page covering this exact slice start.
         let page = unsafe { _mi_safe_ptr_page(start) };
+        // SAFETY: a non-null lookup result is live initialized metadata with stable geometry; its
+        // slice start is readable for exact page-boundary classification.
         if !page.is_null() && start == unsafe { mi_page_slice_start(page) }.cast::<c_void>() {
-            crate::internal::mi_assert_internal!(bit_of_page <= 0);
+            crate::internal::mi_assert_internal!(*bit_of_page <= 0);
             bit_set_count += 1;
-            // SAFETY: arena diagnostics classify page state from allocator-owned page metadata and memid slices.
+            // SAFETY: non-null page-map lookup above established the live metadata pointer.
             let page_ptr = unsafe { PagePtr::new_unchecked(page) };
-            let (c, next_color, page_slice_count) = mi_debug_page_state(page_ptr);
-            color = next_color;
-            bit_of_page = page_slice_count;
-            if color != prev_color {
-                // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
-                unsafe { mi_debug_color(buf, k, color) };
-                prev_color = color;
+            // SAFETY: the caller keeps this page's owner flags, accounting, MemId, and geometry
+            // stable for the current field render.
+            let (c, next_color, page_slice_count) = unsafe { mi_debug_page_state(page_ptr) };
+            *color = next_color;
+            *bit_of_page = page_slice_count;
+            if *color != prev_color {
+                mi_debug_color(buf, k, *color);
+                prev_color = *color;
             }
-            unsafe {
-                *buf.add(*k) = c;
-                *k += 1;
-            }
+            buf[*k] = c;
+            *k += 1;
         } else {
             let mut c = b'?';
-            if bit_of_page > 0 {
+            if *bit_of_page > 0 {
                 c = b'-';
-            // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
-            } else if unsafe { _mi_meta_is_meta_page(start) } {
-                c = b'm';
-                color = MI_GRAY;
-            } else if arena.is_info_slice(slice) {
-                c = b'i';
-                color = MI_GRAY;
-            } else if arena.is_free_slice(slice) {
-                if arena.is_purge_slice(slice) {
-                    c = b'~';
-                    color = MI_ORANGE;
-                } else if arena.is_committed_slice(slice) {
-                    c = b'_';
-                    color = MI_GRAY;
-                } else {
-                    c = b'.';
-                    color = MI_GRAY;
+            } else {
+                // SAFETY: `start` is an address in the live arena backing; metadata classification
+                // reads the initialized meta-page registry without taking ownership.
+                let is_meta_page = unsafe { _mi_meta_is_meta_page(start) };
+                if is_meta_page {
+                    c = b'm';
+                    *color = MI_GRAY;
+                } else if arena.is_info_slice(slice) {
+                    c = b'i';
+                    *color = MI_GRAY;
+                } else if arena.is_free_slice(slice) {
+                    if arena.is_purge_slice(slice) {
+                        c = b'~';
+                        *color = MI_ORANGE;
+                    } else if arena.is_committed_slice(slice) {
+                        c = b'_';
+                        *color = MI_GRAY;
+                    } else {
+                        c = b'.';
+                        *color = MI_GRAY;
+                    }
                 }
             }
-            if bit == MI_BFIELD_BITS - 1 && bit_of_page > 1 {
+            if bit == MI_BFIELD_BITS - 1 && *bit_of_page > 1 {
                 c = b'>';
             }
-            if color != prev_color {
-                // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
-                unsafe { mi_debug_color(buf, k, color) };
-                prev_color = color;
+            if *color != prev_color {
+                mi_debug_color(buf, k, *color);
+                prev_color = *color;
             }
-            unsafe {
-                *buf.add(*k) = c;
-                *k += 1;
-            }
+            buf[*k] = c;
+            *k += 1;
         }
-        bit_of_page -= 1;
+        *bit_of_page -= 1;
     }
-    // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
-    unsafe { mi_debug_color(buf, k, MI_GRAY) };
-    unsafe {
-        *pbit_of_page = bit_of_page;
-        *pcolor_of_page = color;
-    }
+    mi_debug_color(buf, k, MI_GRAY);
     bit_set_count
 }
 
 #[allow(clippy::too_many_arguments)]
 #[inline(never)]
+/// # Safety
+/// `arena` must retain live initialized metadata/backing and bitmaps covering `slice_count` for the
+/// synchronous render. `chunk_bins` must point to the full initialized `MI_CBIN_COUNT - 1` chunk-bin
+/// bitmap array, and every `i < chunk_count` must be a valid bit index. Page-map/page metadata and
+/// geometry must remain stable; concurrent atomic bitmap updates are permitted, but teardown/backing
+/// invalidation must not race.
 unsafe fn mi_debug_show_chunks(
     header1: &str,
     header2: &str,
     header3: &str,
     slice_count: SliceCount,
     chunk_count: usize,
-    chunks: *mut mi_bchunk_t,
     chunk_bins: *mut mi_bchunkmap_t,
-    invert: bool,
     arena: ArenaDebugView,
     narrow: bool,
 ) -> usize {
@@ -432,25 +441,24 @@ unsafe fn mi_debug_show_chunks(
             k += 3;
         }
 
-        let mut chunk_kind = b' ';
-        if !chunk_bins.is_null() {
-            // SAFETY: arena diagnostics render chunk and page bitfields from read-only bitmap metadata.
-            chunk_kind = match unsafe { mi_bbitmap_debug_get_bin(chunk_bins, i) } {
-                MI_CBIN_SMALL => b'S',
-                MI_CBIN_MEDIUM => b'M',
-                MI_CBIN_LARGE => b'L',
-                MI_CBIN_HUGE => b'H',
-                MI_CBIN_OTHER => b'X',
-                _ => b' ',
-            };
-        }
+        // SAFETY: the contract keeps the complete initialized chunk-bin bitmap array readable and
+        // establishes `i < chunk_count` as a valid bit index.
+        let chunk_kind = match unsafe { mi_bbitmap_debug_get_bin(chunk_bins, i) } {
+            MI_CBIN_SMALL => b'S',
+            MI_CBIN_MEDIUM => b'M',
+            MI_CBIN_LARGE => b'L',
+            MI_CBIN_HUGE => b'H',
+            MI_CBIN_OTHER => b'X',
+            _ => b' ',
+        };
         buf[k] = chunk_kind;
         buf[k + 1] = b' ';
         k += 2;
 
         for j in 0..MI_BCHUNK_FIELDS {
             if j > 0 && (j % fields_per_line) == 0 {
-                // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
+                // SAFETY: every byte written before this point is an ASCII digit, marker, space, or
+                // ANSI escape byte, all valid UTF-8 single-byte code units.
                 let line = unsafe { core::str::from_utf8_unchecked(&buf[..k]) };
                 crate::allocator::options::_mi_raw_message(format_args!("  {}\n\x1B[37m", line));
                 buf.fill(0);
@@ -458,37 +466,21 @@ unsafe fn mi_debug_show_chunks(
                 k = 5;
             }
             if bit_count < slice_count {
-                let mut bfield = 0usize;
-                if !chunks.is_null() {
-                    // SAFETY: arena diagnostics render chunk and page bitfields from read-only bitmap metadata.
-                    bfield = unsafe { (*chunks.add(i)).bfields[j].load(Ordering::Relaxed) };
-                }
-                if invert {
-                    bfield = !bfield;
-                }
                 let mut line_k = k;
-                let xcount = if chunks.is_null() {
-                    // SAFETY: arena diagnostics render chunk and page bitfields from read-only bitmap metadata.
-                    unsafe {
-                        mi_debug_show_page_bfield(
-                            buf.as_mut_ptr(),
-                            &mut line_k,
-                            arena,
-                            SliceIndex::new(bit_count),
-                            &mut bit_of_page,
-                            &mut color_of_page,
-                        )
-                    }
-                } else {
-                    // SAFETY: arena diagnostics render chunk and page bitfields from read-only bitmap metadata.
-                    unsafe { mi_debug_show_bfield(bfield, buf.as_mut_ptr(), &mut line_k) }
+                // SAFETY: the chunk contract keeps arena/page-map/backing state live across this
+                // in-bounds field; local buffer and carried state are exclusively borrowed.
+                let xcount = unsafe {
+                    mi_debug_show_page_bfield(
+                        &mut buf,
+                        &mut line_k,
+                        arena,
+                        SliceIndex::new(bit_count),
+                        &mut bit_of_page,
+                        &mut color_of_page,
+                    )
                 };
                 k = line_k;
-                bit_set_count += if invert {
-                    MI_BFIELD_BITS - xcount
-                } else {
-                    xcount
-                };
+                bit_set_count += xcount;
                 buf[k] = b' ';
                 k += 1;
             } else {
@@ -497,7 +489,8 @@ unsafe fn mi_debug_show_chunks(
             }
             bit_count += MI_BFIELD_BITS;
         }
-        // SAFETY: arena diagnostics write bounded stack buffers and emit validated UTF-8 diagnostic lines.
+        // SAFETY: the rendered prefix/fields contain only ASCII markers, digits, spaces, and ANSI
+        // escape bytes, so the initialized `buf[..k]` is valid UTF-8.
         let line = unsafe { core::str::from_utf8_unchecked(&buf[..k]) };
         crate::allocator::options::_mi_raw_message(format_args!("  {}\n\x1B[37m", line));
         i += 1;
@@ -509,15 +502,22 @@ unsafe fn mi_debug_show_chunks(
     bit_set_count
 }
 
+/// # Safety
+/// `heap` must remain a live initialized borrowed heap whose subprocess registry, registered arenas,
+/// bitmap tables, page map, page metadata, and backing remain live for this synchronous diagnostic
+/// traversal. Arena/page teardown or registry relink must not race; concurrent bitmap updates are
+/// permitted only through their atomic protocols.
 unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: bool) {
-    // SAFETY: arena diagnostics walk the current subproc arena registry through typed indexes before printing.
+    // SAFETY: the borrowed heap remains live with an initialized stable subprocess association for
+    // this synchronous traversal.
     let Some(subproc) = (unsafe { heap.ptr().subproc() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
     let subproc_ptr = subproc;
     let subproc = subproc.as_ptr();
-    // SAFETY: arena diagnostics walk the current subproc arena registry through typed indexes before printing.
+    // SAFETY: the live subprocess registry remains initialized; this atomic count snapshot bounds
+    // every subsequent typed index.
     let max_arenas = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
     let mut page_total = 0usize;
     for i in 0..max_arenas {
@@ -526,12 +526,14 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
             continue;
         };
         let arena =
-            // SAFETY: arena diagnostics walk the current subproc arena registry through typed indexes before printing.
+            // SAFETY: `arena_idx` is below the registry count snapshot and subprocess registry
+            // storage remains live; the loaded pointer is only snapshotted for this iteration.
             unsafe { mi_arena_from_index_typed(SubprocPtr::new_unchecked(subproc), arena_idx) };
         if arena.is_null() {
             break;
         }
-        // SAFETY: arena diagnostics walk the current subproc arena registry through typed indexes before printing.
+        // SAFETY: the non-null registry entry identifies live initialized arena metadata whose
+        // prefix and bitmap backing remain stable for this synchronous render.
         let arena_view = unsafe { ArenaDebugView::new_unchecked(arena) };
         crate::internal::mi_assert!(arena_view.subproc_raw() == subproc);
         crate::allocator::options::_mi_raw_message(format_args!(
@@ -563,7 +565,8 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
                 crate::internal::mi_assert_internal!(false);
                 continue;
             };
-            // SAFETY: arena diagnostics walk the current subproc arena registry through typed indexes before printing.
+            // SAFETY: `arena_view` keeps the live arena backing/bitmaps/page map valid, and the
+            // initialized free bbitmap supplies both chunk count and readable bin-map storage.
             page_total += unsafe {
                 mi_debug_show_chunks(
                     header1,
@@ -571,9 +574,7 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
                     header3,
                     slice_count,
                     mi_bbitmap_chunk_count(slices_free),
-                    ptr::null_mut(),
                     (*slices_free).chunkmap_bins.as_mut_ptr(),
-                    false,
                     arena_view,
                     narrow,
                 )
@@ -588,23 +589,33 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
     }
 }
 
-/// # Safety
-/// Matches the C API and reads the current sub-process arena registry.
-// SAFETY: arena diagnostics walk the current subproc arena registry through typed indexes before printing.
 #[unsafe(no_mangle)]
+/// # Safety
+/// The allocator and main heap must be initialized, and the current subprocess registry, registered
+/// arenas, page metadata, and backing must remain live and stable for this synchronous diagnostic.
+/// Arena/page teardown, registry relinking, and non-atomic metadata mutation must not race; atomic
+/// bitmap updates through allocator protocols remain permitted.
 pub unsafe extern "C" fn mi_debug_show_arenas() {
+    // SAFETY: process initialization keeps the main heap live for the process lifetime; this call
+    // obtains its current initialized pointer without transferring ownership.
     let Some(heap) = HeapPtr::new(unsafe { mi_heap_main() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY: arena diagnostics walk the current subproc arena registry through typed indexes before printing.
-    unsafe { mi_debug_show_arenas_ex(BorrowedHeap::new_unchecked(heap), true, true) }
+    // SAFETY: the non-null main heap is initialized and remains live for this synchronous call; the
+    // borrowed witness does not escape it.
+    let heap = unsafe { BorrowedHeap::new_unchecked(heap) };
+    // SAFETY: the public caller contract supplies a synchronous diagnostic epoch that keeps the
+    // main heap, registry, arenas, pages, and backing live and excludes non-atomic metadata mutation
+    // and teardown; permitted bitmap changes use their atomic protocols.
+    unsafe { mi_debug_show_arenas_ex(heap, true, true) }
 }
 
-/// # Safety
-/// Matches the C API and forwards to the current arena debug printer.
-// SAFETY: arena diagnostics walk the current subproc arena registry through typed indexes before printing.
 #[unsafe(no_mangle)]
+/// # Safety
+/// The caller must uphold the initialization and synchronous diagnostic stability requirements of
+/// [`mi_debug_show_arenas`].
 pub unsafe extern "C" fn mi_arenas_print() {
+    // SAFETY: this compatibility entry forwards under the identical diagnostic-epoch contract.
     unsafe { mi_debug_show_arenas() }
 }

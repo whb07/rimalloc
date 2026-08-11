@@ -358,12 +358,28 @@ pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     }
 }
 
+/// Retire a sole all-free normal page, or release it immediately when it cannot be retained.
+///
+/// # Safety
+/// `page_wrapper` must represent a live initialized all-free active page linked in its current
+/// heap's live queue, with stable page geometry, backing, keys, countdown, queue links, and owner
+/// association. Its owner must be the live current-thread heap with exclusive local mutation of
+/// the queue, page metadata, retirement bounds, and statistics; the bounds must remain within the
+/// page-queue bin domain. Protocol atomic remote-free publication is permitted, but queue relink,
+/// competing ownership, non-protocol metadata mutation, and page/heap/TLD/arena teardown must not
+/// race this call. Any release or collection callback reached by the immediate-free path and its
+/// opaque argument must remain valid for synchronous invocation, must not incompatibly reenter and
+/// mutate this page, queue, or heap, and must not unwind. On return the page is either the sole page
+/// retained with an initialized countdown, or it has been detached and terminally released.
 pub(crate) unsafe fn _mi_page_retire_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
 ) {
-    // SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.
-    unsafe {
-        let page = page_wrapper.page().as_ptr();
+    let page_ptr = page_wrapper.page();
+    let page = page_ptr.as_ptr();
+    // SAFETY: the caller keeps this all-free page, its current queue, and adjacent queue metadata
+    // live and stable under exclusive local ownership. This preflight validates the page, clears
+    // the interior-pointer flag, and snapshots whether it is the sole non-special queue member.
+    let (queue, is_sole) = unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_expensive!(_mi_page_is_valid(page));
         crate::internal::mi_assert_internal!(mi_page_all_free(page));
@@ -371,33 +387,37 @@ pub(crate) unsafe fn _mi_page_retire_internal(
         if !mi_page_retire_expire(page).is_zero() {
             return;
         }
-        mi_page_set_has_interior_pointers(page_wrapper.page(), false);
+        mi_page_set_has_interior_pointers(page_ptr, false);
 
         let pq = mi_page_queue_of(page);
         let queue = page_queue_ptr(pq);
-        if !mi_page_queue_is_special(pq)
+        let is_sole = !mi_page_queue_is_special(pq)
             && queue
                 .first()
                 .is_some_and(|first| ptr::eq(first.as_ptr(), page))
             && queue
                 .last()
-                .is_some_and(|last| ptr::eq(last.as_ptr(), page))
-        {
-            let theap = mi_page_theap(page);
+                .is_some_and(|last| ptr::eq(last.as_ptr(), page));
+        (queue, is_sole)
+    };
+
+    if is_sole {
+        let retired = page_wrapper.into_retired();
+        let retired_page = retired.page();
+        let retired_raw = retired_page.as_ptr();
+        // SAFETY: the consumed all-free witness established this live sole-page retirement state;
+        // all subsequent metadata reads and writes use the replacement RetiredPage capability.
+        unsafe {
+            let theap = mi_page_theap(retired_raw);
             if MI_STAT > 0 {
                 __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);
             }
-            let block_size = page_wrapper.page().block_size();
-            let retired = page_wrapper.into_retired();
-            crate::internal::mi_assert_internal!(ptr::eq(retired.page().as_ptr(), page));
+            let block_size = retired_page.block_size();
             mi_page_set_retire_expire(
-                page,
+                retired_raw,
                 crate::allocator::policy::ActivePolicy::retire_expire(block_size),
             );
-            let index = mi_theap_queue_index(
-                ThreadHeapPtr::new_unchecked(theap),
-                PageQueuePtr::new_unchecked(pq),
-            );
+            let index = mi_theap_queue_index(ThreadHeapPtr::new_unchecked(theap), queue);
             crate::internal::mi_assert_internal!(index < MI_BIN_FULL);
             if index < (*theap).page_retired_min {
                 (*theap).page_retired_min = index;
@@ -405,13 +425,15 @@ pub(crate) unsafe fn _mi_page_retire_internal(
             if index > (*theap).page_retired_max {
                 (*theap).page_retired_max = index;
             }
-            crate::internal::mi_assert_internal!(mi_page_all_free(page));
-            return;
+            crate::internal::mi_assert_internal!(mi_page_all_free(retired_raw));
         }
+        return;
+    }
 
-        let queue = crate::core_types::NormalPageQueue::new_unchecked(
-            crate::core_types::PageQueuePtr::new_unchecked(pq),
-        );
+    // SAFETY: preflight kept the live queue and all-free page stable; this branch consumes the
+    // original witness through queue removal and terminal release, with no later page access.
+    unsafe {
+        let queue = crate::core_types::NormalPageQueue::new_unchecked(queue);
         let _ = _mi_page_free_active_internal(page_wrapper, queue);
     }
 }

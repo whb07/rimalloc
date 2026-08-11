@@ -153,14 +153,25 @@ unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_bloc
     }
 }
 
+/// Decode one allocated block's padding trailer into its stored delta and page
+/// usable block size.
+///
+/// # Safety
+/// `page` must identify live initialized page metadata and `block` must be the
+/// aligned start of a live allocated block owned by that page. The page's usable
+/// size, padding keys, block backing, and initialized padding trailer must remain
+/// readable and stable with no concurrent free, realloc, or trailer mutation.
 unsafe fn mi_page_decode_padding(
     page: *const mi_page_t,
     block: *const mi_block_t,
-    delta: *mut usize,
-    bsize: *mut usize,
+    delta: &mut usize,
+    bsize: &mut usize,
 ) -> bool {
-    // SAFETY: padding decode/shrink/check operations use typed padding metadata on validated blocks.
-    unsafe {
+    // SAFETY: the caller couples this live block start to `page` and keeps its
+    // usable size, complete backing, padding trailer, and page keys initialized
+    // and stable. Tracking visibility is restored after the trailer read and
+    // canary check.
+    let canary_ok = unsafe {
         let page_ptr = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
         let block_ptr = crate::core_types::BlockPtr::new_unchecked(block.cast_mut());
         let usable_size = mi_page_usable_block_size(page);
@@ -175,50 +186,65 @@ unsafe fn mi_page_decode_padding(
         *delta = metadata.delta().get() as usize;
         let canary = metadata.canary().get();
         let keys = crate::core_types::PageKeys::from_raw(mi_page_keys(page));
-        let ok = crate::core_types::PaddingCanary::from_page_block_keys(page_ptr, block_ptr, keys)
-            .get()
-            == canary
-            && *delta <= *bsize;
+        let canary_ok =
+            crate::core_types::PaddingCanary::from_page_block_keys(page_ptr, block_ptr, keys).get()
+                == canary;
         mi_track_mem_noaccess(
             padding_ptr.cast::<c_void>(),
             crate::core_types::PaddingPtr::SIZE,
         );
-        ok
-    }
+        canary_ok
+    };
+    canary_ok && *delta <= *bsize
 }
 
-// SAFETY: padding decode/shrink/check operations use typed padding metadata on validated blocks.
 #[cfg(not(mi_c_malloc_fast))]
 #[inline(never)]
+/// Shrink the logical padding delta so at least `min_size` bytes are reported
+/// usable when the page's physical block size permits it.
+///
+/// # Safety
+/// When padding is enabled, `page` must identify live initialized page metadata
+/// and `block` must be the aligned start of a live allocated block owned by that
+/// page. The caller must exclusively own mutation of its initialized padding
+/// trailer while page usable-size metadata, keys, and backing remain live and
+/// stable with no concurrent free or realloc. If shrinking is required,
+/// `bsize - min_size` must fit the padding trailer's `u32` delta field, as it
+/// does for allocator-produced aligned allocation layouts.
 pub(crate) unsafe extern "C" fn _mi_padding_shrink(
     page: *const mi_page_t,
     block: *const mi_block_t,
     min_size: usize,
 ) {
-    // SAFETY: padding decode/shrink/check operations use typed padding metadata on validated blocks.
+    if MI_PADDING == 0 {
+        let _ = page;
+        let _ = block;
+        let _ = min_size;
+        return;
+    }
+
+    let mut bsize = 0usize;
+    let mut delta = 0usize;
+    // SAFETY: the caller provides this matching live page/block pair and keeps
+    // its usable size, keys, backing, and initialized padding trailer stable.
+    let ok = unsafe { mi_page_decode_padding(page, block, &mut delta, &mut bsize) };
+    crate::internal::mi_assert_internal!(ok);
+    if !ok || (bsize - delta) >= min_size {
+        return;
+    }
+
+    crate::internal::mi_assert_internal!(bsize >= min_size);
+    if bsize < min_size {
+        return;
+    }
+
+    let new_delta = bsize - min_size;
+    crate::internal::mi_assert_internal!(new_delta < bsize);
+    // SAFETY: the caller exclusively owns this live block's padding mutation;
+    // `new_delta < bsize` and the caller's allocator-layout bound make the delta
+    // representable for this trailer. Tracking visibility is balanced around
+    // the write.
     unsafe {
-        if MI_PADDING == 0 {
-            let _ = page;
-            let _ = block;
-            let _ = min_size;
-            return;
-        }
-
-        let mut bsize = 0usize;
-        let mut delta = 0usize;
-        let ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
-        crate::internal::mi_assert_internal!(ok);
-        if !ok || (bsize - delta) >= min_size {
-            return;
-        }
-
-        crate::internal::mi_assert_internal!(bsize >= min_size);
-        if bsize < min_size {
-            return;
-        }
-
-        let new_delta = bsize - min_size;
-        crate::internal::mi_assert_internal!(new_delta < bsize);
         let padding = crate::core_types::PaddingPtr::from_block_usable(
             crate::core_types::BlockPtr::new_unchecked(block.cast_mut()),
             crate::core_types::UsableSize::new(bsize),
@@ -248,27 +274,33 @@ pub(crate) unsafe extern "C" fn _mi_padding_shrink(
 /// # Safety
 ///
 /// `page` must be a live initialized page and `block` must be a live allocated
-/// block owned by that page. Their padding metadata and the trailing bytes
-/// covered by the padding check must be initialized, readable, and remain
-/// stable for the call, with no concurrent mutation or free of the block.
+/// block owned by that page. The page's usable-size metadata, padding-canary
+/// keys, block backing, and padding metadata must remain initialized, readable,
+/// and stable; the trailing bytes covered by the padding check must likewise
+/// remain stable for the call, with no concurrent mutation or free of the block.
 unsafe fn mi_verify_padding(
     page: *const mi_page_t,
     block: *const mi_block_t,
     size: &mut usize,
     wrong: &mut usize,
 ) -> bool {
-    // SAFETY: padding decode/shrink/check operations use typed padding metadata on validated blocks.
+    let mut bsize = 0usize;
+    let mut delta = 0usize;
+    // SAFETY: the caller provides this matching live page/block pair and keeps
+    // its usable size, keys, backing, and initialized padding trailer stable.
+    let mut ok = unsafe { mi_page_decode_padding(page, block, &mut delta, &mut bsize) };
+    *size = bsize;
+    *wrong = bsize;
+    if !ok {
+        return false;
+    }
+    crate::internal::mi_assert_internal!(bsize >= delta);
+    *size = bsize - delta;
+    // SAFETY: the caller keeps the live page's initialized huge-page flag
+    // readable and stable. For a non-huge page, the validated delta bounds the
+    // initialized trailing fill inside this live block; concurrent mutation is
+    // excluded and tracking visibility is balanced around the bytewise check.
     unsafe {
-        let mut bsize = 0usize;
-        let mut delta = 0usize;
-        let mut ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
-        *size = bsize;
-        *wrong = bsize;
-        if !ok {
-            return false;
-        }
-        crate::internal::mi_assert_internal!(bsize >= delta);
-        *size = bsize - delta;
         if !mi_page_is_huge(page) {
             let fill = block.cast::<u8>().add(bsize - delta);
             let maxpad = cmp::min(delta, MI_MAX_ALIGN_SIZE);
@@ -282,16 +314,21 @@ unsafe fn mi_verify_padding(
             }
             mi_track_mem_noaccess(fill.cast_mut().cast::<c_void>(), maxpad);
         }
-        ok
     }
+    ok
 }
 
 /// # Safety
 ///
-/// `page` must be a live initialized page and `block` must be a live allocated
-/// block owned by that page. Their padding metadata and the trailing bytes
-/// covered by the padding check must be initialized, readable, and remain
+/// When padding checks are enabled, `page` must be a live initialized page and
+/// `block` must be a live allocated block owned by that page. The page's usable-
+/// size metadata, padding-canary keys, block backing, padding metadata, and the
+/// trailing bytes covered by the check must be initialized, readable, and
 /// stable for the call, with no concurrent mutation or free of the block.
+/// Registered diagnostic callbacks and opaque arguments must remain valid for
+/// synchronous error reporting, must not incompatibly reenter this check, and
+/// must not unwind. When padding checks are disabled, the function returns
+/// without dereferencing `page` or `block`.
 pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t) {
     if MI_PADDING == 0 || MI_PADDING_CHECK == 0 {
         return;
@@ -300,7 +337,7 @@ pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t)
     let mut size = 0usize;
     let mut wrong = 0usize;
     // SAFETY: the caller supplies the matching live page and allocated block,
-    // and keeps their padding metadata and checked trailing bytes stable.
+    // stable usable-size/keys/backing/padding metadata, and valid diagnostics.
     let valid = unsafe { mi_verify_padding(page, block, &mut size, &mut wrong) };
     if !valid {
         _mi_error_message_fmt(

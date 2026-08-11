@@ -2,7 +2,7 @@
 
 use core::ffi::c_void;
 use core::mem::size_of;
-use core::ptr::{self, NonNull};
+use core::ptr;
 use core::sync::atomic::Ordering;
 
 use crate::allocator::arena::_mi_arenas_unsafe_destroy_all;
@@ -14,7 +14,7 @@ use crate::internal::memid::mi_memid_t;
 use crate::internal::{_mi_meta_free, _mi_meta_zalloc};
 use crate::types::{
     BorrowedSubproc, HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainHeap, MainSubproc,
-    MiLockGuard, MiLockPtr, SubprocPtr, TldPtr,
+    MiLockGuard, SubprocPtr, TldPtr,
 };
 use crate::types::{mi_heap_t, mi_heap_visit_fun, mi_subproc_id_t, mi_subproc_t, mi_theap_t};
 
@@ -36,10 +36,10 @@ pub(super) fn to_id(subproc: Option<SubprocPtr>) -> mi_subproc_id_t {
 }
 
 unsafe fn destroy_meta(subproc: SubprocPtr) {
-    // SAFETY: subproc metadata destruction is serialized by the subproc registry lock.
+    // SAFETY: the detached token grants exclusive ownership of this metadata.
     let subproc = unsafe { mi_subproc_prefix_typed(subproc) };
     // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.
-    // SAFETY: subproc metadata destruction is serialized by the subproc registry lock.
+    // SAFETY: the detached token grants exclusive ownership of this metadata.
     unsafe {
         mi_lock_done(ptr::addr_of_mut!((*subproc).arena_reserve_lock));
         mi_lock_done(ptr::addr_of_mut!((*subproc).heaps_lock));
@@ -108,15 +108,8 @@ pub(super) fn main_init() {
     }
 }
 
-unsafe fn unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs_lock: bool) {
-    let Some(subproc) = SubprocPtr::new(subproc) else {
-        return;
-    };
-    // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-    unsafe { unsafe_destroy_typed(subproc, acquire_subprocs_lock) };
-}
-
-unsafe fn unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_lock: bool) {
+unsafe fn destroy_detached(detached: subproc_registry::DetachedSubproc) {
+    let subproc = detached.ptr();
     let subproc_raw = subproc.as_ptr();
     // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
     let main_subproc = unsafe { main_typed().ptr() };
@@ -125,17 +118,6 @@ unsafe fn unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_lock: bool)
     let subproc_prefix = unsafe { mi_subproc_prefix_typed(subproc) };
     // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
     let borrowed_subproc = unsafe { BorrowedSubproc::new(subproc) };
-    if acquire_subprocs_lock {
-        // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        unsafe { mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock)) };
-    }
-    // SAFETY: registry membership rewires only the lock-protected subproc head and prev/next links.
-    unsafe { subproc_registry::unlink_locked(subproc) };
-    if acquire_subprocs_lock {
-        // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-        unsafe { mi_lock_release(ptr::addr_of_mut!(subprocs_lock)) };
-    }
-
     loop {
         // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         let heaps_lock = unsafe { MiLockGuard::acquire(subproc.heaps_lock()) };
@@ -188,21 +170,23 @@ pub(super) unsafe fn unsafe_destroy_all() {
     // SAFETY: registry teardown walks remaining subprocs while holding the registry lock.
     let main_subproc = unsafe { super::_mi_subproc_main() };
     // SAFETY: registry teardown walks remaining subprocs while holding the registry lock.
-    unsafe {
-        {
-            let lock =
-                MiLockPtr::from_nonnull(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
-            let _lock = MiLockGuard::acquire(lock);
-            let mut subproc = subproc_registry::head_locked();
-            while let Some(current) = subproc {
-                let next = subproc_registry::next_locked(current);
-                if !ptr::eq(current.as_ptr(), main_subproc) {
-                    unsafe_destroy(current.as_ptr(), false);
-                }
-                subproc = next;
-            }
-        }
-        unsafe_destroy(main_subproc, true);
+    // SAFETY: `main_init` initialized the registry lock.
+    let registry = unsafe { subproc_registry::SubprocRegistryGuard::acquire() };
+    while let Some(detached) = registry.detach_first_except(main_subproc) {
+        // SAFETY: the detached token proves this live node was unlinked once;
+        // retaining the guard preserves the existing destroy-all lock order.
+        unsafe { destroy_detached(detached) };
+    }
+    drop(registry);
+
+    // Preserve the existing final main-subproc detach after all other nodes.
+    // SAFETY: `main_init` initialized the registry lock.
+    let registry = unsafe { subproc_registry::SubprocRegistryGuard::acquire() };
+    let main = registry.detach(main_subproc);
+    drop(registry);
+    if let Some(main) = main {
+        // SAFETY: the detached token proves main was linked and unlinked once.
+        unsafe { destroy_detached(main) };
     }
 }
 
@@ -362,29 +346,34 @@ pub(super) unsafe fn new() -> mi_subproc_id_t {
         mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).arena_reserve_lock));
         mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).heaps_lock));
     }
-    // SAFETY: local subproc list mutation is serialized by `subprocs_lock`.
-    // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
+    // SAFETY: `main_init` initialized the registry lock.
+    let registry = unsafe { subproc_registry::SubprocRegistryGuard::acquire() };
+    // SAFETY: fresh metadata is initialized and not yet linked.
     unsafe {
-        let lock =
-            MiLockPtr::from_nonnull(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
-        let _lock = MiLockGuard::acquire(lock);
-        subproc_registry::push_front_locked(SubprocPtr::new_unchecked(
+        registry.push_front(SubprocPtr::new_unchecked(
             subproc_ptr.cast::<mi_subproc_t>(),
-        ));
-        super::_mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>())
-    }
+        ))
+    };
+    // SAFETY: the returned identifier is the just-linked initialized node.
+    unsafe { super::_mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>()) }
 }
 
 pub(super) unsafe fn destroy(subproc_id: mi_subproc_id_t) {
     main_init();
-    // SAFETY: raw ID comes from the C ABI surface.
-    let subproc = unsafe { super::_mi_subproc_from_id(subproc_id) };
-    // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
-    if subproc.is_null() || core::ptr::eq(subproc, unsafe { super::_mi_subproc_main() }) {
+    let candidate = subproc_id.as_ptr::<mi_subproc_t>();
+    // SAFETY: main subproc address lookup does not dereference the candidate.
+    if candidate.is_null() || ptr::eq(candidate, unsafe { main_addr() }) {
         return;
     }
-    // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
-    unsafe { unsafe_destroy(subproc, true) };
+    // SAFETY: `main_init` initialized the registry lock.
+    let registry = unsafe { subproc_registry::SubprocRegistryGuard::acquire() };
+    let detached = registry.detach(candidate);
+    drop(registry);
+    if let Some(detached) = detached {
+        // SAFETY: the detached token proves the opaque ID named a live linked
+        // node and that it was unlinked exactly once.
+        unsafe { destroy_detached(detached) };
+    }
 }
 
 pub(super) unsafe fn add_current_thread(subproc_id: mi_subproc_id_t) {

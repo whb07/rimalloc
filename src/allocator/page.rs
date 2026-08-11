@@ -924,59 +924,22 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
     }
 }
 
-/// # Safety
-/// `theap` must be valid. If non-null, `pq` must be a page queue belonging to `theap`.
-// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-#[inline(never)]
-pub unsafe extern "C" fn mi_page_fresh_alloc(
-    theap: *mut mi_theap_t,
-    pq: *mut mi_page_queue_t,
-    block_size: usize,
-    page_alignment: usize,
-) -> *mut mi_page_t {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        crate::internal::mi_assert_internal!(pq.is_null() || mi_theap_contains_queue(theap, pq));
-        crate::internal::mi_assert_internal!(
-            page_alignment > 0
-                || block_size > MI_LARGE_MAX_OBJ_SIZE
-                || pq.is_null()
-                || block_size == mi_page_queue_block_size_raw(pq)
-        );
-        let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
-            crate::core_types::PaddedSize::new_unchecked(block_size),
-            crate::core_types::Zeroed::No,
-        );
-        let Some(page_alignment) = crate::core_types::MaybeAlignment::new(page_alignment) else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
-        let Some(page) = mi_page_fresh_alloc_typed(owner, pq, layout, page_alignment) else {
-            return ptr::null_mut();
-        };
-        page.page().as_ptr()
-    }
-}
-
 /// Allocate, reclaim if needed, and publish one page into its target queue.
 ///
 /// # Safety
-/// `owner` must identify the live current-thread heap that owns `pq`; if `pq`
-/// is non-null, it must remain a live initialized queue for `layout`. The heap,
-/// TLD, subprocess arena registry, page-map and arena backing, page metadata,
-/// OS configuration, and stored commit callbacks/arguments must remain stable
-/// throughout the synchronous allocation/reclaim/queue epoch. Callbacks must
-/// not retain temporary allocator capabilities or unwind. Teardown and
-/// non-protocol queue/page relinking must not race; atomic abandoned claims and
-/// remote-free publication remain permitted by their protocols.
-#[inline]
+/// `owner` must identify the live current-thread heap that owns `queue`, which must remain a live
+/// initialized normal or huge queue for `block_size`. The heap, TLD, subprocess arena registry,
+/// page-map and arena backing, page metadata, OS configuration, and stored release, purge, and
+/// commit callbacks and their opaque arguments must remain stable throughout the synchronous
+/// allocation/reclaim/queue epoch. Callbacks must not unwind or incompatibly reenter allocator
+/// operations that mutate the participating heap, queue, page, arena, or backing. Teardown and
+/// non-protocol queue/page relinking must not race; atomic abandoned claims and remote-free
+/// publication remain permitted by their protocols.
+#[inline(never)]
 unsafe fn mi_page_fresh_alloc_typed(
     owner: crate::core_types::ThreadHeapLocal,
-    pq: *mut mi_page_queue_t,
-    layout: crate::core_types::LayoutRequest,
+    queue: crate::core_types::PageQueuePtr,
+    block_size: crate::core_types::BlockSize,
     page_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<crate::core_types::ActivePage> {
     // SAFETY: the contract supplies one stable current-thread allocation epoch
@@ -984,7 +947,7 @@ unsafe fn mi_page_fresh_alloc_typed(
     // final queue publication; each typed capability is consumed in order.
     unsafe {
         let theap = owner.ptr().as_ptr();
-        let block_size = crate::core_types::BlockSize::from_padded(layout.padded());
+        let pq = queue.as_ptr();
         let allocation = _mi_arenas_page_alloc(owner, block_size, page_alignment)?;
         let page = match allocation {
             crate::allocator::arena::ArenaPageAllocation::Claimed(page) => {
@@ -1001,25 +964,18 @@ unsafe fn mi_page_fresh_alloc_typed(
                 }
                 page
             }
-            crate::allocator::arena::ArenaPageAllocation::Active(page) if !pq.is_null() => {
+            crate::allocator::arena::ArenaPageAllocation::Active(page) => {
                 if mi_page_queue_is_huge(pq) {
                     mi_page_queue_push_raw(theap, pq, page.page().as_ptr());
                     page
                 } else {
-                    mi_page_queue_push_typed(
-                        owner,
-                        crate::core_types::NormalPageQueue::new_unchecked(
-                            crate::core_types::PageQueuePtr::new_unchecked(pq),
-                        ),
-                        page,
-                    )
-                    .into_active()
+                    let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(queue);
+                    mi_page_queue_push_typed(owner, normal_queue, page).into_active()
                 }
             }
-            crate::allocator::arena::ArenaPageAllocation::Active(page) => page,
         };
         crate::internal::mi_assert_internal!(
-            pq.is_null() || mi_page_block_size(page.page().as_ptr()) >= block_size.get()
+            mi_page_block_size(page.page().as_ptr()) >= block_size.get()
         );
         crate::internal::mi_assert_expensive!(_mi_page_is_valid(page.page().as_ptr()));
         Some(page)
@@ -1110,59 +1066,6 @@ pub(crate) unsafe fn mi_page_init_typed(
         let active = page_uninit.initialize(owner);
         crate::internal::mi_assert!(mi_page_immediate_available(active.page().as_ptr()));
         Ok(active)
-    }
-}
-
-/// # Safety
-/// `theap` must be valid, and `pq` must be a page queue belonging to `theap`.
-#[inline]
-pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
-        let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        let queue = crate::core_types::NormalPageQueue::new_unchecked(
-            crate::core_types::PageQueuePtr::new_unchecked(pq),
-        );
-        let block_size = mi_page_queue_block_size_raw(pq);
-        let block_size_typed = crate::core_types::BlockSize::new_unchecked(block_size);
-        let Some(slice_count) = crate::core_types::SliceCount::from_usize(
-            crate::internal::mi_slice_count_of_size(block_size),
-        ) else {
-            crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
-        };
-        let Some(page) = mi_page_fresh_typed(owner, queue, block_size_typed, slice_count) else {
-            return ptr::null_mut();
-        };
-        page.page().as_ptr()
-    }
-}
-
-#[inline]
-unsafe fn mi_page_fresh_typed(
-    owner: crate::core_types::ThreadHeapLocal,
-    queue: crate::core_types::NormalPageQueue,
-    block_size_typed: crate::core_types::BlockSize,
-    slice_count: crate::core_types::SliceCount,
-) -> Option<crate::core_types::ActivePage> {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let theap = owner.ptr().as_ptr();
-        let pq = queue.ptr().as_ptr();
-        let block_size = block_size_typed.get();
-        crate::internal::mi_assert_internal!(slice_count.get() > 0);
-        let page = mi_page_fresh_alloc(theap, pq, block_size, 0);
-        if page.is_null() {
-            return None;
-        }
-        crate::internal::mi_assert_internal!(block_size == mi_page_block_size(page));
-        crate::internal::mi_assert_internal!(pq == mi_theap_page_queue_of(theap, page));
-        Some(crate::core_types::assume_active_page(
-            crate::core_types::PagePtr::new_unchecked(page),
-        ))
     }
 }
 
@@ -1424,6 +1327,21 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
     }
 }
 
+/// Search a normal queue for an available page, extending, retiring, releasing, or allocating a
+/// page as required.
+///
+/// # Safety
+/// `theap` must be the live current-thread owner of `queue`, and `queue` must be its live normal
+/// queue for `block_size`. Every linked page, its backing, geometry, keys, free lists, queue links,
+/// owner association, retirement state, and commit metadata must remain valid through the search.
+/// The caller must exclusively own local queue, direct-cache, free-list, page-state, and statistics
+/// mutation and exclude teardown, relinking, or other non-protocol page mutation; protocol atomic
+/// remote-free publication and abandoned-page claims remain permitted. TLD, subprocess, arena and
+/// page-map registries, OS configuration, and any stored release, purge, or commit callbacks and
+/// their opaque arguments reached during extension, collection, or fresh allocation must remain
+/// valid. Synchronous callbacks must not unwind or incompatibly reenter operations that mutate the
+/// participating heap, queue, page, arena, or backing. A successful result is the sole active
+/// capability returned from this search epoch.
 #[inline]
 unsafe fn mi_page_queue_find_free_ex_active(
     theap: crate::core_types::ThreadHeapLocal,
@@ -1547,13 +1465,25 @@ unsafe fn mi_page_queue_find_free_ex_active(
                 failed_extend,
             );
             _mi_theap_collect_retired_typed(theap, false);
-            let Some(slice_count) = crate::core_types::SliceCount::from_usize(
-                crate::internal::mi_slice_count_of_size(block_size.get()),
-            ) else {
-                crate::internal::mi_assert_internal!(false);
-                return None;
-            };
-            if let Some(fresh) = mi_page_fresh_typed(theap, queue, block_size, slice_count) {
+            // SAFETY: this cold fresh-page branch retains the caller-proven current-thread heap
+            // epoch and exact live normal queue. Its typed block size and zero/default alignment
+            // pass unchanged into the outlined transaction, while the surrounding search contract
+            // keeps arena/page-map backing and release, purge, and commit callbacks stable and
+            // excludes incompatible callback reentry or unwind.
+            let fresh = mi_page_fresh_alloc_typed(
+                theap,
+                queue.ptr(),
+                block_size,
+                crate::core_types::MaybeAlignment::new_unchecked(0),
+            );
+            if let Some(fresh) = fresh {
+                crate::internal::mi_assert_internal!(
+                    block_size.get() == mi_page_block_size(fresh.page().as_ptr())
+                );
+                crate::internal::mi_assert_internal!(
+                    queue.ptr().as_ptr()
+                        == mi_theap_page_queue_of(theap.ptr().as_ptr(), fresh.page().as_ptr())
+                );
                 #[cfg(feature = "bench-diagnostics")]
                 crate::allocator::bench_diagnostics::page_queue_fresh_allocation();
                 return Some(fresh);
@@ -1632,6 +1562,17 @@ unsafe fn mi_find_free_page_typed(
     }
 }
 
+/// Allocate one singleton huge page and return its available-list capability.
+///
+/// # Safety
+/// `owner` must be the live current-thread owner of `queue`, and `queue` must be its live huge
+/// queue. `layout` and `page_alignment` must describe the requested huge-page allocation. The
+/// caller must exclusively own local huge-queue and statistics mutation while heap/TLD/subprocess,
+/// arena/page-map registries, page backing and metadata remain live and stable against teardown,
+/// relinking, or non-protocol mutation. Protocol abandoned claims and atomic remote-free
+/// publication remain permitted. Stored release, purge, and commit callbacks and their opaque
+/// arguments reached synchronously must remain valid and must not unwind or incompatibly reenter
+/// operations that mutate the participating heap, queue, page, arena, or backing.
 #[inline]
 unsafe fn mi_huge_page_alloc_typed(
     owner: crate::core_types::ThreadHeapLocal,
@@ -1639,27 +1580,30 @@ unsafe fn mi_huge_page_alloc_typed(
     page_alignment: crate::core_types::MaybeAlignment,
     queue: crate::core_types::HugePageQueue,
 ) -> Option<crate::core_types::AvailablePage> {
-    // SAFETY: huge-page selection and allocation preserve singleton page layout, queue selection, alignment, and stat accounting.
+    // SAFETY: the caller-proven current-thread heap and exact huge queue remain live under
+    // exclusive local queue/stat mutation. The typed layout/alignment are passed unchanged through
+    // the outlined arena/reclaim/publication transaction; backing registries and synchronous
+    // release, purge, and commit callbacks remain stable, nonunwinding, and nonreentrant under its
+    // contract.
     unsafe {
         let theap = owner.ptr().as_ptr();
-        let pq = queue.ptr().as_ptr();
-        let block_size = layout.padded().get();
-        let page_alignment = page_alignment.get();
-        let page = mi_page_fresh_alloc(theap, pq, block_size, page_alignment);
-        if !page.is_null() {
-            crate::internal::mi_assert_internal!(mi_page_block_size(page) >= layout.padded().get());
-            crate::internal::mi_assert_internal!(mi_page_is_huge(page));
-            crate::internal::mi_assert_internal!(mi_page_is_singleton(page));
-            if MI_STAT > 0 {
-                __mi_stat_increase(
-                    ptr::addr_of_mut!((*theap).stats.malloc_huge),
-                    mi_page_block_size(page),
-                );
-                __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);
-            }
+        let active = mi_page_fresh_alloc_typed(
+            owner,
+            queue.ptr(),
+            crate::core_types::BlockSize::from_padded(layout.padded()),
+            page_alignment,
+        )?;
+        let page = active.page().as_ptr();
+        crate::internal::mi_assert_internal!(mi_page_block_size(page) >= layout.padded().get());
+        crate::internal::mi_assert_internal!(mi_page_is_huge(page));
+        crate::internal::mi_assert_internal!(mi_page_is_singleton(page));
+        if MI_STAT > 0 {
+            __mi_stat_increase(
+                ptr::addr_of_mut!((*theap).stats.malloc_huge),
+                mi_page_block_size(page),
+            );
+            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);
         }
-        let page = crate::core_types::PagePtr::new(page)?;
-        let active = crate::core_types::assume_active_page(page);
         active.try_available().ok()
     }
 }

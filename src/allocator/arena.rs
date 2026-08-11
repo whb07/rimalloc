@@ -3,8 +3,8 @@
 use core::ffi::{c_int, c_long, c_void};
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 use core::mem::offset_of;
-use core::mem::{MaybeUninit, size_of};
-use core::ptr;
+use core::mem::size_of;
+use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::allocator::options::{
@@ -455,12 +455,20 @@ impl Drop for RegisteredFreshPage {
     }
 }
 
+/// # Safety
+/// `arena` must identify live initialized registered arena metadata whose free, dirty, committed,
+/// and accounting bitmap backing remains live through the claim. Its reserved slice backing and
+/// subprocess stats must remain valid, and teardown must not race. Concurrent allocation attempts
+/// are permitted through the bitmap claim protocol. When `commit` is true, the claimed OS range must
+/// remain suitable for the arena commit/reuse and tracking operations until publication completes;
+/// any stored commit callback and its opaque argument must remain valid for synchronous invocation
+/// and the callback must not unwind.
 unsafe fn mi_arena_try_alloc_at(
     arena: ArenaPtr,
     slice_count: crate::core_types::SliceCount,
     commit: bool,
     tseq: crate::core_types::ThreadSeq,
-) -> Option<(*mut c_void, crate::core_types::ArenaAllocation)> {
+) -> Option<(NonNull<c_void>, crate::core_types::ArenaAllocation)> {
     let arena_ptr = arena;
     let arena = arena.as_ptr();
     // SAFETY: arena allocation excludes concurrent teardown and keeps the
@@ -476,7 +484,12 @@ unsafe fn mi_arena_try_alloc_at(
             .as_ptr()
             .cast::<c_void>()
     };
+    // SAFETY: a typed arena slice start is non-null; changing only its pointee type preserves that
+    // invariant without dereferencing it.
+    let p = unsafe { NonNull::new_unchecked(p) };
     let mut touched_slices = slice_count;
+    // SAFETY: the function contract keeps the arena prefix initialized and stable while the claim's
+    // initial-zero state is derived from its backing MemId.
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.initially_zero } {
         let mut already_dirty = 0usize;
         // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
@@ -530,7 +543,7 @@ unsafe fn mi_arena_try_alloc_at(
             if MI_DEBUG > 1
                 && claim.memid().initially_zero
                 // SAFETY: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
-                && !unsafe { mi_mem_is_zero(p, mi_size_of_slices(slice_count)) }
+                && !unsafe { mi_mem_is_zero(p.as_ptr(), mi_size_of_slices(slice_count)) }
             {
                 crate::allocator::options::_mi_error_message_fmt(
                     Errno::EFAULT,
@@ -540,9 +553,12 @@ unsafe fn mi_arena_try_alloc_at(
             }
         } else {
             // SAFETY: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
-            unsafe { _mi_os_reuse(p, mi_size_of_slices(slice_count)) };
+            unsafe { _mi_os_reuse(p.as_ptr(), mi_size_of_slices(slice_count)) };
+            // SAFETY: allocator OS configuration remains initialized for the allocation epoch.
             if unsafe { _mi_os_has_overcommit() }
                 && touched_slices > 0
+                // SAFETY: the live stable arena prefix keeps its backing MemId readable; pinned
+                // arenas are excluded from overcommit accounting adjustment.
                 && !unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned }
             {
                 // SAFETY: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
@@ -569,9 +585,11 @@ unsafe fn mi_arena_try_alloc_at(
 
         if claim.memid().initially_zero {
             // SAFETY: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
-            unsafe { mi_track_mem_defined(p, slice_count * MI_ARENA_SLICE_SIZE) };
+            unsafe { mi_track_mem_defined(p.as_ptr(), slice_count * MI_ARENA_SLICE_SIZE) };
         } else {
-            unsafe { mi_track_mem_undefined(p, slice_count * MI_ARENA_SLICE_SIZE) };
+            // SAFETY: the published claim owns this live slice range, which tracking transitions to
+            // undefined before the allocation becomes visible.
+            unsafe { mi_track_mem_undefined(p.as_ptr(), slice_count * MI_ARENA_SLICE_SIZE) };
         }
     } else {
         // SAFETY: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
@@ -824,6 +842,13 @@ unsafe fn mi_forall_suitable_arenas<F>(
 }
 
 #[allow(clippy::too_many_arguments)]
+/// # Safety
+/// `heap` must remain live and initialized with a stable subprocess association. The heap/subprocess,
+/// arena registry, every visited arena, and its bitmap/backing storage must remain live; teardown or
+/// registry relinking must not race. If supplied, `req_arena` must be a live registered arena
+/// compatible with that subprocess. Concurrent slice claims and registry growth are permitted
+/// through their allocator protocols. When `commit` is true, any stored commit callback and opaque
+/// argument must remain valid for synchronous invocation and the callback must not unwind.
 unsafe fn mi_arenas_try_find_free(
     heap: BorrowedHeap,
     slice_count: crate::core_types::SliceCount,
@@ -833,15 +858,16 @@ unsafe fn mi_arenas_try_find_free(
     req_arena: Option<ArenaPtr>,
     tseq: crate::core_types::ThreadSeq,
     numa_node: crate::core_types::NumaNode,
-    allocation: *mut crate::core_types::ArenaAllocation,
-) -> *mut c_void {
+) -> Option<(NonNull<c_void>, crate::core_types::ArenaAllocation)> {
     crate::internal::mi_assert!(alignment.get() <= MI_ARENA_SLICE_ALIGN);
     if alignment.get() > MI_ARENA_SLICE_ALIGN {
-        return ptr::null_mut();
+        return None;
     }
 
-    let mut found = ptr::null_mut();
-    // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+    let mut found = None;
+    // SAFETY: the function contract keeps the heap registry and each visited arena live. The
+    // internal visitor synchronously claims at most one range and stores its complete allocation
+    // value before stopping traversal.
     unsafe {
         mi_forall_suitable_arenas(
             heap,
@@ -854,8 +880,7 @@ unsafe fn mi_arenas_try_find_free(
                 if let Some((p, arena_allocation)) =
                     mi_arena_try_alloc_at(arena, slice_count, commit, tseq)
                 {
-                    found = p;
-                    *allocation = arena_allocation;
+                    found = Some((p, arena_allocation));
                     false
                 } else {
                     true
@@ -863,11 +888,12 @@ unsafe fn mi_arenas_try_find_free(
             },
         );
     }
-    if !found.is_null() || numa_node.is_any() {
+    if found.is_some() || numa_node.is_any() {
         return found;
     }
 
-    // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+    // SAFETY: the same live registry/arena epoch covers the fallback traversal; NUMA suitability is
+    // relaxed, but the allocation claim and synchronous stop protocol are unchanged.
     unsafe {
         mi_forall_suitable_arenas(
             heap,
@@ -880,8 +906,7 @@ unsafe fn mi_arenas_try_find_free(
                 if let Some((p, arena_allocation)) =
                     mi_arena_try_alloc_at(arena, slice_count, commit, tseq)
                 {
-                    found = p;
-                    *allocation = arena_allocation;
+                    found = Some((p, arena_allocation));
                     false
                 } else {
                     true
@@ -907,6 +932,13 @@ pub(crate) unsafe extern "C" fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_s
 }
 
 #[allow(clippy::too_many_arguments)]
+/// # Safety
+/// `heap` must remain live and initialized with a stable subprocess association. The heap/subprocess,
+/// arena registry, and visited arena metadata/backing must remain live; teardown and registry
+/// relinking must not race. If supplied, `req_arena` must be a compatible live registered arena.
+/// Concurrent arena claims and registry growth remain permitted through their allocator protocols.
+/// When `commit` is true, any stored commit callback and opaque argument must remain valid for
+/// synchronous invocation and the callback must not unwind.
 unsafe fn mi_arenas_try_alloc(
     heap: BorrowedHeap,
     slice_count: crate::core_types::SliceCount,
@@ -916,16 +948,15 @@ unsafe fn mi_arenas_try_alloc(
     req_arena: Option<ArenaPtr>,
     tseq: crate::core_types::ThreadSeq,
     numa_node: crate::core_types::NumaNode,
-    memid: *mut mi_memid_t,
-) -> *mut c_void {
+) -> Option<(NonNull<c_void>, crate::core_types::ArenaAllocation)> {
     crate::internal::mi_assert!(alignment.get() <= MI_ARENA_SLICE_ALIGN);
     if (slice_count.get() as usize).saturating_mul(MI_ARENA_SLICE_SIZE) > MI_ARENA_MAX_SIZE {
-        return ptr::null_mut();
+        return None;
     }
-    let mut allocation = MaybeUninit::<crate::core_types::ArenaAllocation>::uninit();
-
-    // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
-    let mut p = unsafe {
+    // SAFETY: the allocator call contract keeps the borrowed heap, its subprocess registry, and
+    // visited arenas live; the returned allocation value is initialized only after a successful
+    // bitmap claim.
+    if let Some((p, allocation)) = unsafe {
         mi_arenas_try_find_free(
             heap,
             slice_count,
@@ -935,32 +966,37 @@ unsafe fn mi_arenas_try_alloc(
             req_arena,
             tseq,
             numa_node,
-            allocation.as_mut_ptr(),
         )
-    };
-    if !p.is_null() {
-        // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
-        unsafe { *memid = allocation.assume_init().into_memid() };
-        return p;
+    } {
+        return Some((p, allocation));
     }
     if req_arena.is_some() || _mi_preloading() {
-        return ptr::null_mut();
+        return None;
     }
     if mi_option_is_enabled(mi_option_t::mi_option_disallow_os_alloc) {
-        return ptr::null_mut();
+        return None;
     }
 
     // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
     let Some(subproc) = (unsafe { heap.ptr().subproc() }) else {
         crate::internal::mi_assert_internal!(false);
-        return ptr::null_mut();
+        return None;
     };
+    // SAFETY: the function contract keeps the subprocess and initialized arena-count atomic live.
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc) };
     {
-        // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+        // SAFETY: the live subprocess owns this initialized reserve lock; the guard serializes
+        // registry growth and releases the same lock at scope exit.
         let _lock = unsafe { MiLockGuard::acquire(subproc.arena_reserve_lock()) };
+        // SAFETY: the held reserve lock stabilizes registry growth while the live subprocess count
+        // is compared with the pre-lock snapshot.
         if arena_count == unsafe { mi_arenas_get_count_typed(subproc) } {
+            // SAFETY: this constructs the allocator's value-only no-arena identifier without reading
+            // or dereferencing external storage.
             let mut arena_id = unsafe { _mi_arena_id_none() };
+            // SAFETY: the reserve lock and function contract keep the subprocess registry/stats live;
+            // the local arena-id output is uniquely writable, and reserve callbacks remain valid and
+            // non-unwinding for the synchronous growth attempt.
             let _ = unsafe {
                 mi_arena_reserve(
                     subproc,
@@ -975,8 +1011,9 @@ unsafe fn mi_arenas_try_alloc(
         }
     }
 
-    // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
-    p = unsafe {
+    // SAFETY: after reserve growth, the allocator contract still keeps the heap registry and arenas
+    // live for a second synchronous claim attempt.
+    unsafe {
         mi_arenas_try_find_free(
             heap,
             slice_count,
@@ -986,14 +1023,8 @@ unsafe fn mi_arenas_try_alloc(
             req_arena,
             tseq,
             numa_node,
-            allocation.as_mut_ptr(),
         )
-    };
-    if !p.is_null() {
-        // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
-        unsafe { *memid = allocation.assume_init().into_memid() };
     }
-    p
 }
 
 struct ArenaAllocTypedArgs {
@@ -1016,6 +1047,14 @@ fn mi_arena_slice_count_for_request(
     crate::core_types::SliceCount::from_usize(mi_slice_count_of_size(size.get()))
 }
 
+/// # Safety
+/// If present, `heap` must identify a live initialized borrowed heap with a stable subprocess
+/// association; the heap/subprocess must not be torn down during the call. If present, `req_arena`
+/// must be a compatible live registered arena. `memid` must be non-null, aligned, and uniquely
+/// writable on every successful arena or OS allocation. Allocator OS configuration and any stored
+/// arena commit or primitive allocation callback, including opaque arguments, must remain valid for
+/// synchronous invocation and must not unwind. Arena registry or backing teardown must not race;
+/// concurrent claims and growth may use their allocator protocols.
 unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_void {
     let ArenaAllocTypedArgs {
         heap,
@@ -1042,9 +1081,14 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
         let arena_alignment = crate::core_types::Alignment::new(alignment.get())
             // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
             .unwrap_or_else(|| unsafe { crate::core_types::Alignment::new_unchecked(1) });
-        let p = unsafe {
+        // SAFETY: the function contract keeps this non-null borrowed heap initialized with a stable
+        // subprocess association for the synchronous allocation attempt.
+        let heap = unsafe { BorrowedHeap::new_unchecked(heap) };
+        // SAFETY: the function contract keeps the heap association, registry, requested arena, and
+        // visited arena backing live while the allocation result is produced.
+        let arena_allocation = unsafe {
             mi_arenas_try_alloc(
-                BorrowedHeap::new_unchecked(heap),
+                heap,
                 slice_count,
                 arena_alignment,
                 commit,
@@ -1052,11 +1096,13 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
                 req_arena,
                 tseq,
                 numa_node,
-                memid,
             )
         };
-        if !p.is_null() {
-            return p;
+        if let Some((p, allocation)) = arena_allocation {
+            // SAFETY: the typed allocator boundary requires a uniquely writable memid output; the
+            // owned allocation result supplies its fully initialized value.
+            unsafe { *memid = allocation.into_memid() };
+            return p.as_ptr();
         }
     }
 
@@ -1340,6 +1386,12 @@ unsafe fn mi_arenas_page_try_find_abandoned(
     result
 }
 
+/// # Safety
+/// `theap` must identify the current thread's live initialized thread heap, with exclusive local
+/// access to its heap/TLD association and arena-page table. Its heap, TLD, subprocess arena registry,
+/// page map, and any allocated arena or OS backing must remain live and stable through construction;
+/// teardown or non-protocol relinking must not race. Stored arena commit and primitive OS callbacks,
+/// including their opaque arguments, must remain valid for synchronous invocation and must not unwind.
 unsafe fn mi_arenas_page_alloc_fresh_area(
     theap: *mut mi_theap_t,
     slice_count: crate::core_types::SliceCount,
@@ -1381,21 +1433,28 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
         };
         // SAFETY: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
         let page_alignment = unsafe { crate::core_types::Alignment::new_unchecked(page_alignment) };
-        start = unsafe {
+        // SAFETY: the function contract keeps this non-null heap locally owned, initialized, and
+        // live for the synchronous arena attempt.
+        let heap_borrowed = unsafe { BorrowedHeap::new_unchecked(heap_ptr) };
+        // SAFETY: the live initialized TLD remains stable under current-thread ownership.
+        let thread_seq = crate::core_types::ThreadSeq::new(unsafe { (*tld).thread_seq });
+        // SAFETY: the fresh-page contract keeps the heap/TLD association, arena registry, and
+        // requested arena/backing live while the owned allocation result is produced.
+        let arena_allocation = unsafe {
             mi_arenas_try_alloc(
-                BorrowedHeap::new_unchecked(heap_ptr),
+                heap_borrowed,
                 slice_count,
                 page_alignment,
                 commit,
                 allow_large,
                 ArenaPtr::new(req_arena),
-                crate::core_types::ThreadSeq::new((*tld).thread_seq),
+                thread_seq,
                 numa_node,
-                &mut memid,
             )
-            .cast::<u8>()
         };
-        if !start.is_null() {
+        if let Some((arena_start, allocation)) = arena_allocation {
+            start = arena_start.as_ptr().cast::<u8>();
+            memid = allocation.into_memid();
             // SAFETY: successful arena allocation returned live backing and a
             // matching memid owned by this pending transaction.
             let mut pending = unsafe { PendingFreshPage::new(start, alloc_size, memid) };
@@ -2192,6 +2251,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
 #[cfg(test)]
 mod claim_tests {
     use super::*;
+    use core::mem::MaybeUninit;
     use std::alloc::{Layout, alloc_zeroed, dealloc};
 
     fn with_claim_fixture(test: impl FnOnce(ArenaPtr, *mut mi_bbitmap_t)) {

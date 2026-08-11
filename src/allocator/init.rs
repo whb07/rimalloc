@@ -769,17 +769,6 @@ pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
 }
 
 // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-/// # Safety
-/// `subproc_id` must have been produced by this crate's subproc API surface.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_subproc_from_id(
-    subproc_id: mi_subproc_id_t,
-) -> *mut mi_subproc_t {
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    unsafe { subproc::from_id(subproc_id) }
-}
-
-// SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Returns an opaque identifier for the main subproc.

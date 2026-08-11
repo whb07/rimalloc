@@ -9,7 +9,7 @@ use crate::allocator::arena::_mi_arenas_unsafe_destroy_all;
 use crate::allocator::heap::{_mi_heap_force_destroy, mi_heap_destroy};
 use crate::allocator::options::{_mi_options_init, _mi_warning_message_fmt};
 use crate::allocator::stats::{__mi_stat_increase_mt, _mi_stats_merge_into, mi_stats_header_init};
-use crate::internal::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
+use crate::internal::atomic::{mi_lock_done, mi_lock_init};
 use crate::internal::memid::mi_memid_t;
 use crate::internal::{_mi_meta_free, _mi_meta_zalloc};
 use crate::types::{
@@ -216,19 +216,6 @@ pub(super) unsafe fn current_ptr() -> *mut mi_subproc_t {
     unsafe { current_typed().ptr().as_ptr() }
 }
 
-unsafe fn from_id_typed(subproc_id: mi_subproc_id_t) -> Option<BorrowedSubproc> {
-    SubprocPtr::new(subproc_id.as_ptr::<mi_subproc_t>())
-        // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-        .map(|subproc| unsafe { BorrowedSubproc::new(subproc) })
-}
-
-pub(super) unsafe fn from_id(subproc_id: mi_subproc_id_t) -> *mut mi_subproc_t {
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    unsafe { from_id_typed(subproc_id) }
-        .map(|subproc| subproc.ptr().as_ptr())
-        .unwrap_or(ptr::null_mut())
-}
-
 pub(super) unsafe fn main_id() -> mi_subproc_id_t {
     // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
     to_id(Some(unsafe { main_typed().ptr() }))
@@ -377,9 +364,8 @@ pub(super) unsafe fn destroy(subproc_id: mi_subproc_id_t) {
 }
 
 pub(super) unsafe fn add_current_thread(subproc_id: mi_subproc_id_t) {
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let subproc = unsafe { super::_mi_subproc_from_id(subproc_id) };
-    if subproc.is_null() {
+    let candidate = subproc_id.as_ptr::<mi_subproc_t>();
+    if candidate.is_null() {
         return;
     }
     // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
@@ -388,37 +374,25 @@ pub(super) unsafe fn add_current_thread(subproc_id: mi_subproc_id_t) {
         return;
     }
     // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let tld = unsafe { (*theap).tld };
-    if tld.is_null() {
+    let Some(tld) = TldPtr::new(unsafe { (*theap).tld }) else {
         return;
-    }
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let main_subproc = unsafe { super::_mi_subproc_main() };
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    if !ptr::eq(unsafe { (*tld).subproc }, main_subproc) {
+    };
+    // SAFETY: process initialization keeps main metadata and registry lock live.
+    let main = unsafe { main_typed() };
+    // SAFETY: `_mi_theap_default_safe` returned the current thread's live,
+    // writable TLD, which presently must belong to main for reassignment.
+    let result = unsafe {
+        let registry = subproc_registry::SubprocRegistryGuard::acquire();
+        registry.assign_current_thread(candidate, tld, main)
+    };
+    if matches!(
+        result,
+        subproc_registry::AssignCurrentThreadResult::AlreadyAssigned
+    ) {
         _mi_warning_message_fmt(format_args!(
             "unable to add thread to the subprocess as it was already in another subprocess (id: {:?})\n",
-            subproc
+            candidate
         ));
-        return;
-    }
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    let main_prefix = unsafe { mi_subproc_prefix(main_subproc) };
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-    unsafe {
-        (*tld).subproc = subproc;
-        (*tld).thread_seq = crate::types::ThreadSeq::new(
-            (*subproc_prefix)
-                .thread_total_count
-                .fetch_add(1, Ordering::Relaxed),
-        )
-        .get();
-        (*main_prefix).thread_count.fetch_sub(1, Ordering::Relaxed);
-        (*subproc_prefix)
-            .thread_count
-            .fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -432,24 +406,19 @@ pub(super) unsafe fn visit_heaps(
         return false;
     };
     let arg = HeapVisitCallbackArg::from_raw(arg);
-    // SAFETY: subproc heap visitation locks the heap list and invokes typed heap callbacks.
-    let subproc = unsafe { super::_mi_subproc_from_id(subproc_id) };
-    if subproc.is_null() {
+    let candidate = subproc_id.as_ptr::<mi_subproc_t>();
+    if candidate.is_null() {
         return false;
     }
-    // SAFETY: subproc heap visitation locks the heap list and invokes typed heap callbacks.
-    let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
-    // SAFETY: subproc heap visitation locks the heap list and invokes typed heap callbacks.
-    unsafe {
-        mi_lock_acquire(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
-        let mut heap = (*subproc_prefix).heaps;
-        let mut ok = true;
-        while !heap.is_null() && ok {
-            let next = (*(heap.cast::<MiHeapMainPrefix>())).next;
-            ok = visitor.invoke(HeapPtr::new_unchecked(heap), arg);
-            heap = next;
-        }
-        mi_lock_release(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
-        ok
-    }
+    main_init();
+    // SAFETY: `main_init` initialized the registry lock. Acquiring the heap
+    // lock before releasing it hands target liveness to the returned token.
+    let registry = unsafe { subproc_registry::SubprocRegistryGuard::acquire() };
+    let Some(heaps) = registry.lock_heaps(candidate) else {
+        return false;
+    };
+    drop(registry);
+    // SAFETY: the public entrypoint requires a valid callback and argument for
+    // this call, including its reentrancy and no-unwind obligations.
+    unsafe { heaps.visit(visitor, arg) }
 }

@@ -1163,25 +1163,6 @@ pub(crate) unsafe fn mi_theap_realloc_layout(
     }
 }
 
-unsafe fn mi_theap_realloc_request(
-    theap: ThreadHeapLocal,
-    req: crate::core_types::ReallocRequest,
-    usable_pre: *mut usize,
-    usable_post: *mut usize,
-) -> *mut c_void {
-    // SAFETY: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
-    unsafe {
-        mi_theap_realloc_validated_core(
-            theap,
-            req.old(),
-            req.new_layout(),
-            req.zero_new_tail(),
-            usable_pre,
-            usable_post,
-        )
-    }
-}
-
 unsafe fn mi_theap_realloc_request_raw(
     theap: *mut mi_theap_t,
     req: crate::core_types::ReallocRequest,
@@ -1193,9 +1174,11 @@ unsafe fn mi_theap_realloc_request_raw(
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };
-        mi_theap_realloc_request(
+        mi_theap_realloc_validated_core(
             ThreadHeapLocal::new_unchecked(theap),
-            req,
+            req.old(),
+            req.new_layout(),
+            req.zero_new_tail(),
             usable_pre,
             usable_post,
         )
@@ -1288,15 +1271,6 @@ unsafe fn mi_theap_rezalloc(
 }
 
 unsafe fn mi_theap_recalloc(
-    theap: ThreadHeapLocal,
-    req: crate::core_types::CallocRequest,
-    realloc_req: crate::core_types::ReallocRequest,
-) -> *mut c_void {
-    // SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
-    unsafe { mi_theap_recalloc_req(theap, req, realloc_req) }
-}
-
-unsafe fn mi_theap_recalloc_req(
     theap: ThreadHeapLocal,
     req: crate::core_types::CallocRequest,
     realloc_req: crate::core_types::ReallocRequest,
@@ -1433,16 +1407,19 @@ pub unsafe extern "C" fn mi_recalloc(p: *mut c_void, count: usize, size: usize) 
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
-/// allocator.
-// SAFETY: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
+/// `heap` must identify a live initialized heap owned by the current thread and
+/// remain stable without concurrent teardown or non-protocol mutation. `p` must
+/// be null or a live allocation returned by this allocator; its page and block
+/// metadata must remain stable with no concurrent free or realloc. On success,
+/// the old allocation is consumed; on failure it remains live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc(
     heap: *mut mi_heap_t,
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
+    // SAFETY: the caller keeps the raw heap and optional old allocation live
+    // through classification, current-thread localization, and realloc dispatch.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return core::ptr::null_mut();
@@ -1453,16 +1430,6 @@ pub unsafe extern "C" fn mi_heap_realloc(
         let Some(req) = mi_realloc_request_from_ptr(p, layout, ptr::null_mut()) else {
             return core::ptr::null_mut();
         };
-        mi_heap_realloc_typed(heap, req)
-    }
-}
-
-unsafe fn mi_heap_realloc_typed(
-    heap: BorrowedHeap,
-    req: crate::core_types::ReallocRequest,
-) -> *mut c_void {
-    // SAFETY: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
-    unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return core::ptr::null_mut();
         };
@@ -1471,9 +1438,11 @@ unsafe fn mi_heap_realloc_typed(
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
-/// allocator.
-// SAFETY: reallocn paths validate checked products and preserve raw pointer ownership semantics.
+/// `heap` must identify a live initialized heap owned by the current thread and
+/// remain stable without concurrent teardown or non-protocol mutation. `p` must
+/// be null or a live allocation returned by this allocator; its page and block
+/// metadata must remain stable with no concurrent free or realloc. On successful
+/// reallocation the old allocation is consumed; on failure it remains live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_reallocn(
     heap: *mut mi_heap_t,
@@ -1481,7 +1450,8 @@ pub unsafe extern "C" fn mi_heap_reallocn(
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY: reallocn paths validate checked products and preserve raw pointer ownership semantics.
+    // SAFETY: the caller keeps the raw heap and optional old allocation live
+    // through checked-product validation, localization, and realloc dispatch.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -1492,17 +1462,6 @@ pub unsafe extern "C" fn mi_heap_reallocn(
         let Some(req) = mi_realloc_request_from_ptr(p, product.layout(), ptr::null_mut()) else {
             return ptr::null_mut();
         };
-        mi_heap_reallocn_typed(heap, product, req)
-    }
-}
-
-unsafe fn mi_heap_reallocn_typed(
-    heap: BorrowedHeap,
-    product: crate::core_types::AllocProduct,
-    req: crate::core_types::ReallocRequest,
-) -> *mut c_void {
-    // SAFETY: reallocn paths validate checked products and preserve raw pointer ownership semantics.
-    unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
         };
@@ -1511,16 +1470,22 @@ unsafe fn mi_heap_reallocn_typed(
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
-/// allocator.
-// SAFETY: reallocf paths preserve free-on-failure behavior after typed request validation.
+/// `heap` must identify a live initialized heap owned by the current thread and
+/// remain stable without concurrent teardown or non-protocol mutation. `p` must
+/// be null or a live allocation returned by this allocator; its page and block
+/// metadata must remain stable with no concurrent free or realloc. Unlike normal
+/// realloc, invalid new-size layout frees a nonnull old allocation after heap
+/// validation; after a valid request, allocation failure also frees it. Heap
+/// validation failure leaves the old allocation untouched.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_reallocf(
     heap: *mut mi_heap_t,
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY: reallocf paths preserve free-on-failure behavior after typed request validation.
+    // SAFETY: the caller keeps the raw heap and optional old allocation live
+    // through classification and dispatch, and permits the documented
+    // free-on-failure transition.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return core::ptr::null_mut();
@@ -1534,16 +1499,6 @@ pub unsafe extern "C" fn mi_heap_reallocf(
         let Some(req) = mi_realloc_request_from_ptr(p, layout, ptr::null_mut()) else {
             return core::ptr::null_mut();
         };
-        mi_heap_reallocf_typed(heap, req)
-    }
-}
-
-unsafe fn mi_heap_reallocf_typed(
-    heap: BorrowedHeap,
-    req: crate::core_types::ReallocRequest,
-) -> *mut c_void {
-    // SAFETY: reallocf paths preserve free-on-failure behavior after typed request validation.
-    unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return core::ptr::null_mut();
         };
@@ -1552,16 +1507,20 @@ unsafe fn mi_heap_reallocf_typed(
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
-/// allocator.
-// SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
+/// `heap` must identify a live initialized heap owned by the current thread and
+/// remain stable without concurrent teardown or non-protocol mutation. `p` must
+/// be null or a live allocation returned by this allocator; its page and block
+/// metadata must remain stable with no concurrent free or realloc. On success,
+/// the old allocation is consumed and newly added bytes are zero; on failure it
+/// remains live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc(
     heap: *mut mi_heap_t,
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
+    // SAFETY: the caller keeps the raw heap and optional old allocation live
+    // through zeroing-layout validation, localization, and realloc dispatch.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -1572,16 +1531,6 @@ pub unsafe extern "C" fn mi_heap_rezalloc(
         let Some(req) = mi_realloc_request_from_ptr(p, layout, ptr::null_mut()) else {
             return ptr::null_mut();
         };
-        mi_heap_rezalloc_typed(heap, req)
-    }
-}
-
-unsafe fn mi_heap_rezalloc_typed(
-    heap: BorrowedHeap,
-    req: crate::core_types::ReallocRequest,
-) -> *mut c_void {
-    // SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
-    unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
         };
@@ -1590,9 +1539,12 @@ unsafe fn mi_heap_rezalloc_typed(
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
-/// allocator.
-// SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
+/// `heap` must identify a live initialized heap owned by the current thread and
+/// remain stable without concurrent teardown or non-protocol mutation. `p` must
+/// be null or a live allocation returned by this allocator; its page and block
+/// metadata must remain stable with no concurrent free or realloc. On successful
+/// reallocation the old allocation is consumed and newly added bytes are zero;
+/// on failure it remains live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc(
     heap: *mut mi_heap_t,
@@ -1600,7 +1552,8 @@ pub unsafe extern "C" fn mi_heap_recalloc(
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
+    // SAFETY: the caller keeps the raw heap and optional old allocation live
+    // through checked calloc validation, localization, and realloc dispatch.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -1612,17 +1565,6 @@ pub unsafe extern "C" fn mi_heap_recalloc(
         else {
             return ptr::null_mut();
         };
-        mi_heap_recalloc_typed(heap, req, realloc_req)
-    }
-}
-
-unsafe fn mi_heap_recalloc_typed(
-    heap: BorrowedHeap,
-    req: crate::core_types::CallocRequest,
-    realloc_req: crate::core_types::ReallocRequest,
-) -> *mut c_void {
-    // SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
-    unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
         };

@@ -277,17 +277,6 @@ struct MiArenaCommitPrefix {
     pages_meta: *mut mi_page_t,
 }
 
-// SAFETY: OS subproc stats projection uses live borrowed subproc metadata.
-unsafe fn mi_os_current_subproc() -> Option<BorrowedSubproc> {
-    SubprocPtr::new(unsafe { _mi_subproc() })
-        .map(|subproc| unsafe { BorrowedSubproc::new(subproc) })
-}
-
-unsafe fn mi_os_subproc_stats_mut(subproc: BorrowedSubproc) -> *mut mi_stats_t {
-    // SAFETY: OS subproc stats projection uses live borrowed subproc metadata.
-    unsafe { ptr::addr_of_mut!((*subproc.ptr().as_ptr().cast::<MiSubprocStatsPrefix>()).stats) }
-}
-
 /// # Safety
 /// The process OS configuration must not be concurrently rewritten by `_mi_os_init`.
 #[inline(never)]
@@ -896,9 +885,13 @@ pub unsafe extern "C" fn _mi_os_unprotect(addr: *mut c_void, size: usize) -> boo
 
 /// # Safety
 /// When present, `addr..addr+size` must be a primitive OS range that may be
-/// released. The OS configuration must be initialized, `size` must be page
-/// aligned, `commit_size` must match the committed accounting for the range,
-/// and `subproc` must remain live when supplied.
+/// released exactly once by the active primitive. The OS configuration must be
+/// initialized, `size` must be a nonzero whole number of OS pages, and `commit_size`
+/// must match the committed bytes currently charged to this release. A supplied
+/// `subproc` must remain live and own that accounting; otherwise the current
+/// subprocess lookup and registry must remain stable for the operation. Atomic
+/// statistics updates may race, but range reuse or teardown may not. `None` is
+/// accepted as a no-op and performs no accounting.
 #[inline]
 unsafe fn mi_os_prim_free_range(
     addr: Option<NonNull<c_void>>,
@@ -906,7 +899,8 @@ unsafe fn mi_os_prim_free_range(
     commit_size: CommittedBytes,
     subproc: Option<BorrowedSubproc>,
 ) {
-    // SAFETY: the caller preserves the primitive range and accounting contracts above.
+    // SAFETY: the caller keeps the primitive range, configuration, subprocess
+    // registry, and accounting live for this ordered release/update epoch.
     unsafe {
         crate::internal::mi_assert_internal!(
             size.get().is_multiple_of(_mi_os_page_size_typed().get())
@@ -925,9 +919,14 @@ unsafe fn mi_os_prim_free_range(
                 addr
             ));
         }
-        let subproc = subproc.or_else(|| mi_os_current_subproc());
+        let subproc = if subproc.is_some() {
+            subproc
+        } else {
+            SubprocPtr::new(_mi_subproc()).map(|subproc| BorrowedSubproc::new(subproc))
+        };
         if let Some(subproc) = subproc {
-            let stats = mi_os_subproc_stats_mut(subproc);
+            let stats =
+                ptr::addr_of_mut!((*subproc.ptr().as_ptr().cast::<MiSubprocStatsPrefix>()).stats);
             if !commit_size.is_zero() {
                 __mi_stat_decrease_mt(ptr::addr_of_mut!((*stats).committed), commit_size.get());
             }
@@ -936,7 +935,16 @@ unsafe fn mi_os_prim_free_range(
     }
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// Release an OS allocation using its recorded backing metadata.
+///
+/// # Safety
+/// If `memid` decodes as OS memory, it must describe the live backing allocation
+/// containing `addr..addr+size`; other MemId kinds are accepted as a no-op. For
+/// OS memory, the range must not be concurrently used, reused, or freed, and
+/// `still_committed` must describe the usable range's current committed charge.
+/// A nonnull `subproc` must remain live and own the allocation's statistics;
+/// otherwise current-subprocess lookup must remain valid. OS configuration and
+/// primitive dispatch must remain initialized and stable for the release.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_free_ex(
     addr: *mut c_void,
@@ -948,11 +956,15 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
     let MemIdView::Os(memid) = MemId::view(memid) else {
         return;
     };
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-    let subproc = SubprocPtr::new(subproc).map(|subproc| unsafe { BorrowedSubproc::new(subproc) });
+    let subproc = SubprocPtr::new(subproc);
     let addr = NonNull::new(addr);
     let size = ReservedBytes::new(size);
-    unsafe { _mi_os_free_ex_typed(addr, size, still_committed, memid, subproc) };
+    // SAFETY: the raw contract couples the decoded OS MemId, usable range,
+    // commitment state, and optional live accounting subprocess for release.
+    unsafe {
+        let subproc = subproc.map(|subproc| BorrowedSubproc::new(subproc));
+        _mi_os_free_ex_typed(addr, size, still_committed, memid, subproc);
+    }
 }
 
 /// A validated OS allocation backing range and its primitive-free dispatch plan.
@@ -1037,7 +1049,15 @@ impl OsFreeBackingRange {
     }
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// Validate and dispatch one OS backing release.
+///
+/// # Safety
+/// `os` must describe the live backing allocation containing `addr` and `size`.
+/// The allocation must not be concurrently used, reused, or freed, and
+/// `still_committed` must describe the usable range's committed charge. A
+/// supplied `subproc` must remain live and own the accounting; otherwise current
+/// subprocess lookup must remain valid. OS configuration and primitive dispatch
+/// must remain initialized and stable throughout validation and release.
 unsafe fn _mi_os_free_ex_typed(
     addr: Option<NonNull<c_void>>,
     size: ReservedBytes,
@@ -1045,33 +1065,46 @@ unsafe fn _mi_os_free_ex_typed(
     os: OsMemId,
     subproc: Option<BorrowedSubproc>,
 ) {
-    let normalized_size = if os.size.get() == 0 {
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        ReservedBytes::new(unsafe { _mi_os_good_alloc_size(size.get()) })
-    } else {
-        os.size
-    };
-    let range =
-        OsFreeBackingRange::from_usable(addr, size, os, normalized_size, still_committed, unsafe {
-            _mi_os_page_size_typed()
-        });
-    crate::internal::mi_assert_internal!(range.is_some());
-    let Some(range) = range else { return };
-    match range {
-        OsFreeBackingRange::Huge { base, size } => {
-            unsafe { mi_os_free_huge_os_pages(Some(base), size, subproc) };
-        }
-        OsFreeBackingRange::Primitive { memid, committed } => {
-            let addr = memid.base.and_then(|base| NonNull::new(base.as_ptr()));
-            unsafe { mi_os_prim_free_range(addr, memid.size, committed, subproc) };
+    // SAFETY: the caller keeps the backing, configuration, primitive dispatch,
+    // and accounting subprocess valid for this complete plan/dispatch epoch.
+    unsafe {
+        let normalized_size = if os.size.get() == 0 {
+            ReservedBytes::new(_mi_os_good_alloc_size(size.get()))
+        } else {
+            os.size
+        };
+        let range = OsFreeBackingRange::from_usable(
+            addr,
+            size,
+            os,
+            normalized_size,
+            still_committed,
+            _mi_os_page_size_typed(),
+        );
+        crate::internal::mi_assert_internal!(range.is_some());
+        let Some(range) = range else { return };
+        match range {
+            OsFreeBackingRange::Huge { base, size } => {
+                mi_os_free_huge_os_pages(Some(base), size, subproc);
+            }
+            OsFreeBackingRange::Primitive { memid, committed } => {
+                let addr = memid.base.and_then(|base| NonNull::new(base.as_ptr()));
+                mi_os_prim_free_range(addr, memid.size, committed, subproc);
+            }
         }
     }
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// # Safety
+/// `memid` must decode to the live OS backing allocation containing `p..p+size`.
+/// The range must remain unused and unreleased during this committed release;
+/// OS configuration, primitive dispatch, and current-subprocess lookup must be
+/// initialized and stable.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
+    // SAFETY: this wrapper supplies full committed accounting and delegates
+    // current-subprocess selection while preserving the raw backing contract.
     unsafe { _mi_os_free_ex(p, size, true, memid, core::ptr::null_mut()) };
 }
 
@@ -1577,7 +1610,16 @@ fn mi_os_claim_huge_pages(pages: usize) -> Option<(usize, ReservedBytes)> {
     }
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// Release a contiguous huge-page backing one primitive page at a time.
+///
+/// # Safety
+/// When present, `p` and `size` must describe a live contiguous backing made of
+/// whole `MI_HUGE_OS_PAGE_SIZE` primitive mappings, each releasable exactly once.
+/// The range must not be concurrently used, reused, or freed. A supplied
+/// `subproc` must remain live and own all reserved/committed accounting;
+/// otherwise current-subprocess lookup must remain valid. OS configuration and
+/// primitive dispatch must remain initialized and stable. `None` or zero size is
+/// accepted as a no-op.
 #[inline]
 unsafe fn mi_os_free_huge_os_pages(
     p: Option<OsMemPtr>,
@@ -1591,20 +1633,28 @@ unsafe fn mi_os_free_huge_os_pages(
     if size == 0 {
         return;
     }
-    let mut base = p.as_ptr().cast::<u8>();
-    while size >= MI_HUGE_OS_PAGE_SIZE {
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        unsafe {
+    // SAFETY: the caller keeps each separately mapped huge page, primitive
+    // dispatch, and accounting subprocess valid through ordered page release.
+    // Huge-page allocation used these same scalar addresses as primitive hints;
+    // no provenance from one released mapping is reused for the next mapping.
+    unsafe {
+        let mut address = ptr_exposed_addr(p.as_ptr());
+        while size >= MI_HUGE_OS_PAGE_SIZE {
             mi_os_prim_free_range(
-                NonNull::new(base.cast::<c_void>()),
+                NonNull::new(ptr::without_provenance_mut::<c_void>(address)),
                 ReservedBytes::new(MI_HUGE_OS_PAGE_SIZE),
                 CommittedBytes::new(MI_HUGE_OS_PAGE_SIZE),
                 subproc,
-            )
-        };
-        size -= MI_HUGE_OS_PAGE_SIZE;
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        base = unsafe { base.add(MI_HUGE_OS_PAGE_SIZE) };
+            );
+            size -= MI_HUGE_OS_PAGE_SIZE;
+            if size != 0 {
+                let Some(next) = address.checked_add(MI_HUGE_OS_PAGE_SIZE) else {
+                    crate::internal::mi_assert_internal!(false);
+                    return;
+                };
+                address = next;
+            }
+        }
     }
 }
 

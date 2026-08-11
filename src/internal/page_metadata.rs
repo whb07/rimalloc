@@ -148,17 +148,23 @@ pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
 }
 
 /// # Safety
-/// `page` must be null or point to page metadata owned by this allocator.
+/// `page` must be null or identify live initialized page metadata with stable,
+/// readable `reserved` and `used` fields satisfying `used <= reserved`. The
+/// caller must locally own the page or hold its abandoned-page claim while
+/// reading these fields. Concurrent protocol remote-free publication is
+/// permitted when it does not change either field.
 #[inline]
 pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
-    // SAFETY: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        if page.is_null() {
-            return true;
-        }
+    if page.is_null() {
+        return true;
+    }
+    // SAFETY: the caller keeps the initialized page live and its count fields
+    // stable while this snapshot projects them into typed scalar domains.
+    let (reserved, used) = unsafe {
         let reserved = crate::allocator::page::mi_page_reserved_count(page);
         let used = crate::allocator::page::mi_page_used_count(page);
-        let frac = reserved.get() / 8u16;
-        reserved.get() - used.get() <= frac
-    }
+        (reserved, used)
+    };
+    let frac = reserved.get() / 8u16;
+    reserved.get() - used.get() <= frac
 }

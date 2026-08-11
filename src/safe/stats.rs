@@ -148,9 +148,7 @@ impl StatsSnapshot {
         let mut raw = crate::allocator::stats::mi_stats_t::default();
         // SAFETY: `raw` is a fresh writable stats value.
         unsafe { crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
-        // SAFETY: initializes allocator state for the
-        // current thread before collecting process stats.
-        unsafe { crate::allocator::init::mi_thread_init() };
+        crate::allocator::init::mi_thread_init();
         // SAFETY: `raw` is valid writable stats storage.
         if unsafe { crate::allocator::stats::mi_stats_get(ptr::addr_of_mut!(raw)) } {
             Ok(Self { raw })
@@ -174,9 +172,7 @@ impl StatsSnapshot {
         let mut raw = crate::allocator::stats::mi_stats_t::default();
         // SAFETY: `raw` is a fresh writable stats value.
         unsafe { crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
-        // SAFETY: initializes allocator state for the
-        // current thread before collecting heap stats.
-        unsafe { crate::allocator::init::mi_thread_init() };
+        crate::allocator::init::mi_thread_init();
         // SAFETY: `raw` is valid writable stats storage and
         // `heap` is a live borrowed heap handle.
         if unsafe {

@@ -589,12 +589,12 @@ pub extern "C" fn _mi_is_main_thread() -> bool {
     mi_is_main_thread_fast()
 }
 
-// SAFETY: thread-done entry resolves the current default thread heap before typed teardown.
 #[unsafe(no_mangle)]
-/// # Safety
-/// Delegates to the internal thread teardown routine for the current thread.
-pub unsafe extern "C" fn mi_thread_done() {
-    // SAFETY: thread-done entry resolves the current default thread heap before typed teardown.
+/// Release allocator thread-local state for the current thread. Repeated calls
+/// after the thread is already uninitialized are ignored.
+pub extern "C" fn mi_thread_done() {
+    // SAFETY: the null raw argument selects the current thread's allocator TLS;
+    // the internal boundary validates locality and state before teardown.
     unsafe { crate::internal::_mi_thread_done(ptr::null_mut()) };
 }
 
@@ -724,13 +724,11 @@ pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
     unsafe { tls::theap_cached_set(theap) };
 }
 
-// SAFETY: TLD allocation/free and per-thread metadata counters use typed TLD and subproc witnesses.
 #[unsafe(no_mangle)]
-/// # Safety
-/// Marks the current thread-local data as belonging to a threadpool thread.
-pub unsafe extern "C" fn mi_thread_set_in_threadpool() {
-    // SAFETY: TLD allocation/free and per-thread metadata counters use typed TLD and subproc witnesses.
-    unsafe { thread::set_in_threadpool() };
+/// Mark the current thread-local allocator state as belonging to a threadpool
+/// thread. This is a no-op if thread initialization cannot provide that state.
+pub extern "C" fn mi_thread_set_in_threadpool() {
+    thread::set_in_threadpool();
 }
 
 /// Returns the current-thread default theap after successful initialization, or
@@ -824,12 +822,10 @@ pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> b
 }
 
 #[unsafe(no_mangle)]
-/// # Safety
-/// Initializes per-thread mimalloc state for the current thread when it is not already set up.
-// SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
-pub unsafe extern "C" fn mi_thread_init() {
-    // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
-    unsafe { thread::init() };
+/// Initialize per-thread allocator state for the current thread when it is not
+/// already set up. Initialization failure leaves the thread uninitialized.
+pub extern "C" fn mi_thread_init() {
+    thread::init();
 }
 
 // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.

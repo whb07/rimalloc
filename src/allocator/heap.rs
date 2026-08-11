@@ -130,9 +130,7 @@ pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
 // state, allocates raw heap metadata, and registers it with the subproc list.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t) -> *mut mi_heap_t {
-    // SAFETY: heap creation is a C ABI boundary;
-    // initialization follows mimalloc's allocator synchronization rules.
-    unsafe { crate::mimalloc::mi_thread_init() };
+    crate::allocator::init::mi_thread_init();
     // SAFETY: after thread initialization, the
     // process main heap is the allocation owner for heap metadata.
     let heap_main = unsafe { mi_heap_main() };

@@ -343,12 +343,21 @@ fn tld_free(tld: *mut mi_tld_t) {
     }
 }
 
-pub(super) unsafe fn set_in_threadpool() {
+/// Mark the current thread's allocator metadata as belonging to a threadpool.
+/// If current-thread initialization cannot provide a live thread heap, this is
+/// a no-op.
+pub(super) fn set_in_threadpool() {
     let theap = super::_mi_theap_default_safe();
-    // SAFETY: TLD allocation/free and per-thread metadata counters use typed TLD and subproc witnesses.
-    unsafe {
-        (*(*theap).tld).is_in_threadpool = true;
+    // SAFETY: the safe default lookup returns an allocator-owned live heap or a
+    // static uninitialized sentinel; probing the heap pointer distinguishes
+    // those cases before any TLD projection.
+    if !unsafe { crate::internal::mi_theap_is_initialized(theap) } {
+        return;
     }
+    // SAFETY: successful initialization proves this is the current thread's
+    // live nonsentinel heap with initialized TLD metadata; only this thread
+    // mutates its threadpool flag during the thread lifecycle.
+    unsafe { (*(*theap).tld).is_in_threadpool = true };
 }
 
 /// Return the allocator-managed default thread heap for the current thread,
@@ -365,9 +374,8 @@ pub(super) fn default_safe() -> *mut mi_theap_t {
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
     }
-    // SAFETY: initialization owns mutation of this thread's allocator TLS and
-    // establishes any primitive dispatch needed by subsequent reads.
-    unsafe { super::mi_thread_init() };
+    // Initialize this thread before repeating the allocator-owned TLS lookup.
+    super::mi_thread_init();
     // SAFETY: initialization either published this thread's live default heap
     // or left the static empty sentinel when no heap could be provided; the
     // lookup reads only that current-thread slot.
@@ -388,9 +396,9 @@ pub(super) fn default_safe() -> *mut mi_theap_t {
 pub(super) fn main_safe() -> *mut mi_theap_t {
     let mut theap = mi_theap_main_tls_peek();
     if theap.is_null() {
-        // SAFETY: initialization owns this thread's allocator TLS mutation and
-        // establishes the process main heap and primitive dispatch before use.
-        unsafe { super::mi_thread_init() };
+        // Initialize this thread before reading and caching its main-heap TLS
+        // association.
+        super::mi_thread_init();
         // SAFETY: initialization published a static sentinel or live current-
         // thread default heap through the allocator-owned TLS slot.
         theap = unsafe { crate::platform::_mi_theap_default() };
@@ -520,20 +528,27 @@ unsafe fn theaps_done(tld: *mut mi_tld_t) {
     }); // SAFETY: thread cleanup resets default, cached, and main TLS state around heap teardown.
 }
 
-pub(super) unsafe fn init() {
-    // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
+/// Initialize allocator state for the current thread if necessary. Failure to
+/// allocate thread-local metadata leaves the thread uninitialized.
+pub(super) fn init() {
+    // SAFETY: process initialization owns its one-time global publication and
+    // is valid to request from this current-thread initialization boundary.
     unsafe { super::mi_process_init() };
-    // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
+    // SAFETY: process initialization completed (or another initializer
+    // published it); the primitive/TLS query reads current-thread state.
     if unsafe { crate::platform::_mi_thread_is_initialized() } {
         return;
     }
-    // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
+    // SAFETY: this is the current thread's initialization epoch; process state
+    // is initialized and no concurrent actor mutates this thread's TLS/TLD.
     if unsafe { init_default() }.is_null() {
         return;
     }
-    // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
+    // SAFETY: successful default initialization published the current
+    // subprocess main heap and keeps it live through the stats update.
     let heap = unsafe { mi_heap_main() };
-    // SAFETY: thread init entry coordinates process init, initialization checks, and thread stats.
+    // SAFETY: `heap` is the live subprocess main-heap prefix; its atomic thread
+    // statistic is initialized and remains valid during this lifecycle update.
     unsafe {
         __mi_stat_increase_mt(
             ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),

@@ -1672,9 +1672,7 @@ pub(crate) unsafe fn _mi_theap_or_default_typed(
         if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
             return None;
         }
-        // SAFETY: the allocator lifecycle permits current-thread initialization; TLS/primitive
-        // dispatch and any synchronous callbacks satisfy the function contract.
-        unsafe { crate::mimalloc::mi_thread_init() };
+        crate::allocator::init::mi_thread_init();
         // SAFETY: initialization completed for this thread and its default TLS slot remains stable
         // against concurrent teardown or mutation during this lookup.
         theap = unsafe { crate::prim::_mi_theap_default() };

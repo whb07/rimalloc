@@ -12,164 +12,202 @@ use super::{
 };
 
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// Returned memory must be released through this allocator.
-// SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+/// `theap` may be null only when lazy initialization is enabled; otherwise it
+/// must identify a live initialized current-thread heap with exclusive access
+/// to its local allocation state. Protocol atomic remote-free publication is
+/// permitted. Allocator callbacks and their opaque arguments reached
+/// synchronously must remain valid, must not unwind, and must not incompatibly
+/// reenter heap mutation. A nonnull result is allocator-owned and may be
+/// released with `mi_free`.
+// SAFETY: this exported entry preserves the raw thread-heap and scalar-size ABI
+// while validating layout before typed zeroing allocation dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
-    unsafe {
-        if theap.is_null() && MI_THEAP_INITASNULL {
-            return _mi_theap_malloc_zero(theap, size, true, ptr::null_mut());
-        }
-        let Some(layout) = malloc_layout_or_report(size, true) else {
-            return ptr::null_mut();
-        };
+    if theap.is_null() && MI_THEAP_INITASNULL {
+        // SAFETY: the null lazy sentinel is supported in this configuration;
+        // allocator lifecycle and callbacks satisfy the raw zeroing dispatch.
+        return unsafe { _mi_theap_malloc_zero(theap, size, true, ptr::null_mut()) };
+    }
+    let Some(layout) = malloc_layout_or_report(size, true) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the caller keeps any nonnull current-thread heap live and locally
+    // exclusive while default/sentinel resolution creates the local witness.
+    let theap = unsafe {
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };
-        mi_theap_zalloc_typed(ThreadHeapLocal::new_unchecked(theap), layout)
-    }
+        ThreadHeapLocal::new_unchecked(theap)
+    };
+    // SAFETY: the resolved heap stays live and locally exclusive, and `layout`
+    // is the validated zeroing layout for this exact request.
+    unsafe { mi_theap_zalloc_typed(theap, layout) }
 }
 
+/// # Safety
+/// `theap` must remain a live current-thread heap with exclusive access to its
+/// local allocation state; protocol atomic remote-free publication is
+/// permitted. `layout` must be the validated zeroing layout for this request.
+/// Allocator callbacks and their opaque arguments reached synchronously must
+/// remain valid, must not unwind, and must not incompatibly reenter heap
+/// mutation. A nonnull result is allocator-owned and may be released with
+/// `mi_free`.
 pub(super) unsafe fn mi_theap_zalloc_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+    // SAFETY: the caller-proven current-thread heap epoch and validated zeroing
+    // layout satisfy the central typed allocation boundary.
     unsafe { _mi_theap_malloc_zero_typed(theap, layout, ptr::null_mut()) }
 }
 
 /// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+/// The allocator process/TLS lifecycle must permit default-heap initialization
+/// and keep the current thread's local allocation state exclusive; protocol
+/// atomic remote-free publication is permitted. Allocator callbacks and their
+/// opaque arguments reached synchronously must remain valid, must not unwind,
+/// and must not incompatibly reenter heap mutation. A nonnull result is
+/// allocator-owned and may be released with `mi_free`.
+// SAFETY: this exported scalar entry delegates to the allocator's default-heap
+// zeroing path without exposing internal layout or heap witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc(size: usize) -> *mut c_void {
+    // SAFETY: allocator lifecycle supplies the current default/lazy heap and
+    // exclusive local allocation epoch for this validated raw-size dispatch.
     unsafe { _mi_theap_malloc_zero(_mi_theap_default(), size, true, ptr::null_mut()) }
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
+/// `heap` must identify a live initialized heap owned by the current thread,
+/// with a stable thread-heap association and exclusive access to local
+/// allocation state; protocol atomic remote-free publication is permitted.
+/// Allocator callbacks and their opaque arguments reached synchronously must
+/// remain valid, must not unwind, and must not incompatibly reenter heap
+/// mutation. A nonnull result is allocator-owned and may be released with
+/// `mi_free`.
+// SAFETY: this exported heap entry validates and localizes the raw heap before
+// typed zeroing allocation dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return ptr::null_mut();
-        };
-        let Some(layout) = malloc_layout_or_report(size, true) else {
-            return ptr::null_mut();
-        };
-        mi_heap_zalloc_typed(heap, layout)
-    }
-}
-
-unsafe fn mi_heap_zalloc_typed(
-    heap: BorrowedHeap,
-    layout: crate::core_types::LayoutRequest,
-) -> *mut c_void {
-    // SAFETY: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
-    unsafe {
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_zalloc_typed(theap, layout)
-    }
+    // SAFETY: the caller keeps the raw heap live and current-thread owned while
+    // it is validated. This intentionally precedes layout validation.
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return ptr::null_mut();
+    };
+    let Some(layout) = malloc_layout_or_report(size, true) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the validated heap and stable association remain live and
+    // current-thread owned while the local witness is projected.
+    let Some(theap) = (unsafe { mi_heap_borrowed_theap_local(heap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the localized heap stays live and locally exclusive, and
+    // `layout` is the validated zeroing layout for this request.
+    unsafe { mi_theap_zalloc_typed(theap, layout) }
 }
 
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// Returned memory must be released through this allocator.
-// SAFETY: calloc entrypoints validate checked products before zeroing allocation dispatch.
+/// `theap` may be null only when lazy initialization is enabled; otherwise it
+/// must identify a live initialized current-thread heap with exclusive access
+/// to its local allocation state. Protocol atomic remote-free publication is
+/// permitted. Allocator callbacks and their opaque arguments reached
+/// synchronously must remain valid, must not unwind, and must not incompatibly
+/// reenter heap mutation. A nonnull result is allocator-owned and may be
+/// released with `mi_free`.
+// SAFETY: this exported entry preserves the raw thread-heap and product ABI and
+// validates the calloc request before zeroing allocation dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_calloc(
     theap: *mut mi_theap_t,
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY: calloc entrypoints validate checked products before zeroing allocation dispatch.
-    unsafe {
-        if theap.is_null() && MI_THEAP_INITASNULL {
-            return match calloc_request_or_report(count, size) {
-                Some(req) => mi_theap_calloc_req_lazy(theap, req),
-                None => ptr::null_mut(),
-            };
-        }
-        let Some(req) = calloc_request_or_report(count, size) else {
-            return ptr::null_mut();
+    if theap.is_null() && MI_THEAP_INITASNULL {
+        return match calloc_request_or_report(count, size) {
+            // SAFETY: `req` retains the checked product layout, and the null
+            // lazy sentinel is supported for the raw zeroing entry.
+            Some(req) => unsafe { mi_theap_zalloc(theap, req.layout().requested().get()) },
+            None => ptr::null_mut(),
         };
+    }
+    let Some(req) = calloc_request_or_report(count, size) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the caller keeps any nonnull current-thread heap live and locally
+    // exclusive while default/sentinel resolution creates the local witness.
+    let theap = unsafe {
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };
-        mi_theap_calloc_typed(ThreadHeapLocal::new_unchecked(theap), req)
-    }
-}
-
-unsafe fn mi_theap_calloc_typed(
-    theap: ThreadHeapLocal,
-    req: crate::core_types::CallocRequest,
-) -> *mut c_void {
-    // SAFETY: calloc entrypoints validate checked products before zeroing allocation dispatch.
+        ThreadHeapLocal::new_unchecked(theap)
+    };
+    // SAFETY: the resolved heap stays live and locally exclusive, and `req`
+    // carries the validated checked-product zeroing layout.
     unsafe { mi_theap_zalloc_typed(theap, req.layout()) }
 }
 
-pub(super) unsafe fn mi_theap_calloc_req_lazy(
-    theap: *mut mi_theap_t,
-    req: crate::core_types::CallocRequest,
-) -> *mut c_void {
-    // SAFETY: calloc entrypoints validate checked products before zeroing allocation dispatch.
-    unsafe { mi_theap_zalloc(theap, req.layout().requested().get()) }
-}
-
 /// # Safety
-/// Returned memory must be released through this allocator.
+/// The allocator process/TLS lifecycle must permit default-heap initialization
+/// and keep the current thread's local allocation state exclusive; protocol
+/// atomic remote-free publication is permitted. Allocator callbacks and their
+/// opaque arguments reached synchronously must remain valid, must not unwind,
+/// and must not incompatibly reenter heap mutation. A nonnull result is
+/// allocator-owned and may be released with `mi_free`.
 // Retained as an exported C ABI allocation symbol; release cdylib builds may
 // reference it only from external dynamic callers.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY: this exported product entry validates the checked calloc layout
+// before resolving and dispatching through the current default heap.
 #[allow(dead_code)]
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
-    unsafe {
-        if let Some(req) = calloc_request_or_report(count, size) {
+    if let Some(req) = calloc_request_or_report(count, size) {
+        // SAFETY: allocator lifecycle keeps the default TLS slot stable and
+        // permits initialization after the checked product succeeds.
+        let theap = unsafe {
             let Some(theap) = _mi_theap_or_default_typed(_mi_theap_default()) else {
                 return core::ptr::null_mut();
             };
-            mi_theap_zalloc_typed(ThreadHeapLocal::new_unchecked(theap), req.layout())
-        } else {
-            core::ptr::null_mut()
-        }
+            ThreadHeapLocal::new_unchecked(theap)
+        };
+        // SAFETY: the resolved default heap stays live and locally exclusive,
+        // and `req` carries the checked-product zeroing layout.
+        unsafe { mi_theap_zalloc_typed(theap, req.layout()) }
+    } else {
+        core::ptr::null_mut()
     }
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// `heap` must identify a live initialized heap owned by the current thread,
+/// with a stable thread-heap association and exclusive access to local
+/// allocation state; protocol atomic remote-free publication is permitted.
+/// Allocator callbacks and their opaque arguments reached synchronously must
+/// remain valid, must not unwind, and must not incompatibly reenter heap
+/// mutation. A nonnull result is allocator-owned and may be released with
+/// `mi_free`.
+// SAFETY: this exported heap entry validates the raw heap before the checked
+// product and local zeroing allocation dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_calloc(
     heap: *mut mi_heap_t,
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return core::ptr::null_mut();
-        };
-        let Some(req) = calloc_request_or_report(count, size) else {
-            return core::ptr::null_mut();
-        };
-        mi_heap_calloc_typed(heap, req)
-    }
-}
-
-unsafe fn mi_heap_calloc_typed(
-    heap: BorrowedHeap,
-    req: crate::core_types::CallocRequest,
-) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return core::ptr::null_mut();
-        };
-        mi_theap_zalloc_typed(theap, req.layout())
-    }
+    // SAFETY: the caller keeps the raw heap live and current-thread owned while
+    // it is validated. This intentionally precedes product validation.
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some(req) = calloc_request_or_report(count, size) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: the validated heap and stable association remain live and
+    // current-thread owned while the local witness is projected.
+    let Some(theap) = (unsafe { mi_heap_borrowed_theap_local(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: the localized heap stays live and locally exclusive, and `req`
+    // carries the validated checked-product zeroing layout.
+    unsafe { mi_theap_zalloc_typed(theap, req.layout()) }
 }

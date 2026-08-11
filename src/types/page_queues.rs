@@ -92,14 +92,6 @@ impl HugePageQueue {
         }
     }
 
-    /// # Safety
-    /// `ptr` must point to a heap huge page queue, proven by queue lookup or
-    /// queue initialization code.
-    #[inline(always)]
-    pub(crate) unsafe fn new_unchecked(ptr: PageQueuePtr) -> Self {
-        Self(ptr)
-    }
-
     #[inline(always)]
     pub(crate) fn ptr(self) -> PageQueuePtr {
         self.0

@@ -13,8 +13,7 @@ use crate::allocator::options::_mi_error_message_fmt;
 use crate::allocator::page::{
     _mi_page_abandon_internal, _mi_page_free_active_internal, _mi_page_free_collect,
     _mi_page_free_full_internal, _mi_page_is_valid, _mi_theap_collect_retired,
-    mi_full_page_queue_is_valid, mi_huge_page_queue_is_valid, mi_normal_page_queue_is_valid,
-    mi_page_is_abandoned, mi_page_theap,
+    mi_page_is_abandoned, mi_page_queue_is_valid_typed, mi_page_theap,
 };
 use crate::allocator::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
 use crate::bits::{MI_INTPTR_BITS, mi_ctz};
@@ -35,9 +34,8 @@ use crate::prim::{__mi_theap_empty, _mi_theap_default};
 use crate::random::_mi_random_init;
 use crate::random::{_mi_random_next, _mi_random_split};
 use crate::types::{
-    MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_SMALL_PAGE_SIZE,
-    mi_block_visit_fun, mi_heap_area_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_theap_t,
-    mi_tld_t,
+    MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_BIN_FULL, MI_SMALL_PAGE_SIZE, mi_block_visit_fun,
+    mi_heap_area_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_theap_t, mi_tld_t,
 };
 
 #[repr(C)]
@@ -695,8 +693,8 @@ pub unsafe fn mi_theap_is_valid(theap: *mut mi_theap_t) -> bool {
 /// validation. Protocol-compliant remote atomic frees remain permitted.
 unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
     // SAFETY: the caller's queue ownership and stability contract permits the
-    // synchronous page traversal and unchecked classification of each queue by
-    // its fixed bin index; protocol remote frees preserve those invariants.
+    // synchronous page traversal of each fixed-bin queue from this heap's live
+    // table; protocol remote frees preserve the inspected topology invariants.
     unsafe {
         let state = TheapPageVisitState {
             visitor: TheapPageVisitCallback::new(Some(mi_theap_page_is_valid)),
@@ -708,22 +706,11 @@ unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
         for bin_index in 0..MI_BIN_COUNT {
             let bin = Bin::new_unchecked(bin_index as u16);
             let queue = theap.page_queue(bin);
-            let is_valid = if bin_index == MI_BIN_FULL {
-                mi_full_page_queue_is_valid(
-                    theap_wrapper,
-                    crate::core_types::FullPageQueue::new_unchecked(queue),
-                )
-            } else if bin_index == MI_BIN_HUGE {
-                mi_huge_page_queue_is_valid(
-                    theap_wrapper,
-                    crate::core_types::HugePageQueue::new_unchecked(queue),
-                )
-            } else {
-                mi_normal_page_queue_is_valid(
-                    theap_wrapper,
-                    crate::core_types::NormalPageQueue::new_unchecked(queue),
-                )
-            };
+            // SAFETY: `bin` selects this exact live queue from the validated heap table. The
+            // caller-owned validation epoch keeps its topology, classification, pages, and backing
+            // stable while the synchronous read-only traversal runs; protocol remote frees do not
+            // mutate the inspected fields.
+            let is_valid = mi_page_queue_is_valid_typed(theap_wrapper, queue);
             crate::internal::mi_assert_internal!(is_valid);
         }
         true

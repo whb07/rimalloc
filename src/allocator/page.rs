@@ -1118,68 +1118,26 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
     queued.into_active()
 }
 
+/// Validate one queue's linked-page topology and classification against its owning thread heap.
+///
 /// # Safety
-/// `theap` must be valid, and `pq` must point to a page queue belonging to that heap.
-// SAFETY: queue validation walks linked pages without mutating queue ownership.
-#[inline(never)]
-pub unsafe extern "C" fn _mi_page_queue_is_valid(
-    theap: *mut mi_theap_t,
-    pq: *const mi_page_queue_t,
-) -> bool {
-    // SAFETY: queue validation walks linked pages without mutating queue ownership.
-    unsafe {
-        if pq.is_null() {
-            return false;
-        }
-        let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        let pq = crate::core_types::PageQueuePtr::new_unchecked(pq.cast_mut());
-        if let Some(queue) = crate::core_types::NormalPageQueue::new(pq) {
-            mi_normal_page_queue_is_valid(theap, queue)
-        } else if let Some(queue) = crate::core_types::HugePageQueue::new(pq) {
-            mi_huge_page_queue_is_valid(theap, queue)
-        } else if let Some(queue) = crate::core_types::FullPageQueue::new(pq) {
-            mi_full_page_queue_is_valid(theap, queue)
-        } else {
-            false
-        }
-    }
-}
-
+/// `theap` must be a live initialized locally owned thread heap, under current-thread ownership or
+/// exclusive initialization/teardown access, and `queue` must be the live queue selected from that
+/// heap's fixed bin table. Its first/last pointers, count, block-size classification, and every
+/// linked page's next/previous links, owner association, classification, geometry, metadata, and
+/// backing must remain initialized and readable throughout traversal. The caller must hold the
+/// corresponding current-thread local mutation ownership or exclusive initialization/teardown
+/// access and exclude concurrent relink, non-protocol metadata mutation, or page/heap teardown.
+/// Protocol atomic remote-free publication is permitted because this validation does not inspect
+/// or mutate remote free-list heads.
 #[inline]
-pub(crate) unsafe fn mi_normal_page_queue_is_valid(
-    theap: crate::core_types::ThreadHeapLocal,
-    queue: crate::core_types::NormalPageQueue,
-) -> bool {
-    // SAFETY: queue validation walks linked pages without mutating queue ownership.
-    unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
-}
-
-#[inline]
-pub(crate) unsafe fn mi_huge_page_queue_is_valid(
-    theap: crate::core_types::ThreadHeapLocal,
-    queue: crate::core_types::HugePageQueue,
-) -> bool {
-    // SAFETY: queue validation walks linked pages without mutating queue ownership.
-    unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
-}
-
-#[inline]
-pub(crate) unsafe fn mi_full_page_queue_is_valid(
-    theap: crate::core_types::ThreadHeapLocal,
-    queue: crate::core_types::FullPageQueue,
-) -> bool {
-    // SAFETY: queue validation walks linked pages without mutating queue ownership.
-    unsafe { mi_page_queue_is_valid_typed(theap, queue.ptr()) }
-}
-
-#[inline]
-unsafe fn mi_page_queue_is_valid_typed(
+pub(crate) unsafe fn mi_page_queue_is_valid_typed(
     theap: crate::core_types::ThreadHeapLocal,
     pq: crate::core_types::PageQueuePtr,
 ) -> bool {
-    // SAFETY: queue validation walks linked pages without mutating queue ownership.
+    // SAFETY: the caller keeps the exact heap-owned queue and each linked page live with stable
+    // non-atomic topology/classification fields. This coherent read-only traversal checks backward
+    // links, bin compatibility, owner association, terminal identity, and the final stored count.
     unsafe {
         let theap = theap.ptr().as_ptr();
         let pq = pq.as_ptr();

@@ -1008,6 +1008,14 @@ pub(crate) unsafe fn mi_usable_size_from_validated_location(
     }
 }
 
+/// # Safety
+///
+/// `page` may be null, in which case this returns zero without accessing `p`.
+/// Otherwise, `page` must be the live page containing the allocation identified
+/// by `p`, which must have been returned by this allocator, not yet freed, and
+/// remain valid for this operation. Its geometry, padding, and allocation
+/// metadata must remain stable for the call, with no concurrent free or
+/// reallocation of `p`.
 pub(crate) unsafe fn _mi_usable_size_typed(
     p: *const c_void,
     page: *const mi_page_t,

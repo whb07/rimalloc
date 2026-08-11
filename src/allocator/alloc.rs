@@ -849,29 +849,34 @@ unsafe fn mi_heap_mallocn_typed(
 }
 
 /// # Safety
-/// `p` must be null or a pointer previously returned by this allocator.
+/// `p` must be null or identify an allocation previously returned by this
+/// allocator, not yet freed, and valid for this operation. Its page and
+/// allocation metadata must remain stable for this call, with no concurrent
+/// free or reallocation of `p`.
 // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_void {
-    unsafe {
-        if MI_PADDING != 0 {
-            let _ = p;
-            let _ = newsize;
-            return ptr::null_mut();
-        }
-        if p.is_null() {
-            return ptr::null_mut();
-        }
-        let page = _mi_ptr_page(p);
-        if page.is_null() {
-            return ptr::null_mut();
-        }
-        let size = _mi_usable_size_typed(p, page);
-        if newsize > size.get() {
-            return ptr::null_mut();
-        }
-        p
+    if MI_PADDING != 0 {
+        let _ = p;
+        let _ = newsize;
+        return ptr::null_mut();
     }
+    if p.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: the caller supplies a live compatible allocator allocation;
+    // its stable metadata permits deriving the owning page from `p`.
+    let page = unsafe { _mi_ptr_page(p) };
+    if page.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: `page` was derived from this live allocation, and the caller
+    // keeps their matching allocation metadata stable for the operation.
+    let size = unsafe { _mi_usable_size_typed(p, page) };
+    if newsize > size.get() {
+        return ptr::null_mut();
+    }
+    p
 }
 
 unsafe fn mi_validate_ptr_page(

@@ -710,21 +710,15 @@ unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
 
 /// # Safety
 ///
-/// `theap` must point to an initialized thread heap whose backing heap remains
-/// valid for stats merging.
-pub unsafe fn mi_theap_merge_stats(theap: *mut mi_theap_t) {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
-    unsafe {
-        let Some(theap) = ThreadHeapPtr::new(theap) else {
-            crate::internal::mi_assert_internal!(false);
-            return;
-        };
-        mi_theap_merge_stats_typed(theap);
-    }
-}
-
+/// `theap` must identify a live initialized thread heap whose associated heap
+/// remains live and stable for the call. The caller must have exclusive access
+/// to the thread heap's source stats because the merge resets them. The backing
+/// heap's destination stats must be live, correctly aligned, atomic-compatible
+/// storage, with all concurrent access to its fields performed atomically.
 unsafe fn mi_theap_merge_stats_typed(theap: ThreadHeapPtr) {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
+    // SAFETY: the caller keeps the initialized thread heap and its associated
+    // backing heap live and stable, exclusively owns the source stats reset,
+    // and guarantees atomic-compatible access to the destination heap stats.
     unsafe {
         let theap_raw = theap.as_ptr();
         crate::internal::mi_assert_internal!(mi_theap_is_initialized(theap_raw));

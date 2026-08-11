@@ -827,47 +827,38 @@ unsafe fn mi_page_fresh_alloc_typed(
     unsafe {
         let theap = owner.ptr().as_ptr();
         let block_size = layout.padded().get();
-        let page = _mi_arenas_page_alloc(theap, block_size, page_alignment.get());
-        if page.is_null() {
-            return None;
-        }
-        let page = if mi_page_is_abandoned(page) {
-            let page = _mi_theap_page_reclaim(
-                crate::core_types::assume_owned_abandoned_page(
-                    crate::core_types::PagePtr::new_unchecked(page),
-                ),
-                owner,
-            );
-            if !mi_page_immediate_available(page.page().as_ptr()) {
-                if mi_page_is_expandable(page.page().as_ptr()) {
-                    if !mi_page_extend_free(theap, page.page().as_ptr()) {
+        let allocation = _mi_arenas_page_alloc(theap, block_size, page_alignment.get())?;
+        let page = match allocation {
+            crate::allocator::arena::ArenaPageAllocation::Claimed(page) => {
+                let page = _mi_theap_page_reclaim(page, owner);
+                if !mi_page_immediate_available(page.page().as_ptr()) {
+                    if mi_page_is_expandable(page.page().as_ptr()) {
+                        if !mi_page_extend_free(theap, page.page().as_ptr()) {
+                            return None;
+                        }
+                    } else {
+                        crate::internal::mi_assert!(false);
                         return None;
                     }
+                }
+                page
+            }
+            crate::allocator::arena::ArenaPageAllocation::Active(page) if !pq.is_null() => {
+                if mi_page_queue_is_huge(pq) {
+                    mi_page_queue_push_raw(theap, pq, page.page().as_ptr());
+                    page
                 } else {
-                    crate::internal::mi_assert!(false);
-                    return None;
+                    mi_page_queue_push_typed(
+                        owner,
+                        crate::core_types::NormalPageQueue::new_unchecked(
+                            crate::core_types::PageQueuePtr::new_unchecked(pq),
+                        ),
+                        page,
+                    )
+                    .into_active()
                 }
             }
-            page
-        } else if !pq.is_null() {
-            let page = crate::core_types::assume_active_page(
-                crate::core_types::PagePtr::new_unchecked(page),
-            );
-            if mi_page_queue_is_huge(pq) {
-                mi_page_queue_push_raw(theap, pq, page.page().as_ptr());
-                page
-            } else {
-                mi_page_queue_push_typed(
-                    owner,
-                    crate::core_types::NormalPageQueue::new_unchecked(
-                        crate::core_types::PageQueuePtr::new_unchecked(pq),
-                    ),
-                    page,
-                )
-                .into_active()
-            }
-        } else {
-            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page))
+            crate::allocator::arena::ArenaPageAllocation::Active(page) => page,
         };
         crate::internal::mi_assert_internal!(
             pq.is_null() || mi_page_block_size(page.page().as_ptr()) >= block_size

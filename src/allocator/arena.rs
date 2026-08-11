@@ -1317,32 +1317,51 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
     }
 }
 
+/// Search the current heap's suitable arenas for a matching abandoned page and
+/// return its claimed ownership capability.
+///
+/// # Safety
+/// `theap` must identify the current thread's live initialized thread heap, with
+/// its heap/TLD association and heap arena-page table stable for this operation.
+/// The heap, subprocess arena registry, matching arena metadata/backing, page
+/// metadata, encoding keys, and abandoned counters must remain live; teardown or
+/// non-protocol relinking must not race. Competing abandoned claims and remote
+/// frees may proceed only through their atomic protocols.
 unsafe fn mi_arenas_page_try_find_abandoned(
     theap: *mut mi_theap_t,
     slice_count: crate::core_types::SliceCount,
     block_size: crate::core_types::BlockSize,
-) -> *mut mi_page_t {
-    // SAFETY: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
+) -> Option<crate::core_types::OwnedAbandonedPage> {
+    // SAFETY: the raw contract keeps the current thread heap and its associated
+    // borrowed heap live for this synchronous arena search.
     let heap = unsafe { _mi_theap_heap(theap) };
+    // SAFETY: the caller keeps the thread heap's initialized TLD association
+    // live and stable while its thread sequence is read.
     let tseq = crate::core_types::ThreadSeq::new(unsafe { (*(*theap).tld).thread_seq });
+    // SAFETY: `heap` is the live borrowed heap resolved above, whose exclusive
+    // arena selection remains stable for the search.
     let req_arena = unsafe { (*heap.cast::<MiHeapPrefix>()).exclusive_arena };
     let slice_count_usize = slice_count.get() as usize;
 
     let bin = mi_bin_from_block_size(block_size);
     crate::internal::mi_assert_internal!(bin.as_usize() < MI_BIN_COUNT);
-    // SAFETY: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
+    // SAFETY: the live heap prefix contains this bin's initialized atomic
+    // abandoned count; concurrent updates use the same atomic protocol.
     if unsafe { mi_heap_abandoned_count(heap, bin).load_relaxed() } == 0 {
-        return ptr::null_mut();
+        return None;
     }
 
     let any_numa = crate::core_types::NumaNode::any();
-    let mut result = ptr::null_mut();
+    let mut result = None;
     let claim_fun = ThreadLocalClaimCallback::new(mi_arena_try_claim_abandoned);
-    // SAFETY: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
+    // SAFETY: the caller keeps the borrowed heap, arena registry/backing, page
+    // tables, and abandoned-page metadata live. The synchronous visitor does
+    // not retain arena witnesses, and successful bitmap callbacks transfer the
+    // page's atomic owner claim into `result` before traversal stops.
     unsafe {
         let Some(heap_ptr) = HeapPtr::new(heap) else {
             crate::internal::mi_assert_internal!(false);
-            return ptr::null_mut();
+            return None;
         };
         let borrowed_heap = BorrowedHeap::new_unchecked(heap_ptr);
         mi_forall_suitable_arenas(
@@ -1414,7 +1433,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                         mi_page_block_size(page_raw) == block_size.get()
                     );
                     crate::internal::mi_assert_internal!(!mi_page_is_full_local(page_raw));
-                    result = page_raw;
+                    result = Some(owned_page);
                     false
                 } else {
                     true
@@ -1794,25 +1813,50 @@ unsafe fn mi_arenas_page_alloc_fresh(
     Some(registered.publish())
 }
 
+#[must_use = "the page-state capability must be consumed by the page allocator"]
+pub(crate) enum ArenaPageAllocation {
+    Claimed(crate::core_types::OwnedAbandonedPage),
+    Active(crate::core_types::ActivePage),
+}
+
+impl ArenaPageAllocation {
+    #[inline(always)]
+    fn page(&self) -> PagePtr {
+        match self {
+            Self::Claimed(page) => page.page(),
+            Self::Active(page) => page.page(),
+        }
+    }
+}
+
+/// # Safety
+/// `theap` must identify the current thread's live initialized thread heap with
+/// exclusive local access to its heap/TLD association and page initialization.
+/// Its heap, TLD, subprocess arena registry, page map, arena metadata/backing,
+/// and allocation callbacks must remain live and stable; callbacks invoked
+/// synchronously must not unwind. Teardown and non-protocol relinking must not
+/// race, while abandoned claims and remote frees may use their atomic protocols.
 unsafe fn mi_arenas_page_regular_alloc(
     theap: *mut mi_theap_t,
     slice_count: crate::core_types::SliceCount,
     block_size: crate::core_types::BlockSize,
-) -> *mut mi_page_t {
-    // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
-    let page = unsafe { mi_arenas_page_try_find_abandoned(theap, slice_count, block_size) };
-    if !page.is_null() {
-        return page;
+) -> Option<ArenaPageAllocation> {
+    // SAFETY: the regular-allocation contract supplies the live thread heap,
+    // registry, arena backing, and atomic abandoned-page claim epoch.
+    if let Some(page) = unsafe { mi_arenas_page_try_find_abandoned(theap, slice_count, block_size) }
+    {
+        return Some(ArenaPageAllocation::Claimed(page));
     }
 
     let commit_on_demand =
         crate::allocator::options::mi_option_get(mi_option_t::mi_option_page_commit_on_demand);
     let slice_count_usize = slice_count.get() as usize;
     let commit = slice_count_usize <= mi_slice_count_of_size(MI_PAGE_MIN_COMMIT_SIZE)
-        // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
+        // SAFETY: allocator OS configuration remains initialized and stable for
+        // this policy read during fresh-page selection.
         || (commit_on_demand == 2 && unsafe { _mi_os_has_overcommit() })
         || commit_on_demand == 0;
-    let Some(page_uninit) = (unsafe {
+    let page_uninit = (unsafe {
         mi_arenas_page_alloc_fresh(
             theap,
             slice_count,
@@ -1820,18 +1864,16 @@ unsafe fn mi_arenas_page_regular_alloc(
             crate::core_types::MaybeAlignment::new_unchecked(0),
             commit,
         )
-    }) else {
-        return ptr::null_mut();
-    };
+    })?;
     let page = page_uninit.ptr().as_ptr();
-    // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
+    // SAFETY: the registered uninitialized page keeps its initialized memid
+    // readable until the consuming initialization or cleanup below.
     crate::internal::mi_assert_internal!(match crate::core_types::MemId::view(unsafe {
         (*page).memid
     }) {
         crate::core_types::MemIdView::Arena(a) => a.range().count() == slice_count,
         _ => true, // Non-arena allocations trivially pass this slice_count assert
     });
-    // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
     // SAFETY: the current thread heap exclusively owns this registered fresh
     // page through the consuming uninitialized-page witness.
     match unsafe {
@@ -1842,7 +1884,7 @@ unsafe fn mi_arenas_page_regular_alloc(
             page_uninit,
         )
     } {
-        Ok(active) => active.page().as_ptr(),
+        Ok(active) => Some(ArenaPageAllocation::Active(active)),
         Err(page_uninit) => {
             let page = page_uninit.ptr();
             unsafe {
@@ -1852,17 +1894,23 @@ unsafe fn mi_arenas_page_regular_alloc(
                     (*page.as_ptr()).memid,
                 )
             };
-            ptr::null_mut()
+            None
         }
     }
 }
 
+/// # Safety
+/// `theap` must identify the current thread's live initialized thread heap with
+/// exclusive local access to fresh-page initialization. Its heap/TLD, arena
+/// registry and backing, page map, allocator OS state, and stored callbacks must
+/// remain live and stable; synchronously invoked callbacks must not unwind and
+/// teardown must not race.
 #[inline(never)]
 unsafe fn mi_arenas_page_singleton_alloc(
     theap: *mut mi_theap_t,
     block_size: crate::core_types::BlockSize,
     block_alignment: crate::core_types::MaybeAlignment,
-) -> *mut mi_page_t {
+) -> Option<ArenaPageAllocation> {
     let block_size_raw = block_size.get();
     let block_alignment_raw = block_alignment.get();
     let os_align = block_alignment_raw > MI_PAGE_MAX_OVERALLOC_ALIGN;
@@ -1874,13 +1922,11 @@ unsafe fn mi_arenas_page_singleton_alloc(
     let slice_count = mi_slice_count_of_size(info_size + block_size_raw);
     let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
         mi_set_errno(ENOMEM);
-        return ptr::null_mut();
+        return None;
     };
-    let Some(page_uninit) = (unsafe {
+    let page_uninit = (unsafe {
         mi_arenas_page_alloc_fresh(theap, slice_count, block_size, block_alignment, true)
-    }) else {
-        return ptr::null_mut();
-    };
+    })?;
     let page = page_uninit.ptr().as_ptr();
     // SAFETY: singleton arena page setup handles over-aligned or large objects while preserving one-block page invariants.
     crate::internal::mi_assert_internal!(unsafe {
@@ -1896,7 +1942,7 @@ unsafe fn mi_arenas_page_singleton_alloc(
             page_uninit,
         )
     } {
-        Ok(active) => active.page().as_ptr(),
+        Ok(active) => Some(ArenaPageAllocation::Active(active)),
         Err(page_uninit) => {
             let page = page_uninit.ptr();
             unsafe {
@@ -1906,58 +1952,73 @@ unsafe fn mi_arenas_page_singleton_alloc(
                     (*page.as_ptr()).memid,
                 )
             };
-            ptr::null_mut()
+            None
         }
     }
 }
 
 /// # Safety
-/// Internal arena page allocator matching the C ABI.
-// SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
+/// `theap` must identify the current thread's live initialized thread heap with
+/// exclusive local access to page allocation and initialization. `block_size`
+/// must be nonzero and representable as `BlockSize`; `block_alignment` must be
+/// zero or a valid allocator alignment. Heap/TLD, arena registry and backing,
+/// page map, allocator OS state, and stored callbacks must remain live and
+/// stable; synchronously invoked callbacks must not unwind and teardown or
+/// non-protocol relinking must not race.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
+pub(crate) unsafe fn _mi_arenas_page_alloc(
     theap: *mut mi_theap_t,
     block_size: usize,
     block_alignment: usize,
-) -> *mut mi_page_t {
-    // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
+) -> Option<ArenaPageAllocation> {
+    // SAFETY: the caller guarantees the nonzero block size fits the allocator's
+    // typed block-size domain.
     let block_size_typed = unsafe { crate::core_types::BlockSize::new_unchecked(block_size) };
+    // SAFETY: the caller guarantees zero or a valid allocator alignment.
     let block_alignment_typed =
         unsafe { crate::core_types::MaybeAlignment::new_unchecked(block_alignment) };
-    let page = if block_alignment > MI_PAGE_MAX_OVERALLOC_ALIGN {
+    let allocation = if block_alignment > MI_PAGE_MAX_OVERALLOC_ALIGN {
         crate::internal::mi_assert_internal!(crate::internal::_mi_is_power_of_two(block_alignment));
-        // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
+        // SAFETY: the outer contract keeps the thread heap, registry/backing,
+        // page map, OS state, and callbacks live for singleton initialization.
         unsafe { mi_arenas_page_singleton_alloc(theap, block_size_typed, block_alignment_typed) }
     } else if block_size <= MI_SMALL_MAX_OBJ_SIZE {
+        // SAFETY: the outer contract establishes the regular allocation epoch.
         unsafe { mi_arenas_page_regular_alloc(theap, MI_SMALL_PAGE_SLICE_COUNT, block_size_typed) }
     } else if block_size <= MI_MEDIUM_MAX_OBJ_SIZE {
+        // SAFETY: the outer contract establishes the regular allocation epoch.
         unsafe { mi_arenas_page_regular_alloc(theap, MI_MEDIUM_PAGE_SLICE_COUNT, block_size_typed) }
     } else if MI_ENABLE_LARGE_PAGES != 0 && block_size <= MI_LARGE_MAX_OBJ_SIZE {
-        // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
+        // SAFETY: the outer contract establishes the regular allocation epoch.
         unsafe { mi_arenas_page_regular_alloc(theap, MI_LARGE_PAGE_SLICE_COUNT, block_size_typed) }
     } else {
+        // SAFETY: the outer contract keeps the thread heap, registry/backing,
+        // page map, OS state, and callbacks live for singleton initialization.
         unsafe { mi_arenas_page_singleton_alloc(theap, block_size_typed, block_alignment_typed) }
     };
-    if page.is_null() {
-        return ptr::null_mut();
-    }
+    let allocation = allocation?;
+    let page = allocation.page().as_ptr();
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
-        // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
+        // SAFETY: either returned capability keeps this live page's initialized
+        // arena geometry readable through validation.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
+    // SAFETY: either returned capability keeps its initialized page start and
+    // page-map association live for validation.
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
     crate::internal::mi_assert_internal!(
         block_alignment <= MI_PAGE_MAX_OVERALLOC_ALIGN
             || crate::internal::_mi_is_aligned(
-                // SAFETY: regular arena page allocation reuses abandoned pages or initializes fresh size-class pages with matching slice counts.
+                // SAFETY: either returned capability keeps this initialized
+                // page start readable for the requested alignment check.
                 unsafe { mi_page_start(page) }.cast(),
                 block_alignment
             )
     );
-    page
+    Some(allocation)
 }
 
 /// # Safety

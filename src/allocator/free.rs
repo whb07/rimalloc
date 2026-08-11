@@ -6,7 +6,8 @@ use core::ffi::{CStr, c_char, c_void};
 use core::{cmp, ptr};
 
 use crate::allocator::arena::{
-    _mi_arenas_page_free, _mi_arenas_page_try_reabandon_to_mapped_arena, _mi_arenas_page_unabandon,
+    _mi_arenas_page_free_internal, _mi_arenas_page_try_reabandon_to_mapped_arena,
+    _mi_arenas_page_unabandon_internal,
 };
 use crate::allocator::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::allocator::page::{

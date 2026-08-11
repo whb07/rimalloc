@@ -307,7 +307,7 @@ unsafe extern "C" fn mi_heap_delete_page(
         };
         // SAFETY: the claimed page retains stable heap/MemId/list state; null current thread heap
         // selects atomic source stats while abandoned publication is removed.
-        unsafe { _mi_arenas_page_unabandon_internal(owned, None) };
+        unsafe { _mi_arenas_page_unabandon_internal(&owned, None) };
     } else {
         // SAFETY: the live page's initialized thread-free atomic remains stable under exclusive
         // heap deletion; this RMW must acquire its owner bit before any metadata mutation.

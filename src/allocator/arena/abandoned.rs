@@ -79,10 +79,15 @@ pub(super) unsafe fn mi_abandoned_page_unown(
                 };
                 // SAFETY: the page is all-free with active claimed ownership;
                 // competing mutation is excluded and current_theap owns stats.
-                unsafe { _mi_arenas_page_unabandon_internal(owned_page, Some(current_theap)) };
-                // SAFETY: unabandon completed and the all-free page is now
-                // exclusively releasable by the same live thread heap.
-                unsafe { _mi_arenas_page_free(page, current_theap_raw) };
+                unsafe { _mi_arenas_page_unabandon_internal(&owned_page, Some(current_theap)) };
+                let Ok(all_free) = owned_page.try_mark_all_free() else {
+                    crate::internal::mi_assert_internal!(false);
+                    return crate::types::PageAbandonOutcome::Abandoned;
+                };
+                // SAFETY: unabandon removed publication/accounting while the
+                // retained claim refined into this detached all-free witness.
+                let destroyed = unsafe { _mi_arenas_page_free_typed(all_free, current_theap) };
+                let _ = destroyed.page();
                 return crate::types::PageAbandonOutcome::Destroyed;
             }
             tf_old = atomic_tf.load_relaxed();
@@ -502,8 +507,10 @@ pub(super) unsafe fn _mi_arenas_page_abandon_internal(
 /// associated with the page; otherwise the heap's atomic stats remain live.
 /// The caller excludes concurrent reclaim, list relink, or teardown while
 /// protocol remote frees may continue through the page's atomic remote head.
-pub(super) unsafe fn _mi_arenas_page_unabandon_internal(
-    page: crate::types::OwnedAbandonedPage,
+/// This operation does not release the thread-free claim; the borrowed witness
+/// remains the active ownership capability after publication removal.
+pub(crate) unsafe fn _mi_arenas_page_unabandon_internal(
+    page: &crate::types::OwnedAbandonedPage,
     current_theap: Option<crate::types::ThreadHeapLocal>,
 ) {
     let page_ptr = page.page();

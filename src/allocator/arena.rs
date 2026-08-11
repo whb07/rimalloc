@@ -129,9 +129,10 @@ mod os_memory;
 mod prefix;
 mod purge;
 
+pub(crate) use abandoned::_mi_arenas_page_unabandon_internal;
 use abandoned::{
-    _mi_arenas_page_abandon_internal, _mi_arenas_page_unabandon_internal,
-    mi_arena_try_claim_abandoned, mi_heap_ensure_arena_pages_from_raw, mi_page_is_full_local,
+    _mi_arenas_page_abandon_internal, mi_arena_try_claim_abandoned,
+    mi_heap_ensure_arena_pages_from_raw, mi_page_is_full_local,
 };
 use geometry::{
     PageArenaMembership, mi_arena_info_slices, mi_arena_page_at_slice,
@@ -2058,194 +2059,195 @@ pub(crate) unsafe fn _mi_arenas_page_alloc(
 }
 
 /// # Safety
-/// Internal arena page free path matching the C ABI.
-// SAFETY: free entry converts raw page and thread-heap inputs into typed all-free witnesses.
+/// `page` must be a non-null registered, detached, abandoned, all-free page
+/// retaining its claimed thread-free owner bit and empty queue links. Its MemId,
+/// page-map registration, arena table/start bit, metadata, and backing must remain
+/// live and stable through release. If non-null, `current_theapx` must be the
+/// live current-thread stats owner for this page; otherwise its owning heap's
+/// atomic stats must remain live. Protocol remote-head publication is permitted,
+/// but relink, claim, non-protocol metadata mutation, and teardown are excluded.
 pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
     page: *mut mi_page_t,
     current_theapx: *mut mi_theap_t,
 ) {
+    // SAFETY: the raw contract supplies non-null live page metadata for the
+    // complete synchronous free transaction.
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
-    // SAFETY: free entry converts raw page and thread-heap inputs into typed all-free witnesses.
+    // SAFETY: the raw contract establishes abandoned state for this registered
+    // page while its thread-free ownership claim remains held.
     let abandoned = unsafe { crate::core_types::assume_abandoned_page(page_ptr) };
+    // SAFETY: the raw contract establishes zero used blocks and detached queue
+    // state for this claimed abandoned page.
     let all_free = unsafe { crate::core_types::assume_all_free_abandoned(abandoned) };
     let current_theap = if current_theapx.is_null() {
         None
     } else {
-        // SAFETY: free entry converts raw page and thread-heap inputs into typed all-free witnesses.
+        // SAFETY: the raw contract identifies the matching live current-thread
+        // stats owner and excludes its teardown through release.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(current_theapx),
             )
         })
     };
-    // SAFETY: free entry converts raw page and thread-heap inputs into typed all-free witnesses.
-    unsafe { _mi_arenas_page_free_internal(&all_free, current_theap) };
+    // SAFETY: the typed all-free capability and optional stats owner carry the
+    // complete unregister, accounting, bitmap, and backing-release epoch.
+    let destroyed = unsafe { _mi_arenas_page_free_internal(all_free, current_theap) };
+    let _ = destroyed.page();
 }
 
-unsafe fn _mi_arenas_page_free_internal<S>(
-    page_wrapper: &crate::core_types::AllFreePage<S>,
+/// Consume one all-free page through page-map removal, accounting, arena-bit
+/// release, and backing release.
+///
+/// # Safety
+/// `page_wrapper` must retain the claimed thread-free owner bit and represent a
+/// live registered detached abandoned page with stable MemId, geometry, page-map
+/// registration, heap arena bit, and backing. `current_theap`, when present,
+/// must be the matching live current-thread stats owner; otherwise the owning
+/// heap's atomic stats must remain live. Relink, competing claim, non-protocol
+/// metadata mutation, and teardown are excluded through the terminal release;
+/// protocol remote-head publication remains permitted.
+pub(crate) unsafe fn _mi_arenas_page_free_internal<S>(
+    page_wrapper: crate::core_types::AllFreePage<S>,
     current_theap: Option<crate::core_types::ThreadHeapLocal>,
-) {
-    let page_ptr = page_wrapper.page();
-    let page = page_ptr.as_ptr();
-    let current_theapx = current_theap
-        .map(|theap| theap.ptr().as_ptr())
-        .unwrap_or(ptr::null_mut());
-    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
-        // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-        unsafe { mi_page_slice_start(page) }.cast(),
-        MI_PAGE_ALIGN
-    ));
-    crate::internal::mi_assert_internal!(unsafe {
-        crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
-    });
-    // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
-    crate::internal::mi_assert_internal!(unsafe { mi_page_all_free(page) });
-    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
-    crate::internal::mi_assert_internal!(unsafe {
-        page_ptr.queue_next().is_none() && page_ptr.queue_prev().is_none()
-    });
-    let arena_membership = if unsafe { mi_page_memid_is_arena(page) } {
-        let Some(membership) = (unsafe { PageArenaMembership::from_page(page_ptr) }) else {
-            crate::internal::mi_assert_internal!(false);
-            return;
+) -> crate::core_types::DestroyedPage {
+    // SAFETY: the contract keeps one claimed, detached, all-free page, its
+    // optional stats owner, registration, arena publication, metadata, and
+    // backing live for this synchronous transaction. The block performs the
+    // ordered accounting, unregister, bitmap, metadata, and backing release
+    // without letting a raw capability escape.
+    unsafe {
+        // Validate all capability-coupled page and arena state before mutation.
+        let page_ptr = page_wrapper.page();
+        let page = page_ptr.as_ptr();
+        let current_theapx = current_theap
+            .map(|theap| theap.ptr().as_ptr())
+            .unwrap_or(ptr::null_mut());
+        crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+            mi_page_slice_start(page).cast(),
+            MI_PAGE_ALIGN
+        ));
+        crate::internal::mi_assert_internal!(
+            crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+        );
+        crate::internal::mi_assert_internal!(mi_page_is_owned(page));
+        crate::internal::mi_assert_internal!(mi_page_all_free(page));
+        crate::internal::mi_assert_internal!(mi_page_is_abandoned(page));
+        crate::internal::mi_assert_internal!(
+            page_ptr.queue_next().is_none() && page_ptr.queue_prev().is_none()
+        );
+        let arena_membership = if mi_page_memid_is_arena(page) {
+            let membership = PageArenaMembership::from_page(page_ptr).unwrap_unchecked();
+            Some(membership)
+        } else {
+            None
         };
-        Some(membership)
-    } else {
-        None
-    };
 
-    // SAFETY: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
-    let stats_bin = unsafe { _mi_page_stats_bin(page) };
-    if !current_theapx.is_null() {
-        unsafe {
+        // Reconcile the page counts before removing publication.
+        let stats_bin = _mi_page_stats_bin(page);
+        if !current_theapx.is_null() {
             crate::internal::__mi_stat_decrease(
                 ptr::addr_of_mut!((*current_theapx).stats.page_bins[stats_bin]),
                 1,
-            )
-        };
-        // SAFETY: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
-        unsafe {
-            crate::internal::__mi_stat_decrease(ptr::addr_of_mut!((*current_theapx).stats.pages), 1)
-        };
-    } else {
-        let heap = unsafe { mi_page_heap(page) };
-        // SAFETY: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
-        unsafe {
+            );
+            crate::internal::__mi_stat_decrease(
+                ptr::addr_of_mut!((*current_theapx).stats.pages),
+                1,
+            );
+        } else {
+            let heap = mi_page_heap(page);
             crate::internal::__mi_stat_decrease_mt(
                 ptr::addr_of_mut!((*heap).stats.page_bins[stats_bin]),
                 1,
-            )
-        };
-        unsafe {
-            crate::internal::__mi_stat_decrease_mt(ptr::addr_of_mut!((*heap).stats.pages), 1)
-        };
-    }
+            );
+            crate::internal::__mi_stat_decrease_mt(ptr::addr_of_mut!((*heap).stats.pages), 1);
+        }
 
-    if MI_DEBUG > 1
-        && !unsafe { mi_page_is_full_local(page) }
-        && let Some(membership) = arena_membership.as_ref()
-    {
-        let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) });
-        let arena = membership.arena().as_ptr();
-        let range = membership.range();
-        let slice_index = range.start_usize();
-        let slice_count = range.count_usize();
-        let arena_pages = membership.arena_pages().as_ptr();
-        // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-        crate::internal::mi_assert_internal!(unsafe {
-            mi_bbitmap_is_clearN(
+        if MI_DEBUG > 1
+            && !mi_page_is_full_local(page)
+            && let Some(membership) = arena_membership.as_ref()
+        {
+            let bin = mi_bin_from_block_size(mi_page_block_size_typed(page));
+            let arena = membership.arena().as_ptr();
+            let range = membership.range();
+            let slice_index = range.start_usize();
+            let slice_count = range.count_usize();
+            let arena_pages = membership.arena_pages().as_ptr();
+            crate::internal::mi_assert_internal!(mi_bbitmap_is_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
                 slice_index,
                 slice_count,
-            )
-        });
-        // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-        let committed = unsafe { crate::allocator::page::mi_page_slice_committed(page) };
-        crate::internal::mi_assert_internal!(
-            !committed.is_zero()
-                || unsafe {
-                    mi_bitmap_is_setN(
+            ));
+            let committed = crate::allocator::page::mi_page_slice_committed(page);
+            crate::internal::mi_assert_internal!(
+                !committed.is_zero()
+                    || mi_bitmap_is_setN(
                         (*arena.cast::<MiArenaPrefix>()).slices_committed,
                         slice_index,
                         slice_count,
                     )
-                }
-        );
-        // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-        crate::internal::mi_assert_internal!(!unsafe {
-            mi_bitmap_is_setN(
+            );
+            crate::internal::mi_assert_internal!(!mi_bitmap_is_setN(
                 (*arena_pages).pages_abandoned[bin.as_usize()],
                 slice_index,
                 1,
-            )
-        });
-        // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-        crate::internal::mi_assert_internal!(unsafe {
-            mi_bitmap_is_setN((*arena_pages).pages, slice_index, 1)
-        });
-    }
+            ));
+            crate::internal::mi_assert_internal!(mi_bitmap_is_setN(
+                (*arena_pages).pages,
+                slice_index,
+                1
+            ));
+        }
 
-    // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-    unsafe { _mi_page_map_unregister(page) };
-    if let Some(membership) = arena_membership {
-        let arena = membership.arena().as_ptr();
-        let range = membership.range();
-        let slice_index = range.start_usize();
-        let slice_count = range.count_usize();
-        let arena_pages = membership.arena_pages().as_ptr();
-        // SAFETY: free release clears arena metadata and returns backing slices after ownership is proven.
-        unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
-        let committed = unsafe { crate::allocator::page::mi_page_slice_committed(page) };
-        if !committed.is_zero() {
-            let total_slices = committed.get() / MI_ARENA_SLICE_SIZE;
-            crate::internal::mi_assert_internal!(slice_count >= total_slices);
-            if total_slices > 0 {
-                // SAFETY: free release clears arena metadata and returns backing slices after ownership is proven.
-                unsafe {
+        // Remove page-map and arena publication before backing release.
+        _mi_page_map_unregister(page);
+        if let Some(membership) = arena_membership {
+            let arena = membership.arena().as_ptr();
+            let range = membership.range();
+            let slice_index = range.start_usize();
+            let slice_count = range.count_usize();
+            let arena_pages = membership.arena_pages().as_ptr();
+            mi_bitmap_clear((*arena_pages).pages, slice_index);
+            let committed = crate::allocator::page::mi_page_slice_committed(page);
+            if !committed.is_zero() {
+                let total_slices = committed.get() / MI_ARENA_SLICE_SIZE;
+                crate::internal::mi_assert_internal!(slice_count >= total_slices);
+                if total_slices > 0 {
                     mi_bitmap_setN(
                         (*arena.cast::<MiArenaPrefix>()).slices_committed,
                         slice_index,
                         total_slices,
                         ptr::null_mut(),
-                    )
-                };
-            }
-            let extra = committed.get() % MI_ARENA_SLICE_SIZE;
-            if extra > 0 {
-                // SAFETY: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
-                unsafe {
+                    );
+                }
+                let extra = committed.get() % MI_ARENA_SLICE_SIZE;
+                if extra > 0 {
                     crate::internal::__mi_stat_decrease_mt(
                         ptr::addr_of_mut!(
                             (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed
                         ),
                         crate::core_types::CommittedBytes::new(extra).get(),
-                    )
-                };
-            }
-        } else {
-            // SAFETY: free release clears arena metadata and returns backing slices after ownership is proven.
-            crate::internal::mi_assert_internal!(unsafe {
-                mi_bitmap_is_setN(
+                    );
+                }
+            } else {
+                crate::internal::mi_assert_internal!(mi_bitmap_is_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
                     slice_index,
                     slice_count,
-                )
-            });
+                ));
+            }
         }
-    }
-    // SAFETY: free release clears arena metadata and returns backing slices after ownership is proven.
-    if unsafe { mi_page_meta_is_separated(page) } {
-        unsafe { (*page).block_size = 0 };
-    }
-    unsafe {
+        // Complete metadata/backing release, then terminalize the identity.
+        if mi_page_meta_is_separated(page) {
+            (*page).block_size = 0;
+        }
         _mi_arenas_free(
             mi_page_slice_start(page).cast(),
             mi_page_full_size(PagePtr::new_unchecked(page)).get(),
             (*page).memid,
-        )
-    };
+        );
+        page_wrapper.into_destroyed_after_arena_free()
+    }
 }
 
 /// # Safety
@@ -2262,10 +2264,7 @@ pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(
     // SAFETY: the consumed all-free witness proves the detached page state, and
     // `owner` is the live local heap responsible for its release accounting.
     // Both remain valid while the internal path unregisters and frees backing.
-    unsafe { _mi_arenas_page_free_internal(&page, Some(owner)) };
-    // SAFETY: the internal release above completed the all-free page's terminal
-    // arena transition; the returned witness retains identity but grants no access.
-    unsafe { page.into_destroyed_after_arena_free() }
+    unsafe { _mi_arenas_page_free_internal(page, Some(owner)) }
 }
 
 /// # Safety
@@ -2301,7 +2300,7 @@ pub(crate) unsafe fn _mi_arenas_page_abandon(
 ///
 /// # Safety
 /// `page` must be a live initialized claimed abandoned page that is neither full,
-/// all-free, singleton, nor already mapped-abandoned. `_arena_memid` must be the
+/// all-free, singleton, nor already mapped-abandoned. `arena_memid` must be the
 /// arena MemId decoded from that same page. Its associated thread heap, stats,
 /// arena membership, backing, and page metadata must remain live and stable for
 /// the transition. Concurrent claim, relink, reassignment, or teardown is
@@ -2309,97 +2308,73 @@ pub(crate) unsafe fn _mi_arenas_page_abandon(
 #[inline(never)]
 pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
     page: crate::core_types::OwnedAbandonedPage,
-    _arena_memid: crate::core_types::ArenaMemId,
+    arena_memid: crate::core_types::ArenaMemId,
 ) -> Result<crate::core_types::AbandonedDisposition, crate::core_types::OwnedAbandonedPage> {
-    let page_ptr = page.page();
-    let page_raw = page_ptr.as_ptr();
-    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
-        // SAFETY: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-        unsafe { mi_page_slice_start(page_raw) }.cast(),
-        MI_PAGE_ALIGN
-    ));
-    crate::internal::mi_assert_internal!(unsafe {
-        crate::internal::_mi_ptr_page(mi_page_start(page_raw).cast()) == page_raw
-    });
-    // SAFETY: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page_raw) });
-    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page_raw) });
-    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_abandoned_mapped(page_raw) });
-    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_full_local(page_raw) });
-    crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page_raw) });
-    // SAFETY: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page_raw) });
-
-    if unsafe { mi_page_is_full_local(page_raw) }
-        || unsafe { mi_page_is_abandoned_mapped(page_raw) }
-    {
-        return Err(page);
-    }
-
-    // SAFETY: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-    let Some(theap) = (unsafe {
-        _mi_page_associated_theap_peek(crate::core_types::PagePtr::new_unchecked(page_raw))
-    }) else {
-        return Err(page);
-    };
-    let theap = theap.as_ptr();
-
-    // SAFETY: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
+    // SAFETY: the contract keeps the claimed page, decoded arena identity,
+    // associated heap, stats, page map, metadata, and backing stable for this
+    // synchronous transaction. The block consumes the ownership witness once
+    // and returns the exact resulting disposition.
     unsafe {
-        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reabandon_full), 1)
-    };
-    unsafe { __mi_stat_adjust_decrease(ptr::addr_of_mut!((*theap).stats.pages_abandoned), 1) };
-    // SAFETY: the owned witness is consumed exactly once; the associated live thread heap and page
-    // satisfy the internal publication contract, with competing metadata mutation excluded.
-    let outcome = unsafe {
-        _mi_arenas_page_abandon_internal(
+        // Validate eligibility and the caller's decoded arena identity.
+        let page_ptr = page.page();
+        let page_raw = page_ptr.as_ptr();
+        crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+            mi_page_slice_start(page_raw).cast(),
+            MI_PAGE_ALIGN
+        ));
+        crate::internal::mi_assert_internal!(
+            crate::internal::_mi_ptr_page(mi_page_start(page_raw).cast()) == page_raw
+        );
+        crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
+        crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
+        crate::internal::mi_assert_internal!(!mi_page_is_abandoned_mapped(page_raw));
+        crate::internal::mi_assert_internal!(!mi_page_is_full_local(page_raw));
+        crate::internal::mi_assert_internal!(!mi_page_all_free(page_raw));
+        crate::internal::mi_assert_internal!(!mi_page_is_singleton(page_raw));
+
+        let memid_matches = match crate::core_types::MemId::view((*page_raw).memid) {
+            crate::core_types::MemIdView::Arena(current) => {
+                current.arena().as_ptr() == arena_memid.arena().as_ptr()
+                    && current.range().start_usize() == arena_memid.range().start_usize()
+                    && current.range().count_usize() == arena_memid.range().count_usize()
+            }
+            _ => false,
+        };
+        if !memid_matches
+            || mi_page_is_full_local(page_raw)
+            || mi_page_is_abandoned_mapped(page_raw)
+        {
+            return Err(page);
+        }
+
+        // Reconcile source-heap stats before republishing the page.
+        let Some(theap) = _mi_page_associated_theap_peek(page_ptr) else {
+            return Err(page);
+        };
+        let theap = theap.as_ptr();
+
+        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reabandon_full), 1);
+        __mi_stat_adjust_decrease(ptr::addr_of_mut!((*theap).stats.pages_abandoned), 1);
+        // Consume claimed ownership through publication or terminal release.
+        let outcome = _mi_arenas_page_abandon_internal(
             page,
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             ),
-        )
-    };
-    match outcome {
-        crate::core_types::PageAbandonOutcome::Abandoned => {
-            // SAFETY: the consuming internal transition completed mapped-abandoned publication and
-            // released the claim while preserving this saved live page identity.
-            Ok(crate::core_types::AbandonedDisposition::Mapped(unsafe {
-                crate::core_types::assume_mapped_after_reabandon(page_ptr)
-            }))
-        }
-        crate::core_types::PageAbandonOutcome::Destroyed => {
-            // SAFETY: the consuming internal transition completed terminal arena release; the saved
-            // identity is used only to represent the non-accessing destroyed disposition.
-            Ok(crate::core_types::AbandonedDisposition::Destroyed(unsafe {
-                crate::core_types::assume_destroyed_after_arena_free(page_ptr)
-            }))
+        );
+        match outcome {
+            crate::core_types::PageAbandonOutcome::Abandoned => {
+                Ok(crate::core_types::AbandonedDisposition::Mapped(
+                    crate::core_types::assume_mapped_after_reabandon(page_ptr),
+                ))
+            }
+            crate::core_types::PageAbandonOutcome::Destroyed => {
+                Ok(crate::core_types::AbandonedDisposition::Destroyed(
+                    crate::core_types::assume_destroyed_after_arena_free(page_ptr),
+                ))
+            }
         }
     }
-}
-
-/// # Safety
-/// Called from `free` paths while racing with abandoned-page readers.
-// SAFETY: unabandon entry validates raw page and thread-heap witnesses before cleanup.
-pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
-    page: *mut mi_page_t,
-    current_theapx: *mut mi_theap_t,
-) {
-    // SAFETY: the raw compatibility
-    // entry requires a claimed owned-abandoned page.
-    let page =
-        unsafe { crate::core_types::assume_owned_abandoned_page(PagePtr::new_unchecked(page)) };
-    let current_theap = if current_theapx.is_null() {
-        None
-    } else {
-        // SAFETY: unabandon entry validates raw page and thread-heap witnesses before cleanup.
-        Some(unsafe {
-            crate::core_types::ThreadHeapLocal::new_unchecked(
-                crate::core_types::ThreadHeapPtr::new_unchecked(current_theapx),
-            )
-        })
-    };
-    // SAFETY: unabandon entry validates raw page and thread-heap witnesses before cleanup.
-    unsafe { _mi_arenas_page_unabandon_internal(page, current_theap) };
 }
 
 #[cfg(test)]
@@ -2549,6 +2524,8 @@ mod claim_tests {
             assert!(unsafe { mi_bbitmap_is_clearN(bitmap, 5, 3) });
 
             // Restore the fixture's free bits before releasing bitmap storage.
+            // SAFETY: the fixture still owns its live bitmap allocation and
+            // restores the same in-range bits before deallocation.
             assert!(unsafe { mi_bbitmap_setN(bitmap, 5, 3) });
         });
     }

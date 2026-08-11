@@ -9,14 +9,24 @@ use super::*;
 unsafe fn try_free_abandoned(
     page: crate::core_types::OwnedAbandonedPage,
 ) -> Result<crate::core_types::DestroyedPage, crate::core_types::OwnedAbandonedPage> {
-    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
-    unsafe {
-        let all_free = page.try_mark_all_free()?;
-        let page_raw = all_free.page().as_ptr();
-        _mi_arenas_page_unabandon(page_raw, ptr::null_mut());
-        _mi_arenas_page_free(page_raw, ptr::null_mut());
-        Ok(all_free.into_destroyed_after_arena_free())
+    // SAFETY: the owned witness keeps this page's initialized used count stable
+    // while only protocol remote-head publication may race.
+    if !unsafe { mi_page_all_free(page.page().as_ptr()) } {
+        return Err(page);
     }
+    // SAFETY: active claimed ownership keeps heap/MemId/list publication stable
+    // while unabandon removes the matching bitmap/list/stat accounting.
+    unsafe { _mi_arenas_page_unabandon_internal(&page, None) };
+    let all_free = match page.try_mark_all_free() {
+        Ok(all_free) => all_free,
+        Err(page) => {
+            crate::internal::mi_assert_internal!(false);
+            return Err(page);
+        }
+    };
+    // SAFETY: the retained claim refined into the exact detached all-free page;
+    // its atomic heap stats remain live through terminal release.
+    Ok(unsafe { _mi_arenas_page_free_internal(all_free, None) })
 }
 
 unsafe fn try_reabandon_mapped(
@@ -187,7 +197,14 @@ unsafe fn try_reclaim_abandoned(
             return Err(page);
         }
 
-        _mi_arenas_page_unabandon(page_raw, theap);
+        // SAFETY: the claimed page, associated live heap, MemId, and abandoned
+        // publication remain stable while this removes abandoned accounting.
+        _mi_arenas_page_unabandon_internal(
+            &page,
+            Some(crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )),
+        );
         let active = _mi_theap_page_reclaim(
             page,
             crate::core_types::ThreadHeapLocal::new_unchecked(

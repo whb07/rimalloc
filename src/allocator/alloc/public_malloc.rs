@@ -105,11 +105,13 @@ pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) ->
     }
 }
 
-/// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
+/// Allocate `size` bytes from the current thread's default heap.
+///
+/// A nonnull result is allocator-owned and may be released with `mi_free`.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
-pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
+pub extern "C" fn mi_malloc(size: usize) -> *mut c_void {
+    // SAFETY: allocator lifecycle supplies the current default/lazy heap and
+    // exclusive local allocation epoch for this scalar allocation dispatch.
     unsafe { mi_theap_malloc(_mi_theap_default(), size) }
 }
 

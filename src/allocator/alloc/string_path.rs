@@ -306,10 +306,8 @@ unsafe fn mi_theap_realpath_typed(
     }
 
     let n = mi_path_max();
-    // SAFETY: the caller keeps the allocator configuration and default heap
-    // live for this bounded temporary allocation; `n + 1` cannot overflow
-    // because `mi_path_max` clamps `n` to at most 64 KiB.
-    let buf = unsafe { mi_zalloc(n + 1) }.cast::<c_char>();
+    // `n + 1` cannot overflow because `mi_path_max` clamps `n` to at most 64 KiB.
+    let buf = mi_zalloc(n + 1).cast::<c_char>();
     if buf.is_null() {
         mi_set_errno(ENOMEM);
         return ptr::null_mut();

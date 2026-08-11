@@ -61,17 +61,11 @@ pub(super) unsafe fn mi_theap_zalloc_typed(
     unsafe { _mi_theap_malloc_zero_typed(theap, layout, ptr::null_mut()) }
 }
 
-/// # Safety
-/// The allocator process/TLS lifecycle must permit default-heap initialization
-/// and keep the current thread's local allocation state exclusive; protocol
-/// atomic remote-free publication is permitted. Allocator callbacks and their
-/// opaque arguments reached synchronously must remain valid, must not unwind,
-/// and must not incompatibly reenter heap mutation. A nonnull result is
-/// allocator-owned and may be released with `mi_free`.
-// SAFETY: this exported scalar entry delegates to the allocator's default-heap
-// zeroing path without exposing internal layout or heap witnesses.
+/// Allocate and zero `size` bytes from the current thread's default heap.
+///
+/// A nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_zalloc(size: usize) -> *mut c_void {
+pub extern "C" fn mi_zalloc(size: usize) -> *mut c_void {
     // SAFETY: allocator lifecycle supplies the current default/lazy heap and
     // exclusive local allocation epoch for this validated raw-size dispatch.
     unsafe { _mi_theap_malloc_zero(_mi_theap_default(), size, true, ptr::null_mut()) }
@@ -147,20 +141,15 @@ pub unsafe extern "C" fn mi_theap_calloc(
     unsafe { mi_theap_zalloc_typed(theap, req.layout()) }
 }
 
-/// # Safety
-/// The allocator process/TLS lifecycle must permit default-heap initialization
-/// and keep the current thread's local allocation state exclusive; protocol
-/// atomic remote-free publication is permitted. Allocator callbacks and their
-/// opaque arguments reached synchronously must remain valid, must not unwind,
-/// and must not incompatibly reenter heap mutation. A nonnull result is
-/// allocator-owned and may be released with `mi_free`.
+/// Allocate and zero the checked product of `count * size` bytes from the
+/// current thread's default heap.
+///
+/// A nonnull result is allocator-owned and may be released with `mi_free`.
 // Retained as an exported C ABI allocation symbol; release cdylib builds may
 // reference it only from external dynamic callers.
-// SAFETY: this exported product entry validates the checked calloc layout
-// before resolving and dispatching through the current default heap.
 #[allow(dead_code)]
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
-pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
+pub extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
     if let Some(req) = calloc_request_or_report(count, size) {
         // SAFETY: allocator lifecycle keeps the default TLS slot stable and
         // permits initialization after the checked product succeeds.

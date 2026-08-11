@@ -126,41 +126,6 @@ pub(super) unsafe fn mi_memid_create_arena(
     .into_raw()
 }
 
-pub(super) unsafe fn mi_arena_from_memid(
-    memid: mi_memid_t,
-    slice_index: *mut usize,
-    slice_count: *mut usize,
-) -> *mut mi_arena_t {
-    // SAFETY: the helper only returns an arena
-    // pointer when the raw memid decodes to an arena MemIdView.
-    let Some((arena, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else {
-        return core::ptr::null_mut();
-    };
-    if !slice_index.is_null() {
-        // SAFETY: caller provided a non-null
-        // out-pointer for the arena slice start.
-        unsafe { *slice_index = range.start_usize() };
-    }
-    if !slice_count.is_null() {
-        // SAFETY: caller provided a non-null
-        // out-pointer for the arena slice count.
-        unsafe { *slice_count = range.count_usize() };
-    }
-    arena.as_ptr()
-}
-
-unsafe fn mi_arena_range_from_memid(
-    memid: mi_memid_t,
-) -> Option<(crate::core_types::ArenaPtr, crate::core_types::SliceRange)> {
-    match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::Arena(a) => Some((a.arena(), a.range())),
-        _ => {
-            crate::internal::mi_assert_internal!(false);
-            None
-        }
-    }
-}
-
 #[inline]
 pub(super) unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool {
     matches!(

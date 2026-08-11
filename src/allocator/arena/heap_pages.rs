@@ -330,24 +330,17 @@ unsafe extern "C" fn mi_heap_delete_page(
         // SAFETY: transfer uses the page's arena
         // location and typed page witness to update source/target heap tables.
         let sbin = unsafe { _mi_page_stats_bin(page) };
-        let mut slice_index = 0usize;
-        let mut slice_count = 0usize;
-        let mut arena_pages = ptr::null_mut();
         // SAFETY: the page witness is
-        // allocator-owned and the out-pointers are stack-local transfer state.
-        let arena_id = unsafe {
-            mi_page_arena_pages(
-                PagePtr::new_unchecked(page),
-                &mut slice_index,
-                &mut slice_count,
-                &mut arena_pages,
-            )
+        // allocator-owned and its arena membership remains stable during transfer.
+        let Some(membership) =
+            (unsafe { PageArenaMembership::from_page(PagePtr::new_unchecked(page)) })
+        else {
+            crate::internal::mi_assert_internal!(false);
+            return false;
         };
-        // SAFETY: `mi_page_arena_pages` filled
-        // arena table outputs for the source heap before bitmap mutation.
-        crate::internal::mi_assert_internal!(unsafe {
-            mi_bitmap_is_set((*arena_pages).pages, slice_index)
-        });
+        let arena_id = membership.arena().as_ptr();
+        let slice_index = membership.range().start_usize();
+        let arena_pages = membership.arena_pages().as_ptr();
         unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
         if !theap.is_null() {
             // SAFETY: page-bin stats are adjusted

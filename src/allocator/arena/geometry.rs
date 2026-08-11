@@ -55,33 +55,63 @@ pub(super) unsafe fn mi_heap_arena_pages(
     unsafe { mi_heap_arena_page_cell(heap, arena_idx).load_acquire() }.cast::<mi_arena_pages_t>()
 }
 
-pub(super) unsafe fn mi_page_arena_pages(
-    page: PagePtr,
-    slice_index: *mut usize,
-    slice_count: *mut usize,
-    parena_pages: *mut *mut mi_arena_pages_t,
-) -> *mut mi_arena_t {
-    let page = page.as_ptr();
-    // SAFETY: heap arena-page table access validates arena indexes and bitmap ownership for page metadata lookup.
-    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
-    let arena = unsafe { mi_arena_from_memid((*page).memid, slice_index, slice_count) };
-    crate::internal::mi_assert_internal!(!arena.is_null());
-    if !parena_pages.is_null() {
+/// An operation-scoped snapshot of a page's validated arena membership.
+///
+/// This value does not own or freeze the arena bitmap membership. Its copied
+/// components become stale after the owning operation mutates that membership.
+pub(super) struct PageArenaMembership {
+    arena: ArenaPtr,
+    range: crate::types::SliceRange,
+    arena_pages: core::ptr::NonNull<mi_arena_pages_t>,
+}
+
+impl PageArenaMembership {
+    /// # Safety
+    /// `page` must identify a live owned page whose heap, arena MemId, and
+    /// per-heap arena-page table remain stable while the returned value is used.
+    pub(super) unsafe fn from_page(page: PagePtr) -> Option<Self> {
+        let page_raw = page.as_ptr();
+        // SAFETY: the caller provides live owned page metadata.
+        crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page_raw) });
+        let crate::types::MemIdView::Arena(arena_mem) =
+            crate::types::MemId::view(unsafe { (*page_raw).memid })
+        else {
+            return None;
+        };
+        let arena = arena_mem.arena();
+        // SAFETY: the page's live owning heap and decoded arena remain stable
+        // under the caller's page ownership protocol.
         let arena_pages = unsafe {
             mi_heap_arena_pages(
-                BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(mi_page_heap(page))),
-                ArenaPtr::new_unchecked(arena),
+                BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(mi_page_heap(page_raw))),
+                arena,
             )
         };
-        crate::internal::mi_assert_internal!(!arena_pages.is_null());
-        crate::internal::mi_assert_internal!(
-            slice_index.is_null()
-                // SAFETY: heap arena-page table access validates arena indexes and bitmap ownership for page metadata lookup.
-                || unsafe { mi_bitmap_is_setN((*arena_pages).pages, *slice_index, 1) }
-        );
-        unsafe { *parena_pages = arena_pages };
+        let arena_pages = core::ptr::NonNull::new(arena_pages)?;
+        let range = arena_mem.range();
+        // SAFETY: the table pointer is non-null and its bitmap remains live by
+        // contract; the typed range supplies the checked start index.
+        if !unsafe { mi_bitmap_is_setN((*arena_pages.as_ptr()).pages, range.start_usize(), 1) } {
+            return None;
+        }
+        Some(Self {
+            arena,
+            range,
+            arena_pages,
+        })
     }
-    arena
+
+    pub(super) fn arena(&self) -> ArenaPtr {
+        self.arena
+    }
+
+    pub(super) fn range(&self) -> crate::types::SliceRange {
+        self.range
+    }
+
+    pub(super) fn arena_pages(&self) -> core::ptr::NonNull<mi_arena_pages_t> {
+        self.arena_pages
+    }
 }
 
 pub(super) unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page: PagePtr) -> bool {
@@ -266,6 +296,74 @@ pub unsafe extern "C" fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_
                 InteriorUserPtr::new(p.cast_mut()),
                 Some(ArenaPtr::new_unchecked(arena)),
             )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::{mem::MaybeUninit, ptr, sync::atomic::Ordering};
+
+    #[test]
+    fn page_arena_membership_rejects_invalid_states_and_preserves_exact_range() {
+        let mut bitmap = MaybeUninit::<mi_bitmap_t>::zeroed();
+        let mut arena_pages = MaybeUninit::<mi_arena_pages_t>::zeroed();
+        let mut arena = MaybeUninit::<mi_arena_t>::zeroed();
+        let mut heap = MaybeUninit::<mi_heap_t>::zeroed();
+        let mut page = MaybeUninit::<mi_page_t>::zeroed();
+
+        // SAFETY: all fixtures are stack-local, initialize every field read by
+        // membership construction, and remain live for the test.
+        unsafe {
+            let bitmap_raw = bitmap.as_mut_ptr();
+            let arena_pages_raw = arena_pages.as_mut_ptr();
+            let arena_raw = arena.as_mut_ptr();
+            let heap_raw = heap.as_mut_ptr();
+            let page_raw = page.as_mut_ptr();
+
+            mi_bitmap_init(bitmap_raw, 16, true);
+            ptr::addr_of_mut!((*arena_pages_raw).pages).write(bitmap_raw);
+            (*arena_raw.cast::<MiArenaPrefix>()).arena_idx = 0;
+            (*arena_raw.cast::<MiArenaPrefix>()).slice_count = 16;
+            let arena_ptr = ArenaPtr::new_unchecked(arena_raw);
+            let range = crate::types::SliceRange::new(5, 2, arena_ptr).unwrap();
+            let arena_memid = crate::types::MemId::<crate::types::ArenaMem>::arena(
+                arena_ptr,
+                range,
+                crate::types::InitiallyCommitted(false),
+                crate::types::InitiallyZero(false),
+                crate::types::Pinned(false),
+            )
+            .into_raw();
+            ptr::addr_of_mut!((*page_raw).xthread_free).write(
+                crate::types::ThreadFreeWord::from_parts(
+                    None,
+                    crate::types::ThreadFreeOwner::Owned,
+                )
+                .raw(),
+            );
+            ptr::addr_of_mut!((*page_raw).heap).write(heap_raw);
+            let page_ptr = PagePtr::new_unchecked(page_raw);
+
+            ptr::addr_of_mut!((*page_ptr.as_ptr()).memid)
+                .write(crate::internal::memid::_mi_memid_none());
+            assert!(PageArenaMembership::from_page(page_ptr).is_none());
+
+            ptr::addr_of_mut!((*page_ptr.as_ptr()).memid).write(arena_memid);
+            assert!(PageArenaMembership::from_page(page_ptr).is_none());
+
+            (*heap_raw.cast::<MiHeapPrefix>()).arena_pages[0]
+                .store(arena_pages_raw.cast(), Ordering::Release);
+            assert!(PageArenaMembership::from_page(page_ptr).is_none());
+
+            assert!(mi_bitmap_set(bitmap_raw, 5));
+            let membership = PageArenaMembership::from_page(page_ptr)
+                .expect("set start bit establishes exact membership");
+            assert_eq!(membership.arena().as_ptr(), arena_raw);
+            assert_eq!(membership.range().start_usize(), 5);
+            assert_eq!(membership.range().count_usize(), 2);
+            assert_eq!(membership.arena_pages().as_ptr(), arena_pages_raw);
         }
     }
 }

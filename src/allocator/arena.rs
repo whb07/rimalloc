@@ -134,15 +134,15 @@ use abandoned::{
     mi_arena_try_claim_abandoned, mi_heap_ensure_arena_pages_from_raw, mi_page_is_full_local,
 };
 use geometry::{
-    mi_arena_info_slices, mi_arena_numa_node, mi_arena_page_at_slice,
+    PageArenaMembership, mi_arena_info_slices, mi_arena_numa_node, mi_arena_page_at_slice,
     mi_arena_range_is_after_info_slices, mi_arena_size, mi_arena_slice_start, mi_arena_start,
-    mi_heap_arena_pages, mi_heap_has_page, mi_page_arena_pages,
+    mi_heap_arena_pages, mi_heap_has_page,
 };
 pub(crate) use heap_pages::{_mi_heap_destroy_pages, _mi_heap_move_pages};
 pub(crate) use ids::{_mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable};
 use ids::{
-    mi_arena_from_memid, mi_arena_id_from_arena_typed, mi_arena_is_suitable, mi_memid_create_arena,
-    mi_memid_is_os, mi_page_full_size, mi_page_memid_is_arena,
+    mi_arena_id_from_arena_typed, mi_arena_is_suitable, mi_memid_create_arena, mi_memid_is_os,
+    mi_page_full_size, mi_page_memid_is_arena,
 };
 use metadata::mi_arenas_unsafe_destroy;
 use os_memory::{
@@ -1889,6 +1889,15 @@ unsafe fn _mi_arenas_page_free_internal<S>(
     crate::internal::mi_assert_internal!(unsafe {
         page_ptr.queue_next().is_none() && page_ptr.queue_prev().is_none()
     });
+    let arena_membership = if unsafe { mi_page_memid_is_arena(page) } {
+        let Some(membership) = (unsafe { PageArenaMembership::from_page(page_ptr) }) else {
+            crate::internal::mi_assert_internal!(false);
+            return;
+        };
+        Some(membership)
+    } else {
+        None
+    };
 
     // SAFETY: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
     let stats_bin = unsafe { _mi_page_stats_bin(page) };
@@ -1918,23 +1927,15 @@ unsafe fn _mi_arenas_page_free_internal<S>(
     }
 
     if MI_DEBUG > 1
-        // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-        && unsafe { mi_page_memid_is_arena(page) }
         && !unsafe { mi_page_is_full_local(page) }
+        && let Some(membership) = arena_membership.as_ref()
     {
         let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) });
-        let mut slice_index = 0usize;
-        let mut slice_count = 0usize;
-        let mut arena_pages = ptr::null_mut();
-        // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
-        let arena = unsafe {
-            mi_page_arena_pages(
-                PagePtr::new_unchecked(page),
-                &mut slice_index,
-                &mut slice_count,
-                &mut arena_pages,
-            )
-        };
+        let arena = membership.arena().as_ptr();
+        let range = membership.range();
+        let slice_index = range.start_usize();
+        let slice_count = range.count_usize();
+        let arena_pages = membership.arena_pages().as_ptr();
         // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(
@@ -1971,20 +1972,12 @@ unsafe fn _mi_arenas_page_free_internal<S>(
 
     // SAFETY: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
     unsafe { _mi_page_map_unregister(page) };
-    if unsafe { mi_page_memid_is_arena(page) } {
-        let mut arena_pages = ptr::null_mut();
-        let mut slice_index = 0usize;
-        let mut slice_count = 0usize;
-        // SAFETY: free release clears arena metadata and returns backing slices after ownership is proven.
-        let arena = unsafe {
-            mi_page_arena_pages(
-                PagePtr::new_unchecked(page),
-                &mut slice_index,
-                &mut slice_count,
-                &mut arena_pages,
-            )
-        };
-        crate::internal::mi_assert_internal!(!arena_pages.is_null());
+    if let Some(membership) = arena_membership {
+        let arena = membership.arena().as_ptr();
+        let range = membership.range();
+        let slice_index = range.start_usize();
+        let slice_count = range.count_usize();
+        let arena_pages = membership.arena_pages().as_ptr();
         // SAFETY: free release clears arena metadata and returns backing slices after ownership is proven.
         unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
         let committed = unsafe { crate::allocator::page::mi_page_slice_committed(page) };

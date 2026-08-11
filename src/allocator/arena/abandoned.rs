@@ -249,19 +249,18 @@ pub(super) unsafe fn _mi_arenas_page_abandon_internal(
     crate::internal::mi_assert_internal!(heap == unsafe { _mi_theap_heap(current_theap) });
     if unsafe { mi_page_memid_is_arena(page) } && !unsafe { mi_page_is_full_local(page) } {
         let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) });
-        let mut slice_index = 0usize;
-        let mut slice_count = 0usize;
-        let mut arena_pages = ptr::null_mut();
         // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
-        let arena = unsafe {
-            mi_page_arena_pages(
-                PagePtr::new_unchecked(page),
-                &mut slice_index,
-                &mut slice_count,
-                &mut arena_pages,
-            )
+        let Some(membership) =
+            (unsafe { PageArenaMembership::from_page(PagePtr::new_unchecked(page)) })
+        else {
+            crate::internal::mi_assert_internal!(false);
+            return;
         };
-        let _ = arena;
+        let arena = membership.arena().as_ptr();
+        let range = membership.range();
+        let slice_index = range.start_usize();
+        let slice_count = range.count_usize();
+        let arena_pages = membership.arena_pages().as_ptr();
         // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
         crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
         crate::internal::mi_assert_internal!(unsafe {
@@ -356,19 +355,18 @@ pub(super) unsafe fn _mi_arenas_page_unabandon_internal(
     if unsafe { mi_page_is_abandoned_mapped(page) } {
         crate::internal::mi_assert_internal!(unsafe { mi_page_memid_is_arena(page) });
         let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) });
-        let mut slice_index = 0usize;
-        let mut slice_count = 0usize;
-        let mut arena_pages = ptr::null_mut();
         // SAFETY: mapped unabandon clears arena abandoned bitmaps and heap counters.
-        let arena = unsafe {
-            mi_page_arena_pages(
-                PagePtr::new_unchecked(page),
-                &mut slice_index,
-                &mut slice_count,
-                &mut arena_pages,
-            )
+        let Some(membership) =
+            (unsafe { PageArenaMembership::from_page(PagePtr::new_unchecked(page)) })
+        else {
+            crate::internal::mi_assert_internal!(false);
+            return;
         };
-        let _ = arena;
+        let arena = membership.arena().as_ptr();
+        let range = membership.range();
+        let slice_index = range.start_usize();
+        let slice_count = range.count_usize();
+        let arena_pages = membership.arena_pages().as_ptr();
         // SAFETY: mapped unabandon clears arena abandoned bitmaps and heap counters.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(

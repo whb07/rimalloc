@@ -184,6 +184,11 @@ impl UsableOut {
 pub(crate) struct BlockSize(pub(crate) NonZeroUsize);
 
 impl BlockSize {
+    #[inline(always)]
+    pub(crate) const fn from_padded(size: PaddedSize) -> Self {
+        Self(size.0)
+    }
+
     /// # Safety
     /// `size` must be non-zero.
     // SAFETY: unchecked block-size construction is

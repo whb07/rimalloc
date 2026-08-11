@@ -816,6 +816,17 @@ pub unsafe extern "C" fn mi_page_fresh_alloc(
     }
 }
 
+/// Allocate, reclaim if needed, and publish one page into its target queue.
+///
+/// # Safety
+/// `owner` must identify the live current-thread heap that owns `pq`; if `pq`
+/// is non-null, it must remain a live initialized queue for `layout`. The heap,
+/// TLD, subprocess arena registry, page-map and arena backing, page metadata,
+/// OS configuration, and stored commit callbacks/arguments must remain stable
+/// throughout the synchronous allocation/reclaim/queue epoch. Callbacks must
+/// not retain temporary allocator capabilities or unwind. Teardown and
+/// non-protocol queue/page relinking must not race; atomic abandoned claims and
+/// remote-free publication remain permitted by their protocols.
 #[inline]
 unsafe fn mi_page_fresh_alloc_typed(
     owner: crate::core_types::ThreadHeapLocal,
@@ -823,11 +834,13 @@ unsafe fn mi_page_fresh_alloc_typed(
     layout: crate::core_types::LayoutRequest,
     page_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    // SAFETY: the contract supplies one stable current-thread allocation epoch
+    // across arena allocation or claim, reclamation, free-list extension, and
+    // final queue publication; each typed capability is consumed in order.
     unsafe {
         let theap = owner.ptr().as_ptr();
-        let block_size = layout.padded().get();
-        let allocation = _mi_arenas_page_alloc(theap, block_size, page_alignment.get())?;
+        let block_size = crate::core_types::BlockSize::from_padded(layout.padded());
+        let allocation = _mi_arenas_page_alloc(owner, block_size, page_alignment)?;
         let page = match allocation {
             crate::allocator::arena::ArenaPageAllocation::Claimed(page) => {
                 let page = _mi_theap_page_reclaim(page, owner);
@@ -861,7 +874,7 @@ unsafe fn mi_page_fresh_alloc_typed(
             crate::allocator::arena::ArenaPageAllocation::Active(page) => page,
         };
         crate::internal::mi_assert_internal!(
-            pq.is_null() || mi_page_block_size(page.page().as_ptr()) >= block_size
+            pq.is_null() || mi_page_block_size(page.page().as_ptr()) >= block_size.get()
         );
         crate::internal::mi_assert_expensive!(_mi_page_is_valid(page.page().as_ptr()));
         Some(page)

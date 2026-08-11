@@ -39,6 +39,19 @@ impl Page<Uninit> {
         // page witness for the same page pointer.
         unsafe { ActivePage::new_unchecked(self.ptr) }
     }
+
+    /// Consume a fresh page whose initialization failed after its owner was
+    /// returned to the abandoned state.
+    ///
+    /// # Safety
+    /// The page must remain registered with live, stable metadata and backing,
+    /// have an initialized MemId and geometry, have `used == 0`, retain the
+    /// claimed thread-free owner bit, be marked abandoned, and have empty queue
+    /// links. No competing mutation, relink, claim, or teardown may occur.
+    #[inline(always)]
+    pub(crate) unsafe fn into_all_free_after_failed_init(self) -> AllFreePage<Uninit> {
+        AllFreePage { page: self }
+    }
 }
 
 #[derive(Debug)]
@@ -125,6 +138,7 @@ impl_page_witness!(
     ActivePage,
     "`page` must be live, initialized, exclusively thread-owned, and not currently full, retired, destroyed, or abandoned."
 );
+
 impl_page_witness!(
     FullPage,
     "`page` must be live, initialized, thread-owned, and currently present in its stable full queue."

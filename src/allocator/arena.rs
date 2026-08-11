@@ -1859,18 +1859,56 @@ impl ArenaPageAllocation {
     }
 }
 
+/// Complete fresh-page initialization or release the still-uninitialized page
+/// through its matching allocation identity.
+///
 /// # Safety
-/// `theap` must identify the current thread's live initialized thread heap with
-/// exclusive local access to its heap/TLD association and page initialization.
+/// `owner` must be the live current-thread owner of the registered `page`, with
+/// local ownership of its metadata and stats. The page must be detached, have
+/// no used blocks, and retain its claimed thread-free owner bit. Its backing,
+/// initialized MemId and geometry, page map, heap/TLD association, and allocator
+/// teardown state must remain stable through initialization or cleanup.
+unsafe fn mi_arenas_page_finish_fresh(
+    owner: crate::core_types::ThreadHeapLocal,
+    page: crate::core_types::Page<crate::core_types::Uninit>,
+) -> Option<crate::core_types::ActivePage> {
+    // SAFETY: the caller proves `owner` is the live current-thread owner and
+    // `page` is its registered uninitialized-page capability.
+    match unsafe { crate::allocator::page::mi_page_init_typed(owner, page) } {
+        Ok(active) => Some(active),
+        Err(page) => {
+            let page_ptr = page.ptr();
+            // SAFETY: failed initialization returns the same live, registered,
+            // detached page with no used blocks; returning its owner to the
+            // abandoned state preserves the claimed thread-free owner bit.
+            unsafe { mi_page_set_theap(page_ptr.as_ptr(), ptr::null_mut()) };
+            // SAFETY: the failed-init page remains registered with stable MemId
+            // and geometry, has no used blocks or queue links, and the owner
+            // transition above established abandoned claimed ownership.
+            let all_free = unsafe { page.into_all_free_after_failed_init() };
+            // SAFETY: `owner` is the matching live stats owner; the all-free
+            // witness carries the exact detached registered allocation through
+            // page-map, heap-bit, accounting, and backing release.
+            let destroyed = unsafe { _mi_arenas_page_free_typed(all_free, owner) };
+            let _ = destroyed.page();
+            None
+        }
+    }
+}
+
+/// # Safety
+/// `owner` must identify the current thread's live initialized thread heap with
+/// local access to its heap/TLD association and page initialization.
 /// Its heap, TLD, subprocess arena registry, page map, arena metadata/backing,
 /// and allocation callbacks must remain live and stable; callbacks invoked
 /// synchronously must not unwind. Teardown and non-protocol relinking must not
 /// race, while abandoned claims and remote frees may use their atomic protocols.
 unsafe fn mi_arenas_page_regular_alloc(
-    theap: *mut mi_theap_t,
+    owner: crate::core_types::ThreadHeapLocal,
     slice_count: crate::core_types::SliceCount,
     block_size: crate::core_types::BlockSize,
 ) -> Option<ArenaPageAllocation> {
+    let theap = owner.ptr().as_ptr();
     // SAFETY: the regular-allocation contract supplies the live thread heap,
     // registry, arena backing, and atomic abandoned-page claim epoch.
     if let Some(page) = unsafe { mi_arenas_page_try_find_abandoned(theap, slice_count, block_size) }
@@ -1886,6 +1924,9 @@ unsafe fn mi_arenas_page_regular_alloc(
         // this policy read during fresh-page selection.
         || (commit_on_demand == 2 && unsafe { _mi_os_has_overcommit() })
         || commit_on_demand == 0;
+    // SAFETY: the regular-allocation contract keeps the current thread heap,
+    // backing transaction, page map, and callbacks live; zero alignment selects
+    // ordinary page geometry for this checked size-class slice count.
     let page_uninit = (unsafe {
         mi_arenas_page_alloc_fresh(
             theap,
@@ -1904,43 +1945,24 @@ unsafe fn mi_arenas_page_regular_alloc(
         crate::core_types::MemIdView::Arena(a) => a.range().count() == slice_count,
         _ => true, // Non-arena allocations trivially pass this slice_count assert
     });
-    // SAFETY: the current thread heap exclusively owns this registered fresh
-    // page through the consuming uninitialized-page witness.
-    match unsafe {
-        crate::allocator::page::mi_page_init_typed(
-            crate::core_types::ThreadHeapLocal::new_unchecked(
-                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-            ),
-            page_uninit,
-        )
-    } {
-        Ok(active) => Some(ArenaPageAllocation::Active(active)),
-        Err(page_uninit) => {
-            let page = page_uninit.ptr();
-            unsafe {
-                _mi_arenas_free(
-                    page.as_ptr().cast(),
-                    mi_page_full_size(page).get(),
-                    (*page.as_ptr()).memid,
-                )
-            };
-            None
-        }
-    }
+    // SAFETY: the regular-allocation contract keeps the current thread heap
+    // and returned registered page stable through consuming init-or-cleanup.
+    unsafe { mi_arenas_page_finish_fresh(owner, page_uninit) }.map(ArenaPageAllocation::Active)
 }
 
 /// # Safety
-/// `theap` must identify the current thread's live initialized thread heap with
-/// exclusive local access to fresh-page initialization. Its heap/TLD, arena
+/// `owner` must identify the current thread's live initialized thread heap with
+/// local access to fresh-page initialization. Its heap/TLD, arena
 /// registry and backing, page map, allocator OS state, and stored callbacks must
 /// remain live and stable; synchronously invoked callbacks must not unwind and
 /// teardown must not race.
 #[inline(never)]
 unsafe fn mi_arenas_page_singleton_alloc(
-    theap: *mut mi_theap_t,
+    owner: crate::core_types::ThreadHeapLocal,
     block_size: crate::core_types::BlockSize,
     block_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<ArenaPageAllocation> {
+    let theap = owner.ptr().as_ptr();
     let block_size_raw = block_size.get();
     let block_alignment_raw = block_alignment.get();
     let os_align = block_alignment_raw > MI_PAGE_MAX_OVERALLOC_ALIGN;
@@ -1949,82 +1971,66 @@ unsafe fn mi_arenas_page_singleton_alloc(
     } else {
         crate::internal::mi_page_info_size()
     };
-    let slice_count = mi_slice_count_of_size(info_size + block_size_raw);
+    let Some(full_size) = info_size.checked_add(block_size_raw) else {
+        mi_set_errno(ENOMEM);
+        return None;
+    };
+    let slice_count = mi_slice_count_of_size(full_size);
     let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
         mi_set_errno(ENOMEM);
         return None;
     };
+    // SAFETY: the singleton-allocation contract keeps the current thread heap,
+    // backing transaction, page map, and callbacks live for this derived slice
+    // count and caller-validated optional alignment.
     let page_uninit = (unsafe {
         mi_arenas_page_alloc_fresh(theap, slice_count, block_size, block_alignment, true)
     })?;
     let page = page_uninit.ptr().as_ptr();
-    // SAFETY: singleton arena page setup handles over-aligned or large objects while preserving one-block page invariants.
+    // SAFETY: the registered uninitialized singleton keeps its reserved-count
+    // metadata live and readable until consuming initialization or cleanup.
     crate::internal::mi_assert_internal!(unsafe {
         crate::allocator::page::mi_page_reserved_count(page).get() == 1
     });
-    // SAFETY: the current thread heap exclusively owns this registered fresh
-    // singleton through the consuming uninitialized-page witness.
-    match unsafe {
-        crate::allocator::page::mi_page_init_typed(
-            crate::core_types::ThreadHeapLocal::new_unchecked(
-                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-            ),
-            page_uninit,
-        )
-    } {
-        Ok(active) => Some(ArenaPageAllocation::Active(active)),
-        Err(page_uninit) => {
-            let page = page_uninit.ptr();
-            unsafe {
-                _mi_arenas_free(
-                    page.as_ptr().cast(),
-                    mi_page_full_size(page).get(),
-                    (*page.as_ptr()).memid,
-                )
-            };
-            None
-        }
-    }
+    // SAFETY: the singleton-allocation contract keeps the current thread heap
+    // and returned registered page stable through consuming init-or-cleanup.
+    unsafe { mi_arenas_page_finish_fresh(owner, page_uninit) }.map(ArenaPageAllocation::Active)
 }
 
 /// # Safety
-/// `theap` must identify the current thread's live initialized thread heap with
-/// exclusive local access to page allocation and initialization. `block_size`
-/// must be nonzero and representable as `BlockSize`; `block_alignment` must be
-/// zero or a valid allocator alignment. Heap/TLD, arena registry and backing,
-/// page map, allocator OS state, and stored callbacks must remain live and
-/// stable; synchronously invoked callbacks must not unwind and teardown or
-/// non-protocol relinking must not race.
+/// `owner` must identify the current thread's live initialized thread heap with
+/// local access to page allocation and initialization. Its heap/TLD, arena
+/// registry and backing, page map, allocator OS state, and stored callbacks must
+/// remain live and stable; synchronously invoked callbacks must not unwind and
+/// teardown or non-protocol relinking must not race.
 #[inline(never)]
 pub(crate) unsafe fn _mi_arenas_page_alloc(
-    theap: *mut mi_theap_t,
-    block_size: usize,
-    block_alignment: usize,
+    owner: crate::core_types::ThreadHeapLocal,
+    block_size: crate::core_types::BlockSize,
+    block_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<ArenaPageAllocation> {
-    // SAFETY: the caller guarantees the nonzero block size fits the allocator's
-    // typed block-size domain.
-    let block_size_typed = unsafe { crate::core_types::BlockSize::new_unchecked(block_size) };
-    // SAFETY: the caller guarantees zero or a valid allocator alignment.
-    let block_alignment_typed =
-        unsafe { crate::core_types::MaybeAlignment::new_unchecked(block_alignment) };
-    let allocation = if block_alignment > MI_PAGE_MAX_OVERALLOC_ALIGN {
-        crate::internal::mi_assert_internal!(crate::internal::_mi_is_power_of_two(block_alignment));
+    let block_size_raw = block_size.get();
+    let block_alignment_raw = block_alignment.get();
+    let allocation = if block_alignment_raw > MI_PAGE_MAX_OVERALLOC_ALIGN {
+        crate::internal::mi_assert_internal!(crate::internal::_mi_is_power_of_two(
+            block_alignment_raw
+        ));
         // SAFETY: the outer contract keeps the thread heap, registry/backing,
         // page map, OS state, and callbacks live for singleton initialization.
-        unsafe { mi_arenas_page_singleton_alloc(theap, block_size_typed, block_alignment_typed) }
-    } else if block_size <= MI_SMALL_MAX_OBJ_SIZE {
+        unsafe { mi_arenas_page_singleton_alloc(owner, block_size, block_alignment) }
+    } else if block_size_raw <= MI_SMALL_MAX_OBJ_SIZE {
         // SAFETY: the outer contract establishes the regular allocation epoch.
-        unsafe { mi_arenas_page_regular_alloc(theap, MI_SMALL_PAGE_SLICE_COUNT, block_size_typed) }
-    } else if block_size <= MI_MEDIUM_MAX_OBJ_SIZE {
+        unsafe { mi_arenas_page_regular_alloc(owner, MI_SMALL_PAGE_SLICE_COUNT, block_size) }
+    } else if block_size_raw <= MI_MEDIUM_MAX_OBJ_SIZE {
         // SAFETY: the outer contract establishes the regular allocation epoch.
-        unsafe { mi_arenas_page_regular_alloc(theap, MI_MEDIUM_PAGE_SLICE_COUNT, block_size_typed) }
-    } else if MI_ENABLE_LARGE_PAGES != 0 && block_size <= MI_LARGE_MAX_OBJ_SIZE {
+        unsafe { mi_arenas_page_regular_alloc(owner, MI_MEDIUM_PAGE_SLICE_COUNT, block_size) }
+    } else if MI_ENABLE_LARGE_PAGES != 0 && block_size_raw <= MI_LARGE_MAX_OBJ_SIZE {
         // SAFETY: the outer contract establishes the regular allocation epoch.
-        unsafe { mi_arenas_page_regular_alloc(theap, MI_LARGE_PAGE_SLICE_COUNT, block_size_typed) }
+        unsafe { mi_arenas_page_regular_alloc(owner, MI_LARGE_PAGE_SLICE_COUNT, block_size) }
     } else {
         // SAFETY: the outer contract keeps the thread heap, registry/backing,
         // page map, OS state, and callbacks live for singleton initialization.
-        unsafe { mi_arenas_page_singleton_alloc(theap, block_size_typed, block_alignment_typed) }
+        unsafe { mi_arenas_page_singleton_alloc(owner, block_size, block_alignment) }
     };
     let allocation = allocation?;
     let page = allocation.page().as_ptr();
@@ -2040,12 +2046,12 @@ pub(crate) unsafe fn _mi_arenas_page_alloc(
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
     crate::internal::mi_assert_internal!(
-        block_alignment <= MI_PAGE_MAX_OVERALLOC_ALIGN
+        block_alignment_raw <= MI_PAGE_MAX_OVERALLOC_ALIGN
             || crate::internal::_mi_is_aligned(
                 // SAFETY: either returned capability keeps this initialized
                 // page start readable for the requested alignment check.
                 unsafe { mi_page_start(page) }.cast(),
-                block_alignment
+                block_alignment_raw
             )
     );
     Some(allocation)
@@ -2243,8 +2249,12 @@ unsafe fn _mi_arenas_page_free_internal<S>(
 }
 
 /// # Safety
-/// `page` must be an all-free page that has been removed from its page queue.
-/// `owner` must be the thread heap that owned the page before release.
+/// `page` must be an all-free page removed from its page queue, or a registered
+/// failed-init page with no used blocks and no queue links after its owner was
+/// returned to the abandoned state. It must retain claimed thread-free ownership
+/// and stable MemId, geometry, page-map, and heap arena-bit state. `owner` must
+/// be the live thread heap responsible for the page's allocation statistics;
+/// concurrent relink, claim, mutation, and teardown are excluded through release.
 pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(
     page: crate::core_types::AllFreePage<S>,
     owner: crate::core_types::ThreadHeapLocal,

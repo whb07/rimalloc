@@ -13,7 +13,9 @@ use crate::types::{ENOMEM, mi_heap_t, mi_theap_t};
 
 use super::{mi_heap_borrowed_theap_local, mi_theap_malloc, mi_zalloc};
 
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY: these declarations match the Unix libc signatures. Call sites keep
+// input C strings readable and any nonnull output buffers writable for the
+// duration and extent required by the corresponding libc operation.
 #[cfg(all(unix, not(target_os = "wasi")))]
 unsafe extern "C" {
     fn pathconf(path: *const c_char, name: c_int) -> c_long;
@@ -175,53 +177,71 @@ unsafe fn mi_heap_strndup_typed(heap: BorrowedHeap, s: *const c_char, n: usize) 
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]
-unsafe fn mi_path_max() -> usize {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        static PATH_MAX: AtomicUsize = AtomicUsize::new(0);
-        let pmax = PATH_MAX.load(Ordering::Acquire);
-        if pmax != 0 {
-            return pmax;
-        }
-
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        const _PC_PATH_MAX: c_int = 4;
-        #[cfg(target_vendor = "apple")]
-        const _PC_PATH_MAX: c_int = 5;
-
-        let m = pathconf(c"/".as_ptr(), _PC_PATH_MAX);
-        let pmax = if m <= 0 {
-            4096
-        } else if m < 256 {
-            256
-        } else if m > (64 * 1024) {
-            64 * 1024
-        } else {
-            m as usize
-        };
-        let _ = PATH_MAX.compare_exchange(0, pmax, Ordering::AcqRel, Ordering::Acquire);
-        PATH_MAX.load(Ordering::Acquire)
+fn mi_path_max() -> usize {
+    static PATH_MAX: AtomicUsize = AtomicUsize::new(0);
+    let pmax = PATH_MAX.load(Ordering::Acquire);
+    if pmax != 0 {
+        return pmax;
     }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    const _PC_PATH_MAX: c_int = 4;
+    #[cfg(target_vendor = "apple")]
+    const _PC_PATH_MAX: c_int = 5;
+
+    // SAFETY: the static `"/"` string is NUL-terminated and readable for the
+    // synchronous libc query; `_PC_PATH_MAX` is the target's path-limit key.
+    let m = unsafe { pathconf(c"/".as_ptr(), _PC_PATH_MAX) };
+    let pmax = if m <= 0 {
+        4096
+    } else if m < 256 {
+        256
+    } else if m > (64 * 1024) {
+        64 * 1024
+    } else {
+        m as usize
+    };
+    let _ = PATH_MAX.compare_exchange(0, pmax, Ordering::AcqRel, Ordering::Acquire);
+    PATH_MAX.load(Ordering::Acquire)
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]
+/// # Safety
+/// `fname` must be a readable NUL-terminated path. A nonnull `resolved_name`
+/// must satisfy libc `realpath`'s output-buffer requirements. When
+/// `resolved_name` is null, `theap` must remain a live current-thread heap with
+/// exclusive access to its local allocation state while the temporary result
+/// is duplicated; protocol atomic remote-free publication is permitted. The
+/// allocator configuration and default heap used for the temporary buffer must
+/// remain live, and allocator callbacks invoked by allocation or free must be
+/// valid for synchronous use, must not unwind, and must not reenter in a way
+/// that mutates these heap operations incompatibly.
 unsafe fn mi_theap_realpath_typed(
     theap: ThreadHeapLocal,
     fname: *const c_char,
     resolved_name: *mut c_char,
 ) -> *mut c_char {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        if !resolved_name.is_null() {
-            return realpath(fname, resolved_name);
-        }
+    if !resolved_name.is_null() {
+        // SAFETY: the caller supplies the readable input path and a nonnull
+        // output buffer satisfying libc `realpath`'s requirements.
+        return unsafe { realpath(fname, resolved_name) };
+    }
 
-        let n = mi_path_max();
-        let buf = mi_zalloc(n + 1).cast::<c_char>();
-        if buf.is_null() {
-            mi_set_errno(ENOMEM);
-            return ptr::null_mut();
-        }
+    let n = mi_path_max();
+    // SAFETY: the caller keeps the allocator configuration and default heap
+    // live for this bounded temporary allocation; `n + 1` cannot overflow
+    // because `mi_path_max` clamps `n` to at most 64 KiB.
+    let buf = unsafe { mi_zalloc(n + 1) }.cast::<c_char>();
+    if buf.is_null() {
+        mi_set_errno(ENOMEM);
+        return ptr::null_mut();
+    }
+
+    // SAFETY: `fname` remains a readable C string; `buf` is a live writable
+    // `n + 1` byte allocation. The caller's current-thread heap witness and
+    // exclusive local allocation access cover duplication, and `buf` remains
+    // live until the matching allocator free after the duplicate attempt.
+    unsafe {
         let rname = realpath(fname, buf);
         let result = mi_theap_strndup_typed(theap, rname, n);
         mi_free(buf.cast::<c_void>());
@@ -231,81 +251,111 @@ unsafe fn mi_theap_realpath_typed(
 
 #[cfg(all(unix, not(target_os = "wasi")))]
 /// # Safety
-/// `fname` must point to a valid NUL-terminated path. If `resolved_name` is non-null it must be
-/// writable as required by `realpath`.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// `fname` must point to a readable NUL-terminated path. If `resolved_name` is
+/// non-null, it must satisfy libc `realpath`'s output-buffer requirements. When
+/// `resolved_name` is null, `theap` may be null or a supported allocator
+/// default/lazy sentinel; otherwise it must identify a live current-thread heap
+/// with exclusive access to its local allocation state for the call. Protocol
+/// atomic remote-free publication is permitted. In that null-output case,
+/// allocator callbacks and opaque arguments used by allocation or release must
+/// remain valid for synchronous invocation, must not unwind, and must not
+/// reenter with incompatible heap mutation.
+// SAFETY: this exported raw entry preserves the allocator's thread-heap
+// sentinel ABI and delegates path and output-buffer access under its contract.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_theap_realpath(
     theap: *mut mi_theap_t,
     fname: *const c_char,
     resolved_name: *mut c_char,
 ) -> *mut c_char {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        if !resolved_name.is_null() {
-            return realpath(fname, resolved_name);
-        }
+    if !resolved_name.is_null() {
+        // SAFETY: the public contract supplies the readable input path and the
+        // caller-owned output storage required by libc `realpath`.
+        return unsafe { realpath(fname, resolved_name) };
+    }
+
+    // SAFETY: a null/lazy/default `theap` is handled by the allocator; any
+    // nonnull heap is kept live, current-thread owned, and locally exclusive by
+    // the caller while it is classified and converted to a typed witness.
+    let theap = unsafe {
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };
-        mi_theap_realpath_typed(ThreadHeapLocal::new_unchecked(theap), fname, resolved_name)
-    }
+        ThreadHeapLocal::new_unchecked(theap)
+    };
+
+    // SAFETY: the raw entry contract keeps `fname` readable and the selected
+    // current-thread heap/configuration live and locally exclusive through the
+    // temporary allocation, duplication, and release transaction.
+    unsafe { mi_theap_realpath_typed(theap, fname, resolved_name) }
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]
 /// # Safety
-/// `heap` must be a valid heap pointer. `fname` must point to a valid NUL-terminated path. If
-/// `resolved_name` is non-null it must be writable as required by `realpath`.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// `heap` must identify a live initialized heap owned by the current thread,
+/// with a stable thread-heap association and exclusive access to local
+/// allocation state for the call; protocol atomic remote-free publication is
+/// permitted. `fname` must point to a readable NUL-terminated path. If
+/// `resolved_name` is non-null, it must satisfy libc `realpath`'s output-buffer
+/// requirements. When `resolved_name` is null, allocator callbacks and opaque
+/// arguments used by allocation or release must remain valid for synchronous
+/// invocation, must not unwind, and must not reenter with incompatible heap
+/// mutation.
+// SAFETY: this exported heap entry validates and localizes the caller's raw
+// heap before delegating path and output-buffer access under its contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realpath(
     heap: *mut mi_heap_t,
     fname: *const c_char,
     resolved_name: *mut c_char,
 ) -> *mut c_char {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
+    // SAFETY: the caller keeps the raw heap live and current-thread owned while
+    // it is classified and its stable local thread-heap association is read.
+    let Some(theap) = (unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
         };
-        mi_heap_realpath_typed(heap, fname, resolved_name)
-    }
-}
+        mi_heap_borrowed_theap_local(heap)
+    }) else {
+        return ptr::null_mut();
+    };
 
-#[cfg(all(unix, not(target_os = "wasi")))]
-unsafe fn mi_heap_realpath_typed(
-    heap: BorrowedHeap,
-    fname: *const c_char,
-    resolved_name: *mut c_char,
-) -> *mut c_char {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return ptr::null_mut();
-        };
-        mi_theap_realpath_typed(theap, fname, resolved_name)
-    }
+    // SAFETY: the public contract keeps `fname` and any output buffer valid;
+    // the localized current-thread heap remains live and locally exclusive
+    // through direct libc delegation or temporary allocation and release.
+    unsafe { mi_theap_realpath_typed(theap, fname, resolved_name) }
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]
 /// # Safety
-/// `fname` must point to a valid NUL-terminated path. If `resolved_name` is non-null it must be
-/// writable as required by `realpath`.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// `fname` must point to a readable NUL-terminated path. If `resolved_name` is
+/// non-null, it must satisfy libc `realpath`'s output-buffer requirements. When
+/// `resolved_name` is null, allocator callbacks and opaque arguments used by
+/// allocation or release must remain valid for synchronous invocation, must
+/// not unwind, and must not reenter with incompatible mutation of the current
+/// default heap.
+// SAFETY: this exported default-heap entry delegates path and output-buffer
+// access under its contract and allocator lifecycle supplies the local heap.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realpath(
     fname: *const c_char,
     resolved_name: *mut c_char,
 ) -> *mut c_char {
-    // SAFETY: realpath forwards caller-owned
-    // path and output-buffer pointers through the allocation entry boundary.
-    unsafe {
-        if !resolved_name.is_null() {
-            return realpath(fname, resolved_name);
-        }
-        let Some(theap) = mi_theap_default_local() else {
-            return ptr::null_mut();
-        };
-        mi_theap_realpath_typed(theap, fname, resolved_name)
+    if !resolved_name.is_null() {
+        // SAFETY: the public contract supplies the readable input path and the
+        // caller-owned output storage required by libc `realpath`.
+        return unsafe { realpath(fname, resolved_name) };
     }
+
+    // SAFETY: allocator lifecycle initialization keeps the default heap and
+    // thread-local association live; this entry runs with exclusive access to
+    // the current thread's local allocation state.
+    let Some(theap) = (unsafe { mi_theap_default_local() }) else {
+        return ptr::null_mut();
+    };
+
+    // SAFETY: the public contract keeps `fname` readable, and the localized
+    // default heap/configuration remain live and locally exclusive through the
+    // temporary allocation, duplication, and release transaction.
+    unsafe { mi_theap_realpath_typed(theap, fname, resolved_name) }
 }

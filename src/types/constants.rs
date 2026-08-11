@@ -268,8 +268,12 @@ pub type mi_heap_visit_fun = unsafe extern "C" fn(heap: *mut mi_heap_t, arg: *mu
 /// call, and all allocator-owned pointers are valid only during the callback.
 /// Threading: invocation follows the calling traversal and allocator state.
 /// Reentrancy: allocator calls from the callback follow the C contract and are
-/// parity-tested, but callback code must tolerate allocator reentry. Unwind:
-/// the callback must not panic or unwind across the C ABI.
+/// parity-tested, but callback code must tolerate allocator reentry. A callback
+/// returning `true` may allocate and change availability, but must not free or
+/// invalidate the current page backing or change its block geometry before the
+/// next callback invocation or traversal return, and must not mutate the
+/// current `mi_heap_area_t` descriptor. Unwind: the callback must not panic or
+/// unwind across the C ABI.
 // SAFETY: raw callback typedefs are ABI
 // declarations only; callers uphold the documented C callback contract.
 pub type mi_block_visit_fun = unsafe extern "C" fn(

@@ -80,7 +80,6 @@ fn page_area_uses_checked_half_open_address_bounds() {
     // SAFETY: both pointers stay within or one-past the stack byte buffer and
     // are used only for address-domain checks.
     unsafe {
-        assert_eq!(area.offset_of(start.as_ptr().add(1)), Some(1));
         assert!(area.contains(start.as_ptr().add(bytes.len() - 1)));
         assert!(!area.contains(start.as_ptr().add(bytes.len())));
     }
@@ -94,10 +93,7 @@ fn page_area_uses_checked_half_open_address_bounds() {
         assert!(!ptr_exposed_addr(misaligned.as_ptr()).is_multiple_of(size_of::<usize>()));
         let misaligned_area = PageArea::from_start_and_len(misaligned, size_of::<usize>())
             .expect("misaligned exposed-address interval does not overflow");
-        assert_eq!(
-            misaligned_area.offset_of(misaligned.as_ptr().add(3)),
-            Some(3)
-        );
+        assert!(misaligned_area.contains(misaligned.as_ptr().add(3)));
     }
 
     // PageArea is geometry-only, so this intentionally synthetic maximum
@@ -178,32 +174,42 @@ fn page_block_layout_bounds_block_indexes_and_addresses() {
 
 #[test]
 fn page_block_range_contains_only_block_starts_inside_the_range() {
-    let mut blocks = [MaybeUninit::<mi_block_t>::uninit(); 8];
+    let mut blocks = [MaybeUninit::<mi_block_t>::uninit(); 12];
     // SAFETY: the aligned stack allocation remains live while the layout and
     // test pointers describe addresses within its complete backing storage.
     let start = unsafe { PageStart::new_unchecked(blocks.as_mut_ptr().cast::<u8>()) };
-    // SAFETY: two blocks form a non-zero stride aligned for `mi_block_t`.
-    let block_size = unsafe { BlockSize::new_unchecked(2 * size_of::<mi_block_t>()) };
+    // SAFETY: three blocks form a non-power-of-two stride aligned for
+    // `mi_block_t`.
+    let block_size = unsafe { BlockSize::new_unchecked(3 * size_of::<mi_block_t>()) };
     let layout = PageBlockLayout::from_parts(start, block_size, ReservedBlockCount::new(4))
         .expect("aligned four-block layout is valid");
     let range = layout
         .nonempty_range(1, 2)
         .expect("middle two-block range is valid");
 
-    // SAFETY: every candidate is non-null and remains within the live stack
-    // backing; membership itself is what the range checks.
+    // SAFETY: typed candidates are exact aligned block starts within the live
+    // stack backing. The misaligned interior remains raw for classification.
     unsafe {
-        let first = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(2).cast());
-        let last = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(4).cast());
-        let aligned_interior = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(3).cast());
+        let first = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(3).cast());
+        let last = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(6).cast());
+        let aligned_interior = blocks.as_ptr().add(4).cast::<mi_block_t>();
         let below_start = BlockPtr::new_unchecked(blocks.as_mut_ptr().cast());
-        let one_past = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(6).cast());
+        let one_past = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(9).cast());
 
         assert!(range.contains(first));
         assert!(range.contains(last));
-        assert!(!range.contains(aligned_interior));
         assert!(!range.contains(below_start));
         assert!(!range.contains(one_past));
+        assert_eq!(range.index_of(first.as_ptr()), Some(0));
+        assert_eq!(range.index_of(last.as_ptr()), Some(1));
+        assert_eq!(range.index_of(aligned_interior), None);
+        assert_eq!(range.index_of(below_start.as_ptr()), None);
+        assert_eq!(range.index_of(one_past.as_ptr()), None);
+        assert_eq!(range.index_of(core::ptr::null()), None);
+        assert_eq!(range.block_at(0), Some(first));
+        assert_eq!(range.block_at(1), Some(last));
+        assert_eq!(range.block_at(2), None);
+        assert_eq!(range.block_at(usize::MAX), None);
     }
 }
 

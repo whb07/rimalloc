@@ -1075,12 +1075,6 @@ impl PageArea {
     }
 
     #[inline(always)]
-    pub(crate) fn offset_of<T>(self, ptr: *const T) -> Option<usize> {
-        self.contains(ptr)
-            .then(|| ptr_exposed_addr(ptr) - self.start_address())
-    }
-
-    #[inline(always)]
     pub(crate) fn contains<T>(self, ptr: *const T) -> bool {
         let address = ptr_exposed_addr(ptr);
         self.start_address() <= address && address < self.end_address()
@@ -1210,13 +1204,29 @@ impl PageBlockRange {
     /// liveness, initialization, or permission to access `block`.
     #[inline(always)]
     pub(crate) fn contains(self, block: BlockPtr) -> bool {
-        let Some(byte_offset) =
-            ptr_exposed_addr(block.as_ptr()).checked_sub(ptr_exposed_addr(self.first.as_ptr()))
-        else {
-            return false;
-        };
-        byte_offset % self.block_size.get() == 0
-            && byte_offset / self.block_size.get() < self.block_count
+        self.index_of(block.as_ptr()).is_some()
+    }
+
+    /// Returns the block's range-relative index when it is an exact block
+    /// start inside this exposed-address geometry. This does not prove
+    /// provenance, liveness, initialization, or access permission.
+    #[inline(always)]
+    pub(crate) fn index_of(self, block: *const mi_block_t) -> Option<usize> {
+        let byte_offset =
+            ptr_exposed_addr(block).checked_sub(ptr_exposed_addr(self.first.as_ptr()))?;
+        if !byte_offset.is_multiple_of(self.block_size.get()) {
+            return None;
+        }
+        let index = byte_offset / self.block_size.get();
+        (index < self.block_count).then_some(index)
+    }
+
+    #[inline(always)]
+    pub(crate) fn block_at(self, index: usize) -> Option<BlockPtr> {
+        (index < self.block_count).then(|| {
+            // SAFETY: the branch bounds `index` to this validated range.
+            unsafe { self.block_at_offset_unchecked(index) }
+        })
     }
 
     #[inline(always)]

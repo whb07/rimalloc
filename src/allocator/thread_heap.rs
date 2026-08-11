@@ -16,7 +16,7 @@ use crate::allocator::page::{
     mi_normal_page_queue_is_valid, mi_page_is_abandoned, mi_page_theap,
 };
 use crate::allocator::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
-use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
+use crate::bits::{MI_INTPTR_BITS, mi_ctz};
 use crate::core_types::{
     Bin, BlockVisitCallback, BlockVisitCallbackArg, BorrowedHeap, Errno, HeapPtr, PageBlockLayout,
     PagePtr, PageQueuePtr, ThreadHeapLocal, ThreadHeapPtr, ThreadHeapState, TldPtr,
@@ -25,8 +25,8 @@ use crate::internal::memid::mi_memid_t;
 use crate::internal::{
     _mi_align_up, _mi_arenas_alloc, _mi_arenas_free, _mi_deferred_free, _mi_divide_up,
     _mi_is_heap_main, _mi_memcpy_aligned, _mi_meta_free, _mi_meta_zalloc, _mi_subproc,
-    _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_page_all_free,
-    mi_page_block_size, mi_page_heap, mi_page_usable_block_size, mi_theap_is_initialized,
+    _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_page_all_free, mi_page_heap,
+    mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::mimalloc::mi_free;
 use crate::prim::{__mi_theap_empty, _mi_theap_default};
@@ -178,56 +178,25 @@ pub(crate) unsafe fn heap_area_for_page(page: PagePtr) -> Option<mi_heap_area_t>
     })
 }
 
-unsafe fn mi_get_fast_divisor(divisor: usize, magic: *mut u64, shift: *mut usize) {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    unsafe {
-        crate::internal::mi_assert_internal!(divisor > 0 && u32::try_from(divisor).is_ok());
-        *shift = MI_SIZE_BITS - mi_clz(divisor - 1);
-        *magic = (((1u64 << 32) * ((1u64 << *shift) - divisor as u64)) / divisor as u64) + 1;
-    }
-}
-
 /// # Safety
 ///
-/// `magic` and `shift` must come from `mi_get_fast_divisor` for the divisor
-/// used to derive `n`'s quotient.
-#[inline]
-pub unsafe fn mi_fast_divide(n: usize, magic: u64, shift: usize) -> usize {
-    crate::internal::mi_assert_internal!(u32::try_from(n).is_ok());
-    let hi = ((n as u64) * magic) >> 32;
-    ((hi + n as u64) >> shift) as usize
-}
-
-/// # Safety
-///
-/// `area` and `page` must describe the same valid allocator page. `visitor`
-/// must be valid to call for each live block in the page.
-// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+/// `area` and `page` must describe the same valid allocator page, and `visitor`
+/// must be valid to call for each live block. The page metadata and block
+/// backing must remain live, and block geometry must remain stable, throughout
+/// this call. A visitor may allocate and alter availability, but returning
+/// `true` promises it did not free or invalidate this page's backing or change
+/// its block geometry, or mutate the shared `area` descriptor, before the next
+/// invocation.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
-    area: *const mi_heap_area_t,
-    page: *mut mi_page_t,
-    visitor: BlockVisitCallback,
-    arg: BlockVisitCallbackArg,
-) -> bool {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    let page = unsafe { PagePtr::new_unchecked(page) };
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    unsafe { mi_theap_area_visit_blocks_typed(area, page, visitor, arg) }
-}
-
-unsafe fn mi_theap_area_visit_blocks_typed(
-    area: *const mi_heap_area_t,
+pub(crate) unsafe fn visit_page_blocks(
+    area: &mi_heap_area_t,
     page_ptr: PagePtr,
     visitor: BlockVisitCallback,
     arg: BlockVisitCallbackArg,
 ) -> bool {
     // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
-        crate::internal::mi_assert_internal!(!area.is_null());
-        if area.is_null() {
-            return true;
-        }
+        let area = ptr::from_ref(area);
         let page = page_ptr.as_ptr();
         let mut abandoned_owner = if mi_page_is_abandoned(page) {
             let abandoned = crate::core_types::assume_abandoned_page(page_ptr);
@@ -248,29 +217,41 @@ unsafe fn mi_theap_area_visit_blocks_typed(
                 return true;
             }
 
-            let Some(page_area) = page_ptr.area() else {
+            // SAFETY: local traversal ownership, or the abandoned claim above,
+            // keeps the page live while its geometry is captured. Callbacks
+            // must obey the documented non-invalidation contract.
+            let Some(block_layout) = PageBlockLayout::from_current_page(page_ptr) else {
                 crate::internal::mi_assert_internal!(false);
                 return false;
             };
-            let pstart = page_area.start().as_ptr();
             let heap = HeapPtr::new_unchecked(mi_page_heap(page));
-            let bsize = mi_page_block_size(page);
             let ubsize = mi_page_usable_block_size(page);
 
             let capacity = crate::allocator::page::mi_page_capacity_count(page);
+            let Some(block_range) = block_layout.nonempty_range(0, capacity.as_usize()) else {
+                crate::internal::mi_assert_internal!(false);
+                return false;
+            };
             if capacity.get() == 1 {
                 crate::internal::mi_assert_internal!(used.get() == 1 && page_ptr.free().is_empty());
-                return visitor.invoke(heap, area, pstart.cast::<c_void>(), ubsize.get(), arg);
+                return visitor.invoke(
+                    heap,
+                    area,
+                    block_range.first().as_ptr().cast(),
+                    ubsize.get(),
+                    arg,
+                );
             }
-            crate::internal::mi_assert_internal!(u32::try_from(bsize).is_ok());
 
             if used.get() == capacity.get() {
-                let mut block = pstart;
-                for _ in 0..capacity.as_usize() {
-                    if !visitor.invoke(heap, area, block.cast::<c_void>(), ubsize.get(), arg) {
+                for block_index in 0..capacity.as_usize() {
+                    let Some(block) = block_range.block_at(block_index) else {
+                        crate::internal::mi_assert_internal!(false);
+                        return false;
+                    };
+                    if !visitor.invoke(heap, area, block.as_ptr().cast(), ubsize.get(), arg) {
                         return false;
                     }
-                    block = block.add(bsize);
                 }
                 return true;
             }
@@ -282,58 +263,52 @@ unsafe fn mi_theap_area_visit_blocks_typed(
                 free_map[bmapsize - 1] = usize::MAX << shift;
             }
 
-            let mut magic = 0u64;
-            let mut shift = 0usize;
-            mi_get_fast_divisor(bsize, &mut magic, &mut shift);
-
             let mut free_count = 0usize;
             let mut free = page_ptr.free().as_raw();
             while !free.is_null() {
                 free_count += 1;
-                let block = free;
-                let Some(offset) = page_area.offset_of(block) else {
+                // Keep a decoded link raw until exact block-start membership
+                // is established; corrupt interior addresses are not blocks.
+                let Some(blockidx) = block_range.index_of(free) else {
                     crate::internal::mi_assert_internal!(false);
                     return false;
                 };
-                crate::internal::mi_assert_internal!(offset.is_multiple_of(bsize));
-                crate::internal::mi_assert_internal!(u32::try_from(offset).is_ok());
-                let blockidx = mi_fast_divide(offset, magic, shift);
-                crate::internal::mi_assert_internal!(blockidx == offset / bsize);
                 crate::internal::mi_assert_internal!(blockidx < MI_MAX_BLOCKS);
                 let bitidx = blockidx / MI_INTPTR_BITS;
                 let bit = blockidx - (bitidx * MI_INTPTR_BITS);
                 free_map[bitidx] |= 1usize << bit;
-                free = crate::internal::mi_block_next(page, block);
+                free = crate::internal::mi_block_next(page, free);
             }
             crate::internal::mi_assert_internal!(
                 capacity.as_usize() == free_count + used.as_usize()
             );
 
-            let mut block = pstart;
-            for mask in free_map.iter().take(bmapsize) {
+            for (map_index, mask) in free_map.iter().take(bmapsize).enumerate() {
+                let first_block_index = map_index * MI_INTPTR_BITS;
                 if *mask == 0 {
-                    for _ in 0..MI_INTPTR_BITS {
-                        if !visitor.invoke(heap, area, block.cast::<c_void>(), ubsize.get(), arg) {
+                    for bit_index in 0..MI_INTPTR_BITS {
+                        let Some(block) = block_range.block_at(first_block_index + bit_index)
+                        else {
+                            crate::internal::mi_assert_internal!(false);
+                            return false;
+                        };
+                        if !visitor.invoke(heap, area, block.as_ptr().cast(), ubsize.get(), arg) {
                             return false;
                         }
-                        block = block.add(bsize);
                     }
                 } else {
                     let mut used_mask = !*mask;
                     while used_mask != 0 {
                         let bitidx = mi_ctz(used_mask);
-                        if !visitor.invoke(
-                            heap,
-                            area,
-                            block.add(bitidx * bsize).cast::<c_void>(),
-                            ubsize.get(),
-                            arg,
-                        ) {
+                        let Some(block) = block_range.block_at(first_block_index + bitidx) else {
+                            crate::internal::mi_assert_internal!(false);
+                            return false;
+                        };
+                        if !visitor.invoke(heap, area, block.as_ptr().cast(), ubsize.get(), arg) {
                             return false;
                         }
                         used_mask &= used_mask - 1;
                     }
-                    block = block.add(bsize * MI_INTPTR_BITS);
                 }
             }
             true
@@ -440,9 +415,12 @@ unsafe extern "C" fn mi_theap_area_visitor(
             return false;
         }
         if (*args).visit_blocks {
-            _mi_theap_area_visit_blocks(
-                ptr::addr_of!((*xarea).area),
-                (*xarea).page,
+            // SAFETY: the area callback supplies a live page and its matching
+            // area projection. A continuing callback must preserve the page
+            // backing and geometry for the duration of block traversal.
+            visit_page_blocks(
+                &(*xarea).area,
+                PagePtr::new_unchecked((*xarea).page),
                 (*args).visitor,
                 (*args).arg,
             )
@@ -455,7 +433,11 @@ unsafe extern "C" fn mi_theap_area_visitor(
 /// # Safety
 ///
 /// `theap`, when non-null, must point to a valid thread heap. `visitor`, when
-/// present, must be valid for every visited heap area and block.
+/// present, must be valid for every visited heap area and block. A callback
+/// that returns `true` may allocate and change availability, but must not free
+/// or invalidate the current page backing or change its block geometry before
+/// the next callback invocation or traversal return, and must not mutate the
+/// current area descriptor.
 // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_visit_blocks(

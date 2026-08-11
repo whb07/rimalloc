@@ -47,17 +47,11 @@ unsafe fn mi_heap_visit_page(page: PagePtr, vinfo: *mut mi_heap_visit_info_t) ->
     } {
         return false;
     }
-    // SAFETY: the page area was initialized
-    // above and the visitor callback is the caller-provided C ABI callback.
+    // SAFETY: `area` is the matching projection for this live page. A
+    // continuing callback must preserve the page backing and geometry for the
+    // duration of block traversal.
     if unsafe { (*vinfo).visit_blocks } {
-        unsafe {
-            _mi_theap_area_visit_blocks(
-                ptr::addr_of!(area),
-                page_raw,
-                (*vinfo).visitor,
-                (*vinfo).arg,
-            )
-        }
+        unsafe { visit_page_blocks(&area, page, (*vinfo).visitor, (*vinfo).arg) }
     } else {
         true
     }
@@ -89,7 +83,11 @@ unsafe extern "C" fn mi_heap_visit_page_at(
 }
 
 /// # Safety
-/// Visits pages and optionally blocks for a heap using the C ABI callback contract.
+/// Visits pages and optionally blocks for a heap using the C ABI callback
+/// contract. A callback that returns `true` may allocate and change
+/// availability, but must not free or invalidate the current page backing or
+/// change its block geometry before the next callback invocation or traversal
+/// return, and must not mutate the current area descriptor.
 // SAFETY: this internal C ABI shim accepts the
 // upstream nullable heap convention and immediately converts non-null heaps.
 pub(crate) unsafe extern "C" fn _mi_heap_visit_blocks(
@@ -200,7 +198,11 @@ unsafe fn _mi_heap_visit_blocks_internal(
 }
 
 /// # Safety
-/// Public C API wrapper over `_mi_heap_visit_blocks`.
+/// Public C API wrapper over `_mi_heap_visit_blocks`. A callback that returns
+/// `true` may allocate and change availability, but must not free or invalidate
+/// the current page backing or change its block geometry before the next
+/// callback invocation or traversal return, and must not mutate the current
+/// area descriptor.
 // SAFETY: exported C ABI wrapper preserves the
 // public heap visit symbol while narrowing non-null heaps to typed witnesses.
 #[unsafe(no_mangle)]
@@ -235,6 +237,10 @@ pub unsafe extern "C" fn mi_heap_visit_blocks(
 
 /// # Safety
 /// Public C API wrapper over `_mi_heap_visit_blocks` for abandoned pages only.
+/// A callback that returns `true` may allocate and change availability, but
+/// must not free or invalidate the current page backing or change its block
+/// geometry before the next callback invocation or traversal return, and must
+/// not mutate the current area descriptor.
 // SAFETY: exported C ABI wrapper preserves the
 // abandoned-page visit symbol while narrowing non-null heaps to typed witnesses.
 #[unsafe(no_mangle)]

@@ -393,18 +393,22 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
 }
 
 /// # Safety
-/// `page` must be valid, its atomic thread-free ownership bit must already be
-/// claimed by the caller, and `head` must be null or the still-published head
-/// belonging to `page`.
+/// If `head` is null, this returns without accessing `page`. Otherwise, `page`
+/// must be live abandoned page metadata whose atomic thread-free ownership bit
+/// is claimed by the caller, and `head` must be the still-published head
+/// belonging to that page.
 // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
+    #[cfg(feature = "bench-diagnostics")]
+    crate::allocator::bench_diagnostics::page_free_collect_partly_call(head.is_null());
+    if head.is_null() {
+        return;
+    }
+
+    // SAFETY: the caller supplies the live claimed abandoned page and its
+    // still-published non-null remote head for this ownership transition.
     unsafe {
-        #[cfg(feature = "bench-diagnostics")]
-        crate::allocator::bench_diagnostics::page_free_collect_partly_call(head.is_null());
-        if head.is_null() {
-            return;
-        }
         let page_ptr = PagePtr::new_unchecked(page);
         let owned_page = crate::core_types::assume_owned_abandoned_page(page_ptr);
         let remote_head = PublishedRemoteHead::from_raw_compat(BlockPtr::new_unchecked(head));
@@ -451,6 +455,13 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn partly_collect_ignores_null_head_without_accessing_page() {
+        // SAFETY: the entry contract permits any page value when the null head
+        // makes the operation return before page metadata is accessed.
+        unsafe { _mi_page_free_collect_partly(ptr::null_mut(), ptr::null_mut()) };
+    }
 
     #[test]
     fn published_head_detaches_only_its_tail() {

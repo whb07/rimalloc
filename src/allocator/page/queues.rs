@@ -571,8 +571,13 @@ pub(super) unsafe fn mi_theap_queue_index(
 }
 
 /// # Safety
-/// `queue` must be a normal queue inside `theap`, and `direct_idx` must be the
-/// direct-page index for `block_size`.
+/// `theap` must identify a live initialized heap whose complete page-queue array remains readable.
+/// `queue` must be a live normal queue inside that array, and `block_size` must be its initialized
+/// nonzero block size. `direct_idx` must be the direct-page index derived from `block_size`. When
+/// `direct_idx > 1`, `queue` must be strictly after the array's first entry and every preceding
+/// queue entry scanned back through the first entry must retain initialized nonzero block-size
+/// metadata and its position in the same array. Concurrent queue-array mutation, relinking, and
+/// heap teardown are excluded.
 #[inline]
 pub(super) unsafe fn mi_theap_direct_cache_start(
     theap: crate::core_types::ThreadHeapPtr,
@@ -580,17 +585,18 @@ pub(super) unsafe fn mi_theap_direct_cache_start(
     block_size: crate::core_types::BlockSize,
     direct_idx: crate::core_types::DirectBin,
 ) -> usize {
-    // SAFETY: direct-page cache updates mirror normal queue fronts for small pages.
-    unsafe {
-        let idx = direct_idx.as_usize();
-        if idx <= 1 {
-            return 0;
-        }
-
+    let idx = direct_idx.as_usize();
+    if idx <= 1 {
+        return 0;
+    }
+    let bin = mi_bin_from_block_size(block_size).as_usize();
+    // SAFETY: the contract places `queue` strictly inside the live initialized queue array and
+    // keeps every preceding entry stable. The scan reads each predecessor before moving backward,
+    // stops at the first bin change or array start, and never subtracts before the first entry.
+    let start = unsafe {
         let start_queue = ptr::addr_of_mut!((*theap.as_ptr()).pages[0]);
         let pq = queue.ptr().as_ptr();
         crate::internal::mi_assert_internal!(pq > start_queue);
-        let bin = mi_bin_from_block_size(block_size).as_usize();
         let mut prev = pq.sub(1);
         while bin
             == mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
@@ -601,9 +607,9 @@ pub(super) unsafe fn mi_theap_direct_cache_start(
         {
             prev = prev.sub(1);
         }
-        let start = 1 + _mi_wsize_from_size(mi_page_queue_block_size_raw(prev));
-        start.min(idx)
-    }
+        1 + _mi_wsize_from_size(mi_page_queue_block_size_raw(prev))
+    };
+    start.min(idx)
 }
 
 #[cfg(test)]

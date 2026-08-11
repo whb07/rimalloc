@@ -1249,14 +1249,6 @@ unsafe fn mi_theap_reallocf_req_raw(
     }
 }
 
-unsafe fn mi_theap_rezalloc(
-    theap: ThreadHeapLocal,
-    req: crate::core_types::ReallocRequest,
-) -> *mut c_void {
-    // SAFETY: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
-    unsafe { mi_theap_realloc_typed(theap, req) }
-}
-
 unsafe fn mi_theap_recalloc(
     theap: ThreadHeapLocal,
     req: crate::core_types::CallocRequest,
@@ -1495,19 +1487,21 @@ pub unsafe extern "C" fn mi_heap_reallocf(
 
 /// # Safety
 /// `heap` must identify a live initialized heap owned by the current thread and
-/// remain stable without concurrent teardown or non-protocol mutation. `p` must
-/// be null or a live allocation returned by this allocator; its page and block
-/// metadata must remain stable with no concurrent free or realloc. On success,
-/// the old allocation is consumed and newly added bytes are zero; on failure it
-/// remains live.
+/// remain stable without concurrent teardown. The caller must have exclusive
+/// mutation rights over its local allocation state; protocol atomic remote-free
+/// publication is permitted. `p` must be null or a live allocation returned by
+/// this allocator; its page and block metadata must remain stable with no
+/// concurrent free or realloc. On success, the old allocation is consumed and
+/// newly added bytes are zero; on failure it remains live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc(
     heap: *mut mi_heap_t,
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY: the caller keeps the raw heap and optional old allocation live
-    // through zeroing-layout validation, localization, and realloc dispatch.
+    // SAFETY: the caller keeps the heap's local state exclusive and the optional
+    // old allocation live through zeroing-layout validation and localization;
+    // the typed request carries zero-new-tail into realloc dispatch.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -1521,7 +1515,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc(
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
         };
-        mi_theap_rezalloc(theap, req)
+        mi_theap_realloc_typed(theap, req)
     }
 }
 

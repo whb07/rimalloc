@@ -2119,10 +2119,12 @@ pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(
     page: crate::core_types::AllFreePage<S>,
     owner: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY: free release clears arena metadata and returns backing slices after ownership is proven.
-    unsafe { _mi_arenas_page_free(page.page().as_ptr(), owner.ptr().as_ptr()) };
-    // SAFETY: the raw release above completed the all-free page's terminal
-    // arena transition; the returned witness retains identity but no access.
+    // SAFETY: the consumed all-free witness proves the detached page state, and
+    // `owner` is the live local heap responsible for its release accounting.
+    // Both remain valid while the internal path unregisters and frees backing.
+    unsafe { _mi_arenas_page_free_internal(&page, Some(owner)) };
+    // SAFETY: the internal release above completed the all-free page's terminal
+    // arena transition; the returned witness retains identity but grants no access.
     unsafe { page.into_destroyed_after_arena_free() }
 }
 

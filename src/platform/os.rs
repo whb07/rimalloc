@@ -809,63 +809,120 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
     };
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let subproc = SubprocPtr::new(subproc).map(|subproc| unsafe { BorrowedSubproc::new(subproc) });
-    let addr = OsMemPtr::new(addr);
+    let addr = NonNull::new(addr);
     let size = ReservedBytes::new(size);
     unsafe { _mi_os_free_ex_typed(addr, size, still_committed, memid, subproc) };
 }
 
+/// A validated OS allocation backing range and its primitive-free dispatch plan.
+///
+/// This is geometry only and does not prove allocation ownership or liveness.
+enum OsFreeBackingRange {
+    Huge {
+        base: OsMemPtr,
+        size: ReservedBytes,
+    },
+    Primitive {
+        memid: OsMemId,
+        committed: CommittedBytes,
+    },
+}
+
+impl OsFreeBackingRange {
+    /// `legacy_normalized_usable_size` must equal `_mi_os_good_alloc_size(usable_size)`
+    /// when `os.size` is zero; it is ignored otherwise.
+    #[inline]
+    fn from_usable(
+        usable: Option<NonNull<c_void>>,
+        usable_size: ReservedBytes,
+        os: OsMemId,
+        legacy_normalized_usable_size: ReservedBytes,
+        still_committed: bool,
+        page_size: OsPageSize,
+    ) -> Option<Self> {
+        let usable = usable?;
+        let base = os.base?;
+        let base_address = ptr_exposed_addr(base.as_ptr());
+        let usable_address = ptr_exposed_addr(usable.as_ptr());
+        let offset = usable_address.checked_sub(base_address)?;
+
+        if !base_address.is_multiple_of(page_size.get()) {
+            return None;
+        }
+
+        let declared_size = os.size.get();
+        let initial_size = if declared_size == 0 {
+            legacy_normalized_usable_size.get()
+        } else {
+            declared_size
+        };
+        let backing_size = if declared_size == 0 {
+            initial_size.checked_add(offset)?
+        } else {
+            initial_size
+        };
+        if !backing_size.is_multiple_of(page_size.get()) {
+            return None;
+        }
+        let usable_end = offset.checked_add(usable_size.get())?;
+        if usable_end > backing_size {
+            return None;
+        }
+        let committed = if still_committed {
+            initial_size.checked_sub(offset)?
+        } else {
+            0
+        };
+
+        let size = ReservedBytes::new(backing_size);
+        if matches!(&os.kind, OsMemKind::Huge) {
+            if !os.pinned.0 {
+                return None;
+            }
+            Some(Self::Huge { base, size })
+        } else {
+            Some(Self::Primitive {
+                memid: OsMemId {
+                    base: Some(base),
+                    size,
+                    initially_committed: os.initially_committed,
+                    initially_zero: os.initially_zero,
+                    pinned: os.pinned,
+                    kind: OsMemKind::Normal,
+                },
+                committed: CommittedBytes::new(committed),
+            })
+        }
+    }
+}
+
 // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 unsafe fn _mi_os_free_ex_typed(
-    addr: Option<OsMemPtr>,
+    addr: Option<NonNull<c_void>>,
     size: ReservedBytes,
     still_committed: bool,
     os: OsMemId,
     subproc: Option<BorrowedSubproc>,
 ) {
-    let addr = addr.map(OsMemPtr::as_ptr).unwrap_or(core::ptr::null_mut());
-    let (mut csize, base) = (
-        os.size.get(),
-        os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()),
-    );
-    if csize == 0 {
+    let normalized_size = if os.size.get() == 0 {
         // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        csize = unsafe { _mi_os_good_alloc_size(size.get()) };
-    }
-    crate::internal::mi_assert_internal!(csize >= size.get());
-
-    let commit_size = if still_committed { csize } else { 0 };
-    if base != addr {
-        crate::internal::mi_assert_internal!(base <= addr);
-        let diff = addr as usize - base as usize;
-        if csize == 0 {
-            csize += diff;
-        }
-        if still_committed {
-            // commit_size -= diff; // Handled below by subtracting from final argument instead to match original code structure correctly
-        }
-    }
-    if matches!(&os.kind, OsMemKind::Huge) {
-        crate::internal::mi_assert!(os.pinned.0);
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        unsafe {
-            mi_os_free_huge_os_pages(OsMemPtr::new(base), ReservedBytes::new(csize), subproc)
-        };
+        ReservedBytes::new(unsafe { _mi_os_good_alloc_size(size.get()) })
     } else {
-        let committed = if still_committed {
-            CommittedBytes::new(commit_size - (addr as usize - base as usize))
-        } else {
-            CommittedBytes::new(0)
-        };
-        let memid = OsMemId {
-            base: OsMemPtr::new(base),
-            size: ReservedBytes::new(csize),
-            initially_committed: os.initially_committed,
-            initially_zero: os.initially_zero,
-            pinned: os.pinned,
-            kind: OsMemKind::Normal,
-        };
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        unsafe { mi_os_prim_free(memid, committed, subproc) };
+        os.size
+    };
+    let range =
+        OsFreeBackingRange::from_usable(addr, size, os, normalized_size, still_committed, unsafe {
+            _mi_os_page_size_typed()
+        });
+    crate::internal::mi_assert_internal!(range.is_some());
+    let Some(range) = range else { return };
+    match range {
+        OsFreeBackingRange::Huge { base, size } => {
+            unsafe { mi_os_free_huge_os_pages(Some(base), size, subproc) };
+        }
+        OsFreeBackingRange::Primitive { memid, committed } => {
+            unsafe { mi_os_prim_free(memid, committed, subproc) };
+        }
     }
 }
 
@@ -1761,6 +1818,24 @@ mod tests {
         assert_eq!(range.size(), ReservedBytes::new(size));
     }
 
+    fn os_memid(base: *mut c_void, size: usize) -> OsMemId {
+        OsMemId {
+            base: OsMemPtr::new(base),
+            size: ReservedBytes::new(size),
+            initially_committed: InitiallyCommitted(true),
+            initially_zero: InitiallyZero(false),
+            pinned: Pinned(false),
+            kind: OsMemKind::Normal,
+        }
+    }
+
+    fn primitive_plan(range: OsFreeBackingRange) -> (OsMemPtr, ReservedBytes, CommittedBytes) {
+        let OsFreeBackingRange::Primitive { memid, committed } = range else {
+            panic!("expected primitive OS free plan")
+        };
+        (memid.base.unwrap(), memid.size, committed)
+    }
+
     #[test]
     fn os_page_range_rejects_null_and_zero() {
         let page = page_size(16);
@@ -1865,5 +1940,265 @@ mod tests {
     #[test]
     fn os_page_range_has_compact_geometry_layout() {
         assert_eq!(size_of::<OsPageRange>(), 2 * size_of::<usize>());
+    }
+
+    #[test]
+    fn os_free_backing_range_validates_interior_usable_geometry() {
+        let page = page_size(16);
+        let mut storage = [0u8; 128];
+        let base = aligned_ptr(&mut storage, page.get());
+        let usable = NonNull::new(base.map_addr(|address| address + 16));
+        let os = os_memid(base, 64);
+
+        let range = OsFreeBackingRange::from_usable(
+            usable,
+            ReservedBytes::new(32),
+            os,
+            ReservedBytes::new(64),
+            true,
+            page,
+        )
+        .unwrap();
+        let (range_base, range_size, committed) = primitive_plan(range);
+        assert_eq!(range_base.as_ptr(), base);
+        assert_eq!(range_size, ReservedBytes::new(64));
+        assert_eq!(committed.get(), 48);
+
+        let os = os_memid(base, 64);
+        let uncommitted = OsFreeBackingRange::from_usable(
+            usable,
+            ReservedBytes::new(32),
+            os,
+            ReservedBytes::new(64),
+            false,
+            page,
+        )
+        .unwrap();
+        assert_eq!(primitive_plan(uncommitted).2.get(), 0);
+    }
+
+    #[test]
+    fn os_free_backing_range_preserves_legacy_unsized_memid_expansion() {
+        let page = page_size(16);
+        let mut storage = [0u8; 128];
+        let base = aligned_ptr(&mut storage, page.get());
+        let usable = NonNull::new(base.map_addr(|address| address + 16));
+        let os = os_memid(base, 0);
+
+        let range = OsFreeBackingRange::from_usable(
+            usable,
+            ReservedBytes::new(16),
+            os,
+            ReservedBytes::new(32),
+            true,
+            page,
+        )
+        .unwrap();
+        let (range_base, range_size, committed) = primitive_plan(range);
+        assert_eq!(range_base.as_ptr(), base);
+        assert_eq!(range_size, ReservedBytes::new(48));
+        assert_eq!(committed.get(), 16);
+
+        let farther_usable = NonNull::new(base.map_addr(|address| address + 32));
+        let os = os_memid(base, 0);
+        assert!(
+            OsFreeBackingRange::from_usable(
+                farther_usable,
+                ReservedBytes::new(16),
+                os,
+                ReservedBytes::new(16),
+                true,
+                page,
+            )
+            .is_none()
+        );
+        let os = os_memid(base, 0);
+        let uncommitted = OsFreeBackingRange::from_usable(
+            farther_usable,
+            ReservedBytes::new(16),
+            os,
+            ReservedBytes::new(16),
+            false,
+            page,
+        )
+        .unwrap();
+        let (_, size, committed) = primitive_plan(uncommitted);
+        assert_eq!(size, ReservedBytes::new(48));
+        assert_eq!(committed.get(), 0);
+    }
+
+    #[test]
+    fn os_free_backing_range_rejects_invalid_backing_geometry() {
+        let page = page_size(16);
+        let mut storage = [0u8; 128];
+        let base = aligned_ptr(&mut storage, page.get());
+        let usable = NonNull::new(base.map_addr(|address| address + 16));
+
+        let missing_base = os_memid(ptr::null_mut(), 64);
+        assert!(
+            OsFreeBackingRange::from_usable(
+                usable,
+                ReservedBytes::new(16),
+                missing_base,
+                ReservedBytes::new(64),
+                true,
+                page,
+            )
+            .is_none()
+        );
+        let valid = os_memid(base, 64);
+        assert!(
+            OsFreeBackingRange::from_usable(
+                None,
+                ReservedBytes::new(16),
+                valid,
+                ReservedBytes::new(64),
+                true,
+                page,
+            )
+            .is_none()
+        );
+
+        let non_page_multiple = os_memid(base, 24);
+        assert!(
+            OsFreeBackingRange::from_usable(
+                usable,
+                ReservedBytes::new(8),
+                non_page_multiple,
+                ReservedBytes::new(24),
+                true,
+                page,
+            )
+            .is_none()
+        );
+        let misaligned_base = os_memid(base.map_addr(|address| address + 1), 64);
+        assert!(
+            OsFreeBackingRange::from_usable(
+                usable,
+                ReservedBytes::new(8),
+                misaligned_base,
+                ReservedBytes::new(64),
+                true,
+                page,
+            )
+            .is_none()
+        );
+        let base_after_usable = os_memid(base.map_addr(|address| address + 32), 64);
+        assert!(
+            OsFreeBackingRange::from_usable(
+                usable,
+                ReservedBytes::new(8),
+                base_after_usable,
+                ReservedBytes::new(64),
+                true,
+                page,
+            )
+            .is_none()
+        );
+        let too_small = os_memid(base, 32);
+        assert!(
+            OsFreeBackingRange::from_usable(
+                usable,
+                ReservedBytes::new(17),
+                too_small,
+                ReservedBytes::new(32),
+                true,
+                page,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn os_free_backing_range_validates_primitive_dispatch_kind() {
+        let page = page_size(16);
+        let mut storage = [0u8; 128];
+        let base = aligned_ptr(&mut storage, page.get());
+        let usable = NonNull::new(base);
+
+        let mut huge = os_memid(base, 64);
+        huge.kind = OsMemKind::Huge;
+        huge.pinned = Pinned(true);
+        let plan = OsFreeBackingRange::from_usable(
+            usable,
+            ReservedBytes::new(16),
+            huge,
+            ReservedBytes::new(64),
+            true,
+            page,
+        )
+        .unwrap();
+        let OsFreeBackingRange::Huge {
+            base: huge_base,
+            size: huge_size,
+        } = plan
+        else {
+            panic!("expected huge OS free plan")
+        };
+        assert_eq!(huge_base.as_ptr(), base);
+        assert_eq!(huge_size, ReservedBytes::new(64));
+
+        let mut unpinned_huge = os_memid(base, 64);
+        unpinned_huge.kind = OsMemKind::Huge;
+        assert!(
+            OsFreeBackingRange::from_usable(
+                usable,
+                ReservedBytes::new(16),
+                unpinned_huge,
+                ReservedBytes::new(64),
+                true,
+                page,
+            )
+            .is_none()
+        );
+
+        let mut pinned_normal = os_memid(base, 64);
+        pinned_normal.pinned = Pinned(true);
+        let plan = OsFreeBackingRange::from_usable(
+            usable,
+            ReservedBytes::new(16),
+            pinned_normal,
+            ReservedBytes::new(64),
+            true,
+            page,
+        )
+        .unwrap();
+        let OsFreeBackingRange::Primitive { memid, .. } = plan else {
+            panic!("expected primitive OS free plan")
+        };
+        assert!(memid.pinned.0);
+        assert!(matches!(memid.kind, OsMemKind::Normal));
+    }
+
+    #[test]
+    fn os_free_backing_range_rejects_checked_arithmetic_overflow() {
+        let page = page_size(16);
+        let base = ptr::without_provenance_mut::<c_void>(16);
+        let usable = NonNull::new(ptr::without_provenance_mut::<c_void>(usize::MAX - 8));
+        let bounded = os_memid(base, usize::MAX - 15);
+        assert!(
+            OsFreeBackingRange::from_usable(
+                usable,
+                ReservedBytes::new(32),
+                bounded,
+                ReservedBytes::new(usize::MAX - 15),
+                true,
+                page,
+            )
+            .is_none()
+        );
+
+        let unknown_size = os_memid(base, 0);
+        assert!(
+            OsFreeBackingRange::from_usable(
+                usable,
+                ReservedBytes::new(0),
+                unknown_size,
+                ReservedBytes::new(32),
+                true,
+                page,
+            )
+            .is_none()
+        );
     }
 }

@@ -378,15 +378,11 @@ impl MallocGenericFlags {
         Self(z | huge_alignment.get())
     }
 
-    /// # Safety
-    ///
-    /// Bit 0 must only encode the zeroing flag, and all high bits must be zero
-    /// or a valid huge-alignment payload with bit 0 clear.
+    /// Decode the raw C-compatible flag word. Bit 0 selects zeroing and every
+    /// remaining bit is retained as the huge-alignment payload; consumers
+    /// validate that payload before using it as an alignment.
     #[inline(always)]
-    // SAFETY: callers provide a raw flag word with
-    // bit 0 reserved for zeroing and the remaining bits reserved for huge
-    // alignment.
-    pub(crate) unsafe fn from_raw(raw: usize) -> Self {
+    pub(crate) fn from_raw(raw: usize) -> Self {
         Self(raw)
     }
 

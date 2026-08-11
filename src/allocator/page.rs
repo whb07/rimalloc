@@ -1647,26 +1647,49 @@ unsafe fn mi_find_page_typed(
     }
 }
 
-// SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+/// Generic allocation boundary used by the C-compatible fast allocation path.
+///
+/// # Safety
+/// `theap` must be null, a supported allocator sentinel, or a live initialized current-thread
+/// heap; any nonnull metadata must remain live and readable through localization, and the caller
+/// must exclude concurrent local mutation or teardown of the selected heap's TLD, counters, page
+/// queues, free lists, and stats. Protocol atomic remote-free publication is permitted. `size`
+/// must be the allocator's raw padded-size word (zero is the supported minimum-size sentinel, and
+/// nonzero words resulting from caller arithmetic are forwarded unchanged). Bit zero of
+/// `zero_huge_alignment` selects zeroing and the remaining bits are the huge-alignment payload;
+/// invalid payloads are validated downstream and return null. Process/TLS initialization and all
+/// synchronously reached deferred-free, collection, arena commit/purge, and error callbacks plus
+/// opaque arguments must remain valid, must not incompatibly reenter the selected heap's local
+/// allocation state, and must not unwind. If nonnull, `usable` must be aligned and writable for one
+/// `usize` when accessed and must not overlap allocator metadata. Heap localization or page-search
+/// failure returns null without writing `usable`; success writes it before allocating the returned
+/// block.
 pub(crate) unsafe extern "C" fn _mi_malloc_generic(
     theap: *mut mi_theap_t,
     size: usize,
     zero_huge_alignment: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
-    unsafe {
-        // SAFETY: `zero_huge_alignment` is the C-compatible packed flag word:
-        // bit 0 is zeroing and the remaining bits are the huge-alignment payload.
-        let flags = crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment);
+    let flags = crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment);
+    // SAFETY: the raw-boundary contract supplies the allocator's padded-size word. Zero is
+    // normalized exactly as before; every nonzero word is representable by `PaddedSize`, including
+    // a result wrapped by caller arithmetic. Only the padded scalar and zeroing policy are consumed
+    // by this unchecked layout materialization; the complete decoded flags are passed unchanged to
+    // the later generic dispatch.
+    let layout = unsafe {
         let padded = if size == 0 {
             crate::core_types::RequestedSize::new(crate::core_types::RequestedSize::MIN_ZERO_SIZE)
                 .padded_unchecked()
         } else {
             crate::core_types::PaddedSize::new_unchecked(size)
         };
-        let layout =
-            crate::core_types::LayoutRequest::from_padded_unchecked(padded, flags.zeroed());
+        crate::core_types::LayoutRequest::from_padded_unchecked(padded, flags.zeroed())
+    };
+
+    // SAFETY: the contract permits the supported raw heap states and current-thread
+    // initialization, keeps the selected heap's local allocation state exclusive, and keeps all
+    // callbacks, backing, registries, and the optional output valid through generic dispatch.
+    unsafe {
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };

@@ -106,15 +106,11 @@ fn generic_flags_pack_zero_bit_and_huge_alignment() {
     assert_eq!(flags.zeroed(), Zeroed::Yes);
     assert_eq!(flags.huge_alignment().get(), 64);
 
-    // SAFETY: these raw flag words are
-    // concrete valid encodings used to exercise bit packing and unpacking.
-    let raw = unsafe { MallocGenericFlags::from_raw(128) };
+    let raw = MallocGenericFlags::from_raw(128);
     assert_eq!(raw.zeroed(), Zeroed::No);
     assert_eq!(raw.huge_alignment().get(), 128);
 
-    // SAFETY: `65` is the valid encoding for
-    // zeroed plus 64-byte huge alignment.
-    let raw_zero_huge = unsafe { MallocGenericFlags::from_raw(65) };
+    let raw_zero_huge = MallocGenericFlags::from_raw(65);
     assert_eq!(raw_zero_huge.zeroed(), Zeroed::Yes);
     assert_eq!(raw_zero_huge.huge_alignment().get(), 64);
 }

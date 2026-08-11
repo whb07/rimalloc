@@ -5,7 +5,6 @@
 //! separated page metadata. Allocation policy and raw compatibility entrypoints
 //! remain in the parent module.
 
-use super::geometry::mi_arena_set_numa_node;
 use super::*;
 
 pub(super) unsafe fn mi_arena_pages_size(
@@ -346,7 +345,9 @@ pub(super) unsafe fn mi_arena_initialize(
         } else {
             numa_node
         };
-        mi_arena_set_numa_node(arena, numa_node);
+        // This unpublished arena is exclusively initialized here; write the
+        // complete typed NUMA value before registry publication.
+        (*arena.cast::<MiArenaPrefix>()).numa_node = numa_node.get();
         (*arena.cast::<MiArenaPrefix>())
             .purge_expire
             .store(0, Ordering::Relaxed);

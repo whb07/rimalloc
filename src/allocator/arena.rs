@@ -134,7 +134,7 @@ use abandoned::{
     mi_arena_try_claim_abandoned, mi_heap_ensure_arena_pages_from_raw, mi_page_is_full_local,
 };
 use geometry::{
-    PageArenaMembership, mi_arena_info_slices, mi_arena_numa_node, mi_arena_page_at_slice,
+    PageArenaMembership, mi_arena_info_slices, mi_arena_page_at_slice,
     mi_arena_range_is_after_info_slices, mi_arena_size, mi_arena_slice_start, mi_arena_start,
     mi_heap_arena_pages, mi_heap_has_page,
 };
@@ -726,8 +726,10 @@ unsafe fn mi_arena_is_suitable_ex(
         return false;
     }
     if req_arena.is_none() {
-        // SAFETY: arena suitability checks keep pinned, requested-arena, and NUMA predicates separate from table mutation.
-        let arena_numa = unsafe { mi_arena_numa_node(arena_raw) };
+        // SAFETY: suitability runs while this registered live arena prefix is
+        // stable; its initialized NUMA field is copied without mutation.
+        let arena_numa =
+            crate::types::NumaNode::new(unsafe { (*arena_raw.cast::<MiArenaPrefix>()).numa_node });
         let numa_suitable = arena_numa.is_suitable_for(numa_node);
         if match_numa.get() {
             if !numa_suitable {

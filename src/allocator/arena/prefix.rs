@@ -94,14 +94,19 @@ pub(super) unsafe fn mi_subproc_arena_cell(
     }
 }
 
-// SAFETY: callers pass a typed subproc pointer
-// and a checked arena index before loading the published arena pointer.
+/// Load one published arena registry slot with acquire ordering.
+///
+/// # Safety
+/// `subproc` must remain live and initialized with stable arena table storage,
+/// and `arena_idx` must be below its published arena count. Concurrent registry
+/// growth may use its publication protocol, but teardown or relinking existing
+/// entries must not race this load.
 pub(super) unsafe fn mi_arena_from_index_typed(
     subproc: SubprocPtr,
     arena_idx: ArenaIndex,
 ) -> *mut mi_arena_t {
-    // SAFETY: the loaded cell belongs to the
-    // subproc arena table and is read with the same acquire ordering as C.
+    // SAFETY: the caller keeps this bounded registry cell live; acquire matches
+    // the publication protocol before exposing the arena pointer.
     unsafe {
         mi_subproc_arena_cell(subproc.as_ptr(), arena_idx)
             .load(crate::core_types::MemoryOrder::Acquire)

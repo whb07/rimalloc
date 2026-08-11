@@ -53,30 +53,39 @@ pub(super) unsafe fn mi_arena_id_from_arena_typed(arena: ArenaPtr) -> mi_arena_i
     arena.as_ptr().cast::<c_void>()
 }
 
+/// # Safety
+/// `arena` and an optional `req_arena` must remain live initialized registered
+/// arenas with stable exclusive-role and parent-link metadata for the check.
+/// Registry teardown or relinking must not race this operation.
 pub(super) unsafe fn mi_arena_is_suitable(arena: ArenaPtr, req_arena: Option<ArenaPtr>) -> bool {
     if req_arena.is_some_and(|req_arena| arena.as_ptr() == req_arena.as_ptr()) {
         return true;
     }
-    // SAFETY: arena suitability helpers read typed arena role and parent metadata.
-    // witness and `is_exclusive()` reads the arena prefix role flag.
+    // SAFETY: the function contract keeps this registered arena's initialized
+    // exclusive-role field live and stable for the read.
     if req_arena.is_none() && !unsafe { arena.is_exclusive() } {
         return true;
     }
-    // SAFETY: arena suitability helpers read typed arena role and parent metadata.
-    // witness and `parent()` reads the arena prefix parent link.
+    // SAFETY: the same registry epoch keeps this arena's initialized parent
+    // field live and stable for the relationship check.
     let parent = unsafe { arena.parent() };
     parent.is_some_and(|parent| {
         req_arena.is_some_and(|req_arena| parent.as_ptr() == req_arena.as_ptr())
     })
 }
 
+/// # Safety
+/// Any arena carried by `memid` and an optional `request_arena` must remain live
+/// registered arenas with stable role and parent metadata. The decoded MemId
+/// view must still describe that live allocation epoch; teardown or registry
+/// relinking must not race this check.
 unsafe fn mi_arena_memid_is_suitable_typed(
     memid: crate::core_types::MemIdView,
     request_arena: Option<ArenaPtr>,
 ) -> bool {
     match memid {
-        // SAFETY: `MemIdView::Arena` carries the
-        // typed arena witness extracted from the raw memid.
+        // SAFETY: the Arena MemId variant carries the arena identity whose live
+        // registration and stable relationship metadata the caller guarantees.
         crate::core_types::MemIdView::Arena(a) => unsafe {
             mi_arena_is_suitable(a.arena(), request_arena)
         },
@@ -85,18 +94,19 @@ unsafe fn mi_arena_memid_is_suitable_typed(
 }
 
 /// # Safety
-/// `memid` and `request_arena` must follow the internal arena allocation invariants.
+/// If `memid` encodes an arena allocation, that arena and a non-null
+/// `request_arena` must remain live registered arenas with stable exclusive-role
+/// and parent metadata. The MemId must still describe the live allocation epoch;
+/// teardown or registry relinking must not race this check.
 #[inline(never)]
-// SAFETY: this raw C ABI shim converts nullable
-// arena requests and raw memids into typed views before suitability checks.
 pub(crate) unsafe extern "C" fn _mi_arena_memid_is_suitable(
     memid: mi_memid_t,
     request_arena: *mut mi_arena_t,
 ) -> bool {
     let request_arena = ArenaPtr::new(request_arena);
     let memid = crate::core_types::MemId::view(memid);
-    // SAFETY: the raw inputs have been converted
-    // to typed/optional views before the suitability helper inspects metadata.
+    // SAFETY: the raw contract keeps every arena identity decoded above live
+    // with stable relationship metadata for the synchronous typed check.
     unsafe { mi_arena_memid_is_suitable_typed(memid, request_arena) }
 }
 

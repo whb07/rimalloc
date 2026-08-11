@@ -917,16 +917,6 @@ impl SubprocPtr {
     }
 
     /// # Safety
-    /// The subproc pointer must refer to initialized subproc metadata.
-    #[inline(always)]
-    pub(crate) unsafe fn arena(self, index: ArenaIndex) -> Option<ArenaPtr> {
-        let raw = self.as_ptr();
-        // SAFETY: the caller keeps the subprocess and arena table live; the
-        // typed index bounds this initialized slot, which is stable for the read.
-        ArenaPtr::new(unsafe { ptr::read(ptr::addr_of!((*raw).arenas[index.get() as usize])) })
-    }
-
-    /// # Safety
     /// The subproc pointer must refer to subproc metadata whose lock field is valid.
     #[inline(always)]
     pub(crate) unsafe fn arena_reserve_lock(self) -> MiLockPtr {

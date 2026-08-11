@@ -162,19 +162,30 @@ use prefix::{
 pub(crate) use purge::{_mi_arenas_collect, _mi_arenas_free};
 
 /// # Safety
-/// `subproc` must point to a valid `mi_subproc_t`.
-// SAFETY: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
+/// `subproc` must remain live and initialized with valid aligned arena-count
+/// atomic storage for this load. Concurrent teardown is excluded; concurrent
+/// registry growth may proceed through its publication protocol.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usize {
     let Some(subproc) = SubprocPtr::new(subproc) else {
         crate::internal::mi_assert_internal!(false);
         return 0;
     };
-    // SAFETY: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
+    // SAFETY: the raw contract keeps the live subproc's arena-count atomic
+    // storage valid for this relaxed snapshot.
     unsafe { mi_arenas_get_count_typed(subproc) }
 }
 
+/// Read the current published arena count without stabilizing later registry
+/// entries.
+///
+/// # Safety
+/// `subproc` must remain live and initialized with its arena-count atomic
+/// storage valid for this load; concurrent teardown is excluded. Concurrent
+/// registry growth may proceed through its publication protocol.
 unsafe fn mi_arenas_get_count_typed(subproc: SubprocPtr) -> usize {
+    // SAFETY: the caller keeps the live subproc's aligned arena-count atomic
+    // storage valid for this relaxed snapshot.
     unsafe {
         subproc
             .arena_count(crate::core_types::MemoryOrder::Relaxed)
@@ -661,8 +672,10 @@ unsafe fn mi_arena_try_alloc_at(
 }
 
 /// # Safety
-/// `subproc` must point to a valid `mi_subproc_t`, and `idx` must be in range.
-// SAFETY: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
+/// `subproc` must remain live and initialized with stable registry storage, and
+/// `idx` must be less than its current published arena count. Concurrent
+/// registry growth may use the publication protocol, but teardown or relinking
+/// existing entries must not race this lookup.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arena_from_index(
     subproc: *mut mi_subproc_t,
@@ -676,42 +689,42 @@ pub unsafe extern "C" fn mi_arena_from_index(
         crate::internal::mi_assert_internal!(false);
         return ptr::null_mut();
     };
-    // SAFETY: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
+    // SAFETY: the raw contract keeps the live subproc count atomic valid; this
+    // relaxed snapshot is used only to verify the caller-provided index bound.
     crate::internal::mi_assert_internal!(idx < unsafe { mi_arenas_get_count_typed(subproc_ptr) });
+    // SAFETY: `arena_idx` is table-bounded and caller-proven below the published
+    // count; the live registry cell is loaded with acquire ordering.
     unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) }
 }
 
-// SAFETY: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
+// SAFETY: this assertion checks the translated C ABI signature of the arena-id export.
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_arena_t) -> mi_arena_id_t = ids::mi_arena_id_from_arena;
 
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_subproc_t) -> usize = mi_arenas_get_count;
 
-// SAFETY: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
+// SAFETY: this assertion checks the translated C ABI signature of the arena lookup export.
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_subproc_t, usize) -> *mut mi_arena_t = mi_arena_from_index;
 
-unsafe fn mi_arena_start_idx(
-    heap: BorrowedHeap,
+fn mi_arena_start_idx(
+    hseq: crate::core_types::HeapSeq,
+    hcount: usize,
     tseq: crate::core_types::ThreadSeq,
     arena_cycle: ArenaIndex,
 ) -> ArenaIndex {
     let arena_cycle = arena_cycle.get() as usize;
-    let heap = heap.ptr().as_ptr().cast::<MiHeapPrefix>();
-    // SAFETY: arena iteration start indexes are derived from typed heap/thread sequence domains and bounded arena counts.
-    let subproc = unsafe { (*heap).subproc.cast::<MiSubprocPrefix>() };
-    let hseq = crate::core_types::HeapSeq::new(unsafe { (*heap).heap_seq });
-    let hcount = unsafe { (*subproc).heap_count.load(Ordering::Relaxed) };
     if arena_cycle <= 1 {
+        // SAFETY: zero is in the arena-index domain.
         return unsafe { ArenaIndex::new_unchecked(0) };
     }
-    if hseq.get() == 0 || hcount <= 1 || arena_cycle > 0x8FF {
-        // SAFETY: arena iteration start indexes are derived from typed heap/thread sequence domains and bounded arena counts.
+    if hseq.get() == 0 || hcount <= 1 {
+        // SAFETY: modulo by the nonzero bounded arena cycle produces an index
+        // below `arena_cycle`, which is already an ArenaIndex value.
         return unsafe { ArenaIndex::new_unchecked((tseq.get() % arena_cycle) as u16) };
     }
 
-    crate::internal::mi_assert_internal!(arena_cycle <= 0x8FF);
     let frac = (arena_cycle * 256) / hcount;
     let start = if frac == 0 {
         hseq.get() % arena_cycle
@@ -724,10 +737,16 @@ unsafe fn mi_arena_start_idx(
         start
     };
     crate::internal::mi_assert_internal!(start < arena_cycle);
-    // SAFETY: arena iteration start indexes are derived from typed heap/thread sequence domains and bounded arena counts.
+    // SAFETY: the calculation above proves `start < arena_cycle`; the input
+    // ArenaIndex bounds the cycle to the arena table domain.
     unsafe { ArenaIndex::new_unchecked(start as u16) }
 }
 
+/// # Safety
+/// `arena` and an optional `req_arena` must remain live registered arena
+/// metadata with stable role, parent, MemId, pinned, and NUMA fields during the
+/// check. Registry/backing teardown or relinking must not race; allocator
+/// protocol bitmap updates are permitted.
 unsafe fn mi_arena_is_suitable_ex(
     arena: ArenaPtr,
     req_arena: Option<ArenaPtr>,
@@ -736,10 +755,13 @@ unsafe fn mi_arena_is_suitable_ex(
     allow_pinned: crate::core_types::AllowPinned,
 ) -> bool {
     let arena_raw = arena.as_ptr();
-    // SAFETY: arena suitability checks keep pinned, requested-arena, and NUMA predicates separate from table mutation.
+    // SAFETY: the function contract keeps the registered arena prefix and its
+    // initialized MemId pinned flag readable for this snapshot.
     if !allow_pinned.get() && unsafe { (*arena_raw.cast::<MiArenaPrefix>()).memid.is_pinned } {
         return false;
     }
+    // SAFETY: both optional arena identities and their stable role/parent
+    // metadata satisfy the lower-level suitability contract.
     if unsafe { !mi_arena_is_suitable(arena, req_arena) } {
         return false;
     }
@@ -760,6 +782,16 @@ unsafe fn mi_arena_is_suitable_ex(
     true
 }
 
+/// Visit the current arena registry snapshot in allocation preference order.
+///
+/// # Safety
+/// `heap` must remain live and initialized with a stable subprocess association.
+/// The subprocess registry, its published cells, every yielded arena, and arena
+/// backing must remain live; teardown or relinking existing entries must not
+/// race, while concurrent growth and allocator state mutation may use their
+/// publication protocols. An optional `req_arena` must be compatible and live.
+/// `visit` runs synchronously, must not retain an `ArenaPtr` or mutate registry
+/// structure, and must not unwind after publishing allocator state.
 unsafe fn mi_forall_arenas<F>(
     heap: BorrowedHeap,
     req_arena: Option<ArenaPtr>,
@@ -768,22 +800,32 @@ unsafe fn mi_forall_arenas<F>(
 ) where
     F: FnMut(ArenaPtr) -> bool,
 {
-    let heap = heap.ptr();
-    // SAFETY: arena iteration loads typed subproc table cells and stops on visitor decisions without mutating registry state.
-    let Some(subproc) = (unsafe { heap.subproc() }) else {
+    let heap_ptr = heap.ptr();
+    // SAFETY: the function contract keeps the live initialized heap and its
+    // stable subprocess field readable for the traversal snapshot.
+    let Some(subproc) = (unsafe { heap_ptr.subproc() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
+    // SAFETY: the same traversal epoch keeps the heap sequence field and the
+    // associated subproc heap-count atomic valid for these scalar snapshots.
+    let (hseq, hcount) = unsafe {
+        let heap_raw = heap_ptr.as_ptr().cast::<MiHeapPrefix>();
+        let subproc_raw = subproc.as_ptr().cast::<MiSubprocPrefix>();
+        (
+            crate::core_types::HeapSeq::new((*heap_raw).heap_seq),
+            (*subproc_raw).heap_count.load(Ordering::Relaxed),
+        )
+    };
+    // SAFETY: the live subproc count atomic remains valid, and concurrent growth
+    // publishes table cells independently with acquire loads below.
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc) };
     let arena_cycle = arena_count.saturating_sub(1);
     let Some(arena_cycle_idx) = ArenaIndex::from_usize(arena_cycle) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY: arena iteration loads typed subproc table cells and stops on visitor decisions without mutating registry state.
-    let start = unsafe {
-        mi_arena_start_idx(BorrowedHeap::new_unchecked(heap), tseq, arena_cycle_idx).get() as usize
-    };
+    let start = mi_arena_start_idx(hseq, hcount, tseq, arena_cycle_idx).get() as usize;
     for i in 0..arena_count {
         let arena = if let Some(req_arena) = req_arena {
             if i > 0 {
@@ -804,8 +846,11 @@ unsafe fn mi_forall_arenas<F>(
                 crate::internal::mi_assert_internal!(false);
                 continue;
             };
-            // SAFETY: arena iteration loads typed subproc table cells and stops on visitor decisions without mutating registry state.
-            let Some(arena) = (unsafe { subproc.arena(arena_idx) }) else {
+            // SAFETY: `arena_idx` is below the relaxed count snapshot; the live
+            // registry cell is loaded with acquire ordering to observe publication.
+            let Some(arena) =
+                ArenaPtr::new(unsafe { mi_arena_from_index_typed(subproc, arena_idx) })
+            else {
                 continue;
             };
             arena
@@ -816,6 +861,16 @@ unsafe fn mi_forall_arenas<F>(
     }
 }
 
+/// Visit arenas matching the requested pinned, requested-arena, and NUMA policy.
+///
+/// # Safety
+/// `heap`, its subprocess registry, every yielded arena, and their backing must
+/// remain live and stable against teardown or registry relinking. Each arena's
+/// pinned, exclusive-role, parent, and NUMA fields must remain stable during
+/// filtering. Concurrent registry growth and allocator state updates may use
+/// their publication protocols. An optional `req_arena` must be compatible and
+/// live. `visit` runs synchronously, must not retain an `ArenaPtr` or mutate
+/// registry structure, and must not unwind after publishing allocator state.
 unsafe fn mi_forall_suitable_arenas<F>(
     heap: BorrowedHeap,
     req_arena: Option<ArenaPtr>,
@@ -827,18 +882,24 @@ unsafe fn mi_forall_suitable_arenas<F>(
 ) where
     F: FnMut(ArenaPtr) -> bool,
 {
-    // SAFETY: arena iteration loads typed subproc table cells and stops on visitor decisions without mutating registry state.
-    unsafe {
-        mi_forall_arenas(heap, req_arena, tseq, |arena| {
-            !mi_arena_is_suitable_ex(
+    let mut visit_suitable = |arena| {
+        // SAFETY: the enclosing function contract keeps each synchronously
+        // yielded arena and optional requested arena metadata stable.
+        let suitable = unsafe {
+            mi_arena_is_suitable_ex(
                 arena,
                 req_arena,
                 crate::core_types::MatchNuma::new(match_numa),
                 numa_node,
                 crate::core_types::AllowPinned::new(allow_large),
-            ) || visit(arena)
-        })
+            )
+        };
+        !suitable || visit(arena)
     };
+    // SAFETY: the function contract provides the complete live registry epoch;
+    // this filtering adapter is synchronous and non-retaining and passes the
+    // caller's post-publication unwind obligation through to `visit`.
+    unsafe { mi_forall_arenas(heap, req_arena, tseq, &mut visit_suitable) };
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2245,6 +2306,81 @@ mod claim_tests {
     use super::*;
     use core::mem::MaybeUninit;
     use std::alloc::{Layout, alloc_zeroed, dealloc};
+
+    #[test]
+    fn arena_start_index_stays_inside_the_typed_cycle_domain() {
+        let index = |value| ArenaIndex::from_usize(value).expect("test cycle is arena-bounded");
+        assert_eq!(
+            mi_arena_start_idx(
+                crate::core_types::HeapSeq::new(7),
+                4,
+                crate::core_types::ThreadSeq::new(11),
+                index(0),
+            )
+            .get(),
+            0
+        );
+        assert_eq!(
+            mi_arena_start_idx(
+                crate::core_types::HeapSeq::new(7),
+                4,
+                crate::core_types::ThreadSeq::new(11),
+                index(1),
+            )
+            .get(),
+            0
+        );
+        assert_eq!(
+            mi_arena_start_idx(
+                crate::core_types::HeapSeq::new(0),
+                4,
+                crate::core_types::ThreadSeq::new(3),
+                index(2),
+            )
+            .get(),
+            1
+        );
+        assert_eq!(
+            mi_arena_start_idx(
+                crate::core_types::HeapSeq::new(7),
+                1,
+                crate::core_types::ThreadSeq::new(4),
+                index(3),
+            )
+            .get(),
+            1
+        );
+        assert_eq!(
+            mi_arena_start_idx(
+                crate::core_types::HeapSeq::new(7),
+                0,
+                crate::core_types::ThreadSeq::new(7),
+                index(5),
+            )
+            .get(),
+            2
+        );
+        assert_eq!(
+            mi_arena_start_idx(
+                crate::core_types::HeapSeq::new(321),
+                50_000,
+                crate::core_types::ThreadSeq::new(9),
+                index(crate::types::MI_MAX_ARENAS - 1),
+            )
+            .get() as usize,
+            321 % (crate::types::MI_MAX_ARENAS - 1)
+        );
+
+        for cycle in 2..crate::types::MI_MAX_ARENAS {
+            let start = mi_arena_start_idx(
+                crate::core_types::HeapSeq::new(cycle * 3),
+                cycle / 2 + 2,
+                crate::core_types::ThreadSeq::new(cycle * 5),
+                index(cycle),
+            );
+            assert!((start.get() as usize) < cycle);
+        }
+    }
 
     fn with_claim_fixture(test: impl FnOnce(ArenaPtr, *mut mi_bbitmap_t)) {
         let layout = Layout::new::<mi_bbitmap_t>();

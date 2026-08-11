@@ -41,7 +41,7 @@ use crate::core_types::{
     InteriorUserPtr, MiLockGuard, OsMemPtr, OwnedHeap, PagePtr, ReservedBytes, SliceCount,
     SliceIndex, SubprocPtr, ThreadLocalClaimCallback,
 };
-use crate::internal::memid::{_mi_memid_none, mi_memid_t};
+use crate::internal::memid::mi_memid_t;
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt,
     __mi_stat_counter_increase, __mi_stat_counter_increase_mt, __mi_stat_decrease,
@@ -148,6 +148,7 @@ use ids::{
 use metadata::mi_arenas_unsafe_destroy;
 use os_memory::{
     ArenaOsAllocRequest, mi_arena_commit, mi_arena_os_alloc_aligned, mi_arena_reserve,
+    mi_write_arena_os_allocation_result,
 };
 #[allow(unused_imports)]
 pub use os_memory::{
@@ -1057,12 +1058,8 @@ unsafe fn mi_arenas_try_alloc(
         // SAFETY: the held reserve lock stabilizes registry growth while the live subprocess count
         // is compared with the pre-lock snapshot.
         if arena_count == unsafe { mi_arenas_get_count_typed(subproc) } {
-            // SAFETY: this constructs the allocator's value-only no-arena identifier without reading
-            // or dereferencing external storage.
-            let mut arena_id = unsafe { _mi_arena_id_none() };
             // SAFETY: the reserve lock and function contract keep the subprocess registry/stats live;
-            // the local arena-id output is uniquely writable, and reserve callbacks remain valid and
-            // non-unwinding for the synchronous growth attempt.
+            // reserve callbacks remain valid and non-unwinding for the synchronous growth attempt.
             let _ = unsafe {
                 mi_arena_reserve(
                     subproc,
@@ -1071,7 +1068,6 @@ unsafe fn mi_arenas_try_alloc(
                     )),
                     crate::core_types::NumaNode::any(),
                     allow_large,
-                    &mut arena_id,
                 )
             };
         }
@@ -1173,7 +1169,7 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
     }
 
     // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
-    unsafe {
+    let result = unsafe {
         mi_arena_os_alloc_aligned(
             ArenaOsAllocRequest {
                 size: size.get(),
@@ -1186,9 +1182,11 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
                 .map(ArenaPtr::as_ptr)
                 .unwrap_or(ptr::null_mut())
                 .cast::<c_void>(),
-            memid,
         )
-    }
+    };
+    // SAFETY: the raw boundary keeps `memid` aligned and uniquely writable while
+    // the helper writes the MemId matching this fallback pointer result.
+    unsafe { mi_write_arena_os_allocation_result(result, &mut *memid) }
 }
 
 /// # Safety
@@ -1238,19 +1236,25 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
             })
         },
         // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
-        Err(_) => unsafe {
-            mi_arena_os_alloc_aligned(
-                ArenaOsAllocRequest {
-                    size,
-                    alignment,
-                    align_offset,
-                },
-                commit,
-                allow_large,
-                req_arena.cast::<c_void>(),
-                memid,
-            )
-        },
+        Err(_) => {
+            // SAFETY: the raw contract keeps OS configuration and the requested
+            // arena live for this synchronous fallback attempt.
+            let result = unsafe {
+                mi_arena_os_alloc_aligned(
+                    ArenaOsAllocRequest {
+                        size,
+                        alignment,
+                        align_offset,
+                    },
+                    commit,
+                    allow_large,
+                    req_arena.cast::<c_void>(),
+                )
+            };
+            // SAFETY: the raw boundary keeps `memid` aligned and uniquely
+            // writable while the helper writes the matching fallback MemId.
+            unsafe { mi_write_arena_os_allocation_result(result, &mut *memid) }
+        }
     }
 }
 
@@ -1303,22 +1307,28 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
         },
         // SAFETY: the raw contract keeps OS configuration, requested arena, callbacks, and output
         // live; this preserves the prior fallback inputs after checked layout rejection.
-        Err(_) => unsafe {
-            mi_arena_os_alloc_aligned(
-                ArenaOsAllocRequest {
-                    size: size.get(),
-                    alignment,
-                    align_offset: 0,
-                },
-                commit,
-                allow_large,
-                req_arena
-                    .map(ArenaPtr::as_ptr)
-                    .unwrap_or(ptr::null_mut())
-                    .cast::<c_void>(),
-                memid,
-            )
-        },
+        Err(_) => {
+            // SAFETY: the raw contract keeps OS configuration and the requested
+            // arena live for this synchronous fallback attempt.
+            let result = unsafe {
+                mi_arena_os_alloc_aligned(
+                    ArenaOsAllocRequest {
+                        size: size.get(),
+                        alignment,
+                        align_offset: 0,
+                    },
+                    commit,
+                    allow_large,
+                    req_arena
+                        .map(ArenaPtr::as_ptr)
+                        .unwrap_or(ptr::null_mut())
+                        .cast::<c_void>(),
+                )
+            };
+            // SAFETY: the raw boundary keeps `memid` aligned and uniquely
+            // writable while the helper writes the matching fallback MemId.
+            unsafe { mi_write_arena_os_allocation_result(result, &mut *memid) }
+        }
     }
 }
 
@@ -1548,9 +1558,6 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     let pending = if let Some(pending) = arena_pending {
         pending
     } else {
-        // SAFETY: allocator memid-none construction initializes the OS output
-        // before the fallback allocator conditionally replaces it.
-        let mut memid = unsafe { _mi_memid_none() };
         let request = if os_align {
             ArenaOsAllocRequest {
                 size: alloc_size,
@@ -1565,12 +1572,11 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
             }
         };
         // SAFETY: the fresh-area contract keeps OS state, requested arena, and
-        // callbacks live; `memid` is uniquely writable for the synchronous
-        // allocation result.
-        let start = unsafe {
-            mi_arena_os_alloc_aligned(request, commit, allow_large, req_arena.cast(), &mut memid)
-        };
-        let start = NonNull::new(start.cast::<u8>())?;
+        // callbacks live for the synchronous allocation result.
+        let (start, memid) =
+            unsafe { mi_arena_os_alloc_aligned(request, commit, allow_large, req_arena.cast()) }
+                .ok()?;
+        let start = start.cast::<u8>();
         // SAFETY: the OS allocator returned this live allocation and matching
         // memid; both are now exclusively owned by the pending transaction.
         unsafe { PendingFreshPage::new(start.as_ptr(), alloc_size, memid) }
@@ -1696,10 +1702,10 @@ unsafe fn mi_arenas_page_alloc_fresh(
             commit_size_raw = page_noguard_size;
         }
         commit_size = crate::core_types::CommittedBytes::new(commit_size_raw);
-        let mut is_zero = false;
         // SAFETY: an uncommitted pending backing necessarily carries its exact
         // arena/range MemId; the backing and callback remain live, and is_zero
         // is uniquely writable for this synchronous commit.
+        let mut is_zero = false;
         if !unsafe {
             let (arena_ptr, range) = match crate::core_types::MemId::view(memid) {
                 crate::core_types::MemIdView::Arena(a) => (a.arena(), a.range()),

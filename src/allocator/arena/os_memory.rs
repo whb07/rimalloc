@@ -6,24 +6,53 @@
 use super::metadata::mi_arena_initialize;
 use super::*;
 
+fn align_managed_memory(start: *mut c_void, size: usize) -> Option<(*mut c_void, usize)> {
+    let address = start.addr();
+    let remainder = address % MI_ARENA_SLICE_SIZE;
+    if remainder == 0 {
+        return Some((start, size));
+    }
+    let adjustment = MI_ARENA_SLICE_SIZE - remainder;
+    let aligned_address = address.checked_add(adjustment)?;
+    if adjustment >= size || size - adjustment < MI_ARENA_SLICE_SIZE {
+        return None;
+    }
+    Some((start.map_addr(|_| aligned_address), size - adjustment))
+}
+
+/// Commit the backing bytes for one already-claimed arena slice range.
+///
+/// # Safety
+/// `arena` must remain live and initialized, and `range` must identify slices
+/// within its backing that this allocation transition exclusively claimed.
+/// `commit_size` and `already_committed` must accurately describe that range's
+/// OS commitment and accounting. The backing must remain valid for the selected
+/// commit primitive. Any stored commit callback and opaque argument must remain
+/// valid for synchronous invocation, tolerate concurrent arena commits, not
+/// retain the temporary `is_zero` pointer, and not unwind. Arena teardown and
+/// non-protocol bitmap mutation must not race this operation.
 pub(super) unsafe fn mi_arena_commit(
     arena: ArenaPtr,
     range: crate::types::SliceRange,
     commit_size: crate::types::CommittedBytes,
-    is_zero: *mut bool,
+    is_zero: &mut bool,
     already_committed: crate::types::CommittedBytes,
 ) -> bool {
     let arena_raw = arena.as_ptr();
-    // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+    // SAFETY: the claimed range is within the caller-stabilized arena backing;
+    // its start slice therefore projects a valid commit-range address.
     let start = unsafe {
         mi_arena_slice_start(arena, range.start())
             .as_ptr()
             .cast::<c_void>()
     };
     let size = commit_size.get();
-    // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+    // SAFETY: the live initialized arena prefix keeps its callback field
+    // readable and stable for this synchronous commit attempt.
     let commit_fun = unsafe { (*arena_raw.cast::<MiArenaPrefix>()).commit_fun };
     if let Some(commit_fun) = commit_fun {
+        // SAFETY: the contract keeps the callback and opaque argument valid and
+        // non-unwinding, the range writable, and `is_zero` uniquely borrowed.
         return unsafe {
             commit_fun(
                 true,
@@ -35,9 +64,12 @@ pub(super) unsafe fn mi_arena_commit(
         };
     }
     if !already_committed.is_zero() {
-        // SAFETY: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+        // SAFETY: the contract couples the live backing range with both byte
+        // counts; the extended primitive updates only the supplied zero flag.
         unsafe { _mi_os_commit_ex(start, size, is_zero, already_committed) }
     } else {
+        // SAFETY: the claimed live backing covers `size`, and the caller keeps
+        // OS configuration initialized while the zero flag is updated.
         unsafe { _mi_os_commit(start, size, is_zero) }
     }
 }
@@ -49,23 +81,30 @@ pub(super) struct ArenaOsAllocRequest {
     pub(super) align_offset: usize,
 }
 
+/// Allocate aligned OS backing and return its matching initialized MemId.
+///
+/// # Safety
+/// Allocator OS configuration and primitive callbacks must be initialized and
+/// remain stable for this synchronous attempt. A non-null `req_arena_id` is
+/// treated only as a value that disables OS fallback and is never dereferenced.
+/// On success the caller is responsible for releasing the returned backing with
+/// the returned MemId. This function does not otherwise establish a Rust
+/// ownership or lifetime guarantee for the pointer.
 pub(super) unsafe fn mi_arena_os_alloc_aligned(
     request: ArenaOsAllocRequest,
     commit: bool,
     allow_large: bool,
     req_arena_id: mi_arena_id_t,
-    memid: *mut mi_memid_t,
-) -> *mut c_void {
-    if mi_option_is_enabled(mi_option_t::mi_option_disallow_os_alloc)
-        // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
-        || req_arena_id != unsafe { _mi_arena_id_none() }
-    {
+) -> Result<(NonNull<c_void>, mi_memid_t), mi_memid_t> {
+    let mut memid = crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw();
+    if mi_option_is_enabled(mi_option_t::mi_option_disallow_os_alloc) || !req_arena_id.is_null() {
         mi_set_errno(ENOMEM);
-        return ptr::null_mut();
+        return Err(memid);
     }
 
-    if request.align_offset > 0 {
-        // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
+    let start = if request.align_offset > 0 {
+        // SAFETY: initialized OS configuration accepts this request; the local
+        // MemId output is uniquely writable and remains paired with the result.
         unsafe {
             _mi_os_alloc_aligned_at_offset(
                 request.size,
@@ -73,26 +112,63 @@ pub(super) unsafe fn mi_arena_os_alloc_aligned(
                 request.align_offset,
                 commit,
                 allow_large,
-                memid,
+                &mut memid,
             )
         }
     } else {
-        // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
-        unsafe { _mi_os_alloc_aligned(request.size, request.alignment, commit, allow_large, memid) }
+        // SAFETY: initialized OS configuration accepts this request; the local
+        // MemId output is uniquely writable and remains paired with the result.
+        unsafe {
+            _mi_os_alloc_aligned(
+                request.size,
+                request.alignment,
+                commit,
+                allow_large,
+                &mut memid,
+            )
+        }
+    };
+    match NonNull::new(start) {
+        Some(start) => Ok((start, memid)),
+        None => Err(memid),
     }
 }
 
+/// Write an OS allocation result through the allocator's raw MemId ABI.
+///
+/// The returned pointer is the successful non-null address or null on failure;
+/// `memid` receives the matching result state in both cases.
+pub(super) fn mi_write_arena_os_allocation_result(
+    result: Result<(NonNull<c_void>, mi_memid_t), mi_memid_t>,
+    memid: &mut mi_memid_t,
+) -> *mut c_void {
+    let (start, allocated_memid) = match result {
+        Ok((start, memid)) => (start.as_ptr(), memid),
+        Err(memid) => (ptr::null_mut(), memid),
+    };
+    *memid = allocated_memid;
+    start
+}
+
+/// Grow a subprocess arena registry by reserving OS backing.
+///
+/// # Safety
+/// `subproc` must remain live with initialized registry, reserve-lock, and
+/// atomic statistics fields. The caller must serialize registry growth with the
+/// subprocess reserve lock. Allocator OS state and callbacks must remain valid
+/// and non-unwinding. Subprocess/arena teardown must not race; concurrent arena
+/// claims may proceed through their atomic protocols.
 pub(super) unsafe fn mi_arena_reserve(
     subproc: SubprocPtr,
     req_size: crate::types::ReservedBytes,
     numa_node: crate::types::NumaNode,
     allow_large: bool,
-    arena_id: *mut mi_arena_id_t,
 ) -> bool {
     let subproc_ptr = subproc;
     let subproc = subproc.as_ptr();
     let req_size = req_size.get();
-    // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+    // SAFETY: the live subprocess owns an initialized atomic arena count, and
+    // the caller-held reserve lock excludes registry teardown during the load.
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
     if arena_count > (MI_MAX_ARENAS - 4) {
         return false;
@@ -103,7 +179,8 @@ pub(super) unsafe fn mi_arena_reserve(
         return false;
     }
 
-    // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+    // SAFETY: allocator OS configuration is initialized and stable while the
+    // reserve policy snapshots virtual-reservation support.
     if !unsafe { _mi_os_has_virtual_reserve() } {
         arena_reserve /= 4;
     }
@@ -136,7 +213,8 @@ pub(super) unsafe fn mi_arena_reserve(
         return false;
     }
 
-    // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+    // SAFETY: allocator OS configuration remains initialized while eager-commit
+    // policy snapshots overcommit support.
     let overcommit = unsafe { _mi_os_has_overcommit() };
     let mut arena_commit = false;
     if mi_option_get(mi_option_t::mi_option_arena_eager_commit) == 2 {
@@ -148,7 +226,8 @@ pub(super) unsafe fn mi_arena_reserve(
 
     let adjust = overcommit && arena_commit;
     if adjust {
-        // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+        // SAFETY: the live subprocess committed counter is atomic-compatible;
+        // this pre-adjustment prevents double charging eager overcommit.
         unsafe {
             __mi_stat_adjust_decrease_mt(
                 ptr::addr_of_mut!((*subproc).stats.committed),
@@ -157,7 +236,8 @@ pub(super) unsafe fn mi_arena_reserve(
         }
     }
 
-    // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+    // SAFETY: the reserve lock stabilizes the live subprocess registry and OS
+    // callbacks through allocation, registration, and possible rollback.
     let mut err = unsafe {
         mi_reserve_os_memory_ex2(
             subproc_ptr,
@@ -166,12 +246,13 @@ pub(super) unsafe fn mi_arena_reserve(
             crate::types::InitiallyCommitted(arena_commit),
             crate::types::AllowPinned::new(allow_large),
             crate::types::Exclusive::new(false),
-            arena_id,
+            ptr::null_mut(),
         )
     };
     if err != 0 {
         if adjust {
-            // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+            // SAFETY: failed registration did not consume the pre-adjustment;
+            // restore it through the subprocess's atomic-compatible counter.
             unsafe {
                 __mi_stat_adjust_increase_mt(
                     ptr::addr_of_mut!((*subproc).stats.committed),
@@ -182,7 +263,8 @@ pub(super) unsafe fn mi_arena_reserve(
         let small_arena_reserve = 4 * MI_ARENA_MIN_SIZE;
         if arena_reserve > small_arena_reserve && small_arena_reserve > req_size {
             if adjust {
-                // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+                // SAFETY: the smaller eager-overcommit retry needs the same
+                // atomic pre-adjustment against the live subprocess counter.
                 unsafe {
                     __mi_stat_adjust_decrease_mt(
                         ptr::addr_of_mut!((*subproc).stats.committed),
@@ -190,7 +272,8 @@ pub(super) unsafe fn mi_arena_reserve(
                     );
                 }
             }
-            // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+            // SAFETY: the reserve lock and function contract remain in force
+            // for the bounded smaller allocation and registration retry.
             err = unsafe {
                 mi_reserve_os_memory_ex2(
                     subproc_ptr,
@@ -199,11 +282,12 @@ pub(super) unsafe fn mi_arena_reserve(
                     crate::types::InitiallyCommitted(arena_commit),
                     crate::types::AllowPinned::new(allow_large),
                     crate::types::Exclusive::new(false),
-                    arena_id,
+                    ptr::null_mut(),
                 )
             };
             if err != 0 && adjust {
-                // SAFETY: arena reserve growth computes bounded reserve sizes, lock-protects growth, and balances commit accounting across retries.
+                // SAFETY: failed smaller registration leaves its pre-adjustment
+                // unconsumed, so restore the live atomic-compatible counter.
                 unsafe {
                     __mi_stat_adjust_increase_mt(
                         ptr::addr_of_mut!((*subproc).stats.committed),
@@ -216,6 +300,15 @@ pub(super) unsafe fn mi_arena_reserve(
     err == 0
 }
 
+/// Reserve aligned OS backing and register it in `subproc` as an arena.
+///
+/// # Safety
+/// `subproc` must remain live with an initialized registry and statistics.
+/// Allocator OS configuration and primitive callbacks must remain valid for
+/// allocation, registration, and rollback. If non-null, `arena_id` must be
+/// aligned and uniquely writable for one identifier. Registry/subprocess
+/// teardown must not race; successful registration transfers backing lifetime
+/// management to the arena registry.
 unsafe fn mi_reserve_os_memory_ex2(
     subproc: SubprocPtr,
     size: crate::types::ReservedBytes,
@@ -230,13 +323,15 @@ unsafe fn mi_reserve_os_memory_ex2(
     let allow_large = allow_large.get();
     let exclusive = exclusive.get();
     if !arena_id.is_null() {
-        // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+        // SAFETY: the caller keeps the optional arena-id output aligned and
+        // uniquely writable for initialization.
         unsafe { *arena_id = _mi_arena_id_none() };
     }
 
     let size = _mi_align_up(size.get(), MI_ARENA_SLICE_SIZE);
-    let mut memid = unsafe { _mi_memid_none() };
-    // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    let mut memid = crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw();
+    // SAFETY: allocator OS state is initialized; the local MemId output is
+    // uniquely writable and will remain paired with this allocation.
     let start = unsafe {
         _mi_os_alloc_aligned(size, MI_ARENA_SLICE_ALIGN, commit, allow_large, &mut memid)
     };
@@ -244,7 +339,8 @@ unsafe fn mi_reserve_os_memory_ex2(
         return ENOMEM;
     }
 
-    // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY: the fresh OS allocation and MemId describe the exact live backing;
+    // the subprocess registry and optional output remain valid for registration.
     if unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(subproc),
@@ -269,7 +365,8 @@ unsafe fn mi_reserve_os_memory_ex2(
         ));
         0
     } else {
-        // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+        // SAFETY: registration failed without taking ownership; the live OS
+        // allocation is released using its exact size, commit state, and MemId.
         unsafe { _mi_os_free_ex(start, size, commit, memid, ptr::null_mut()) };
         crate::allocator::options::_mi_verbose_message(format_args!(
             "failed to reserve {} KiB memory\n",
@@ -280,8 +377,9 @@ unsafe fn mi_reserve_os_memory_ex2(
 }
 
 /// # Safety
-/// Matches the C API and may mutate global arena state through the active sub-process.
-// SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+/// If non-null, `arena_id` must be aligned and uniquely writable for one
+/// identifier for the duration of the call.
+// SAFETY: this exported name and C signature match the public mimalloc reserve ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     size: usize,
@@ -290,7 +388,8 @@ pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     exclusive: bool,
     arena_id: *mut mi_arena_id_t,
 ) -> c_int {
-    // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+    // SAFETY: the optional output validity is the public contract; the active
+    // subprocess and OS state are allocator-owned and remain live for the call.
     unsafe {
         mi_reserve_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -304,22 +403,20 @@ pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     }
 }
 
-/// # Safety
-/// Matches the C API and may mutate global arena state through the active sub-process.
-// SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+/// Reserve OS memory and register it in the active subprocess arena registry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_reserve_os_memory(
-    size: usize,
-    commit: bool,
-    allow_large: bool,
-) -> c_int {
-    // SAFETY: public reserve entrypoints preserve C ABI contracts while registering aligned arena memory with typed memid state.
+pub extern "C" fn mi_reserve_os_memory(size: usize, commit: bool, allow_large: bool) -> c_int {
+    // SAFETY: this value-only wrapper supplies no output pointer; the public
+    // reserve boundary owns the active-subprocess lookup and registration.
     unsafe { mi_reserve_os_memory_ex(size, commit, allow_large, false, ptr::null_mut()) }
 }
 
 /// # Safety
-/// Matches the C API and forwards to the current arena-management entrypoint.
-// SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+/// `start..start+size` must be caller-controlled backing that remains reserved
+/// for allocator use until every resulting arena is destroyed. The committed,
+/// large, and zero flags must describe that backing accurately. Backing teardown
+/// and non-protocol mutation must not race allocator use.
+// SAFETY: this exported name and C signature match the public managed-memory ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_manage_os_memory(
     start: *mut c_void,
@@ -329,7 +426,8 @@ pub unsafe extern "C" fn mi_manage_os_memory(
     is_zero: bool,
     numa_node: c_int,
 ) -> bool {
-    // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+    // SAFETY: the caller's backing and state flags satisfy the extended
+    // boundary; no callback or arena-id output is supplied by this wrapper.
     unsafe {
         mi_manage_os_memory_ex(
             start,
@@ -344,6 +442,19 @@ pub unsafe extern "C" fn mi_manage_os_memory(
     }
 }
 
+/// Register caller-managed backing as one or more arenas.
+///
+/// # Safety
+/// `subproc` must remain live with an initialized registry and statistics.
+/// `start` and `size` must describe caller-controlled backing that remains live,
+/// writable as required by `memid`, and reserved for allocator use until every
+/// resulting arena is destroyed. `memid` must describe that exact backing and
+/// its committed, zero, pinned, and release policy. Any commit callback and
+/// opaque argument must remain valid and thread-safe for later concurrent arena
+/// invocations, must not retain temporary output pointers, and must not unwind.
+/// If non-null, `arena_id` must be aligned and uniquely
+/// writable for one identifier. Registry/backing teardown or relinking must not
+/// race registration; concurrent registry growth may use its atomic protocol.
 #[allow(clippy::too_many_arguments)]
 unsafe fn mi_manage_os_memory_ex2(
     subproc: SubprocPtr,
@@ -357,26 +468,21 @@ unsafe fn mi_manage_os_memory_ex2(
     arena_id: *mut mi_arena_id_t,
 ) -> bool {
     let subproc = subproc.as_ptr();
-    let mut start = start.as_ptr();
-    let mut size = size.get();
+    let start = start.as_ptr();
+    let size = size.get();
     let exclusive = exclusive.get();
     if !arena_id.is_null() {
-        // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+        // SAFETY: the caller keeps the optional arena-id output aligned and
+        // uniquely writable for initialization.
         unsafe { *arena_id = _mi_arena_id_none() };
     }
-    if !(start as usize).is_multiple_of(MI_ARENA_SLICE_SIZE) {
-        let aligned_start = _mi_align_up(start as usize, MI_ARENA_SLICE_SIZE) as *mut c_void;
-        let diff = aligned_start as usize - start as usize;
-        if diff >= size || (size - diff) < MI_ARENA_SLICE_SIZE {
-            crate::allocator::options::_mi_warning_message_fmt(format_args!(
-                "after alignment, the size of the arena becomes too small (memory at {:p} with size {})\n",
-                start, size
-            ));
-            return false;
-        }
-        start = aligned_start;
-        size -= diff;
-    }
+    let Some((mut start, size)) = align_managed_memory(start, size) else {
+        crate::allocator::options::_mi_warning_message_fmt(format_args!(
+            "after alignment, the size of the arena becomes too small (memory at {:p} with size {})\n",
+            start, size
+        ));
+        return false;
+    };
 
     let mut total_slice_count = (size / MI_ARENA_SLICE_SIZE / MI_BCHUNK_BITS) * MI_BCHUNK_BITS;
     let total_size = mi_size_of_slices(total_slice_count);
@@ -400,7 +506,9 @@ unsafe fn mi_manage_os_memory_ex2(
             return false;
         };
 
-        // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+        // SAFETY: checked slice geometry keeps this remaining segment within
+        // the caller-owned backing; the root/parent, callback state, registry,
+        // and optional root output satisfy `mi_arena_initialize`'s contract.
         let arena = unsafe {
             mi_arena_initialize(
                 SubprocPtr::new_unchecked(subproc),
@@ -424,12 +532,15 @@ unsafe fn mi_manage_os_memory_ex2(
             if parent.is_null() {
                 return false;
             }
-            crate::internal::mi_assert!(
-                mi_size_of_slices(total_slice_count)
-                    // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
-                    <= unsafe { (*parent.cast::<MiArenaPrefix>()).total_size }
-            );
+            // SAFETY: `parent` was returned by the successful root
+            // initialization above and remains live under the registration
+            // epoch. The failed child leaves the parent's size field exclusively
+            // adjustable, and the assertion guards the subtraction.
             unsafe {
+                crate::internal::mi_assert!(
+                    mi_size_of_slices(total_slice_count)
+                        <= (*parent.cast::<MiArenaPrefix>()).total_size
+                );
                 (*parent.cast::<MiArenaPrefix>()).total_size -=
                     mi_size_of_slices(total_slice_count);
             }
@@ -442,7 +553,8 @@ unsafe fn mi_manage_os_memory_ex2(
         }
         crate::internal::mi_assert!(slice_count <= total_slice_count);
         total_slice_count -= slice_count;
-        // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+        // SAFETY: `slice_count` is bounded by the remaining slice count, so this
+        // provenance-preserving advance stays within or one-past the backing.
         start = unsafe {
             start
                 .cast::<u8>()
@@ -455,8 +567,12 @@ unsafe fn mi_manage_os_memory_ex2(
 }
 
 /// # Safety
-/// Matches the C API and may mutate arena state for externally managed memory.
-// SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+/// `start..start+size` must be caller-controlled backing that remains reserved
+/// for allocator use until every resulting arena is destroyed. The committed,
+/// pinned, and zero flags must describe it accurately. If non-null, `arena_id`
+/// must be aligned and uniquely writable for one identifier. Backing teardown
+/// and non-protocol mutation must not race allocator use.
+// SAFETY: this exported name and C signature match the extended managed-memory ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_manage_os_memory_ex(
     start: *mut c_void,
@@ -479,7 +595,8 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     let Some(start_ptr) = crate::types::OsMemPtr::new(start) else {
         return false;
     };
-    // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+    // SAFETY: the public contract keeps external backing and optional output
+    // valid; allocator-owned subprocess state remains live during registration.
     unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -495,11 +612,15 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     }
 }
 
-// SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+// SAFETY: this exported name and C signature match the callback managed-memory ABI.
 #[unsafe(no_mangle)]
 /// # Safety
-/// `start..start+size` must describe caller-owned memory suitable for arena management.
-/// `commit_fun` and `arena_id`, when present, must follow the C ABI contract.
+/// `start..start+size` must be caller-controlled backing reserved for allocator
+/// use until every resulting arena is destroyed, and the state flags must
+/// describe it accurately. If supplied, `commit_fun` and `commit_fun_arg` must
+/// remain valid and thread-safe for later concurrent arena commits, must not
+/// retain temporary output pointers, and must not unwind. If non-null,
+/// `arena_id` must be aligned and uniquely writable for one identifier.
 pub unsafe extern "C" fn mi_manage_memory(
     start: *mut c_void,
     size: usize,
@@ -523,7 +644,8 @@ pub unsafe extern "C" fn mi_manage_memory(
     let Some(start_ptr) = crate::types::OsMemPtr::new(start) else {
         return false;
     };
-    // SAFETY: managed OS-memory entrypoints preserve C ABI contracts while registering caller-owned memory with typed memid state.
+    // SAFETY: the external backing, persistent callback state, and optional
+    // output satisfy the private registration epoch's contract.
     unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -540,8 +662,9 @@ pub unsafe extern "C" fn mi_manage_memory(
 }
 
 /// # Safety
-/// Matches the C API and may reserve/manage huge-page backed arena memory.
-// SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+/// If non-null, `arena_id` must be aligned and uniquely writable for one
+/// identifier for the duration of the call.
+// SAFETY: this exported name and C signature match the huge-page reserve ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     pages: usize,
@@ -551,7 +674,8 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     arena_id: *mut mi_arena_id_t,
 ) -> c_int {
     if !arena_id.is_null() {
-        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: the caller keeps the optional arena-id output aligned and
+        // uniquely writable for its required failure-state initialization.
         unsafe { *arena_id = ptr::null_mut() };
     }
     if pages == 0 {
@@ -562,13 +686,15 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     } else {
         crate::types::NumaNode::new(numa_node)
     }
-    // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+    // SAFETY: allocator OS configuration is initialized while the raw node
+    // count is read and used only to normalize this value-domain input.
     .normalize(unsafe { _mi_os_numa_node_count() });
     let numa_node_raw = numa_node.get();
     let mut hsize = 0usize;
     let mut pages_reserved = 0usize;
-    let mut memid = unsafe { _mi_memid_none() };
-    // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+    let mut memid = crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw();
+    // SAFETY: OS huge-page state is initialized; all three local outputs are
+    // uniquely writable and remain paired with the returned allocation.
     let p = unsafe {
         _mi_os_alloc_huge_os_pages(
             pages,
@@ -591,7 +717,8 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
         numa_node_raw, pages_reserved, pages
     ));
 
-    // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+    // SAFETY: the successful huge allocation, reported size, and MemId describe
+    // the exact live backing; registry and optional output remain valid.
     if !unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -605,33 +732,31 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
             arena_id,
         )
     } {
-        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: failed registration did not take ownership; release the live
+        // huge-page allocation with its exact reported size and MemId.
         unsafe { _mi_os_free(p, hsize, memid) };
         return ENOMEM;
     }
     0
 }
 
-/// # Safety
-/// Matches the C API and reserves huge-page backed arena memory on a specific NUMA node.
-// SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+/// Reserve huge-page backed arena memory on a specific NUMA node.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_reserve_huge_os_pages_at(
+pub extern "C" fn mi_reserve_huge_os_pages_at(
     pages: usize,
     numa_node: c_int,
     timeout_msecs: usize,
 ) -> c_int {
-    // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+    // SAFETY: this value-only wrapper supplies no output pointer; the extended
+    // boundary owns OS allocation and active-subprocess registration.
     unsafe {
         mi_reserve_huge_os_pages_at_ex(pages, numa_node, timeout_msecs, false, ptr::null_mut())
     }
 }
 
-/// # Safety
-/// Matches the C API and reserves huge-page backed arena memory interleaved across NUMA nodes.
-// SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+/// Reserve huge-page backed arena memory interleaved across NUMA nodes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
+pub extern "C" fn mi_reserve_huge_os_pages_interleave(
     mut pages: usize,
     numa_nodes: usize,
     timeout_msecs: usize,
@@ -643,7 +768,8 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
     let mut numa_count = if numa_nodes > 0 && numa_nodes <= c_int::MAX as usize {
         numa_nodes as c_int
     } else {
-        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: allocator OS configuration is initialized while the NUMA node
+        // count is read for value-only interleave policy.
         unsafe { _mi_os_numa_node_count() }
     };
     if numa_count <= 0 {
@@ -665,8 +791,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
         if (numa_node as usize) < pages_mod {
             node_pages += 1;
         }
-        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
-        let err = unsafe { mi_reserve_huge_os_pages_at(node_pages, numa_node, timeout_per) };
+        let err = mi_reserve_huge_os_pages_at(node_pages, numa_node, timeout_per);
         if err != 0 {
             return err;
         }
@@ -681,8 +806,9 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
 }
 
 /// # Safety
-/// Matches the deprecated C API and forwards to the interleaved huge-page reservation path.
-// SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+/// If non-null, `pages_reserved` must be aligned and uniquely writable for one
+/// `usize` for the duration of the call.
+// SAFETY: this exported name and C signature match the deprecated huge-page reserve ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages(
     pages: usize,
@@ -693,14 +819,36 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages(
         "mi_reserve_huge_os_pages is deprecated: use mi_reserve_huge_os_pages_interleave/at instead\n"
     ));
     if !pages_reserved.is_null() {
-        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: the caller keeps the optional count output aligned and
+        // uniquely writable for failure-state initialization.
         unsafe { *pages_reserved = 0 };
     }
-    let err =
-        unsafe { mi_reserve_huge_os_pages_interleave(pages, 0, (max_secs * 1000.0) as usize) };
+    let err = mi_reserve_huge_os_pages_interleave(pages, 0, (max_secs * 1000.0) as usize);
     if err == 0 && !pages_reserved.is_null() {
-        // SAFETY: huge-page reservation entrypoints normalize NUMA input, reserve huge OS memory, and register or release it atomically.
+        // SAFETY: the same optional output remains uniquely writable and the
+        // successful compatibility path reports the requested page count.
         unsafe { *pages_reserved = pages };
     }
     err
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn managed_memory_alignment_checks_size_and_address_boundaries() {
+        let slice = MI_ARENA_SLICE_SIZE;
+        let aligned = ptr::without_provenance_mut::<c_void>(slice);
+        assert_eq!(align_managed_memory(aligned, slice), Some((aligned, slice)));
+
+        let misaligned = ptr::without_provenance_mut::<c_void>(1);
+        let (start, size) = align_managed_memory(misaligned, 2 * slice).unwrap();
+        assert_eq!(start.addr(), slice);
+        assert_eq!(size, slice + 1);
+        assert_eq!(align_managed_memory(misaligned, slice), None);
+
+        let overflowing = ptr::without_provenance_mut::<c_void>(usize::MAX);
+        assert_eq!(align_managed_memory(overflowing, usize::MAX), None);
+    }
 }

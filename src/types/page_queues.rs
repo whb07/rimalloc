@@ -265,6 +265,25 @@ impl QueuedPage<NormalQueue> {
 }
 
 impl QueuedPage<FullQueue> {
+    /// Construct the exact full-queue membership capability without rechecking metadata.
+    ///
+    /// # Safety
+    /// `page` must be a live initialized page currently linked in `queue`, marked full, and owned
+    /// by the same live initialized heap as that queue. The page, adjacent links, queue metadata,
+    /// and owning heap association must remain stable, and the caller must exclude local relink or
+    /// teardown while the returned capability is used. Protocol atomic remote-free publication is
+    /// permitted.
+    #[inline(always)]
+    pub(crate) unsafe fn new_unchecked(
+        page: crate::core_types::FullPage,
+        queue: FullPageQueue,
+    ) -> Self {
+        Self {
+            page: page.page(),
+            queue: PageQueue::full(queue),
+        }
+    }
+
     /// # Safety
     /// `page` and `queue` must belong to the same initialized heap metadata.
     #[inline(always)]

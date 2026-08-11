@@ -1,6 +1,9 @@
 use super::*;
-use crate::types::{PageFlags, PageOwnerId, PageThreadId, ThreadId, mi_page_queue_t, mi_page_t};
-use core::mem::MaybeUninit;
+use crate::types::{
+    MI_BIN_FULL, PageFlags, PageOwnerId, PageThreadId, ThreadId, mi_page_queue_t, mi_page_t,
+    mi_theap_t,
+};
+use core::{mem::MaybeUninit, ptr};
 
 fn fixture_page_thread_id(flags: PageFlags) -> usize {
     let owner = ThreadId::new(0x1000).expect("valid fixture thread id");
@@ -190,6 +193,30 @@ fn queued_normal_page_requires_page_linked_in_normal_queue() {
 #[test]
 fn queued_full_page_requires_page_linked_in_full_queue() {
     let full_size = crate::types::MI_LARGE_MAX_OBJ_SIZE + (2 * size_of::<usize>());
+    let mut page = MaybeUninit::<mi_page_t>::zeroed();
+    let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
+    // SAFETY: the stack-local fixture initializes the page association and the embedded full queue
+    // fields used by this identity-only capability construction. Both remain live and stable until
+    // the consumed queued witness has been inspected and dropped without performing queue mutation.
+    unsafe {
+        let page_raw = page.as_mut_ptr();
+        let theap_raw = theap.as_mut_ptr();
+        let queue_raw = ptr::addr_of_mut!((*theap_raw).pages[MI_BIN_FULL]);
+        (*page_raw).theap = theap_raw;
+        (*page_raw).xthread_id = fixture_page_thread_id(PageFlags::IN_FULL_QUEUE);
+        (*queue_raw).block_size = full_size;
+        (*queue_raw).first = page_raw;
+        (*queue_raw).last = page_raw;
+        (*queue_raw).count = 1;
+        let page_ptr = PagePtr::new_unchecked(page_raw);
+        let queue_ptr = PageQueuePtr::new_unchecked(queue_raw);
+        let full_page = crate::core_types::FullPage::new_unchecked(page_ptr);
+        let full_queue = FullPageQueue::new(queue_ptr).expect("full queue");
+        let queued = QueuedPage::<FullQueue>::new_unchecked(full_page, full_queue);
+        assert_eq!(queued.page().as_ptr(), page_raw);
+        assert_eq!(queued.queue.ptr.as_ptr(), queue_raw);
+    }
+
     with_page_in_queue(full_size, true, |page, queue| {
         // SAFETY: the fixture links the
         // stack-local page into a full queue and sets the full-queue flag before

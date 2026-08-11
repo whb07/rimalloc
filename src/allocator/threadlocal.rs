@@ -2,6 +2,7 @@
 
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
+use core::marker::PhantomData;
 use core::mem::size_of;
 use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
@@ -259,11 +260,126 @@ fn set_thread_locals_ptr(tls: *mut mi_thread_locals_t) {
     }
 }
 
-#[inline]
-fn tls_slots(tls: *mut mi_thread_locals_t) -> *mut mi_tls_slot_t {
-    // SAFETY: callers pass a live thread-local
-    // slot block; this helper only returns its flexible slot array pointer.
-    unsafe { (*tls).slots.as_mut_ptr() }
+struct CurrentThreadLocals {
+    ptr: ptr::NonNull<mi_thread_locals_t>,
+    _current_thread: PhantomData<*mut ()>,
+}
+
+impl CurrentThreadLocals {
+    /// # Safety
+    /// The current TLS pointer must remain stable and no other
+    /// `CurrentThreadLocals` token may remain live until this token is consumed.
+    #[inline]
+    unsafe fn current_unchecked() -> Self {
+        // SAFETY: every TLS backend returns either this thread's live allocated
+        // block or the process-lifetime immutable empty sentinel, never null.
+        let ptr = unsafe { ptr::NonNull::new_unchecked(thread_locals_ptr()) };
+        Self {
+            ptr,
+            _current_thread: PhantomData,
+        }
+    }
+
+    #[inline]
+    fn count(&self) -> usize {
+        // SAFETY: this token keeps the current thread's TLS block stable until
+        // it is consumed by expansion or release.
+        unsafe { (*self.ptr.as_ptr()).count }
+    }
+
+    #[inline]
+    fn slot(&self, idx: ThreadLocalSlotIndex) -> Option<ptr::NonNull<mi_tls_slot_t>> {
+        if idx.get() >= self.count() {
+            return None;
+        }
+        // SAFETY: the checked index is within this block's flexible slot array.
+        Some(unsafe {
+            let slots = ptr::addr_of_mut!((*self.ptr.as_ptr()).slots).cast::<mi_tls_slot_t>();
+            ptr::NonNull::new_unchecked(slots.add(idx.get()))
+        })
+    }
+
+    #[inline]
+    fn try_set(&self, key: mi_thread_local_t, value: *mut core::ffi::c_void) -> bool {
+        let Some(slot) = self.slot(mi_key_index(key)) else {
+            return false;
+        };
+        // SAFETY: `slot` is bounded by this current-thread token and no other
+        // thread can access the underlying slot block.
+        unsafe {
+            ptr::addr_of_mut!((*slot.as_ptr()).value).write(value);
+            ptr::addr_of_mut!((*slot.as_ptr()).version).write(mi_key_version(key).get());
+        }
+        true
+    }
+
+    #[inline]
+    fn get(&self, key: mi_thread_local_t) -> *mut core::ffi::c_void {
+        let Some(slot) = self.slot(mi_key_index(key)) else {
+            return ptr::null_mut();
+        };
+        // SAFETY: `slot` is bounded by this current-thread token and remains
+        // stable for the duration of both field reads.
+        let version = unsafe { ptr::addr_of!((*slot.as_ptr()).version).read() };
+        if mi_key_version(key).get() == version {
+            unsafe { ptr::addr_of!((*slot.as_ptr()).value).read() }
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[inline]
+    fn expand_to_include(self, least_idx: ThreadLocalSlotIndex) -> Option<Self> {
+        let count_old = self.count();
+        // End the scoped view before entering the allocator, which may access
+        // the current thread's TLS while resizing its backing storage.
+        let Self { ptr: old, .. } = self;
+        let mut count = if count_old == 0 {
+            16
+        } else if count_old >= 1024 {
+            count_old.saturating_add(1024)
+        } else {
+            count_old.saturating_mul(2)
+        };
+        if count <= least_idx.get() {
+            count = least_idx.get() + 1;
+        }
+        if count > MI_TLS_IDX_MAX {
+            return None;
+        }
+
+        let size_new = thread_locals_size(ThreadLocalSlotCount::new(count))?;
+        let old_ptr = if count_old == 0 {
+            ptr::null_mut()
+        } else {
+            old.as_ptr().cast()
+        };
+        // SAFETY: a nonempty token owns this thread's allocation; the empty
+        // sentinel maps to null. `size_new` covers the requested slot count.
+        let tls = unsafe { mi_rezalloc(old_ptr, size_new).cast::<mi_thread_locals_t>() };
+        let ptr = ptr::NonNull::new(tls)?;
+        // SAFETY: the allocation is writable and sized for `count` slots.
+        unsafe { (*ptr.as_ptr()).count = count };
+        set_thread_locals_ptr(ptr.as_ptr());
+        Some(Self {
+            ptr,
+            _current_thread: PhantomData,
+        })
+    }
+
+    #[inline]
+    fn release(self) {
+        if self.count() == 0 {
+            return;
+        }
+        // End the scoped view before entering the allocator free path, which
+        // may itself consult current-thread TLS.
+        let Self { ptr, .. } = self;
+        // SAFETY: a positive count distinguishes this thread's allocated block
+        // from the immutable empty sentinel.
+        unsafe { mi_free(ptr.as_ptr().cast()) };
+        set_thread_locals_ptr(thread_locals_empty_ptr());
+    }
 }
 
 #[inline]
@@ -301,69 +417,22 @@ fn mi_key_create(
     key
 }
 
-#[inline]
-fn mi_thread_locals_expand(least_idx: ThreadLocalSlotIndex) -> Option<*mut mi_thread_locals_t> {
-    let tls_old = thread_locals_ptr();
-    // SAFETY: `thread_locals_ptr` returns the
-    // current thread's live TLS block or the immutable empty sentinel.
-    let count_old = unsafe { (*tls_old).count };
-    let mut count = if count_old == 0 {
-        16
-    } else if count_old >= 1024 {
-        count_old.saturating_add(1024)
-    } else {
-        count_old.saturating_mul(2)
-    };
-    if count <= least_idx.get() {
-        count = least_idx.get() + 1;
-    }
-    if count > MI_TLS_IDX_MAX {
-        return None;
-    }
-
-    let size_new = thread_locals_size(ThreadLocalSlotCount::new(count))?;
-    let old_ptr = if count_old == 0 {
-        ptr::null_mut()
-    } else {
-        tls_old.cast()
-    };
-    // SAFETY: `old_ptr` is either null or the
-    // current thread's owned TLS block; `size_new` was checked above.
-    let tls = unsafe { mi_rezalloc(old_ptr, size_new).cast::<mi_thread_locals_t>() };
-
-    if tls.is_null() {
-        return None;
-    }
-    // SAFETY: `tls` is writable newly allocated
-    // or resized TLS storage large enough for `count` slots.
-    unsafe {
-        (*tls).count = count;
-    }
-    set_thread_locals_ptr(tls);
-    Some(tls)
-}
-
 #[inline(never)]
 fn mi_thread_local_set_expand(key: mi_thread_local_t, val: *mut core::ffi::c_void) -> bool {
     if val.is_null() {
         return true;
     }
     let idx = mi_key_index(key);
-    let tls = match mi_thread_locals_expand(idx) {
+    // SAFETY: this slow entry holds the only current-thread view and consumes
+    // it through expansion before the TLS pointer can change.
+    let tls = match unsafe { CurrentThreadLocals::current_unchecked() }.expand_to_include(idx) {
         Some(tls) => tls,
         None => return false,
     };
-    crate::internal::mi_debug_assert!(tls == thread_locals_ptr());
-    // SAFETY: expansion ensures `idx` is within
-    // the current thread-local slot count.
-    crate::internal::mi_debug_assert!(idx.get() < unsafe { (*tls).count });
-    // SAFETY: `idx` is in bounds and the TLS
-    // block belongs to this thread.
-    unsafe {
-        let slots = tls_slots(tls);
-        (*slots.add(idx.get())).value = val;
-        (*slots.add(idx.get())).version = mi_key_version(key).get();
-    }
+    crate::internal::mi_debug_assert!(tls.ptr.as_ptr() == thread_locals_ptr());
+    crate::internal::mi_debug_assert!(idx.get() < tls.count());
+    let was_set = tls.try_set(key, val);
+    crate::internal::mi_assert_internal!(was_set);
     true
 }
 
@@ -547,21 +616,17 @@ pub extern "C" fn _mi_thread_local_set(
     key: mi_thread_local_t,
     val: *mut core::ffi::c_void,
 ) -> bool {
-    let tls = thread_locals_ptr();
-    crate::internal::mi_debug_assert!(!tls.is_null());
     crate::internal::mi_debug_assert!(key != 0);
-    let idx = mi_key_index(key);
-    // SAFETY: `tls` is this thread's TLS block;
-    // versioned slot writes are in bounds or delegated to expansion.
-    unsafe {
-        if idx.get() < (*tls).count {
-            let slots = tls_slots(tls);
-            (*slots.add(idx.get())).value = val;
-            (*slots.add(idx.get())).version = mi_key_version(key).get();
-            true
-        } else {
-            mi_thread_local_set_expand(key, val)
-        }
+    let was_set = {
+        // SAFETY: this entry creates the sole operation-scoped view of the
+        // current thread's stable TLS pointer.
+        let tls = unsafe { CurrentThreadLocals::current_unchecked() };
+        tls.try_set(key, val)
+    };
+    if was_set {
+        true
+    } else {
+        mi_thread_local_set_expand(key, val)
     }
 }
 
@@ -569,41 +634,19 @@ pub extern "C" fn _mi_thread_local_set(
 // slot block only when the key version still matches.
 #[inline(never)]
 pub extern "C" fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut core::ffi::c_void {
-    let tls = thread_locals_ptr();
-    crate::internal::mi_debug_assert!(!tls.is_null());
     crate::internal::mi_debug_assert!(key != 0);
-    let idx = mi_key_index(key);
-    // SAFETY: `tls` is this thread's TLS block;
-    // reads are in bounds and stale key versions return null.
-    unsafe {
-        if idx.get() < (*tls).count {
-            let slots = tls_slots(tls);
-            if mi_key_version(key).get() == (*slots.add(idx.get())).version {
-                (*slots.add(idx.get())).value
-            } else {
-                ptr::null_mut()
-            }
-        } else {
-            ptr::null_mut()
-        }
-    }
+    // SAFETY: this entry creates the sole operation-scoped view of the current
+    // thread's stable TLS pointer and performs no reallocating call.
+    unsafe { CurrentThreadLocals::current_unchecked() }.get(key)
 }
 
 // SAFETY: frees only this thread's dynamically
 // allocated TLS slot block and restores the empty sentinel.
 #[inline(never)]
 pub extern "C" fn _mi_thread_locals_thread_done() {
-    let tls = thread_locals_ptr();
-    // SAFETY: `tls` is the current thread's TLS
-    // pointer; positive count distinguishes allocated blocks from the sentinel.
-    if unsafe { !tls.is_null() && (*tls).count > 0 } {
-        // SAFETY: a positive count means this
-        // thread owns a dynamically allocated TLS block.
-        unsafe {
-            mi_free(tls.cast());
-        }
-        set_thread_locals_ptr(thread_locals_empty_ptr());
-    }
+    // SAFETY: thread teardown creates the sole current-thread view and consumes
+    // it while releasing any allocated block.
+    unsafe { CurrentThreadLocals::current_unchecked() }.release();
 }
 
 // SAFETY: allocates a versioned TLS key under
@@ -660,6 +703,26 @@ pub extern "C" fn _mi_thread_local_free(key: mi_thread_local_t) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use static_assertions::assert_not_impl_any;
+
+    assert_not_impl_any!(CurrentThreadLocals: Copy, Clone, Send, Sync);
+
+    #[repr(C)]
+    struct ThreadLocalsFixture {
+        count: usize,
+        slots: [mi_tls_slot_t; 3],
+    }
+
+    impl ThreadLocalsFixture {
+        /// # Safety
+        /// No other token or access to this fixture may overlap the returned token.
+        unsafe fn token(&mut self) -> CurrentThreadLocals {
+            CurrentThreadLocals {
+                ptr: ptr::NonNull::from_mut(self).cast(),
+                _current_thread: PhantomData,
+            }
+        }
+    }
 
     #[test]
     fn key_helpers_split_index_and_version_domains() {
@@ -680,5 +743,77 @@ mod tests {
             keep_set
         ));
         assert!(!keep_flag);
+    }
+
+    #[test]
+    fn current_thread_locals_bounds_and_versions_slot_access() {
+        let mut fixture = ThreadLocalsFixture {
+            count: 3,
+            slots: [mi_tls_slot_t::default(); 3],
+        };
+        let value = ptr::without_provenance_mut::<core::ffi::c_void>(0x1000);
+        let key = mi_key_create(ThreadLocalSlotIndex::new(1), ThreadLocalKeyVersion::new(2));
+        let stale = mi_key_create(ThreadLocalSlotIndex::new(1), ThreadLocalKeyVersion::new(3));
+        let out_of_bounds =
+            mi_key_create(ThreadLocalSlotIndex::new(3), ThreadLocalKeyVersion::new(2));
+
+        // SAFETY: this is the sole token for `fixture` and it is dropped before
+        // the fixture fields are inspected directly.
+        {
+            let tls = unsafe { fixture.token() };
+            assert!(tls.try_set(key, value));
+            assert_eq!(tls.get(key), value);
+            assert!(tls.get(stale).is_null());
+            assert!(!tls.try_set(out_of_bounds, value));
+            assert!(tls.get(out_of_bounds).is_null());
+        }
+        assert_eq!(fixture.slots[1].version, 2);
+        assert_eq!(fixture.slots[1].value, value);
+
+        fixture.count = 0;
+        // SAFETY: the prior token is out of scope and this is the sole token
+        // for the fixture during the empty-block checks.
+        let empty = unsafe { fixture.token() };
+        assert!(!empty.try_set(key, value));
+        assert!(empty.get(key).is_null());
+    }
+
+    #[test]
+    fn null_out_of_range_set_does_not_expand_current_tls() {
+        let before = thread_locals_ptr();
+        let key = mi_key_create(ThreadLocalSlotIndex::new(17), ThreadLocalKeyVersion::new(2));
+        assert!(mi_thread_local_set_expand(key, ptr::null_mut()));
+        assert_eq!(thread_locals_ptr(), before);
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn current_thread_locals_expansion_preserves_slots_and_release_restores_sentinel() {
+        std::thread::spawn(|| {
+            assert_eq!(thread_locals_ptr(), thread_locals_empty_ptr());
+
+            let first_key =
+                mi_key_create(ThreadLocalSlotIndex::new(1), ThreadLocalKeyVersion::new(2));
+            let last_key =
+                mi_key_create(ThreadLocalSlotIndex::new(17), ThreadLocalKeyVersion::new(3));
+            let first_value = ptr::without_provenance_mut::<core::ffi::c_void>(0x1000);
+            let last_value = ptr::without_provenance_mut::<core::ffi::c_void>(0x2000);
+
+            assert!(_mi_thread_local_set(first_key, first_value));
+            assert!(_mi_thread_local_set(last_key, last_value));
+            assert_eq!(_mi_thread_local_get(first_key), first_value);
+            assert_eq!(_mi_thread_local_get(last_key), last_value);
+            // SAFETY: no other current-thread token is live and these operations do
+            // not change the TLS pointer.
+            {
+                let tls = unsafe { CurrentThreadLocals::current_unchecked() };
+                assert!(tls.count() > 17);
+            }
+
+            _mi_thread_locals_thread_done();
+            assert_eq!(thread_locals_ptr(), thread_locals_empty_ptr());
+        })
+        .join()
+        .expect("isolated TLS test thread completes");
     }
 }

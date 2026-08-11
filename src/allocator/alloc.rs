@@ -27,7 +27,7 @@ use crate::mimalloc::mi_free;
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{
     MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING, MI_PADDING_CHECK, MI_PADDING_SIZE,
-    MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_heap_t, mi_page_t, mi_theap_t,
+    MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_heap_t, mi_theap_t,
 };
 
 mod cxx_new;
@@ -215,27 +215,6 @@ unsafe fn memset_nonhuge(
         if !crate::allocator::page::mi_page_is_huge(page.as_ptr()) {
             ptr::write_bytes(block.as_ptr(), MI_DEBUG_UNINIT, usable_size.get());
         }
-    }
-}
-
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_page_malloc_zero(
-    theap: *mut mi_theap_t,
-    page: *mut mi_page_t,
-    size: usize,
-    zero: bool,
-) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let zeroed = crate::core_types::Zeroed::from_bool(zero);
-        let padded = crate::core_types::PaddedSize::new_unchecked(size);
-        let active =
-            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
-        let Ok(available) = active.try_available() else {
-            return mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, ptr::null_mut());
-        };
-        _mi_page_malloc_zero_typed(theap, available, padded, zeroed, ptr::null_mut())
     }
 }
 
@@ -797,33 +776,35 @@ unsafe fn mi_theap_mallocn_req(
     unsafe { mi_theap_malloc_typed(theap, req.layout()) }
 }
 
-/// # Safety
-/// Returned memory must be released through this allocator.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// A nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
-    unsafe {
-        if let Some(req) = alloc_product_or_report(count, size) {
+pub extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
+    if let Some(req) = alloc_product_or_report(count, size) {
+        // SAFETY: allocator lifecycle owns the current thread's default heap and
+        // keeps its TLS metadata live while this synchronous allocation runs.
+        unsafe {
             let Some(theap) = _mi_theap_or_default_typed(_mi_theap_default()) else {
                 return core::ptr::null_mut();
             };
             mi_theap_mallocn_req(ThreadHeapLocal::new_unchecked(theap), req)
-        } else {
-            core::ptr::null_mut()
         }
+    } else {
+        core::ptr::null_mut()
     }
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+/// `heap` must identify a live initialized heap owned by the current thread and
+/// remain stable without concurrent teardown or non-protocol mutation. A
+/// nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_mallocn(
     heap: *mut mi_heap_t,
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY: the caller keeps the heap live and current-thread owned through
+    // raw classification, checked-product validation, and allocation dispatch.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return core::ptr::null_mut();
@@ -831,16 +812,6 @@ pub unsafe extern "C" fn mi_heap_mallocn(
         let Some(req) = alloc_product_or_report(count, size) else {
             return core::ptr::null_mut();
         };
-        mi_heap_mallocn_typed(heap, req)
-    }
-}
-
-unsafe fn mi_heap_mallocn_typed(
-    heap: BorrowedHeap,
-    req: crate::core_types::AllocProduct,
-) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return core::ptr::null_mut();
         };
@@ -879,21 +850,20 @@ pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_voi
     p
 }
 
-unsafe fn mi_validate_ptr_page(
-    p: *const c_void,
-    msg: *const c_char,
-) -> crate::core_types::PointerLookup {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe { crate::allocator::free::mi_validate_pointer(p.cast_mut(), msg) }
-}
-
+/// # Safety
+/// `p` must identify a live nonnull allocation returned by this allocator. Its
+/// page and block metadata must remain stable, with no concurrent free or
+/// realloc, for as long as the returned witness is used. `msg` must point to a
+/// live NUL-terminated diagnostic string for this call.
 unsafe fn mi_realloc_old_allocation(
     p: *mut c_void,
     msg: *const c_char,
 ) -> Option<crate::core_types::OldAllocation> {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY: the caller keeps the nonnull allocation and its metadata stable;
+    // `msg` remains a readable NUL-terminated diagnostic string while pointer
+    // validation derives the matching page and block location.
     unsafe {
-        match mi_validate_ptr_page(p, msg) {
+        match crate::allocator::free::mi_validate_pointer(p, msg) {
             crate::core_types::PointerLookup::Valid(valid) => {
                 let (user, page, location) = valid.into_parts();
                 let usable =

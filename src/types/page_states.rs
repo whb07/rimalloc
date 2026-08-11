@@ -123,11 +123,11 @@ macro_rules! impl_page_witness {
 
 impl_page_witness!(
     ActivePage,
-    "`page` must be initialized, thread-owned, and not currently full, retired, destroyed, or abandoned."
+    "`page` must be live, initialized, exclusively thread-owned, and not currently full, retired, destroyed, or abandoned."
 );
 impl_page_witness!(
     FullPage,
-    "`page` must be initialized, thread-owned, and currently present in the full queue."
+    "`page` must be live, initialized, thread-owned, and currently present in its stable full queue."
 );
 impl_page_witness!(
     RetiredPage,
@@ -135,7 +135,7 @@ impl_page_witness!(
 );
 impl_page_witness!(
     AvailablePage,
-    "`page` must be initialized, thread-owned, and have at least one available block."
+    "`page` must be live, initialized, exclusively thread-owned, have a valid non-empty available list, and satisfy `used < capacity`."
 );
 impl_page_witness!(
     LocalPage,
@@ -147,7 +147,7 @@ impl_page_witness!(
 );
 impl_page_witness!(
     AbandonedPageType,
-    "`page` must be marked abandoned and not currently owned by a live thread heap."
+    "`page` must be live and initialized, marked abandoned, have a live aligned thread-free atomic governed by the remote-free protocol, and not be owned by a live thread heap."
 );
 impl_page_witness!(
     AbandonedMappedPageType,
@@ -172,6 +172,20 @@ impl<S> AllFreePage<S> {
     #[inline(always)]
     pub(crate) fn page(&self) -> PagePtr {
         self.page.ptr()
+    }
+
+    /// Consume the all-free proof after the arena released this page's raw
+    /// metadata and backing allocation.
+    ///
+    /// # Safety
+    /// The caller must have unregistered and released this page's arena backing;
+    /// the page pointer is retained only as a terminal identity and must not be
+    /// dereferenced through the resulting witness.
+    #[inline(always)]
+    pub(crate) unsafe fn into_destroyed_after_arena_free(self) -> DestroyedPage {
+        // SAFETY: the caller completed arena release; this terminal witness
+        // preserves only the consumed page identity and grants no access.
+        unsafe { DestroyedPage::new_unchecked(self.page()) }
     }
 }
 
@@ -208,10 +222,10 @@ impl AllFreePage<Abandoned> {
 }
 
 impl ActivePage {
+    /// Return an available-page witness when this active page has a free head.
+    /// The consumed active witness carries local ownership and metadata stability.
     #[inline(always)]
-    // SAFETY: callers hold an active page
-    // witness and may inspect the page-local free-list head.
-    pub(crate) unsafe fn try_available(self) -> Result<AvailablePage, ActivePage> {
+    pub(crate) fn try_available(self) -> Result<AvailablePage, ActivePage> {
         let page = self.page();
         // SAFETY: active page metadata is live;
         // a null free head means there is no available block witness.
@@ -225,6 +239,10 @@ impl ActivePage {
     }
 
     #[inline(always)]
+    /// # Safety
+    /// `self` must remain a live active page linked in `from`; `to` must be its
+    /// owning heap's initialized full queue. The caller must exclusively own
+    /// both queue mutations and keep their links stable throughout the move.
     pub(crate) unsafe fn into_full(
         self,
         from: crate::core_types::NormalPageQueue,
@@ -245,8 +263,9 @@ impl ActivePage {
         }
     }
 
+    /// Refine this locally owned active page when its stable used count is zero.
     #[inline(always)]
-    pub(crate) unsafe fn try_mark_all_free(self) -> Result<AllFreePage<Active>, ActivePage> {
+    pub(crate) fn try_mark_all_free(self) -> Result<AllFreePage<Active>, ActivePage> {
         let page = self.page();
         // SAFETY: active page metadata is live
         // and the used count determines the all-free witness.
@@ -267,8 +286,9 @@ impl ActivePage {
 }
 
 impl FullPage {
+    /// Refine this owned full page when its stable used count is zero.
     #[inline(always)]
-    pub(crate) unsafe fn try_mark_all_free(self) -> Result<AllFreePage<Full>, FullPage> {
+    pub(crate) fn try_mark_all_free(self) -> Result<AllFreePage<Full>, FullPage> {
         let page = self.page();
         // SAFETY: full page metadata is live
         // and the used count determines the all-free witness.
@@ -289,8 +309,10 @@ impl FullPage {
 }
 
 impl AvailablePage {
+    /// Pop one block while consuming the witness that proves a non-empty
+    /// available list and exclusive local ownership of its accounting transition.
     #[inline(always)]
-    pub(crate) unsafe fn pop_free_block(
+    pub(crate) fn pop_free_block(
         self,
     ) -> (
         crate::core_types::validation_extra::AllocatedBlock,
@@ -370,6 +392,10 @@ impl LocalPage {
         unsafe { publish_recycled_available(self.page(), available) };
     }
 
+    /// # Safety
+    /// `self` must remain the current thread's live page. `block` must be a
+    /// valid free block owned by that page, and the caller must exclusively own
+    /// its link word plus the page's local-list head and used-count transition.
     #[inline(always)]
     pub(crate) unsafe fn push_free_block(
         self,
@@ -405,22 +431,17 @@ impl AllFreePage<Active> {
     }
 }
 
-impl<S> AllFreePage<S> {
-    #[inline(always)]
-    pub(crate) fn free_to_arena(self, owner: ThreadHeapLocal) -> DestroyedPage {
-        crate::core_types::free_all_free_page_to_arena(self, owner)
-    }
-}
-
 impl AbandonedPageType {
+    /// Atomically refine an abandoned-page witness into temporary ownership.
+    /// The consumed abandoned witness carries the live atomic-field protocol.
     #[inline(always)]
-    pub(crate) unsafe fn try_claim_ownership(
-        self,
-    ) -> Result<OwnedAbandonedPage, AbandonedPageType> {
+    pub(crate) fn try_claim_ownership(self) -> Result<OwnedAbandonedPage, AbandonedPageType> {
         let page = self.page();
         // SAFETY: abandoned page metadata is
         // live and owns the atomic thread-free cell used for claiming.
         let atomic = unsafe { page.thread_free_cell() };
+        // SAFETY: the consumed abandoned witness keeps this atomic field live
+        // and permits only its atomic ownership transition.
         if unsafe { atomic.claim_acq_rel() } {
             // SAFETY: a successful claim owns
             // the abandoned page for reclaim or reabandon.
@@ -492,22 +513,33 @@ impl OwnedAbandonedPage {
         }
     }
 
+    /// # Safety
+    /// The caller must have reassigned this live page's heap owner to `target`,
+    /// collected its abandoned lists into local state, and established exclusive,
+    /// non-full active metadata ready for insertion. The page must not yet be
+    /// linked in a target queue, and concurrent teardown must remain excluded.
     #[inline(always)]
-    pub(crate) fn into_reclaimed(self, _target: ThreadHeapLocal) -> ActivePage {
-        // SAFETY: ownership has been claimed
-        // and the target local thread heap reclaims this page as active.
+    pub(crate) unsafe fn into_reclaimed(self, _target: ThreadHeapLocal) -> ActivePage {
+        // SAFETY: the caller completed the pre-enqueue ownership/list transfer;
+        // the page is exclusively active and ready for target-queue insertion.
         unsafe { ActivePage::new_unchecked(self.page()) }
     }
 
+    /// # Safety
+    /// The caller must have completed arena reabandon publication for this live
+    /// page, including mapped-abandoned ownership and accounting state.
     #[inline(always)]
-    pub(crate) fn into_mapped_abandoned(self) -> AbandonedMappedPageType {
+    pub(crate) unsafe fn into_mapped_abandoned(self) -> AbandonedMappedPageType {
         // SAFETY: the owned abandoned page is
         // being returned to mapped abandoned state.
         unsafe { AbandonedMappedPageType::new_unchecked(self.page()) }
     }
 
+    /// # Safety
+    /// The caller must have atomically released claimed ownership while keeping
+    /// the live page's abandoned metadata and remote-free protocol valid.
     #[inline(always)]
-    pub(crate) fn into_abandoned(self) -> AbandonedPageType {
+    pub(crate) unsafe fn into_abandoned(self) -> AbandonedPageType {
         // SAFETY: the caller has
         // released atomic ownership while preserving abandoned metadata.
         unsafe { AbandonedPageType::new_unchecked(self.page()) }
@@ -515,6 +547,11 @@ impl OwnedAbandonedPage {
 }
 
 #[inline(always)]
+/// # Safety
+/// `page` must remain live and exclusively locally owned. `local` must be its
+/// current non-empty local list, the available list must be empty, and the
+/// caller must exclusively own `free`, `local_free`, and `free_is_zero` for the
+/// ordered publication.
 unsafe fn transfer_local_to_available(page: PagePtr, local: LocalFreeList) {
     let raw = page.as_ptr();
     // SAFETY: the caller proves exclusive access, that `local` is this page's
@@ -529,6 +566,10 @@ unsafe fn transfer_local_to_available(page: PagePtr, local: LocalFreeList) {
 }
 
 #[inline(always)]
+/// # Safety
+/// `page` must remain live under exclusive local or claimed-abandoned ownership.
+/// `available` must be its new non-empty recycled list, and the caller must
+/// exclusively own `free` and `free_is_zero` for the ordered publication.
 unsafe fn publish_recycled_available(page: PagePtr, available: AvailableFreeList) {
     let raw = page.as_ptr();
     // SAFETY: the caller proves exclusive access and that `available` is this
@@ -552,17 +593,6 @@ impl AllFreePage<Full> {
                 _state: PhantomData,
             },
         }
-    }
-}
-
-impl AllFreePage<Abandoned> {
-    /// Consume the all-free abandoned proof after the arena has released the
-    /// corresponding raw page metadata.
-    #[inline(always)]
-    pub(crate) fn into_destroyed_after_arena_free(self) -> DestroyedPage {
-        // SAFETY: the caller
-        // performs arena release before invoking this terminal transition.
-        unsafe { DestroyedPage::new_unchecked(self.page()) }
     }
 }
 

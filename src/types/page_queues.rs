@@ -57,8 +57,10 @@ impl NormalPageQueue {
     }
 
     /// # Safety
-    /// `ptr` must point to a heap normal page queue, proven by queue lookup or
-    /// queue initialization code.
+    /// `ptr` must point to an initialized queue accepted by normal-page
+    /// traversal, proven by heap queue lookup or initialization. This includes
+    /// the huge sentinel queue when the traversal handles its huge-page branch,
+    /// but excludes the full queue.
     #[inline(always)]
     pub(crate) unsafe fn new_unchecked(ptr: PageQueuePtr) -> Self {
         Self(ptr)
@@ -226,6 +228,10 @@ impl QueuedPage<NormalQueue> {
     }
 
     #[inline(always)]
+    /// # Safety
+    /// The page and normal queue must remain live with `self.page` still linked
+    /// in `self.queue`. The caller must exclusively own unlinking and stabilize
+    /// all adjacent page links and queue metadata for the operation.
     pub(crate) unsafe fn remove(self) -> crate::core_types::ActivePage {
         // SAFETY: `self` proves that the page is
         // linked in `self.queue`; removal delegates list mutation to the page
@@ -237,6 +243,10 @@ impl QueuedPage<NormalQueue> {
     }
 
     #[inline(always)]
+    /// # Safety
+    /// `self` must remain linked in its live normal queue and `to` must be the
+    /// owning heap's live full queue. The caller must exclusively own the move,
+    /// adjacent links, queue metadata, and in-full flag transition.
     pub(crate) unsafe fn into_full(self, to: FullPageQueue) -> crate::core_types::FullPage {
         // SAFETY: `self` proves a queued normal
         // page and `to` proves the full queue; the helper performs the raw list
@@ -282,6 +292,10 @@ impl QueuedPage<FullQueue> {
     }
 
     #[inline(always)]
+    /// # Safety
+    /// `self` must remain linked in its live full queue and `to` must be the
+    /// owning heap's compatible live normal queue. The caller must exclusively
+    /// own the move, adjacent links, queue metadata, and in-full flag transition.
     pub(crate) unsafe fn unfull(self, to: NormalPageQueue) -> crate::core_types::ActivePage {
         // SAFETY: `self` proves a queued full
         // page and `to` proves a normal queue; the helper performs the raw list
@@ -300,6 +314,10 @@ impl QueuedPage<FullQueue> {
     }
 
     #[inline(always)]
+    /// # Safety
+    /// The page and full queue must remain live with `self.page` still linked
+    /// in `self.queue`. The caller must exclusively own unlinking and stabilize
+    /// all adjacent page links and queue metadata for the operation.
     pub(crate) unsafe fn remove(self) -> crate::core_types::ActivePage {
         // SAFETY: `self` proves that the full
         // page is linked in `self.queue`; removal delegates list mutation to
@@ -309,19 +327,6 @@ impl QueuedPage<FullQueue> {
             crate::core_types::ActivePage::new_unchecked(self.page)
         }
     }
-}
-
-// Strictly typed transitions to prevent illegal states, per DT-10.
-
-#[inline]
-pub(crate) fn free_all_free_page_to_arena<S>(
-    page: crate::core_types::page_states::AllFreePage<S>,
-    _owner: crate::core_types::page_states::ThreadHeapLocal,
-) -> crate::core_types::page_states::DestroyedPage {
-    // SAFETY: the AllFreePage and
-    // ThreadHeapLocal witnesses prove this page is owned by the local heap and
-    // all blocks are free before arena free transitions it to DestroyedPage.
-    unsafe { crate::core_types::page_states::DestroyedPage::new_unchecked(page.page()) }
 }
 
 const _: unsafe fn(PageQueuePtr) -> Option<NormalPageQueue> = NormalPageQueue::new;

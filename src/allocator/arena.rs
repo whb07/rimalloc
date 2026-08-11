@@ -2060,7 +2060,9 @@ pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(
 ) -> crate::core_types::DestroyedPage {
     // SAFETY: free release clears arena metadata and returns backing slices after ownership is proven.
     unsafe { _mi_arenas_page_free(page.page().as_ptr(), owner.ptr().as_ptr()) };
-    page.free_to_arena(owner)
+    // SAFETY: the raw release above completed the all-free page's terminal
+    // arena transition; the returned witness retains identity but no access.
+    unsafe { page.into_destroyed_after_arena_free() }
 }
 
 /// # Safety
@@ -2149,7 +2151,9 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
     };
     unsafe { __mi_stat_adjust_decrease(ptr::addr_of_mut!((*theap).stats.pages_abandoned), 1) };
     unsafe { _mi_arenas_page_abandon(page_raw, theap) };
-    Ok(page.into_mapped_abandoned())
+    // SAFETY: `_mi_arenas_page_abandon` above completed mapped-abandoned
+    // publication and accounting before the terminal witness transition.
+    Ok(unsafe { page.into_mapped_abandoned() })
 }
 
 /// # Safety

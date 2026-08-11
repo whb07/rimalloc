@@ -92,7 +92,6 @@ pub(crate) use crate::internal::guarded::{
 
 pub(crate) use page_queues::{
     FullPageQueue, FullQueue, HugePageQueue, NormalPageQueue, NormalQueue, QueuedPage,
-    free_all_free_page_to_arena,
 };
 
 pub(crate) use heap::{

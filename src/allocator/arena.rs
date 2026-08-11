@@ -205,7 +205,7 @@ fn mi_set_errno(err: c_int) {
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
 fn mi_set_errno(_err: c_int) {}
 
-unsafe fn mi_arena_max_object_size() -> usize {
+fn mi_arena_max_object_size() -> usize {
     let max_size = _mi_align_up(
         mi_option_get_size(mi_option_t::mi_option_arena_max_object_size),
         MI_ARENA_SLICE_SIZE,
@@ -1032,8 +1032,7 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
 
     if !mi_option_is_enabled(mi_option_t::mi_option_disallow_arena_alloc)
         && size.get() >= MI_ARENA_MIN_OBJ_SIZE
-        // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
-        && size.get() <= unsafe { mi_arena_max_object_size() }
+        && size.get() <= mi_arena_max_object_size()
         && alignment.get() <= MI_ARENA_SLICE_ALIGN
         && align_offset.get() == 0
         && let (Some(slice_count), Some(heap)) = (arena_slice_count, heap)
@@ -1372,8 +1371,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     let alloc_size = mi_size_of_slices(slice_count_usize);
     if !mi_option_is_enabled(mi_option_t::mi_option_disallow_arena_alloc)
         && !os_align
-        // SAFETY: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
-        && slice_count_usize <= unsafe { mi_arena_max_object_size() } / MI_ARENA_SLICE_SIZE
+        && slice_count_usize <= mi_arena_max_object_size() / MI_ARENA_SLICE_SIZE
     {
         let Some(heap_ptr) = HeapPtr::new(heap) else {
             crate::internal::mi_assert_internal!(false);
@@ -1482,7 +1480,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     }
 }
 
-unsafe fn mi_page_block_start(block_size: crate::core_types::BlockSize, os_align: bool) -> usize {
+fn mi_page_block_start(block_size: crate::core_types::BlockSize, os_align: bool) -> usize {
     let block_size = block_size.get();
     if os_align {
         MI_PAGE_ALIGN
@@ -1560,8 +1558,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     }
     if page.is_null() {
         page = slice_start.cast::<mi_page_t>();
-        // SAFETY: fresh arena page setup initializes metadata, commit state, and layout counters.
-        block_start = unsafe { mi_page_block_start(block_size, os_align) };
+        block_start = mi_page_block_start(block_size, os_align);
     }
     if page_meta_is_separate {
         // SAFETY: the selected separate arena metadata slot is non-null and

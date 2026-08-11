@@ -19,10 +19,11 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
     let arena = arena.as_ptr();
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
-    // SAFETY: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
-    let delay = unsafe { mi_arena_purge_delay() };
-    if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } || delay < 0 || _mi_preloading()
-    {
+    let delay = mi_arena_purge_delay();
+    // SAFETY: the typed arena remains live during scheduling, so its initialized
+    // immutable allocation policy may be read before any purge bitmap mutation.
+    let is_pinned = unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned };
+    if is_pinned || delay < 0 || _mi_preloading() {
         return;
     }
     // SAFETY: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
@@ -148,7 +149,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
     }
 }
 
-unsafe fn mi_arena_purge_delay() -> c_long {
+fn mi_arena_purge_delay() -> c_long {
     mi_option_get(mi_option_t::mi_option_purge_delay)
         * mi_option_get(mi_option_t::mi_option_arena_purge_mult)
 }
@@ -348,8 +349,7 @@ unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c
 
     let mut vinfo = mi_purge_visit_info_t {
         now,
-        // SAFETY: purge expiration policy reads and clears delayed purge clocks while accounting purge attempts.
-        delay: unsafe { mi_arena_purge_delay() },
+        delay: mi_arena_purge_delay(),
         all_purged: true,
         any_purged: false,
     };
@@ -376,8 +376,7 @@ unsafe fn mi_arenas_try_purge(
 ) {
     let subproc_ptr = subproc;
     let subproc = subproc.as_ptr();
-    // SAFETY: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
-    let delay = unsafe { mi_arena_purge_delay() };
+    let delay = mi_arena_purge_delay();
     if _mi_preloading() || delay <= 0 {
         return;
     }

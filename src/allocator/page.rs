@@ -80,8 +80,7 @@ pub(crate) use lifecycle::{
 };
 pub use queues::{mi_page_queue_contains, mi_page_queue_of};
 pub(crate) use queues::{
-    mi_page_queue_enqueue_from_full, mi_page_queue_enqueue_from_raw, mi_page_queue_remove_raw,
-    mi_page_queue_remove_typed,
+    mi_page_queue_enqueue_from_raw, mi_page_queue_remove_raw, mi_page_queue_remove_typed,
 };
 use queues::{
     mi_page_queue_move_to_front_typed, mi_page_queue_push_at_end_typed, mi_page_queue_push_raw,
@@ -114,33 +113,28 @@ pub const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 
 const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
 
+/// Move a full page back to its owning heap's normal block-size queue.
+///
 /// # Safety
-/// `page` must point to a page currently owned by a full queue.
-// SAFETY: full/active page transitions preserve queue membership and heap ownership.
-#[inline(never)]
-pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
-    unsafe {
-        let _ = _mi_page_unfull_internal(crate::core_types::assume_full_page(
-            crate::core_types::PagePtr::new_unchecked(page),
-        ));
-    }
-}
-
+/// `page_wrapper` must identify a live initialized current-thread page linked in its owning heap's
+/// full queue and marked full. The heap must disallow page abandonment and its association, full
+/// queue, target block-size queue, page geometry, and direct-page cache must remain live and stable.
+/// The caller must exclusively own local queue links, counts, cache entries, and the full-flag
+/// transition, excluding relink, non-protocol metadata mutation, and page/heap teardown. Protocol
+/// atomic remote-free publication remains permitted.
 #[inline(never)]
 pub(crate) unsafe fn _mi_page_unfull_internal(
     page_wrapper: crate::core_types::FullPage,
 ) -> crate::core_types::ActivePage {
-    // SAFETY: full/active page transitions preserve queue membership and heap ownership.
+    // SAFETY: the caller-proven full-page epoch keeps the page, owner, source/target queues, and
+    // direct cache live under exclusive local mutation. The temporary flag clear is restored before
+    // constructing the linked-full witness; consuming it moves the page and clears the flag once.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_expensive!(_mi_page_is_valid(page));
         crate::internal::mi_assert_internal!(mi_page_is_in_full(page));
         crate::internal::mi_assert_internal!(!(*mi_page_theap(page)).allow_page_abandon);
-        if !mi_page_is_in_full(page) {
-            return crate::core_types::assume_active_page(page_wrapper.page());
-        }
-
         let theap = mi_page_theap(page);
         let theap_ptr = ThreadHeapPtr::new_unchecked(theap);
         let pqfull = theap_ptr.page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
@@ -148,27 +142,35 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
         let pq = mi_theap_page_queue_of(theap, page);
         mi_page_set_in_full(page, true);
         let from = crate::core_types::FullPageQueue::new_unchecked(pqfull);
-        let queued =
-            match crate::core_types::QueuedPage::<crate::core_types::FullQueue>::try_queue_full(
-                page_wrapper,
-                from,
-            ) {
-                Ok(queued) => queued,
-                Err(page_wrapper) => {
-                    crate::internal::mi_assert_internal!(false);
-                    return crate::core_types::assume_active_page(page_wrapper.page());
-                }
-            };
+        let queued = crate::core_types::QueuedPage::<crate::core_types::FullQueue>::new_unchecked(
+            page_wrapper,
+            from,
+        );
         let to = crate::core_types::NormalPageQueue::new_unchecked(
             crate::core_types::PageQueuePtr::new_unchecked(pq),
         );
-        mi_page_unfull_typed(queued, to)
+        queued.unfull(to)
     }
 }
 
+/// Move an unavailable active page to the full queue or abandon it according to heap policy.
+///
+/// # Safety
+/// `page` must identify a live initialized active current-thread page linked in `pq`, its owning
+/// source queue (the matching normal block-size queue or huge-page queue). The page must have no
+/// immediately available blocks. The heap, source/full queues, page geometry, free-list metadata,
+/// direct cache, statistics, and arena
+/// backing must remain live and stable. The caller must exclusively own local queue/page/heap
+/// mutation, excluding relink, non-protocol mutation, and teardown; protocol atomic remote-free
+/// publication remains permitted. If abandonment is enabled, stored arena callbacks and arguments
+/// reached synchronously must remain valid, must not incompatibly reenter these page/heap queues,
+/// and must not unwind.
 #[inline]
 unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    // SAFETY: full/active page transitions preserve queue membership and heap ownership.
+    // SAFETY: the caller-proven current-thread page/queue epoch stabilizes policy and metadata.
+    // The abandon arm consumes Active directly; the full arm constructs exact linked-source and
+    // compatible source/full queue capabilities, consumes them through the move, then collects
+    // through returned Full.
     unsafe {
         crate::internal::mi_assert_internal!(pq == mi_page_queue_of(page));
         crate::internal::mi_assert_internal!(!mi_page_immediate_available(page));
@@ -184,39 +186,24 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
                 crate::core_types::PageQueuePtr::new_unchecked(pq),
             );
         } else if !mi_page_is_in_full(page) {
-            let full = ThreadHeapPtr::new_unchecked(theap)
+            let full_queue = ThreadHeapPtr::new_unchecked(theap)
                 .page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
-            let _ = mi_page_move_to_full_typed(
-                crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(
-                    page,
-                )),
-                crate::core_types::NormalPageQueue::new_unchecked(
-                    crate::core_types::PageQueuePtr::new_unchecked(pq),
-                ),
-                crate::core_types::FullPageQueue::new_unchecked(full),
+            let active = crate::core_types::assume_active_page(
+                crate::core_types::PagePtr::new_unchecked(page),
             );
-            _mi_page_free_collect(page, false);
+            let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(
+                crate::core_types::PageQueuePtr::new_unchecked(pq),
+            );
+            let queued =
+                crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
+                    active,
+                    normal_queue,
+                );
+            let full =
+                queued.into_full(crate::core_types::FullPageQueue::new_unchecked(full_queue));
+            _mi_page_free_collect(full.page().as_ptr(), false);
         }
     }
-}
-
-#[inline]
-unsafe fn mi_page_move_to_full_typed(
-    page: crate::core_types::ActivePage,
-    from: crate::core_types::NormalPageQueue,
-    to: crate::core_types::FullPageQueue,
-) -> crate::core_types::FullPage {
-    // SAFETY: full/active page transitions preserve queue membership and heap ownership.
-    unsafe { page.into_full(from, to) }
-}
-
-#[inline]
-unsafe fn mi_page_unfull_typed(
-    page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,
-    to: crate::core_types::NormalPageQueue,
-) -> crate::core_types::ActivePage {
-    // SAFETY: full/active page transitions preserve queue membership and heap ownership.
-    unsafe { mi_page_queue_enqueue_from_full(to, page) }
 }
 
 #[inline(never)]

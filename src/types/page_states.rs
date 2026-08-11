@@ -252,31 +252,6 @@ impl ActivePage {
         }
     }
 
-    #[inline(always)]
-    /// # Safety
-    /// `self` must remain a live active page linked in `from`; `to` must be its
-    /// owning heap's initialized full queue. The caller must exclusively own
-    /// both queue mutations and keep their links stable throughout the move.
-    pub(crate) unsafe fn into_full(
-        self,
-        from: crate::core_types::NormalPageQueue,
-        to: crate::core_types::FullPageQueue,
-    ) -> FullPage {
-        // SAFETY: the caller supplies matching
-        // typed source/target queues for an active page that is transitioning
-        // into the full queue.
-        unsafe {
-            crate::allocator::page::mi_page_queue_enqueue_from_raw(
-                to.ptr(),
-                from.ptr(),
-                true,
-                self.page(),
-            );
-            crate::allocator::page::mi_page_set_in_full(self.page().as_ptr(), true);
-            FullPage::new_unchecked(self.page())
-        }
-    }
-
     /// Refine this locally owned active page when its stable used count is zero.
     #[inline(always)]
     pub(crate) fn try_mark_all_free(self) -> Result<AllFreePage<Active>, ActivePage> {

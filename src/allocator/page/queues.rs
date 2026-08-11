@@ -410,15 +410,6 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from(
     unsafe { page.into_full(to) }
 }
 
-#[inline]
-pub(crate) unsafe fn mi_page_queue_enqueue_from_full(
-    to: crate::core_types::NormalPageQueue,
-    page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,
-) -> crate::core_types::ActivePage {
-    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
-    unsafe { page.unfull(to) }
-}
-
 /// # Safety
 /// `theap`, `pq`, and `append` must be valid page-queue structures with compatible block sizes.
 // SAFETY: queue append moves linked pages between queues while retargeting owning thread heaps.

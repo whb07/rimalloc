@@ -388,7 +388,7 @@ pub(super) unsafe fn mi_arena_initialize(
         } else {
             // SAFETY: the caller-provided backing and matching MemId permit
             // committing this page-rounded metadata prefix under initialized OS state.
-            unsafe { _mi_os_commit(arena.cast::<c_void>(), commit_size, ptr::null_mut()) }
+            unsafe { _mi_os_commit(arena.cast::<c_void>(), commit_size) }.success()
         };
         if !ok {
             crate::allocator::options::_mi_warning_message_fmt(format_args!(

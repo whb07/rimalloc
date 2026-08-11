@@ -63,15 +63,18 @@ pub(super) unsafe fn mi_arena_commit(
             )
         };
     }
-    if !already_committed.is_zero() {
+    let result = if !already_committed.is_zero() {
         // SAFETY: the contract couples the live backing range with both byte
-        // counts; the extended primitive updates only the supplied zero flag.
-        unsafe { _mi_os_commit_ex(start, size, is_zero, already_committed) }
+        // counts for the typed commit result.
+        unsafe { _mi_os_commit_ex(start, size, already_committed) }
     } else {
         // SAFETY: the claimed live backing covers `size`, and the caller keeps
-        // OS configuration initialized while the zero flag is updated.
-        unsafe { _mi_os_commit(start, size, is_zero) }
-    }
+        // OS configuration initialized while the typed result is produced.
+        unsafe { _mi_os_commit(start, size) }
+    };
+    let success = result.success();
+    *is_zero = result.initially_zero().0;
+    success
 }
 
 #[derive(Clone, Copy)]

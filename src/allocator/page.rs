@@ -634,8 +634,9 @@ unsafe fn mi_page_extend_free_typed(
                         .add(committed.get())
                         .cast::<c_void>(),
                     needed_commit - committed.get(),
-                    ptr::null_mut(),
-                ) {
+                )
+                .success()
+                {
                     return false;
                 }
                 mi_page_set_slice_committed(

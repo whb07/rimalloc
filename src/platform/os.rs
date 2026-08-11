@@ -62,6 +62,25 @@ struct PrimitiveOsAllocation {
     pinned: Pinned,
 }
 
+/// Result of an OS commit attempt, including whether the committed bytes were
+/// reported as initially zero. This is a status value, not mapping ownership.
+pub(crate) struct OsCommitResult {
+    success: bool,
+    initially_zero: InitiallyZero,
+}
+
+impl OsCommitResult {
+    #[inline]
+    pub(crate) fn success(&self) -> bool {
+        self.success
+    }
+
+    #[inline]
+    pub(crate) fn initially_zero(self) -> InitiallyZero {
+        self.initially_zero
+    }
+}
+
 /// Result of an effective primitive decommit attempt.
 ///
 /// `None` from the helper means page containment produced no effective range;
@@ -565,9 +584,7 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
             }
         }
         // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        return unsafe {
-            _mi_os_commit(addr, _mi_os_secure_guard_page_size(), core::ptr::null_mut())
-        };
+        return unsafe { _mi_os_commit(addr, _mi_os_secure_guard_page_size()) }.success();
     }
     true
 }
@@ -593,19 +610,19 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_before(
 }
 
 /// # Safety
-/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
+/// A nonempty `addr..addr+size` must remain a live caller-controlled range
+/// suitable for the active primitive commit operation. OS configuration and
+/// current subprocess statistics must remain live and initialized, and
+/// `stat_size` must match the committed bytes charged on success. Null or empty
+/// input is accepted as a successful no-op.
+pub(crate) unsafe fn _mi_os_commit_ex(
     addr: *mut c_void,
     size: usize,
-    is_zero: *mut bool,
     stat_size: CommittedBytes,
-) -> bool {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+) -> OsCommitResult {
+    // SAFETY: the caller keeps the configuration, subprocess statistics, and
+    // nonempty primitive range valid for this coherent commit/accounting epoch.
     unsafe {
-        if !is_zero.is_null() {
-            *is_zero = false;
-        }
         let subproc = _mi_subproc();
         if !subproc.is_null() {
             let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
@@ -615,7 +632,10 @@ pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
         let Some(range) =
             OsPageRange::covering(addr, ReservedBytes::new(size), _mi_os_page_size_typed())
         else {
-            return true;
+            return OsCommitResult {
+                success: true,
+                initially_zero: InitiallyZero(false),
+            };
         };
         let start = range.start();
         let csize = range.size().get();
@@ -627,30 +647,32 @@ pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
                 "cannot commit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
                 err, err, start, csize
             ));
-            return false;
-        }
-        if os_is_zero && !is_zero.is_null() {
-            *is_zero = true;
+            return OsCommitResult {
+                success: false,
+                initially_zero: InitiallyZero(false),
+            };
         }
         if !subproc.is_null() {
             let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
             __mi_stat_increase_mt(ptr::addr_of_mut!((*stats).committed), stat_size.get());
         }
-        true
+        OsCommitResult {
+            success: true,
+            initially_zero: InitiallyZero(os_is_zero),
+        }
     }
 }
 
 /// # Safety
-/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// A nonempty `addr..addr+size` must remain a live caller-controlled range
+/// suitable for the active primitive commit operation. OS configuration and
+/// current subprocess statistics must remain live and initialized. Null or
+/// empty input is accepted as a successful no-op.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_os_commit(
-    addr: *mut c_void,
-    size: usize,
-    is_zero: *mut bool,
-) -> bool {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-    unsafe { _mi_os_commit_ex(addr, size, is_zero, CommittedBytes::new(size)) }
+pub(crate) unsafe fn _mi_os_commit(addr: *mut c_void, size: usize) -> OsCommitResult {
+    // SAFETY: the full range size is also its committed-byte accounting, and
+    // the remaining lifetime and primitive requirements are inherited.
+    unsafe { _mi_os_commit_ex(addr, size, CommittedBytes::new(size)) }
 }
 
 /// # Safety
@@ -1228,7 +1250,7 @@ unsafe fn mi_os_alloc_aligned_memid(
             p = _mi_align_up_ptr(p, alignment.get());
 
             // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-            if commit && !unsafe { _mi_os_commit(p, size, core::ptr::null_mut()) } {
+            if commit && !unsafe { _mi_os_commit(p, size) }.success() {
                 unsafe {
                     mi_os_prim_free_range(
                         NonNull::new(os_base),
@@ -1314,9 +1336,9 @@ unsafe fn mi_os_ensure_zero(p: *mut c_void, size: usize, memid: *mut mi_memid_t)
     }
     // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     if !unsafe { (*memid).initially_committed } {
-        let mut is_zero = false;
         // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        if !unsafe { _mi_os_commit(p, size, &mut is_zero) } {
+        let commit = unsafe { _mi_os_commit(p, size) };
+        if !commit.success() {
             unsafe { _mi_os_free(p, size, *memid) };
             return core::ptr::null_mut();
         }
@@ -1864,7 +1886,7 @@ unsafe fn mi_os_alloc_aligned_ex(
 // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_commit(p: *mut c_void, size: usize) {
-    let _ = unsafe { _mi_os_commit(p, size, core::ptr::null_mut()) };
+    let _ = unsafe { _mi_os_commit(p, size) };
 }
 
 /// # Safety
@@ -2020,6 +2042,15 @@ mod tests {
         assert!(result.is_null());
         assert_eq!(pages_reserved, 0);
         assert_eq!(size, 0);
+    }
+
+    #[test]
+    fn os_commit_no_effective_range_reports_success_without_zeroing() {
+        // SAFETY: null and empty input is the documented no-op case; default OS
+        // configuration and subprocess statistics remain live for the call.
+        let result = unsafe { _mi_os_commit(ptr::null_mut(), 0) };
+        assert!(result.success());
+        assert!(!result.initially_zero().0);
     }
 
     fn assert_range(range: OsPageRange, start: usize, size: usize) {

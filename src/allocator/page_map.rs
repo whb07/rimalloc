@@ -345,16 +345,16 @@ unsafe fn mi_page_map_ensure_committed(
                 // within the reserved byte page-map allocation.
                 let start = unsafe { _mi_page_map.add(i * MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT) };
                 let size = MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT;
-                let mut is_zero = false;
                 // SAFETY: commits exactly one bitmap
                 // tracked page-map chunk inside the reserved page-map region.
-                if !unsafe { _mi_os_commit(start.cast::<c_void>(), size, &mut is_zero) } {
+                let commit = unsafe { _mi_os_commit(start.cast::<c_void>(), size) };
+                if !commit.success() {
                     mi_page_map_cannot_commit();
                     return false;
                 }
                 // SAFETY: memid was captured at reserve
                 // time and describes whether committed memory is initially zero.
-                if !is_zero && !unsafe { mi_page_map_memid.initially_zero } {
+                if !commit.initially_zero().0 && !unsafe { mi_page_map_memid.initially_zero } {
                     // SAFETY: committed chunk is live
                     // and writable before registration bytes are published.
                     unsafe { _mi_memzero(start.cast::<c_void>(), size) };
@@ -451,11 +451,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         // prefix and is committed before bitmap initialization.
         unsafe {
             mi_page_map_commit = base.cast::<mi_bitmap_t>();
-            if !_mi_os_commit(
-                mi_page_map_commit.cast::<c_void>(),
-                bitmap_size,
-                ptr::null_mut(),
-            ) {
+            if !_mi_os_commit(mi_page_map_commit.cast::<c_void>(), bitmap_size).success() {
                 mi_page_map_cannot_commit();
                 return false;
             }
@@ -709,8 +705,8 @@ unsafe fn mi_page_map_ensure_committed(
             _mi_os_commit(
                 start.cast::<c_void>(),
                 MI_PAGE_MAP_ENTRIES_PER_CBIT * core::mem::size_of::<mi_submap_t>(),
-                ptr::null_mut(),
             )
+            .success()
         } {
             mi_page_map_cannot_commit();
             return None;
@@ -830,7 +826,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     if !unsafe { mi_page_map_memid.initially_committed }
         // SAFETY: commits the first submap range before
         // it is published at top-level index zero.
-        && !unsafe { _mi_os_commit(sub0.cast::<c_void>(), submap_size, ptr::null_mut()) }
+        && !unsafe { _mi_os_commit(sub0.cast::<c_void>(), submap_size) }.success()
     {
         mi_page_map_cannot_commit();
         return false;

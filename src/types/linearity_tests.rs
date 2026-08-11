@@ -6,8 +6,8 @@ use super::page_batch::{LocalFreeBatch, RemoteFreeBatch};
 use super::page_queues::{NormalQueue, QueuedPage};
 use super::page_states::{
     AbandonedMappedPageType, AbandonedPageType, Active, ActivePage, AllFreePage, AvailablePage,
-    DestroyedPage, ForeignPage, FullPage, LocalPage, OwnedAbandonedPage, Page, PageAbandonOutcome,
-    PageForAbandon, PageFreeOwner, RetiredPage, Uninit,
+    DestroyedPage, ForeignPage, FreeRouteSnapshot, FullPage, LocalPage, OwnedAbandonedPage, Page,
+    PageAbandonOutcome, PageForAbandon, RetiredPage, Uninit,
 };
 use super::validation::{
     BlockForFree, GuardedBlock, LocatedBlock, PointerLocation, PointerLookup, ValidPointerLookup,
@@ -47,5 +47,5 @@ assert_not_impl_any!(DestroyedPage: Copy, Clone);
 assert_not_impl_any!(AllFreePage<Active>: Copy, Clone);
 assert_not_impl_any!(PageForAbandon: Copy, Clone);
 assert_not_impl_any!(PageAbandonOutcome: Copy, Clone);
-assert_not_impl_any!(PageFreeOwner: Copy, Clone);
+assert_not_impl_any!(FreeRouteSnapshot: Copy, Clone);
 assert_not_impl_any!(QueuedPage<NormalQueue>: Copy, Clone);

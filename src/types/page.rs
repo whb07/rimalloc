@@ -44,7 +44,8 @@ impl PageFlags {
     }
 }
 
-/// Represents a real owning thread id. Non-zero and must have flag bits clear.
+/// Represents a real owning thread id. Non-zero, distinct from allocator owner
+/// sentinels, and with all page flag bits clear.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct ThreadId(NonZeroUsize);
@@ -52,23 +53,24 @@ pub(crate) struct ThreadId(NonZeroUsize);
 impl ThreadId {
     #[inline(always)]
     pub(crate) fn new(id: usize) -> Option<Self> {
-        if id == 0 || (id & MI_PAGE_FLAG_MASK) != 0 {
+        if id <= MI_THREADID_ABANDONED_MAPPED || (id & MI_PAGE_FLAG_MASK) != 0 {
             None
         } else {
-            // SAFETY: the branch rejects zero and all
-            // page flag bits before constructing the non-zero thread id.
+            // SAFETY: the branch rejects zero, the mapped-abandoned sentinel,
+            // and all page flag bits before constructing the thread id.
             Some(unsafe { Self::new_unchecked(id) })
         }
     }
 
     /// # Safety
-    /// `id` must be non-zero and must not conflict with `MI_PAGE_FLAG_MASK`.
-    // SAFETY: callers must prove the raw thread id is
-    // non-zero and has no page flag bits set before using this hot constructor.
+    /// `id` must be non-zero, distinct from `MI_THREADID_ABANDONED_MAPPED`, and
+    /// must not conflict with `MI_PAGE_FLAG_MASK`.
+    // SAFETY: callers must prove the raw thread id is non-zero, is not the
+    // mapped-abandoned sentinel, and has no page flag bits set.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(id: usize) -> Self {
-        // SAFETY: the function safety contract requires
-        // `id` to be non-zero, matching `NonZeroUsize::new_unchecked`.
+        // SAFETY: the function safety contract includes the non-zero condition
+        // required by `NonZeroUsize::new_unchecked`.
         Self(unsafe { NonZeroUsize::new_unchecked(id) })
     }
 

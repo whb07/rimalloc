@@ -97,6 +97,7 @@ fn free_path_classifier_matches_raw_xor_branch_rules() {
 fn thread_id_new_rejects_zero_and_flag_bits() {
     assert!(ThreadId::new(0).is_none());
     assert!(ThreadId::new(MI_PAGE_FLAG_MASK).is_none());
+    assert!(ThreadId::new(MI_THREADID_ABANDONED_MAPPED).is_none());
     assert_eq!(ThreadId::new(0x1000).map(ThreadId::get), Some(0x1000));
 }
 

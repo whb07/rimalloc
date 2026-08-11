@@ -567,9 +567,13 @@ impl AllFreePage<Abandoned> {
 }
 
 #[must_use = "allocator state capabilities must be consumed or explicitly returned"]
-pub(crate) enum PageFreeOwner {
-    Local(LocalPage),
-    Foreign(ForeignPage),
+/// A single-load snapshot coupling a page's free path with the corresponding
+/// owner capability.
+pub(crate) enum FreeRouteSnapshot {
+    LocalFast(LocalPage),
+    LocalSlow(LocalPage),
+    ForeignPlain(ForeignPage),
+    ForeignSlow(ForeignPage),
     Abandoned(AbandonedPageType),
     AbandonedMapped(AbandonedMappedPageType),
 }
@@ -665,34 +669,42 @@ impl ThreadHeapLocal {
 }
 
 impl PagePtr {
-    pub(crate) unsafe fn classify_for_free(
+    /// Load and classify this page's current free-route owner state once.
+    ///
+    /// # Safety
+    /// `self` must identify live initialized page metadata registered for the
+    /// free operation, and `current` must identify the executing thread.
+    pub(crate) unsafe fn snapshot_free_route(
         self,
         current: crate::core_types::ThreadId,
-    ) -> PageFreeOwner {
+    ) -> FreeRouteSnapshot {
         // SAFETY: page metadata is live and its
         // typed thread-id cell owns free-path classification bits.
         let tid = unsafe { self.thread_id_cell().load_relaxed() };
-        if tid.is_abandoned() {
-            // SAFETY: the thread-id word marks
-            // this page as abandoned.
-            PageFreeOwner::Abandoned(unsafe { AbandonedPageType::new_unchecked(self) })
-        } else if tid.is_abandoned_mapped() {
-            // SAFETY: the thread-id word marks
-            // this page as abandoned-mapped.
-            PageFreeOwner::AbandonedMapped(unsafe { AbandonedMappedPageType::new_unchecked(self) })
-        } else {
-            match tid.classify_free_path(current) {
-                crate::core_types::FreePathKind::LocalFast
-                | crate::core_types::FreePathKind::LocalSlowFlags => {
-                    // SAFETY: the owner bits
-                    // classify this page as local to `current`.
-                    PageFreeOwner::Local(unsafe { LocalPage::new_unchecked(self) })
-                }
-                crate::core_types::FreePathKind::RemotePlain
-                | crate::core_types::FreePathKind::RemoteSlowFlags => {
-                    // SAFETY: the owner bits
-                    // classify this page as foreign to `current`.
-                    PageFreeOwner::Foreign(unsafe { ForeignPage::new_unchecked(self) })
+        match tid.classify_free_path(current) {
+            crate::core_types::FreePathKind::LocalFast => {
+                // SAFETY: the owner bits classify this page as local to `current`.
+                FreeRouteSnapshot::LocalFast(unsafe { LocalPage::new_unchecked(self) })
+            }
+            crate::core_types::FreePathKind::LocalSlowFlags => {
+                // SAFETY: the owner bits classify this page as local to `current`.
+                FreeRouteSnapshot::LocalSlow(unsafe { LocalPage::new_unchecked(self) })
+            }
+            remote_path => {
+                if tid.is_abandoned() {
+                    // SAFETY: the thread-id word marks this page as abandoned.
+                    FreeRouteSnapshot::Abandoned(unsafe { AbandonedPageType::new_unchecked(self) })
+                } else if tid.is_abandoned_mapped() {
+                    // SAFETY: the thread-id word marks this page as abandoned-mapped.
+                    FreeRouteSnapshot::AbandonedMapped(unsafe {
+                        AbandonedMappedPageType::new_unchecked(self)
+                    })
+                } else if matches!(remote_path, crate::core_types::FreePathKind::RemotePlain) {
+                    // SAFETY: the owner bits classify this page as foreign to `current`.
+                    FreeRouteSnapshot::ForeignPlain(unsafe { ForeignPage::new_unchecked(self) })
+                } else {
+                    // SAFETY: the owner bits classify this page as foreign to `current`.
+                    FreeRouteSnapshot::ForeignSlow(unsafe { ForeignPage::new_unchecked(self) })
                 }
             }
         }

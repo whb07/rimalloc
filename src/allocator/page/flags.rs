@@ -168,6 +168,8 @@ unsafe fn mi_page_set_theap_typed(
             let tid = (*(*owner.ptr().as_ptr()).tld).thread_id;
             let thread_id = crate::core_types::ThreadId::new(tid).unwrap_or_else(|| {
                 crate::internal::mi_assert_internal!(false);
+                // SAFETY: local thread-heap ownership requires TLD initialization
+                // with a real platform thread id, never a page-owner sentinel.
                 crate::core_types::ThreadId::new_unchecked(tid)
             });
             crate::core_types::PageOwnerId::Thread(thread_id)

@@ -369,12 +369,15 @@ fn abandoned_mapped_classification_remains_distinct() {
     // SAFETY: the fixture sets only the
     // owner/flag word needed to classify a stack-local page as abandoned-mapped.
     with_page(mapped.raw(), |page| unsafe {
-        match page.classify_for_free(current) {
-            PageFreeOwner::AbandonedMapped(mapped_page) => {
+        match page.snapshot_free_route(current) {
+            FreeRouteSnapshot::AbandonedMapped(mapped_page) => {
                 assert_eq!(mapped_page.page().as_ptr(), page.as_ptr());
             }
-            PageFreeOwner::Abandoned(_) => panic!("abandoned-mapped collapsed to abandoned"),
-            PageFreeOwner::Local(_) | PageFreeOwner::Foreign(_) => {
+            FreeRouteSnapshot::Abandoned(_) => panic!("abandoned-mapped collapsed to abandoned"),
+            FreeRouteSnapshot::LocalFast(_)
+            | FreeRouteSnapshot::LocalSlow(_)
+            | FreeRouteSnapshot::ForeignPlain(_)
+            | FreeRouteSnapshot::ForeignSlow(_) => {
                 panic!("abandoned-mapped classified as owned")
             }
         }
@@ -384,16 +387,65 @@ fn abandoned_mapped_classification_remains_distinct() {
     // SAFETY: the fixture sets only the
     // owner/flag word needed to classify a stack-local page as abandoned.
     with_page(abandoned.raw(), |page| unsafe {
-        match page.classify_for_free(current) {
-            PageFreeOwner::Abandoned(abandoned_page) => {
+        match page.snapshot_free_route(current) {
+            FreeRouteSnapshot::Abandoned(abandoned_page) => {
                 assert_eq!(abandoned_page.page().as_ptr(), page.as_ptr());
             }
-            PageFreeOwner::AbandonedMapped(_) => {
+            FreeRouteSnapshot::AbandonedMapped(_) => {
                 panic!("abandoned classified as abandoned-mapped")
             }
-            PageFreeOwner::Local(_) | PageFreeOwner::Foreign(_) => {
+            FreeRouteSnapshot::LocalFast(_)
+            | FreeRouteSnapshot::LocalSlow(_)
+            | FreeRouteSnapshot::ForeignPlain(_)
+            | FreeRouteSnapshot::ForeignSlow(_) => {
                 panic!("abandoned classified as owned")
             }
         }
     });
+}
+
+#[test]
+fn free_route_snapshot_couples_owner_and_path() {
+    let current = ThreadId::new(0x2000).expect("valid thread id");
+    let foreign = ThreadId::new(0x4000).expect("valid foreign thread id");
+
+    let cases = [
+        (
+            PageThreadId::from_parts(PageOwnerId::Thread(current), PageFlags::new(0).unwrap()),
+            0,
+        ),
+        (
+            PageThreadId::from_parts(
+                PageOwnerId::Thread(current),
+                PageFlags::HAS_INTERIOR_POINTERS,
+            ),
+            1,
+        ),
+        (
+            PageThreadId::from_parts(PageOwnerId::Thread(foreign), PageFlags::new(0).unwrap()),
+            2,
+        ),
+        (
+            PageThreadId::from_parts(
+                PageOwnerId::Thread(foreign),
+                PageFlags::HAS_INTERIOR_POINTERS,
+            ),
+            3,
+        ),
+    ];
+
+    for (thread_id, expected) in cases {
+        // SAFETY: each stack-local page contains the complete owner/flag word
+        // consumed by the snapshot classifier and remains live for the match.
+        with_page(thread_id.raw(), |page| unsafe {
+            let actual = match page.snapshot_free_route(current) {
+                FreeRouteSnapshot::LocalFast(_) => 0,
+                FreeRouteSnapshot::LocalSlow(_) => 1,
+                FreeRouteSnapshot::ForeignPlain(_) => 2,
+                FreeRouteSnapshot::ForeignSlow(_) => 3,
+                FreeRouteSnapshot::Abandoned(_) | FreeRouteSnapshot::AbandonedMapped(_) => 4,
+            };
+            assert_eq!(actual, expected);
+        });
+    }
 }

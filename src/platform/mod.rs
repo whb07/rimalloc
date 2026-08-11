@@ -44,7 +44,9 @@ use crate::core_types::{PagePtr, ThreadHeapPtr};
 #[cfg(target_os = "emscripten")]
 pub(crate) use crate::types::mi_msecs_t;
 pub(crate) use crate::types::mi_process_info_t;
-use crate::types::{mi_heap_t, mi_theap_t, mi_thread_local_t, mi_threadid_t};
+use crate::types::{
+    MI_THREADID_ABANDONED_MAPPED, mi_heap_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
+};
 
 pub const MIMALLOC_PRIM_H: () = ();
 pub const MI_USE_SBRK: usize = if cfg!(target_os = "wasi") { 1 } else { 0 };
@@ -400,6 +402,7 @@ pub fn __mi_prim_thread_id() -> mi_threadid_t {
 pub fn _mi_prim_thread_id() -> mi_threadid_t {
     let tid = __mi_prim_thread_id();
     crate::internal::mi_debug_assert!(tid > 1);
+    crate::internal::mi_debug_assert!(tid != MI_THREADID_ABANDONED_MAPPED);
     crate::internal::mi_debug_assert_eq!(tid & 0x03, 0);
     tid
 }

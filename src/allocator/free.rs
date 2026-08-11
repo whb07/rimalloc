@@ -770,22 +770,17 @@ unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable:
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
 
         let current_tid = crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id());
-        let page_tid = parts.page.thread_id_cell().load_relaxed();
-        let path = page_tid.classify_free_path(current_tid);
-        let owner = parts.page.classify_for_free(current_tid);
+        let route = parts.page.snapshot_free_route(current_tid);
 
-        match (path, owner) {
-            (
-                crate::core_types::FreePathKind::LocalFast,
-                crate::core_types::PageFreeOwner::Local(local_page),
-            ) => {
+        match route {
+            crate::core_types::FreeRouteSnapshot::LocalFast(local_page) => {
                 mi_free_block_local(
                     local_page,
                     parts.block,
                     crate::core_types::LocalFreeMode::TrackOnly,
                 );
             }
-            (_, owner) => mi_free_ex_slow(parts, owner, path),
+            route => mi_free_ex_slow(parts, route),
         }
     }
 }
@@ -813,24 +808,21 @@ unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
             return false;
         };
         let current = crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id());
-        let page_tid = page_ptr.thread_id_cell().load_relaxed();
         let block = crate::core_types::BlockForFree::from_block_start_unchecked(
             crate::core_types::BlockPtr::new_unchecked(p.cast()),
         );
 
-        match page_tid.classify_free_path(current) {
-            crate::core_types::FreePathKind::LocalFast => {
+        match page_ptr.snapshot_free_route(current) {
+            crate::core_types::FreeRouteSnapshot::LocalFast(local_page) => {
                 mi_free_block_local(
-                    crate::core_types::assume_local_page(page_ptr),
+                    local_page,
                     block,
                     crate::core_types::LocalFreeMode::TrackOnly,
                 );
                 true
             }
-            crate::core_types::FreePathKind::RemotePlain
-                if !page_tid.is_abandoned() && !page_tid.is_abandoned_mapped() =>
-            {
-                mi_free_block_mt(crate::core_types::assume_foreign_page(page_ptr), block);
+            crate::core_types::FreeRouteSnapshot::ForeignPlain(foreign_page) => {
+                mi_free_block_mt(foreign_page, block);
                 true
             }
             _ => false,
@@ -842,8 +834,7 @@ unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
 #[inline(never)]
 pub(crate) unsafe fn mi_free_ex_slow(
     parts: crate::core_types::ValidatedFreeParts,
-    owner: crate::core_types::PageFreeOwner,
-    path: crate::core_types::FreePathKind,
+    route: crate::core_types::FreeRouteSnapshot,
 ) {
     // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
@@ -853,31 +844,40 @@ pub(crate) unsafe fn mi_free_ex_slow(
         // directly to the block free functions instead of re-deriving from the raw
         // pointer via `mi_free_generic_local`/`mi_free_generic_mt` (which would also
         // double-call `mi_block_check_unguard` on guarded blocks).
-        match owner {
-            crate::core_types::PageFreeOwner::Local(local_page) => {
+        match route {
+            crate::core_types::FreeRouteSnapshot::LocalFast(local_page) => {
+                mi_free_block_local(
+                    local_page,
+                    block,
+                    crate::core_types::LocalFreeMode::TrackOnly,
+                );
+            }
+            crate::core_types::FreeRouteSnapshot::LocalSlow(local_page) => {
                 // Local page with flags set (e.g. in the full queue): check for unfull.
                 mi_free_block_local(
                     local_page,
                     block,
-                    crate::core_types::LocalFreeMode::for_free_path(path),
+                    crate::core_types::LocalFreeMode::TrackAndCheckFull,
                 );
             }
-            crate::core_types::PageFreeOwner::Foreign(foreign_page) => {
+            crate::core_types::FreeRouteSnapshot::ForeignPlain(foreign_page)
+            | crate::core_types::FreeRouteSnapshot::ForeignSlow(foreign_page) => {
                 // Remote (plain or with flags): push onto the owning thread's free list.
                 // The flag distinction collapses here because validation already resolved
                 // the block; `mi_free_block_mt` does not branch on page flags.
                 mi_free_block_mt(foreign_page, block);
             }
-            crate::core_types::PageFreeOwner::Abandoned(abandoned_page) => {
+            crate::core_types::FreeRouteSnapshot::Abandoned(abandoned_page) => {
                 mi_free_block_mt(abandoned_page.remote_free_page(), block);
             }
-            crate::core_types::PageFreeOwner::AbandonedMapped(abandoned_page) => {
+            crate::core_types::FreeRouteSnapshot::AbandonedMapped(abandoned_page) => {
                 mi_free_block_mt(abandoned_page.remote_free_page(), block);
             }
         }
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *mut usize) {
     // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
@@ -1132,7 +1132,7 @@ mod tests {
     use super::*;
     use crate::allocator::init::_mi_thread_id;
     use crate::core_types::{
-        AvailableFreeList, BlockPtr, FreePathKind, LocalFreeList, PageFlags, PageFreeOwner,
+        AvailableFreeList, BlockPtr, FreePathKind, FreeRouteSnapshot, LocalFreeList, PageFlags,
         PageOwnerId, PagePtr, PageThreadId, PointerLocation, PointerLookup, ThreadFreeOwner,
         ThreadFreeWord, ThreadId, UserPtr,
     };
@@ -1342,8 +1342,8 @@ mod tests {
                 FreePathKind::LocalFast
             ));
             assert!(matches!(
-                validated.page().classify_for_free(current),
-                PageFreeOwner::Local(_)
+                validated.page().snapshot_free_route(current),
+                FreeRouteSnapshot::LocalFast(_)
             ));
         }
 
@@ -1367,8 +1367,8 @@ mod tests {
                 FreePathKind::RemotePlain
             ));
             assert!(matches!(
-                validated.page().classify_for_free(current),
-                PageFreeOwner::Foreign(_)
+                validated.page().snapshot_free_route(current),
+                FreeRouteSnapshot::ForeignPlain(_)
             ));
         }
 
@@ -1385,8 +1385,8 @@ mod tests {
                 abandoned.block(0).as_ptr()
             );
             assert!(matches!(
-                validated.page().classify_for_free(current),
-                PageFreeOwner::Abandoned(_)
+                validated.page().snapshot_free_route(current),
+                FreeRouteSnapshot::Abandoned(_)
             ));
         }
     }

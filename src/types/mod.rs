@@ -67,9 +67,9 @@ pub(crate) use memid::{
 
 pub(crate) use page_states::{
     AbandonedDisposition, AbandonedMappedPageType, AbandonedPageType as AbandonedPage, Active,
-    ActivePage, AllFreePage, AvailablePage, DestroyedPage, ForeignPage, Full, FullPage, LocalPage,
-    OwnedAbandonedPage, Page, PageAbandonOutcome, PageForAbandon, PageFreeOwner, ThreadHeapLocal,
-    Uninit,
+    ActivePage, AllFreePage, AvailablePage, DestroyedPage, ForeignPage, FreeRouteSnapshot, Full,
+    FullPage, LocalPage, OwnedAbandonedPage, Page, PageAbandonOutcome, PageForAbandon,
+    ThreadHeapLocal, Uninit,
 };
 
 pub(crate) use page_batch::{BatchValidationError, LocalFreeBatch, RemoteFreeBatch};

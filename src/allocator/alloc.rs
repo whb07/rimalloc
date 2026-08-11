@@ -14,7 +14,7 @@ use crate::allocator::page::{
 use crate::allocator::tracking::{
     MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
 };
-use crate::core_types::{BorrowedHeap, Errno, PagePtr, ThreadHeapLocal, ThreadHeapPtr, UserPtr};
+use crate::core_types::{BorrowedHeap, Errno, ThreadHeapLocal, ThreadHeapPtr, UserPtr};
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up,
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size_typed,
@@ -58,39 +58,29 @@ pub use zeroed::{
 
 pub const _DEFAULT_SOURCE: () = ();
 
-unsafe fn mi_malloc_generic_fallback_from_padded(
-    theap: *mut mi_theap_t,
-    padded: crate::core_types::PaddedSize,
-    zeroed: crate::core_types::Zeroed,
-    usable: *mut usize,
-) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        let layout = crate::core_types::LayoutRequest::from_padded_unchecked(padded, zeroed);
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
-        };
-        _mi_malloc_generic_typed(
-            theap,
-            layout,
-            crate::core_types::MallocGenericFlags::new(
-                zeroed,
-                crate::core_types::MaybeHugeAlignment::none(),
-            ),
-            usable,
-        )
-    }
-}
-
+/// # Safety
+/// `local_theap` must be the live current-thread heap that owns `available`; its
+/// local queues, free list, direct cache, and statistics must be exclusively
+/// mutable for this operation, while protocol atomic remote-free publication is
+/// allowed. `available` must describe a live initialized page whose free-list
+/// head, keys, and `free_is_zero` state are valid. `padded` must be the logical
+/// requested size plus exactly `MI_PADDING_SIZE`, and fit that page's block size.
+/// The popped block's full usable range and padding tail must be writable within
+/// the live page backing. If nonnull, `usable` must be aligned and uniquely
+/// writable for one `usize` throughout the call.
 pub(crate) unsafe fn _mi_page_malloc_zero_typed(
-    theap: *mut mi_theap_t,
+    local_theap: ThreadHeapLocal,
     available: crate::core_types::AvailablePage,
     padded: crate::core_types::PaddedSize,
     zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY: the caller couples the available page to the current-thread heap,
+    // keeps its free list, keys, backing, and local stats exclusively accessible,
+    // and supplies a fitting padded size plus a valid optional output slot for
+    // this coherent pop, accounting, initialization, and padding epoch.
     unsafe {
+        let theap = local_theap.ptr().as_ptr();
         let page_ptr = available.page();
         let page = page_ptr.as_ptr();
         let size = padded.get();
@@ -149,12 +139,14 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
             crate::core_types::BlockTag::write_aligned_to(
                 crate::core_types::BlockPtr::new_unchecked(block),
             );
-            if cfg!(debug_assertions) && MI_TRACK_ENABLED == 0 {
-                memset_nonhuge(
-                    crate::core_types::PagePtr::new_unchecked(page),
-                    crate::core_types::UserPtr::new_unchecked(block.cast()),
-                    usable_size,
-                );
+            if cfg!(debug_assertions)
+                && MI_TRACK_ENABLED == 0
+                && !crate::allocator::page::mi_page_is_huge(page)
+            {
+                // SAFETY: the popped non-huge block is exclusively writable for
+                // its full usable size, which remains within the live page backing;
+                // tracking marked it undefined immediately above.
+                ptr::write_bytes(block.cast::<u8>(), MI_DEBUG_UNINIT, usable_size.get());
             }
         } else if !(*page).free_is_zero {
             _mi_memzero_aligned(block.cast(), bsize);
@@ -201,20 +193,6 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
         }
 
         block.cast()
-    }
-}
-
-#[inline]
-unsafe fn memset_nonhuge(
-    page: PagePtr,
-    block: UserPtr,
-    usable_size: crate::core_types::UsableSize,
-) {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe {
-        if !crate::allocator::page::mi_page_is_huge(page.as_ptr()) {
-            ptr::write_bytes(block.as_ptr(), MI_DEBUG_UNINIT, usable_size.get());
-        }
     }
 }
 
@@ -270,9 +248,20 @@ unsafe fn mi_theap_malloc_small_zero_typed(
         let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
         let available = _mi_theap_get_free_small_page_typed(local_theap, padded);
         let p = if let Some(available) = available {
-            _mi_page_malloc_zero_typed(theap, available, padded, zeroed, usable)
+            _mi_page_malloc_zero_typed(local_theap, available, padded, zeroed, usable)
         } else {
-            mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, usable)
+            // SAFETY: `padded` was derived immediately above from the normalized
+            // logical request and includes exactly the allocator padding size.
+            let layout = crate::core_types::LayoutRequest::from_padded_unchecked(padded, zeroed);
+            _mi_malloc_generic_typed(
+                local_theap.ptr(),
+                layout,
+                crate::core_types::MallocGenericFlags::new(
+                    zeroed,
+                    crate::core_types::MaybeHugeAlignment::none(),
+                ),
+                usable,
+            )
         };
         mi_track_malloc(p, requested_size, zero);
 

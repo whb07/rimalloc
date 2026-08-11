@@ -71,7 +71,6 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
     if let Some(local_theap) = theap
         && mi_likely(size <= MI_SMALL_SIZE_MAX && alignment_raw <= size)
     {
-        let theap = local_theap.ptr().as_ptr();
         let align_mask = alignment_raw - 1;
         let padded = layout.padded();
         // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
@@ -87,10 +86,12 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
                     crate::core_types::UsableOut::new(usable)
                         .write_if_present(mi_page_usable_block_size(page_ptr.as_ptr()));
                 }
-                // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
+                // SAFETY: `available` came from `local_theap`'s direct cache in
+                // this exclusive local allocation epoch; its padded size fits the
+                // selected live page, and the core receives no usable out-pointer.
                 let p = unsafe {
                     _mi_page_malloc_zero_typed(
-                        theap,
+                        local_theap,
                         available,
                         padded,
                         crate::core_types::Zeroed::from_bool(zero),

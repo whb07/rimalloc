@@ -1694,8 +1694,11 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
         crate::internal::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
 
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
+        // SAFETY: `available` was found from `local_theap` during its exclusive
+        // allocation epoch; the checks above establish the padded-size fit and
+        // backing geometry, while its page/free-list metadata remains live.
         let p = _mi_page_malloc_zero_typed(
-            theap,
+            local_theap,
             available,
             layout.padded(),
             crate::core_types::Zeroed::from_bool(zero),

@@ -1650,26 +1650,50 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
 }
 
 #[inline(always)]
+/// Resolve an optional or lazy thread-heap pointer to an initialized thread heap for the current
+/// allocation path.
+///
+/// # Safety
+/// `theap` must be null, one of the allocator's static empty/wrong-thread sentinels, or a live,
+/// aligned allocator thread-heap pointer whose `heap` pointer field is initialized and readable.
+/// Any nonnull input metadata must remain live and readable through its probe. The allocator
+/// process/TLS lifecycle must permit current-thread initialization and default-heap lookup, with
+/// no concurrent teardown or mutation of this thread's default TLS slot. Primitive/TLS dynamic
+/// dispatch may already be initialized, or the lifecycle must permit `mi_thread_init` to establish
+/// it before subsequent reads. Any initialization callbacks and opaque arguments reached
+/// synchronously must remain valid, must not incompatibly reenter thread initialization, and must
+/// not unwind.
 pub(crate) unsafe fn _mi_theap_or_default_typed(
     mut theap: *mut mi_theap_t,
 ) -> Option<crate::core_types::ThreadHeapPtr> {
-    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
-    unsafe {
-        if !mi_theap_is_initialized(theap) {
-            if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
-                return None;
-            }
-            crate::mimalloc::mi_thread_init();
-            theap = crate::prim::_mi_theap_default();
-            if !mi_theap_is_initialized(theap) {
-                return None;
-            }
-            crate::internal::mi_assert_internal!(crate::prim::_mi_theap_default() == theap);
+    // SAFETY: the input contract limits `theap` to null, static allocator sentinels, or live
+    // readable allocator metadata, so the initialization probe may read its heap pointer field.
+    if !unsafe { mi_theap_is_initialized(theap) } {
+        if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
+            return None;
         }
-        crate::internal::mi_assert_internal!(mi_theap_is_initialized(theap));
-
-        Some(crate::core_types::ThreadHeapPtr::new_unchecked(theap))
+        // SAFETY: the allocator lifecycle permits current-thread initialization; TLS/primitive
+        // dispatch and any synchronous callbacks satisfy the function contract.
+        unsafe { crate::mimalloc::mi_thread_init() };
+        // SAFETY: initialization completed for this thread and its default TLS slot remains stable
+        // against concurrent teardown or mutation during this lookup.
+        theap = unsafe { crate::prim::_mi_theap_default() };
+        // SAFETY: the default lookup returns a static sentinel or live allocator thread heap, so
+        // its heap pointer field is readable for this post-initialization check.
+        if !unsafe { mi_theap_is_initialized(theap) } {
+            return None;
+        }
+        // SAFETY: preserve the original assertion-conditional second default-slot read after
+        // successful initialization; the current thread's TLS slot remains stable for both reads.
+        crate::internal::mi_assert_internal!(unsafe { crate::prim::_mi_theap_default() } == theap);
     }
+    // SAFETY: preserve the original final metadata check; the selected static sentinel or live
+    // thread heap remains readable and stable through return.
+    crate::internal::mi_assert_internal!(unsafe { mi_theap_is_initialized(theap) });
+
+    // SAFETY: the successful initial or post-initialization probe proves `theap` is nonnull; the
+    // returned pointer wrapper carries no additional lifetime or ownership claim.
+    Some(unsafe { crate::core_types::ThreadHeapPtr::new_unchecked(theap) })
 }
 
 pub(crate) unsafe fn _mi_malloc_generic_typed(

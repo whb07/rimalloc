@@ -741,32 +741,131 @@ subprocess, and OS allocation.
 
 ### Work
 
-- [ ] Find direct pointer arithmetic and direct raw metadata field access
+- [x] Find direct pointer arithmetic and direct raw metadata field access
       outside the owning `src/types/` or boundary module.
-- [ ] Reuse an existing checked pointer wrapper before creating a new wrapper.
-- [ ] Add a wrapper method only when it can validate bounds, alignment,
+- [x] Reuse an existing checked pointer wrapper before creating a new wrapper.
+- [x] Add a wrapper method only when it can validate bounds, alignment,
       provenance, initialization, or ownership once for multiple callers.
-- [ ] Return typed values or `Option`/`Result` from checked operations; do not
+- [x] Return typed values or `Option`/`Result` from checked operations; do not
       encode failure with a new sentinel.
-- [ ] Keep raw accessors crate-private and avoid `Deref`/`DerefMut` for
+- [x] Keep raw accessors crate-private and avoid `Deref`/`DerefMut` for
       allocator metadata wrappers.
-- [ ] Replace callers in one domain, then remove the superseded unsafe helper or
+- [x] Replace callers in one domain, then remove the superseded unsafe helper or
       raw field access.
 
 ### Validation
 
-- [ ] Add boundary tests for null, zero, minimum, maximum, overflow,
+- [x] Add boundary tests for null, zero, minimum, maximum, overflow,
       misalignment, and one-past-end cases relevant to the domain.
-- [ ] Run `scripts/check-strict-types.py` and the focused provenance tests.
-- [ ] Run the relevant focused Miri command from `scripts/check-miri-all.sh`.
-- [ ] Run the common Rust validation gate.
-- [ ] Record the before/after unsafe-site count and require a net reduction or a
+- [x] Run `scripts/check-strict-types.py` and the focused provenance tests.
+- [x] Run the relevant focused Miri command from `scripts/check-miri-all.sh`.
+- [x] Run the common Rust validation gate.
+- [x] Record the before/after unsafe-site count and require a net reduction or a
       clearly smaller set of callers that must uphold the invariant.
+
+### Completion note (2026-08-11)
+
+- Baseline `6af713a` was the clean revision immediately before the first 2.2
+  pointer-domain slice; completion is `3768869`. Work proceeded in the required
+  order and gave each centralizable invariant a private owner:
+
+  1. **Page:** `PageMapLocation`, `PublishedSubmap`, availability/publication
+     witnesses, `PageArea`, the direct-cache availability projection, and typed
+     page-map commit state now own address decomposition, queue membership,
+     block-area geometry, direct-slot interpretation, and commit-slot results.
+     Raw out-parameters and duplicate area/containment calculations were
+     removed from callers.
+  2. **Block:** `PageBlockLayout` and compact `PageBlockRange` validate page
+     metadata, stride, full geometry, capacity-bounded ranges, block lookup,
+     and detached-chain membership once. Refill and heap-visitor paths no
+     longer call the raw block-at helper or rebuild page geometry per node.
+  3. **Heap/thread heap:** `heap_area_for_page` returns the seven-field callback
+     descriptor instead of writing through a raw out-pointer, and the typed
+     block visitor owns one capacity range plus decoded-link classification
+     while preserving encoded-link corruption handling and callback reentry.
+     `FreeRouteSnapshot` also couples free path and owner classification from
+     one relaxed owner-word load and is consumed by both validated and fast
+     routes; the older independently sampled classifier was removed.
+  4. **Arena:** non-Copy `ClaimedArenaSlices` and pending/registered fresh-page
+     transactions own atomic slice rollback, heap page-bit publication,
+     separated metadata cleanup, page-map unregister ordering, and final
+     publication. `PageArenaMembership` replaces the five-caller, three-output
+     arena/range/table protocol with one checked operation snapshot. Registered
+     fresh pages now remain `Page<Uninit>` through both callers and become
+     `ActivePage` only through the consuming typed initializer. Pre-publication
+     failure exits are rollback-owned, while both published callers preserve
+     `Page<Uninit>` until successful activation or explicit baseline cleanup;
+     `ActivePage` is constructed only after extension succeeds.
+  5. **Subprocess:** `SubprocRegistryGuard`, non-Copy `DetachedSubproc`, and the
+     registry-to-heaps-lock handoff validate opaque IDs by address without
+     dereferencing forged/stale pointers. Destruction consumes a detached token;
+     live visitors hold the dynamic heaps lock after releasing the registry.
+  6. **OS:** `OsPageRange`, consumed `OsFreeBackingRange`, and `OsAlignment`
+     own checked page envelopes, usable-to-backing validation and dispatch,
+     alignment normalization, offset alignment, and overflow boundaries. The
+     aligned over-reserve rollback/trim path now uses the stats-aware primitive
+     release boundary, matching upstream accounting.
+- Two cross-domain projections were also centralized: multithreaded statistics
+  now project raw atomic-compatible fields without manufacturing concurrent
+  `&mut` references, and private `CurrentThreadLocals` couples bounds, version,
+  flexible-slot access, expansion, and teardown. Six caller-side `slots.add`
+  expressions became one checked flexible-array projection.
+- More than 100 exact `src` references across superseded raw-helper families
+  fell to zero, including `_mi_page_map_index`,
+  `mi_page_area`, `mi_page_contains_address`, `mi_page_free_quick_collect`,
+  `mi_page_block_at`, the fast-divisor pair, both raw heap-area visitor helpers,
+  `_mi_subproc_from_id`, `unsafe_destroy_typed`, and both OS page-range
+  alignment helpers. Additional reductions removed page-map commit out-slots,
+  caller-owned heap-area writes, six OS mutable-size out-parameters, and the
+  subprocess caller-supplied lock-state boolean. Later slices additionally
+  removed the five-caller `mi_page_arena_pages` protocol and its fifteen raw
+  output arguments, plus the private `_mi_page_init` definition and its two raw
+  callers. The statistics migration removed thirteen shared caller-side
+  mutable field projections and seven broad OS mutable-stat aliases; the free
+  route reduced validated owner-word sampling from two loads to one while the
+  fast route remained at one.
+- The advisory lexical inventory intentionally does **not** show a global
+  unsafe-syntax win: it moved from 5,708 mentions / 3,480 blocks / 1,814 unsafe
+  functions at `6af713a` to 5,832 / 3,588 / 1,827 at `3768869`. The accepted
+  alternative in this task's validation is the smaller proof set above: raw
+  arithmetic, publication, and rollback obligations moved from multiple
+  callers into checked owners and linear transitions, with boundary and Miri
+  tests alongside them. No unsafe-count decrease is claimed.
+- Boundary coverage includes page-map null/domain/submap edges; page-area zero,
+  minimum, maximum, overflow, misalignment, and one-past intervals; block
+  first/last/off-stride/out-of-range cases; direct-cache sentinel/live states;
+  arena claim/drop/publish, membership resolution, and fresh-page rollback,
+  reuse, and uninitialized-to-active transition; forged, stale, double, and
+  locked subprocess IDs; TLS bounds/version/expansion; atomic statistics; free
+  route owner/flag combinations; and OS null/zero/page/overflow/backing/
+  alignment cases. Pure pointer/state filters passed stacked borrows, tree
+  borrows, strict provenance, and strict-provenance-plus-tree Miri modes.
+- The common gate passed on the completed production state: `cargo fmt --all`,
+  warnings-denied workspace/all-target/all-feature Clippy, workspace/all-target/
+  all-feature tests, the no-default-features library check, strict types, and
+  `git diff --check`. Core C/Rust behavioral parity, syscall/ABI/FFI checks, and
+  focused rollback, visitor, subprocess, and aligned-OS statistics tests also
+  passed. Default, secure, and tracking assembly captures kept allocator hot
+  anchors exact; reviewed growth is confined to cold validation/lifecycle paths.
+- Deliberately deferred work is not representable as another scalar pointer
+  getter: carrying `RegisteredPageRange` through the full page/arena lifetime,
+  FREE-owned user-to-block offsets and encoded-link classification, heap/TLS
+  intrusive-list teardown under lock, remaining arena/random atomic protocols,
+  subprocess pointer-ID address-reuse ABA, a fully linear OS over-reservation
+  owner, and coherent callback-plus-argument publication all require the later
+  linearity, atomic, lifecycle, or callback tasks. Adding wrappers here would
+  only relocate unsafe reasoning and violate this plan's no-make-work rule.
+  `PageArenaMembership` is deliberately an operation-scoped validated snapshot,
+  not a claim that bitmap membership remains frozen after mutation.
 
 ### Completion condition
 
-Each pointer invariant has one owner, callers cannot bypass it accidentally,
-and the change reduces the code that must be manually trusted.
+Each centralizable repeated pointer invariant identified by the six-domain
+audit now has one private owner; migrated callers cannot bypass it without
+crossing an explicit raw/unsafe boundary, and superseded caller-side proofs
+were removed. Residual operations are confined to the named ABI, platform,
+hot-path, and lifecycle boundaries above, where a wrapper alone cannot enforce
+ownership.
 
 ## 2.3 Narrow unsafe functions and blocks
 

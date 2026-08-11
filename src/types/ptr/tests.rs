@@ -177,6 +177,37 @@ fn page_block_layout_bounds_block_indexes_and_addresses() {
 }
 
 #[test]
+fn page_block_range_contains_only_block_starts_inside_the_range() {
+    let mut blocks = [MaybeUninit::<mi_block_t>::uninit(); 8];
+    // SAFETY: the aligned stack allocation remains live while the layout and
+    // test pointers describe addresses within its complete backing storage.
+    let start = unsafe { PageStart::new_unchecked(blocks.as_mut_ptr().cast::<u8>()) };
+    // SAFETY: two blocks form a non-zero stride aligned for `mi_block_t`.
+    let block_size = unsafe { BlockSize::new_unchecked(2 * size_of::<mi_block_t>()) };
+    let layout = PageBlockLayout::from_parts(start, block_size, ReservedBlockCount::new(4))
+        .expect("aligned four-block layout is valid");
+    let range = layout
+        .nonempty_range(1, 2)
+        .expect("middle two-block range is valid");
+
+    // SAFETY: every candidate is non-null and remains within the live stack
+    // backing; membership itself is what the range checks.
+    unsafe {
+        let first = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(2).cast());
+        let last = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(4).cast());
+        let aligned_interior = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(3).cast());
+        let below_start = BlockPtr::new_unchecked(blocks.as_mut_ptr().cast());
+        let one_past = BlockPtr::new_unchecked(blocks.as_mut_ptr().add(6).cast());
+
+        assert!(range.contains(first));
+        assert!(range.contains(last));
+        assert!(!range.contains(aligned_interior));
+        assert!(!range.contains(below_start));
+        assert!(!range.contains(one_past));
+    }
+}
+
+#[test]
 fn page_block_layout_from_page_couples_expected_block_size() {
     let mut blocks = [MaybeUninit::<mi_block_t>::uninit(); 2];
     let mut raw_page = MaybeUninit::<mi_page_t>::zeroed();

@@ -2,7 +2,7 @@
 
 use crate::core_types::{
     AvailableFreeList, BatchLen, BlockPtr, LocalFreeList, LocalPage, OwnedAbandonedPage,
-    PageCapacity, PagePtr, UsedBlockCount,
+    PageBlockLayout, PageCapacity, PagePtr, UsedBlockCount,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -89,22 +89,6 @@ impl RemoteFreeBatch {
 }
 
 #[inline]
-unsafe fn block_belongs_to_page(page: PagePtr, block: BlockPtr, capacity: PageCapacity) -> bool {
-    // SAFETY: the caller supplies initialized page
-    // metadata; arithmetic is bounded by the page capacity and block size.
-    let start = unsafe { page.start().as_ptr() } as usize;
-    let block_size = unsafe { page.block_size().get() };
-    let address = block.as_ptr() as usize;
-    let Some(offset) = address.checked_sub(start) else {
-        return false;
-    };
-    let Some(committed_bytes) = block_size.checked_mul(capacity.as_usize()) else {
-        return false;
-    };
-    offset < committed_bytes && offset % block_size == 0
-}
-
-#[inline]
 unsafe fn classify_foreign_link(page: PagePtr, block: BlockPtr) -> BatchValidationError {
     // SAFETY: allocator page lookup accepts an
     // arbitrary candidate address and returns null when it is unregistered.
@@ -129,13 +113,30 @@ unsafe fn scan_detached_chain_impl<const VALIDATE_BLOCKS: bool>(
         });
     }
 
+    let validated_range = if VALIDATE_BLOCKS {
+        // SAFETY: the caller supplies initialized, stable page geometry for
+        // the duration of this uniquely detached chain scan.
+        let block_size = unsafe { page.block_size() };
+        // SAFETY: the same caller contract keeps the page geometry and block
+        // backing live and stable for pointers derived during the scan.
+        let Some(layout) = (unsafe { PageBlockLayout::from_page(page, block_size) }) else {
+            return Err(unsafe { classify_foreign_link(page, head) });
+        };
+        let Some(range) = layout.nonempty_range(0, capacity.as_usize()) else {
+            return Err(unsafe { classify_foreign_link(page, head) });
+        };
+        Some(range)
+    } else {
+        None
+    };
+
     let mut current = head;
     let mut observed = 0usize;
     loop {
         // SAFETY: hardened callers classify
         // membership before dereferencing a block. Trusted callers discharge
         // the same-page invariant through the detached-list owner proof.
-        if VALIDATE_BLOCKS && !unsafe { block_belongs_to_page(page, current, capacity) } {
+        if validated_range.is_some_and(|range| !range.contains(current)) {
             return Err(unsafe { classify_foreign_link(page, current) });
         }
 

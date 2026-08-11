@@ -1188,6 +1188,19 @@ impl PageBlockLayout {
 }
 
 impl PageBlockRange {
+    /// Tests exposed-address geometry only; this does not prove provenance,
+    /// liveness, initialization, or permission to access `block`.
+    #[inline(always)]
+    pub(crate) fn contains(self, block: BlockPtr) -> bool {
+        let Some(byte_offset) =
+            ptr_exposed_addr(block.as_ptr()).checked_sub(ptr_exposed_addr(self.first.as_ptr()))
+        else {
+            return false;
+        };
+        byte_offset % self.block_size.get() == 0
+            && byte_offset / self.block_size.get() < self.block_count
+    }
+
     #[inline(always)]
     pub(crate) fn block_size(self) -> BlockSize {
         self.block_size

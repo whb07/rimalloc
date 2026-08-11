@@ -772,9 +772,9 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
             mi_page_set_theap(page, ptr::null_mut());
             // Preserve the original theap pointer so same-theap reclaim-on-free can still work.
             (*page).theap = theap;
-            _mi_arenas_page_abandon(page, theap);
+            let outcome = _mi_arenas_page_abandon(page, theap);
             _mi_arenas_collect(false, false, (*theap).tld);
-            crate::core_types::PageAbandonOutcome::Abandoned
+            outcome
         }
     }
 }

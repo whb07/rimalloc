@@ -19,7 +19,7 @@ use super::*;
 pub(super) unsafe fn mi_abandoned_page_unown(
     owned_page: crate::types::OwnedAbandonedPage,
     current_theap: crate::types::ThreadHeapLocal,
-) -> bool {
+) -> crate::types::PageAbandonOutcome {
     let page_ptr = owned_page.page();
     let page = page_ptr.as_ptr();
     let current_theap_raw = current_theap.ptr().as_ptr();
@@ -83,7 +83,7 @@ pub(super) unsafe fn mi_abandoned_page_unown(
                 // SAFETY: unabandon completed and the all-free page is now
                 // exclusively releasable by the same live thread heap.
                 unsafe { _mi_arenas_page_free(page, current_theap_raw) };
-                return true;
+                return crate::types::PageAbandonOutcome::Destroyed;
             }
             tf_old = atomic_tf.load_relaxed();
         }
@@ -94,7 +94,7 @@ pub(super) unsafe fn mi_abandoned_page_unown(
             // SAFETY: the successful CAS released claimed ownership while all
             // abandoned metadata and the remote-free protocol remain live.
             let _ = unsafe { owned_page.into_abandoned() };
-            return false;
+            return crate::types::PageAbandonOutcome::Abandoned;
         }
     }
 }
@@ -334,7 +334,7 @@ pub(super) unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
 pub(super) unsafe fn _mi_arenas_page_abandon_internal(
     page: crate::types::OwnedAbandonedPage,
     current_theap: crate::types::ThreadHeapLocal,
-) {
+) -> crate::types::PageAbandonOutcome {
     let page_ptr = page.page();
     let page_raw = page_ptr.as_ptr();
     let current_theap_raw = current_theap.ptr().as_ptr();
@@ -386,7 +386,17 @@ pub(super) unsafe fn _mi_arenas_page_abandon_internal(
         // arena range/table membership live for the publication snapshot.
         let Some(membership) = (unsafe { PageArenaMembership::from_page(page_ptr) }) else {
             crate::internal::mi_assert_internal!(false);
-            return;
+            // SAFETY: invalid membership is outside the function contract, but the claimed page and
+            // current thread heap remain live; release the claim rather than leaking ownership in a
+            // non-asserting build.
+            let current_theap = unsafe {
+                crate::types::ThreadHeapLocal::new_unchecked(
+                    crate::types::ThreadHeapPtr::new_unchecked(current_theap_raw),
+                )
+            };
+            // SAFETY: the same active claim and live thread heap described above remain valid for
+            // the synchronous claim release or terminal all-free cleanup.
+            return unsafe { mi_abandoned_page_unown(page, current_theap) };
         };
         let arena = membership.arena().as_ptr();
         let range = membership.range();
@@ -478,7 +488,7 @@ pub(super) unsafe fn _mi_arenas_page_abandon_internal(
     // SAFETY: active claimed page ownership is carried through all bitmap,
     // list, and stats publication; competing mutation is excluded and
     // current_theap remains live for release.
-    unsafe { mi_abandoned_page_unown(page, current_theap) };
+    unsafe { mi_abandoned_page_unown(page, current_theap) }
 }
 
 /// Remove a claimed abandoned page from mapped/OS abandoned publication and

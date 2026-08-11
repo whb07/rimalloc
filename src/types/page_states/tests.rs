@@ -297,8 +297,8 @@ fn all_free_and_retire_preserve_page_identity() {
 #[test]
 fn abandon_and_reclaim_transitions_preserve_page_identity() {
     // SAFETY: the stack-local page is
-    // used only as an identity witness while exercising abandon, reclaim, and
-    // reabandon typestate transitions.
+    // used only as an identity witness while exercising abandon and reclaim
+    // typestate transitions.
     with_page(0, |page| unsafe {
         match ActivePage::new_unchecked(page).into_abandon_candidate() {
             PageForAbandon::Active(active) => assert_eq!(active.page().as_ptr(), page.as_ptr()),
@@ -326,9 +326,6 @@ fn abandon_and_reclaim_transitions_preserve_page_identity() {
             .expect_err("used abandoned page remains owned");
         let reclaimed = owned.into_reclaimed(heap_owner());
         assert_eq!(reclaimed.page().as_ptr(), page.as_ptr());
-        let owned = OwnedAbandonedPage::new_unchecked(page);
-        let mapped = owned.into_mapped_abandoned();
-        assert_eq!(mapped.page().as_ptr(), page.as_ptr());
     });
 }
 

@@ -407,7 +407,7 @@ unsafe extern "C" fn mi_heap_delete_page(
         }
         // SAFETY: the page retains its active owner bit after reassignment and target publication;
         // the live target thread heap owns stats while raw abandon completes mapped publication.
-        unsafe { _mi_arenas_page_abandon(page, theap_target) };
+        let _ = unsafe { _mi_arenas_page_abandon(page, theap_target) };
     }
     true
 }

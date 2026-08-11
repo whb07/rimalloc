@@ -2133,10 +2133,10 @@ pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(
 /// stats owner. Page geometry, lists, MemId, heap, and arena membership must
 /// remain stable; concurrent claim, relink, or teardown is excluded, while
 /// protocol remote-free publication remains allowed.
-pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
+pub(crate) unsafe fn _mi_arenas_page_abandon(
     page: *mut mi_page_t,
     current_theap: *mut mi_theap_t,
-) {
+) -> crate::core_types::PageAbandonOutcome {
     // SAFETY: the caller has detached this live page, cleared its thread heap,
     // marked it abandoned, and retains the claimed thread-free owner bit.
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
@@ -2150,37 +2150,27 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
             crate::core_types::ThreadHeapPtr::new_unchecked(current_theap),
         )
     };
-    // SAFETY: the typed witnesses retain active claimed ownership and the
-    // matching local heap; the raw contract excludes competing mutation while
-    // bitmap, list, stats, and claim-release publication run synchronously.
-    unsafe { _mi_arenas_page_abandon_internal(page, current_theap) };
+    // SAFETY: the typed witnesses retain active claimed ownership and the matching local heap; the
+    // raw contract excludes competing mutation while publication and claim release run synchronously.
+    unsafe { _mi_arenas_page_abandon_internal(page, current_theap) }
 }
 
+/// Re-publish a claimed abandoned arena page through mapped-abandoned state.
+///
 /// # Safety
-/// Called from the free path on pages already associated with an arena.
-// SAFETY: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
-    page: *mut mi_page_t,
-) -> bool {
-    let page_raw = page;
-    // SAFETY: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-    let page =
-        unsafe { crate::core_types::assume_owned_abandoned_page(PagePtr::new_unchecked(page)) };
-    let arena_memid = match crate::core_types::MemId::view(unsafe { (*page_raw).memid }) {
-        crate::core_types::MemIdView::Arena(arena_memid) => arena_memid,
-        _ => return false,
-    };
-    // SAFETY: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
-    unsafe { _mi_arenas_page_try_reabandon_to_mapped_arena(page, arena_memid).is_ok() }
-}
-
+/// `page` must be a live initialized claimed abandoned page that is neither full,
+/// all-free, singleton, nor already mapped-abandoned. `_arena_memid` must be the
+/// arena MemId decoded from that same page. Its associated thread heap, stats,
+/// arena membership, backing, and page metadata must remain live and stable for
+/// the transition. Concurrent claim, relink, reassignment, or teardown is
+/// excluded; protocol remote-free publication remains allowed.
 #[inline(never)]
 pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
     page: crate::core_types::OwnedAbandonedPage,
     _arena_memid: crate::core_types::ArenaMemId,
-) -> Result<crate::core_types::AbandonedMappedPageType, crate::core_types::OwnedAbandonedPage> {
-    let page_raw = page.page().as_ptr();
+) -> Result<crate::core_types::AbandonedDisposition, crate::core_types::OwnedAbandonedPage> {
+    let page_ptr = page.page();
+    let page_raw = page_ptr.as_ptr();
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
         // SAFETY: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
         unsafe { mi_page_slice_start(page_raw) }.cast(),
@@ -2217,10 +2207,32 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
         __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reabandon_full), 1)
     };
     unsafe { __mi_stat_adjust_decrease(ptr::addr_of_mut!((*theap).stats.pages_abandoned), 1) };
-    unsafe { _mi_arenas_page_abandon(page_raw, theap) };
-    // SAFETY: `_mi_arenas_page_abandon` above completed mapped-abandoned
-    // publication and accounting before the terminal witness transition.
-    Ok(unsafe { page.into_mapped_abandoned() })
+    // SAFETY: the owned witness is consumed exactly once; the associated live thread heap and page
+    // satisfy the internal publication contract, with competing metadata mutation excluded.
+    let outcome = unsafe {
+        _mi_arenas_page_abandon_internal(
+            page,
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            ),
+        )
+    };
+    match outcome {
+        crate::core_types::PageAbandonOutcome::Abandoned => {
+            // SAFETY: the consuming internal transition completed mapped-abandoned publication and
+            // released the claim while preserving this saved live page identity.
+            Ok(crate::core_types::AbandonedDisposition::Mapped(unsafe {
+                crate::core_types::assume_mapped_after_reabandon(page_ptr)
+            }))
+        }
+        crate::core_types::PageAbandonOutcome::Destroyed => {
+            // SAFETY: the consuming internal transition completed terminal arena release; the saved
+            // identity is used only to represent the non-accessing destroyed disposition.
+            Ok(crate::core_types::AbandonedDisposition::Destroyed(unsafe {
+                crate::core_types::assume_destroyed_after_arena_free(page_ptr)
+            }))
+        }
+    }
 }
 
 /// # Safety

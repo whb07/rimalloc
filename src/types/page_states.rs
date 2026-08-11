@@ -526,16 +526,6 @@ impl OwnedAbandonedPage {
     }
 
     /// # Safety
-    /// The caller must have completed arena reabandon publication for this live
-    /// page, including mapped-abandoned ownership and accounting state.
-    #[inline(always)]
-    pub(crate) unsafe fn into_mapped_abandoned(self) -> AbandonedMappedPageType {
-        // SAFETY: the owned abandoned page is
-        // being returned to mapped abandoned state.
-        unsafe { AbandonedMappedPageType::new_unchecked(self.page()) }
-    }
-
-    /// # Safety
     /// The caller must have atomically released claimed ownership while keeping
     /// the live page's abandoned metadata and remote-free protocol valid.
     #[inline(always)]

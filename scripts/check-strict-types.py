@@ -88,10 +88,13 @@ RAW_BRIDGE_CALLERS = {
         "src/allocator/page/lifecycle.rs",
         "src/internal/mod.rs",
     },
+    "assume_mapped_after_reabandon": {"src/allocator/arena.rs"},
+    "assume_destroyed_after_arena_free": {"src/allocator/arena.rs"},
 }
 RAW_BRIDGE_CALL_RE = re.compile(
     r"\b(?P<name>assume_(?:uninit_page|active_page|all_free_abandoned|full_page|"
-    r"local_page|foreign_page|abandoned_page|owned_abandoned_page))\s*\("
+    r"local_page|foreign_page|abandoned_page|owned_abandoned_page|"
+    r"mapped_after_reabandon|destroyed_after_arena_free))\s*\("
 )
 RAW_STRING_RE = re.compile(r'(?:b|c)?r(?P<hashes>#{0,255})"')
 CHAR_LITERAL_RE = re.compile(r"'(?:\\.|[^'\\\r\n])'")

@@ -8,8 +8,8 @@
 
 use super::page_states::Abandoned;
 use super::{
-    AbandonedPage, ActivePage, AllFreePage, ForeignPage, FullPage, LocalPage, OwnedAbandonedPage,
-    Page, PagePtr, Uninit,
+    AbandonedMappedPageType, AbandonedPage, ActivePage, AllFreePage, DestroyedPage, ForeignPage,
+    FullPage, LocalPage, OwnedAbandonedPage, Page, PagePtr, Uninit,
 };
 
 /// # Safety
@@ -43,6 +43,29 @@ raw_page_bridge!(
     "SAFETY",
     "`page` must be initialized, locally owned, active, and not full. Legal callers: C-shaped allocation/page entry points, initialization, and queue lookup."
 );
+
+/// # Safety
+/// `page` must be the saved identity of an `OwnedAbandonedPage` that was consumed by arena
+/// reabandon publication and returned `PageAbandonOutcome::Abandoned`. The page must remain live and
+/// published with mapped-abandoned ownership and accounting. Legal caller: the typed arena
+/// reabandon completion boundary.
+#[inline(always)]
+pub(crate) unsafe fn assume_mapped_after_reabandon(page: PagePtr) -> AbandonedMappedPageType {
+    // SAFETY: the caller proves the consuming arena transition completed mapped publication before
+    // this sole replacement capability is constructed.
+    unsafe { AbandonedMappedPageType::new_unchecked(page) }
+}
+
+/// # Safety
+/// `page` must be the saved identity of an `OwnedAbandonedPage` that was consumed by arena abandon
+/// cleanup and returned `PageAbandonOutcome::Destroyed` after completing arena release. Legal caller:
+/// the typed arena reabandon completion boundary.
+#[inline(always)]
+pub(crate) unsafe fn assume_destroyed_after_arena_free(page: PagePtr) -> DestroyedPage {
+    // SAFETY: the caller proves the consuming arena transition completed terminal release before
+    // this non-accessing destroyed-state capability is constructed.
+    unsafe { DestroyedPage::new_unchecked(page) }
+}
 
 /// # Safety
 /// `page` must be abandoned and have zero used blocks. Legal callers: raw

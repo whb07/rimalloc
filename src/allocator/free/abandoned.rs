@@ -21,7 +21,7 @@ unsafe fn try_free_abandoned(
 
 unsafe fn try_reabandon_mapped(
     page: crate::core_types::OwnedAbandonedPage,
-) -> Result<crate::core_types::AbandonedMappedPageType, crate::core_types::OwnedAbandonedPage> {
+) -> Result<crate::core_types::AbandonedDisposition, crate::core_types::OwnedAbandonedPage> {
     // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
         #[cfg(feature = "bench-diagnostics")]
@@ -87,7 +87,7 @@ unsafe fn release_abandoned_ownership(
                     Err(page) => page,
                 };
                 page = match try_reabandon_mapped(page) {
-                    Ok(page) => return crate::core_types::AbandonedDisposition::Mapped(page),
+                    Ok(disposition) => return disposition,
                     Err(page) => page,
                 };
                 tf_expect = atomic_tf.load_relaxed();
@@ -260,7 +260,7 @@ pub(super) unsafe fn collect_after_remote_free(
             };
         }
         let page = match try_reabandon_mapped(page) {
-            Ok(page) => return crate::core_types::AbandonedDisposition::Mapped(page),
+            Ok(disposition) => return disposition,
             Err(page) => page,
         };
 

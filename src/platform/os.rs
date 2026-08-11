@@ -1436,56 +1436,64 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     p
 }
 
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline]
-unsafe fn mi_os_claim_huge_pages(pages: usize, total_size: *mut usize) -> *mut u8 {
+fn mi_os_huge_reservation_size(pages: usize) -> Option<ReservedBytes> {
+    pages
+        .checked_mul(MI_HUGE_OS_PAGE_SIZE)
+        .map(ReservedBytes::new)
+}
+
+#[inline]
+fn mi_os_huge_reservation_end(start: usize, size: ReservedBytes) -> Option<usize> {
+    start.checked_add(size.get())
+}
+
+#[inline]
+fn mi_os_claim_huge_pages(pages: usize) -> Option<(usize, ReservedBytes)> {
     #[cfg(target_pointer_width = "32")]
     let _ = pages;
-    if !total_size.is_null() {
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        unsafe { *total_size = 0 };
-    }
     #[cfg(target_pointer_width = "32")]
     {
-        return core::ptr::null_mut();
+        return None;
     }
 
     #[cfg(not(target_pointer_width = "32"))]
     {
-        let size = pages * MI_HUGE_OS_PAGE_SIZE;
+        let size = mi_os_huge_reservation_size(pages)?;
         let mut huge_start = MI_HUGE_START.load(Ordering::Relaxed);
         loop {
             let mut start = huge_start;
             if start == 0 {
                 start = 8usize << 40;
                 if MI_SECURE != 0 || MI_DEBUG == 0 {
-                    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+                    // SAFETY: process initialization publishes the default
+                    // thread-heap pointer before huge reservations can run.
                     let theap = unsafe { _mi_theap_default() };
+                    // SAFETY: `theap` is the live process-default metadata;
+                    // this predicate only reads its initialized-state marker.
                     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
+                        // SAFETY: the preceding predicate established initialized
+                        // default-thread-heap random state for this synchronous use.
                         let r = unsafe { crate::internal::_mi_theap_random_next(theap) };
-                        start += MI_HUGE_OS_PAGE_SIZE * ((r >> 17) & 0x0FFF);
+                        let random_offset = MI_HUGE_OS_PAGE_SIZE * ((r >> 17) & 0x0FFF);
+                        start = start.checked_add(random_offset)?;
                     } else {
                         _mi_warning_message_fmt(format_args!(
                             "failed to randomize the start address of huge pages allocation ({} bytes at {:p})",
-                            size, start as *mut c_void
+                            size.get(),
+                            ptr::without_provenance_mut::<c_void>(start)
                         ));
                     }
                 }
             }
-            let end = start + size;
+            let end = mi_os_huge_reservation_end(start, size)?;
             match MI_HUGE_START.compare_exchange_weak(
                 huge_start,
                 end,
                 Ordering::AcqRel,
                 Ordering::Relaxed,
             ) {
-                Ok(_) => {
-                    if !total_size.is_null() {
-                        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-                        unsafe { *total_size = size };
-                    }
-                    return start as *mut u8;
-                }
+                Ok(_) => return Some((start, size)),
                 Err(current) => huge_start = current,
             }
         }
@@ -1589,9 +1597,12 @@ pub(crate) unsafe fn _mi_os_numa_node_typed() -> crate::core_types::NumaNode {
 }
 
 /// # Safety
-/// Any non-null output pointers must be writable. The returned memory must be released through
-/// the matching OS huge-page free path.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// `memid` must be non-null, aligned, and uniquely writable for one memory ID.
+/// Any non-null `pages_reserved` and `psize` outputs must likewise be aligned
+/// and uniquely writable for one `usize`. The returned memory must be released
+/// through the matching OS huge-page free path.
+// SAFETY: this internal ABI boundary initializes each caller-provided output,
+// then publishes only successfully mapped contiguous huge pages and their MemId.
 pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
     pages: usize,
     numa_node: i32,
@@ -1600,7 +1611,9 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
     psize: *mut usize,
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY: the caller keeps every non-null output uniquely writable for the
+    // transaction; primitive mappings are accessed only through their returned
+    // ranges, and successful pages remain live through MemId publication.
     unsafe {
         if !memid.is_null() {
             *memid = _mi_memid_none();
@@ -1611,17 +1624,21 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
         if !pages_reserved.is_null() {
             *pages_reserved = 0;
         }
-        let mut size = 0usize;
-        let start = mi_os_claim_huge_pages(pages, &mut size);
-        if start.is_null() {
+        if memid.is_null() {
             return ptr::null_mut();
         }
+        let Some((start, size)) = mi_os_claim_huge_pages(pages) else {
+            return ptr::null_mut();
+        };
 
         let start_t = _mi_clock_start();
         let mut page = 0usize;
         let mut all_zero = true;
+        let mut mapped_start = None;
+        let mut mapped_start_address = None;
         while page < pages {
-            let addr = start.add(page * MI_HUGE_OS_PAGE_SIZE).cast::<c_void>();
+            let offset = page * MI_HUGE_OS_PAGE_SIZE;
+            let addr = ptr::without_provenance_mut::<c_void>(start + offset);
             let mut is_zero = false;
             let mut p: *mut c_void = ptr::null_mut();
             // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
@@ -1648,15 +1665,31 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
                         "could not allocate contiguous huge OS page {} at {:p}\n",
                         page, addr
                     ));
-                    mi_os_prim_free_range(
-                        NonNull::new(p),
-                        ReservedBytes::new(MI_HUGE_OS_PAGE_SIZE),
-                        CommittedBytes::new(MI_HUGE_OS_PAGE_SIZE),
-                        None,
-                    );
+                    // SAFETY: the primitive returned this committed mapping, but
+                    // allocator statistics have not yet recorded it; release it
+                    // directly so no uncharged counters are decremented.
+                    let free_err = _mi_prim_free(p, MI_HUGE_OS_PAGE_SIZE);
+                    if free_err != 0 {
+                        _mi_warning_message_fmt(format_args!(
+                            "unable to free OS memory (error: {} (0x{:x}), size: 0x{:x} bytes, address: {:p})\n",
+                            free_err, free_err, MI_HUGE_OS_PAGE_SIZE, p
+                        ));
+                    }
                 }
                 break;
             }
+
+            let mapped = NonNull::new(p);
+            crate::internal::mi_assert_internal!(mapped.is_some());
+            let Some(mapped) = mapped else { break };
+            if page == 0 {
+                mapped_start = Some(mapped);
+                mapped_start_address = Some(ptr_exposed_addr(mapped.as_ptr()));
+            }
+            crate::internal::mi_assert_internal!(mapped_start.is_some());
+            crate::internal::mi_assert_internal!(
+                ptr_exposed_addr(mapped.as_ptr()) == mapped_start_address.unwrap_or(start) + offset
+            );
 
             page += 1;
             let subproc = _mi_subproc();
@@ -1687,32 +1720,27 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
         }
 
         let allocated = page * MI_HUGE_OS_PAGE_SIZE;
-        crate::internal::mi_assert_internal!(allocated <= size);
+        crate::internal::mi_assert_internal!(allocated <= size.get());
         if !pages_reserved.is_null() {
             *pages_reserved = page;
         }
         if !psize.is_null() {
             *psize = allocated;
         }
-        if page != 0 {
-            crate::internal::mi_assert_internal!(!start.is_null());
-            if !memid.is_null() {
-                *memid = crate::core_types::MemId::<crate::core_types::OsMem>::os_huge(
-                    crate::core_types::OsMemPtr::new(start.cast::<c_void>()),
-                    crate::core_types::ReservedBytes::new(allocated),
-                    crate::core_types::InitiallyCommitted(true),
-                    crate::core_types::InitiallyZero(all_zero),
-                    crate::core_types::Pinned(true),
-                )
-                .into_raw();
-                crate::internal::mi_assert!((*memid).is_pinned);
-            }
-        }
-        if page == 0 {
-            ptr::null_mut()
-        } else {
-            start.cast::<c_void>()
-        }
+        let Some(mapped_start) = mapped_start else {
+            return ptr::null_mut();
+        };
+        crate::internal::mi_assert_internal!(page != 0);
+        *memid = crate::core_types::MemId::<crate::core_types::OsMem>::os_huge(
+            crate::core_types::OsMemPtr::new(mapped_start.as_ptr()),
+            crate::core_types::ReservedBytes::new(allocated),
+            crate::core_types::InitiallyCommitted(true),
+            crate::core_types::InitiallyZero(all_zero),
+            crate::core_types::Pinned(true),
+        )
+        .into_raw();
+        crate::internal::mi_assert!((*memid).is_pinned);
+        mapped_start.as_ptr()
     }
 }
 
@@ -1911,6 +1939,34 @@ mod tests {
             address + alignment - remainder
         };
         base.map_addr(|_| aligned).cast()
+    }
+
+    #[test]
+    fn huge_page_reservation_geometry_rejects_overflow() {
+        assert_eq!(mi_os_huge_reservation_size(0), Some(ReservedBytes::new(0)));
+        let one = mi_os_huge_reservation_size(1).unwrap();
+        assert_eq!(one, ReservedBytes::new(MI_HUGE_OS_PAGE_SIZE));
+        assert!(mi_os_huge_reservation_size(usize::MAX).is_none());
+
+        assert_eq!(
+            mi_os_huge_reservation_end(usize::MAX - one.get(), one),
+            Some(usize::MAX)
+        );
+        assert!(mi_os_huge_reservation_end(usize::MAX - one.get() + 1, one).is_none());
+    }
+
+    #[test]
+    fn huge_page_allocation_rejects_null_memid_before_primitive_work() {
+        let mut pages_reserved = usize::MAX;
+        let mut size = usize::MAX;
+        // SAFETY: the optional outputs are uniquely writable; a null mandatory
+        // MemId is intentionally supplied to exercise preflight rejection.
+        let result = unsafe {
+            _mi_os_alloc_huge_os_pages(1, 0, 0, &mut pages_reserved, &mut size, ptr::null_mut())
+        };
+        assert!(result.is_null());
+        assert_eq!(pages_reserved, 0);
+        assert_eq!(size, 0);
     }
 
     fn assert_range(range: OsPageRange, start: usize, size: usize) {

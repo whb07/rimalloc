@@ -14,7 +14,7 @@ use crate::platform::os::_mi_os_numa_node_count;
 use crate::types::{MI_MALLOC_VERSION, mi_output_fun};
 use crate::types::{RequestedSize, StatsBin};
 
-use super::counters::{mi_stat_count_add_mt, mi_stats_get_bin_size_typed, stats_bin_iter};
+use super::counters::{mi_stats_get_bin_size_typed, mi_stats_snapshot_atomic, stats_bin_iter};
 use super::process::{ProcessInfoOutput, mi_process_info_impl};
 use super::{
     MI_BIN_HUGE, MI_CHUNKBIN_COUNT, MI_CHUNKBINS, MI_STAT_VERSION, mi_chunkbin_e, mi_chunkbin_t,
@@ -341,7 +341,10 @@ fn mi_buffered_flush(buf: &mut buffered_t) {
     buf.used = 0;
 }
 
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+/// # Safety
+/// A non-null `msg` must point to a readable NUL-terminated string. A non-null `arg` must point to
+/// the live, aligned, uniquely writable `buffered_t` created by `_mi_stats_print`, including its
+/// writable backing buffer. This C callback must not unwind.
 unsafe extern "C" fn mi_buffered_out(msg: *const c_char, arg: *mut c_void) {
     if msg.is_null() || arg.is_null() {
         return;
@@ -366,6 +369,11 @@ unsafe extern "C" fn mi_buffered_out(msg: *const c_char, arg: *mut c_void) {
     }
 }
 
+/// # Safety
+/// `stats` must be null or point to live, aligned initialized stats. During the snapshot, each
+/// source counter must either be exclusively stable or have all concurrent access use the atomic
+/// stats protocol. A non-null output callback and `arg0` must remain valid for synchronous
+/// invocation and the callback must not unwind.
 pub(super) unsafe fn _mi_stats_print(
     name: &str,
     id: usize,
@@ -373,10 +381,13 @@ pub(super) unsafe fn _mi_stats_print(
     out0: Option<mi_output_fun>,
     arg0: *mut c_void,
 ) {
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
-    let Some(stats) = (unsafe { stats.as_ref() }) else {
+    if stats.is_null() {
         return;
-    };
+    }
+    // SAFETY: the caller keeps the non-null source live and each counter is either exclusively
+    // stable or accessed concurrently only through the atomic stats protocol.
+    let snapshot = unsafe { mi_stats_snapshot_atomic(stats) };
+    let stats = &snapshot;
 
     let mut buf = [0 as c_char; 256];
     let mut buffer = buffered_t {
@@ -423,9 +434,14 @@ pub(super) unsafe fn _mi_stats_print(
             out,
             arg,
         );
-        let mut total = mi_stat_count_t::default();
-        mi_stat_count_add_mt(&mut total, &stats.malloc_normal);
-        mi_stat_count_add_mt(&mut total, &stats.malloc_huge);
+        let mut total = mi_stat_count_t {
+            current: stats.malloc_normal.current + stats.malloc_huge.current,
+            total: stats.malloc_normal.total + stats.malloc_huge.total,
+            peak: stats.malloc_normal.peak,
+        };
+        total.peak = total
+            .peak
+            .max(stats.malloc_normal.current + stats.malloc_huge.peak);
         mi_stat_print_ex(&total, "total", 1, out, arg, Some(""));
         mi_stat_total_print(&stats.malloc_requested, "malloc req", 1, out, arg);
         _mi_fprintf(out, arg, format_args!("\n"));
@@ -487,6 +503,9 @@ pub(super) unsafe fn _mi_stats_print(
 }
 
 #[inline(always)]
+/// # Safety
+/// A non-null output callback and `arg` must remain valid for synchronous invocation and the
+/// callback must not unwind.
 pub(super) unsafe fn mi_process_info_print_out_impl(out: Option<mi_output_fun>, arg: *mut c_void) {
     let mut elapsed = 0usize;
     let mut user_time = 0usize;
@@ -790,19 +809,28 @@ fn append_stats_json(hbuf: &mut mi_json_buf_t, stats: &mi_stats_t) {
     mi_json_buf_print_counter_value(hbuf, "heaps_delete_wait", &stats.heaps_delete_wait);
 }
 
+/// # Safety
+/// `stats` must be null or point to live, aligned initialized stats that remain readable and stable
+/// against mutation for the initial value copy. If `output_buf` is non-null, it must be uniquely
+/// writable for `output_size` bytes for the duration of this call.
 pub(super) unsafe fn mi_stats_get_json_from_impl(
     stats: *const mi_stats_t,
     output_size: usize,
     output_buf: *mut c_char,
 ) -> *mut c_char {
-    // SAFETY: caller provides a valid stats pointer when non-null.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
-    let Some(stats) = (unsafe { stats.as_ref() }) else {
-        return ptr::null_mut();
-    };
-    if stats.size != size_of::<mi_stats_t>() || stats.version != MI_STAT_VERSION {
+    if stats.is_null() {
         return ptr::null_mut();
     }
+    // SAFETY: the caller keeps the source live, aligned, readable, and stable during these header
+    // reads and the subsequent plain value copy.
+    let (stats_size, stats_version) = unsafe { ((*stats).size, (*stats).version) };
+    if stats_size != size_of::<mi_stats_t>() || stats_version != MI_STAT_VERSION {
+        return ptr::null_mut();
+    }
+    // SAFETY: the caller excludes mutation while the initialized source value is copied. A plain
+    // read supports user-owned snapshots whose raw pointer may carry shared-reference provenance.
+    let snapshot = unsafe { ptr::read(stats) };
+    let stats = &snapshot;
 
     let mut hbuf = mi_json_buf_t::default();
     if output_size > 0 && !output_buf.is_null() {

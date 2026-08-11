@@ -5,12 +5,14 @@ use core::{mem::size_of, ptr};
 use crate::allocator::page::_mi_bin_size;
 use crate::internal::_mi_memzero;
 use crate::internal::atomic::{
-    mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed,
+    mi_atomic_addi64_relaxed, mi_atomic_loadi64_explicit, mi_atomic_maxi64_relaxed,
+    mi_memory_order_e,
 };
 use crate::types::{Bin, StatsBin};
 
 use super::{
-    MI_BIN_HUGE, MI_STAT, MI_STAT_VERSION, mi_stat_count_t, mi_stat_counter_t, mi_stats_t,
+    MI_BIN_HUGE, MI_CHUNKBIN_COUNT, MI_STAT, MI_STAT_VERSION, mi_stat_count_t, mi_stat_counter_t,
+    mi_stats_t,
 };
 
 /// # Safety
@@ -59,6 +61,9 @@ pub(super) fn initialized_stats() -> mi_stats_t {
     stats
 }
 
+/// # Safety
+/// `stat` must point to live, aligned atomic-compatible count storage, and every concurrent access
+/// to its fields must use the atomic statistics protocol.
 unsafe fn mi_stat_update_mt(stat: *mut mi_stat_count_t, amount: i64) {
     if amount == 0 {
         return;
@@ -157,6 +162,9 @@ pub(crate) unsafe extern "C" fn __mi_stat_decrease(stat: *mut mi_stat_count_t, a
     mi_stat_update(unsafe { &mut *stat }, -(amount as i64));
 }
 
+/// # Safety
+/// `stat` must point to live, aligned atomic-compatible count storage, and every concurrent access
+/// to its fields must use the atomic statistics protocol.
 unsafe fn mi_stat_adjust_mt(stat: *mut mi_stat_count_t, amount: i64) {
     if amount == 0 {
         return;
@@ -229,53 +237,79 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease(
     mi_stat_adjust(unsafe { &mut *stat }, -(amount as i64));
 }
 
-pub(super) fn mi_stat_count_add_mt(stat: *mut mi_stat_count_t, src: *const mi_stat_count_t) {
+/// # Safety
+/// `stat` and `src` must point to live, aligned atomic-compatible count storage. `stat` must be
+/// writable, and every concurrent access to either counter must use the atomic stats protocol.
+pub(super) unsafe fn mi_stat_count_add_mt(stat: *mut mi_stat_count_t, src: *const mi_stat_count_t) {
     if ptr::eq(stat.cast_const(), src) {
         return;
     }
-    // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the contract keeps both counters live and atomic-compatible. Each relaxed source
+    // load is race-free; values from different fields need not form one coherent instant.
     unsafe {
-        mi_atomic_void_addi64_relaxed(
-            ptr::addr_of_mut!((*stat).total),
+        let total = mi_atomic_loadi64_explicit(
             ptr::addr_of!((*src).total),
+            mi_memory_order_e::mi_memory_order_relaxed,
         );
-        let prev_current =
-            mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).current), (*src).current);
-        mi_atomic_maxi64_relaxed(ptr::addr_of_mut!((*stat).peak), prev_current + (*src).peak);
+        if total != 0 {
+            mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).total), total);
+        }
+        let current = mi_atomic_loadi64_explicit(
+            ptr::addr_of!((*src).current),
+            mi_memory_order_e::mi_memory_order_relaxed,
+        );
+        let peak = mi_atomic_loadi64_explicit(
+            ptr::addr_of!((*src).peak),
+            mi_memory_order_e::mi_memory_order_relaxed,
+        );
+        let prev_current = mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).current), current);
+        mi_atomic_maxi64_relaxed(ptr::addr_of_mut!((*stat).peak), prev_current + peak);
     }
 }
 
-fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_counter_t) {
+/// # Safety
+/// `stat` and `src` must point to live, aligned atomic-compatible counter storage. `stat` must be
+/// writable, and every concurrent access to either counter must use the atomic stats protocol.
+unsafe fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_counter_t) {
     if ptr::eq(stat.cast_const(), src) {
         return;
     }
-    // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the contract keeps both counters live and atomic-compatible; the relaxed source load
+    // and conditional destination update use the same protocol as concurrent statistics updates.
     unsafe {
-        mi_atomic_void_addi64_relaxed(
-            ptr::addr_of_mut!((*stat).total),
+        let total = mi_atomic_loadi64_explicit(
             ptr::addr_of!((*src).total),
+            mi_memory_order_e::mi_memory_order_relaxed,
         );
+        if total != 0 {
+            mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).total), total);
+        }
     }
 }
 
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+/// # Safety
+/// Non-null pointers must address live, aligned `mi_stats_t` storage; `stats` must be writable.
+/// During this operation, each source/destination counter must either be exclusively stable or have
+/// all concurrent access use the allocator's atomic statistics protocol.
 #[inline(never)]
 unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {
         return;
     }
-    // SAFETY: null and self-add cases were checked above.
-    // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
+    // SAFETY: the function contract supplies live atomic-compatible source and destination fields;
+    // null and self-add cases were handled above.
     unsafe { mi_stats_add_nonnull(stats, src) };
 }
 
+/// # Safety
+/// `stats` and `src` must address distinct live, aligned `mi_stats_t` values; `stats` must be
+/// writable. During this operation, each counter must either be exclusively stable or have all
+/// concurrent access use the allocator's atomic statistics protocol.
 #[inline(never)]
 unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     macro_rules! MI_STAT_COUNT {
         ($field:ident) => {
-            // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
+            // SAFETY: the enclosing contract covers this corresponding count-field projection.
             unsafe {
                 mi_stat_count_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -286,7 +320,7 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     }
     macro_rules! MI_STAT_COUNTER {
         ($field:ident) => {
-            // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
+            // SAFETY: the enclosing contract covers this corresponding counter-field projection.
             unsafe {
                 mi_stat_counter_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -344,9 +378,14 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
             // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
             let bin = unsafe { StatsBin::new_unchecked(i as u16) };
             // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
-            mi_stat_count_add_mt(unsafe { stats_malloc_bins.add(bin.as_usize()) }, unsafe {
-                src_malloc_bins.add(bin.as_usize())
-            });
+            // SAFETY: the enclosing stats contract covers the corresponding initialized bin
+            // counters, and `bin` is within both fixed-size arrays.
+            unsafe {
+                mi_stat_count_add_mt(
+                    stats_malloc_bins.add(bin.as_usize()),
+                    src_malloc_bins.add(bin.as_usize()),
+                )
+            };
         }
     }
     // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
@@ -358,34 +397,204 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
         // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
         let bin = unsafe { StatsBin::new_unchecked(i as u16) };
         // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
-        mi_stat_count_add_mt(unsafe { stats_page_bins.add(bin.as_usize()) }, unsafe {
-            src_page_bins.add(bin.as_usize())
-        });
+        // SAFETY: the enclosing stats contract covers the corresponding initialized bin counters,
+        // and `bin` is within both fixed-size arrays.
+        unsafe {
+            mi_stat_count_add_mt(
+                stats_page_bins.add(bin.as_usize()),
+                src_page_bins.add(bin.as_usize()),
+            )
+        };
     }
 }
 
-pub(super) fn mi_stats_add_into(to: &mut mi_stats_t, from: &mi_stats_t) {
-    // SAFETY: references are valid `mi_stats_t` values; the checked raw helper preserves C's
-    // null/self guard at the compatibility boundary.
-    // SAFETY: raw stats merge bodies update validated counter fields and reset source buffers.
-    unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };
+/// # Safety
+/// `to` and `from` must point to live, aligned `mi_stats_t` values and `to` must be writable. During
+/// this operation, each counter must either be exclusively stable or have all concurrent access use
+/// the allocator's atomic statistics protocol.
+pub(super) unsafe fn mi_stats_add_into(to: *mut mi_stats_t, from: *const mi_stats_t) {
+    // SAFETY: the caller supplies the raw atomic-compatible source and destination contracts.
+    unsafe { mi_stats_add(to, from) };
 }
 
-pub(super) fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bool {
-    // SAFETY: callers must pass valid pointers when non-null; header checks gate the copy.
-    // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+/// # Safety
+/// `stats_to` must be null or point to a live, aligned, exclusively writable `mi_stats_t`.
+/// `stats_from` must be null or point to live, aligned statistics storage. During this operation,
+/// every source counter must either be exclusively stable or have all concurrent access use the
+/// allocator's atomic statistics protocol. Neither allocation may be invalidated during this call.
+pub(super) unsafe fn mi_stats_copy(
+    stats_to: *mut mi_stats_t,
+    stats_from: *const mi_stats_t,
+) -> bool {
+    if stats_to.is_null() {
+        return false;
+    }
+    // SAFETY: the destination is caller-provided readable storage until the final exclusive write.
+    let (to_size, to_version) = unsafe { ((*stats_to).size, (*stats_to).version) };
+    if to_size != size_of::<mi_stats_t>() || to_version != MI_STAT_VERSION || stats_from.is_null() {
+        return false;
+    }
+    // SAFETY: size is immutable after source publication and the source remains live.
+    let from_size = unsafe { (*stats_from).size };
+    if from_size != to_size {
+        return false;
+    }
+
+    // SAFETY: validation above established the non-null live source; its counters satisfy the
+    // function's atomic-or-exclusive access contract.
+    let snapshot = unsafe { mi_stats_snapshot_atomic(stats_from) };
+    // SAFETY: the contract makes the destination exclusive for this final initialized value write.
+    unsafe { ptr::write(stats_to, snapshot) };
+    true
+}
+
+/// # Safety
+/// `stats_from` must point to live, aligned initialized statistics storage. During this operation,
+/// every source counter must either be exclusively stable or have all concurrent access use the
+/// allocator's atomic statistics protocol. The source may not be invalidated during the snapshot.
+pub(super) unsafe fn mi_stats_snapshot_atomic(stats_from: *const mi_stats_t) -> mi_stats_t {
+    // SAFETY: the source header is immutable after publication and remains live under the contract.
+    let (from_size, from_version) = unsafe { ((*stats_from).size, (*stats_from).version) };
+    let mut snapshot = initialized_stats();
+    snapshot.size = from_size;
+    snapshot.version = from_version;
+    macro_rules! MI_STAT_COUNT {
+        ($field:ident) => {
+            // SAFETY: the source field is live atomic-compatible storage under the function
+            // contract; the returned value is written into the fresh exclusive snapshot.
+            snapshot.$field =
+                unsafe { mi_stat_count_snapshot(ptr::addr_of!((*stats_from).$field)) };
+        };
+    }
+    macro_rules! MI_STAT_COUNTER {
+        ($field:ident) => {
+            // SAFETY: the source field is live atomic-compatible storage under the function
+            // contract; the returned value is written into the fresh exclusive snapshot.
+            snapshot.$field =
+                unsafe { mi_stat_counter_snapshot(ptr::addr_of!((*stats_from).$field)) };
+        };
+    }
+
+    MI_STAT_COUNT!(pages);
+    MI_STAT_COUNT!(reserved);
+    MI_STAT_COUNT!(committed);
+    MI_STAT_COUNTER!(reset);
+    MI_STAT_COUNTER!(purged);
+    MI_STAT_COUNT!(page_committed);
+    MI_STAT_COUNT!(pages_abandoned);
+    MI_STAT_COUNT!(threads);
+    MI_STAT_COUNT!(malloc_normal);
+    MI_STAT_COUNT!(malloc_huge);
+    MI_STAT_COUNT!(malloc_requested);
+    MI_STAT_COUNTER!(mmap_calls);
+    MI_STAT_COUNTER!(commit_calls);
+    MI_STAT_COUNTER!(reset_calls);
+    MI_STAT_COUNTER!(purge_calls);
+    MI_STAT_COUNTER!(arena_count);
+    MI_STAT_COUNTER!(malloc_normal_count);
+    MI_STAT_COUNTER!(malloc_huge_count);
+    MI_STAT_COUNTER!(malloc_guarded_count);
+    MI_STAT_COUNTER!(arena_rollback_count);
+    MI_STAT_COUNTER!(arena_purges);
+    MI_STAT_COUNTER!(pages_extended);
+    MI_STAT_COUNTER!(pages_retire);
+    MI_STAT_COUNTER!(page_searches);
+    MI_STAT_COUNTER!(page_searches_count);
+    MI_STAT_COUNT!(segments);
+    MI_STAT_COUNT!(segments_abandoned);
+    MI_STAT_COUNT!(segments_cache);
+    MI_STAT_COUNT!(_segments_reserved);
+    MI_STAT_COUNT!(heaps);
+    MI_STAT_COUNT!(theaps);
+    MI_STAT_COUNTER!(pages_reclaim_on_alloc);
+    MI_STAT_COUNTER!(pages_reclaim_on_free);
+    MI_STAT_COUNTER!(pages_reabandon_full);
+    MI_STAT_COUNTER!(pages_unabandon_busy_wait);
+    MI_STAT_COUNTER!(heaps_delete_wait);
+
+    for i in 0..snapshot._stat_reserved.len() {
+        // SAFETY: `i` is in both fixed-size reserved-count arrays and the source remains live.
+        snapshot._stat_reserved[i] = unsafe {
+            mi_stat_count_snapshot(
+                ptr::addr_of!((*stats_from)._stat_reserved)
+                    .cast::<mi_stat_count_t>()
+                    .add(i),
+            )
+        };
+    }
+    for i in 0..snapshot._stat_counter_reserved.len() {
+        // SAFETY: `i` is in both fixed-size reserved-counter arrays and the source remains live.
+        snapshot._stat_counter_reserved[i] = unsafe {
+            mi_stat_counter_snapshot(
+                ptr::addr_of!((*stats_from)._stat_counter_reserved)
+                    .cast::<mi_stat_counter_t>()
+                    .add(i),
+            )
+        };
+    }
+    for i in 0..=MI_BIN_HUGE {
+        // SAFETY: `i` is in both fixed-size malloc/page bin arrays and the source remains live.
+        unsafe {
+            snapshot.malloc_bins[i] = mi_stat_count_snapshot(
+                ptr::addr_of!((*stats_from).malloc_bins)
+                    .cast::<mi_stat_count_t>()
+                    .add(i),
+            );
+            snapshot.page_bins[i] = mi_stat_count_snapshot(
+                ptr::addr_of!((*stats_from).page_bins)
+                    .cast::<mi_stat_count_t>()
+                    .add(i),
+            );
+        }
+    }
+    for i in 0..MI_CHUNKBIN_COUNT {
+        // SAFETY: `i` is in the fixed-size chunk-bin array and the source remains live.
+        snapshot.chunk_bins[i] = unsafe {
+            mi_stat_count_snapshot(
+                ptr::addr_of!((*stats_from).chunk_bins)
+                    .cast::<mi_stat_count_t>()
+                    .add(i),
+            )
+        };
+    }
+    snapshot
+}
+
+/// # Safety
+/// `src` must point to live, aligned count storage. During this operation it must either be
+/// exclusively stable or have all concurrent field access use the atomic statistics protocol.
+unsafe fn mi_stat_count_snapshot(src: *const mi_stat_count_t) -> mi_stat_count_t {
+    // SAFETY: the contract covers all three atomic-compatible source field projections.
     unsafe {
-        if stats_to.is_null()
-            || (*stats_to).size != size_of::<mi_stats_t>()
-            || (*stats_to).version != MI_STAT_VERSION
-        {
-            return false;
+        mi_stat_count_t {
+            total: mi_atomic_loadi64_explicit(
+                ptr::addr_of!((*src).total),
+                mi_memory_order_e::mi_memory_order_relaxed,
+            ),
+            peak: mi_atomic_loadi64_explicit(
+                ptr::addr_of!((*src).peak),
+                mi_memory_order_e::mi_memory_order_relaxed,
+            ),
+            current: mi_atomic_loadi64_explicit(
+                ptr::addr_of!((*src).current),
+                mi_memory_order_e::mi_memory_order_relaxed,
+            ),
         }
-        if stats_from.is_null() || (*stats_from).size != (*stats_to).size {
-            return false;
-        }
-        *stats_to = *stats_from;
-        true
+    }
+}
+
+/// # Safety
+/// `src` must point to live, aligned counter storage. During this operation it must either be
+/// exclusively stable or have all concurrent field access use the atomic statistics protocol.
+unsafe fn mi_stat_counter_snapshot(src: *const mi_stat_counter_t) -> mi_stat_counter_t {
+    mi_stat_counter_t {
+        total: unsafe {
+            // SAFETY: the contract covers this atomic-compatible source total-field projection.
+            mi_atomic_loadi64_explicit(
+                ptr::addr_of!((*src).total),
+                mi_memory_order_e::mi_memory_order_relaxed,
+            )
+        },
     }
 }
 
@@ -396,7 +605,8 @@ mod tests {
 
     use super::{
         __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt, __mi_stat_decrease_mt,
-        __mi_stat_increase_mt, mi_stat_count_t,
+        __mi_stat_increase_mt, initialized_stats, mi_stat_count_t, mi_stats_copy,
+        mi_stats_snapshot_atomic,
     };
 
     struct SharedStatCount(UnsafeCell<mi_stat_count_t>);
@@ -448,6 +658,80 @@ mod tests {
         assert_eq!(stat.current, 3);
         assert_eq!(stat.total, 4);
         assert_eq!(stat.peak, 5);
+    }
+
+    #[test]
+    fn atomic_snapshot_covers_reserved_and_all_bin_families() {
+        let source = UnsafeCell::new(initialized_stats());
+        let source_raw = source.get();
+        // SAFETY: this is the fixture's only raw pointer and all initialization completes before
+        // the atomic snapshot starts; no overlapping reference is created.
+        unsafe {
+            (*source_raw)._stat_reserved[2] = mi_stat_count_t {
+                current: 11,
+                total: 13,
+                peak: 17,
+            };
+            (*source_raw)._stat_counter_reserved[1].total = 19;
+            (*source_raw).malloc_bins[3] = mi_stat_count_t {
+                current: 23,
+                total: 29,
+                peak: 31,
+            };
+            (*source_raw).page_bins[4].total = 37;
+            (*source_raw).chunk_bins[1] = mi_stat_count_t {
+                current: 41,
+                total: 43,
+                peak: 47,
+            };
+        }
+        let mut snapshot = initialized_stats();
+
+        // SAFETY: both values are live and aligned; the destination is exclusive and the source
+        // has no concurrent access while the snapshot helper performs its atomic field loads.
+        assert!(unsafe { mi_stats_copy(ptr::addr_of_mut!(snapshot), source_raw.cast_const()) });
+
+        assert_eq!(snapshot._stat_reserved[2].total, 13);
+        assert_eq!(snapshot._stat_counter_reserved[1].total, 19);
+        assert_eq!(snapshot.malloc_bins[3].peak, 31);
+        assert_eq!(snapshot.page_bins[4].total, 37);
+        assert_eq!(snapshot.chunk_bins[1].current, 41);
+    }
+
+    #[test]
+    fn atomic_snapshot_preserves_source_header_version() {
+        let source = UnsafeCell::new(initialized_stats());
+        let source_raw = source.get();
+        // SAFETY: this is the fixture's only raw pointer and initialization precedes the snapshot.
+        unsafe { (*source_raw).version = super::MI_STAT_VERSION.wrapping_add(1) };
+        let mut snapshot = initialized_stats();
+
+        // SAFETY: both values are live and aligned; the destination is exclusive and the source
+        // has no concurrent access while its header and fields are sampled.
+        assert!(unsafe { mi_stats_copy(ptr::addr_of_mut!(snapshot), source_raw.cast_const()) });
+        // SAFETY: the snapshot has completed and no mutation or other access overlaps this read.
+        let source = unsafe { &*source_raw };
+        assert_eq!(snapshot.size, source.size);
+        assert_eq!(snapshot.version, source.version);
+    }
+
+    #[test]
+    fn atomic_snapshot_accepts_legacy_zero_header_for_rendering() {
+        let source = UnsafeCell::new(initialized_stats());
+        let source_raw = source.get();
+        // SAFETY: this is the fixture's only raw pointer and initialization precedes the snapshot.
+        unsafe {
+            (*source_raw).size = 0;
+            (*source_raw).version = 0;
+            (*source_raw).malloc_normal.total = 7;
+        }
+
+        // SAFETY: the source remains live and exclusive, with raw provenance suitable for the
+        // atomic-compatible field loads used by allocator rendering.
+        let snapshot = unsafe { mi_stats_snapshot_atomic(source_raw.cast_const()) };
+        assert_eq!(snapshot.size, 0);
+        assert_eq!(snapshot.version, 0);
+        assert_eq!(snapshot.malloc_normal.total, 7);
     }
 }
 

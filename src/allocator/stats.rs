@@ -9,8 +9,7 @@ use core::{mem::size_of, ptr};
 
 use crate::atomic::mi_lock_t;
 use crate::core_types::{
-    BorrowedHeap, HeapPtr, OutputCallback, OutputCallbackArg, SubprocPtr, ThreadHeapLocal,
-    ThreadHeapPtr,
+    BorrowedHeap, HeapPtr, OutputCallback, OutputCallbackArg, ThreadHeapLocal, ThreadHeapPtr,
 };
 use crate::internal::memid::mi_memid_t;
 use crate::internal::mi_theap_is_initialized;
@@ -201,9 +200,9 @@ pub extern "C" fn mi_process_info_print() {
 }
 
 /// # Safety
-/// `stats` must point to a valid `mi_stats_t` when non-null. If `output_buf` is non-null it
-/// must be writable for `output_size` bytes.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+/// `stats` must be null or point to a live, aligned initialized `mi_stats_t` that remains readable
+/// and stable against mutation during the initial value copy. If `output_buf` is non-null it must be
+/// uniquely writable for `output_size` bytes for the duration of this call.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_stats_get_json_from(
     stats: *const mi_stats_t,
@@ -235,8 +234,10 @@ pub unsafe extern "C" fn mi_subproc_stats_get_json(
 }
 
 /// # Safety
-/// `heap` must be null or a valid heap pointer. If `buf` is non-null it must be writable for
-/// `buf_size` bytes.
+/// `heap` must be null or identify a live initialized heap that is not torn down or reassociated
+/// during this call. Any associated local thread heap must be current-thread owned and exclusively
+/// available for destructive stats merge. If `buf` is non-null it must be uniquely writable for
+/// `buf_size` bytes for the duration of this call.
 // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_get_json(
@@ -244,21 +245,14 @@ pub unsafe extern "C" fn mi_heap_stats_get_json(
     buf_size: usize,
     buf: *mut c_char,
 ) -> *mut c_char {
-    let heap = if heap.is_null() {
-        // SAFETY: the main heap is initialized before its statistics are queried.
-        unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
-    } else {
-        // SAFETY: the caller guarantees that the non-null heap remains valid for this query.
-        unsafe { HeapPtr::new_unchecked(heap) }
-    };
-    // SAFETY: the borrowed heap and caller-provided output buffer remain valid for this call.
-    unsafe {
-        mi_stats_get_json_from(
-            mi_heap_get_stats_borrowed(BorrowedHeap::new_unchecked(heap)),
-            buf_size,
-            buf,
-        )
+    let mut stats = initialized_stats();
+    // SAFETY: the caller keeps the heap live and any current-local source exclusive while its live
+    // counters are atomically copied into the stack snapshot; null retains main-heap semantics.
+    if !unsafe { mi_heap_stats_get(heap, ptr::addr_of_mut!(stats)) } {
+        return ptr::null_mut();
     }
+    // SAFETY: `stats` is a stable initialized stack value and the caller supplies the output buffer.
+    unsafe { mi_stats_get_json_from(ptr::addr_of!(stats), buf_size, buf) }
 }
 
 /// # Safety
@@ -271,9 +265,9 @@ pub unsafe extern "C" fn mi_stats_get_json(buf_size: usize, buf: *mut c_char) ->
 }
 
 /// # Safety
-/// `stats` must point to a valid `mi_stats_t` when non-null. If `buf` is non-null it must be
-/// writable for `buf_size` bytes.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+/// `stats` must be null or point to a live, aligned initialized `mi_stats_t` that remains readable
+/// and stable against mutation during the initial value copy. If `buf` is non-null it must be
+/// uniquely writable for `buf_size` bytes for the duration of this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_as_json(
     stats: *mut mi_stats_t,
@@ -351,129 +345,133 @@ impl HeapPrintVisitInfo {
     }
 }
 
-struct HeapAggregateVisitInfo<'a> {
-    stats: &'a mut mi_stats_t,
-}
-
-unsafe fn mi_stats_merge_theap_to_heap(theap: *mut mi_theap_t) -> *const mi_stats_t {
-    // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-    let theap = unsafe { ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap)) };
-    // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
+/// # Safety
+/// `theap` must remain a live initialized current-thread local thread heap with a live associated
+/// heap. Its local statistics must be exclusively accessible, the heap destination statistics must
+/// remain atomic-compatible, and neither allocation nor their association may be torn down during
+/// the destructive merge. Protocol atomic updates to the heap destination are permitted.
+unsafe fn mi_stats_merge_local_theap_to_heap(theap: ThreadHeapLocal) -> *const mi_stats_t {
+    // SAFETY: the contract keeps the provided current-local thread heap and its association live.
     let Some(heap) = (unsafe { theap.ptr().heap() }) else {
         crate::internal::mi_assert_internal!(false);
         return core::ptr::null();
     };
-    // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-    unsafe { mi_stats_merge_theap_to_heap_typed(theap, heap) }
-}
-
-unsafe fn mi_stats_merge_theap_to_heap_typed(
-    theap: ThreadHeapLocal,
-    heap: HeapPtr,
-) -> *const mi_stats_t {
-    // SAFETY: typed witnesses keep both stats allocations live through the merge.
+    // SAFETY: the local witness provides exclusive readable/writable source statistics.
     let stats = unsafe { ptr::addr_of_mut!((*theap.ptr().as_ptr()).stats) };
-    // SAFETY: typed witnesses keep both stats allocations live through the merge.
+    // SAFETY: the associated heap remains live with atomic-compatible destination statistics.
     let heap_stats =
         unsafe { ptr::addr_of_mut!((*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats) };
-    // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
+    // SAFETY: the source is exclusively owned by this thread; the destination remains live and all
+    // concurrent destination access uses the atomic statistics protocol.
     unsafe { _mi_stats_merge_into(heap_stats, stats) };
     heap_stats.cast_const()
 }
 
-unsafe fn mi_heap_get_stats(heap: *mut mi_heap_t) -> *const mi_stats_t {
-    let heap = if heap.is_null() {
-        // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-        unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
-    } else {
-        // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-        unsafe { HeapPtr::new_unchecked(heap) }
-    };
-    // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-    unsafe { mi_heap_get_stats_borrowed(BorrowedHeap::new_unchecked(heap)) }
-}
-
+/// # Safety
+/// `heap` must remain live and initialized without teardown or reassociation. If it has a local
+/// thread heap, that thread heap must be current-thread owned and exclusively accessible for its
+/// destructive stats merge. Heap statistics must remain atomic-compatible; protocol atomic updates
+/// are permitted.
 unsafe fn mi_heap_get_stats_borrowed(heap: BorrowedHeap) -> *const mi_stats_t {
     let heap = heap.ptr();
-    // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
+    // SAFETY: reading current-thread initialization state does not access the borrowed heap.
     if !unsafe { crate::prim::_mi_thread_is_initialized() } {
-        // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-        return unsafe { &(*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats };
+        // SAFETY: the borrowed heap remains live; raw projection avoids a shared reference to its
+        // concurrently atomically updated statistics.
+        return unsafe { ptr::addr_of!((*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats) };
     }
-    // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
+    // SAFETY: the borrowed live heap remains associated while its current-thread theap is queried.
     let theap = unsafe { _mi_heap_theap_peek(heap.as_ptr()) };
     if theap.is_null() {
-        // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-        unsafe { &(*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats }
+        // SAFETY: the borrowed heap remains live; raw projection avoids a shared reference to its
+        // concurrently atomically updated statistics.
+        unsafe { ptr::addr_of!((*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats) }
     } else {
-        // SAFETY: heap stats merge helpers bind thread heaps and heap stats through typed witnesses.
-        unsafe { mi_stats_merge_theap_to_heap(theap) }
+        // SAFETY: `_mi_heap_theap_peek` returned this current thread's live
+        // local thread heap for the borrowed heap.
+        let theap = unsafe { ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap)) };
+        // SAFETY: the current-local witness keeps the thread-heap source exclusive, while the
+        // borrowed associated heap and its atomic-compatible destination remain live.
+        unsafe { mi_stats_merge_local_theap_to_heap(theap) }
     }
 }
 
 /// # Safety
-/// `heap` must be null or a valid heap pointer owned by the current subproc.
-// SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
+/// `heap` must be null or identify a live initialized heap with a live associated subprocess.
+/// The heap stats source must be exclusively available: no counter updates, other merge/reset, or
+/// teardown may race the destructive merge and zeroing. Concurrent access to the subprocess
+/// destination is permitted only through the atomic stats protocol.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_subproc(heap: *mut mi_heap_t) {
     let heap = if heap.is_null() {
-        // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
+        // SAFETY: the runtime keeps the initialized main heap live for this destructive merge.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
-        // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
+        // SAFETY: the caller supplies the non-null live initialized heap.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
+    // SAFETY: the caller keeps the heap and its stable subprocess association live.
     let Some(subproc) = (unsafe { heap.subproc() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
-    unsafe { mi_heap_stats_merge_to_subproc_typed(BorrowedHeap::new_unchecked(heap), subproc) };
-}
-
-unsafe fn mi_heap_stats_merge_to_subproc_typed(heap: BorrowedHeap, subproc: SubprocPtr) {
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
-    unsafe { _mi_stats_merge_into(subproc.stats(), heap.ptr().stats()) };
+    // SAFETY: the caller keeps the source heap stats exclusively available for
+    // destructive merge and the matching subprocess destination live.
+    unsafe {
+        _mi_stats_merge_into(
+            subproc.stats(),
+            BorrowedHeap::new_unchecked(heap).ptr().stats(),
+        )
+    };
 }
 
 /// # Safety
-/// Uses the process-default heap/theap state and follows the legacy C ABI.
-// SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
+/// The process-default heap, current-local thread heap, and subprocess must remain live. The caller
+/// must exclude concurrent main-heap counter updates, merge/reset operations, and teardown while
+/// its statistics are destructively merged and zeroed. Concurrent subprocess destination updates
+/// are permitted only through the atomic stats protocol.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_reset() {
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
+    // SAFETY: the contract keeps the default thread heap live for this initialization query.
     if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
         return;
     }
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
-    let heap = unsafe { mi_heap_main() };
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
-    let _ = unsafe { mi_heap_get_stats(heap) };
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
-    unsafe { mi_heap_stats_merge_to_subproc(heap) };
+    // SAFETY: the initialized runtime keeps the main heap live through the merge/reset epoch.
+    let heap = unsafe { HeapPtr::new_unchecked(mi_heap_main()) };
+    // SAFETY: current-thread stats may be destructively merged into the live
+    // main heap before its source counters are reset.
+    let _ = unsafe { mi_heap_get_stats_borrowed(BorrowedHeap::new_unchecked(heap)) };
+    // SAFETY: the contract excludes main-heap updates and teardown while the live heap source is
+    // destructively merged into its live atomic subprocess destination.
+    unsafe { mi_heap_stats_merge_to_subproc(heap.as_ptr()) };
 }
 
 /// # Safety
-/// Uses process-global stats and heap state and must not race with process teardown.
-// SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
+/// The process-default heap, current-local thread heap, and subprocess must remain live. The caller
+/// must exclude concurrent main-heap counter updates, merge/reset operations, and teardown while
+/// its statistics are destructively merged and zeroed. Concurrent subprocess destination updates
+/// are permitted only through the atomic stats protocol.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_merge() {
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
+    // SAFETY: the contract keeps the default thread heap live for this initialization query.
     if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
         return;
     }
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
-    let heap = unsafe { mi_heap_main() };
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
-    let _ = unsafe { mi_heap_get_stats(heap) };
-    // SAFETY: public stats merge and reset shims preserve process-global C ABI behavior.
-    unsafe { mi_heap_stats_merge_to_subproc(heap) };
+    // SAFETY: the initialized runtime keeps the main heap live through the merge/reset epoch.
+    let heap = unsafe { HeapPtr::new_unchecked(mi_heap_main()) };
+    // SAFETY: current-thread stats may be destructively merged into the live
+    // main heap before its source counters are reset.
+    let _ = unsafe { mi_heap_get_stats_borrowed(BorrowedHeap::new_unchecked(heap)) };
+    // SAFETY: the contract excludes main-heap updates and teardown while the live heap source is
+    // destructively merged into its live atomic subprocess destination.
+    unsafe { mi_heap_stats_merge_to_subproc(heap.as_ptr()) };
 }
 
 /// # Safety
-/// `heap` must be null or a valid `mi_heap_t*`; any output callback must obey the C ABI.
-// SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+/// `heap` must be null or identify a live initialized heap that remains allocated and associated
+/// during the snapshot. Any current-local thread heap must be exclusively available for destructive
+/// merge. A non-null output callback and its opaque argument must remain valid for synchronous
+/// invocation and the callback must not unwind.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_print_out(
     heap: *mut mi_heap_t,
@@ -481,13 +479,14 @@ pub unsafe extern "C" fn mi_heap_stats_print_out(
     arg: *mut c_void,
 ) {
     let heap = if heap.is_null() {
-        // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+        // SAFETY: the runtime keeps the initialized main heap live during this synchronous print.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
-        // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+        // SAFETY: the caller supplies the non-null live initialized heap.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
-    // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+    // SAFETY: the caller contract supplies the heap/current-local merge epoch and callback validity;
+    // the raw values are wrapped only for this synchronous dispatch.
     unsafe {
         mi_heap_stats_print_out_typed(
             BorrowedHeap::new_unchecked(heap),
@@ -497,6 +496,13 @@ pub unsafe extern "C" fn mi_heap_stats_print_out(
     };
 }
 
+/// # Safety
+/// `heap` must remain live and initialized without teardown or reassociation. Any associated local
+/// thread heap must be current-thread owned and exclusive for destructive merge; concurrent heap
+/// counter updates must use the atomic stats protocol. A non-null output callback and its opaque
+/// argument must remain valid for synchronous invocation and must not unwind. While invoked from a
+/// subprocess heap traversal, it must not reenter operations that create, destroy, or relink heaps
+/// in that subprocess.
 unsafe fn mi_heap_stats_print_out_typed(
     heap: BorrowedHeap,
     out: OutputCallback,
@@ -504,64 +510,69 @@ unsafe fn mi_heap_stats_print_out_typed(
 ) {
     let heap_ptr = heap.ptr();
     let heap_prefix = heap_ptr.as_ptr().cast::<MiHeapStatsPrefix>();
-    // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+    // SAFETY: the borrowed heap remains live and any current-local source is exclusively merged.
+    // `_mi_stats_print` atomically snapshots the returned heap counters before its first callback.
+    let heap_stats = unsafe { mi_heap_get_stats_borrowed(heap) };
+    // SAFETY: the heap stats and sequence prefix remain live while `_mi_stats_print` takes its
+    // atomic snapshot; the caller-provided callback/argument contract is forwarded unchanged.
     unsafe {
         _mi_stats_print(
             "heap",
             crate::core_types::HeapSeq::new((*heap_prefix).heap_seq).get(),
-            mi_heap_get_stats_borrowed(heap),
+            heap_stats,
             out.raw(),
             arg.as_ptr(),
         )
     };
 }
 
-// SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+/// # Safety
+/// `heap` must identify a live initialized heap held stable by the subprocess heap traversal.
+/// `arg` must point to a live readable `mi_heap_print_visit_info_t` for this synchronous call. Its
+/// output callback and opaque argument must satisfy `mi_heap_stats_print_out_typed`; the callback
+/// must not unwind or reenter subprocess heap-registry mutation while the traversal lock is held.
 #[inline(never)]
 unsafe extern "C" fn mi_heap_print_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
+    // SAFETY: the visitor contract keeps this internal stack visit-info readable until return; the
+    // temporary reference and copied adapter do not escape this invocation.
     let vinfo =
-        // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
         HeapPrintVisitInfo::from_raw(unsafe { &*(arg.cast::<mi_heap_print_visit_info_t>()) });
-    // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+    // SAFETY: the traversal keeps the non-null heap live; this witness is used synchronously only.
     let heap = unsafe { BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(heap)) };
-    // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
-    unsafe { mi_heap_print_visitor_typed(heap, vinfo) }
-}
-
-unsafe fn mi_heap_print_visitor_typed(heap: BorrowedHeap, vinfo: HeapPrintVisitInfo) -> bool {
-    // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+    // SAFETY: the traversal contract keeps the borrowed heap and internal copied adapter live for
+    // this call; the opaque output argument is governed solely by its caller-provided contract.
     unsafe { mi_heap_stats_print_out_typed(heap, vinfo.out, vinfo.out_arg) };
     true
 }
 
-// SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+/// # Safety
+/// `heap` must identify a live initialized heap held stable by the subprocess heap traversal, with
+/// any local thread-heap stats exclusively mergeable by this thread. `arg` must point to one live,
+/// aligned, exclusively writable initialized `mi_stats_t` accumulator. Heap stats fields may be
+/// concurrently updated during this call only through the atomic stats protocol. This C callback
+/// must not unwind.
 #[inline(never)]
 unsafe extern "C" fn mi_heap_aggregate_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
-    let vinfo = HeapAggregateVisitInfo {
-        // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
-        stats: unsafe { &mut *arg.cast::<mi_stats_t>() },
-    };
-    // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+    // SAFETY: the visitor caller supplies one aligned uniquely writable stats
+    // accumulator for the duration of the synchronous traversal.
+    let stats = arg.cast::<mi_stats_t>();
+    // SAFETY: the traversal keeps the non-null heap live; this witness is used synchronously only.
     let heap = unsafe { BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(heap)) };
-    // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
-    unsafe { mi_heap_aggregate_visitor_typed(heap, vinfo) }
-}
-
-unsafe fn mi_heap_aggregate_visitor_typed(
-    heap: BorrowedHeap,
-    vinfo: HeapAggregateVisitInfo<'_>,
-) -> bool {
-    // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
+    // SAFETY: the borrowed heap and any current-local source satisfy the destructive merge epoch;
+    // the returned raw destination remains live and atomically accessible during accumulation.
     let heap_stats = unsafe { mi_heap_get_stats_borrowed(heap) };
-    // SAFETY: both pointers refer to valid stats buffers during the heap walk.
-    // SAFETY: heap stats visitors keep callback arguments and borrowed heap witnesses valid during walks.
-    unsafe { mi_stats_add_into(vinfo.stats, &*heap_stats) };
+    // SAFETY: the live heap stats source remains readable and distinct from the unique
+    // traversal accumulator while their initialized counters are combined.
+    unsafe { mi_stats_add_into(stats, heap_stats) };
     true
 }
 
 /// # Safety
-/// `subproc_id` must identify a live subproc and any output callback must obey the C ABI.
-// SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+/// `subproc_id` must identify a live initialized subprocess whose heap registry, heaps, and stats
+/// remain allocated during the traversal. Its registry must not be torn down concurrently. A
+/// non-null output callback and its opaque argument must remain valid for synchronous invocation
+/// and must not unwind. During per-heap callbacks it must not reenter operations that create,
+/// destroy, or relink heaps in this subprocess because its heap lock is held.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
     subproc_id: mi_subproc_id_t,
@@ -573,7 +584,8 @@ pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
         return;
     }
     let mut vinfo = mi_heap_print_visit_info_t { out, out_arg: arg };
-    // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+    // SAFETY: the caller keeps the subprocess registry stable; `vinfo` is uniquely live through the
+    // synchronous locked traversal and the callback/output contracts forbid unwind and reentry.
     unsafe {
         mi_subproc_visit_heaps(
             subproc_id,
@@ -591,8 +603,9 @@ pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
 }
 
 /// # Safety
-/// `subproc_id` must identify a live subproc and `stats` must point to writable stats storage.
-// SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+/// `subproc_id` must identify a live initialized subprocess whose stats storage remains allocated;
+/// protocol atomic counter updates are permitted. `stats` must point to a live, aligned,
+/// exclusively writable initialized `mi_stats_t` and must not overlap the subprocess stats.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
     subproc_id: mi_subproc_id_t,
@@ -605,13 +618,16 @@ pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
     if subproc.is_null() {
         return false;
     }
-    // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
-    unsafe { mi_stats_copy(&mut *stats, &(*subproc).stats) }
+    // SAFETY: the destination is exclusive and initialized; the live subprocess source is sampled
+    // with atomic field loads and does not overlap it.
+    unsafe { mi_stats_copy(stats, ptr::addr_of!((*subproc).stats)) }
 }
 
 /// # Safety
-/// `subproc_id` must identify a live subproc and `stats` must point to writable stats storage.
-// SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+/// `subproc_id` must identify a live initialized subprocess whose registry, heaps, and stats remain
+/// allocated during synchronous traversal; registry teardown must not race this call. `stats` must
+/// point to a live, aligned, exclusively writable initialized `mi_stats_t` that does not overlap a
+/// source stats object. Protocol atomic counter updates are permitted.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get(
     subproc_id: mi_subproc_id_t,
@@ -624,9 +640,10 @@ pub unsafe extern "C" fn mi_subproc_stats_get(
     if subproc.is_null() {
         return false;
     }
-    // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+    // SAFETY: the destination is exclusive and initialized; the subprocess source and locked heap
+    // traversal remain live, and the internal visitor synchronously accumulates through raw atomics.
     unsafe {
-        if !mi_stats_copy(&mut *stats, &(*subproc).stats) {
+        if !mi_stats_copy(stats, ptr::addr_of!((*subproc).stats)) {
             return false;
         }
         mi_subproc_visit_heaps(
@@ -639,36 +656,43 @@ pub unsafe extern "C" fn mi_subproc_stats_get(
 }
 
 /// # Safety
-/// `stats` must point to writable stats storage.
-// SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+/// `stats` must point to a live, aligned, exclusively writable initialized `mi_stats_t` that does
+/// not overlap allocator-owned source statistics. The current subprocess and its heap registry must
+/// remain live without teardown during the synchronous snapshot; protocol atomic updates are
+/// permitted.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_get(stats: *mut mi_stats_t) -> bool {
-    // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+    // SAFETY: the current subprocess, heap registry, and exclusive destination satisfy the delegated
+    // synchronous snapshot contract.
     unsafe { mi_subproc_stats_get(mi_subproc_current(), stats) }
 }
 
 /// # Safety
-/// `heap` must be null or a valid heap pointer, and `stats` must point to writable stats storage.
-// SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+/// `heap` must be null or identify a live initialized heap that is not torn down or reassociated
+/// during this call. Any associated local thread heap must be current-thread owned and exclusively
+/// available for destructive stats merge. `stats` must point to a live, aligned, exclusively
+/// writable initialized `mi_stats_t` that does not overlap the heap stats. Protocol atomic updates
+/// to heap counters are permitted.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_get(heap: *mut mi_heap_t, stats: *mut mi_stats_t) -> bool {
     if stats.is_null() {
         return false;
     }
     let heap = if heap.is_null() {
-        // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+        // SAFETY: the runtime keeps the initialized main heap live during this snapshot.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
-        // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
+        // SAFETY: the caller supplies the non-null live initialized heap.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
-    // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
-    unsafe { mi_heap_stats_get_borrowed(BorrowedHeap::new_unchecked(heap), &mut *stats) }
-}
-
-unsafe fn mi_heap_stats_get_borrowed(heap: BorrowedHeap, stats: &mut mi_stats_t) -> bool {
-    // SAFETY: public stats export shims validate output buffers before copying heap or subproc stats.
-    unsafe { mi_stats_copy(stats, mi_heap_get_stats_borrowed(heap)) }
+    // SAFETY: the raw contract keeps the destination exclusively writable and
+    // the borrowed heap live while current-thread stats are merged and copied.
+    unsafe {
+        mi_stats_copy(
+            stats,
+            mi_heap_get_stats_borrowed(BorrowedHeap::new_unchecked(heap)),
+        )
+    }
 }
 
 /// # Safety
@@ -764,6 +788,6 @@ pub unsafe extern "C" fn mi_thread_stats_print_out(out: Option<mi_output_fun>, a
             out,
             arg,
         );
-        mi_stats_merge_theap_to_heap(theap);
+        mi_stats_merge_local_theap_to_heap(ThreadHeapLocal::new_unchecked(theap_ptr));
     }
 }

@@ -275,13 +275,23 @@ unsafe fn mi_theap_malloc_small_zero_typed(
     }
 }
 
+/// # Safety
+/// `theap` must identify a live current-thread heap. The caller must have
+/// exclusive mutation rights over its local TLD state, direct cache, page queues,
+/// free lists, and statistics; protocol atomic remote-free publication is
+/// permitted. `layout` and `flags` must agree on zeroing, and any nonzero huge
+/// alignment in `flags` must be valid for the request. If nonnull, `usable` must
+/// be aligned and uniquely writable for one `usize` throughout the call.
 unsafe fn mi_theap_malloc_generic(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
     flags: crate::core_types::MallocGenericFlags,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY: the caller keeps the current-thread heap's local allocation and
+    // collection state exclusively mutable, supplies matching layout/flags, and
+    // keeps the optional output writable through guarded/generic dispatch and
+    // allocation tracking.
     unsafe {
         let raw_theap = theap.ptr().as_ptr();
         let size = layout.requested().get();
@@ -308,7 +318,8 @@ unsafe fn mi_theap_malloc_generic(
 
 #[inline(always)]
 fn no_alignment() -> crate::core_types::MaybeAlignment {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY: zero is the defined sentinel for an ordinary allocation with no
+    // requested optional alignment.
     unsafe { crate::core_types::MaybeAlignment::new_unchecked(0) }
 }
 
@@ -445,7 +456,13 @@ unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapL
     }
 }
 
-// SAFETY: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
+/// # Safety
+/// `theap` may be null or an allocator default/lazy sentinel supported by the
+/// current configuration. Otherwise it must identify a live initialized
+/// current-thread heap whose local allocation state is exclusively mutable for
+/// this call; protocol atomic remote-free publication is permitted. If nonnull,
+/// `usable` must be aligned and uniquely writable for one `usize` throughout the
+/// call. `huge_alignment` may be arbitrary and is validated before allocation.
 #[inline(always)]
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     theap: *mut mi_theap_t,
@@ -454,7 +471,10 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     huge_alignment: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
+    // SAFETY: the caller keeps any non-sentinel heap live, current-thread owned,
+    // and locally exclusive, and keeps the optional output writable. The
+    // debug-only evenness assertion preserves the existing internal diagnostic;
+    // the typed conversion rejects invalid scalar alignments before dispatch.
     unsafe {
         crate::internal::mi_assert!((huge_alignment & 1) == 0);
         let Some(huge_alignment) = maybe_alignment_or_report(huge_alignment) else {
@@ -486,13 +506,23 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     }
 }
 
+/// # Safety
+/// `theap` must identify a live current-thread heap. The caller must have
+/// exclusive mutation rights over its local TLD state, direct cache, page queues,
+/// free lists, and statistics; protocol atomic remote-free publication is
+/// permitted. For a small request `huge_alignment` must be zero; for a generic
+/// request, any nonzero value must be a validated alignment for that request. If
+/// nonnull, `usable` must be aligned and uniquely writable for one `usize`
+/// throughout the call.
 unsafe fn _mi_theap_malloc_zero_ex_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
     huge_alignment: crate::core_types::MaybeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
+    // SAFETY: the caller keeps the current-thread local allocation epoch
+    // exclusive, supplies an alignment valid for the selected small or generic
+    // branch, and keeps the optional result slot writable through dispatch.
     unsafe {
         let requested = layout.requested();
         let size = requested.get();
@@ -509,7 +539,13 @@ unsafe fn _mi_theap_malloc_zero_ex_typed(
     }
 }
 
-// SAFETY: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
+/// # Safety
+/// `theap` may be null or an allocator default/lazy sentinel supported by the
+/// current configuration. Otherwise it must identify a live initialized
+/// current-thread heap whose local allocation state is exclusively mutable for
+/// this call; protocol atomic remote-free publication is permitted. If nonnull,
+/// `usable` must be aligned and uniquely writable for one `usize` throughout the
+/// call.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
     theap: *mut mi_theap_t,
@@ -517,7 +553,9 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
     zero: bool,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
+    // SAFETY: the caller keeps any non-sentinel heap live, current-thread owned,
+    // and locally exclusive, and keeps the optional output writable through
+    // lazy/default resolution, layout validation, and unaligned dispatch.
     unsafe {
         if theap.is_null() && MI_THEAP_INITASNULL {
             return _mi_theap_malloc_zero_ex(theap, size, zero, 0, usable);
@@ -532,42 +570,39 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
     }
 }
 
+/// # Safety
+/// `theap` must be a live current-thread heap with exclusive mutation rights
+/// over its local allocation state; protocol atomic remote-free publication is
+/// permitted. If nonnull, `usable` must be aligned and uniquely writable for one
+/// `usize` throughout the call.
 unsafe fn _mi_theap_malloc_zero_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
+    // SAFETY: the caller keeps the local heap epoch exclusive and the optional
+    // result slot writable; the zero alignment selects ordinary unaligned
+    // small-or-generic allocation for the validated layout.
     unsafe { _mi_theap_malloc_zero_ex_typed(theap, layout, no_alignment(), usable) }
 }
 
-unsafe fn mi_theap_malloc_typed(
-    theap: ThreadHeapLocal,
-    layout: crate::core_types::LayoutRequest,
-) -> *mut c_void {
-    // SAFETY: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
-    unsafe { _mi_theap_malloc_zero_typed(theap, layout, ptr::null_mut()) }
-}
-
+/// # Safety
+/// `heap` must identify a live initialized heap owned by the current thread and
+/// retain a stable association to its local thread heap. The caller must have
+/// exclusive mutation rights over local allocation state during the call;
+/// protocol atomic remote-free publication is permitted.
 unsafe fn mi_heap_malloc_typed(
     heap: BorrowedHeap,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
+    // SAFETY: the caller keeps the heap live, current-thread owned, and locally
+    // exclusive while its thread heap is projected and used for allocation.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
         };
-        mi_theap_malloc_typed(theap, layout)
+        _mi_theap_malloc_zero_typed(theap, layout, ptr::null_mut())
     }
-}
-
-unsafe fn mi_theap_calloc_req(
-    theap: ThreadHeapLocal,
-    req: crate::core_types::CallocRequest,
-) -> *mut c_void {
-    // SAFETY: calloc entrypoints validate checked products before zeroing allocation dispatch.
-    unsafe { zeroed::mi_theap_zalloc_typed(theap, req.layout()) }
 }
 
 fn product_size_or_report(
@@ -644,16 +679,20 @@ pub unsafe extern "C" fn mi_uzalloc_small(size: usize, usable: *mut usize) -> *m
 }
 
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// If `usable` is non-null it must be writable for one `usize`.
-// SAFETY: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
+/// `theap` may be null only when lazy initialization is enabled; otherwise it
+/// must identify a live initialized current-thread heap. The caller must have
+/// exclusive mutation rights over its local allocation state, while protocol
+/// atomic remote-free publication is permitted. If nonnull, `usable` must be
+/// aligned and uniquely writable for one `usize` throughout the call.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_theap_umalloc(
     theap: *mut mi_theap_t,
     size: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
+    // SAFETY: the caller keeps the raw current-thread heap and optional output
+    // live through lazy handling, layout validation, and typed allocation; the
+    // terminal dispatch writes the usable size at most once.
     unsafe {
         if theap.is_null() && MI_THEAP_INITASNULL {
             return _mi_theap_malloc_zero_ex(theap, size, false, 0, usable);
@@ -668,12 +707,19 @@ pub unsafe extern "C" fn mi_theap_umalloc(
     }
 }
 
+/// # Safety
+/// `theap` must identify a live current-thread heap. The caller must have
+/// exclusive mutation rights over its local allocation state; protocol atomic
+/// remote-free publication is permitted. If nonnull, `usable` must be aligned
+/// and uniquely writable for one `usize` throughout the call.
 unsafe fn mi_theap_umalloc_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
+    // SAFETY: the caller keeps the current-thread local allocation state
+    // exclusive and the optional output writable; `layout` is already validated
+    // and the outlined dispatch retains those facts for the synchronous call.
     unsafe { _mi_theap_malloc_zero_typed(theap, layout, usable) }
 }
 
@@ -713,25 +759,22 @@ pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
     mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()
 }
 
-unsafe fn mi_theap_mallocn_req(
-    theap: ThreadHeapLocal,
-    req: crate::core_types::AllocProduct,
-) -> *mut c_void {
-    // SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
-    unsafe { mi_theap_malloc_typed(theap, req.layout()) }
-}
-
 /// A nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
     if let Some(req) = alloc_product_or_report(count, size) {
-        // SAFETY: allocator lifecycle owns the current thread's default heap and
-        // keeps its TLS metadata live while this synchronous allocation runs.
+        // SAFETY: allocator lifecycle keeps the current thread's default heap
+        // live and its local allocation state exclusively owned while this
+        // synchronous checked-product allocation runs.
         unsafe {
             let Some(theap) = _mi_theap_or_default_typed(_mi_theap_default()) else {
                 return core::ptr::null_mut();
             };
-            mi_theap_mallocn_req(ThreadHeapLocal::new_unchecked(theap), req)
+            _mi_theap_malloc_zero_typed(
+                ThreadHeapLocal::new_unchecked(theap),
+                req.layout(),
+                ptr::null_mut(),
+            )
         }
     } else {
         core::ptr::null_mut()
@@ -740,8 +783,10 @@ pub extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
 
 /// # Safety
 /// `heap` must identify a live initialized heap owned by the current thread and
-/// remain stable without concurrent teardown or non-protocol mutation. A
-/// nonnull result is allocator-owned and may be released with `mi_free`.
+/// remain stable without concurrent teardown. The caller must have exclusive
+/// mutation rights over its local allocation state; protocol atomic remote-free
+/// publication is permitted. A nonnull result is allocator-owned and may be
+/// released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_mallocn(
     heap: *mut mi_heap_t,
@@ -760,7 +805,7 @@ pub unsafe extern "C" fn mi_heap_mallocn(
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return core::ptr::null_mut();
         };
-        mi_theap_mallocn_req(theap, req)
+        _mi_theap_malloc_zero_typed(theap, req.layout(), ptr::null_mut())
     }
 }
 

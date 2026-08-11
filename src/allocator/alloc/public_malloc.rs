@@ -7,9 +7,9 @@ use crate::prim::{_mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{mi_heap_t, mi_theap_t};
 
 use super::{
-    _mi_theap_malloc_zero, malloc_layout_or_report, mi_heap_borrowed_theap_local,
-    mi_heap_malloc_typed, mi_theap_malloc_small_zero, mi_theap_malloc_small_zero_typed,
-    mi_theap_malloc_typed,
+    _mi_theap_malloc_zero, _mi_theap_malloc_zero_typed, malloc_layout_or_report,
+    mi_heap_borrowed_theap_local, mi_heap_malloc_typed, mi_theap_malloc_small_zero,
+    mi_theap_malloc_small_zero_typed,
 };
 
 /// # Safety
@@ -77,11 +77,16 @@ pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize)
 }
 
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// Returned memory must be released through this allocator.
-// SAFETY: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
+/// `theap` may be null only when lazy initialization is enabled; otherwise it
+/// must identify a live initialized current-thread heap. The caller must have
+/// exclusive mutation rights over its local allocation state, while protocol
+/// atomic remote-free publication is permitted. A nonnull result is
+/// allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
+    // SAFETY: the caller keeps the raw current-thread heap and its local state
+    // live and exclusive through lazy handling, layout validation, and ordinary
+    // unaligned allocation dispatch.
     unsafe {
         if theap.is_null() && MI_THEAP_INITASNULL {
             return _mi_theap_malloc_zero(theap, size, false, ptr::null_mut());
@@ -92,7 +97,11 @@ pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) ->
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };
-        mi_theap_malloc_typed(ThreadHeapLocal::new_unchecked(theap), layout)
+        _mi_theap_malloc_zero_typed(
+            ThreadHeapLocal::new_unchecked(theap),
+            layout,
+            ptr::null_mut(),
+        )
     }
 }
 

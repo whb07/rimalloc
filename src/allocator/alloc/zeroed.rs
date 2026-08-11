@@ -8,7 +8,7 @@ use crate::types::{mi_heap_t, mi_theap_t};
 
 use super::{
     _mi_theap_malloc_zero, _mi_theap_malloc_zero_typed, calloc_request_or_report,
-    malloc_layout_or_report, mi_heap_borrowed_theap_local, mi_theap_calloc_req,
+    malloc_layout_or_report, mi_heap_borrowed_theap_local,
 };
 
 /// # Safety
@@ -109,7 +109,7 @@ unsafe fn mi_theap_calloc_typed(
     req: crate::core_types::CallocRequest,
 ) -> *mut c_void {
     // SAFETY: calloc entrypoints validate checked products before zeroing allocation dispatch.
-    unsafe { mi_theap_calloc_req(theap, req) }
+    unsafe { mi_theap_zalloc_typed(theap, req.layout()) }
 }
 
 pub(super) unsafe fn mi_theap_calloc_req_lazy(
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
             let Some(theap) = _mi_theap_or_default_typed(_mi_theap_default()) else {
                 return core::ptr::null_mut();
             };
-            mi_theap_calloc_req(ThreadHeapLocal::new_unchecked(theap), req)
+            mi_theap_zalloc_typed(ThreadHeapLocal::new_unchecked(theap), req.layout())
         } else {
             core::ptr::null_mut()
         }
@@ -170,6 +170,6 @@ unsafe fn mi_heap_calloc_typed(
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return core::ptr::null_mut();
         };
-        mi_theap_calloc_req(theap, req)
+        mi_theap_zalloc_typed(theap, req.layout())
     }
 }

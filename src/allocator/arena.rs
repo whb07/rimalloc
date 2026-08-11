@@ -1126,8 +1126,14 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
 }
 
 /// # Safety
-/// Internal arena allocator wrapper following the C ABI.
-// SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
+/// `size` must be nonzero. If non-null, `heap` must be a live initialized
+/// borrowed heap with a stable subprocess association, and `req_arena` must be
+/// a compatible live registered arena. `memid` must be non-null, aligned, and
+/// uniquely writable for successful result publication. Allocator OS state and
+/// every stored arena commit or primitive allocation callback and opaque argument
+/// must remain valid for synchronous invocation and must not unwind. Heap,
+/// subprocess, arena registry, and backing teardown must not race; concurrent
+/// arena claims and growth may proceed through their atomic protocols.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
     heap: *mut mi_heap_t,
@@ -1182,34 +1188,39 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
     }
 }
 
-struct ArenaAllocArgs {
-    heap: Option<HeapPtr>,
-    size: crate::core_types::RequestedSize,
-    arena_slice_count: Option<crate::core_types::SliceCount>,
+/// # Safety
+/// `size` must be nonzero. If non-null, `heap` must be a live initialized
+/// borrowed heap with a stable subprocess association, and `req_arena` must be
+/// a compatible live registered arena. `memid` must be non-null, aligned, and
+/// uniquely writable for successful result publication. Allocator OS state and
+/// every stored arena commit or primitive allocation callback and opaque argument
+/// must remain valid for synchronous invocation and must not unwind. Heap,
+/// subprocess, arena registry, and backing teardown must not race; concurrent
+/// arena claims and growth may proceed through their atomic protocols.
+#[inline(never)]
+pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
+    heap: *mut mi_heap_t,
+    size: usize,
     commit: bool,
     allow_large: bool,
-    req_arena: Option<ArenaPtr>,
-    tseq: crate::core_types::ThreadSeq,
-    numa_node: crate::core_types::NumaNode,
+    req_arena: *mut mi_arena_t,
+    tseq: usize,
+    numa_node: c_int,
     memid: *mut mi_memid_t,
-}
-
-unsafe fn mi_arenas_alloc_typed(args: ArenaAllocArgs) -> *mut c_void {
-    let ArenaAllocArgs {
-        heap,
-        size,
-        arena_slice_count,
-        commit,
-        allow_large,
-        req_arena,
-        tseq,
-        numa_node,
-        memid,
-    } = args;
+) -> *mut c_void {
+    crate::internal::mi_assert_internal!(!memid.is_null());
+    crate::internal::mi_assert_internal!(size > 0);
+    let size = crate::core_types::RequestedSize::new(size);
+    let heap = HeapPtr::new(heap);
+    let arena_slice_count = mi_arena_slice_count_for_request(size);
+    let req_arena = ArenaPtr::new(req_arena);
+    let tseq = crate::core_types::ThreadSeq::new(tseq);
+    let numa_node = crate::core_types::NumaNode::new(numa_node);
     let alignment = MI_ARENA_SLICE_SIZE;
 
     match crate::core_types::LayoutRequest::aligned(size.get(), alignment) {
-        // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
+        // SAFETY: the raw contract keeps the heap, requested arena, callbacks, and output live;
+        // checked layout and slice-count construction satisfy the typed allocation boundary.
         Ok(layout) => unsafe {
             mi_arenas_alloc_aligned_typed(ArenaAllocTypedArgs {
                 heap,
@@ -1224,7 +1235,8 @@ unsafe fn mi_arenas_alloc_typed(args: ArenaAllocArgs) -> *mut c_void {
                 memid,
             })
         },
-        // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
+        // SAFETY: the raw contract keeps OS configuration, requested arena, callbacks, and output
+        // live; this preserves the prior fallback inputs after checked layout rejection.
         Err(_) => unsafe {
             mi_arena_os_alloc_aligned(
                 ArenaOsAllocRequest {
@@ -1241,40 +1253,6 @@ unsafe fn mi_arenas_alloc_typed(args: ArenaAllocArgs) -> *mut c_void {
                 memid,
             )
         },
-    }
-}
-
-/// # Safety
-/// Internal arena allocator wrapper following the C ABI.
-// SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
-    heap: *mut mi_heap_t,
-    size: usize,
-    commit: bool,
-    allow_large: bool,
-    req_arena: *mut mi_arena_t,
-    tseq: usize,
-    numa_node: c_int,
-    memid: *mut mi_memid_t,
-) -> *mut c_void {
-    crate::internal::mi_assert_internal!(!memid.is_null());
-    crate::internal::mi_assert_internal!(size > 0);
-    let size = crate::core_types::RequestedSize::new(size);
-
-    // SAFETY: arena OS fallback allocation preserves alignment, requested layout, memid initialization, errno, and disallow-options behavior.
-    unsafe {
-        mi_arenas_alloc_typed(ArenaAllocArgs {
-            heap: HeapPtr::new(heap),
-            size,
-            arena_slice_count: mi_arena_slice_count_for_request(size),
-            commit,
-            allow_large,
-            req_arena: ArenaPtr::new(req_arena),
-            tseq: crate::core_types::ThreadSeq::new(tseq),
-            numa_node: crate::core_types::NumaNode::new(numa_node),
-            memid,
-        })
     }
 }
 

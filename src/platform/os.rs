@@ -207,9 +207,12 @@ impl OsPageRange {
     }
 }
 
-// SAFETY: OS memory config readers preserve process-global memory configuration invariants.
+/// Return the address of process-global OS configuration storage.
+///
+/// This does not read the mutable static or create a reference; callers must
+/// separately justify every field access through the returned raw pointer.
 #[inline]
-unsafe fn mi_os_mem_config_ptr() -> *const mi_os_mem_config_t {
+fn mi_os_mem_config_ptr() -> *const mi_os_mem_config_t {
     core::ptr::addr_of!(mi_os_mem_config)
 }
 
@@ -266,105 +269,127 @@ unsafe fn mi_os_subproc_stats_mut(subproc: BorrowedSubproc) -> *mut mi_stats_t {
     unsafe { ptr::addr_of_mut!((*subproc.ptr().as_ptr().cast::<MiSubprocStatsPrefix>()).stats) }
 }
 
-// SAFETY: OS memory config readers preserve process-global memory configuration invariants.
+/// # Safety
+/// The process OS configuration must not be concurrently rewritten by `_mi_os_init`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_has_overcommit() -> bool {
+    // SAFETY: the caller excludes configuration mutation while this initialized
+    // boolean field is read through the raw static address.
     unsafe { (*mi_os_mem_config_ptr()).has_overcommit }
 }
 
-// SAFETY: OS memory config readers preserve process-global memory configuration invariants.
+/// # Safety
+/// The process OS configuration must not be concurrently rewritten by `_mi_os_init`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_has_virtual_reserve() -> bool {
+    // SAFETY: the caller excludes configuration mutation while this initialized
+    // boolean field is read through the raw static address.
     unsafe { (*mi_os_mem_config_ptr()).has_virtual_reserve }
 }
 
-// SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+/// # Safety
+/// The process OS configuration must not be concurrently rewritten by `_mi_os_init`.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_page_size() -> usize {
+    // SAFETY: the caller excludes configuration mutation while the initialized
+    // page-size field is read through the raw static address.
     unsafe { (*mi_os_mem_config_ptr()).page_size }
 }
 
 /// # Safety
-/// The OS memory configuration must have been initialized and contain a nonzero page size.
-// SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+/// The OS memory configuration must contain a nonzero page size and must not be
+/// concurrently rewritten by `_mi_os_init`.
 #[inline]
 pub(crate) unsafe fn _mi_os_page_size_typed() -> crate::core_types::OsPageSize {
+    // SAFETY: this function's contract keeps initialized configuration stable.
     let page_size = unsafe { _mi_os_page_size() };
     crate::internal::mi_assert_internal!(page_size > 0);
+    // SAFETY: primitive initialization and the assertion establish nonzero size.
     unsafe { crate::core_types::OsPageSize::new_unchecked(page_size) }
 }
 
 /// # Safety
-/// The OS memory configuration must have been initialized before this is called concurrently.
-// SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+/// The OS memory configuration must be initialized and must not be concurrently
+/// rewritten by `_mi_os_init`.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_large_page_size() -> usize {
+    // SAFETY: the caller keeps initialized OS configuration stable for this read.
     let large = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
     if large != 0 {
         large
     } else {
-        // SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+        // SAFETY: the caller keeps initialized OS configuration stable.
         unsafe { _mi_os_page_size_typed().get() }
     }
 }
 
 /// # Safety
-/// The OS memory configuration and options state must be initialized.
-// SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+/// The OS memory configuration and options state must be initialized; OS
+/// configuration must not be concurrently rewritten by `_mi_os_init`.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
     let minsize = mi_option_get_size(mi_option_t::mi_option_minimal_purge_size);
     if minsize != 0 {
+        // SAFETY: the caller keeps initialized OS configuration stable.
         _mi_align_up(minsize, unsafe { _mi_os_page_size_typed().get() })
     } else {
-        // SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+        // SAFETY: the caller keeps initialized OS configuration stable while
+        // the transparent-huge-page policy field is read.
         let has_transparent_huge_pages =
             unsafe { (*mi_os_mem_config_ptr()).has_transparent_huge_pages };
         if has_transparent_huge_pages && mi_option_get(mi_option_t::mi_option_allow_thp) == 2 {
+            // SAFETY: the caller keeps initialized OS configuration stable.
             unsafe { _mi_os_large_page_size() }
         } else {
-            // SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+            // SAFETY: the caller keeps initialized OS configuration stable.
             unsafe { _mi_os_page_size_typed().get() }
         }
     }
 }
 
 /// # Safety
-/// The OS memory configuration must have been initialized.
-// SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+/// The OS memory configuration must be initialized and must not be concurrently
+/// rewritten by `_mi_os_init`.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
+    // SAFETY: the caller keeps initialized OS configuration stable.
     let gsize = unsafe { _mi_os_page_size_typed().get() };
     crate::internal::mi_debug_assert!(gsize <= (MI_ARENA_SLICE_SIZE / 4));
     gsize
 }
 
 /// # Safety
-/// The OS memory configuration must have been initialized.
-// SAFETY: OS memory config readers preserve process-global memory configuration invariants.
+/// The OS memory configuration must be initialized and must not be concurrently
+/// rewritten by `_mi_os_init`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
+    // SAFETY: the caller excludes configuration mutation while this initialized
+    // scalar field is read through the raw static address.
     let vbits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
     crate::internal::mi_debug_assert!(vbits <= MI_MAX_VABITS);
     vbits
 }
 
 /// # Safety
-/// The OS memory configuration must have been initialized.
-// SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+/// The OS memory configuration must be initialized and must not be concurrently
+/// rewritten by `_mi_os_init`.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize) -> bool {
+    // SAFETY: the caller keeps initialized OS configuration stable for this read.
     let large_page_size = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
     large_page_size != 0
         && size.is_multiple_of(large_page_size)
         && alignment.is_multiple_of(large_page_size)
 }
 
-// SAFETY: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
+/// # Safety
+/// The OS memory configuration must contain a nonzero page size and must not be
+/// concurrently rewritten by `_mi_os_init`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
     let align_size = if size < 512 * MI_KiB {
+        // SAFETY: the caller keeps initialized OS configuration stable.
         unsafe { _mi_os_page_size_typed().get() }
     } else if size < 2 * MI_MiB {
         64 * MI_KiB
@@ -1553,18 +1578,23 @@ unsafe fn mi_os_free_huge_os_pages(
     }
 }
 
-/// # Safety
-/// Reads process-wide NUMA configuration and may initialize its cached value.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// Return the process-wide NUMA node count, initializing its atomic cache when needed.
+///
+/// The allocator lifecycle completes `_mi_os_init` and primitive dispatch
+/// initialization before NUMA queries become reachable, and never mutates the
+/// platform NUMA dispatch statics afterward.
 #[inline(never)]
-pub unsafe extern "C" fn _mi_os_numa_node_count() -> i32 {
+pub extern "C" fn _mi_os_numa_node_count() -> i32 {
     let mut count = MI_NUMA_NODE_COUNT.load(Ordering::Acquire);
     if count == 0 {
         let ncount = mi_option_get(mi_option_t::mi_option_use_numa_nodes);
         count = if ncount > 0 && ncount < i32::MAX as _ {
             ncount as usize
         } else {
-            // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+            // SAFETY: allocator lifecycle completed `_mi_os_init` and primitive
+            // initialization, and excludes concurrent or subsequent mutation of
+            // Windows dynamic-dispatch statics. The primitive synchronously owns
+            // every syscall/path/output buffer used by this query.
             let n = unsafe { _mi_prim_numa_node_count() };
             if n == 0 || n > i32::MAX as usize {
                 1
@@ -1582,13 +1612,16 @@ pub unsafe extern "C" fn _mi_os_numa_node_count() -> i32 {
 }
 
 #[inline]
-unsafe fn mi_os_numa_node_get() -> i32 {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-    let numa_count = unsafe { _mi_os_numa_node_count() };
+/// Query the current node after allocator lifecycle has frozen primitive NUMA dispatch.
+fn mi_os_numa_node_get() -> i32 {
+    let numa_count = _mi_os_numa_node_count();
     if numa_count <= 1 {
         return 0;
     }
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY: allocator lifecycle completed `_mi_os_init` and primitive
+    // initialization, and excludes concurrent or subsequent mutation of Windows
+    // dynamic-dispatch statics. The primitive keeps its processor/node syscall
+    // outputs in valid local storage for the synchronous query.
     let n = unsafe { _mi_prim_numa_node() };
     let mut numa_node = if n < i32::MAX as usize { n as i32 } else { 0 };
     if numa_node >= numa_count {
@@ -1597,25 +1630,23 @@ unsafe fn mi_os_numa_node_get() -> i32 {
     numa_node
 }
 
-/// # Safety
-/// Reads process-wide NUMA configuration and may query the OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// Return the current process NUMA node normalized to the cached node count.
+/// Allocator lifecycle guarantees primitive initialization and freezes the
+/// platform NUMA dispatch statics before this API becomes reachable.
 #[inline(never)]
-pub unsafe extern "C" fn _mi_os_numa_node() -> i32 {
+pub extern "C" fn _mi_os_numa_node() -> i32 {
     if MI_NUMA_NODE_COUNT.load(Ordering::Relaxed) == 1 {
         0
     } else {
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
-        unsafe { mi_os_numa_node_get() }
+        mi_os_numa_node_get()
     }
 }
 
-/// # Safety
-/// Reads process-wide NUMA configuration and may query the OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// Return the current process NUMA node in its scalar domain type. Allocator
+/// lifecycle guarantees primitive initialization before this API is used.
 #[inline]
-pub(crate) unsafe fn _mi_os_numa_node_typed() -> crate::core_types::NumaNode {
-    unsafe { crate::core_types::NumaNode::new(_mi_os_numa_node()) }
+pub(crate) fn _mi_os_numa_node_typed() -> crate::core_types::NumaNode {
+    crate::core_types::NumaNode::new(_mi_os_numa_node())
 }
 
 /// # Safety

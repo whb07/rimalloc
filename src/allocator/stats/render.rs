@@ -491,10 +491,7 @@ pub(super) unsafe fn _mi_stats_print(
         _mi_fprintf(
             out,
             arg,
-            // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
-            format_args!("  {:<10}: {:>5}\n", "numa nodes", unsafe {
-                _mi_os_numa_node_count()
-            }),
+            format_args!("  {:<10}: {:>5}\n", "numa nodes", _mi_os_numa_node_count()),
         );
         // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { mi_process_info_print_out_impl(out, arg) };

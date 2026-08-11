@@ -91,9 +91,7 @@ pub unsafe extern "C" fn mi_heap_set_numa_affinity(heap: *mut mi_heap_t, numa_no
 // typed heap witness while preserving the OS NUMA count query.
 #[inline]
 unsafe fn mi_heap_set_numa_affinity_typed(heap: HeapPtr, numa_node: crate::core_types::NumaNode) {
-    // SAFETY: querying the OS NUMA count has no
-    // heap side effects and matches the C helper boundary.
-    let numa_count = unsafe { _mi_os_numa_node_count() };
+    let numa_count = _mi_os_numa_node_count();
     // SAFETY: `heap` is live and mutable by the
     // caller contract; `normalize` bounds the stored NUMA value.
     unsafe { heap.set_numa_node(numa_node.normalize(numa_count)) };

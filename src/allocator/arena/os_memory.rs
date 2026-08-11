@@ -686,9 +686,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     } else {
         crate::types::NumaNode::new(numa_node)
     }
-    // SAFETY: allocator OS configuration is initialized while the raw node
-    // count is read and used only to normalize this value-domain input.
-    .normalize(unsafe { _mi_os_numa_node_count() });
+    .normalize(_mi_os_numa_node_count());
     let numa_node_raw = numa_node.get();
     let mut hsize = 0usize;
     let mut pages_reserved = 0usize;
@@ -768,9 +766,7 @@ pub extern "C" fn mi_reserve_huge_os_pages_interleave(
     let mut numa_count = if numa_nodes > 0 && numa_nodes <= c_int::MAX as usize {
         numa_nodes as c_int
     } else {
-        // SAFETY: allocator OS configuration is initialized while the NUMA node
-        // count is read for value-only interleave policy.
-        unsafe { _mi_os_numa_node_count() }
+        _mi_os_numa_node_count()
     };
     if numa_count <= 0 {
         numa_count = 1;

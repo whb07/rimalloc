@@ -714,8 +714,16 @@ pub(crate) unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
 }
 
 /// # Safety
-/// `p..p+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// `p..p+size` must designate a live caller-controlled range that remains valid
+/// for the purge operation. When no callback is supplied and an OS decommit or
+/// reset can be selected, the range must be suitable for the active OS
+/// primitive layer and its configuration must be initialized. When the
+/// decommit branch is selected, `stat_size` must accurately describe the
+/// committed bytes charged to that operation.
+/// If `commit_fun` is present, it must accept a decommit request for this exact
+/// range on the calling thread; `commit_fun_arg` must remain valid for every
+/// access the callback performs and satisfy its managed-arena lifetime,
+/// threading, and reentrancy contract. The callback must not unwind.
 pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
     p: *mut c_void,
     size: usize,
@@ -724,39 +732,53 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
     commit_fun: Option<mi_commit_fun_t>,
     commit_fun_arg: *mut c_void,
 ) -> bool {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    if mi_option_get(mi_option_t::mi_option_purge_delay) < 0 {
+        return false;
+    }
+
+    // SAFETY: the current subproc remains live while its atomic statistics are
+    // updated, and all concurrent access to these fields is atomic.
     unsafe {
-        if mi_option_get(mi_option_t::mi_option_purge_delay) < 0 {
-            return false;
-        }
         let subproc = _mi_subproc();
         if !subproc.is_null() {
             let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
             __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).purge_calls), 1);
             __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*stats).purged), size);
         }
-
-        if let Some(commit_fun) = commit_fun {
-            commit_fun(false, p, size, core::ptr::null_mut(), commit_fun_arg)
-        } else if mi_option_is_enabled(mi_option_t::mi_option_purge_decommits) && !_mi_preloading()
-        {
-            let mut needs_recommit = true;
-            mi_os_decommit_ex(p, size, &mut needs_recommit, CommittedBytes::new(stat_size));
-            needs_recommit
-        } else {
-            if allow_reset {
-                _mi_os_reset(p, size);
-            }
-            false
-        }
     }
+
+    if let Some(commit_fun) = commit_fun {
+        // SAFETY: the caller keeps the managed range and opaque argument valid,
+        // permits invocation on this thread, and guarantees the callback does
+        // not unwind across its C ABI boundary.
+        return unsafe { commit_fun(false, p, size, core::ptr::null_mut(), commit_fun_arg) };
+    }
+
+    if mi_option_is_enabled(mi_option_t::mi_option_purge_decommits) && !_mi_preloading() {
+        let mut needs_recommit = true;
+        // SAFETY: the caller exclusively controls the live reserved range and
+        // supplies its exact committed-byte accounting for OS decommit.
+        unsafe { mi_os_decommit_ex(p, size, &mut needs_recommit, CommittedBytes::new(stat_size)) };
+        return needs_recommit;
+    }
+
+    if allow_reset {
+        // SAFETY: the caller exclusively controls the live reserved range for
+        // this OS reset operation.
+        unsafe { _mi_os_reset(p, size) };
+    }
+    false
 }
 
 /// # Safety
-/// `p..p+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+/// `p..p+size` must designate a live reserved virtual-memory range that the
+/// caller exclusively controls for purge and keeps valid for the call. The OS
+/// memory configuration must be initialized.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_purge(p: *mut c_void, size: usize) -> bool {
+    // SAFETY: the caller keeps this exclusively controlled range live for the
+    // purge; the committed-byte accounting matches its full size, and this
+    // wrapper supplies no callback or opaque argument.
     unsafe { _mi_os_purge_ex(p, size, true, size, None, core::ptr::null_mut()) }
 }
 

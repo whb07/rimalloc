@@ -62,6 +62,15 @@ struct PrimitiveOsAllocation {
     pinned: Pinned,
 }
 
+/// Result of an effective primitive decommit attempt.
+///
+/// `None` from the helper means page containment produced no effective range;
+/// callers retain their distinct legacy no-op defaults in that case.
+struct OsDecommitResult {
+    success: bool,
+    needs_recommit: bool,
+}
+
 static mut mi_os_mem_config: mi_os_mem_config_t = mi_os_mem_config_t {
     page_size: 4096,
     large_page_size: 0,
@@ -619,33 +628,34 @@ pub(crate) unsafe extern "C" fn _mi_os_commit(
     unsafe { _mi_os_commit_ex(addr, size, is_zero, CommittedBytes::new(size)) }
 }
 
+/// # Safety
+///
+/// `addr..addr+size` must remain a live caller-controlled range suitable for
+/// the active primitive decommit operation. OS configuration and current
+/// subprocess statistics must remain live, and `stat_size` must match the
+/// committed bytes charged if the primitive reports that recommit is needed.
 #[inline]
 unsafe fn mi_os_decommit_ex(
     addr: *mut c_void,
     size: usize,
-    needs_recommit: *mut bool,
     stat_size: CommittedBytes,
-) -> bool {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+) -> Option<OsDecommitResult> {
+    // SAFETY: the caller supplies the live primitive range and exact accounting;
+    // the primitive's in/out flag remains local to this decommit epoch.
     unsafe {
-        crate::internal::mi_assert_internal!(!needs_recommit.is_null());
-
-        let Some(range) =
-            OsPageRange::contained(addr, ReservedBytes::new(size), _mi_os_page_size_typed())
-        else {
-            return true;
-        };
+        let range =
+            OsPageRange::contained(addr, ReservedBytes::new(size), _mi_os_page_size_typed())?;
         let start = range.start();
         let csize = range.size().get();
 
-        *needs_recommit = true;
-        let err = _mi_prim_decommit(start, csize, needs_recommit);
+        let mut needs_recommit = true;
+        let err = _mi_prim_decommit(start, csize, &mut needs_recommit);
         if err != 0 {
             _mi_warning_message_fmt(format_args!(
                 "cannot decommit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
                 err, err, start, csize
             ));
-        } else if *needs_recommit {
+        } else if needs_recommit {
             let subproc = _mi_subproc();
             if !subproc.is_null() {
                 let stats = ptr::addr_of_mut!((*subproc.cast::<MiSubprocStatsPrefix>()).stats);
@@ -653,7 +663,10 @@ unsafe fn mi_os_decommit_ex(
             }
         }
         crate::internal::mi_assert_internal!(err == 0);
-        err == 0
+        Some(OsDecommitResult {
+            success: err == 0,
+            needs_recommit,
+        })
     }
 }
 
@@ -662,8 +675,10 @@ unsafe fn mi_os_decommit_ex(
 // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool {
-    let mut needs_recommit = false;
-    unsafe { mi_os_decommit_ex(addr, size, &mut needs_recommit, CommittedBytes::new(size)) }
+    // SAFETY: the caller keeps the primitive range live and its full committed
+    // size supplies the accounting for an effective decommit.
+    unsafe { mi_os_decommit_ex(addr, size, CommittedBytes::new(size)) }
+        .is_none_or(|result| result.success)
 }
 
 /// # Safety
@@ -765,11 +780,10 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
     }
 
     if mi_option_is_enabled(mi_option_t::mi_option_purge_decommits) && !_mi_preloading() {
-        let mut needs_recommit = true;
         // SAFETY: the caller exclusively controls the live reserved range and
         // supplies its exact committed-byte accounting for OS decommit.
-        unsafe { mi_os_decommit_ex(p, size, &mut needs_recommit, CommittedBytes::new(stat_size)) };
-        return needs_recommit;
+        return unsafe { mi_os_decommit_ex(p, size, CommittedBytes::new(stat_size)) }
+            .is_none_or(|result| result.needs_recommit);
     }
 
     if allow_reset {

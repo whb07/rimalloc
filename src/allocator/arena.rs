@@ -2068,27 +2068,33 @@ pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(
 }
 
 /// # Safety
-/// Internal arena abandon path matching the C ABI.
-// SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+/// `page` must be non-null live page metadata already detached from its queue,
+/// marked abandoned, and retaining the claimed thread-free owner bit.
+/// `current_theap` must be its live current-thread local heap association and
+/// stats owner. Page geometry, lists, MemId, heap, and arena membership must
+/// remain stable; concurrent claim, relink, or teardown is excluded, while
+/// protocol remote-free publication remains allowed.
 pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
     page: *mut mi_page_t,
     current_theap: *mut mi_theap_t,
 ) {
+    // SAFETY: the caller has detached this live page, cleared its thread heap,
+    // marked it abandoned, and retains the claimed thread-free owner bit.
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
-    // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
-    let page_wrapper = if unsafe { mi_page_is_full_local(page) } {
-        unsafe { crate::core_types::assume_full_page(page_ptr).into_abandon_candidate() }
-    } else {
-        unsafe { crate::core_types::assume_active_page(page_ptr).into_abandon_candidate() }
-    };
-    // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+    // SAFETY: the raw abandon boundary above establishes live abandoned page
+    // metadata with the remote-free ownership claim still held.
+    let page = unsafe { crate::core_types::assume_owned_abandoned_page(page_ptr) };
+    // SAFETY: the caller supplies the non-null live current-thread local heap
+    // matching this page's retained association and abandoned stats owner.
     let current_theap = unsafe {
         crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(current_theap),
         )
     };
-    // SAFETY: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
-    unsafe { _mi_arenas_page_abandon_internal(page_wrapper, current_theap) };
+    // SAFETY: the typed witnesses retain active claimed ownership and the
+    // matching local heap; the raw contract excludes competing mutation while
+    // bitmap, list, stats, and claim-release publication run synchronously.
+    unsafe { _mi_arenas_page_abandon_internal(page, current_theap) };
 }
 
 /// # Safety

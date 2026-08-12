@@ -283,58 +283,82 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
 /// `theap` must be a live current-thread heap whose TLD, page queues, and small
 /// page metadata remain initialized for this allocation. The caller must hold
 /// exclusive current-thread mutation rights over its direct-page cache, local
-/// page queues and free lists, and local statistics; protocol atomic remote-free
-/// publication is permitted. `size` must not exceed `MI_SMALL_SIZE_MAX`. If
-/// nonnull, `usable` must be aligned and uniquely writable for one `usize` for
-/// the duration of the call.
+/// page queues and free lists, guarded-sampling state, and local statistics;
+/// protocol atomic remote-free publication is permitted. `size` must not exceed
+/// `MI_SMALL_SIZE_MAX`. The page map, backing metadata, guarded configuration,
+/// and allocator lifecycle must remain stable. Heap collection, deferred-free,
+/// arena allocation/commit/purge/release, guarded protection, tracking, and
+/// diagnostic callbacks plus their opaque arguments must remain valid for
+/// synchronous invocation, must not incompatibly reenter this heap's local
+/// allocation state, and must not unwind. If nonnull, `usable` must be aligned
+/// and uniquely writable for one `usize` for the duration of the call and must
+/// not overlap allocator metadata.
 unsafe fn mi_theap_malloc_small_zero_typed(
     theap: ThreadHeapLocal,
     size: crate::core_types::RequestedSize,
     zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: the caller keeps the current-thread heap, its TLD, queues, and
-    // selected page metadata live and stable; the bounded requested size yields
-    // a fitting padded size, and `usable` satisfies its optional out-pointer
-    // contract throughout the allocation and tracking epoch.
-    unsafe {
-        let local_theap = theap;
-        let theap = local_theap.ptr().as_ptr();
-        let mut size = size.get();
-        crate::internal::mi_assert!(!theap.is_null());
-        crate::internal::mi_assert!(size <= MI_SMALL_SIZE_MAX);
-        if cfg!(debug_assertions) {
+    let local_theap = theap;
+    let theap = local_theap.ptr().as_ptr();
+    let mut size = size.get();
+    crate::internal::mi_assert!(!theap.is_null());
+    crate::internal::mi_assert!(size <= MI_SMALL_SIZE_MAX);
+    if cfg!(debug_assertions) {
+        // SAFETY: the caller keeps the current-thread heap and its TLD live and
+        // stable; preserve the original thread-id read followed by the two
+        // short-circuit owner-field reads.
+        unsafe {
             let tid = _mi_thread_id();
             crate::internal::mi_assert!(
                 (*(*theap).tld).thread_id == 0 || (*(*theap).tld).thread_id == tid
             );
         }
-        let requested_size = size;
-        if mi_unlikely(size == 0) {
-            size = crate::core_types::RequestedSize::MIN_ZERO_SIZE;
-        }
-        let zero = zeroed.as_bool();
-        if crate::internal::MI_GUARDED != 0
-            && mi_unlikely(mi_theap_malloc_use_guarded(
+    }
+    let requested_size = size;
+    if mi_unlikely(size == 0) {
+        size = crate::core_types::RequestedSize::MIN_ZERO_SIZE;
+    }
+    let zero = zeroed.as_bool();
+    if crate::internal::MI_GUARDED != 0
+        // SAFETY: the caller grants exclusive guarded-sampling mutation on the
+        // live current-thread heap; the normalized small size is nonzero.
+        && mi_unlikely(unsafe {
+            mi_theap_malloc_use_guarded(
                 local_theap,
                 crate::core_types::EffectiveSize::new_unchecked(size),
-            ))
-        {
-            return _mi_theap_malloc_guarded(theap, size, zero);
-        }
+            )
+        })
+    {
+        // SAFETY: the caller keeps the heap, backing state, OS configuration,
+        // and synchronous guarded allocation/protection callbacks valid; this
+        // terminal branch preserves the original guarded allocation dispatch.
+        return unsafe { _mi_theap_malloc_guarded(theap, size, zero) };
+    }
 
-        // Compute the padded size once via the typed `PaddedSize` boundary so both
-        // the page lookup and the page-malloc use the same value, instead of
-        // open-coding `size + MI_PADDING_SIZE` twice. Uses the branchless unchecked
-        // path: `size <= MI_SMALL_SIZE_MAX` (≤ 1024, guarded upstream) and is
-        // normalized to non-zero above, so the sum cannot overflow or yield zero.
-        let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
-        let available = _mi_theap_get_free_small_page_typed(local_theap, padded);
-        let p = if let Some(available) = available {
-            _mi_page_malloc_zero_typed(local_theap, available, padded, zeroed, usable)
-        } else {
-            // SAFETY: `padded` was derived immediately above from the normalized
-            // logical request and includes exactly the allocator padding size.
+    // Compute the padded size once via the typed `PaddedSize` boundary so both
+    // the page lookup and the page-malloc use the same value, instead of
+    // open-coding `size + MI_PADDING_SIZE` twice. Uses the branchless unchecked
+    // path: `size <= MI_SMALL_SIZE_MAX` (≤ 1024, guarded upstream) and is
+    // normalized to non-zero above, so the sum cannot overflow or yield zero.
+    // The preceding bound and normalization establish the branchless padded
+    // size calculation's representability and nonzero requirements.
+    let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
+    // SAFETY: the caller keeps the live current-thread heap's initialized direct
+    // cache locally owned; `padded` derives from the bounded normalized request.
+    let available = unsafe { _mi_theap_get_free_small_page_typed(local_theap, padded) };
+    let p = if let Some(available) = available {
+        // SAFETY: `available` came from this heap's direct cache for `padded`;
+        // its page/free-list metadata and optional usable output remain valid
+        // through this terminal fast allocation.
+        unsafe { _mi_page_malloc_zero_typed(local_theap, available, padded, zeroed, usable) }
+    } else {
+        // SAFETY: `padded` was derived from the normalized logical request and
+        // includes exactly the allocator padding size. The caller keeps the
+        // heap's queues, backing state, stats, and synchronous allocator
+        // callbacks valid and locally exclusive; layout and flags carry the
+        // same zeroing policy and no huge alignment.
+        unsafe {
             let layout = crate::core_types::LayoutRequest::from_padded_unchecked(padded, zeroed);
             _mi_malloc_generic_typed(
                 local_theap.ptr(),
@@ -345,17 +369,21 @@ unsafe fn mi_theap_malloc_small_zero_typed(
                 ),
                 usable,
             )
-        };
-        mi_track_malloc(p, requested_size, zero);
-
-        if cfg!(debug_assertions) && !p.is_null() && zero && requested_size != 0 {
-            crate::internal::mi_assert_expensive!(crate::internal::mi_mem_is_zero(
-                p,
-                requested_size
-            ));
         }
-        p
+    };
+    // SAFETY: either allocation arm returns null or a live allocation covering
+    // the original request; the tracking backend remains valid and cannot
+    // incompatibly reenter or unwind.
+    unsafe { mi_track_malloc(p, requested_size, zero) };
+
+    if cfg!(debug_assertions) && !p.is_null() && zero && requested_size != 0 {
+        // SAFETY: the successful zeroing allocation remains live and readable
+        // for its original requested size through this assertion-only probe.
+        crate::internal::mi_assert_expensive!(unsafe {
+            crate::internal::mi_mem_is_zero(p, requested_size)
+        });
     }
+    p
 }
 
 /// # Safety

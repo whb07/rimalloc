@@ -124,21 +124,28 @@ pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
 /// # Safety
 ///
 /// The allocator runtime must be initialized or safe to initialize on this
-/// thread. The returned heap, when non-null, must later be released through the
-/// heap deletion or destruction APIs.
-// SAFETY: heap creation initializes allocator
-// state, allocates raw heap metadata, and registers it with the subproc list.
+/// thread. `exclusive_arena_id` must be null or identify a live initialized
+/// top-level arena whose parent metadata remains stable through its projection;
+/// that arena must remain live while the returned heap can use it, and arena
+/// teardown or relinking must not race either operation. Allocator metadata,
+/// TLS, lock, and statistics state must remain valid. Registered allocation,
+/// release, tracking, and diagnostic callbacks and their opaque arguments must
+/// remain valid for synchronous use, must not incompatibly reenter this
+/// heap-construction transaction, and must not unwind. The returned heap, when
+/// non-null, owns initialized metadata linked into its subprocess and must later
+/// be released through the heap deletion or destruction APIs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t) -> *mut mi_heap_t {
     crate::allocator::init::mi_thread_init();
-    // SAFETY: after thread initialization, the
-    // process main heap is the allocation owner for heap metadata.
+    // SAFETY: successful current-thread initialization keeps the live process
+    // main heap and its subprocess association available for this construction.
     let heap_main = unsafe { mi_heap_main() };
     if heap_main.is_null() {
         return ptr::null_mut();
     }
-    // SAFETY: allocate zeroed storage for one
-    // `mi_heap_t` from the initialized main heap.
+    // SAFETY: `heap_main` is the initialized allocation owner. The construction
+    // contract keeps allocator callbacks and state valid; a nonnull result is
+    // uniquely owned zeroed storage for one complete `mi_heap_t`.
     let heap =
         unsafe { mi_heap_zalloc(heap_main, core::mem::size_of::<mi_heap_t>()) }.cast::<mi_heap_t>();
     if heap.is_null() {
@@ -151,14 +158,17 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
             Errno::EFAULT,
             format_args!("unable to dynamically create a thread local for a heap\n"),
         );
-        // SAFETY: the heap metadata was just
-        // allocated and has not been registered with the subproc list.
+        // SAFETY: the zeroed heap metadata remains uniquely owned and
+        // unpublished, so TLS-slot failure rollback releases it exactly once.
         unsafe { mi_free(heap.cast::<c_void>()) };
         return ptr::null_mut();
     }
 
-    // SAFETY: `heap` is freshly allocated,
-    // `heap_main` is initialized, and subproc list insertion is lock-protected.
+    // SAFETY: `heap` is uniquely owned, writable, zeroed backing for a complete
+    // heap and remains unpublished. `heap_main` and its initialized subprocess
+    // stay live and stable. The arena-ID contract permits the top-level arena
+    // projection. Initialize identity, counter, policy, stats, and lock fields
+    // in their original order before publication.
     unsafe {
         (*heap).theap = theap_slot;
         (*heap).subproc = (*heap_main).subproc;
@@ -174,7 +184,12 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
         mi_lock_init(ptr::addr_of_mut!((*heap).theaps_lock));
         mi_lock_init(ptr::addr_of_mut!((*heap).os_abandoned_pages_lock));
         mi_lock_init(ptr::addr_of_mut!((*heap).arena_pages_lock));
+    }
 
+    // SAFETY: initialization above produced a fully initialized, still-unlinked
+    // heap associated with this live subprocess. The subprocess-list lock
+    // serializes terminal intrusive publication and its count/stat updates.
+    unsafe {
         let subproc = SubprocPtr::new_unchecked((*heap).subproc);
         subproc_heaps::push_front(subproc, HeapPtr::new_unchecked(heap));
     }

@@ -561,72 +561,94 @@ unsafe fn mi_page_free_list_extend_secure_typed(
     page: crate::core_types::PagePtr,
     block_range: PageBlockRange,
 ) {
-    // SAFETY: the caller provides the same-page writable block range, stable encoded keys and
-    // existing heads, exclusive local-list/random-state publication, and balanced tracking access
-    // for every link word constructed in this coherent randomized-list epoch.
-    unsafe {
-        let theap = theap.ptr().as_ptr();
-        let bsize = block_range.block_size().get();
-        let extend = block_range.block_count();
-        #[cfg(feature = "bench-diagnostics")]
-        crate::allocator::bench_diagnostics::free_list_extend(block_range.block_count());
-        if MI_SECURE < 3 {
-            crate::internal::mi_assert_internal!(page.free().is_empty());
-            crate::internal::mi_assert_internal!(page.local_free().is_empty());
-        }
-        let capacity = page.capacity();
-        crate::internal::mi_assert_internal!(
-            capacity.as_usize() + extend <= page.reserved().as_usize()
-        );
-        let mut shift = MI_MAX_SLICE_SHIFT;
-        while (extend >> shift) == 0 {
-            shift -= 1;
-        }
-        let slice_count = 1usize << shift;
-        let slice_extend = extend / slice_count;
-        crate::internal::mi_assert_internal!(slice_extend >= 1);
+    let theap = theap.ptr().as_ptr();
+    let bsize = block_range.block_size().get();
+    let extend = block_range.block_count();
+    #[cfg(feature = "bench-diagnostics")]
+    crate::allocator::bench_diagnostics::free_list_extend(block_range.block_count());
+    if MI_SECURE < 3 {
+        // SAFETY: the caller exclusively stabilizes the initialized available-list head. Keeping
+        // this read in the assertion operand preserves assertion-only evaluation and read order.
+        crate::internal::mi_assert_internal!(unsafe { page.free().is_empty() });
+        // SAFETY: the same live page's local-list head remains stable and is read only after the
+        // available-list assertion, exactly as required by the secure builder preflight.
+        crate::internal::mi_assert_internal!(unsafe { page.local_free().is_empty() });
+    }
+    // SAFETY: the caller keeps the live initialized page counts stable through partition setup.
+    let capacity = unsafe { page.capacity() };
+    // SAFETY: the same stable count snapshot permits the assertion-only reserved read after
+    // capacity; the caller guarantees the extension stays within the page's reserved range.
+    crate::internal::mi_assert_internal!(
+        capacity.as_usize() + extend <= unsafe { page.reserved().as_usize() }
+    );
+    let mut shift = MI_MAX_SLICE_SHIFT;
+    while (extend >> shift) == 0 {
+        shift -= 1;
+    }
+    let slice_count = 1usize << shift;
+    let slice_extend = extend / slice_count;
+    crate::internal::mi_assert_internal!(slice_extend >= 1);
 
-        let mut blocks = [ptr::null_mut::<mi_block_t>(); 1 << MI_MAX_SLICE_SHIFT];
-        let mut counts = [0usize; 1 << MI_MAX_SLICE_SHIFT];
-        let head_step = slice_extend * bsize;
-        let mut head = block_range.first().as_ptr();
-        for i in 0..slice_count {
-            blocks[i] = head;
-            counts[i] = slice_extend;
-            // SAFETY: the prevalidated range contains `extend` blocks, and
-            // `slice_count * slice_extend <= extend`, so each recurrence stays
-            // within or one-past the live backing block interval.
-            head = head.cast::<u8>().add(head_step).cast::<mi_block_t>();
+    let mut blocks = [ptr::null_mut::<mi_block_t>(); 1 << MI_MAX_SLICE_SHIFT];
+    let mut counts = [0usize; 1 << MI_MAX_SLICE_SHIFT];
+    let head_step = slice_extend * bsize;
+    let mut head = block_range.first().as_ptr();
+    for i in 0..slice_count {
+        blocks[i] = head;
+        counts[i] = slice_extend;
+        // SAFETY: the prevalidated range contains `extend` blocks, and
+        // `slice_count * slice_extend <= extend`, so each recurrence stays
+        // within or one-past the live backing block interval.
+        head = unsafe { head.cast::<u8>().add(head_step).cast::<mi_block_t>() };
+    }
+    counts[slice_count - 1] += extend % slice_count;
+
+    // SAFETY: the caller exclusively owns the live current-thread heap's random state; this is the
+    // algorithm's single random-state read/mutation after partition construction.
+    let r = unsafe { _mi_theap_random_next(theap) };
+    let mut current = r % slice_count;
+    counts[current] -= 1;
+    let free_start = blocks[current];
+
+    let mut rnd = crate::random::_mi_random_shuffle(r | 1);
+    for i in 1..extend {
+        let round = i % size_of::<usize>();
+        if round == 0 {
+            rnd = crate::random::_mi_random_shuffle(rnd);
         }
-        counts[slice_count - 1] += extend % slice_count;
-
-        let r = _mi_theap_random_next(theap);
-        let mut current = r % slice_count;
-        counts[current] -= 1;
-        let free_start = blocks[current];
-
-        let mut rnd = crate::random::_mi_random_shuffle(r | 1);
-        for i in 1..extend {
-            let round = i % size_of::<usize>();
-            if round == 0 {
-                rnd = crate::random::_mi_random_shuffle(rnd);
+        let mut next = (rnd >> (8 * round)) & (slice_count - 1);
+        while counts[next] == 0 {
+            next += 1;
+            if next == slice_count {
+                next = 0;
             }
-            let mut next = (rnd >> (8 * round)) & (slice_count - 1);
-            while counts[next] == 0 {
-                next += 1;
-                if next == slice_count {
-                    next = 0;
-                }
-            }
-            counts[next] -= 1;
-            let block = blocks[current];
-            blocks[current] = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
+        }
+        counts[next] -= 1;
+        let block = blocks[current];
+        // SAFETY: `block` is this partition's current in-range block and its remaining count proves
+        // advancing by one stable block size stays within or one-past `block_range`.
+        blocks[current] = unsafe { block.cast::<u8>().add(bsize).cast::<mi_block_t>() };
+        // SAFETY: `block` is nonnull, aligned, and writable in the caller-provided committed range;
+        // `blocks[next]` is the next same-page partition head. Exclusive list mutation, stable page
+        // keys, and tracking access permit this one encoded-link publication.
+        unsafe {
             crate::core_types::BlockPtr::new_unchecked(block)
                 .set_next(page, crate::core_types::BlockPtr::new(blocks[next]));
-            current = next;
         }
-        crate::core_types::BlockPtr::new_unchecked(blocks[current])
-            .set_next(page, page.free().head());
+        current = next;
+    }
+    // SAFETY: the selected terminal partition retains a nonnull in-range block after the loop.
+    // Materialize it before the intentionally late read of the prior page head.
+    let tail = unsafe { crate::core_types::BlockPtr::new_unchecked(blocks[current]) };
+    // SAFETY: the caller keeps the initialized prior available-list head stable until the new
+    // terminal link is installed; this remains the algorithm's late `page.free` read.
+    let prior_head = unsafe { page.free().head() };
+    // SAFETY: `tail` is writable committed same-page backing, `prior_head` is null or in the same
+    // encoded-list domain, and exclusive mutation plus stable keys permit terminal link publication.
+    unsafe { tail.set_next(page, prior_head) };
+    // SAFETY: `free_start` was selected from the first nonempty partition and is nonnull, aligned,
+    // and linked through `tail`; publish the new page head only after every link is initialized.
+    unsafe {
         page.set_free(crate::core_types::AvailableFreeList::from_head(
             crate::core_types::BlockPtr::new_unchecked(free_start),
         ));

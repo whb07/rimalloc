@@ -33,6 +33,13 @@ use super::{
     mi_theap_main_tls_peek, mi_theap_main_tls_set, subproc_main, theap_main, tld_main,
 };
 
+/// # Safety
+///
+/// A nonnull `theap` must identify live initialized thread-heap metadata for
+/// the current thread, with its TLD, subprocess, heap lists, pages, and backing
+/// satisfying `done_typed` for the complete teardown. Null requests teardown of
+/// the current thread's published default heap. No incompatible concurrent
+/// attach, relink, teardown, or non-refcounted metadata access is permitted.
 pub(super) unsafe fn done(theap: *mut mi_theap_t) {
     let mut default_theap = theap;
     if default_theap.is_null() {
@@ -54,6 +61,15 @@ pub(super) unsafe fn done(theap: *mut mi_theap_t) {
     unsafe { done_typed(default_theap) };
 }
 
+/// # Safety
+///
+/// `default_theap` must remain live and initialized through state and locality
+/// validation. If it belongs to the current thread, its TLD, subprocess, heap
+/// lists, pages, and backing must remain live and satisfy `theaps_done`; this
+/// call exclusively owns current-thread teardown. Registered collection,
+/// arena, tracking, and diagnostic callbacks and opaque arguments must remain
+/// valid for synchronous invocation, tolerate compatible allocator reentry,
+/// preserve the teardown topology, and must not unwind.
 unsafe fn done_typed(default_theap: ThreadHeapPtr) {
     // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let theap = match unsafe { default_theap.state() } {
@@ -93,8 +109,14 @@ unsafe fn done_typed(default_theap: ThreadHeapPtr) {
         return;
     }
 
-    // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
-    unsafe { theaps_done(tld) };
+    // SAFETY: the successful initialized/local classification and matching TLD
+    // thread ID establish the current-thread teardown epoch. The heap/TLD lists,
+    // subprocess, pages, backing, and callback state remain live as required by
+    // `theaps_done` until it has removed every thread heap.
+    let tld_ptr = unsafe { TldPtr::new_unchecked(tld) };
+    // SAFETY: the current-thread validation above establishes the complete TLD
+    // teardown contract, including exclusive list mutation and callback rules.
+    unsafe { theaps_done(tld_ptr) };
     tld_free(tld);
 }
 
@@ -455,80 +477,106 @@ pub(super) unsafe fn init_default() -> *mut mi_theap_t {
     theap
 }
 
-unsafe fn theaps_done(tld: *mut mi_tld_t) {
-    // SAFETY: thread cleanup resets default, cached, and main TLS state around heap teardown.
+/// # Safety
+///
+/// `tld` must identify live, initialized TLD metadata owned by the current
+/// thread, and the caller must exclusively own its teardown. Its initialized
+/// thread-heap lock and list must remain valid; every linked heap must belong to
+/// this TLD and remain live with stable list links, pages, page backing, heap
+/// association, refcount, and MemId until its terminal free attempt. No
+/// concurrent heap attach, list relink, teardown, or non-refcounted metadata
+/// access is permitted; allocator-protocol remote publication and existing
+/// refcount holders may delay deletion. The TLD's subprocess and atomic stats
+/// must remain live through every retry. Registered collection, release, arena,
+/// tracking, and diagnostic callbacks and opaque arguments must remain valid
+/// for synchronous invocation, tolerate compatible allocator reentry without
+/// mutating this teardown topology, and must not unwind. A successfully freed
+/// heap must not be accessed again.
+unsafe fn theaps_done(tld: TldPtr) {
+    // SAFETY: current-thread teardown resets the published TLS entries before
+    // visiting or releasing any heap that they could otherwise expose.
     let empty = unsafe { _mi_theap_empty_get() };
-    // SAFETY: thread cleanup resets default, cached, and main TLS state around heap teardown.
+    // SAFETY: `empty` is the allocator's live uninitialized sentinel, and this
+    // current-thread teardown exclusively owns all three TLS publications.
     unsafe {
         _mi_theap_default_set(empty);
         _mi_theap_cached_set(empty);
         mi_theap_main_tls_set(None);
     }
 
-    // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-    unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };
-    // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-    let mut theap = unsafe { (*tld).theaps };
-    while !theap.is_null() {
-        // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-        let next = unsafe { (*theap).tnext };
-        // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-        unsafe { _mi_theap_collect_abandon(theap) };
-        // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-        crate::internal::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
-        theap = next;
+    // SAFETY: the caller keeps the initialized TLD/list live and grants this
+    // current thread exclusive teardown mutation. Snapshot each next link
+    // before callback-capable abandonment; abandonment preserves list links
+    // while draining the current node's pages.
+    unsafe {
+        mi_lock_acquire(tld.thread_heaps_lock());
+        let mut theap = tld
+            .thread_heaps()
+            .map_or(ptr::null_mut(), ThreadHeapPtr::as_ptr);
+        while !theap.is_null() {
+            let next = (*theap).tnext;
+            _mi_theap_collect_abandon(theap);
+            crate::internal::mi_assert_internal!((*theap).page_count == 0);
+            theap = next;
+        }
+        mi_lock_release(tld.thread_heaps_lock());
     }
-    // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-    unsafe { mi_lock_release(ptr::addr_of_mut!((*tld).theaps_lock)) };
 
     loop {
         let mut all_freed = true;
-        // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-        unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };
-        // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-        let mut theap = unsafe { (*tld).theaps };
-        while !theap.is_null() {
-            // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-            let next = unsafe { (*theap).tnext };
-            // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-            crate::internal::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
-            // SAFETY: thread teardown keeps this node, heap/TLD lists, stats,
-            // refcount, MemId, and backing live. The heap-list lock must be
-            // acquired (`true`), while the TLD-list lock is held (`false`);
-            // only refcounted users may remain during this retry loop.
-            if !unsafe { _mi_theap_free(theap, true, false) } {
-                all_freed = false;
+        // SAFETY: the TLD list lock serializes traversal and unlinking. Snapshot
+        // `tnext` before `_mi_theap_free`: success unlinks and may release the
+        // current node, while failure leaves it live for a later retry. The heap
+        // list lock is acquired by the callee (`true`) and this TLD list lock is
+        // already held (`false`). No current-node access follows the call.
+        unsafe {
+            mi_lock_acquire(tld.thread_heaps_lock());
+            let mut theap = tld
+                .thread_heaps()
+                .map_or(ptr::null_mut(), ThreadHeapPtr::as_ptr);
+            while !theap.is_null() {
+                let next = (*theap).tnext;
+                crate::internal::mi_assert_internal!((*theap).page_count == 0);
+                if !_mi_theap_free(theap, true, false) {
+                    all_freed = false;
+                }
+                theap = next;
             }
-            theap = next;
+            mi_lock_release(tld.thread_heaps_lock());
         }
-        // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-        unsafe { mi_lock_release(ptr::addr_of_mut!((*tld).theaps_lock)) };
 
         if !all_freed {
-            // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-            let subproc = unsafe { mi_subproc_prefix((*tld).subproc) };
-            // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
+            // SAFETY: the caller keeps the TLD and its nonnull subprocess
+            // association stable through retries; projection copies the pointer
+            // value before addressing the live atomic wait counter.
+            let subproc = unsafe { tld.subproc().unwrap_unchecked() };
+            // SAFETY: the subprocess stats remain live atomic-compatible storage;
+            // this diagnostic update does not mutate the protected TLD list.
             unsafe {
                 crate::internal::__mi_stat_counter_increase_mt(
-                    ptr::addr_of_mut!((*subproc).stats.heaps_delete_wait),
+                    ptr::addr_of_mut!((*subproc.stats()).heaps_delete_wait),
                     1,
                 )
             };
-            // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
+            // SAFETY: the primitive yield has completed process initialization
+            // and performs no access through the retained TLD or heap pointers.
             unsafe { crate::platform::_mi_prim_thread_yield() };
         } else {
-            // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
-            crate::internal::mi_assert_internal!(unsafe { (*tld).theaps }.is_null());
+            // SAFETY: the final locked traversal observed every node released;
+            // the initialized TLD remains live for this list-head assertion.
+            crate::internal::mi_assert_internal!(unsafe { tld.thread_heaps() }.is_none());
             break;
         }
     }
 
-    // SAFETY: thread cleanup resets default, cached, and main TLS state around heap teardown.
+    // SAFETY: teardown published the empty sentinel before releasing heaps and
+    // no later phase changes the current thread's default TLS entry.
     crate::internal::mi_assert_internal!(unsafe { crate::platform::_mi_theap_default() } == empty);
-    // SAFETY: thread cleanup resets default, cached, and main TLS state around heap teardown.
+    // SAFETY: `empty` is the allocator's live sentinel and its initialized-state
+    // probe is valid after all thread heaps have been removed.
     crate::internal::mi_assert_internal!(!unsafe {
         crate::internal::mi_theap_is_initialized(empty)
-    }); // SAFETY: thread cleanup resets default, cached, and main TLS state around heap teardown.
+    });
 }
 
 /// Initialize allocator state for the current thread if necessary. Failure to

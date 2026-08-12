@@ -110,28 +110,27 @@ unsafe fn release_abandoned_ownership(
     }
 }
 
-unsafe fn mi_page_queue_len_is_atmost(
-    theap: crate::core_types::ThreadHeapLocal,
-    block_size: crate::core_types::BlockSize,
-    atmost: crate::core_types::PageQueueCount,
-) -> bool {
-    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
-    unsafe {
-        let pq = mi_page_queue(theap.ptr().as_ptr(), block_size);
-        crate::internal::mi_assert_internal!(!pq.is_null());
-        mi_page_queue_count_typed(pq).get() <= atmost.get()
-    }
-}
-
+/// # Safety
+/// `page` must be the unique live ownership claim for an abandoned, non-all-free page whose remote
+/// free head has already been collected. Its registration, backing, geometry, associated-heap
+/// pointer, MemId, and abandoned arena/list accounting must remain live and stable until this call
+/// returns or consumes the claim. Any heap selected for reclaim must be initialized, current-thread
+/// local, and exclusively mutable for its TLD, queue array, page links, and stats; remote publication
+/// may occur only through allocator atomics. Teardown, backing release, heap relink, and incompatible
+/// callback reentry must be excluded. Arena, purge, commit, tracking, and diagnostic callbacks and
+/// opaque arguments must remain valid for synchronous invocation and must not unwind. `decision`
+/// must describe the active reclaim-on-free policy for this operation.
 unsafe fn try_reclaim_abandoned(
     page: crate::core_types::OwnedAbandonedPage,
     decision: crate::allocator::policy::ReclaimDecision,
 ) -> Result<crate::core_types::ActivePage, crate::core_types::OwnedAbandonedPage> {
-    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
-    unsafe {
-        let reclaim_on_free = decision.reclaim_on_free();
-        #[cfg(feature = "bench-diagnostics")]
-        crate::allocator::bench_diagnostics::abandoned_reclaim_attempt();
+    let reclaim_on_free = decision.reclaim_on_free();
+    #[cfg(feature = "bench-diagnostics")]
+    crate::allocator::bench_diagnostics::abandoned_reclaim_attempt();
+
+    // SAFETY: the unique claimed page remains live with stable owner, used count, geometry, MemId,
+    // and associated-heap metadata while this epoch validates and snapshots its block size.
+    let (page_raw, block_size) = unsafe {
         let page_raw = page.page().as_ptr();
         let block_size = page.page().block_size_raw();
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
@@ -139,19 +138,29 @@ unsafe fn try_reclaim_abandoned(
         crate::internal::mi_assert_internal!(!mi_page_all_free(page_raw));
         crate::internal::mi_assert_internal!(block_size <= MI_MEDIUM_MAX_OBJ_SIZE);
         crate::internal::mi_assert_internal!(reclaim_on_free.is_enabled());
+        (page_raw, block_size)
+    };
 
-        if !_mi_thread_is_initialized() {
-            #[cfg(feature = "bench-diagnostics")]
-            crate::allocator::bench_diagnostics::abandoned_reclaim_fail_thread_uninit();
-            return Err(page);
-        }
+    // SAFETY: allocator lifecycle keeps the current thread-state slot initialized and readable.
+    if !unsafe { _mi_thread_is_initialized() } {
+        #[cfg(feature = "bench-diagnostics")]
+        crate::allocator::bench_diagnostics::abandoned_reclaim_fail_thread_uninit();
+        return Err(page);
+    }
 
-        let Some(theap) = _mi_page_associated_theap_peek(page.page()) else {
-            #[cfg(feature = "bench-diagnostics")]
-            crate::allocator::bench_diagnostics::abandoned_reclaim_fail_no_theap();
-            return Err(page);
-        };
-        let theap = theap.as_ptr();
+    // SAFETY: the claimed page's associated-heap field remains live and stable. A returned heap
+    // remains initialized and current-thread local through the reclaim decision and transition.
+    let Some(associated) = (unsafe { _mi_page_associated_theap_peek(page.page()) }) else {
+        #[cfg(feature = "bench-diagnostics")]
+        crate::allocator::bench_diagnostics::abandoned_reclaim_fail_no_theap();
+        return Err(page);
+    };
+    let theap = associated.as_ptr();
+
+    // SAFETY: the associated heap and its TLD, reclaim flag, arena selection, queue metadata, and
+    // stats remain live and stable. Current-thread ownership gives exclusive local mutation rights;
+    // the claimed page's owner, used count, MemId, and associated-heap identity remain stable.
+    let (owner, max_reclaim) = unsafe {
         if !(*theap).allow_page_reclaim {
             #[cfg(feature = "bench-diagnostics")]
             crate::allocator::bench_diagnostics::abandoned_reclaim_fail_reclaim_disabled();
@@ -178,44 +187,46 @@ unsafe fn try_reclaim_abandoned(
                 crate::allocator::policy::ReclaimContext::CrossThreadHeap,
             );
         }
+        (
+            crate::core_types::ThreadHeapLocal::new_unchecked(associated),
+            max_reclaim,
+        )
+    };
 
-        let decision = crate::allocator::policy::ReclaimDecision::new(
-            reclaim_on_free,
-            max_reclaim.as_queue_count(),
-        );
-        if let Some(max_reclaim) = decision.max_queue_count()
-            && !mi_page_queue_len_is_atmost(
-                crate::core_types::ThreadHeapLocal::new_unchecked(
-                    crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-                ),
-                crate::core_types::BlockSize::new_unchecked(block_size),
-                max_reclaim,
-            )
-        {
+    let decision = crate::allocator::policy::ReclaimDecision::new(
+        reclaim_on_free,
+        max_reclaim.as_queue_count(),
+    );
+    if let Some(max_reclaim) = decision.max_queue_count() {
+        // SAFETY: `owner` retains the live current-thread heap witness. The validated block size
+        // selects its matching live queue, whose count remains stable under exclusive local access.
+        let within_limit = unsafe {
+            let block_size = crate::core_types::BlockSize::new_unchecked(block_size);
+            let pq = mi_page_queue(owner.ptr().as_ptr(), block_size);
+            crate::internal::mi_assert_internal!(!pq.is_null());
+            mi_page_queue_count_typed(pq).get() <= max_reclaim.get()
+        };
+        if !within_limit {
             #[cfg(feature = "bench-diagnostics")]
             crate::allocator::bench_diagnostics::abandoned_reclaim_fail_queue_limit();
             return Err(page);
         }
-
-        // SAFETY: the claimed page, associated live heap, MemId, and abandoned
-        // publication remain stable while this removes abandoned accounting.
-        _mi_arenas_page_unabandon_internal(
-            &page,
-            Some(crate::core_types::ThreadHeapLocal::new_unchecked(
-                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-            )),
-        );
-        let active = _mi_theap_page_reclaim(
-            page,
-            crate::core_types::ThreadHeapLocal::new_unchecked(
-                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-            ),
-        );
-        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reclaim_on_free), 1);
-        #[cfg(feature = "bench-diagnostics")]
-        crate::allocator::bench_diagnostics::abandoned_reclaim_success();
-        Ok(active)
     }
+
+    // SAFETY: the unique claimed page, its backing/MemId and abandoned publication, and `owner`
+    // remain live through this terminal epoch. Unabandon first removes matching arena/list/stats
+    // accounting; reclaim then consumes the claim and publishes the Active page to `owner`; only
+    // owner stats are touched afterward. Neither `page` nor `page_raw` is used after consumption,
+    // and callbacks cannot incompatibly reenter or unwind.
+    let active = unsafe {
+        _mi_arenas_page_unabandon_internal(&page, Some(owner));
+        let active = _mi_theap_page_reclaim(page, owner);
+        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reclaim_on_free), 1);
+        active
+    };
+    #[cfg(feature = "bench-diagnostics")]
+    crate::allocator::bench_diagnostics::abandoned_reclaim_success();
+    Ok(active)
 }
 
 #[cold]

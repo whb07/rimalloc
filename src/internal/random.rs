@@ -135,21 +135,19 @@ fn _mi_prim_clock_now() -> mi_msecs_t {
 }
 
 #[inline]
-fn _mi_prim_random_buf(buf: *mut u8, buf_len: usize) -> bool {
-    if buf_len == 0 {
+fn _mi_prim_random_buf(buf: &mut [u8]) -> bool {
+    if buf.is_empty() {
         return true;
     }
-    crate::internal::mi_debug_assert!(!buf.is_null());
     #[cfg(unix)]
     {
-        // SAFETY: `buf` and `buf_len` come
-        // from a live stack-local key buffer in `mi_random_init_ex`.
-        unsafe { crate::prim::unix::_mi_prim_random_buf(buf.cast(), buf_len) }
+        // SAFETY: the mutable slice provides live, uniquely writable backing
+        // for exactly `buf.len()` bytes through this synchronous primitive call.
+        unsafe { crate::prim::unix::_mi_prim_random_buf(buf.as_mut_ptr().cast(), buf.len()) }
     }
     #[cfg(not(unix))]
     {
         let _ = buf;
-        let _ = buf_len;
         false
     }
 }
@@ -157,7 +155,7 @@ fn _mi_prim_random_buf(buf: *mut u8, buf_len: usize) -> bool {
 #[inline]
 fn mi_random_init_ex(ctx: &mut mi_random_ctx_t, use_weak: bool) {
     let mut key = [0u8; 32];
-    if use_weak || !_mi_prim_random_buf(key.as_mut_ptr(), key.len()) {
+    if use_weak || !_mi_prim_random_buf(&mut key) {
         if !use_weak {
             crate::allocator::options::_mi_warning_message_fmt(format_args!(
                 "unable to use secure randomness\n"
@@ -278,5 +276,16 @@ pub(crate) unsafe extern "C" fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ct
     let ctx = unsafe { &mut *ctx };
     if ctx.weak {
         mi_random_init_ex(ctx, false);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn primitive_random_buffer_accepts_empty_slice_without_platform_access() {
+        let mut empty = [];
+        assert!(_mi_prim_random_buf(&mut empty));
     }
 }

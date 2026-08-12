@@ -270,40 +270,62 @@ unsafe fn mi_heap_free_theaps(heap: OwnedHeap) {
 /// # Safety
 /// `heap` must be live, non-main, and exclusively owned for final teardown. Its
 /// thread heaps must already be drained and its pages moved or destroyed. The
-/// arena-page table/lock, statistics, TLS slot, locks, subprocess association,
-/// and subprocess heap-list links must remain initialized and valid. The main
-/// heap and subprocess must remain live, with no concurrent heap relink,
-/// teardown, arena-table access, or other metadata use.
+/// arena-page table and each nonnull table allocation, statistics, TLS slot,
+/// locks, subprocess association/list links/counters, and heap backing must
+/// remain initialized and valid. The main heap and subprocess must remain live.
+/// No concurrent source-stat update/reset, heap relink, teardown, arena-table
+/// access, TLS use, lock use, or other metadata access may occur; concurrent
+/// main-heap destination updates may continue through the allocator's atomic
+/// stats protocol. Platform TLS/lock state and registered release, tracking,
+/// and diagnostic callbacks and opaque arguments must remain valid for
+/// synchronous use, must not incompatibly reenter this heap/subprocess
+/// teardown, and must not unwind. No heap field may be accessed after the
+/// final backing release.
 unsafe fn mi_heap_free(heap: OwnedHeap) {
-    let heap = heap.ptr().as_ptr();
-    // SAFETY: the caller's final-teardown epoch keeps every projected field,
-    // lock, registry link, and allocator target live until their ordered release;
-    // metadata is freed only after all dependent state is detached or destroyed.
+    let heap = heap.ptr();
+    let heap_raw = heap.as_ptr();
+    // SAFETY: the final-teardown contract keeps the heap and subprocess
+    // association live for the assertion-only main classification. It also
+    // keeps the arena-page cells and lock live. Each atomic swap detaches one
+    // owned page-table allocation before its terminal free; no cell is accessed
+    // afterward.
     unsafe {
-        crate::internal::mi_assert_internal!(!heap.is_null() && !_mi_is_heap_main(heap));
-
-        mi_lock_acquire(ptr::addr_of_mut!((*heap).arena_pages_lock));
-        for arena_pages in &mut (*heap).arena_pages {
+        crate::internal::mi_assert_internal!(!heap_raw.is_null() && !_mi_is_heap_main(heap_raw));
+        mi_lock_acquire(ptr::addr_of_mut!((*heap_raw).arena_pages_lock));
+        for arena_pages in &mut (*heap_raw).arena_pages {
             let pages = arena_pages.swap(ptr::null_mut(), Ordering::Relaxed);
             if !pages.is_null() {
                 mi_free(pages);
             }
         }
-        mi_lock_release(ptr::addr_of_mut!((*heap).arena_pages_lock));
+        mi_lock_release(ptr::addr_of_mut!((*heap_raw).arena_pages_lock));
+    }
 
+    // SAFETY: all heap pages/theaps are already drained. The live main heap
+    // remains the destination for the destructive source-stat merge, and the
+    // heap remains linked to its live subprocess until the immediately
+    // following exact unlink. The exclusive teardown contract prevents source
+    // stats mutation or concurrent subprocess relinking across this epoch.
+    unsafe {
         _mi_stats_merge_into(
             ptr::addr_of_mut!((*mi_heap_main()).stats),
-            ptr::addr_of_mut!((*heap).stats),
+            ptr::addr_of_mut!((*heap_raw).stats),
         );
+        let subproc = SubprocPtr::new_unchecked((*heap_raw).subproc);
+        subproc_heaps::remove(subproc, heap);
+    }
 
-        let subproc = SubprocPtr::new_unchecked((*heap).subproc);
-        subproc_heaps::remove(subproc, HeapPtr::new_unchecked(heap));
-
-        _mi_thread_local_free((*heap).theap);
-        mi_lock_done(ptr::addr_of_mut!((*heap).theaps_lock));
-        mi_lock_done(ptr::addr_of_mut!((*heap).os_abandoned_pages_lock));
-        mi_lock_done(ptr::addr_of_mut!((*heap).arena_pages_lock));
-        mi_free(heap.cast::<c_void>());
+    // SAFETY: the heap is now drained, merged, and unlinked. Its TLS key and
+    // three unheld locks remain live and exclusively owned for ordered
+    // destruction. Preserve TLS release before lock destruction and destroy
+    // the locks in their original order. The final `mi_free` consumes the heap
+    // backing, so no access through `heap_raw` or `heap` follows this block.
+    unsafe {
+        _mi_thread_local_free((*heap_raw).theap);
+        mi_lock_done(ptr::addr_of_mut!((*heap_raw).theaps_lock));
+        mi_lock_done(ptr::addr_of_mut!((*heap_raw).os_abandoned_pages_lock));
+        mi_lock_done(ptr::addr_of_mut!((*heap_raw).arena_pages_lock));
+        mi_free(heap_raw.cast::<c_void>());
     }
 }
 

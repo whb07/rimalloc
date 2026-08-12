@@ -6,12 +6,9 @@
 
 use super::*;
 
-/// # Safety
-/// Matches the C internal API and returns the null arena-id sentinel.
+/// Return the null arena-ID sentinel without accessing allocator metadata.
 #[inline(never)]
-// SAFETY: this raw C ABI shim returns the
-// null arena-id sentinel and does not dereference allocator metadata.
-pub(crate) unsafe extern "C" fn _mi_arena_id_none() -> mi_arena_id_t {
+pub(crate) extern "C" fn _mi_arena_id_none() -> mi_arena_id_t {
     ptr::null_mut()
 }
 
@@ -37,9 +34,7 @@ pub(crate) unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arena_id_from_arena(arena: *mut mi_arena_t) -> mi_arena_id_t {
     let Some(arena) = ArenaPtr::new(arena) else {
-        // SAFETY: null arena input maps to the
-        // null arena-id sentinel through the internal C ABI shim.
-        return unsafe { _mi_arena_id_none() };
+        return _mi_arena_id_none();
     };
     // SAFETY: `ArenaPtr::new` proved the pointer
     // is non-null; the typed helper checks top-level arena state.

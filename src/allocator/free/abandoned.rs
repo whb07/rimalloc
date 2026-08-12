@@ -284,53 +284,90 @@ unsafe fn try_reclaim_abandoned(
     Ok(active)
 }
 
+/// Collect a remote free after its publication acquired abandoned-page ownership.
+///
+/// # Safety
+/// `page` must be the unique live ownership claim for the initialized abandoned
+/// page containing `published`. `published` must be the exact block link whose
+/// successful remote publication acquired that ownership; newer remote pushes
+/// may precede it, but it must remain reachable in the page's published remote
+/// chain until consumed here. The page's atomic thread-free word, backing,
+/// encoded-link keys, counts, free lists, MemId, arena/page-map registration,
+/// associated heap, and stats must remain live through return or a terminal
+/// consuming transition. Remote pushes may race only through the allocator's
+/// atomic protocol; competing collection, ownership transitions, relinking,
+/// reclaim, reabandon, backing release, and teardown are excluded. Arena,
+/// purge, commit, tracking, and diagnostic callbacks and their opaque arguments
+/// must remain valid for synchronous invocation, must not incompatibly reenter
+/// this page, heap, or arena, and must not unwind. Any heap selected for reclaim
+/// must be initialized and current-thread local, with exclusive local mutation
+/// of its TLD, queues, page links, and stats.
+///
+/// Partial collection carries the captured block as the deliberately possibly
+/// stale release-CAS expectation, including when final-block collection has
+/// already detached it; full collection carries a null expectation. The claim
+/// is consumed exactly once into `Destroyed`, `Reclaimed`, `Mapped`, or
+/// `StillAbandoned`, with no page access after a terminal transition.
 #[cold]
 #[inline(never)]
 pub(super) unsafe fn collect_after_remote_free(
     page: crate::core_types::OwnedAbandonedPage,
     published: crate::core_types::PublishedRemoteHead,
 ) -> crate::core_types::AbandonedDisposition {
-    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
-    unsafe {
+    // SAFETY: the unique claim keeps this page's initialized state, backing,
+    // owner word, and block-size field live and stable while protocol remote
+    // pushes may prepend to the published chain.
+    let (page_raw, block_size) = unsafe {
         let page_raw = page.page().as_ptr();
         let block_size = page.page().block_size_raw();
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
         crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
+        (page_raw, block_size)
+    };
 
-        let mt_free = published.head();
-        let expected_thread_free = match crate::allocator::policy::ActivePolicy::remote_collect_mode(
-            page.page().block_size(),
-        ) {
-            crate::allocator::policy::RemoteCollectMode::PartialKeepPublishedHead => {
+    let mt_free = published.head();
+    let expected_thread_free = match crate::allocator::policy::ActivePolicy::remote_collect_mode(
+        // SAFETY: the claim keeps the initialized block-size field readable.
+        // This second read intentionally remains at the original policy point.
+        unsafe { page.page().block_size() },
+    ) {
+        crate::allocator::policy::RemoteCollectMode::PartialKeepPublishedHead => {
+            // SAFETY: the claimed owner and matching captured publication keep
+            // its link and tail structurally valid. Newer pushes may prepend but
+            // cannot mutate that tail; no competing collector or page transition
+            // can race this partial collection. The policy requires at least 16
+            // reserved blocks before using the partial path.
+            unsafe {
                 crate::internal::mi_assert_internal!(
                     crate::allocator::page::mi_page_reserved_count(page_raw).get() >= 16
                 );
-                // SAFETY: `page` retains the unique claimed abandoned-page
-                // ownership established for this collection transaction, and
-                // `published` is the exact head obtained from its owned atomic
-                // thread-free word. The live page backing, keys, counts, and
-                // lists remain stable except for protocol-authorized remote
-                // publication; the surrounding collection excludes competing
-                // owner/list transitions, and configured diagnostics cannot
-                // incompatibly reenter this mutation or unwind across C ABI.
                 crate::allocator::page::_mi_page_free_collect_partly_typed(&page, published);
-                crate::core_types::ThreadFreeWord::from_parts(
-                    Some(mt_free),
-                    crate::core_types::ThreadFreeOwner::Owned,
-                )
             }
-            crate::allocator::policy::RemoteCollectMode::FullDetach => {
-                published.leave_published();
+            crate::core_types::ThreadFreeWord::from_parts(
+                Some(mt_free),
+                crate::core_types::ThreadFreeOwner::Owned,
+            )
+        }
+        crate::allocator::policy::RemoteCollectMode::FullDetach => {
+            published.leave_published();
+            // SAFETY: the unique abandoned-page claim keeps the complete
+            // published chain, page-local lists, counts, keys, and backing live
+            // while this full collection atomically detaches and consumes it.
+            unsafe {
                 crate::allocator::page::collect_page_free_lists_abandoned(&page, false);
-                crate::core_types::ThreadFreeWord::from_parts(
-                    None,
-                    crate::core_types::ThreadFreeOwner::Owned,
-                )
             }
-        };
+            crate::core_types::ThreadFreeWord::from_parts(
+                None,
+                crate::core_types::ThreadFreeOwner::Owned,
+            )
+        }
+    };
 
-        let reclaim_on_free = crate::allocator::policy::ActivePolicy::reclaim_on_free_mode();
-        if MI_DEBUG > 1 {
+    let reclaim_on_free = crate::allocator::policy::ActivePolicy::reclaim_on_free_mode();
+    if MI_DEBUG > 1 {
+        // SAFETY: the retained unique claim keeps the page's initialized flags
+        // and counts readable for these debug-only consistency checks.
+        unsafe {
             if mi_page_is_singleton(page_raw) {
                 crate::internal::mi_assert_internal!(mi_page_all_free(page_raw));
             }
@@ -338,23 +375,35 @@ pub(super) unsafe fn collect_after_remote_free(
                 crate::internal::mi_assert!(mi_page_is_mostly_used(page_raw));
             }
         }
-
-        let mut page = match try_free_abandoned(page) {
-            Ok(page) => return crate::core_types::AbandonedDisposition::Destroyed(page),
-            Err(page) => page,
-        };
-        if block_size <= MI_MEDIUM_MAX_OBJ_SIZE && reclaim_on_free.is_enabled() {
-            let decision = crate::allocator::policy::ReclaimDecision::new(reclaim_on_free, None);
-            page = match try_reclaim_abandoned(page, decision) {
-                Ok(page) => return crate::core_types::AbandonedDisposition::Reclaimed(page),
-                Err(page) => page,
-            };
-        }
-        let page = match try_reabandon_mapped(page) {
-            Ok(disposition) => return disposition,
-            Err(page) => page,
-        };
-
-        release_abandoned_ownership(page, expected_thread_free)
     }
+
+    // SAFETY: remote collection has updated the retained claimed page's counts;
+    // its arena registration and backing remain live for the terminal all-free
+    // check and possible destruction. Success consumes the page exactly once.
+    let mut page = match unsafe { try_free_abandoned(page) } {
+        Ok(page) => return crate::core_types::AbandonedDisposition::Destroyed(page),
+        Err(page) => page,
+    };
+    if block_size <= MI_MEDIUM_MAX_OBJ_SIZE && reclaim_on_free.is_enabled() {
+        let decision = crate::allocator::policy::ReclaimDecision::new(reclaim_on_free, None);
+        // SAFETY: the non-all-free claimed page retains stable backing, MemId,
+        // associated-heap, and arena state. The validated policy permits this
+        // consuming reclaim attempt; failure returns the same claim.
+        page = match unsafe { try_reclaim_abandoned(page, decision) } {
+            Ok(page) => return crate::core_types::AbandonedDisposition::Reclaimed(page),
+            Err(page) => page,
+        };
+    }
+    // SAFETY: the retained non-all-free claim and stable arena/MemId state
+    // permit the consuming mapped-reabandon attempt. Failure returns the claim.
+    let page = match unsafe { try_reabandon_mapped(page) } {
+        Ok(disposition) => return disposition,
+        Err(page) => page,
+    };
+
+    // SAFETY: the retained claim remains live and `expected_thread_free` is the
+    // exact owned observation produced by the preceding partial/full collection.
+    // A stale captured head is intentional: newer pushes force the release CAS
+    // into its collect/retry path before ownership can be cleared.
+    unsafe { release_abandoned_ownership(page, expected_thread_free) }
 }

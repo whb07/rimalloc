@@ -131,20 +131,33 @@ pub extern "C" fn mi_malloc(size: usize) -> *mut c_void {
 }
 
 /// # Safety
-/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
+/// If nonnull, `heap` must identify live initialized current-thread heap
+/// metadata with a stable association to its thread heap. The caller must keep
+/// the selected local TLD, direct cache, page queues, free lists, statistics,
+/// and guarded-allocation sampling state exclusively mutable for this call;
+/// protocol atomic remote-free publication is permitted. Page-map, arena,
+/// backing-memory, allocator-configuration, and lifecycle state must remain
+/// initialized and stable. Any synchronous collection, deferred-free, arena,
+/// guarded-allocation, tracking, or diagnostic callbacks and opaque arguments
+/// reached during allocation must remain valid, must not incompatibly reenter
+/// local heap state, and must not unwind. A nonnull result is allocator-owned
+/// and may be released with `mi_free`.
+// SAFETY: this raw boundary first classifies caller-proven live heap metadata,
+// then validates the layout before terminal typed allocation dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
-    // SAFETY: heap is validated via BorrowedHeap::from_allocation_raw which checks live heap metadata; layout is validated before typed dispatch.
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return ptr::null_mut();
-        };
-        let Ok(layout) = crate::core_types::LayoutRequest::malloc(size) else {
-            return core::ptr::null_mut();
-        };
-        mi_heap_malloc_typed(heap, layout)
-    }
+    // SAFETY: the raw-boundary contract keeps any nonnull heap metadata live,
+    // current-thread owned, and stable through this classification.
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return ptr::null_mut();
+    };
+    let Ok(layout) = crate::core_types::LayoutRequest::malloc(size) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: the caller-proven classified heap and validated layout retain the
+    // local-exclusivity, lifecycle, and callback obligations required by
+    // terminal allocation.
+    unsafe { mi_heap_malloc_typed(heap, layout) }
 }
 
 /// # Safety

@@ -667,27 +667,42 @@ unsafe fn mi_page_free_list_extend_typed(
     page: crate::core_types::PagePtr,
     block_range: PageBlockRange,
 ) {
-    // SAFETY: the caller provides the same-page writable block range, stable encoded keys and
-    // existing heads, exclusive local-list publication, and balanced tracking access for every
-    // link word constructed in this coherent sequential-list epoch.
-    unsafe {
-        let bsize = block_range.block_size().get();
-        #[cfg(feature = "bench-diagnostics")]
-        crate::allocator::bench_diagnostics::free_list_extend(block_range.block_count());
-        if MI_SECURE < 3 {
-            crate::internal::mi_assert_internal!(page.free().is_empty());
-            crate::internal::mi_assert_internal!(page.local_free().is_empty());
-        }
-        let start = block_range.first();
-        let last = block_range.last();
-        let mut block = start.as_ptr();
-        while block < last.as_ptr() {
-            let next = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
+    let bsize = block_range.block_size().get();
+    #[cfg(feature = "bench-diagnostics")]
+    crate::allocator::bench_diagnostics::free_list_extend(block_range.block_count());
+    if MI_SECURE < 3 {
+        // SAFETY: the caller exclusively stabilizes the initialized available-list head. Keeping
+        // this read in the assertion operand preserves assertion-only evaluation and read order.
+        crate::internal::mi_assert_internal!(unsafe { page.free().is_empty() });
+        // SAFETY: the same live page's local-list head remains stable and is read only after the
+        // available-list assertion, exactly as required by the sequential builder preflight.
+        crate::internal::mi_assert_internal!(unsafe { page.local_free().is_empty() });
+    }
+    let start = block_range.first();
+    let last = block_range.last();
+    let mut block = start.as_ptr();
+    while block < last.as_ptr() {
+        // SAFETY: `block` is an in-range block before `last`; advancing by the range's stable block
+        // size yields the next block, at most the same allocation's terminal `last` block.
+        let next = unsafe { block.cast::<u8>().add(bsize).cast::<mi_block_t>() };
+        // SAFETY: `block` and `next` are distinct aligned blocks in the caller-provided committed
+        // same-page range. Exclusive list mutation, stable page keys, and tracking access permit
+        // this encoded link write before advancing the sequential cursor.
+        unsafe {
             crate::core_types::BlockPtr::new_unchecked(block)
                 .set_next(page, crate::core_types::BlockPtr::new(next));
-            block = next;
         }
-        last.set_next(page, page.free().head());
+        block = next;
+    }
+    // SAFETY: the caller keeps the initialized prior available-list head stable until the new
+    // terminal link is installed; this remains the algorithm's intentionally late head read.
+    let prior_head = unsafe { page.free().head() };
+    // SAFETY: `last` is the writable final block in the committed same-page range, and `prior_head`
+    // is null or in the same encoded-list domain. Publish the terminal link before the page head.
+    unsafe { last.set_next(page, prior_head) };
+    // SAFETY: `start` is nonnull and now heads the completely initialized sequential chain; the
+    // caller exclusively owns the live page's available-head publication.
+    unsafe {
         page.set_free(crate::core_types::AvailableFreeList::from_head(start));
     }
 }

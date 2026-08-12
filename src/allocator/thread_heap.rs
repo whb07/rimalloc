@@ -50,10 +50,16 @@ pub const MI_MAX_BLOCKS: usize = MI_SMALL_PAGE_SIZE / core::mem::size_of::<*cons
 
 /// # Safety
 ///
-/// The callback receives allocator-owned thread-heap, queue, and page pointers
-/// that are valid only for the synchronous invocation. `arg1` and `arg2` must
-/// satisfy the callback's contract and remain valid through that invocation.
-/// The callback must not unwind across the C ABI.
+/// The callback receives allocator-owned thread-heap, queue, and current-page
+/// pointers that are valid only for the synchronous invocation. `arg1` and
+/// `arg2` must satisfy the callback's contract and remain valid through that
+/// invocation. After the traversal has captured the current page's successor,
+/// a callback may detach and terminally consume only that current page,
+/// including its queue endpoints/count and the successor's predecessor link.
+/// It must not invalidate the captured successor, change its forward link or
+/// the remaining unvisited forward chain, or relink the current page into that
+/// chain. The callback must not unwind across the C ABI or incompatibly reenter
+/// page traversal.
 // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub type theap_page_visitor_fun = unsafe extern "C" fn(
     theap: *mut mi_theap_t,
@@ -67,6 +73,10 @@ pub type theap_page_visitor_fun = unsafe extern "C" fn(
 struct TheapPageVisitCallback(theap_page_visitor_fun);
 
 impl TheapPageVisitCallback {
+    /// # Safety
+    /// The visitor, opaque arguments, heap, queue, and current page must meet
+    /// `theap_page_visitor_fun`'s synchronous callback contract. The raw
+    /// pointers are not retained after this call.
     #[inline(always)]
     fn new(visitor: Option<theap_page_visitor_fun>) -> Option<Self> {
         visitor.map(Self)
@@ -569,12 +579,14 @@ pub unsafe extern "C" fn mi_theap_visit_blocks(
 ///
 /// When non-null, `theap` must point to a live initialized thread heap whose
 /// current thread (or exclusive initialization/teardown owner) may mutate local
-/// queues/free lists and metadata, and whose queues, page backing, and page
-/// geometry remain valid through the synchronous traversal. When present,
+/// queues/free lists and metadata, and whose queue storage, page backing, and
+/// page geometry remain valid through the synchronous traversal. When present,
 /// `fn_page`, `arg1`, and `arg2` must satisfy the page callback contract for
 /// every invocation and remain valid until traversal returns. The callback must
-/// not unwind across the C ABI or incompatibly reenter page traversal. A null
-/// `theap` returns `false` without invoking the callback.
+/// not unwind across the C ABI or incompatibly reenter page traversal. After a
+/// successor has been captured, it may detach and terminally consume only the
+/// current page, while preserving the successor and the remaining unvisited
+/// forward chain. A null `theap` returns `false` without invoking the callback.
 pub unsafe fn mi_theap_visit_pages(
     theap: *mut mi_theap_t,
     fn_page: Option<theap_page_visitor_fun>,
@@ -602,14 +614,23 @@ pub unsafe fn mi_theap_visit_pages(
 /// # Safety
 /// `theap` must identify a live initialized locally owned thread heap under
 /// current-thread ownership or exclusive initialization/teardown access. Its
-/// page count, queue array, queue links, page metadata, geometry, and backing
-/// must remain live throughout traversal. Protocol remote-free publication may
-/// continue only through allocator atomics. If present, `state.visitor` must
-/// have the declared ABI, and it and both opaque arguments must remain valid for
-/// every synchronous invocation and must not unwind. After `next` is captured,
-/// the callback may detach and terminally consume the current page, but must not
-/// relink it into the unvisited traversal or mutate the captured successor,
-/// remaining queue topology, heap, or queue before traversal resumes.
+/// page count and complete fixed-bin queue array must be initialized and
+/// readable for the initial snapshots, and every queue storage location must
+/// remain live throughout traversal. Every page, link, metadata object,
+/// geometry value, and backing allocation must be live and initialized when it
+/// is read, and each visited chain must be finite.
+/// Protocol remote-free publication may continue only through allocator
+/// atomics. If present, `state.visitor` must have the declared ABI, and it and
+/// both opaque arguments must remain valid for every synchronous invocation and
+/// must not unwind or incompatibly reenter traversal. After `next` is captured,
+/// the callback may detach and terminally consume the current page, including
+/// updating the owning queue's links/endpoints/count, the captured successor's
+/// predecessor link, and the heap page count. It must not relink the current
+/// page into the unvisited traversal, invalidate the captured successor, alter
+/// that successor's forward link or the remaining forward chain, or invalidate
+/// metadata/backing needed by later callbacks before traversal resumes. A
+/// `false` callback result stops traversal immediately without advancing to the
+/// captured successor.
 unsafe fn mi_theap_visit_pages_typed(
     theap: ThreadHeapPtr,
     include_full: bool,
@@ -632,28 +653,38 @@ unsafe fn mi_theap_visit_pages_typed(
     };
 
     for i in 0..=max_bin {
-        // SAFETY: `i` selects a live queue from this heap. The caller keeps its
-        // topology, pages, metadata, geometry, and backing stable except that
-        // the callback may consume the current page after `next` is captured;
-        // the callback contract preserves that successor and the remainder.
-        unsafe {
+        // SAFETY: the safe loop bounds keep `i` within the selected fixed-bin range. The caller
+        // keeps the complete queue array live and the selected queue head initialized until read.
+        let (queue, mut page) = unsafe {
             let bin = Bin::new_unchecked(i as u16);
             let queue = theap.page_queue(bin);
-            let mut page = queue.first();
-            while let Some(current) = page {
-                let current_ptr = current.as_ptr();
-                let next = current.queue_next();
-                crate::internal::mi_assert_internal!(mi_page_theap(current_ptr) == theap_ptr);
-                if crate::internal::MI_DEBUG > 1 {
-                    count += 1;
-                }
-                if let Some(visitor) = state.visitor
-                    && !visitor.invoke(theap, queue, current, state)
-                {
-                    return false;
-                }
-                page = next;
+            let page = queue.first();
+            (queue, page)
+        };
+        while let Some(current) = page {
+            let current_ptr = current.as_ptr();
+            // SAFETY: the current page remains live with an initialized stable forward link until
+            // this read. Capturing it before owner validation and callback invocation preserves the
+            // original removal-safe traversal order.
+            let next = unsafe { current.queue_next() };
+            // SAFETY: the current page remains live with its initialized owner association stable
+            // before the callback. Keeping the read in the assertion preserves assertion-only
+            // evaluation after the successor snapshot.
+            crate::internal::mi_assert_internal!(
+                unsafe { mi_page_theap(current_ptr) } == theap_ptr
+            );
+            if crate::internal::MI_DEBUG > 1 {
+                count += 1;
             }
+            if let Some(visitor) = state.visitor
+                // SAFETY: `next` was captured first. The callback, opaque arguments, current page,
+                // queue, and heap remain live for this synchronous invocation and the contract
+                // permits only current-page detach/consumption while preserving the successor.
+                && !unsafe { visitor.invoke(theap, queue, current, state) }
+            {
+                return false;
+            }
+            page = next;
         }
     }
 
@@ -1577,6 +1608,80 @@ mod tests {
     use crate::types::mi_block_t;
     use core::mem::{MaybeUninit, align_of};
 
+    struct PageTraversalFixture {
+        seen_pages: [*mut mi_page_t; 3],
+        seen_queues: [*mut mi_page_queue_t; 3],
+        len: usize,
+        stop_after: Option<usize>,
+        detach_first: bool,
+    }
+
+    impl PageTraversalFixture {
+        fn new(stop_after: Option<usize>, detach_first: bool) -> Self {
+            Self {
+                seen_pages: [ptr::null_mut(); 3],
+                seen_queues: [ptr::null_mut(); 3],
+                len: 0,
+                stop_after,
+                detach_first,
+            }
+        }
+    }
+
+    /// # Safety
+    /// `theap`, `pq`, and `page` must be the live stack-local traversal fixture,
+    /// and `arg1` must point exclusively to its live `PageTraversalFixture`.
+    /// When `detach_first` is set, the first page must have a live successor in
+    /// the supplied queue and the fixture must exclusively own all affected
+    /// heap, queue, and link fields. The callback is synchronous and must not
+    /// retain pointers for dereference after it returns or unwind; it records
+    /// page and queue addresses only as non-dereferenced identities for the
+    /// test assertions.
+    unsafe extern "C" fn record_page_traversal(
+        theap: *mut mi_theap_t,
+        pq: *mut mi_page_queue_t,
+        page: *mut mi_page_t,
+        arg1: *mut c_void,
+        _arg2: *mut c_void,
+    ) -> bool {
+        // SAFETY: the test call satisfies the callback contract and keeps all
+        // stack-local metadata exclusively live through this invocation.
+        unsafe {
+            let fixture = &mut *arg1.cast::<PageTraversalFixture>();
+            let index = fixture.len;
+            if index >= fixture.seen_pages.len() {
+                return false;
+            }
+            fixture.seen_pages[index] = page;
+            fixture.seen_queues[index] = pq;
+            fixture.len += 1;
+
+            if fixture.detach_first && index == 0 {
+                let queue = PageQueuePtr::new_unchecked(pq);
+                let current = PagePtr::new_unchecked(page);
+                let Some(successor) = current.queue_next() else {
+                    return false;
+                };
+                let queue_count = queue.count().get();
+                let page_count = (*theap).page_count;
+                if queue_count == 0 || page_count == 0 {
+                    return false;
+                }
+                queue.set_first(Some(successor));
+                successor.set_queue_prev(None);
+                current.set_queue_next(None);
+                current.set_queue_prev(None);
+                queue.set_count(crate::core_types::PageQueueCount::new(queue_count - 1));
+                (*theap).page_count = page_count - 1;
+            }
+
+            match fixture.stop_after {
+                Some(stop_after) => fixture.len < stop_after,
+                None => true,
+            }
+        }
+    }
+
     #[test]
     fn visit_dispatch_rejects_null_heap_and_missing_callbacks() {
         // SAFETY: all three entry points explicitly accept null heaps and
@@ -1596,6 +1701,117 @@ mod tests {
                 ptr::null_mut(),
                 ptr::null_mut()
             ));
+        }
+    }
+
+    #[test]
+    fn typed_page_traversal_preserves_order_short_circuit_and_saved_successor() {
+        let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
+        let mut first_page = MaybeUninit::<mi_page_t>::zeroed();
+        let mut second_page = MaybeUninit::<mi_page_t>::zeroed();
+        let mut full_page = MaybeUninit::<mi_page_t>::zeroed();
+
+        // SAFETY: the stack-local heap receives the complete initialized queue
+        // table and every linked page remains live with stable ownership. All
+        // topology mutation is exclusive. The final traversal's callback
+        // detaches only the current head after the worker has captured its
+        // successor, preserving that successor and the remaining topology.
+        unsafe {
+            let theap_raw = theap.as_mut_ptr();
+            (*theap_raw).pages = crate::allocator::init::MI_PAGE_QUEUES_EMPTY();
+            (*theap_raw).page_count = 3;
+            let theap = ThreadHeapPtr::new_unchecked(theap_raw);
+            let block_size = crate::core_types::BlockSize::new_unchecked(64);
+            let normal_queue =
+                theap.page_queue(crate::allocator::page::mi_bin_from_block_size(block_size));
+            let full_queue = theap.page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
+            let thread_id = crate::core_types::ThreadId::new(0x1000)
+                .expect("fixture thread id must not overlap page flag bits");
+            let active_owner = crate::core_types::PageThreadId::from_parts(
+                crate::core_types::PageOwnerId::Thread(thread_id),
+                crate::core_types::PageFlags::new(0).expect("zero page flags"),
+            )
+            .raw();
+            let full_owner = crate::core_types::PageThreadId::from_parts(
+                crate::core_types::PageOwnerId::Thread(thread_id),
+                crate::core_types::PageFlags::IN_FULL_QUEUE,
+            )
+            .raw();
+
+            let first_raw = first_page.as_mut_ptr();
+            let second_raw = second_page.as_mut_ptr();
+            let full_raw = full_page.as_mut_ptr();
+            for page in [first_raw, second_raw] {
+                (*page).theap = theap_raw;
+                (*page).block_size = block_size.get();
+                (*page).xthread_id = active_owner;
+            }
+            (*full_raw).theap = theap_raw;
+            (*full_raw).block_size = block_size.get();
+            (*full_raw).xthread_id = full_owner;
+
+            let first = PagePtr::new_unchecked(first_raw);
+            let second = PagePtr::new_unchecked(second_raw);
+            let full = PagePtr::new_unchecked(full_raw);
+            first.set_queue_prev(None);
+            first.set_queue_next(Some(second));
+            second.set_queue_prev(Some(first));
+            second.set_queue_next(None);
+            full.set_queue_prev(None);
+            full.set_queue_next(None);
+            normal_queue.set_first(Some(first));
+            normal_queue.set_last(Some(second));
+            normal_queue.set_count(crate::core_types::PageQueueCount::new(2));
+            full_queue.set_first(Some(full));
+            full_queue.set_last(Some(full));
+            full_queue.set_count(crate::core_types::PageQueueCount::new(1));
+
+            let mut normal_only = PageTraversalFixture::new(None, false);
+            let normal_state = TheapPageVisitState {
+                visitor: TheapPageVisitCallback::new(Some(record_page_traversal)),
+                arg1: ptr::addr_of_mut!(normal_only).cast(),
+                arg2: ptr::null_mut(),
+            };
+            assert!(mi_theap_visit_pages_typed(theap, false, normal_state));
+            assert_eq!(normal_only.len, 2);
+            assert_eq!(&normal_only.seen_pages[..2], &[first_raw, second_raw]);
+            assert_eq!(
+                &normal_only.seen_queues[..2],
+                &[normal_queue.as_ptr(), normal_queue.as_ptr()]
+            );
+
+            let mut with_full = PageTraversalFixture::new(None, false);
+            let full_state = TheapPageVisitState {
+                visitor: TheapPageVisitCallback::new(Some(record_page_traversal)),
+                arg1: ptr::addr_of_mut!(with_full).cast(),
+                arg2: ptr::null_mut(),
+            };
+            assert!(mi_theap_visit_pages_typed(theap, true, full_state));
+            assert_eq!(with_full.len, 3);
+            assert_eq!(with_full.seen_pages, [first_raw, second_raw, full_raw]);
+
+            let mut stopped = PageTraversalFixture::new(Some(2), false);
+            let stopped_state = TheapPageVisitState {
+                visitor: TheapPageVisitCallback::new(Some(record_page_traversal)),
+                arg1: ptr::addr_of_mut!(stopped).cast(),
+                arg2: ptr::null_mut(),
+            };
+            assert!(!mi_theap_visit_pages_typed(theap, true, stopped_state));
+            assert_eq!(stopped.len, 2);
+            assert_eq!(&stopped.seen_pages[..2], &[first_raw, second_raw]);
+
+            let mut detached = PageTraversalFixture::new(None, true);
+            let detached_state = TheapPageVisitState {
+                visitor: TheapPageVisitCallback::new(Some(record_page_traversal)),
+                arg1: ptr::addr_of_mut!(detached).cast(),
+                arg2: ptr::null_mut(),
+            };
+            assert!(mi_theap_visit_pages_typed(theap, true, detached_state));
+            assert_eq!(detached.seen_pages, [first_raw, second_raw, full_raw]);
+            assert_eq!(normal_queue.first(), Some(second));
+            assert_eq!(normal_queue.last(), Some(second));
+            assert_eq!(normal_queue.count().get(), 1);
+            assert_eq!((*theap_raw).page_count, 2);
         }
     }
 

@@ -660,16 +660,21 @@ pub(crate) unsafe fn mi_block_check_unguard(
 #[allow(clippy::absurd_extreme_comparisons)]
 // The fast-malloc assembly reaches this through the generic free shims below.
 #[cfg_attr(not(mi_c_malloc_fast), allow(dead_code))]
+/// # Safety
+/// `page` must identify live registered page metadata and `user` must identify a live user pointer
+/// within one block of that page. Page start/block-size/interior/guard metadata and backing must
+/// remain readable and stable through the returned lookup's use, without concurrent free, realloc,
+/// page-map teardown, or backing release. When block-start validation is enabled by the build, `user`
+/// must be the exact block start unless the page permits interior pointers.
 pub(crate) unsafe fn mi_validate_block_from_ptr(
     page: crate::core_types::PagePtr,
     user: crate::core_types::UserPtr,
 ) -> crate::core_types::PointerLookup {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
-    unsafe {
-        let location = mi_pointer_location(page, user, MI_SECURE > 0, true);
+    // SAFETY: the caller couples `user` to this live page and keeps its complete block geometry,
+    // backing, and guard/interior metadata stable for the coherent location calculation.
+    let location = unsafe { mi_pointer_location(page, user, MI_SECURE > 0, true) };
 
-        crate::core_types::PointerLookup::valid(user, page, location)
-    }
+    crate::core_types::PointerLookup::valid(user, page, location)
 }
 
 unsafe fn mi_lookup_pointer_page(
@@ -735,56 +740,90 @@ unsafe fn mi_pointer_location(
     }
 }
 
-// SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
+/// # Safety
+/// `page` and `p` must be nonnull and identify the same live allocation, with `p` at its block start
+/// unless the page's supported interior-pointer geometry says otherwise. The page must be owned by
+/// the current thread, and its registration, backing, geometry, keys, guard metadata, local free
+/// lists, full-queue state, and accounting must remain valid and exclusively mutable through this
+/// terminal free. The operation must not race free/realloc, teardown, backing release, or owner
+/// relink. Registered callbacks and opaque arguments must remain valid for synchronous invocation,
+/// exclude incompatible reentry, and must not unwind.
 #[cold]
 #[inline(never)]
 // `raw::macros` names this function as an assembly operand in fast-malloc builds.
 #[cfg_attr(not(mi_c_malloc_fast), allow(dead_code))]
 pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
+    crate::internal::mi_assert_internal!(!p.is_null() && !page.is_null());
+    // SAFETY: the assembly caller supplies nonnull page/user addresses for the same live allocation;
+    // these constructors record identity without dereferencing either pointer.
+    let (page, user) = unsafe {
+        (
+            crate::core_types::PagePtr::new_unchecked(page),
+            crate::core_types::UserPtr::new_unchecked(p),
+        )
+    };
+    // SAFETY: the caller keeps this allocation's page geometry, backing, and guard metadata live and
+    // stable while validation derives the exact block and prepares any guard transition.
+    let validated = unsafe { mi_prepare_validated_free(mi_validate_block_from_ptr(page, user)) };
+    let Some(validated) = validated else {
+        return;
+    };
+
+    // Validation completes before local ownership is classified from the assembly-selected entry.
+    let parts = validated.into_parts();
+    // SAFETY: this local assembly operand is selected only after the fast caller classifies `page`
+    // as current-thread owned; that owner state remains stable through the terminal local mutation.
+    let page_wrapper = unsafe { crate::core_types::assume_local_page(parts.page) };
+
+    // SAFETY: the caller supplies exclusive local page/free-list/full-queue/accounting access; the
+    // validated block belongs to this page and callbacks cannot incompatibly reenter or unwind.
     unsafe {
-        crate::internal::mi_assert_internal!(!p.is_null() && !page.is_null());
-        let page = crate::core_types::PagePtr::new_unchecked(page);
-        let user = crate::core_types::UserPtr::new_unchecked(p);
-        let Some(validated) = mi_prepare_validated_free(mi_validate_block_from_ptr(page, user))
-        else {
-            return;
-        };
-
-        // SAFETY: The generic dispatch boundary supplies a non-null page/user pair;
-        // validation reconstructs the typed free witness.
-        let parts = validated.into_parts();
-        let page_wrapper = crate::core_types::assume_local_page(parts.page);
-
         mi_free_block_local(
             page_wrapper,
             parts.block,
             crate::core_types::LocalFreeMode::TrackAndCheckFull,
-        );
-    }
+        )
+    };
 }
 
-// SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
+/// # Safety
+/// `page` and `p` must be nonnull and identify the same live allocation, with `p` at its block start
+/// unless the page's supported interior-pointer geometry says otherwise. The page must be foreign to
+/// the current thread, and its registration, backing, geometry, keys, guard metadata, owner word,
+/// remote-free links, and accounting must remain valid through this terminal publication. The
+/// operation must not race free/realloc, teardown, backing release, or non-protocol owner mutation;
+/// concurrent remote publication is permitted only through allocator atomics. Registered callbacks
+/// and opaque arguments must remain synchronously valid, exclude incompatible reentry, and not unwind.
 #[cold]
 #[inline(never)]
 // `raw::macros` names this function as an assembly operand in fast-malloc builds.
 #[cfg_attr(not(mi_c_malloc_fast), allow(dead_code))]
 pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
-    unsafe {
-        crate::internal::mi_assert_internal!(!p.is_null() && !page.is_null());
-        let page = crate::core_types::PagePtr::new_unchecked(page);
-        let user = crate::core_types::UserPtr::new_unchecked(p);
-        let Some(validated) = mi_prepare_validated_free(mi_validate_block_from_ptr(page, user))
-        else {
-            return;
-        };
+    crate::internal::mi_assert_internal!(!p.is_null() && !page.is_null());
+    // SAFETY: the assembly caller supplies nonnull page/user addresses for the same live allocation;
+    // these constructors record identity without dereferencing either pointer.
+    let (page, user) = unsafe {
+        (
+            crate::core_types::PagePtr::new_unchecked(page),
+            crate::core_types::UserPtr::new_unchecked(p),
+        )
+    };
+    // SAFETY: the caller keeps this allocation's page geometry, backing, and guard metadata live and
+    // stable while validation derives the exact block and prepares any guard transition.
+    let validated = unsafe { mi_prepare_validated_free(mi_validate_block_from_ptr(page, user)) };
+    let Some(validated) = validated else {
+        return;
+    };
 
-        // SAFETY: The generic dispatch boundary supplies a non-null page/user pair;
-        // validation reconstructs the typed free witness.
-        let parts = validated.into_parts();
-        let page_wrapper = crate::core_types::assume_foreign_page(parts.page);
+    // Validation completes before foreign ownership is classified from the assembly-selected entry.
+    let parts = validated.into_parts();
+    // SAFETY: this remote assembly operand is selected only after the fast caller classifies `page`
+    // as foreign; that owner state remains protocol-stable through atomic publication.
+    let page_wrapper = unsafe { crate::core_types::assume_foreign_page(parts.page) };
 
-        mi_free_block_mt(page_wrapper, parts.block);
-    }
+    // SAFETY: the validated block belongs to this live foreign page, whose atomic remote-free word
+    // is the sole publication path; callbacks cannot incompatibly reenter or unwind.
+    unsafe { mi_free_block_mt(page_wrapper, parts.block) };
 }
 
 /// # Safety

@@ -284,8 +284,7 @@ mod tests {
     }
 
     unsafe fn links(node: SubprocPtr) -> (*mut mi_subproc_t, *mut mi_subproc_t) {
-        // SAFETY: the caller keeps the initialized stack node live.
-        let prefix = unsafe { mi_subproc_prefix_typed(node) };
+        let prefix = mi_subproc_prefix_typed(node);
         // SAFETY: the node's link fields are initialized and readable.
         unsafe {
             (

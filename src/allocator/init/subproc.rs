@@ -25,8 +25,7 @@ use super::{
 };
 
 pub(super) unsafe fn heap_main_typed(subproc: BorrowedSubproc) -> Option<HeapPtr> {
-    // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
-    let subproc = unsafe { mi_subproc_prefix_typed(subproc.ptr()) };
+    let subproc = mi_subproc_prefix_typed(subproc.ptr());
     // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
     HeapPtr::new(unsafe { ptr::addr_of!((*subproc).heap_main).read_unaligned() })
 }
@@ -36,8 +35,7 @@ pub(super) fn to_id(subproc: Option<SubprocPtr>) -> mi_subproc_id_t {
 }
 
 unsafe fn destroy_meta(subproc: SubprocPtr) {
-    // SAFETY: the detached token grants exclusive ownership of this metadata.
-    let subproc = unsafe { mi_subproc_prefix_typed(subproc) };
+    let subproc = mi_subproc_prefix_typed(subproc);
     // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.
     // SAFETY: the detached token grants exclusive ownership of this metadata.
     unsafe {
@@ -116,8 +114,7 @@ unsafe fn destroy_detached(detached: subproc_registry::DetachedSubproc) {
     let subproc_raw = subproc.as_ptr();
     let main_subproc = main_typed().ptr();
     let is_main = ptr::eq(subproc_raw, main_subproc.as_ptr());
-    // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-    let subproc_prefix = unsafe { mi_subproc_prefix_typed(subproc) };
+    let subproc_prefix = mi_subproc_prefix_typed(subproc);
     // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
     let borrowed_subproc = unsafe { BorrowedSubproc::new(subproc) };
     loop {
@@ -154,8 +151,7 @@ unsafe fn destroy_detached(detached: subproc_registry::DetachedSubproc) {
         // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         unsafe { crate::allocator::page_map::_mi_page_map_unsafe_destroy(subproc) };
     } else {
-        // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
-        let main_subproc = unsafe { mi_subproc_prefix_typed(main_subproc) };
+        let main_subproc = mi_subproc_prefix_typed(main_subproc);
         // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
         unsafe {
             _mi_stats_merge_into(

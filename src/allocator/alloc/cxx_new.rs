@@ -156,6 +156,8 @@ pub(crate) unsafe extern "C" fn mi_theap_alloc_new(
 // SAFETY: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
+    // SAFETY: the caller supplies the default-heap allocation epoch and guarantees any
+    // runtime-provided handler is live, ABI-compatible, and non-unwinding for synchronous retry.
     unsafe { mi_theap_alloc_new(_mi_theap_default(), size) }
 }
 
@@ -167,15 +169,15 @@ pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
 // SAFETY: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_alloc_new(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return ptr::null_mut();
-        };
-        let size = crate::core_types::RequestedSize::new(size);
-        // SAFETY: the caller supplies the live current-thread heap epoch and guarantees any
-        // runtime-provided handler is live, ABI-compatible, and non-unwinding for synchronous retry.
-        mi_heap_alloc_new_typed(heap, size)
-    }
+    // SAFETY: the caller guarantees `heap` names a live heap for this classification and subsequent
+    // synchronous allocation attempt; a null or unsupported value is rejected without dereference.
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return ptr::null_mut();
+    };
+    let size = crate::core_types::RequestedSize::new(size);
+    // SAFETY: the caller supplies the live current-thread heap epoch and guarantees any
+    // runtime-provided handler is live, ABI-compatible, and non-unwinding for synchronous retry.
+    unsafe { mi_heap_alloc_new_typed(heap, size) }
 }
 
 /// # Safety
@@ -222,19 +224,17 @@ unsafe fn mi_theap_alloc_new_n(
 // SAFETY: C++ new_n paths validate checked products before typed allocation and retry dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_n(count: usize, size: usize) -> *mut c_void {
-    unsafe {
-        match alloc_product_or_report(count, size) {
-            Some(req) => {
-                // SAFETY: the caller supplies the default-heap allocation epoch and guarantees any
-                // runtime-provided handler is live, ABI-compatible, and non-unwinding for retry.
-                mi_theap_alloc_new_n(_mi_theap_default(), req)
-            }
-            None => {
-                // SAFETY: the caller guarantees the process runtime's handler, if any, is live,
-                // ABI-compatible, and non-unwinding for this synchronous overflow attempt.
-                mi_try_new_handler(false);
-                ptr::null_mut()
-            }
+    match alloc_product_or_report(count, size) {
+        Some(req) => {
+            // SAFETY: the caller supplies the default-heap allocation epoch and guarantees any
+            // runtime-provided handler is live, ABI-compatible, and non-unwinding for retry.
+            unsafe { mi_theap_alloc_new_n(_mi_theap_default(), req) }
+        }
+        None => {
+            // SAFETY: the caller guarantees the process runtime's handler, if any, is live,
+            // ABI-compatible, and non-unwinding for this synchronous overflow attempt.
+            unsafe { mi_try_new_handler(false) };
+            ptr::null_mut()
         }
     }
 }
@@ -299,15 +299,13 @@ unsafe fn mi_heap_alloc_new_n_typed(
 // SAFETY: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
-    unsafe {
-        let p = mi_malloc(size);
-        if mi_unlikely(p.is_null()) {
-            // SAFETY: the caller guarantees any runtime-provided handler is live, ABI-compatible,
-            // and non-unwinding for the synchronous nothrow retry.
-            mi_try_new(size, true)
-        } else {
-            p
-        }
+    let p = mi_malloc(size);
+    if mi_unlikely(p.is_null()) {
+        // SAFETY: the caller supplies the default-heap allocation epoch and guarantees any
+        // runtime-provided handler is live, ABI-compatible, and non-unwinding for this retry.
+        unsafe { mi_try_new(size, true) }
+    } else {
+        p
     }
 }
 
@@ -318,12 +316,12 @@ pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
 // SAFETY: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_aligned(size: usize, alignment: usize) -> *mut c_void {
-    unsafe {
-        let Some(alignment) = alignment_or_report(size, alignment) else {
-            return ptr::null_mut();
-        };
-        mi_new_aligned_typed(crate::core_types::RequestedSize::new(size), alignment)
-    }
+    let Some(alignment) = alignment_or_report(size, alignment) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: validation produced the typed alignment; the caller supplies the default-heap
+    // allocation epoch and handler liveness/ABI/non-unwind guarantee for any synchronous retry.
+    unsafe { mi_new_aligned_typed(crate::core_types::RequestedSize::new(size), alignment) }
 }
 
 /// # Safety
@@ -355,12 +353,12 @@ unsafe fn mi_new_aligned_typed(
 // SAFETY: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_aligned_nothrow(size: usize, alignment: usize) -> *mut c_void {
-    unsafe {
-        let Some(alignment) = alignment_or_report(size, alignment) else {
-            return ptr::null_mut();
-        };
-        mi_new_aligned_nothrow_typed(crate::core_types::RequestedSize::new(size), alignment)
-    }
+    let Some(alignment) = alignment_or_report(size, alignment) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: validation produced the typed alignment; the caller supplies the default-heap
+    // allocation epoch and handler liveness/ABI/non-unwind guarantee for any synchronous retry.
+    unsafe { mi_new_aligned_nothrow_typed(crate::core_types::RequestedSize::new(size), alignment) }
 }
 
 /// # Safety
@@ -393,15 +391,15 @@ unsafe fn mi_new_aligned_nothrow_typed(
 // SAFETY: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
-    unsafe {
-        let mut q: *mut c_void;
-        loop {
-            q = mi_realloc(p, newsize);
-            // SAFETY: the caller guarantees each runtime-provided handler is live, ABI-compatible,
-            // and non-unwinding for this synchronous retry.
-            if !q.is_null() || !mi_try_new_handler(false) {
-                return q;
-            }
+    let mut q: *mut c_void;
+    loop {
+        // SAFETY: the caller keeps `p` null or live and stable against concurrent free/realloc for
+        // this attempt; failure leaves the old allocation live for a possible retry.
+        q = unsafe { mi_realloc(p, newsize) };
+        // SAFETY: the caller guarantees each runtime-provided handler is live, ABI-compatible, and
+        // non-unwinding for this synchronous retry after allocation failure.
+        if !q.is_null() || !unsafe { mi_try_new_handler(false) } {
+            return q;
         }
     }
 }

@@ -164,17 +164,25 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
 /// and must not unwind.
 #[inline]
 unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    // SAFETY: the caller-proven current-thread page/queue epoch stabilizes policy and metadata.
-    // The abandon arm consumes Active directly; the full arm constructs exact linked-source and
-    // compatible source/full queue capabilities, consumes them through the move, then collects
-    // through returned Full.
+    // SAFETY: the caller keeps this live active page and exact source queue stable. Preserve the
+    // source-queue, immediate-availability, then first full-state assertion reads exactly.
     unsafe {
         crate::internal::mi_assert_internal!(pq == mi_page_queue_of(page));
         crate::internal::mi_assert_internal!(!mi_page_immediate_available(page));
         crate::internal::mi_assert_internal!(!mi_page_is_in_full(page));
+    }
 
-        let theap = mi_page_theap(page);
-        if (*theap).allow_page_abandon {
+    // SAFETY: the caller-proven current-thread ownership keeps the page association live and
+    // stable for this owner snapshot after the assertion-only reads.
+    let theap = unsafe { mi_page_theap(page) };
+    // SAFETY: the captured owner remains live and its local abandonment policy is stable under the
+    // caller's exclusive heap mutation epoch.
+    let allow_page_abandon = unsafe { (*theap).allow_page_abandon };
+    if allow_page_abandon {
+        // SAFETY: the active page remains linked in the exact source queue with stable owner,
+        // geometry, backing, and remote-free state. Consume Active through the complete abandon or
+        // terminal-release transition, then do not access the page again in this branch.
+        unsafe {
             let active = crate::core_types::assume_active_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
@@ -182,7 +190,16 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
                 active.into_abandon_candidate(),
                 crate::core_types::PageQueuePtr::new_unchecked(pq),
             );
-        } else if !mi_page_is_in_full(page) {
+        }
+    } else if !unsafe {
+        // SAFETY: only the non-abandon path performs this original second full-state read; the live
+        // current-thread page remains stable under exclusive local queue mutation.
+        mi_page_is_in_full(page)
+    } {
+        // SAFETY: the non-full active page remains linked in its exact compatible normal or huge
+        // source queue. Derive the owner's full queue, consume the linked Active capability through
+        // move/full-flag publication, then collect only through the returned Full capability.
+        unsafe {
             let full_queue = ThreadHeapPtr::new_unchecked(theap)
                 .page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
             let active = crate::core_types::assume_active_page(

@@ -843,33 +843,46 @@ pub unsafe fn mi_theap_is_valid(theap: *mut mi_theap_t) -> bool {
 ///
 /// `theap` must identify a live initialized thread heap. The caller must own
 /// its local queue mutation through current-thread local ownership or exclusive
-/// initialization/teardown access. Queue links, page backing, and page geometry
-/// must remain valid and must not be concurrently destroyed or relinked during
-/// validation. Protocol-compliant remote atomic frees remain permitted.
+/// initialization/teardown access. Its page count, complete fixed-bin queue
+/// table, queue endpoints/counts, and every linked page, adjacent link, owner
+/// association, classification, geometry, metadata, and backing inspected by
+/// validation must remain live, initialized, readable, and stable. Each queue
+/// chain must be finite, and every nonnull link encountered must resolve to
+/// live page metadata. Concurrent local relinking, non-protocol metadata
+/// mutation, and page or heap teardown are excluded;
+/// protocol-compliant remote atomic frees remain permitted. Allocator
+/// diagnostics must remain valid, must not unwind, and must not incompatibly
+/// reenter page, queue, or heap mutation.
 unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
-    // SAFETY: the caller's queue ownership and stability contract permits the
-    // synchronous page traversal of each fixed-bin queue from this heap's live
-    // table; protocol remote frees preserve the inspected topology invariants.
+    let state = TheapPageVisitState {
+        visitor: TheapPageVisitCallback::new(Some(mi_theap_page_is_valid)),
+        arg1: core::ptr::null_mut(),
+        arg2: core::ptr::null_mut(),
+    };
+
+    // SAFETY: the contract keeps the live heap, complete queue table, every linked page, geometry,
+    // and backing stable while the fixed internal callback synchronously checks page ownership.
+    // Its null opaque arguments are unused and it is not retained. Protocol remote frees do not
+    // mutate the topology inspected by this traversal.
     unsafe {
-        let state = TheapPageVisitState {
-            visitor: TheapPageVisitCallback::new(Some(mi_theap_page_is_valid)),
-            arg1: core::ptr::null_mut(),
-            arg2: core::ptr::null_mut(),
-        };
         mi_theap_visit_pages_typed(theap, true, state);
-        let theap_wrapper = ThreadHeapLocal::new_unchecked(theap);
-        for bin_index in 0..MI_BIN_COUNT {
+    }
+
+    // SAFETY: the caller holds current-thread local ownership or the exclusive lifecycle access
+    // that permits projecting the same live heap for read-only queue validation.
+    let theap_wrapper = unsafe { ThreadHeapLocal::new_unchecked(theap) };
+    for bin_index in 0..MI_BIN_COUNT {
+        // SAFETY: the loop bounds prove `bin_index` is a valid ascending fixed-bin index. The
+        // contract keeps that exact queue and every reachable page live and stable while the
+        // synchronous validator reads its topology, classification, ownership, and count.
+        let is_valid = unsafe {
             let bin = Bin::new_unchecked(bin_index as u16);
             let queue = theap.page_queue(bin);
-            // SAFETY: `bin` selects this exact live queue from the validated heap table. The
-            // caller-owned validation epoch keeps its topology, classification, pages, and backing
-            // stable while the synchronous read-only traversal runs; protocol remote frees do not
-            // mutate the inspected fields.
-            let is_valid = mi_page_queue_is_valid_typed(theap_wrapper, queue);
-            crate::internal::mi_assert_internal!(is_valid);
-        }
-        true
+            mi_page_queue_is_valid_typed(theap_wrapper, queue)
+        };
+        crate::internal::mi_assert_internal!(is_valid);
     }
+    true
 }
 
 /// # Safety

@@ -1,38 +1,53 @@
 use super::*;
 
+/// Return whether a nonnull page identity occurs in a queue's linked chain.
+///
 /// # Safety
-/// `queue` must be valid, and `page` must be null or page metadata compatible with that queue.
+/// `queue` must be nonnull and identify a live initialized page queue whose finite linked chain,
+/// head, and every visited page and forward/backward link remain live, initialized, readable, and
+/// stable throughout traversal. `page` must be nonnull; it is used only as a comparison identity
+/// and is not independently dereferenced. The caller must hold current-thread local ownership or
+/// exclusive initialization, collection, or teardown access and exclude concurrent local relink,
+/// non-protocol link mutation, page/queue teardown, and incompatible diagnostic callback reentry.
+/// Protocol atomic remote-free publication is permitted because this function reads only queue
+/// links. Any diagnostic callback and opaque arguments reached by a failed assertion must remain
+/// valid and must not unwind.
 #[inline]
 pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const mi_page_t) -> bool {
-    // SAFETY: queue validation walks linked pages without mutating queue ownership.
-    unsafe {
-        crate::internal::mi_assert_internal!(!page.is_null());
-        let queue_ptr = super::counts::page_queue_ptr(queue);
-        let mut list = queue_ptr
-            .first()
+    crate::internal::mi_assert_internal!(!page.is_null());
+    // SAFETY: the caller keeps the nonnull initialized queue metadata live throughout traversal.
+    let queue_ptr = unsafe { super::counts::page_queue_ptr(queue) };
+    // SAFETY: the caller keeps the initialized queue head stable and every nonnull head live.
+    let mut list = unsafe { queue_ptr.first() }
+        .map(crate::core_types::PagePtr::as_ptr)
+        .unwrap_or(ptr::null_mut());
+    while let Some(list_ptr) = crate::core_types::PagePtr::new(list) {
+        // SAFETY: the current and next linked pages remain live with stable initialized links.
+        // Keeping both reads in the assertion operand preserves assertion-only evaluation and the
+        // original forward-then-backward read order.
+        crate::internal::mi_assert_internal!(unsafe {
+            list_ptr
+                .queue_next()
+                .is_none_or(|next| next.queue_prev() == Some(list_ptr))
+        });
+        // SAFETY: the current and previous linked pages remain live with stable initialized links.
+        // Keeping both reads in the assertion operand preserves assertion-only evaluation and the
+        // original backward-then-forward read order.
+        crate::internal::mi_assert_internal!(unsafe {
+            list_ptr
+                .queue_prev()
+                .is_none_or(|prev| prev.queue_next() == Some(list_ptr))
+        });
+        if ptr::eq(list, page.cast_mut()) {
+            break;
+        }
+        // SAFETY: the current page remains live and its initialized forward link stays stable.
+        // This deliberately repeats the next-link read after the assertion-only topology check.
+        list = unsafe { list_ptr.queue_next() }
             .map(crate::core_types::PagePtr::as_ptr)
             .unwrap_or(ptr::null_mut());
-        while let Some(list_ptr) = crate::core_types::PagePtr::new(list) {
-            crate::internal::mi_assert_internal!(
-                list_ptr
-                    .queue_next()
-                    .is_none_or(|next| next.queue_prev() == Some(list_ptr))
-            );
-            crate::internal::mi_assert_internal!(
-                list_ptr
-                    .queue_prev()
-                    .is_none_or(|prev| prev.queue_next() == Some(list_ptr))
-            );
-            if ptr::eq(list, page.cast_mut()) {
-                break;
-            }
-            list = list_ptr
-                .queue_next()
-                .map(crate::core_types::PagePtr::as_ptr)
-                .unwrap_or(ptr::null_mut());
-        }
-        ptr::eq(list, page.cast_mut())
     }
+    ptr::eq(list, page.cast_mut())
 }
 
 /// # Safety

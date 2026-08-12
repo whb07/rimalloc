@@ -454,40 +454,63 @@ unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLo
     let mut min = MI_BIN_FULL;
     let mut max = 0usize;
     for bin in retired_min..=retired_max {
-        // SAFETY: the bounded bin belongs to the caller-owned live heap. Its queue head and any
-        // retired page remain stable for this coherent countdown/reset-or-terminal-free epoch.
-        // A terminal free consumes the page and this block returns without accessing it again.
-        let remains_retired = unsafe {
-            let queue_ptr = theap_ptr.page_queue(Bin::new_unchecked(bin as u16));
-            let Some(page_ptr) = queue_ptr.first() else {
+        let remains_retired = {
+            // SAFETY: the bounded bin belongs to the caller-owned live heap, whose initialized queue
+            // array remains stable while its exact queue is projected.
+            let queue_ptr = unsafe { theap_ptr.page_queue(Bin::new_unchecked(bin as u16)) };
+            // SAFETY: exclusive queue ownership keeps the initialized head link stable for this read.
+            let Some(page_ptr) = (unsafe { queue_ptr.first() }) else {
                 continue;
             };
             let page = page_ptr.as_ptr();
-            if mi_page_retire_expire(page).is_zero() {
+            // SAFETY: the selected live queue-front page and its initialized countdown remain stable
+            // under the caller's exclusive retired-page epoch.
+            let retire_expire = unsafe { mi_page_retire_expire(page) };
+            if retire_expire.is_zero() {
                 false
             } else {
-                let retired = crate::core_types::assume_retired_page(page_ptr);
-                if mi_page_all_free(page) {
-                    let expire = mi_page_decrement_retire_expire(page);
+                // SAFETY: the live current-thread normal-queue front has the required nonzero
+                // retirement countdown, and the caller excludes relink, conflicting mutation, and
+                // teardown.
+                let retired = unsafe { crate::core_types::assume_retired_page(page_ptr) };
+                // SAFETY: the caller keeps the retired page metadata live and stable while its
+                // used-count predicate is snapshotted before any countdown or state transition.
+                let all_free = unsafe { mi_page_all_free(page) };
+                if all_free {
+                    // SAFETY: the countdown was observed nonzero above and remains exclusively
+                    // mutable; preserve the original decrement-before-force-decision order.
+                    let expire = unsafe { mi_page_decrement_retire_expire(page) };
                     if expire.is_zero() || force {
-                        if !expire.is_zero() {
-                            mi_page_reset_retire_expire(page);
-                        }
-                        let active = retired.into_active_after_countdown_cleared();
-                        if let Ok(all_free) = active.try_mark_all_free() {
-                            let queue =
-                                crate::core_types::NormalPageQueue::new_unchecked(queue_ptr);
-                            let _ = _mi_page_free_active_internal(all_free, queue);
-                        } else {
-                            crate::internal::mi_assert_internal!(false);
+                        // SAFETY: the caller owns this coherent reset-and-terminal-transition epoch.
+                        // A forced nonzero countdown is cleared before consuming RetiredPage into
+                        // Active; the all-free refinement then consumes the sole active capability
+                        // into terminal queue removal and release, with no subsequent access through
+                        // `page` or `retired`.
+                        unsafe {
+                            if !expire.is_zero() {
+                                mi_page_reset_retire_expire(page);
+                            }
+                            let active = retired.into_active_after_countdown_cleared();
+                            if let Ok(all_free) = active.try_mark_all_free() {
+                                let queue =
+                                    crate::core_types::NormalPageQueue::new_unchecked(queue_ptr);
+                                let _ = _mi_page_free_active_internal(all_free, queue);
+                            } else {
+                                crate::internal::mi_assert_internal!(false);
+                            }
                         }
                         false
                     } else {
                         true
                     }
                 } else {
-                    mi_page_reset_retire_expire(page);
-                    let _ = retired.into_active_after_countdown_cleared();
+                    // SAFETY: the caller exclusively owns the non-all-free retired page. Clear its
+                    // countdown, then consume the retired witness into the matching active state
+                    // without accessing the old capability afterward.
+                    unsafe {
+                        mi_page_reset_retire_expire(page);
+                        let _ = retired.into_active_after_countdown_cleared();
+                    }
                     false
                 }
             }

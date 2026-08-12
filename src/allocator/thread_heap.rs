@@ -844,34 +844,54 @@ unsafe fn mi_theap_merge_stats_typed(theap: ThreadHeapPtr) {
 /// local ownership or exclusive teardown ownership. Its TLD, backing heap,
 /// page queues, page metadata, and page backing must remain live and stable for
 /// the call, with no concurrent destroy or queue relinking. Protocol remote
-/// frees may publish through the allocator's atomic remote-free lists. Any
-/// registered deferred-free callback and opaque argument must remain valid for
-/// invocation on this thread, tolerate allocator reentry, preserve the thread
-/// heap and page topology needed after it returns, and must not unwind.
+/// frees may publish through the allocator's atomic remote-free lists. The
+/// caller must exclusively own the thread heap's local queue/free-list,
+/// retirement, arena collection, and source-stats reset operations; its TLD
+/// pointer and associated heap must remain stable. Any registered deferred-free,
+/// arena purge/commit, tracking, diagnostic, or page-collection callback and
+/// opaque argument must remain valid for synchronous invocation on this thread,
+/// tolerate allocator reentry, preserve the thread heap, TLD, page topology,
+/// arena state, and stats needed by all later phases, and must not unwind.
 unsafe fn mi_theap_collect_ex_typed(theap: ThreadHeapLocal, mut collect: mi_collect_t) {
-    // SAFETY: the caller's local or exclusive-teardown ownership keeps the TLD,
-    // backing heap, queues, pages, and stats live for this collection epoch.
-    // Protocol remote frees remain atomic, while the registered deferred-free
-    // callback is valid on this thread, reentry-safe, topology-preserving, and
-    // non-unwinding.
-    unsafe {
-        let theap_ptr = theap.ptr();
-        let theap = theap_ptr.as_ptr();
-        crate::internal::mi_assert_expensive!(mi_theap_is_valid(theap));
+    let theap_ptr = theap.ptr();
+    let theap_raw = theap_ptr.as_ptr();
 
-        let force = collect as i32 >= mi_collect_t::MI_FORCE as i32;
-        _mi_deferred_free(theap, force);
-        _mi_theap_collect_retired(theap, force);
-        let state = TheapPageVisitState {
-            visitor: TheapPageVisitCallback::new(Some(mi_theap_page_collect)),
-            arg1: core::ptr::addr_of_mut!(collect).cast(),
-            arg2: core::ptr::null_mut(),
-        };
+    // SAFETY: the caller keeps the initialized heap, its queue topology, pages,
+    // geometry, and backing live and owns local mutation during this preflight.
+    unsafe {
+        crate::internal::mi_assert_expensive!(mi_theap_is_valid(theap_raw));
+    }
+
+    let force = collect as i32 >= mi_collect_t::MI_FORCE as i32;
+    // SAFETY: the local/exclusive lifecycle epoch and callback contract permit
+    // deferred processing followed by retired-page collection. The deferred
+    // callback is synchronous and must preserve the topology consumed by the
+    // immediately following retirement phase.
+    unsafe {
+        _mi_deferred_free(theap_raw, force);
+        _mi_theap_collect_retired(theap_raw, force);
+    }
+
+    let state = TheapPageVisitState {
+        visitor: TheapPageVisitCallback::new(Some(mi_theap_page_collect)),
+        arg1: core::ptr::addr_of_mut!(collect).cast(),
+        arg2: core::ptr::null_mut(),
+    };
+    // SAFETY: retired collection has completed. The caller still exclusively
+    // owns the live queues/pages, while the synchronous adapter and stack-local
+    // collect argument remain valid for every page callback and are not retained.
+    unsafe {
         mi_theap_visit_pages_typed(theap_ptr, collect != mi_collect_t::MI_NORMAL, state);
+    }
+
+    // SAFETY: page traversal has returned and its callbacks preserve the live
+    // heap/TLD, arena registry, and stats. Preserve the original post-traversal
+    // TLD read, then arena collection followed by destructive stats merge.
+    unsafe {
         _mi_arenas_collect(
             collect == mi_collect_t::MI_FORCE,
             collect as i32 >= mi_collect_t::MI_FORCE as i32,
-            (*theap).tld,
+            (*theap_raw).tld,
         );
         mi_theap_merge_stats_typed(theap_ptr);
     }

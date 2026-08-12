@@ -75,101 +75,176 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: the caller couples the available page to the current-thread heap,
-    // keeps its free list, keys, backing, and local stats exclusively accessible,
-    // and supplies a fitting padded size plus a valid optional output slot for
-    // this coherent pop, accounting, initialization, and padding epoch.
+    let theap = local_theap.ptr().as_ptr();
+    let page_ptr = available.page();
+    let page = page_ptr.as_ptr();
+    let size = padded.get();
+    // SAFETY: `available` witnesses initialized live page metadata, including
+    // its block-size field, for the duration of this allocation.
+    let block_size = unsafe { page_ptr.block_size_raw() };
+    if block_size != 0 {
+        crate::internal::mi_assert_internal!(
+            // SAFETY: the caller keeps the available page metadata live and
+            // readable for this assertion-only block-size check.
+            unsafe { crate::internal::mi_page_block_size(page) } >= size
+        );
+        crate::internal::mi_assert_internal!(_mi_is_aligned(
+            // SAFETY: the caller keeps the page metadata and backing live for
+            // this assertion-only slice-start projection.
+            unsafe { mi_page_slice_start(page) }.cast(),
+            crate::allocator::page::MI_OS_PAGE_SIZE
+        ));
+        crate::internal::mi_assert_internal!(
+            // SAFETY: the caller keeps the page metadata and backing live for
+            // these assertion-only start and page-map projections.
+            unsafe { _mi_ptr_page(mi_page_start(page).cast()) == page }
+        );
+    }
+
+    // SAFETY: `available` witnesses a nonempty initialized free list whose
+    // head remains readable until the single pop below.
+    let block = unsafe { page_ptr.free().as_raw() };
+    crate::internal::mi_assert_internal!(
+        !block.is_null()
+            &&
+            // SAFETY: the nonnull free-list head belongs to this live page;
+            // this assertion-only lookup verifies the caller-provided witness.
+            unsafe { _mi_ptr_page(block.cast()) == page }
+    );
+    // SAFETY: the caller supplies a valid optional output slot and keeps the
+    // page metadata readable; this write intentionally precedes the pop.
     unsafe {
-        let theap = local_theap.ptr().as_ptr();
-        let page_ptr = available.page();
-        let page = page_ptr.as_ptr();
-        let size = padded.get();
-        let block_size = page_ptr.block_size_raw();
-        if block_size != 0 {
-            crate::internal::mi_assert_internal!(crate::internal::mi_page_block_size(page) >= size);
-            crate::internal::mi_assert_internal!(_mi_is_aligned(
-                mi_page_slice_start(page).cast(),
-                crate::allocator::page::MI_OS_PAGE_SIZE
-            ));
-            crate::internal::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
-        }
-
-        let block = page_ptr.free().as_raw();
-        crate::internal::mi_assert_internal!(
-            !block.is_null() && _mi_ptr_page(block.cast()) == page
-        );
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
+    }
 
-        let (allocated, _) = available.pop_free_block();
-        let block = allocated.into_ptr().as_ptr();
-        let free = page_ptr.free().as_raw();
-        crate::internal::mi_assert_internal!(free.is_null() || _mi_ptr_page(free.cast()) == page);
-        crate::internal::mi_assert_internal!(
-            block_size < MI_MAX_ALIGN_SIZE || _mi_is_aligned(block.cast(), MI_MAX_ALIGN_SIZE)
+    let (allocated, _) = available.pop_free_block();
+    let block = allocated.into_ptr().as_ptr();
+    // SAFETY: the pop retained exclusive local-page mutation rights, so the
+    // updated free-list head is initialized and readable here.
+    let free = unsafe { page_ptr.free().as_raw() };
+    crate::internal::mi_assert_internal!(
+        free.is_null()
+            ||
+            // SAFETY: any remaining free-list head belongs to the same live
+            // page; this assertion-only lookup verifies that invariant.
+            unsafe { _mi_ptr_page(free.cast()) == page }
+    );
+    crate::internal::mi_assert_internal!(
+        block_size < MI_MAX_ALIGN_SIZE || _mi_is_aligned(block.cast(), MI_MAX_ALIGN_SIZE)
+    );
+
+    if cfg!(debug_assertions)
+        // SAFETY: the page's initialized zero-state metadata remains readable
+        // after the local free-list pop.
+        && unsafe { (*page).free_is_zero }
+        && size > size_of::<mi_block_t>()
+    {
+        crate::internal::mi_assert_expensive!(
+            // SAFETY: the popped block is live and readable for its fitting
+            // padded size; this assertion deliberately skips the link word.
+            unsafe {
+                crate::internal::mi_mem_is_zero(block.add(1).cast(), size - size_of::<mi_block_t>())
+            }
         );
+    }
 
-        if cfg!(debug_assertions) && (*page).free_is_zero && size > size_of::<mi_block_t>() {
-            crate::internal::mi_assert_expensive!(crate::internal::mi_mem_is_zero(
-                block.add(1).cast(),
-                size - size_of::<mi_block_t>()
-            ));
-        }
+    // SAFETY: the page remains live with initialized block-size metadata.
+    let usable_size = unsafe { mi_page_usable_block_size(page) };
+    let bsize = usable_size.get();
+    // SAFETY: the popped block is exclusively owned and writable for its full
+    // usable range within the live page backing.
+    unsafe { mi_track_mem_undefined(block.cast(), bsize) };
 
-        let usable_size = mi_page_usable_block_size(page);
-        let bsize = usable_size.get();
-        mi_track_mem_undefined(block.cast(), bsize);
-
-        if MI_STAT > 0 && bsize <= MI_LARGE_MAX_OBJ_SIZE {
-            __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize);
-            if MI_STAT > 1 {
-                __mi_stat_counter_increase(
-                    ptr::addr_of_mut!((*theap).stats.malloc_normal_count),
-                    1,
-                );
-                let bin = mi_bin_from_usable(usable_size).as_usize();
-                __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_bins[bin]), 1);
+    if MI_STAT > 0 && bsize <= MI_LARGE_MAX_OBJ_SIZE {
+        // SAFETY: `local_theap` grants exclusive current-thread access to its
+        // live local statistics for this allocation.
+        unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize) };
+        if MI_STAT > 1 {
+            // SAFETY: the same exclusive local-statistics access covers the
+            // ordered count update.
+            unsafe {
+                __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal_count), 1)
+            };
+            let bin = mi_bin_from_usable(usable_size).as_usize();
+            // SAFETY: `bin` is derived from the page's usable block size and
+            // indexes the live heap's exclusively mutable statistics array.
+            unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_bins[bin]), 1) };
+            // SAFETY: the fitting padded size makes the requested-size
+            // subtraction valid, and local statistics are exclusively mutable.
+            unsafe {
                 __mi_stat_increase(
                     ptr::addr_of_mut!((*theap).stats.malloc_requested),
                     size - MI_PADDING_SIZE,
-                );
-            }
+                )
+            };
         }
+    }
 
-        if zeroed == crate::core_types::Zeroed::No {
+    if zeroed == crate::core_types::Zeroed::No {
+        // SAFETY: the popped block pointer is nonnull, aligned, and exclusively
+        // writable, so its allocation tag may be initialized.
+        unsafe {
             crate::core_types::BlockTag::write_aligned_to(
                 crate::core_types::BlockPtr::new_unchecked(block),
-            );
-            if cfg!(debug_assertions)
-                && MI_TRACK_ENABLED == 0
-                && !crate::allocator::page::mi_page_is_huge(page)
-            {
-                // SAFETY: the popped non-huge block is exclusively writable for
-                // its full usable size, which remains within the live page backing;
-                // tracking marked it undefined immediately above.
+            )
+        };
+        if cfg!(debug_assertions)
+            && MI_TRACK_ENABLED == 0
+            // SAFETY: the page remains live with initialized huge-page metadata.
+            && !unsafe { crate::allocator::page::mi_page_is_huge(page) }
+        {
+            // SAFETY: the popped non-huge block is exclusively writable for
+            // its full usable size, which remains within the live page backing;
+            // tracking marked it undefined immediately above.
+            unsafe {
                 ptr::write_bytes(block.cast::<u8>(), MI_DEBUG_UNINIT, usable_size.get());
             }
-        } else if !(*page).free_is_zero {
-            _mi_memzero_aligned(block.cast(), bsize);
-        } else {
+        }
+    // SAFETY: this deliberately performs the second ordered read of the live
+    // page's initialized zero-state metadata after the nonzero policy branch.
+    } else if !unsafe { (*page).free_is_zero } {
+        // SAFETY: the popped block is aligned and exclusively writable for its
+        // full usable size.
+        unsafe { _mi_memzero_aligned(block.cast(), bsize) };
+    } else {
+        // SAFETY: the popped block pointer is nonnull, aligned, and exclusively
+        // writable, so its allocation tag may be initialized.
+        unsafe {
             crate::core_types::BlockTag::write_aligned_to(
                 crate::core_types::BlockPtr::new_unchecked(block),
-            );
-            mi_track_mem_defined(block.cast(), bsize);
-        }
+            )
+        };
+        // SAFETY: the zero-state metadata proves the exclusively owned usable
+        // block range is initialized.
+        unsafe { mi_track_mem_defined(block.cast(), bsize) };
+    }
 
-        if MI_PADDING != 0 {
+    if MI_PADDING != 0 {
+        // SAFETY: the popped block is nonnull and aligned, and its usable-size
+        // boundary is followed by writable padding metadata.
+        let (block_ptr, padding) = unsafe {
             let block_ptr = crate::core_types::BlockPtr::new_unchecked(block);
             let padding = crate::core_types::PaddingPtr::from_block_usable(block_ptr, usable_size);
-            let padding_ptr = padding.as_ptr();
-            let delta =
-                (padding_ptr as usize).wrapping_sub(block as usize) - (size - MI_PADDING_SIZE);
-            if cfg!(debug_assertions) {
-                crate::internal::mi_assert_internal!(
-                    delta <= bsize && bsize >= (size - MI_PADDING_SIZE + delta)
-                );
-            }
+            (block_ptr, padding)
+        };
+        let padding_ptr = padding.as_ptr();
+        let delta = (padding_ptr as usize).wrapping_sub(block as usize) - (size - MI_PADDING_SIZE);
+        if cfg!(debug_assertions) {
+            crate::internal::mi_assert_internal!(
+                delta <= bsize && bsize >= (size - MI_PADDING_SIZE + delta)
+            );
+        }
+        // SAFETY: the padding pointer addresses live writable metadata at the
+        // end of the exclusively owned block.
+        unsafe {
             mi_track_mem_defined(padding_ptr.cast(), crate::core_types::PaddingPtr::SIZE);
-            let keys = crate::core_types::PageKeys::from_raw(mi_page_keys(page));
+        }
+        // SAFETY: the page remains live and its initialized key array is stable
+        // throughout padding-canary construction.
+        let keys = crate::core_types::PageKeys::from_raw(unsafe { mi_page_keys(page) });
+        // SAFETY: the page/block witnesses refer to the same live allocation,
+        // and the derived padding metadata remains exclusively writable.
+        unsafe {
             padding.write(crate::core_types::Padding::new(
                 crate::core_types::PaddingCanary::from_page_block_keys(
                     crate::core_types::PagePtr::new_unchecked(page),
@@ -183,7 +258,15 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
                     },
                 ),
             ));
-            if MI_PADDING_CHECK != 0 && !crate::allocator::page::mi_page_is_huge(page) {
+        }
+        if MI_PADDING_CHECK != 0
+            // SAFETY: the page remains live with initialized huge-page metadata.
+            && !unsafe { crate::allocator::page::mi_page_is_huge(page) }
+        {
+            // SAFETY: `delta` was derived from the block and its padding
+            // boundary, so the selected trailing bytes remain within the
+            // exclusively writable non-huge block.
+            unsafe {
                 let fill = padding_ptr.cast::<u8>().sub(delta);
                 let maxpad = delta.min(MI_MAX_ALIGN_SIZE);
                 for i in 0..maxpad {
@@ -191,9 +274,9 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
                 }
             }
         }
-
-        block.cast()
     }
+
+    block.cast()
 }
 
 /// # Safety

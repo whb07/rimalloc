@@ -27,10 +27,10 @@ use crate::types::{
 use crate::types::{mi_subproc_t, mi_theap_t, mi_tld_t};
 
 use super::{
-    _mi_is_theap_main, _mi_theap_cached_set, _mi_theap_default_set, _mi_theap_empty_get,
-    MI_TLD_INVALID, MiHeapMainPrefix, MiSubprocPrefix, mi_heap_main, mi_heap_main_init,
-    mi_is_main_thread_fast, mi_memid_is_static, mi_subproc_heap_main_raw, mi_subproc_prefix,
-    mi_theap_main_tls_peek, mi_theap_main_tls_set, subproc_main, theap_main, tld_main,
+    _mi_is_theap_main, _mi_theap_cached_set, _mi_theap_default_set, MI_TLD_INVALID,
+    MiHeapMainPrefix, MiSubprocPrefix, mi_heap_main, mi_heap_main_init, mi_is_main_thread_fast,
+    mi_memid_is_static, mi_subproc_heap_main_raw, mi_subproc_prefix, mi_theap_main_tls_peek,
+    mi_theap_main_tls_set, subproc_main, theap_main, tld_main,
 };
 
 /// # Safety
@@ -493,9 +493,7 @@ pub(super) unsafe fn init_default() -> *mut mi_theap_t {
 /// mutating this teardown topology, and must not unwind. A successfully freed
 /// heap must not be accessed again.
 unsafe fn theaps_done(tld: TldPtr) {
-    // SAFETY: current-thread teardown resets the published TLS entries before
-    // visiting or releasing any heap that they could otherwise expose.
-    let empty = unsafe { _mi_theap_empty_get() };
+    let empty = crate::platform::__mi_theap_empty();
     // SAFETY: `empty` is the allocator's live uninitialized sentinel, and this
     // current-thread teardown exclusively owns all three TLS publications.
     unsafe {

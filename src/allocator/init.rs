@@ -747,14 +747,6 @@ pub(crate) extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     thread::main_safe()
 }
 
-// SAFETY: empty thread-heap sentinel stays static and typed before TLS exposure.
-/// # Safety
-/// Returns the process-global empty theap sentinel.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
-    ptr::addr_of!(_mi_theap_empty).cast_mut()
-}
-
 /// Returns the current subproc without forcing thread-local initialization.
 /// Before a current-thread association exists, this returns the process-global
 /// main subproc. The raw pointer is non-owning and grants no dereference rights.
@@ -1011,8 +1003,7 @@ mod tests {
     #[test]
     fn linux_theap_main_tls_is_thread_local() {
         let previous = super::mi_theap_main_tls_peek();
-        // SAFETY: main thread-heap TLS access publishes only typed thread-heap pointers.
-        let marker = unsafe { super::_mi_theap_empty_get() };
+        let marker = crate::platform::__mi_theap_empty();
         let marker_addr = marker as usize;
 
         super::mi_theap_main_tls_set(crate::core_types::ThreadHeapPtr::new(marker));

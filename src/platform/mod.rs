@@ -407,12 +407,10 @@ pub fn _mi_prim_thread_id() -> mi_threadid_t {
     tid
 }
 
-/// # Safety
-///
-/// Must be called only after the process-global empty thread heap storage has
-/// been initialized.
+/// Returns the stable address of the statically initialized empty thread-heap
+/// sentinel. The raw pointer is non-owning and grants no dereference rights.
 #[inline]
-pub unsafe fn __mi_theap_empty() -> *mut mi_theap_t {
+pub fn __mi_theap_empty() -> *mut mi_theap_t {
     #[cfg(all(not(miri), target_os = "linux", target_arch = "x86_64"))]
     {
         let empty: *mut mi_theap_t;
@@ -523,9 +521,7 @@ pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
     // returns null or allocator-owned thread-local metadata.
     let theap = unsafe { _mi_theap_default_raw() };
     if theap.is_null() {
-        // SAFETY: null default TLS falls back to
-        // the process-global empty thread-heap sentinel.
-        unsafe { __mi_theap_empty() }
+        __mi_theap_empty()
     } else {
         theap
     }
@@ -542,9 +538,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         {
             let theap = TLS_THEAP_CACHED.with(Cell::get);
             if theap.is_null() {
-                // SAFETY: null cached TLS falls
-                // back to the process-global empty thread-heap sentinel.
-                unsafe { __mi_theap_empty() }
+                __mi_theap_empty()
             } else {
                 theap
             }
@@ -558,9 +552,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         {
             let theap = TLS_THEAP_CACHED.with(Cell::get);
             if theap.is_null() {
-                // SAFETY: null cached TLS falls
-                // back to the process-global empty thread-heap sentinel.
-                unsafe { __mi_theap_empty() }
+                __mi_theap_empty()
             } else {
                 theap
             }
@@ -577,9 +569,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
             // reads the hidden cached thread-heap TLS cell.
             let theap = unsafe { mi_linux_x64_theap_cached_get() };
             if theap.is_null() {
-                // SAFETY: null cached TLS falls
-                // back to the process-global empty thread-heap sentinel.
-                unsafe { __mi_theap_empty() }
+                __mi_theap_empty()
             } else {
                 theap
             }
@@ -595,9 +585,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
             // reads the hidden cached thread-heap TLS cell through C.
             let theap = unsafe { _mi_tls_theap_cached_get() };
             if theap.is_null() {
-                // SAFETY: null cached TLS falls
-                // back to the process-global empty thread-heap sentinel.
-                unsafe { __mi_theap_empty() }
+                __mi_theap_empty()
             } else {
                 theap
             }
@@ -606,9 +594,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         TLS_THEAP_CACHED.with(|cell| {
             let theap = cell.get();
             if theap.is_null() {
-                // SAFETY: null cached TLS falls
-                // back to the process-global empty thread-heap sentinel.
-                unsafe { __mi_theap_empty() }
+                __mi_theap_empty()
             } else {
                 theap
             }

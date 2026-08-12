@@ -273,6 +273,14 @@ pub(super) unsafe fn collect_after_remote_free(
                 crate::internal::mi_assert_internal!(
                     crate::allocator::page::mi_page_reserved_count(page_raw).get() >= 16
                 );
+                // SAFETY: `page` retains the unique claimed abandoned-page
+                // ownership established for this collection transaction, and
+                // `published` is the exact head obtained from its owned atomic
+                // thread-free word. The live page backing, keys, counts, and
+                // lists remain stable except for protocol-authorized remote
+                // publication; the surrounding collection excludes competing
+                // owner/list transitions, and configured diagnostics cannot
+                // incompatibly reenter this mutation or unwind across C ABI.
                 crate::allocator::page::_mi_page_free_collect_partly_typed(&page, published);
                 crate::core_types::ThreadFreeWord::from_parts(
                     Some(mt_free),

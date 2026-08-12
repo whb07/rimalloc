@@ -69,8 +69,8 @@ pub use flags::{
 pub(crate) use lifecycle::collect_page_free_lists_local;
 #[allow(unused_imports)]
 pub use lifecycle::{
-    _mi_page_free_collect, _mi_page_free_collect_partly, mi_page_is_full,
-    mi_page_thread_collect_to_local, mi_page_thread_free_collect,
+    _mi_page_free_collect, mi_page_is_full, mi_page_thread_collect_to_local,
+    mi_page_thread_free_collect,
 };
 pub(crate) use lifecycle::{
     _mi_page_free_collect_partly_typed, collect_page_free_lists_abandoned,

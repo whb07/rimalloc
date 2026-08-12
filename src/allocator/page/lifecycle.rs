@@ -393,42 +393,35 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
 }
 
 /// # Safety
-/// If `head` is null, this returns without accessing `page`. Otherwise, `page`
-/// must be live abandoned page metadata whose atomic thread-free ownership bit
-/// is claimed by the caller, and `head` must be the still-published head
-/// belonging to that page.
-// SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-#[inline(never)]
-pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
-    #[cfg(feature = "bench-diagnostics")]
-    crate::allocator::bench_diagnostics::page_free_collect_partly_call(head.is_null());
-    if head.is_null() {
-        return;
-    }
-
-    // SAFETY: the caller supplies the live claimed abandoned page and its
-    // still-published non-null remote head for this ownership transition.
-    unsafe {
-        let page_ptr = PagePtr::new_unchecked(page);
-        let owned_page = crate::core_types::assume_owned_abandoned_page(page_ptr);
-        let remote_head = PublishedRemoteHead::from_raw_compat(BlockPtr::new_unchecked(head));
-        _mi_page_free_collect_partly_typed(&owned_page, remote_head);
-    }
-}
-
-/// # Safety
-/// `page` must be valid, and `remote_head` must remain published for `page`.
+/// `owned_page` must retain the unique claim on a live abandoned page for this
+/// operation. `remote_head` must be the exact non-null head still published in
+/// that page's atomic thread-free word. The page backing, encoded-link keys,
+/// used count, and available/local free-list fields must remain live and
+/// structurally valid; the claimed ownership must exclude another collector,
+/// owner transition, relink, or backing release while remote frees may publish
+/// only through the atomic thread-free protocol. Any diagnostic callback and
+/// opaque argument must remain valid, must not incompatibly reenter page/list
+/// mutation, and must not unwind across its C ABI invocation.
+///
+/// The operation first detaches and collects only the published head's tail,
+/// leaves the head published, and only then observes `used == 1` to decide
+/// whether to collect the final one-block remote list.
 #[inline]
 pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
     owned_page: &OwnedAbandonedPage,
     remote_head: PublishedRemoteHead,
 ) {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let page_ptr = owned_page.page();
-        let page = page_ptr.as_ptr();
-        let head_block = remote_head.head();
-        let head = head_block.as_ptr();
+    #[cfg(feature = "bench-diagnostics")]
+    crate::allocator::bench_diagnostics::page_free_collect_partly_call(false);
+    let page_ptr = owned_page.page();
+    let page = page_ptr.as_ptr();
+    let head = remote_head.head().as_ptr();
+
+    // SAFETY: the claimed abandoned owner and exact published head exclude a
+    // competing collector. Detaching severs only the head's tail; the detached
+    // chain and all page-local list fields remain exclusively mutable here.
+    // List snapshots are intentionally repeated to preserve publication order.
+    let remote_head = unsafe {
         let (remote_head, remote_tail) = remote_head.detach_tail(owned_page);
         if let Some(remote_tail) = remote_tail {
             #[cfg(feature = "bench-diagnostics")]
@@ -440,7 +433,16 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
                 owned_page.transfer_local_to_available(local);
             }
         }
-        remote_head.leave_published();
+        remote_head
+    };
+
+    remote_head.leave_published();
+
+    // SAFETY: the page and its claimed ownership remain live after leaving the
+    // publication witness. The used-count check intentionally follows that
+    // transition; when one block remains, the atomic head and its null link
+    // prove the final one-block list before the terminal full collection.
+    unsafe {
         if mi_page_used_count(page).get() == 1 {
             let atomic_tf = page_ptr.thread_free_cell();
             crate::internal::mi_assert_internal!(atomic_tf.load_relaxed().head_raw() == head);
@@ -455,13 +457,6 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn partly_collect_ignores_null_head_without_accessing_page() {
-        // SAFETY: the entry contract permits any page value when the null head
-        // makes the operation return before page metadata is accessed.
-        unsafe { _mi_page_free_collect_partly(ptr::null_mut(), ptr::null_mut()) };
-    }
 
     #[test]
     fn published_head_detaches_only_its_tail() {

@@ -354,7 +354,7 @@ pub(crate) unsafe fn visit_page_blocks(
     if let Some(owner) = abandoned_owner.take() {
         // SAFETY: the retained claim keeps the atomic ownership word and page
         // metadata live. Preserve the original collect-until-empty CAS retry
-        // transaction before consuming the claim back to abandoned state.
+        // transaction before terminally releasing the claim.
         unsafe {
             let atomic = page_ptr.thread_free_cell();
             loop {
@@ -368,7 +368,6 @@ pub(crate) unsafe fn visit_page_blocks(
                     break;
                 }
             }
-            let _ = owner.into_abandoned();
         }
     }
     result

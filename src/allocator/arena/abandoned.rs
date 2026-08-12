@@ -96,9 +96,6 @@ pub(super) unsafe fn mi_abandoned_page_unown(
         // SAFETY: the live atomic remains claimed with the expected stable
         // snapshot; CAS releases only ownership while preserving remote head.
         if unsafe { atomic_tf.release_acq_rel(&mut tf_old) } {
-            // SAFETY: the successful CAS released claimed ownership while all
-            // abandoned metadata and the remote-free protocol remain live.
-            let _ = unsafe { owned_page.into_abandoned() };
             return crate::types::PageAbandonOutcome::Abandoned;
         }
     }

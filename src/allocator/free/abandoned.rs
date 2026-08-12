@@ -129,7 +129,7 @@ unsafe fn release_abandoned_ownership(
             #[cfg(feature = "bench-diagnostics")]
             crate::allocator::bench_diagnostics::ownership_release_cas_attempt();
         }
-        crate::core_types::AbandonedDisposition::StillAbandoned(page.into_abandoned())
+        crate::core_types::AbandonedDisposition::StillAbandoned
     }
 }
 

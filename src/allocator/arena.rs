@@ -2369,9 +2369,7 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
         );
         match outcome {
             crate::core_types::PageAbandonOutcome::Abandoned => {
-                Ok(crate::core_types::AbandonedDisposition::Mapped(
-                    crate::core_types::assume_mapped_after_reabandon(page_ptr),
-                ))
+                Ok(crate::core_types::AbandonedDisposition::Mapped)
             }
             crate::core_types::PageAbandonOutcome::Destroyed => {
                 Ok(crate::core_types::AbandonedDisposition::Destroyed(

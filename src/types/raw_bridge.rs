@@ -8,8 +8,8 @@
 
 use super::page_states::{Abandoned, RetiredPage};
 use super::{
-    AbandonedMappedPageType, AbandonedPage, ActivePage, AllFreePage, DestroyedPage, ForeignPage,
-    FullPage, LocalPage, OwnedAbandonedPage, Page, PagePtr, Uninit,
+    AbandonedPage, ActivePage, AllFreePage, DestroyedPage, ForeignPage, FullPage, LocalPage,
+    OwnedAbandonedPage, Page, PagePtr, Uninit,
 };
 
 /// # Safety
@@ -49,18 +49,6 @@ raw_page_bridge!(
     "SAFETY",
     "`page` must be a live initialized current-thread page linked at the head of its stable normal queue with a nonzero retirement countdown. Legal caller: retired-bin collection."
 );
-
-/// # Safety
-/// `page` must be the saved identity of an `OwnedAbandonedPage` that was consumed by arena
-/// reabandon publication and returned `PageAbandonOutcome::Abandoned`. The page must remain live and
-/// published with mapped-abandoned ownership and accounting. Legal caller: the typed arena
-/// reabandon completion boundary.
-#[inline(always)]
-pub(crate) unsafe fn assume_mapped_after_reabandon(page: PagePtr) -> AbandonedMappedPageType {
-    // SAFETY: the caller proves the consuming arena transition completed mapped publication before
-    // this sole replacement capability is constructed.
-    unsafe { AbandonedMappedPageType::new_unchecked(page) }
-}
 
 /// # Safety
 /// `page` must be the saved identity of an `OwnedAbandonedPage` that was consumed by arena abandon

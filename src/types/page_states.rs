@@ -583,16 +583,6 @@ impl OwnedAbandonedPage {
         // the page is exclusively active and ready for target-queue insertion.
         unsafe { ActivePage::new_unchecked(self.page()) }
     }
-
-    /// # Safety
-    /// The caller must have atomically released claimed ownership while keeping
-    /// the live page's abandoned metadata and remote-free protocol valid.
-    #[inline(always)]
-    pub(crate) unsafe fn into_abandoned(self) -> AbandonedPageType {
-        // SAFETY: the caller has
-        // released atomic ownership while preserving abandoned metadata.
-        unsafe { AbandonedPageType::new_unchecked(self.page()) }
-    }
 }
 
 #[inline(always)]
@@ -686,8 +676,8 @@ pub(crate) enum PageAbandonOutcome {
 
 #[must_use = "abandoned dispositions must be consumed or explicitly returned"]
 pub(crate) enum AbandonedDisposition {
-    StillAbandoned(AbandonedPageType),
-    Mapped(AbandonedMappedPageType),
+    StillAbandoned,
+    Mapped,
     Reclaimed(ActivePage),
     Destroyed(DestroyedPage),
 }
@@ -698,12 +688,7 @@ impl AbandonedDisposition {
     #[inline(always)]
     pub(crate) fn discard(self) {
         match self {
-            Self::StillAbandoned(page) => {
-                let _ = page.page();
-            }
-            Self::Mapped(page) => {
-                let _ = page.page();
-            }
+            Self::StillAbandoned | Self::Mapped => {}
             Self::Reclaimed(page) => {
                 let _ = page.page();
             }

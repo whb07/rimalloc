@@ -184,12 +184,18 @@ pub(crate) unsafe fn heap_area_for_page(page: PagePtr) -> Option<mi_heap_area_t>
 /// # Safety
 ///
 /// `area` and `page` must describe the same valid allocator page, and `visitor`
-/// must be valid to call for each live block. The page metadata and block
-/// backing must remain live, and block geometry must remain stable, throughout
-/// this call. A visitor may allocate and alter availability, but returning
-/// `true` promises it did not free or invalidate this page's backing or change
-/// its block geometry, or mutate the shared `area` descriptor, before the next
-/// invocation.
+/// and `arg` must satisfy the block callback contract for each live block. The
+/// page must be either locally owned by its live initialized associated heap under
+/// current-thread/exclusive local free-list mutation, or abandoned and eligible
+/// for the atomic ownership claim. Its metadata, heap, encoded free-list keys,
+/// counts, block backing, and geometry must remain live and stable through local
+/// collection and free-map snapshot construction; protocol remote frees may
+/// publish only through allocator atomics. The callback and opaque argument must
+/// remain valid for every synchronous invocation and must not unwind. A visitor
+/// may allocate and alter availability, but returning `true` promises it did not
+/// free or invalidate this page's snapshotted allocation state, backing, block
+/// geometry, later callback blocks, or shared `area` descriptor, and did not
+/// incompatibly reenter and mutate this page.
 #[inline(never)]
 pub(crate) unsafe fn visit_page_blocks(
     area: &mi_heap_area_t,
@@ -197,11 +203,13 @@ pub(crate) unsafe fn visit_page_blocks(
     visitor: BlockVisitCallback,
     arg: BlockVisitCallbackArg,
 ) -> bool {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    unsafe {
-        let area = ptr::from_ref(area);
-        let page = page_ptr.as_ptr();
-        let mut abandoned_owner = if mi_page_is_abandoned(page) {
+    let area = ptr::from_ref(area);
+    let page = page_ptr.as_ptr();
+    // SAFETY: the contract provides either a locally owned page or a claimable
+    // abandoned page. This epoch classifies it and collects remote publication
+    // before geometry/free-list traversal, preserving the original order.
+    let mut abandoned_owner = unsafe {
+        if mi_page_is_abandoned(page) {
             let abandoned = crate::core_types::assume_abandoned_page(page_ptr);
             let Ok(owner) = abandoned.try_claim_ownership() else {
                 return false;
@@ -212,66 +220,85 @@ pub(crate) unsafe fn visit_page_blocks(
             crate::internal::mi_assert_internal!(!mi_page_theap(page).is_null());
             _mi_page_free_collect(page, true);
             None
-        };
+        }
+    };
+    // SAFETY: local collection or the retained abandoned claim leaves the
+    // initialized local free list empty before the available-list traversal.
+    unsafe {
         crate::internal::mi_assert_internal!(page_ptr.local_free().is_empty());
-        let result = (|| {
-            let used = crate::allocator::page::mi_page_used_count(page);
-            if used.get() == 0 {
-                return true;
-            }
+    }
+    let result = (|| {
+        // SAFETY: local ownership or the abandoned claim keeps the initialized
+        // used count live and stable for this snapshot.
+        let used = unsafe { crate::allocator::page::mi_page_used_count(page) };
+        if used.get() == 0 {
+            return true;
+        }
 
-            // SAFETY: local traversal ownership, or the abandoned claim above,
-            // keeps the page live while its geometry is captured. Callbacks
-            // must obey the documented non-invalidation contract.
+        // SAFETY: local traversal ownership or the abandoned claim keeps the
+        // page, associated heap, counts, geometry, and backing stable while
+        // this complete traversal snapshot is formed.
+        let (block_layout, heap, ubsize, capacity) = unsafe {
             let Some(block_layout) = PageBlockLayout::from_current_page(page_ptr) else {
                 crate::internal::mi_assert_internal!(false);
                 return false;
             };
             let heap = HeapPtr::new_unchecked(mi_page_heap(page));
             let ubsize = mi_page_usable_block_size(page);
-
             let capacity = crate::allocator::page::mi_page_capacity_count(page);
-            let Some(block_range) = block_layout.nonempty_range(0, capacity.as_usize()) else {
-                crate::internal::mi_assert_internal!(false);
-                return false;
-            };
-            if capacity.get() == 1 {
+            (block_layout, heap, ubsize, capacity)
+        };
+        let Some(block_range) = block_layout.nonempty_range(0, capacity.as_usize()) else {
+            crate::internal::mi_assert_internal!(false);
+            return false;
+        };
+        if capacity.get() == 1 {
+            // SAFETY: the stable capacity/used snapshot and collected page
+            // state establish the singleton list invariant; the callback
+            // contract covers the sole live block invocation.
+            return unsafe {
                 crate::internal::mi_assert_internal!(used.get() == 1 && page_ptr.free().is_empty());
-                return visitor.invoke(
+                visitor.invoke(
                     heap,
                     area,
                     block_range.first().as_ptr().cast(),
                     ubsize.get(),
                     arg,
-                );
-            }
+                )
+            };
+        }
 
-            if used.get() == capacity.get() {
-                for block_index in 0..capacity.as_usize() {
-                    let Some(block) = block_range.block_at(block_index) else {
-                        crate::internal::mi_assert_internal!(false);
-                        return false;
-                    };
-                    if !visitor.invoke(heap, area, block.as_ptr().cast(), ubsize.get(), arg) {
-                        return false;
-                    }
+        if used.get() == capacity.get() {
+            for block_index in 0..capacity.as_usize() {
+                let Some(block) = block_range.block_at(block_index) else {
+                    crate::internal::mi_assert_internal!(false);
+                    return false;
+                };
+                // SAFETY: the range identifies this live allocated block and
+                // the callback contract remains valid for this invocation.
+                if !unsafe { visitor.invoke(heap, area, block.as_ptr().cast(), ubsize.get(), arg) }
+                {
+                    return false;
                 }
-                return true;
             }
+            return true;
+        }
 
-            let mut free_map = [0usize; MI_MAX_BLOCKS / MI_INTPTR_BITS];
-            let bmapsize = _mi_divide_up(capacity.as_usize(), MI_INTPTR_BITS);
-            if !capacity.as_usize().is_multiple_of(MI_INTPTR_BITS) {
-                let shift = capacity.as_usize() % MI_INTPTR_BITS;
-                free_map[bmapsize - 1] = usize::MAX << shift;
-            }
+        let mut free_map = [0usize; MI_MAX_BLOCKS / MI_INTPTR_BITS];
+        let bmapsize = _mi_divide_up(capacity.as_usize(), MI_INTPTR_BITS);
+        if !capacity.as_usize().is_multiple_of(MI_INTPTR_BITS) {
+            let shift = capacity.as_usize() % MI_INTPTR_BITS;
+            free_map[bmapsize - 1] = usize::MAX << shift;
+        }
 
+        // SAFETY: local ownership or the abandoned claim keeps the encoded
+        // available-list head and keys stable. Each decoded successor remains
+        // raw until exact block-start membership is established.
+        let free_count = unsafe {
             let mut free_count = 0usize;
             let mut free = page_ptr.free().as_raw();
             while !free.is_null() {
                 free_count += 1;
-                // Keep a decoded link raw until exact block-start membership
-                // is established; corrupt interior addresses are not blocks.
                 let Some(blockidx) = block_range.index_of(free) else {
                     crate::internal::mi_assert_internal!(false);
                     return false;
@@ -282,42 +309,53 @@ pub(crate) unsafe fn visit_page_blocks(
                 free_map[bitidx] |= 1usize << bit;
                 free = crate::internal::mi_block_next(page, free);
             }
-            crate::internal::mi_assert_internal!(
-                capacity.as_usize() == free_count + used.as_usize()
-            );
+            free_count
+        };
+        crate::internal::mi_assert_internal!(capacity.as_usize() == free_count + used.as_usize());
 
-            for (map_index, mask) in free_map.iter().take(bmapsize).enumerate() {
-                let first_block_index = map_index * MI_INTPTR_BITS;
-                if *mask == 0 {
-                    for bit_index in 0..MI_INTPTR_BITS {
-                        let Some(block) = block_range.block_at(first_block_index + bit_index)
-                        else {
-                            crate::internal::mi_assert_internal!(false);
-                            return false;
-                        };
-                        if !visitor.invoke(heap, area, block.as_ptr().cast(), ubsize.get(), arg) {
-                            return false;
-                        }
-                    }
-                } else {
-                    let mut used_mask = !*mask;
-                    while used_mask != 0 {
-                        let bitidx = mi_ctz(used_mask);
-                        let Some(block) = block_range.block_at(first_block_index + bitidx) else {
-                            crate::internal::mi_assert_internal!(false);
-                            return false;
-                        };
-                        if !visitor.invoke(heap, area, block.as_ptr().cast(), ubsize.get(), arg) {
-                            return false;
-                        }
-                        used_mask &= used_mask - 1;
+        for (map_index, mask) in free_map.iter().take(bmapsize).enumerate() {
+            let first_block_index = map_index * MI_INTPTR_BITS;
+            if *mask == 0 {
+                for bit_index in 0..MI_INTPTR_BITS {
+                    let Some(block) = block_range.block_at(first_block_index + bit_index) else {
+                        crate::internal::mi_assert_internal!(false);
+                        return false;
+                    };
+                    // SAFETY: this bit is absent from the validated free map,
+                    // so the range identifies a live block for the callback.
+                    if !unsafe {
+                        visitor.invoke(heap, area, block.as_ptr().cast(), ubsize.get(), arg)
+                    } {
+                        return false;
                     }
                 }
+            } else {
+                let mut used_mask = !*mask;
+                while used_mask != 0 {
+                    let bitidx = mi_ctz(used_mask);
+                    let Some(block) = block_range.block_at(first_block_index + bitidx) else {
+                        crate::internal::mi_assert_internal!(false);
+                        return false;
+                    };
+                    // SAFETY: this set used bit identifies a live block within
+                    // the validated page range for the callback invocation.
+                    if !unsafe {
+                        visitor.invoke(heap, area, block.as_ptr().cast(), ubsize.get(), arg)
+                    } {
+                        return false;
+                    }
+                    used_mask &= used_mask - 1;
+                }
             }
-            true
-        })();
+        }
+        true
+    })();
 
-        if let Some(owner) = abandoned_owner.take() {
+    if let Some(owner) = abandoned_owner.take() {
+        // SAFETY: the retained claim keeps the atomic ownership word and page
+        // metadata live. Preserve the original collect-until-empty CAS retry
+        // transaction before consuming the claim back to abandoned state.
+        unsafe {
             let atomic = page_ptr.thread_free_cell();
             loop {
                 let mut expected = atomic.load_relaxed();
@@ -332,8 +370,8 @@ pub(crate) unsafe fn visit_page_blocks(
             }
             let _ = owner.into_abandoned();
         }
-        result
     }
+    result
 }
 
 // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
@@ -380,9 +418,11 @@ unsafe fn mi_theap_visit_areas_page_typed(
 /// # Safety
 ///
 /// When non-null, `theap` must point to a live initialized thread heap whose
-/// page backing and geometry remain valid through the synchronous traversal.
-/// When present, `visitor` and `arg` must satisfy the area callback contract
-/// for that traversal, and the callback must not unwind across the C ABI.
+/// current thread (or exclusive initialization/teardown owner) may mutate local
+/// page free lists and metadata, and whose page backing and geometry remain
+/// valid through the synchronous traversal. When present, `visitor` and `arg`
+/// must satisfy the area callback contract for that traversal, and the callback
+/// must not unwind across the C ABI or incompatibly reenter the page traversal.
 unsafe fn mi_theap_visit_areas(
     theap: *const mi_theap_t,
     visitor: Option<mi_theap_area_visit_fun>,
@@ -473,11 +513,13 @@ pub unsafe extern "C" fn mi_theap_visit_blocks(
 /// # Safety
 ///
 /// When non-null, `theap` must point to a live initialized thread heap whose
-/// queues, page backing, and page geometry remain valid through the synchronous
-/// traversal. When present, `fn_page`, `arg1`, and `arg2` must satisfy the page
-/// callback contract for every invocation and remain valid until traversal
-/// returns. The callback must not unwind across the C ABI. A null `theap`
-/// returns `false` without invoking the callback.
+/// current thread (or exclusive initialization/teardown owner) may mutate local
+/// queues/free lists and metadata, and whose queues, page backing, and page
+/// geometry remain valid through the synchronous traversal. When present,
+/// `fn_page`, `arg1`, and `arg2` must satisfy the page callback contract for
+/// every invocation and remain valid until traversal returns. The callback must
+/// not unwind across the C ABI or incompatibly reenter page traversal. A null
+/// `theap` returns `false` without invoking the callback.
 pub unsafe fn mi_theap_visit_pages(
     theap: *mut mi_theap_t,
     fn_page: Option<theap_page_visitor_fun>,

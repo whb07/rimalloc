@@ -1519,33 +1519,45 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
         return;
     }
 
-    // SAFETY: the queue head and direct cache remain stable under the caller's exclusive local
-    // epoch. The head is a live compatible page or absence selects the static nonnull sentinel.
-    // After the equality fast return, the helper reads initialized preceding queue entries when
-    // needed to derive the bounded inclusive range, which this same epoch then publishes.
-    unsafe {
-        let page = queue.ptr().first().unwrap_or_else(|| {
+    // SAFETY: the caller keeps this live queue's initialized head link stable under exclusive
+    // local queue mutation. Absence is preserved for the sentinel selection immediately below.
+    let first = unsafe { queue.ptr().first() };
+    let page = first.unwrap_or_else(|| {
+        // SAFETY: `_mi_page_empty` has static storage, a stable nonnull address, and the initialized
+        // empty-page sentinel representation required by every direct-cache slot.
+        unsafe {
             crate::core_types::PagePtr::new_unchecked(ptr::addr_of!(_mi_page_empty).cast_mut())
-        });
-
-        let direct_idx = mi_direct_bin_from_size(size);
-        let idx = direct_idx.as_usize();
-        crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
-        let theap_ptr = theap.ptr();
-        if theap_ptr.direct_page(direct_idx) == page {
-            return;
         }
+    });
 
-        let start = if idx <= 1 {
-            0
-        } else {
-            mi_theap_direct_cache_start(theap_ptr, queue, block_size, direct_idx)
-        };
-
-        crate::internal::mi_assert_internal!(start <= idx);
-        let direct_start = crate::core_types::DirectBin::new_unchecked(start as u16);
-        theap_ptr.fill_direct_pages(direct_start, direct_idx, page);
+    let direct_idx = mi_direct_bin_from_size(size);
+    let idx = direct_idx.as_usize();
+    crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
+    let theap_ptr = theap.ptr();
+    // SAFETY: the caller keeps the full direct cache initialized and stable under exclusive local
+    // mutation; this is the single cache-slot read before the equality fast return.
+    let cached = unsafe { theap_ptr.direct_page(direct_idx) };
+    if cached == page {
+        return;
     }
+
+    let start = if idx <= 1 {
+        0
+    } else {
+        // SAFETY: `direct_idx` was derived from this queue's initialized `block_size`. For this
+        // branch the caller keeps the queue strictly after the array's first entry and every
+        // predecessor inspected by the backward scan initialized and stable.
+        unsafe { mi_theap_direct_cache_start(theap_ptr, queue, block_size, direct_idx) }
+    };
+
+    crate::internal::mi_assert_internal!(start <= idx);
+    // SAFETY: both branches return `start <= idx`, while `direct_idx` witnesses that `idx` is in
+    // the direct-cache domain; therefore `start` is also a representable in-range direct bin.
+    let direct_start = unsafe { crate::core_types::DirectBin::new_unchecked(start as u16) };
+    // SAFETY: the caller exclusively owns the live initialized direct cache; `direct_start` through
+    // `direct_idx` is the bounded inclusive range for which the queue head or static sentinel is
+    // suitable. This publication remains the final operation.
+    unsafe { theap_ptr.fill_direct_pages(direct_start, direct_idx, page) };
 }
 
 /// Search a normal queue for an available page, extending, retiring, releasing, or allocating a

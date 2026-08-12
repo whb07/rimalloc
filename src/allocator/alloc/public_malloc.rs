@@ -50,23 +50,34 @@ pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usi
 }
 
 /// # Safety
-/// `heap` must identify a live initialized heap owned by the current thread and
-/// remain stable without concurrent teardown. The caller must have exclusive
-/// mutation rights over its local allocation state; protocol atomic remote-free
-/// publication is permitted. `size` must not exceed `MI_SMALL_SIZE_MAX`. A
-/// nonnull result is allocator-owned and may be released with `mi_free`.
+/// Null returns null. If nonnull, `heap` must identify a live initialized heap
+/// owned by the current thread, with a stable heap-to-thread-heap association
+/// and no concurrent teardown or reassignment. The caller must have exclusive
+/// mutation rights over its local TLD, direct cache, page queues, free lists,
+/// statistics, and guarded sampling state; protocol atomic remote-free
+/// publication is permitted. Page-map, arena, backing-memory,
+/// allocator-configuration, and lifecycle state must remain initialized and
+/// stable. Synchronous initialization, deferred-free, collection, arena,
+/// guarded-allocation, tracking, or diagnostic callbacks and their opaque
+/// arguments must remain valid, must not incompatibly reenter local heap state,
+/// and must not unwind. `size` must not exceed `MI_SMALL_SIZE_MAX`. A nonnull
+/// result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
-    // SAFETY: the caller keeps the heap live and current-thread owned while it
-    // is classified, localized, and used for the bounded small allocation.
+    // SAFETY: the caller proves that nonnull `heap` is live initialized heap
+    // metadata; this operation only classifies that raw pointer.
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return ptr::null_mut();
+    };
+    let size = crate::core_types::RequestedSize::new(size);
+    // SAFETY: the caller keeps the classified heap current-thread owned with a
+    // stable association while the resolver localizes it.
+    let Some(theap) = (unsafe { mi_heap_borrowed_theap_local(heap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the caller's exclusive local-allocation contract remains valid
+    // for this terminal bounded allocation operation.
     unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return ptr::null_mut();
-        };
-        let size = crate::core_types::RequestedSize::new(size);
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return ptr::null_mut();
-        };
         mi_theap_malloc_small_zero_typed(
             theap,
             size,

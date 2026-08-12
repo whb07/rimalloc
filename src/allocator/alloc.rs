@@ -1349,8 +1349,25 @@ pub(crate) unsafe fn mi_realloc_request_from_user(
 }
 
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// `p` must be null or a pointer previously returned by this allocator.
+/// `theap` may be null only where the supported lazy/default heap protocol
+/// accepts it; otherwise it must be a supported static sentinel or a live
+/// initialized current-thread heap whose metadata remains readable through
+/// resolution. Process and TLS initialization/default lookup must be permitted.
+/// After resolution, the selected heap's local TLD, direct cache, page queues,
+/// free lists, statistics, and guarded-allocation sampling state must be
+/// exclusively mutable for this call; protocol atomic remote-free publication
+/// is permitted. Page-map, arena, backing-memory, allocator-configuration, and
+/// lifecycle state must remain initialized and stable. `p` must be null or a
+/// live allocation returned by this allocator whose page-map registration, page
+/// and block metadata, and backing remain stable, without concurrent free,
+/// realloc, or teardown, until this call returns or consumes it. Synchronous
+/// initialization, deferred-free, collection, arena, guarded-allocation,
+/// tracking, or diagnostic callbacks and their opaque arguments must remain
+/// valid, must not incompatibly reenter local heap state, and must not unwind.
+/// Invalid layout or pointer validation returns null without consuming `p`.
+/// Heap-localization or allocation failure also leaves it live. In-place success
+/// returns the still-live old allocation; moved success frees it and returns the
+/// new allocation with its preserved prefix.
 // SAFETY: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_realloc(
@@ -1358,30 +1375,43 @@ pub unsafe extern "C" fn mi_theap_realloc(
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
-    unsafe {
-        let Some(layout) = malloc_layout_or_report(newsize, false) else {
+    let Some(layout) = malloc_layout_or_report(newsize, false) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the caller keeps any nonnull old allocation and its metadata
+    // stable through validation; the null output requires no writable storage.
+    let Some(old) = (unsafe { mi_realloc_old_from_ptr(p, ptr::null_mut()) }) else {
+        return ptr::null_mut();
+    };
+    if theap.is_null() && MI_THEAP_INITASNULL {
+        // SAFETY: the supported lazy-null protocol keeps the selected default
+        // heap live and current-thread local while it is resolved.
+        let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
             return ptr::null_mut();
         };
-        let Some(old) = mi_realloc_old_from_ptr(p, ptr::null_mut()) else {
-            return ptr::null_mut();
-        };
-        if theap.is_null() && MI_THEAP_INITASNULL {
-            let Some(theap) = _mi_theap_or_default_typed(theap) else {
-                return ptr::null_mut();
-            };
-            return mi_theap_realloc_validated_core(
+        // SAFETY: successful localization proves the live current-thread heap;
+        // the caller preserves its exclusive allocation state and `old` remains
+        // stable through the terminal realloc disposition.
+        return unsafe {
+            mi_theap_realloc_validated_core(
                 ThreadHeapLocal::new_unchecked(theap),
                 old,
                 layout,
                 layout.zeroed(),
                 ptr::null_mut(),
                 ptr::null_mut(),
-            );
-        }
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
+            )
         };
+    }
+    // SAFETY: the caller keeps the supported raw heap state live and
+    // current-thread local while the resolver localizes it.
+    let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: successful localization proves the live current-thread heap; the
+    // caller preserves its exclusive allocation state and `old` remains stable
+    // through the terminal realloc disposition.
+    unsafe {
         mi_theap_realloc_validated_core(
             ThreadHeapLocal::new_unchecked(theap),
             old,

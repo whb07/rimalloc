@@ -1311,28 +1311,35 @@ unsafe fn mi_realloc_request_from_ptr(
 }
 
 /// # Safety
-/// `user` must identify a live allocation returned by this allocator. Its page and block metadata
-/// must remain stable, without concurrent free or realloc, for as long as the returned request is
-/// used; the returned request does not extend this lifetime. If nonnull, `usable_pre` must be
-/// aligned and writable for one `usize` when accessed and must not overlap allocator metadata. It
-/// may point within the user allocation if that storage is still live at the access.
+/// `user` must identify a live allocation returned by this allocator. Its
+/// page-map registration, page and block metadata, and backing must remain
+/// readable and stable, without concurrent free, realloc, or teardown, for as
+/// long as the returned request is used; the request does not extend this
+/// lifetime. `None` reports failed pointer validation after writing zero to a
+/// nonnull `usable_pre`; success leaves it untouched. The validated `layout`
+/// supplies the request's matching zero-new-tail policy. If nonnull,
+/// `usable_pre` must be aligned and uniquely writable for one `usize` when
+/// accessed and must not overlap allocator metadata. It may point within the
+/// user allocation if that storage is still live at the access. Diagnostic
+/// callbacks and their opaque arguments must remain valid, must not
+/// incompatibly reenter allocator state, and must not unwind.
 pub(crate) unsafe fn mi_realloc_request_from_user(
     user: crate::core_types::UserPtr,
     layout: crate::core_types::LayoutRequest,
     usable_pre: *mut usize,
 ) -> Option<crate::core_types::ReallocRequest> {
     let p = user.as_ptr();
-    // SAFETY: the caller keeps the typed nonnull user allocation and its page/block metadata live
-    // and stable through use of the returned request. The optional failure output is writable at
-    // the access and does not overlap allocator metadata.
-    let old = unsafe {
-        let Some(old) = mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) else {
-            if !usable_pre.is_null() {
-                *usable_pre = 0;
-            }
-            return None;
-        };
-        old
+    // SAFETY: the caller keeps the typed nonnull user allocation and its
+    // metadata live and stable through use of the returned request; validation
+    // uses the fixed valid UTF-8 diagnostic string.
+    let old = unsafe { mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) };
+    let Some(old) = old else {
+        if !usable_pre.is_null() {
+            // SAFETY: the caller supplies uniquely writable output storage at
+            // this validation-failure access, disjoint from allocator metadata.
+            unsafe { *usable_pre = 0 };
+        }
+        return None;
     };
     Some(crate::core_types::ReallocRequest::from_existing(
         old,

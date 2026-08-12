@@ -122,7 +122,6 @@ fn page_queue_count_arithmetic_preserves_domain() {
     let count = PageQueueCount::new(1).increment();
     assert_eq!(count.get(), 2);
     assert_eq!(count.decrement().get(), 1);
-    assert_eq!(count.add(PageQueueCount::new(3)).get(), 5);
 }
 
 #[test]
@@ -134,7 +133,6 @@ fn page_count_domains_preserve_raw_counts() {
     assert_eq!(used.as_usize(), 3);
     assert_eq!(used.increment_wrapping().get(), 4);
     assert_eq!(used.decrement().get(), 2);
-    assert_eq!(used.subtract(2).get(), 1);
 
     assert_eq!(reserved.get(), 9);
     assert_eq!(reserved.as_usize(), 9);

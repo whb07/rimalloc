@@ -361,11 +361,6 @@ impl PageQueueCount {
         crate::internal::mi_debug_assert!(self.0 > 0);
         Self(self.0 - 1)
     }
-
-    #[inline(always)]
-    pub(crate) const fn add(self, rhs: Self) -> Self {
-        Self(self.0 + rhs.0)
-    }
 }
 
 /// Value of the `page_reclaim_on_free` option after raw option lookup.
@@ -456,12 +451,6 @@ impl UsedBlockCount {
     pub(crate) fn decrement(self) -> Self {
         crate::internal::mi_debug_assert!(self.0 > 0);
         Self(self.0 - 1)
-    }
-
-    #[inline(always)]
-    pub(crate) fn subtract(self, count: u16) -> Self {
-        crate::internal::mi_debug_assert!(self.0 >= count);
-        Self(self.0 - count)
     }
 
     #[inline(always)]

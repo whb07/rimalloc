@@ -173,27 +173,6 @@ unsafe fn mi_page_queue_push_internal(
 /// # Safety
 /// `theap`, `queue`, and `page` must be valid. `queue` must belong to `theap`, and `page` must not
 /// already be linked into it.
-pub(super) unsafe fn mi_page_queue_push_at_end_raw(
-    theap: *mut mi_theap_t,
-    queue: *mut mi_page_queue_t,
-    page: *mut mi_page_t,
-) {
-    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
-    unsafe {
-        let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        mi_page_queue_push_at_end_internal(
-            theap,
-            PageQueuePtr::new_unchecked(queue),
-            PagePtr::new_unchecked(page),
-        );
-    }
-}
-
-/// # Safety
-/// `theap`, `queue`, and `page` must be valid. `queue` must belong to `theap`, and `page` must not
-/// already be linked into it.
 #[inline]
 unsafe fn mi_page_queue_push_at_end_internal(
     theap: crate::core_types::ThreadHeapLocal,
@@ -399,15 +378,6 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_raw(
             mi_theap_queue_first_update(theap, to);
         }
     }
-}
-
-#[inline]
-pub(crate) unsafe fn mi_page_queue_enqueue_from(
-    to: crate::core_types::FullPageQueue,
-    page: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
-) -> crate::core_types::FullPage {
-    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
-    unsafe { page.into_full(to) }
 }
 
 /// # Safety

@@ -61,13 +61,6 @@ pub unsafe extern "C" fn mi_page_queue_is_special(pq: *const mi_page_queue_t) ->
 
 /// # Safety
 /// `pq` must point to a valid `mi_page_queue_t`.
-// SAFETY: page-queue count helpers read and write allocator-owned queue metadata through typed counters.
-pub unsafe extern "C" fn mi_page_queue_count(pq: *const mi_page_queue_t) -> usize {
-    unsafe { mi_page_queue_count_typed(pq).get() }
-}
-
-/// # Safety
-/// `pq` must point to a valid `mi_page_queue_t`.
 #[inline(always)]
 pub(crate) unsafe fn mi_page_queue_count_typed(
     pq: *const mi_page_queue_t,
@@ -108,19 +101,6 @@ pub(super) unsafe fn mi_page_queue_decrement_count(pq: *mut mi_page_queue_t) {
 }
 
 /// # Safety
-/// `pq` must point to writable page-queue metadata.
-#[inline(always)]
-pub(super) unsafe fn mi_page_queue_add_count(
-    pq: *mut mi_page_queue_t,
-    count: crate::core_types::PageQueueCount,
-) {
-    // SAFETY: page-queue count helpers read and write allocator-owned queue metadata through typed counters.
-    unsafe {
-        mi_page_queue_set_count(pq, mi_page_queue_count_typed(pq).add(count));
-    }
-}
-
-/// # Safety
 /// `page` must point to valid page metadata.
 #[inline(always)]
 pub(crate) unsafe fn mi_page_used_count(
@@ -139,49 +119,6 @@ pub(crate) unsafe fn mi_page_set_used_count(
 ) {
     // SAFETY: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
     unsafe { page_ptr(page).set_used(used) };
-}
-
-/// # Safety
-/// `page` must point to writable page metadata.
-#[inline(always)]
-pub(crate) unsafe fn mi_page_increment_used_count(
-    page: *mut mi_page_t,
-) -> crate::core_types::UsedBlockCount {
-    // SAFETY: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
-    unsafe {
-        let used = mi_page_used_count(page).increment_wrapping();
-        mi_page_set_used_count(page, used);
-        used
-    }
-}
-
-/// # Safety
-/// `page` must point to writable page metadata and have a nonzero used count.
-#[inline(always)]
-pub(crate) unsafe fn mi_page_decrement_used_count(
-    page: *mut mi_page_t,
-) -> crate::core_types::UsedBlockCount {
-    // SAFETY: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
-    unsafe {
-        let used = mi_page_used_count(page).decrement();
-        mi_page_set_used_count(page, used);
-        used
-    }
-}
-
-/// # Safety
-/// `page` must point to writable page metadata and have at least `count` used blocks.
-#[inline(always)]
-pub(crate) unsafe fn mi_page_subtract_used_count(
-    page: *mut mi_page_t,
-    count: u16,
-) -> crate::core_types::UsedBlockCount {
-    // SAFETY: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
-    unsafe {
-        let used = mi_page_used_count(page).subtract(count);
-        mi_page_set_used_count(page, used);
-        used
-    }
 }
 
 /// # Safety

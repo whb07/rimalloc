@@ -104,10 +104,9 @@ pub fn mi_memid_arena(memid: mi_memid_t) -> *mut mi_arena_t {
     }
 }
 
-/// # Safety
-/// Returns the inert memid sentinel and has no caller preconditions.
+/// Returns the inert memid sentinel.
 #[inline]
-pub unsafe fn _mi_memid_none() -> mi_memid_t {
+pub fn _mi_memid_none() -> mi_memid_t {
     crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw()
 }
 

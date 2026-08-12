@@ -974,9 +974,7 @@ unsafe fn mi_page_map_ensure_submap_at(
         // published for this top-level slot.
         let mut loaded = unsafe { atomic_submap.load(crate::core_types::MemoryOrder::Acquire) };
         if loaded.is_null() {
-            // SAFETY: local memid starts empty and will
-            // be filled by the OS zero-allocation helper on success.
-            let mut memid = unsafe { _mi_memid_none() };
+            let mut memid = _mi_memid_none();
             // SAFETY: allocates a zeroed submap-sized
             // backing range for publication in exactly one top-level slot.
             let new_sub = unsafe { _mi_os_zalloc(MI_PAGE_MAP_SUB_SIZE, &raw mut memid) }

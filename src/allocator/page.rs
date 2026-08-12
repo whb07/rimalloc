@@ -1392,174 +1392,220 @@ unsafe fn mi_page_queue_find_free_ex_active(
     block_size: crate::core_types::BlockSize,
     first_try: bool,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let theap_raw = theap.ptr().as_ptr();
-        let pq = queue.ptr().as_ptr();
-        let mut count = crate::core_types::PageQueueCount::new(0);
-        let mut candidate_limit = crate::core_types::PageReclaimLimit::new(0);
-        let configured = crate::allocator::policy::ThreadHeapPolicy::from_fields(
+    let theap_raw = theap.ptr().as_ptr();
+    let pq = queue.ptr().as_ptr();
+    let mut count = crate::core_types::PageQueueCount::new(0);
+    let mut candidate_limit = crate::core_types::PageReclaimLimit::new(0);
+    // SAFETY: the caller keeps the live current-thread heap and its policy fields initialized and
+    // stable while these three fields are read in their original order.
+    let configured = unsafe {
+        crate::allocator::policy::ThreadHeapPolicy::from_fields(
             (*theap_raw).allow_page_reclaim,
             (*theap_raw).allow_page_abandon,
             (*theap_raw).page_full_retain,
-        );
-        let mut page_full_retain = crate::allocator::policy::ActivePolicy::initial_full_retain(
-            block_size,
-            configured.page_full_retain(),
-        );
-        let mut page_candidate = ptr::null_mut::<mi_page_t>();
-        let mut page = queue
-            .ptr()
-            .first()
-            .map(PagePtr::as_ptr)
-            .unwrap_or(ptr::null_mut());
-        #[cfg(feature = "bench-diagnostics")]
-        let mut failed_extend = false;
-        #[cfg(feature = "bench-diagnostics")]
-        let mut selected_position = 0usize;
+        )
+    };
+    let mut page_full_retain = crate::allocator::policy::ActivePolicy::initial_full_retain(
+        block_size,
+        configured.page_full_retain(),
+    );
+    let mut page_candidate = ptr::null_mut::<mi_page_t>();
+    // SAFETY: the exact live normal queue remains stable under exclusive local queue ownership
+    // while its initialized front link is read once before traversal.
+    let mut page = unsafe { queue.ptr().first() }
+        .map(PagePtr::as_ptr)
+        .unwrap_or(ptr::null_mut());
+    #[cfg(feature = "bench-diagnostics")]
+    let mut failed_extend = false;
+    #[cfg(feature = "bench-diagnostics")]
+    let mut selected_position = 0usize;
 
-        while !page.is_null() {
-            let next = (*page).next;
-            count = count.increment();
-            candidate_limit = candidate_limit.decrement();
+    while !page.is_null() {
+        // SAFETY: the current linked page and its initialized successor remain live and stable;
+        // snapshot `next` before any collection, move, callback, or terminal release.
+        let next = unsafe { (*page).next };
+        count = count.increment();
+        candidate_limit = candidate_limit.decrement();
 
-            let mut immediate_available = mi_page_immediate_available(page);
-            if !immediate_available {
+        // SAFETY: the current live page's local available-list metadata is stable for this read.
+        let mut immediate_available = unsafe { mi_page_immediate_available(page) };
+        if !immediate_available {
+            // SAFETY: the current page remains locally owned and live for remote-list collection;
+            // callbacks obey the function contract. Preserve collection before the second read.
+            unsafe {
                 _mi_page_free_collect(page, false);
-                immediate_available = mi_page_immediate_available(page);
             }
+            // SAFETY: collection returned with the current page live, so reread its availability
+            // exactly once in the original position.
+            immediate_available = unsafe { mi_page_immediate_available(page) };
+        }
 
-            if !immediate_available && !mi_page_is_expandable(page) {
-                page_full_retain = page_full_retain.decrement();
-                if page_full_retain.is_negative() {
+        // SAFETY: short-circuiting reaches this initialized page metadata read only when the
+        // snapshotted availability is false; the caller keeps the page geometry stable.
+        if !immediate_available && !unsafe { mi_page_is_expandable(page) } {
+            page_full_retain = page_full_retain.decrement();
+            if page_full_retain.is_negative() {
+                // SAFETY: the live current page and owning queue remain stable. Preserve the
+                // assertion's full-then-availability short circuit, then consume the page through
+                // its full-or-abandon transition without accessing it again in this iteration.
+                unsafe {
                     crate::internal::mi_assert_internal!(
                         !mi_page_is_in_full(page) && !mi_page_immediate_available(page)
                     );
                     mi_page_to_full(page, pq);
                 }
-            } else {
-                if page_candidate.is_null() {
-                    page_candidate = page;
-                    #[cfg(feature = "bench-diagnostics")]
-                    {
-                        selected_position = count.get();
-                    }
-                    candidate_limit =
-                        crate::allocator::policy::ActivePolicy::page_candidate_limit();
-                } else if mi_page_all_free(page_candidate) {
+            }
+        } else {
+            if page_candidate.is_null() {
+                page_candidate = page;
+                #[cfg(feature = "bench-diagnostics")]
+                {
+                    selected_position = count.get();
+                }
+                candidate_limit = crate::allocator::policy::ActivePolicy::page_candidate_limit();
+            } else if unsafe {
+                // SAFETY: the retained candidate remains a live active page linked in this exact
+                // queue with stable used metadata until this classification read.
+                mi_page_all_free(page_candidate)
+            } {
+                // SAFETY: the all-free candidate is live, active, and linked in `queue`. Consume
+                // its sole capability through terminal removal and release before replacing the
+                // raw candidate identity; do not access the released candidate afterward.
+                unsafe {
                     let active = crate::core_types::assume_active_page(
                         crate::core_types::PagePtr::new_unchecked(page_candidate),
                     );
                     let all_free = active.try_mark_all_free().unwrap_unchecked();
                     let _ = _mi_page_free_active_internal(all_free, queue);
-                    page_candidate = page;
-                    #[cfg(feature = "bench-diagnostics")]
-                    {
-                        selected_position = count.get();
-                    }
-                } else if mi_page_used_count(page) >= mi_page_used_count(page_candidate)
-                    && !mi_page_is_mostly_used(page)
-                {
-                    page_candidate = page;
-                    #[cfg(feature = "bench-diagnostics")]
-                    {
-                        selected_position = count.get();
-                    }
                 }
-                if immediate_available || candidate_limit.is_exhausted() {
-                    crate::internal::mi_assert_internal!(!page_candidate.is_null());
-                    break;
+                page_candidate = page;
+                #[cfg(feature = "bench-diagnostics")]
+                {
+                    selected_position = count.get();
+                }
+            } else if unsafe {
+                // SAFETY: the current page and retained candidate remain live with stable used
+                // counts and current-page geometry. This expression preserves the original current
+                // used, candidate used, then conditional mostly-used read order and short circuit.
+                mi_page_used_count(page) >= mi_page_used_count(page_candidate)
+                    && !mi_page_is_mostly_used(page)
+            } {
+                page_candidate = page;
+                #[cfg(feature = "bench-diagnostics")]
+                {
+                    selected_position = count.get();
                 }
             }
-
-            page = next;
+            if immediate_available || candidate_limit.is_exhausted() {
+                crate::internal::mi_assert_internal!(!page_candidate.is_null());
+                break;
+            }
         }
 
+        page = next;
+    }
+
+    // SAFETY: the caller exclusively owns this live heap's local search statistics. Preserve the
+    // page-search total update before the search-count update in one coherent accounting epoch.
+    unsafe {
         __mi_stat_counter_increase(
             ptr::addr_of_mut!((*theap_raw).stats.page_searches),
             count.get(),
         );
         __mi_stat_counter_increase(ptr::addr_of_mut!((*theap_raw).stats.page_searches_count), 1);
+    }
 
-        if !page_candidate.is_null() {
-            page = page_candidate;
-        }
-        if !page.is_null() {
-            if !mi_page_immediate_available(page) {
-                crate::internal::mi_assert_internal!(mi_page_is_expandable(page));
-                if !mi_page_extend_free(theap_raw, page) {
-                    page = ptr::null_mut();
-                    #[cfg(feature = "bench-diagnostics")]
-                    {
-                        failed_extend = true;
-                    }
+    if !page_candidate.is_null() {
+        page = page_candidate;
+    }
+    if !page.is_null() {
+        // SAFETY: the selected page remains live in the exact local queue and its availability
+        // metadata is stable for this read.
+        if !unsafe { mi_page_immediate_available(page) } {
+            // SAFETY: the same selected page keeps stable expandable geometry through this
+            // assertion-only read.
+            crate::internal::mi_assert_internal!(unsafe { mi_page_is_expandable(page) });
+            // SAFETY: the selected expandable page and owning heap remain live and exclusively
+            // locally mutable through extension and any synchronous commit callback.
+            if !unsafe { mi_page_extend_free(theap_raw, page) } {
+                page = ptr::null_mut();
+                #[cfg(feature = "bench-diagnostics")]
+                {
+                    failed_extend = true;
                 }
             }
-            crate::internal::mi_assert_internal!(
-                page.is_null() || mi_page_immediate_available(page)
-            );
         }
+        // SAFETY: when nonnull, the selected or successfully extended page remains live and its
+        // availability metadata is stable. Preserve the original null short circuit.
+        crate::internal::mi_assert_internal!(
+            page.is_null() || unsafe { mi_page_immediate_available(page) }
+        );
+    }
 
-        if page.is_null() {
-            #[cfg(feature = "bench-diagnostics")]
-            crate::allocator::bench_diagnostics::page_queue_search(
-                count.get(),
-                false,
-                failed_extend,
-            );
+    if page.is_null() {
+        #[cfg(feature = "bench-diagnostics")]
+        crate::allocator::bench_diagnostics::page_queue_search(count.get(), false, failed_extend);
+        // SAFETY: the caller-proven current-thread heap/queue epoch covers retired collection,
+        // which completes before the fresh allocation transaction and preserves its callback,
+        // arena, page-map, and backing requirements.
+        unsafe {
             _mi_theap_collect_retired_typed(theap, false);
-            // SAFETY: this cold fresh-page branch retains the caller-proven current-thread heap
-            // epoch and exact live normal queue. Its typed block size and zero/default alignment
-            // pass unchanged into the outlined transaction, while the surrounding search contract
-            // keeps arena/page-map backing and release, purge, and commit callbacks stable and
-            // excludes incompatible callback reentry or unwind.
-            let fresh = mi_page_fresh_alloc_typed(
+        }
+        // SAFETY: retired collection has completed; the caller still owns the live heap and exact
+        // normal queue. Preserve the same block size and zero/default alignment materialization.
+        let fresh = unsafe {
+            mi_page_fresh_alloc_typed(
                 theap,
                 queue.ptr(),
                 block_size,
                 crate::core_types::MaybeAlignment::new_unchecked(0),
+            )
+        };
+        if let Some(fresh) = fresh {
+            // SAFETY: fresh allocation returned a live initialized page whose block-size metadata
+            // remains stable for this assertion-only read.
+            crate::internal::mi_assert_internal!(
+                block_size.get() == unsafe { mi_page_block_size(fresh.page().as_ptr()) }
             );
-            if let Some(fresh) = fresh {
-                crate::internal::mi_assert_internal!(
-                    block_size.get() == mi_page_block_size(fresh.page().as_ptr())
-                );
-                crate::internal::mi_assert_internal!(
-                    queue.ptr().as_ptr()
-                        == mi_theap_page_queue_of(theap.ptr().as_ptr(), fresh.page().as_ptr())
-                );
-                #[cfg(feature = "bench-diagnostics")]
-                crate::allocator::bench_diagnostics::page_queue_fresh_allocation();
-                return Some(fresh);
-            }
-            if first_try {
-                #[cfg(feature = "bench-diagnostics")]
-                crate::allocator::bench_diagnostics::page_queue_retry();
-                return mi_page_queue_find_free_ex_active(theap, queue, block_size, false);
-            }
-            return None;
+            // SAFETY: the fresh page and current-thread heap remain live and stably associated;
+            // queue selection is read-only and must reproduce the exact supplied queue.
+            crate::internal::mi_assert_internal!(unsafe {
+                queue.ptr().as_ptr()
+                    == mi_theap_page_queue_of(theap.ptr().as_ptr(), fresh.page().as_ptr())
+            });
+            #[cfg(feature = "bench-diagnostics")]
+            crate::allocator::bench_diagnostics::page_queue_fresh_allocation();
+            return Some(fresh);
         }
+        if first_try {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::allocator::bench_diagnostics::page_queue_retry();
+            // SAFETY: failed fresh allocation preserves the caller's live current-thread heap,
+            // queue, and callback epoch for the single original retry with `first_try = false`.
+            return unsafe { mi_page_queue_find_free_ex_active(theap, queue, block_size, false) };
+        }
+        return None;
+    }
 
+    // SAFETY: traversal or candidate selection proves this live active page remains linked in the
+    // exact compatible normal queue. Consume it into the queued witness, move that witness to the
+    // front, then clear retirement only through the returned queued page identity.
+    let queued = unsafe {
         let active =
             crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
-        // SAFETY: traversal proves membership in this exact queue; the normal
-        // queue invariant proves the page is not full and has a compatible
-        // block size.
         let queued = crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
             active, queue,
         );
         let queued = mi_page_queue_move_to_front_typed(theap, queue, queued);
-        mi_page_reset_retire_expire(page);
-        #[cfg(feature = "bench-diagnostics")]
-        {
-            crate::allocator::bench_diagnostics::page_queue_search(
-                count.get(),
-                true,
-                failed_extend,
-            );
-            crate::allocator::bench_diagnostics::page_queue_selected(selected_position);
-        }
-        Some(queued.into_active())
+        mi_page_reset_retire_expire(queued.page().as_ptr());
+        queued
+    };
+    #[cfg(feature = "bench-diagnostics")]
+    {
+        crate::allocator::bench_diagnostics::page_queue_search(count.get(), true, failed_extend);
+        crate::allocator::bench_diagnostics::page_queue_selected(selected_position);
     }
+    Some(queued.into_active())
 }
 
 /// Return an available page from the front of a normal queue or from the complete queue-search

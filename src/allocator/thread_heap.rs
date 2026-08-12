@@ -1281,12 +1281,14 @@ fn mi_memid_is_refcounted(memid: mi_memid_t) -> bool {
 ///
 /// # Safety
 /// `theap` must identify live allocator-owned metadata whose refcount has just
-/// transitioned to zero and whose `raw_memid`/`memid` describe its exact live
-/// backing. `size` must be the original thread-heap metadata size. No other
-/// access, refcount operation, TLS reference, or teardown may race or occur
-/// after this call. Subprocess stats and release callbacks/opaque arguments
-/// must remain valid synchronously, exclude incompatible reentry, and not
-/// unwind. This call may free the backing and consumes all access to `theap`.
+/// transitioned to zero. `raw_memid` and `memid` must be the same stable MemId
+/// snapshot and describe the exact live backing of `theap`; `size` must be the
+/// original thread-heap metadata size. No other access, refcount operation,
+/// TLS reference, or teardown may race or occur after this call. Subprocess
+/// stats and release callbacks/opaque arguments must remain valid for their
+/// synchronous use, exclude incompatible reentry, and not unwind. Each branch
+/// may release the backing, so the caller must perform no later access through
+/// any copy of `theap`.
 #[inline(always)]
 unsafe fn mi_theap_free_mem_typed(
     theap: ThreadHeapPtr,
@@ -1294,46 +1296,49 @@ unsafe fn mi_theap_free_mem_typed(
     memid: crate::core_types::MemIdView,
     size: crate::core_types::ReservedBytes,
 ) {
-    // SAFETY: the final-reference contract keeps the exact backing, matching
-    // MemId, subprocess stats, and release machinery live for this terminal
-    // dispatch. No page-local ownership is required to release metadata.
+    let raw = theap.as_ptr();
+
+    // SAFETY: the final-reference transition owns this heap-count decrement;
+    // the live subprocess stats field supports its atomic update. This remains
+    // ordered before every terminal backing-release branch.
     unsafe {
-        let raw = theap.as_ptr();
         __mi_stat_decrease_mt(ptr::addr_of_mut!((*_mi_subproc()).stats.theaps), 1);
-        match memid {
-            crate::core_types::MemIdView::HeapMain => {
-                let theap = raw;
+    }
+
+    match memid {
+        crate::core_types::MemIdView::HeapMain => {
+            // SAFETY: the matching HeapMain MemId identifies the main-heap
+            // allocation at `raw`. The assertion reads metadata before the
+            // terminal free; no thread-heap field is accessed afterward.
+            unsafe {
                 crate::internal::mi_assert_internal!(_mi_is_heap_main(
-                    _mi_theap_heap(theap).cast_const()
+                    _mi_theap_heap(raw).cast_const()
                 ));
-                mi_free(theap.cast());
-            }
-            crate::core_types::MemIdView::Meta(_) => {
-                _mi_meta_free(raw.cast(), size.get(), raw_memid);
-            }
-            crate::core_types::MemIdView::Arena(arena_memid) => {
-                mi_theap_free_arena_mem(theap, raw_memid, arena_memid.range(), size);
-            }
-            _ => {
-                _mi_arenas_free(raw.cast(), size.get(), raw_memid);
+                mi_free(raw.cast());
             }
         }
-    }
-}
-
-#[inline(always)]
-unsafe fn mi_theap_free_arena_mem(
-    theap: ThreadHeapPtr,
-    memid: mi_memid_t,
-    _range: crate::core_types::SliceRange,
-    size: crate::core_types::ReservedBytes,
-) {
-    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
-    unsafe {
-        let raw = theap.as_ptr();
-        let alloc_size =
-            crate::core_types::ReservedBytes::new(_mi_align_up(size.get(), MI_ARENA_MIN_OBJ_SIZE));
-        _mi_arenas_free(raw.cast(), alloc_size.get(), memid);
+        crate::core_types::MemIdView::Meta(_) => {
+            // SAFETY: the matching Meta MemId and original metadata size name
+            // the exact live meta allocation. This terminal call consumes its
+            // free transition and no thread-heap field is accessed afterward.
+            unsafe { _mi_meta_free(raw.cast(), size.get(), raw_memid) };
+        }
+        crate::core_types::MemIdView::Arena(_) => {
+            let alloc_size = crate::core_types::ReservedBytes::new(_mi_align_up(
+                size.get(),
+                MI_ARENA_MIN_OBJ_SIZE,
+            ));
+            // SAFETY: arena allocation rounded the metadata request to this
+            // minimum object size; the matching MemId names that exact live
+            // range. This terminal call performs the sole backing release.
+            unsafe { _mi_arenas_free(raw.cast(), alloc_size.get(), raw_memid) };
+        }
+        _ => {
+            // SAFETY: the matching non-special MemId and original metadata
+            // size name the exact live backing. This terminal call performs
+            // the sole release and no thread-heap field is accessed afterward.
+            unsafe { _mi_arenas_free(raw.cast(), size.get(), raw_memid) };
+        }
     }
 }
 
@@ -1365,20 +1370,28 @@ pub(crate) unsafe fn _mi_theap_incref_typed(theap: ThreadHeapPtr) {
 /// it may free the backing.
 #[inline(always)]
 pub(crate) unsafe fn mi_theap_decref_inline(theap: ThreadHeapPtr) {
-    // SAFETY: the caller owns one reference and keeps MemId/refcount/backing
-    // release state valid. Snapshot the MemId before the decrement; on the
-    // final transition, pass the exact value into terminal dispatch.
-    unsafe {
-        let raw_memid = (*theap.as_ptr()).memid;
-        if mi_memid_is_refcounted(raw_memid) && theap.refcount_cell().decref_acq_rel() == 1 {
-            mi_theap_free_mem_typed(
-                theap,
-                raw_memid,
-                crate::core_types::MemId::view(raw_memid),
-                crate::core_types::ReservedBytes::new(size_of::<mi_theap_t>()),
-            );
-        }
+    // SAFETY: the owned live reference keeps the initialized MemId field
+    // readable and stable through this single raw snapshot.
+    let raw_memid = unsafe { ptr::read(ptr::addr_of!((*theap.as_ptr()).memid)) };
+    if !mi_memid_is_refcounted(raw_memid) {
+        return;
     }
+
+    // SAFETY: the caller owns one live reference, the refcount field remains
+    // live for atomic access, and every concurrent user participates through
+    // the same reference protocol. AcqRel publishes prior reference use to the
+    // thread that observes the terminal transition.
+    let previous = unsafe { theap.refcount_cell().decref_acq_rel() };
+    if previous != 1 {
+        return;
+    }
+
+    let memid = crate::core_types::MemId::view(raw_memid);
+    let size = crate::core_types::ReservedBytes::new(size_of::<mi_theap_t>());
+    // SAFETY: `previous == 1` exclusively owns the terminal release. The MemId
+    // is the pre-decrement stable snapshot and `size` is the exact metadata
+    // allocation request. Do not access `theap` after this call.
+    unsafe { mi_theap_free_mem_typed(theap, raw_memid, memid, size) };
 }
 
 /// # Safety

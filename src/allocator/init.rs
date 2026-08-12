@@ -698,13 +698,12 @@ fn mi_heap_main_init() {
     }
 }
 
-// SAFETY: main subproc and main heap publication initialize process-global static metadata once.
-/// # Safety
-/// Returns a borrowed process-global opaque subproc pointer.
+/// Returns the address of the process-global main subproc metadata. The raw
+/// pointer carries no dereference permission; its address remains stable for
+/// the process lifetime.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
-    // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
-    unsafe { subproc::main_ptr() }
+pub(crate) extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
+    subproc::main_ptr()
 }
 
 // SAFETY: default thread-heap association validates local ownership before TLS publication.
@@ -765,13 +764,11 @@ pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
     unsafe { subproc::current_ptr() }
 }
 
-// SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
+// SAFETY: this is the crate's unique definition of the C ABI symbol.
 #[unsafe(no_mangle)]
-/// # Safety
-/// Returns an opaque identifier for the main subproc.
-pub unsafe extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    unsafe { subproc::main_id() }
+/// Returns an opaque identifier for the process-global main subproc.
+pub extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
+    subproc::main_id()
 }
 
 // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.

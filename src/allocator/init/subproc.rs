@@ -58,9 +58,10 @@ unsafe fn heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
 
 #[cfg(all(not(miri), target_os = "linux", target_arch = "x86_64"))]
 #[inline(always)]
-unsafe fn main_addr() -> *mut mi_subproc_t {
+fn main_addr() -> *mut mi_subproc_t {
     let main: *mut mi_subproc_t;
-    // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
+    // SAFETY: this non-memory-accessing RIP-relative address calculation names
+    // the process-global `subproc_main` static and does not depend on caller state.
     unsafe {
         core::arch::asm!(
             "lea {main}, [rip + subproc_main]",
@@ -73,15 +74,17 @@ unsafe fn main_addr() -> *mut mi_subproc_t {
 
 #[cfg(any(miri, not(all(target_os = "linux", target_arch = "x86_64"))))]
 #[inline(always)]
-unsafe fn main_addr() -> *mut mi_subproc_t {
+fn main_addr() -> *mut mi_subproc_t {
     ptr::addr_of_mut!(super::subproc_main)
         .cast::<MiSubprocPrefix>()
         .cast::<mi_subproc_t>()
 }
 
-unsafe fn main_typed() -> MainSubproc {
-    // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
-    unsafe { MainSubproc::new_unchecked(SubprocPtr::new_unchecked(main_addr())) }
+fn main_typed() -> MainSubproc {
+    let main = main_addr();
+    // SAFETY: `main_addr` returns the non-null address of exactly the
+    // process-global `subproc_main` static, whose storage has process lifetime.
+    unsafe { MainSubproc::new_unchecked(SubprocPtr::new_unchecked(main)) }
 }
 
 pub(super) fn main_init() {
@@ -111,8 +114,7 @@ pub(super) fn main_init() {
 unsafe fn destroy_detached(detached: subproc_registry::DetachedSubproc) {
     let subproc = detached.ptr();
     let subproc_raw = subproc.as_ptr();
-    // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
-    let main_subproc = unsafe { main_typed().ptr() };
+    let main_subproc = main_typed().ptr();
     let is_main = ptr::eq(subproc_raw, main_subproc.as_ptr());
     // SAFETY: subproc destruction drains heaps, arenas, and page maps under registry ordering.
     let subproc_prefix = unsafe { mi_subproc_prefix_typed(subproc) };
@@ -167,8 +169,7 @@ unsafe fn destroy_detached(detached: subproc_registry::DetachedSubproc) {
 
 pub(super) unsafe fn unsafe_destroy_all() {
     main_init();
-    // SAFETY: registry teardown walks remaining subprocs while holding the registry lock.
-    let main_subproc = unsafe { super::_mi_subproc_main() };
+    let main_subproc = super::_mi_subproc_main();
     // SAFETY: registry teardown walks remaining subprocs while holding the registry lock.
     // SAFETY: `main_init` initialized the registry lock.
     let registry = unsafe { subproc_registry::SubprocRegistryGuard::acquire() };
@@ -190,22 +191,20 @@ pub(super) unsafe fn unsafe_destroy_all() {
     }
 }
 
-pub(super) unsafe fn main_ptr() -> *mut mi_subproc_t {
-    // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
-    unsafe { main_typed().ptr().as_ptr() }
+pub(super) fn main_ptr() -> *mut mi_subproc_t {
+    main_typed().ptr().as_ptr()
 }
 
 unsafe fn current_typed() -> BorrowedSubproc {
     // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
     let theap = unsafe { crate::platform::_mi_theap_default_raw() };
     let subproc = if theap.is_null() {
-        // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-        unsafe { main_typed().ptr() }
+        main_typed().ptr()
     } else {
         // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
         let tld = unsafe { TldPtr::new_unchecked((*theap).tld) };
         // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-        unsafe { tld.subproc() }.unwrap_or_else(|| unsafe { main_typed().ptr() })
+        unsafe { tld.subproc() }.unwrap_or_else(|| main_typed().ptr())
     };
     // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
     unsafe { BorrowedSubproc::new(subproc) }
@@ -216,9 +215,8 @@ pub(super) unsafe fn current_ptr() -> *mut mi_subproc_t {
     unsafe { current_typed().ptr().as_ptr() }
 }
 
-pub(super) unsafe fn main_id() -> mi_subproc_id_t {
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    to_id(Some(unsafe { main_typed().ptr() }))
+pub(super) fn main_id() -> mi_subproc_id_t {
+    to_id(Some(main_typed().ptr()))
 }
 
 pub(super) unsafe fn current_id() -> mi_subproc_id_t {
@@ -256,8 +254,7 @@ pub(super) unsafe fn heap_main() -> *mut mi_heap_t {
     // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
     let theap = unsafe { crate::platform::_mi_theap_default_raw() };
     let subproc = if theap.is_null() {
-        // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
-        unsafe { main_addr() }
+        main_addr()
     } else {
         // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
         let tld = unsafe { (*theap).tld };
@@ -357,8 +354,7 @@ pub(super) fn new() -> mi_subproc_id_t {
 pub(super) unsafe fn destroy(subproc_id: mi_subproc_id_t) {
     main_init();
     let candidate = subproc_id.as_ptr::<mi_subproc_t>();
-    // SAFETY: main subproc address lookup does not dereference the candidate.
-    if candidate.is_null() || ptr::eq(candidate, unsafe { main_addr() }) {
+    if candidate.is_null() || ptr::eq(candidate, main_addr()) {
         return;
     }
     // SAFETY: `main_init` initialized the registry lock.
@@ -385,8 +381,7 @@ pub(super) unsafe fn add_current_thread(subproc_id: mi_subproc_id_t) {
     let Some(tld) = TldPtr::new(unsafe { (*theap).tld }) else {
         return;
     };
-    // SAFETY: process initialization keeps main metadata and registry lock live.
-    let main = unsafe { main_typed() };
+    let main = main_typed();
     // SAFETY: `_mi_theap_default_safe` returned the current thread's live,
     // writable TLD, which presently must belong to main for reassignment.
     let result = unsafe {

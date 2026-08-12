@@ -70,9 +70,9 @@ pub(super) unsafe fn mi_process_info_impl(output: ProcessInfoOutput) {
         elapsed: _mi_clock_end(PROCESS_START.load(Ordering::Relaxed)),
         ..Default::default()
     };
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
-    let subproc = unsafe { _mi_subproc_main() }.cast::<MiSubprocStatsPrefix>();
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    let subproc = _mi_subproc_main().cast::<MiSubprocStatsPrefix>();
+    // SAFETY: the accessor returned the process-lifetime main subproc address;
+    // process teardown cannot race this information snapshot.
     if let Some(subproc) = unsafe { subproc.as_ref() } {
         pinfo.current_commit = subproc.stats.committed.current.max(0) as usize;
         pinfo.peak_commit = subproc.stats.committed.peak.max(0) as usize;

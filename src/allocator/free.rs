@@ -103,23 +103,32 @@ unsafe fn mi_list_contains(
     }
 }
 
-// SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+/// # Safety
+/// `page` and `user` must identify the same live allocation. The page's backing, start, and nonzero
+/// block size must remain readable and stable through the call. The allocation area must contain
+/// `user`, its block size must partition the page geometry, and the derived block start must be
+/// nonnull and no later than `user`.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_page_ptr_unalign(
-    page: *const mi_page_t,
-    p: *const c_void,
-) -> *mut mi_block_t {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+unsafe fn mi_page_ptr_unalign_typed(
+    page: crate::core_types::PagePtr,
+    user: crate::core_types::UserPtr,
+) -> crate::core_types::BlockPtr {
+    // SAFETY: the caller couples this user address to the live page and keeps its backing, start,
+    // and block geometry stable for the complete address-to-block calculation.
     unsafe {
-        crate::internal::mi_assert_internal!(!page.is_null() && !p.is_null());
-        let diff = p.cast::<u8>().offset_from(mi_page_start(page)) as usize;
-        let block_size = mi_page_block_size(page);
+        let diff = user
+            .as_ptr()
+            .cast::<u8>()
+            .offset_from(mi_page_start(page.as_ptr())) as usize;
+        let block_size = mi_page_block_size(page.as_ptr());
         let adjust = if _mi_is_power_of_two(block_size) {
             diff & (block_size - 1)
         } else {
             diff % block_size
         };
-        p.cast_mut().cast::<u8>().sub(adjust).cast::<mi_block_t>()
+        crate::core_types::BlockPtr::new_unchecked(
+            user.as_ptr().cast::<u8>().sub(adjust).cast::<mi_block_t>(),
+        )
     }
 }
 
@@ -677,54 +686,75 @@ pub(crate) unsafe fn mi_validate_block_from_ptr(
     crate::core_types::PointerLookup::valid(user, page, location)
 }
 
+/// # Safety
+/// The allocator page map must be initialized and remain stable against teardown. In debug or
+/// secure configurations, `user` may contain any nonnull address; any returned page registration,
+/// backing, and allocation-area metadata must remain live and stable through the returned
+/// `PagePtr`'s use. In unchecked configurations, `user` must instead belong to a live allocator
+/// allocation whose published page-map entry, page metadata, and backing remain live and stable
+/// through the returned `PagePtr`'s use.
 unsafe fn mi_lookup_pointer_page(
     user: crate::core_types::UserPtr,
 ) -> Option<crate::core_types::PagePtr> {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
-    unsafe {
-        let p = user.as_ptr();
-        if MI_DEBUG != 0 || cfg!(feature = "secure") {
-            let registered = _mi_safe_ptr_page_registered(p);
-            match registered {
-                Some(registered)
-                    if registered
+    let p = user.as_ptr();
+    if MI_DEBUG != 0 || cfg!(feature = "secure") {
+        // SAFETY: the allocator page map is initialized and stable against teardown. The registered
+        // lookup accepts an arbitrary nonnull address and returns a live page registration, if any;
+        // that page's backing and area metadata remain readable while containment is checked.
+        let registered = unsafe { _mi_safe_ptr_page_registered(p) };
+        match registered {
+            Some(registered) => {
+                // SAFETY: the registration witness is non-owning; the caller and allocator lifecycle
+                // keep the registered page, backing, and initialized allocation area live and stable
+                // for the containment query.
+                let contains = unsafe {
+                    registered
                         .page()
                         .area()
-                        .is_some_and(|area| area.contains(user.as_ptr())) =>
-                {
-                    Some(registered.page())
-                }
-                _ => None,
+                        .is_some_and(|area| area.contains(user.as_ptr()))
+                };
+                contains.then(|| registered.page())
             }
-        } else {
-            crate::core_types::PagePtr::new(_mi_ptr_page(p))
+            None => None,
         }
+    } else {
+        // SAFETY: unchecked configurations require `user` to belong to a live allocator allocation;
+        // its page-map entry and page metadata remain published and stable through the returned use.
+        crate::core_types::PagePtr::new(unsafe { _mi_ptr_page(p) })
     }
 }
 
+/// # Safety
+/// `page` and `user` must identify the same live allocation. The page's backing, start, block size,
+/// interior-pointer policy, and guard metadata must remain readable and stable through the call,
+/// without concurrent free, realloc, page-map teardown, or backing release. When unalignment is
+/// requested or supported, the allocation area must contain `user`, its nonzero block size must
+/// partition the page geometry, and the derived block start must be nonnull and no later than
+/// `user`. When `assert_block_start` is set, a page without interior pointers must have `user` at
+/// its exact block start.
 unsafe fn mi_pointer_location(
     page: crate::core_types::PagePtr,
     user: crate::core_types::UserPtr,
     force_unalign: bool,
     assert_block_start: bool,
 ) -> crate::core_types::PointerLocation {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    // SAFETY: the caller couples the live user allocation to this page and keeps its complete block,
+    // interior-pointer, backing, and guard geometry stable for this coherent classification epoch.
     unsafe {
         let page_raw = page.as_ptr();
         let user_raw = user.as_ptr();
 
         let block = if mi_page_has_interior_pointers(page_raw) || force_unalign {
-            _mi_page_ptr_unalign(page_raw, user_raw)
+            mi_page_ptr_unalign_typed(page, user)
         } else {
-            user_raw.cast()
+            crate::core_types::BlockPtr::new_unchecked(user_raw.cast())
         };
         if assert_block_start && !mi_page_has_interior_pointers(page_raw) {
             crate::internal::mi_assert!(
-                _mi_page_ptr_unalign(page_raw, user_raw) == user_raw.cast()
+                mi_page_ptr_unalign_typed(page, user).as_ptr() == user_raw.cast()
             );
         }
 
-        let block = crate::core_types::BlockPtr::new_unchecked(block);
         let offset =
             crate::core_types::BlockOffset((user_raw as usize) - (block.as_ptr() as usize));
         if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block.as_ptr(), user_raw) {
@@ -1210,16 +1240,27 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
 // SAFETY: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 const _: unsafe extern "C" fn(*mut mi_page_t, *mut mi_block_t) = mi_free_try_collect_mt;
 
+/// # Safety
+/// `page` must identify the live page containing the nonnull allocation address `p`. The page's
+/// backing, start, block-size, interior-pointer, guard, and usable-size metadata must remain readable
+/// and stable through the query, without concurrent free, realloc, page-map teardown, or backing
+/// release. The derived block must precede or equal `p` within the same live user allocation.
 pub(crate) unsafe fn mi_page_usable_aligned_size_of_typed(
     page: *const mi_page_t,
     p: *const c_void,
 ) -> crate::core_types::UsableSize {
-    // SAFETY: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
+    // SAFETY: the contract couples this nonnull user address to the live page and keeps its backing,
+    // block, guard, and usable-size geometry stable for this direct aligned-size calculation.
     unsafe {
-        let block = _mi_page_ptr_unalign(page, p);
-        let is_guarded = mi_block_ptr_is_guarded(block, p.cast_mut());
-        let size = mi_page_usable_size_of_typed(page, block, is_guarded);
-        let adjust = p.cast::<u8>().offset_from(block.cast::<u8>());
+        let page_ptr = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
+        let user = crate::core_types::UserPtr::new_unchecked(p.cast_mut());
+        let block = mi_page_ptr_unalign_typed(page_ptr, user);
+        let is_guarded = mi_block_ptr_is_guarded(block.as_ptr(), user.as_ptr());
+        let size = mi_page_usable_size_of_typed(page, block.as_ptr(), is_guarded);
+        let adjust = user
+            .as_ptr()
+            .cast::<u8>()
+            .offset_from(block.as_ptr().cast::<u8>());
         crate::internal::mi_assert_internal!(adjust >= 0 && adjust as usize <= size.get());
         size.checked_sub(adjust as usize)
             .unwrap_or_else(|_| crate::core_types::UsableSize::new(0))
@@ -1227,7 +1268,11 @@ pub(crate) unsafe fn mi_page_usable_aligned_size_of_typed(
 }
 
 /// # Safety
-/// `page` and `location` must come from the same successful pointer validation.
+/// `page` and `location` must have been derived together under caller-proven stable allocation
+/// geometry. The page's backing, usable-size and padding metadata, and the located block and guard
+/// classification must remain live, readable, and stable through the query, without concurrent
+/// free, realloc, page-map teardown, or backing release. The recorded offset must not exceed the
+/// located block's usable size.
 #[inline(always)]
 pub(crate) unsafe fn mi_usable_size_from_validated_location(
     page: crate::core_types::PagePtr,

@@ -1046,90 +1046,153 @@ unsafe fn mi_page_fresh_alloc_typed(
 }
 
 /// # Safety
-/// `owner` must be the live current-thread owner of the registered fresh page,
-/// and no other page-state witness or concurrent access may exist during
-/// initialization.
+/// `owner` must be the live current-thread owner selected for the registered detached fresh page
+/// carried exclusively by `page_uninit`. The page's initialized MemId, geometry, backing,
+/// thread-free owner bit, empty links/lists, zero counts, and page-map registration must remain live
+/// and stable through initialization or failure return. The owner's heap/TLD association, random
+/// state, statistics, and relevant tracking and OS commit configuration must remain live, with
+/// exclusive local mutation and no concurrent teardown or non-protocol page mutation. Tracking
+/// hooks and any commit or diagnostic callback and opaque argument reached synchronously must remain
+/// valid; callbacks must not incompatibly reenter the participating heap/page state and must not
+/// unwind. No other page-state witness may exist; failure returns the same `Page<Uninit>`
+/// capability, while success consumes it exactly once into `ActivePage`.
 #[inline(never)]
 pub(crate) unsafe fn mi_page_init_typed(
     owner: crate::core_types::ThreadHeapLocal,
     page_uninit: crate::core_types::Page<crate::core_types::Uninit>,
 ) -> Result<crate::core_types::ActivePage, crate::core_types::Page<crate::core_types::Uninit>> {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
+    let theap = owner.ptr().as_ptr();
+    let page = page_uninit.ptr().as_ptr();
+    // SAFETY: the caller keeps the live current-thread owner's initialized heap association stable
+    // for this read, before any page metadata is published.
+    let heap = unsafe { _mi_theap_heap(theap) };
+    // SAFETY: the returned heap pointer remains live and initialized for this main-heap identity
+    // classification, which retains its original position before both page metadata writes.
+    let is_heap_main = unsafe { _mi_is_heap_main(heap) };
+    let page_heap = if is_heap_main { ptr::null_mut() } else { heap };
+    // SAFETY: `page_uninit` is the sole capability for this live detached page. Publish the selected
+    // heap field before its thread-heap owner, preserving the initialization order exactly.
     unsafe {
-        let theap = owner.ptr().as_ptr();
-        let page = page_uninit.ptr().as_ptr();
-        let heap = _mi_theap_heap(theap);
-        (*page).heap = if _mi_is_heap_main(heap) {
-            ptr::null_mut()
-        } else {
-            heap
-        };
+        (*page).heap = page_heap;
         mi_page_set_theap(page, theap);
-
-        let page_ptr = page_uninit.ptr();
-        let Some(area) = page_ptr.area() else {
-            crate::internal::mi_assert_internal!(false);
-            return Err(page_uninit);
-        };
-        mi_track_mem_noaccess(area.start().as_ptr().cast(), area.byte_len());
-        crate::internal::mi_assert_internal!(
-            area.byte_len() / mi_page_block_size(page) < (1usize << 16)
-        );
-        crate::internal::mi_assert_internal!(mi_page_reserved_count(page).get() > 0);
-
-        if MI_PADDING != 0 || MI_ENCODE_FREELIST != 0 {
-            mi_page_set_keys(
-                page_ptr,
-                PageKeys::from_raw([_mi_theap_random_next(theap), _mi_theap_random_next(theap)]),
-            );
-        }
-
-        if MI_DEBUG > 2 && (*page).memid.initially_zero {
-            let committed = mi_page_committed_typed(page);
-            mi_track_mem_defined((*page).page_start.cast(), committed.get());
-            crate::internal::mi_assert_expensive!(mi_mem_is_zero(
-                area.start().as_ptr().cast(),
-                committed.get()
-            ));
-        }
-
-        crate::internal::mi_assert_internal!(!(*page).theap.is_null());
-        crate::internal::mi_assert_internal!((*page).theap == mi_page_theap(page));
-        crate::internal::mi_assert_internal!(mi_page_capacity_count(page).get() == 0);
-        crate::internal::mi_assert_internal!(page_ptr.free().is_empty());
-        crate::internal::mi_assert_internal!(mi_page_used_count(page).get() == 0);
-        crate::internal::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
-        let thread_free = page_ptr.thread_free_cell().load_relaxed();
-        crate::internal::mi_assert_internal!(
-            thread_free
-                == crate::core_types::ThreadFreeWord::from_parts(
-                    None,
-                    crate::core_types::ThreadFreeOwner::Owned
-                )
-        );
-        crate::internal::mi_assert_internal!(page_ptr.queue_next().is_none());
-        crate::internal::mi_assert_internal!(page_ptr.queue_prev().is_none());
-        crate::internal::mi_assert_internal!(mi_page_retire_expire(page).is_zero());
-        crate::internal::mi_assert_internal!(!mi_page_has_interior_pointers(page));
-        #[cfg(any(
-            feature = "secure",
-            debug_assertions,
-            feature = "track-valgrind",
-            feature = "track-asan"
-        ))]
-        {
-            crate::internal::mi_assert_internal!((*page).keys[0] != 0);
-            crate::internal::mi_assert_internal!((*page).keys[1] != 0);
-        }
-        crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_uninit.ptr()));
-
-        if !mi_page_extend_free(theap, page) {
-            return Err(page_uninit);
-        }
-        let active = page_uninit.initialize(owner);
-        crate::internal::mi_assert!(mi_page_immediate_available(active.page().as_ptr()));
-        Ok(active)
     }
+
+    let page_ptr = page_uninit.ptr();
+    // SAFETY: the registered fresh page's initialized start, reserved count, block size, and backing
+    // remain stable for this checked area projection after owner publication.
+    let Some(area) = (unsafe { page_ptr.area() }) else {
+        crate::internal::mi_assert_internal!(false);
+        return Err(page_uninit);
+    };
+    // SAFETY: the projected live committed block area is placed into tracking no-access state before
+    // any geometry validation or free-list initialization, preserving the original transition.
+    unsafe {
+        mi_track_mem_noaccess(area.start().as_ptr().cast(), area.byte_len());
+    }
+    // SAFETY: the caller keeps the fresh page's initialized nonzero block size stable. Keeping the
+    // read in the assertion operand preserves assertion-only evaluation after tracking transition.
+    crate::internal::mi_assert_internal!(unsafe {
+        area.byte_len() / mi_page_block_size(page) < (1usize << 16)
+    });
+    // SAFETY: the caller keeps the initialized reserved count stable. This remains the second
+    // geometry assertion and is evaluated only when internal assertions are enabled.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_reserved_count(page).get() > 0 });
+
+    if MI_PADDING != 0 || MI_ENCODE_FREELIST != 0 {
+        // SAFETY: the caller exclusively owns the live current-thread random state and fresh page
+        // keys. Draw key zero, then key one, then publish both together exactly as before.
+        unsafe {
+            let key0 = _mi_theap_random_next(theap);
+            let key1 = _mi_theap_random_next(theap);
+            mi_page_set_keys(page_ptr, PageKeys::from_raw([key0, key1]));
+        }
+    }
+
+    // SAFETY: short-circuiting reads the live page's initialized MemId only when the debug level
+    // requires the original-zero validation, preserving the test order.
+    if MI_DEBUG > 2 && unsafe { (*page).memid.initially_zero } {
+        // SAFETY: the page's initialized committed geometry remains stable for this read before the
+        // tracking transition and zero check.
+        let committed = unsafe { mi_page_committed_typed(page) };
+        // SAFETY: the initialized page start and committed prefix remain live and backed; this makes
+        // exactly that prefix defined before its contents are inspected.
+        unsafe {
+            mi_track_mem_defined((*page).page_start.cast(), committed.get());
+        }
+        // SAFETY: the page area remains live and the committed prefix was made defined above.
+        // Keeping the read in the assertion operand preserves assertion-only evaluation.
+        crate::internal::mi_assert_expensive!(unsafe {
+            mi_mem_is_zero(area.start().as_ptr().cast(), committed.get())
+        });
+    }
+
+    // SAFETY: owner publication above initialized this field; keep its first assertion-only read in
+    // place before the association check.
+    crate::internal::mi_assert_internal!(unsafe { !(*page).theap.is_null() });
+    // SAFETY: the caller keeps owner metadata stable; preserve raw owner-field then decoded-owner
+    // read order within this assertion operand.
+    crate::internal::mi_assert_internal!(unsafe { (*page).theap == mi_page_theap(page) });
+    // SAFETY: the registered fresh page's initialized capacity remains stable and zero before
+    // extension. This read remains assertion-only.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_capacity_count(page).get() == 0 });
+    // SAFETY: the sole fresh-page capability keeps its initialized available-list head stable and
+    // empty before extension. This read remains assertion-only.
+    crate::internal::mi_assert_internal!(unsafe { page_ptr.free().is_empty() });
+    // SAFETY: the registered fresh page's initialized used count remains stable and zero before
+    // extension. This read remains assertion-only.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_used_count(page).get() == 0 });
+    // SAFETY: the page's live atomic owner word remains claimed throughout initialization. This read
+    // remains assertion-only and precedes the explicit relaxed snapshot below.
+    crate::internal::mi_assert_internal!(unsafe { crate::internal::mi_page_is_owned(page) });
+    // SAFETY: the live initialized atomic thread-free word remains available for exactly one Relaxed
+    // snapshot, with protocol publication excluded by the sole fresh-page capability.
+    let thread_free = unsafe { page_ptr.thread_free_cell().load_relaxed() };
+    crate::internal::mi_assert_internal!(
+        thread_free
+            == crate::core_types::ThreadFreeWord::from_parts(
+                None,
+                crate::core_types::ThreadFreeOwner::Owned
+            )
+    );
+    // SAFETY: the detached fresh page's initialized forward link remains empty. This assertion read
+    // intentionally precedes the backward-link read.
+    crate::internal::mi_assert_internal!(unsafe { page_ptr.queue_next().is_none() });
+    // SAFETY: the detached fresh page's initialized backward link remains empty.
+    crate::internal::mi_assert_internal!(unsafe { page_ptr.queue_prev().is_none() });
+    // SAFETY: the initialized retirement field remains stable and zero before activation.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_retire_expire(page).is_zero() });
+    // SAFETY: the fresh page's initialized geometry has no interior-pointer classification before
+    // activation. This read remains assertion-only.
+    crate::internal::mi_assert_internal!(unsafe { !mi_page_has_interior_pointers(page) });
+    #[cfg(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    ))]
+    {
+        // SAFETY: key initialization above published key zero before any encoded-list operation;
+        // keep this first key read in its assertion operand.
+        crate::internal::mi_assert_internal!(unsafe { (*page).keys[0] != 0 });
+        // SAFETY: preserve the following key-one assertion and its assertion-only evaluation.
+        crate::internal::mi_assert_internal!(unsafe { (*page).keys[1] != 0 });
+    }
+    // SAFETY: all preceding initialization writes and caller-proven geometry remain live and stable
+    // for the final pre-extension validity assertion.
+    crate::internal::mi_assert_expensive!(unsafe { mi_page_is_valid_init(page_uninit.ptr()) });
+
+    // SAFETY: the caller exclusively owns the current-thread page's capacity/free-list mutation;
+    // backing and commit callback state remain valid. Failure leaves the same Uninit capability.
+    if !unsafe { mi_page_extend_free(theap, page) } {
+        return Err(page_uninit);
+    }
+    // Successful extension established the initialized available list; the typed transition
+    // consumes the sole Uninit capability exactly once with its matching owner.
+    let active = page_uninit.initialize(owner);
+    // SAFETY: the newly active page remains live and its available-list metadata is stable. Keeping
+    // this check in the assertion operand preserves assertion-only evaluation after consumption.
+    crate::internal::mi_assert!(unsafe { mi_page_immediate_available(active.page().as_ptr()) });
+    Ok(active)
 }
 
 #[inline(never)]

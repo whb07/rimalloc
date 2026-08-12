@@ -855,41 +855,65 @@ pub(crate) unsafe fn mi_validate_pointer(
 }
 
 #[inline(always)]
+/// # Safety
+/// A valid `lookup` must still identify the same live registered allocation, page backing, block,
+/// and guard metadata produced by pointer validation. They must remain stable against concurrent
+/// free, realloc, page-map teardown, or backing release through the returned witness's use. For a
+/// guarded block, its protection geometry must remain valid for synchronous unprotection.
 unsafe fn mi_prepare_validated_free(
     lookup: crate::core_types::PointerLookup,
 ) -> Option<crate::core_types::ValidatedFree> {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
-    unsafe {
-        let validated = lookup.prepare_free()?;
-        if validated.block().was_guarded() == crate::core_types::WasGuarded::Yes {
-            mi_block_check_unguard(validated.page(), validated.block(), validated.user());
-        }
-        Some(validated)
+    let validated = lookup.prepare_free()?;
+    if validated.block().was_guarded() == crate::core_types::WasGuarded::Yes {
+        // SAFETY: the caller keeps the validated page, block, user pointer, backing, and guard
+        // geometry live and stable for this synchronous unprotection transition.
+        unsafe { mi_block_check_unguard(validated.page(), validated.block(), validated.user()) };
     }
+    Some(validated)
 }
 
 #[inline(always)]
+/// # Safety
+/// `validated` must identify one live allocator allocation whose page registration, backing, block
+/// geometry, owner metadata, keys, free lists, and accounting remain valid through this terminal
+/// free. It must not race another free/realloc, page-map teardown, backing release, or non-protocol
+/// owner mutation. Local state must be exclusively mutable by the current thread; remote publication
+/// may occur only through the allocator atomics. If nonnull, `usable` must be aligned and writable
+/// for one `usize` when accessed; it may alias the live user allocation but not allocator metadata,
+/// and is written before route classification and release. Registered callbacks and opaque arguments
+/// must be valid for synchronous invocation, exclude incompatible reentry, and must not unwind.
 unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable: *mut usize) {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    let parts = validated.into_parts();
+    let _ = parts.user;
+    let page = parts.page.as_ptr();
+    // SAFETY: the validated page geometry remains live for the size read, and the caller keeps a
+    // nonnull `usable` aligned and writable at this access before any terminal free occurs.
     unsafe {
-        let parts = validated.into_parts();
-        let _ = parts.user;
-        let page = parts.page.as_ptr();
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
+    }
 
+    // SAFETY: the primitive returns the executing thread id, and the validated page's owner word
+    // remains live and protocol-stable while it is loaded and classified exactly once.
+    let route = unsafe {
         let current_tid = crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id());
-        let route = parts.page.snapshot_free_route(current_tid);
+        parts.page.snapshot_free_route(current_tid)
+    };
 
-        match route {
-            crate::core_types::FreeRouteSnapshot::LocalFast(local_page) => {
+    match route {
+        crate::core_types::FreeRouteSnapshot::LocalFast(local_page) => {
+            // SAFETY: the route snapshot proves current-thread ownership; the caller supplies
+            // exclusive local free-list/accounting mutation and stable allocation metadata.
+            unsafe {
                 mi_free_block_local(
                     local_page,
                     parts.block,
                     crate::core_types::LocalFreeMode::TrackOnly,
-                );
-            }
-            route => mi_free_ex_slow(parts, route),
+                )
+            };
         }
+        // SAFETY: `route` was sampled from `parts.page` in the same stable owner epoch, and the
+        // caller supplies the matching local-exclusive or remote-atomic mutation obligations.
+        route => unsafe { mi_free_ex_slow(parts, route) },
     }
 }
 
@@ -904,13 +928,23 @@ fn mi_free_fast_path_enabled(usable: *mut usize) -> bool {
 }
 
 #[inline(always)]
+/// # Safety
+/// When the fast-path configuration is enabled, nonnull `p` must be the block start of a live,
+/// unguarded, unpadded allocator allocation. Its registered page, backing, initialized geometry,
+/// owner word, keys, free lists, and accounting must remain valid through classification and free,
+/// without concurrent free/realloc, teardown, backing release, or non-protocol owner mutation.
+/// Current-thread local state must be exclusively mutable; foreign publication may occur only via
+/// allocator atomics. Registered callbacks and opaque arguments must be synchronously valid, exclude
+/// incompatible reentry, and must not unwind. A nonnull `usable` disables this path without access.
 unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
-    // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
-    unsafe {
-        if !mi_free_fast_path_enabled(usable) {
-            return false;
-        }
+    if !mi_free_fast_path_enabled(usable) {
+        return false;
+    }
 
+    // SAFETY: the caller supplies one live block-start allocation and stable page-map/backing/owner
+    // epoch. The release configuration excludes guarded, padded, and diagnostic pointer adjustment;
+    // local mutation is exclusive and foreign publication uses the page's atomic protocol.
+    unsafe {
         let page = _mi_ptr_page(p);
         let Some(page_ptr) = crate::core_types::PagePtr::new(page) else {
             return false;
@@ -940,64 +974,100 @@ unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
 
 #[cold]
 #[inline(never)]
+/// # Safety
+/// `parts` must identify one live validated allocation, and `route` must be the still-current owner
+/// snapshot taken from that same page. Page registration, backing, geometry, keys, free lists, and
+/// accounting must remain valid until the selected terminal mutation. Local routes require exclusive
+/// current-thread mutation; foreign and abandoned routes permit only protocol atomic publication.
+/// The operation must not race another free/realloc, teardown, backing release, or owner relink.
+/// Registered callbacks and opaque arguments must be synchronously valid, exclude incompatible
+/// reentry, and must not unwind.
 pub(crate) unsafe fn mi_free_ex_slow(
     parts: crate::core_types::ValidatedFreeParts,
     route: crate::core_types::FreeRouteSnapshot,
 ) {
-    // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
-    unsafe {
-        let block = parts.block;
-        // `validated` was produced by `mi_validate_pointer`, which already derived the
-        // interior-corrected block and resolved guard state. Route the typed witness
-        // directly to the block free functions instead of re-deriving from the raw
-        // pointer via `mi_free_generic_local`/`mi_free_generic_mt` (which would also
-        // double-call `mi_block_check_unguard` on guarded blocks).
-        match route {
-            crate::core_types::FreeRouteSnapshot::LocalFast(local_page) => {
+    let block = parts.block;
+    // `validated` was produced by `mi_validate_pointer`, which already derived the
+    // interior-corrected block and resolved guard state. Route the typed witness
+    // directly to the block free functions instead of re-deriving from the raw
+    // pointer via `mi_free_generic_local`/`mi_free_generic_mt` (which would also
+    // double-call `mi_block_check_unguard` on guarded blocks).
+    match route {
+        crate::core_types::FreeRouteSnapshot::LocalFast(local_page) => {
+            // SAFETY: this matching route proves current-thread ownership, and the caller supplies
+            // exclusive local free-list/accounting mutation for the validated block.
+            unsafe {
                 mi_free_block_local(
                     local_page,
                     block,
                     crate::core_types::LocalFreeMode::TrackOnly,
-                );
-            }
-            crate::core_types::FreeRouteSnapshot::LocalSlow(local_page) => {
-                // Local page with flags set (e.g. in the full queue): check for unfull.
+                )
+            };
+        }
+        crate::core_types::FreeRouteSnapshot::LocalSlow(local_page) => {
+            // Local page with flags set (e.g. in the full queue): check for unfull.
+            // SAFETY: this matching route proves current-thread ownership, and the caller supplies
+            // exclusive local free-list, full-queue, and accounting mutation.
+            unsafe {
                 mi_free_block_local(
                     local_page,
                     block,
                     crate::core_types::LocalFreeMode::TrackAndCheckFull,
-                );
-            }
-            crate::core_types::FreeRouteSnapshot::ForeignPlain(foreign_page)
-            | crate::core_types::FreeRouteSnapshot::ForeignSlow(foreign_page) => {
-                // Remote (plain or with flags): push onto the owning thread's free list.
-                // The flag distinction collapses here because validation already resolved
-                // the block; `mi_free_block_mt` does not branch on page flags.
-                mi_free_block_mt(foreign_page, block);
-            }
-            crate::core_types::FreeRouteSnapshot::Abandoned(abandoned_page) => {
-                mi_free_block_mt(abandoned_page.remote_free_page(), block);
-            }
-            crate::core_types::FreeRouteSnapshot::AbandonedMapped(abandoned_page) => {
-                mi_free_block_mt(abandoned_page.remote_free_page(), block);
-            }
+                )
+            };
+        }
+        crate::core_types::FreeRouteSnapshot::ForeignPlain(foreign_page)
+        | crate::core_types::FreeRouteSnapshot::ForeignSlow(foreign_page) => {
+            // Remote (plain or with flags): push onto the owning thread's free list.
+            // The flag distinction collapses here because validation already resolved
+            // the block; `mi_free_block_mt` does not branch on page flags.
+            // SAFETY: the matching foreign route and caller contract keep the page live while the
+            // block is published through its atomic remote-free protocol.
+            unsafe { mi_free_block_mt(foreign_page, block) };
+        }
+        crate::core_types::FreeRouteSnapshot::Abandoned(abandoned_page) => {
+            // SAFETY: the matching abandoned route keeps the page/arena ownership epoch live while
+            // the block is published and any protocol reclamation is attempted.
+            unsafe { mi_free_block_mt(abandoned_page.remote_free_page(), block) };
+        }
+        crate::core_types::FreeRouteSnapshot::AbandonedMapped(abandoned_page) => {
+            // SAFETY: the matching mapped-abandoned route keeps page-map/backing ownership live
+            // while the block is published and any protocol reclamation is attempted.
+            unsafe { mi_free_block_mt(abandoned_page.remote_free_page(), block) };
         }
     }
 }
 
 #[inline(never)]
+/// # Safety
+/// `p` may be null. Otherwise it must identify one live allocator allocation whose page-map entry,
+/// backing, geometry, guard metadata, owner word, keys, free lists, and accounting remain valid until
+/// terminal release, without concurrent free/realloc, teardown, backing release, or non-protocol
+/// owner mutation. Local state must be exclusively mutable by the current thread; remote publication
+/// may occur only through allocator atomics. `msg` must be live NUL-terminated diagnostic text when
+/// validation can use it. If nonnull, `usable` must be aligned and writable for one `usize` when
+/// accessed; it may alias live user storage but not allocator metadata, and is written before free.
+/// Registered callbacks and opaque arguments must be synchronously valid, exclude incompatible
+/// reentry, and must not unwind.
 pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *mut usize) {
-    // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
-    unsafe {
-        if p.is_null() {
-            return;
-        }
-        if mi_free_fast_try(p, usable) {
-            return;
-        }
-        if let Some(validated) = mi_prepare_validated_free(mi_validate_pointer(p, msg)) {
-            mi_free_validated(validated, usable);
-        }
+    if p.is_null() {
+        return;
+    }
+    // SAFETY: the caller supplies the live allocation/page/owner epoch and optional usable-output
+    // validity required by the coherent fast classification-and-free attempt.
+    if unsafe { mi_free_fast_try(p, usable) } {
+        return;
+    }
+    // SAFETY: the caller supplies the live pointer, page-map/backing stability, diagnostic text, and
+    // callback validity required to classify `p` without racing free/realloc or teardown.
+    let lookup = unsafe { mi_validate_pointer(p, msg) };
+    // SAFETY: successful validation remains live and stable through guarded unprotection and the
+    // returned terminal-free witness; invalid/null lookup variants are not dereferenced.
+    let validated = unsafe { mi_prepare_validated_free(lookup) };
+    if let Some(validated) = validated {
+        // SAFETY: the caller supplies the allocation/owner epoch and usable-output validity through
+        // the terminal local or remote mutation; output publication precedes route/free operations.
+        unsafe { mi_free_validated(validated, usable) };
     }
 }
 

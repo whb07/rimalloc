@@ -1787,32 +1787,45 @@ unsafe fn mi_huge_page_alloc_typed(
     page_alignment: crate::core_types::MaybeAlignment,
     queue: crate::core_types::HugePageQueue,
 ) -> Option<crate::core_types::AvailablePage> {
+    let theap = owner.ptr().as_ptr();
     // SAFETY: the caller-proven current-thread heap and exact huge queue remain live under
     // exclusive local queue/stat mutation. The typed layout/alignment are passed unchanged through
     // the outlined arena/reclaim/publication transaction; backing registries and synchronous
     // release, purge, and commit callbacks remain stable, nonunwinding, and nonreentrant under its
     // contract.
-    unsafe {
-        let theap = owner.ptr().as_ptr();
-        let active = mi_page_fresh_alloc_typed(
+    let active = unsafe {
+        mi_page_fresh_alloc_typed(
             owner,
             queue.ptr(),
             crate::core_types::BlockSize::from_padded(layout.padded()),
             page_alignment,
-        )?;
-        let page = active.page().as_ptr();
-        crate::internal::mi_assert_internal!(mi_page_block_size(page) >= layout.padded().get());
-        crate::internal::mi_assert_internal!(mi_page_is_huge(page));
-        crate::internal::mi_assert_internal!(mi_page_is_singleton(page));
-        if MI_STAT > 0 {
+        )
+    }?;
+    let page = active.page().as_ptr();
+    // SAFETY: fresh allocation returned a live initialized page whose block-size metadata remains
+    // stable. Keep this read in the first assertion operand before classification reads.
+    crate::internal::mi_assert_internal!(unsafe {
+        mi_page_block_size(page) >= layout.padded().get()
+    });
+    // SAFETY: the same live page retains its initialized huge-page classification. This remains the
+    // second assertion-only metadata read.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_huge(page) });
+    // SAFETY: the page's initialized singleton geometry remains stable. This remains the third
+    // assertion-only metadata read.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_singleton(page) });
+    if MI_STAT > 0 {
+        // SAFETY: the caller exclusively owns the live current-thread heap statistics and keeps the
+        // returned page metadata stable. Preserve the second block-size read and bytes update before
+        // the count update in one coherent statistics epoch.
+        unsafe {
             __mi_stat_increase(
                 ptr::addr_of_mut!((*theap).stats.malloc_huge),
                 mi_page_block_size(page),
             );
             __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);
         }
-        active.try_available().ok()
     }
+    active.try_available().ok()
 }
 
 #[inline(always)]

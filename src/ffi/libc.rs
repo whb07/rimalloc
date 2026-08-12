@@ -452,8 +452,8 @@ pub(crate) extern "C" fn _mi_popcount_generic(x: usize) -> usize {
     }
 }
 
-pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arguments<'_>) -> i32 {
-    if buf.is_null() || bufsize == 0 {
+pub(crate) fn mi_vsnprintf_args(buf: &mut [c_char], args: fmt::Arguments<'_>) -> i32 {
+    if buf.is_empty() {
         return 0;
     }
 
@@ -481,14 +481,14 @@ pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arg
     }
 
     let mut out = FixedBuffer {
-        ptr: as_bytes_mut_ptr(buf),
-        cap: bufsize - 1,
+        ptr: as_bytes_mut_ptr(buf.as_mut_ptr()),
+        cap: buf.len() - 1,
         used: 0,
     };
     let _ = fmt::write(&mut out, args);
 
-    // SAFETY: `buf` is valid for `bufsize` bytes by
-    // caller contract, and `out.used <= bufsize - 1`.
+    // SAFETY: `out.ptr` came from `buf`, which remains exclusively borrowed,
+    // and `out.used <= buf.len() - 1`.
     unsafe {
         *out.ptr.add(out.used) = 0;
     }
@@ -535,13 +535,13 @@ pub(crate) unsafe extern "C" fn _mi_vsnprintf(
         // SAFETY: non-Unix fallback reads the
         // validated format C string and writes through the bounded Rust helper.
         let fmt_str = unsafe { CStr::from_ptr(fmt) }.to_string_lossy();
-        mi_vsnprintf_args(buf, bufsize, format_args!("{}", fmt_str))
+        // SAFETY: the raw boundary checked that `buf` is nonnull and the caller
+        // guarantees it is writable for `bufsize` elements for this call.
+        mi_vsnprintf_args(
+            unsafe { core::slice::from_raw_parts_mut(buf, bufsize) },
+            format_args!("{}", fmt_str),
+        )
     }
-}
-
-#[inline(never)]
-pub(crate) fn _mi_snprintf(buf: *mut c_char, buflen: usize, args: fmt::Arguments<'_>) -> i32 {
-    mi_vsnprintf_args(buf, buflen, args)
 }
 
 #[cfg(test)]
@@ -625,25 +625,23 @@ mod tests {
     #[test]
     fn fixed_buffer_formatting_truncates_and_always_terminates() {
         let mut truncated = [b'X' as c_char; 5];
-        let written = mi_vsnprintf_args(
-            truncated.as_mut_ptr(),
-            truncated.len(),
-            format_args!("abcdef"),
-        );
+        let written = mi_vsnprintf_args(&mut truncated, format_args!("abcdef"));
         assert_eq!(written, 4);
         assert_eq!(c_bytes(&truncated), b"abcd");
         assert_eq!(truncated[4], 0);
 
         let mut one_byte = [b'X' as c_char; 1];
-        let written = mi_vsnprintf_args(
-            one_byte.as_mut_ptr(),
-            one_byte.len(),
-            format_args!("abcdef"),
-        );
+        let written = mi_vsnprintf_args(&mut one_byte, format_args!("abcdef"));
         assert_eq!(written, 0);
         assert_eq!(one_byte[0], 0);
 
-        let written = mi_vsnprintf_args(ptr::null_mut(), 8, format_args!("ignored"));
+        let written = mi_vsnprintf_args(&mut [], format_args!("ignored"));
+        assert_eq!(written, 0);
+
+        // SAFETY: a null output buffer is an explicitly supported raw-boundary
+        // case and returns before either the format or varargs pointers are read.
+        let written =
+            unsafe { _mi_vsnprintf(ptr::null_mut(), 8, c"ignored".as_ptr(), ptr::null_mut()) };
         assert_eq!(written, 0);
     }
 }

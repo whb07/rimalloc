@@ -92,11 +92,7 @@ fn format_amount(buf: &mut [c_char; 32], mut n: i64, unit: i64) {
     if pos < base {
         if n != 1 || suffix != "B" {
             let amount_suffix = if n == 0 { "" } else { suffix };
-            libc::mi_vsnprintf_args(
-                buf.as_mut_ptr(),
-                buf.len(),
-                format_args!("{n}   {amount_suffix:<3}"),
-            );
+            libc::mi_vsnprintf_args(buf, format_args!("{n}   {amount_suffix:<3}"));
         } else {
             buf[0] = 0;
         }
@@ -127,11 +123,7 @@ fn format_amount(buf: &mut [c_char; 32], mut n: i64, unit: i64) {
                 _ => "G ",
             }
         };
-        libc::mi_vsnprintf_args(
-            buf.as_mut_ptr(),
-            buf.len(),
-            format_args!("{whole}.{frac1} {unitdesc:<3}"),
-        );
+        libc::mi_vsnprintf_args(buf, format_args!("{whole}.{frac1} {unitdesc:<3}"));
     }
 }
 
@@ -315,8 +307,7 @@ fn mi_stats_print_bins(
             };
             let mut label = [0 as c_char; 64];
             libc::mi_vsnprintf_args(
-                label.as_mut_ptr(),
-                label.len(),
+                &mut label,
                 format_args!("bin{pagekind:>2}  {:>3}", bin.as_usize()),
             );
             mi_stat_print(stat, c_char_buffer_str(&label), unit.as_bytes(), out, arg);
@@ -651,8 +642,7 @@ fn mi_json_buf_print_count_bin(
     };
     let mut buf = [0 as c_char; 128];
     libc::mi_vsnprintf_args(
-        buf.as_mut_ptr(),
-        buf.len(),
+        &mut buf,
         format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"block_size\": {}, \"page_size\": {pagesize} }}{}\n",
             stat.total.get(),
@@ -683,8 +673,7 @@ fn mi_json_buf_print_count_cbin(
     };
     let mut buf = [0 as c_char; 128];
     libc::mi_vsnprintf_args(
-        buf.as_mut_ptr(),
-        buf.len(),
+        &mut buf,
         format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"bin\": \"{cbin}\" }}{}\n",
             stat.total.get(),
@@ -705,8 +694,7 @@ fn mi_json_buf_print_count(
     let stat = StatCountSnapshot::from_stat(stat);
     let mut buf = [0 as c_char; 128];
     libc::mi_vsnprintf_args(
-        buf.as_mut_ptr(),
-        buf.len(),
+        &mut buf,
         format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {} }}{}\n",
             stat.total.get(),
@@ -720,7 +708,7 @@ fn mi_json_buf_print_count(
 
 fn mi_json_buf_print_count_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi_stat_count_t) {
     let mut buf = [0 as c_char; 128];
-    libc::mi_vsnprintf_args(buf.as_mut_ptr(), buf.len(), format_args!("  \"{name}\": "));
+    libc::mi_vsnprintf_args(&mut buf, format_args!("  \"{name}\": "));
     mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
     mi_json_buf_print_count(hbuf, "", stat, true);
 }
@@ -728,19 +716,14 @@ fn mi_json_buf_print_count_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi
 #[inline(never)]
 fn mi_json_buf_print_value(hbuf: &mut mi_json_buf_t, name: &str, val: i64) {
     let mut buf = [0 as c_char; 128];
-    libc::mi_vsnprintf_args(
-        buf.as_mut_ptr(),
-        buf.len(),
-        format_args!("  \"{name}\": {val},\n"),
-    );
+    libc::mi_vsnprintf_args(&mut buf, format_args!("  \"{name}\": {val},\n"));
     mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
 }
 
 fn mi_json_buf_print_size(hbuf: &mut mi_json_buf_t, name: &str, val: usize, add_comma: bool) {
     let mut buf = [0 as c_char; 128];
     libc::mi_vsnprintf_args(
-        buf.as_mut_ptr(),
-        buf.len(),
+        &mut buf,
         format_args!(
             "    \"{name}\": {val}{}\n",
             if add_comma { "," } else { "" }

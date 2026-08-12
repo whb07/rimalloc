@@ -27,7 +27,7 @@ mod page_metadata;
 pub(crate) mod provenance;
 pub(crate) mod random;
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_void};
 use core::mem::size_of;
 use core::ptr;
 
@@ -248,8 +248,6 @@ pub unsafe fn _mi_memzero_var<T>(x: *mut T) {
 
 // SAFETY: internal declarations preserve translated C helper signatures without dereferencing pointers.
 unsafe extern "C" {
-    pub fn _mi_snprintf(buf: *mut c_char, buflen: usize, fmt: *const c_char, ...) -> c_int;
-
     pub fn _mi_fputs(
         out: Option<mi_output_fun>,
         arg: *mut c_void,

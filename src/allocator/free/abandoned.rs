@@ -33,7 +33,7 @@ unsafe fn try_free_abandoned(
 ///
 /// # Safety
 /// `page` must be the unique live ownership claim for an initialized abandoned,
-/// non-all-free page. Its count fields, flags, MemId, associated heap and stats,
+/// non-singleton, non-all-free page. Its count fields, flags, MemId, associated heap and stats,
 /// arena membership, page-map registration, metadata, and backing must remain
 /// live and stable until this call returns or consumes the claim. Concurrent
 /// claim, reassignment, relink, backing release, or teardown is excluded;

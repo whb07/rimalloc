@@ -416,16 +416,18 @@ pub unsafe extern "C" fn mi_new_reallocn(
     newcount: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
-    unsafe {
-        match alloc_product_or_report(newcount, size) {
-            Some(req) => mi_new_realloc(p, req.total().get()),
-            None => {
-                // SAFETY: the caller guarantees the process runtime's handler, if any, is live,
-                // ABI-compatible, and non-unwinding for this synchronous overflow attempt.
-                mi_try_new_handler(false);
-                ptr::null_mut()
-            }
+    match alloc_product_or_report(newcount, size) {
+        Some(req) => {
+            // SAFETY: the caller keeps `p` live through the delegated realloc policy and every
+            // runtime-provided retry handler live, ABI-compatible, and non-unwinding; `req.total()`
+            // is the exact checked product whose allocation layout was validated above.
+            unsafe { mi_new_realloc(p, req.total().get()) }
+        }
+        None => {
+            // SAFETY: the caller guarantees the process runtime's handler, if any, is live,
+            // ABI-compatible, and non-unwinding for this synchronous overflow attempt.
+            unsafe { mi_try_new_handler(false) };
+            ptr::null_mut()
         }
     }
 }

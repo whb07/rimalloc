@@ -980,44 +980,69 @@ unsafe fn mi_page_fresh_alloc_typed(
     block_size: crate::core_types::BlockSize,
     page_alignment: crate::core_types::MaybeAlignment,
 ) -> Option<crate::core_types::ActivePage> {
-    // SAFETY: the contract supplies one stable current-thread allocation epoch
-    // across arena allocation or claim, reclamation, free-list extension, and
-    // final queue publication; each typed capability is consumed in order.
-    unsafe {
-        let theap = owner.ptr().as_ptr();
-        let pq = queue.as_ptr();
-        let allocation = _mi_arenas_page_alloc(owner, block_size, page_alignment)?;
-        let page = match allocation {
-            crate::allocator::arena::ArenaPageAllocation::Claimed(page) => {
-                let page = _mi_theap_page_reclaim(page, owner);
-                if !mi_page_immediate_available(page.page().as_ptr()) {
-                    if mi_page_is_expandable(page.page().as_ptr()) {
-                        if !mi_page_extend_free(theap, page.page().as_ptr()) {
-                            return None;
-                        }
-                    } else {
-                        crate::internal::mi_assert!(false);
+    let theap = owner.ptr().as_ptr();
+    let pq = queue.as_ptr();
+    // SAFETY: the caller keeps the current-thread heap, exact target queue, arena/page-map
+    // registry, backing, and synchronous allocation callbacks live and stable for this allocation
+    // or abandoned-page claim. The typed request values pass through unchanged.
+    let allocation = (unsafe { _mi_arenas_page_alloc(owner, block_size, page_alignment) })?;
+    let page = match allocation {
+        crate::allocator::arena::ArenaPageAllocation::Claimed(page) => {
+            // SAFETY: the claimed abandoned page, current-thread owner, arena registration,
+            // geometry, and free-list metadata remain live and exclusively owned while reclaim
+            // consumes the claim and publishes the matching Active capability.
+            let page = unsafe { _mi_theap_page_reclaim(page, owner) };
+            // SAFETY: the reclaimed Active page remains live with stable available-list metadata
+            // for this read before any optional extension.
+            let immediate_available = unsafe { mi_page_immediate_available(page.page().as_ptr()) };
+            if !immediate_available {
+                // SAFETY: the same reclaimed page keeps its count and commit geometry stable while
+                // expandability is classified after the failed availability read.
+                let expandable = unsafe { mi_page_is_expandable(page.page().as_ptr()) };
+                if expandable {
+                    // SAFETY: the live reclaimed page and current-thread heap remain exclusively
+                    // locally mutable; commit callbacks and backing stay valid through extension.
+                    let extended = unsafe { mi_page_extend_free(theap, page.page().as_ptr()) };
+                    if !extended {
                         return None;
                     }
+                } else {
+                    crate::internal::mi_assert!(false);
+                    return None;
+                }
+            }
+            page
+        }
+        crate::allocator::arena::ArenaPageAllocation::Active(page) => {
+            // SAFETY: the target queue remains live and initialized; this read classifies the exact
+            // queue before consuming the fresh Active capability through one publication path.
+            let is_huge = unsafe { mi_page_queue_is_huge(pq) };
+            if is_huge {
+                // SAFETY: the active page and owning heap remain live and exclusively locally
+                // mutable; raw huge-queue publication consumes no duplicate page capability.
+                unsafe {
+                    mi_page_queue_push_raw(theap, pq, page.page().as_ptr());
                 }
                 page
-            }
-            crate::allocator::arena::ArenaPageAllocation::Active(page) => {
-                if mi_page_queue_is_huge(pq) {
-                    mi_page_queue_push_raw(theap, pq, page.page().as_ptr());
-                    page
-                } else {
+            } else {
+                // SAFETY: classification proved the exact compatible non-huge queue. Construct the
+                // normal witness and consume Active through typed queue publication exactly once.
+                unsafe {
                     let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(queue);
                     mi_page_queue_push_typed(owner, normal_queue, page).into_active()
                 }
             }
-        };
+        }
+    };
+    // SAFETY: either publication path returned a live Active page owned by this heap. Preserve the
+    // final block-size assertion before the expensive validity assertion, with metadata stable.
+    unsafe {
         crate::internal::mi_assert_internal!(
             mi_page_block_size(page.page().as_ptr()) >= block_size.get()
         );
         crate::internal::mi_assert_expensive!(_mi_page_is_valid(page.page().as_ptr()));
-        Some(page)
     }
+    Some(page)
 }
 
 /// # Safety

@@ -688,33 +688,40 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
 /// # Safety
 /// `theap` must identify a live current-thread heap. The caller must have
 /// exclusive mutation rights over its local TLD state, direct cache, page queues,
-/// free lists, and statistics; protocol atomic remote-free publication is
-/// permitted. For a small request `huge_alignment` must be zero; for a generic
-/// request, any nonzero value must be a validated alignment for that request. If
-/// nonnull, `usable` must be aligned and uniquely writable for one `usize`
-/// throughout the call.
+/// free lists, statistics, and guarded-allocation sampling state; protocol atomic
+/// remote-free publication is permitted. Page-map, arena, backing-memory,
+/// allocator-configuration, and lifecycle state must remain initialized and
+/// stable. Any synchronous collection, deferred-free, arena, guarded-allocation,
+/// tracking, or diagnostic callbacks and opaque arguments reached by either
+/// dispatch must remain valid, must not incompatibly reenter local heap state,
+/// and must not unwind. For a small request `huge_alignment` must be zero; for a
+/// generic request, any nonzero value must be a validated alignment for that
+/// request. If nonnull, `usable` must be aligned and uniquely writable for one
+/// `usize` throughout the call and must not overlap allocator metadata.
 unsafe fn _mi_theap_malloc_zero_ex_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
     huge_alignment: crate::core_types::MaybeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: the caller keeps the current-thread local allocation epoch
-    // exclusive, supplies an alignment valid for the selected small or generic
-    // branch, and keeps the optional result slot writable through dispatch.
-    unsafe {
-        let requested = layout.requested();
-        let size = requested.get();
-        if size <= MI_SMALL_SIZE_MAX {
-            crate::internal::mi_assert_internal!(huge_alignment.get() == 0);
-            mi_theap_malloc_small_zero_typed(theap, requested, layout.zeroed(), usable)
-        } else {
-            let flags = crate::core_types::MallocGenericFlags::new(
-                layout.zeroed(),
-                crate::core_types::MaybeHugeAlignment::new(huge_alignment.get()),
-            );
-            mi_theap_malloc_generic(theap, layout, flags, usable)
-        }
+    let requested = layout.requested();
+    let size = requested.get();
+    if size <= MI_SMALL_SIZE_MAX {
+        crate::internal::mi_assert_internal!(huge_alignment.get() == 0);
+        // SAFETY: the function contract supplies the live current-thread heap,
+        // exclusive local allocation epoch, and writable optional result slot.
+        // The branch uses the caller-required ordinary small-allocation
+        // alignment; the assertion is diagnostic only.
+        unsafe { mi_theap_malloc_small_zero_typed(theap, requested, layout.zeroed(), usable) }
+    } else {
+        let flags = crate::core_types::MallocGenericFlags::new(
+            layout.zeroed(),
+            crate::core_types::MaybeHugeAlignment::new(huge_alignment.get()),
+        );
+        // SAFETY: the function contract supplies the live current-thread heap,
+        // exclusive local allocation epoch, and writable optional result slot.
+        // This branch preserves the validated generic alignment policy.
+        unsafe { mi_theap_malloc_generic(theap, layout, flags, usable) }
     }
 }
 

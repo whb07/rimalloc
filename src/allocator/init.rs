@@ -564,11 +564,11 @@ unsafe fn mi_subproc_heap_main_raw(subproc: *mut mi_subproc_t) -> *mut mi_heap_t
         .unwrap_or(ptr::null_mut())
 }
 
-// SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-/// # Safety
-/// The returned opaque identifier must only be passed back to this crate's subproc functions.
+/// Convert a possibly null subprocess pointer value into its opaque ID without
+/// dereferencing or validating it. The returned ID conveys no liveness or
+/// dereference permission and is only interpreted by subprocess entrypoints.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_subproc_id_t {
+pub(crate) extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_subproc_id_t {
     subproc::to_id(SubprocPtr::new(subproc))
 }
 

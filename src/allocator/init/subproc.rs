@@ -339,8 +339,7 @@ pub(super) fn new() -> mi_subproc_id_t {
             .cast::<MiSubprocPrefix>()
     };
     if subproc_ptr.is_null() {
-        // SAFETY: a null pointer is the allocator's opaque allocation-failure ID.
-        return unsafe { super::_mi_subproc_to_id(ptr::null_mut()) };
+        return super::_mi_subproc_to_id(ptr::null_mut());
     }
     // SAFETY: `_mi_meta_zalloc` returned writable storage for the complete
     // prefix and `memid` describes that backing. The node remains unpublished
@@ -367,9 +366,7 @@ pub(super) fn new() -> mi_subproc_id_t {
             subproc_ptr.cast::<mi_subproc_t>(),
         ))
     };
-    // SAFETY: publication completed under the registry guard, so this live
-    // node's address is now a valid opaque allocator ID.
-    unsafe { super::_mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>()) }
+    super::_mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>())
 }
 
 pub(super) unsafe fn destroy(subproc_id: mi_subproc_id_t) {

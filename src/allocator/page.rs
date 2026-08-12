@@ -672,13 +672,15 @@ unsafe fn mi_page_free_list_extend_typed(
 
 /// # Safety
 /// `theap` and `page` must be nonnull and live, with `theap` the current-thread owner of the
-/// initialized page. The caller must exclusively own local free-list, capacity, commitment, and
-/// statistics mutation while keeping page geometry, encoded keys, backing, and the heap/page
-/// association stable; protocol atomic remote-free publication is permitted. Any OS commit
-/// callback and opaque argument reached by extension must remain valid for synchronous invocation,
-/// obey its threading/reentrancy contract, and not unwind. Tracking must permit balanced access to
-/// newly linked blocks followed by final undefined/no-access restoration over the complete reserved
-/// [`PageBlockLayout::area`].
+/// initialized page. The caller must exclusively own local free-list, capacity, commitment,
+/// statistics, and, when selected, secure-builder heap random-state mutation while keeping page
+/// geometry, encoded keys, backing, and the heap/page association stable; protocol atomic
+/// remote-free publication is permitted. OS configuration and current-subprocess commit accounting
+/// must be initialized and remain stable and live through extension. Any primitive commit callback
+/// and opaque argument reached by extension must remain valid for synchronous invocation, must not
+/// incompatibly reenter this heap's local extension state, and must not unwind. Tracking must permit
+/// balanced access to newly linked blocks followed by final undefined/no-access restoration over
+/// the complete reserved [`PageBlockLayout::area`].
 #[inline(never)]
 unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
     // SAFETY: the caller supplies the matching live current-thread heap/page pair, exclusive local
@@ -696,12 +698,14 @@ unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_p
 /// `theap` must remain the live current-thread owner of `page_ptr`. The page must be initialized
 /// with stable block geometry, encoded-list keys, backing, and
 /// `used <= capacity <= reserved`. The caller must exclusively own its local free-list, capacity,
-/// commitment, and heap statistics mutation; protocol atomic remote-free publication is permitted.
-/// The not-yet-capacity block interval must be writable if already committed or suitable for the
-/// page-covering OS commit operation. Any OS commit callback and opaque argument must remain valid
-/// for synchronous invocation, obey its threading/reentrancy contract, and not unwind. Tracking
-/// must permit link initialization in the new range followed by undefined/no-access restoration
-/// over the complete reserved [`PageBlockLayout::area`].
+/// commitment, heap statistics, and, when selected, secure-builder heap random-state mutation;
+/// protocol atomic remote-free publication is permitted. The not-yet-capacity block interval must
+/// be writable if already committed or suitable for the page-covering OS commit operation. OS
+/// configuration and current-subprocess commit accounting must be initialized and remain stable
+/// and live through extension. Any primitive commit callback and opaque argument must remain valid
+/// for synchronous invocation, must not incompatibly reenter this heap's local extension state,
+/// and must not unwind. Tracking must permit link initialization in the new range followed by
+/// undefined/no-access restoration over the complete reserved [`PageBlockLayout::area`].
 unsafe fn mi_page_extend_free_typed(
     theap: crate::core_types::ThreadHeapLocal,
     page_ptr: PagePtr,
@@ -709,25 +713,28 @@ unsafe fn mi_page_extend_free_typed(
     let theap_local = theap;
     let theap = theap.ptr().as_ptr();
     let page = page_ptr.as_ptr();
-    // SAFETY: the caller supplies a live initialized page owned by this current-thread heap and
-    // keeps its geometry, keys, counts, and local list heads stable. This snapshot performs no
-    // mutation and reads every field used by the following safe extension policy.
-    let (capacity, reserved, block_size) = unsafe {
-        crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_ptr));
-        if MI_SECURE < 3 {
-            let free_empty = page_ptr.free().is_empty();
-            crate::internal::mi_assert!(free_empty);
-            crate::internal::mi_assert!(page_ptr.local_free().is_empty());
-            if !free_empty {
-                return true;
-            }
+    // SAFETY: the caller keeps this live initialized page's geometry, counts, lists, ownership, and
+    // backing stable. Keeping the read in the assertion operand preserves assertion-only evaluation.
+    crate::internal::mi_assert_expensive!(unsafe { mi_page_is_valid_init(page_ptr) });
+    if MI_SECURE < 3 {
+        // SAFETY: the caller exclusively owns the live page's initialized available-list head. This
+        // remains the first list read before the assertion and local-list check.
+        let free_empty = unsafe { page_ptr.free().is_empty() };
+        crate::internal::mi_assert!(free_empty);
+        // SAFETY: the same page's initialized local-list head remains stable. Keeping this read in
+        // the assertion operand preserves its original assertion-only evaluation.
+        crate::internal::mi_assert!(unsafe { page_ptr.local_free().is_empty() });
+        if !free_empty {
+            return true;
         }
-        (
-            page_ptr.capacity(),
-            page_ptr.reserved(),
-            page_ptr.block_size(),
-        )
-    };
+    }
+    // SAFETY: the caller keeps the page's initialized capacity stable for this first count read.
+    let capacity = unsafe { page_ptr.capacity() };
+    // SAFETY: the initialized reserved count remains stable and is read after capacity exactly as
+    // required by the extension policy.
+    let reserved = unsafe { page_ptr.reserved() };
+    // SAFETY: the initialized nonzero block size remains stable and is read after both counts.
+    let block_size = unsafe { page_ptr.block_size() };
     if capacity.get() >= reserved.get() {
         return true;
     }
@@ -760,24 +767,29 @@ unsafe fn mi_page_extend_free_typed(
         None
     };
 
-    // SAFETY: this coherent commitment epoch reads the live page's stable current committed
-    // boundary. The page-slice start and backing remain live, and the page-covering range requested
-    // from the capacity/extension size lies within that page allocation and is suitable for commit.
-    // The caller supplies valid non-unwinding callback state, excludes teardown, and exclusively
-    // publishes the updated committed boundary.
-    unsafe {
-        let committed = mi_page_slice_committed(page);
-        if !committed.is_zero() {
-            let needed_size = (capacity.as_usize() + extend) * bsize;
-            let needed_commit = _mi_align_up(
-                mi_page_slice_offset_of(page, needed_size),
-                MI_PAGE_MIN_COMMIT_SIZE,
+    // SAFETY: the caller keeps this live page's initialized committed boundary stable for this
+    // first read, before any possible commit or boundary publication.
+    let committed = unsafe { mi_page_slice_committed(page) };
+    if !committed.is_zero() {
+        let needed_size = (capacity.as_usize() + extend) * bsize;
+        // SAFETY: the page-slice start and stable geometry place `needed_size` within this page's
+        // allocation; this computes the same page-relative extent used by the commit policy.
+        let needed_commit = _mi_align_up(
+            unsafe { mi_page_slice_offset_of(page, needed_size) },
+            MI_PAGE_MIN_COMMIT_SIZE,
+        );
+        if needed_commit > committed.get() {
+            // SAFETY: initialized OS configuration remains stable through this assertion-only page
+            // size read.
+            crate::internal::mi_assert_internal!(
+                (needed_commit - committed.get())
+                    .is_multiple_of(unsafe { _mi_os_page_size_typed().get() })
             );
-            if needed_commit > committed.get() {
-                crate::internal::mi_assert_internal!(
-                    (needed_commit - committed.get())
-                        .is_multiple_of(_mi_os_page_size_typed().get())
-                );
+            // SAFETY: this coherent commit-and-publication epoch covers a page-backed range derived
+            // from the stable slice geometry. OS configuration, current-subprocess accounting, and
+            // the primitive callback state remain valid and stable; incompatible reentry and unwind
+            // are excluded. The committed boundary is published only after a successful callback.
+            let committed_update_succeeded = unsafe {
                 if !_mi_os_commit(
                     mi_page_slice_start(page)
                         .cast::<u8>()
@@ -787,45 +799,69 @@ unsafe fn mi_page_extend_free_typed(
                 )
                 .success()
                 {
-                    return false;
+                    false
+                } else {
+                    mi_page_set_slice_committed(
+                        page,
+                        crate::core_types::CommittedBytes::new(needed_commit),
+                    );
+                    true
                 }
-                mi_page_set_slice_committed(
-                    page,
-                    crate::core_types::CommittedBytes::new(needed_commit),
-                );
+            };
+            if !committed_update_succeeded {
+                return false;
             }
         }
     }
 
-    // SAFETY: this coherent link/accounting/tracking publication epoch exclusively owns the
-    // current-thread heap stats and page local-list/capacity fields. `block_range` is the same-page
-    // nonempty range now backed by writable committed memory; page keys and existing heads remain
-    // stable, remote publication is confined to its atomic protocol, and tracking permits link
-    // accesses followed by restoration of the complete reserved page area.
-    unsafe {
-        if MI_STAT > 0 {
+    if MI_STAT > 0 {
+        // SAFETY: the caller exclusively owns this live current-thread heap's statistics. Preserve
+        // the pages-extended counter update before any free-list or capacity publication.
+        unsafe {
             __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_extended), 1);
         }
+    }
 
-        if extend < MI_MIN_SLICES || MI_SECURE < 2 {
+    if extend < MI_MIN_SLICES || MI_SECURE < 2 {
+        // SAFETY: this coherent builder-and-capacity publication epoch exclusively owns the live
+        // page's local free list and capacity. `block_range` is the same-page nonempty range now
+        // backed by writable committed memory; keys and existing heads remain stable, and remote
+        // publication is confined to its atomic protocol.
+        unsafe {
             mi_page_free_list_extend_typed(page_ptr, block_range);
-        } else {
-            mi_page_free_list_extend_secure_typed(theap_local, page_ptr, block_range);
+            mi_page_add_capacity_count(page, extend as u16);
         }
-        mi_page_add_capacity_count(page, extend as u16);
-        if MI_STAT > 0 {
+    } else {
+        // SAFETY: this coherent secure-builder-and-capacity publication epoch has the same page and
+        // backing guarantees as the plain branch. It additionally has exclusive access to this
+        // heap's live random state through randomized link construction and capacity publication.
+        unsafe {
+            mi_page_free_list_extend_secure_typed(theap_local, page_ptr, block_range);
+            mi_page_add_capacity_count(page, extend as u16);
+        }
+    }
+    if MI_STAT > 0 {
+        // SAFETY: capacity publication is complete and the caller still exclusively owns the live
+        // heap statistics. Preserve the page-committed byte update after capacity.
+        unsafe {
             __mi_stat_increase(
                 ptr::addr_of_mut!((*theap).stats.page_committed),
                 crate::core_types::CommittedBytes::new(extend * bsize).get(),
             );
         }
+    }
 
-        if let Some(area) = track_area {
+    if let Some(area) = track_area {
+        // SAFETY: link construction and capacity publication are complete; tracking permits the
+        // complete reserved page area to become undefined and then no-access in this exact order.
+        unsafe {
             mi_track_mem_undefined(area.start().as_ptr().cast(), area.byte_len());
             mi_track_mem_noaccess(area.start().as_ptr().cast(), area.byte_len());
         }
-        crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_ptr));
     }
+    // SAFETY: all commit, link, capacity, accounting, and tracking updates are complete while the
+    // page remains live and stable. Keep final validation assertion-only and last.
+    crate::internal::mi_assert_expensive!(unsafe { mi_page_is_valid_init(page_ptr) });
     true
 }
 

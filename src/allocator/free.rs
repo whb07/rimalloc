@@ -787,23 +787,6 @@ pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut
     }
 }
 
-// SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_free_generic(
-    page: *mut mi_page_t,
-    is_local: bool,
-    p: *mut c_void,
-) {
-    // SAFETY: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
-    unsafe {
-        if is_local {
-            mi_free_generic_local(page, p);
-        } else {
-            mi_free_generic_mt(page, p);
-        }
-    }
-}
-
 /// # Safety
 ///
 /// `p` may be null. In configurations without registered pointer validation, a
@@ -1180,13 +1163,6 @@ pub(crate) unsafe fn _mi_usable_size_typed(
             mi_page_usable_aligned_size_of_typed(page, p)
         }
     }
-}
-
-/// # Safety
-/// `page` must be null or the page containing `p`.
-pub unsafe fn _mi_usable_size(p: *const c_void, page: *const mi_page_t) -> usize {
-    // SAFETY: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
-    unsafe { _mi_usable_size_typed(p, page).get() }
 }
 
 /// # Safety

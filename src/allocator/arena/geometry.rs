@@ -291,9 +291,9 @@ fn mi_arena_strictly_contains(
 /// size fields must remain stable and readable; concurrent arena destruction or
 /// reparenting is excluded. A supplied `parent` must belong to that registry.
 unsafe fn mi_arenas_contain_ex(p: Option<InteriorUserPtr>, parent: Option<ArenaPtr>) -> bool {
-    // SAFETY: the caller keeps the current subproc initialized and live for the
-    // registry traversal; `_mi_subproc` returns its non-null identity.
-    let subproc = unsafe { _mi_subproc() };
+    // The noninitializing lookup selects the current or process-main subproc;
+    // the caller keeps that registry live for the ensuing traversal.
+    let subproc = _mi_subproc();
     // SAFETY: the initialized current subproc identity is non-null by contract.
     let subproc_ptr = unsafe { SubprocPtr::new_unchecked(subproc) };
     // SAFETY: the caller stabilizes this live subproc's published arena count

@@ -755,13 +755,12 @@ pub(crate) unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
     ptr::addr_of!(_mi_theap_empty).cast_mut()
 }
 
-// SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-/// # Safety
 /// Returns the current subproc without forcing thread-local initialization.
+/// Before a current-thread association exists, this returns the process-global
+/// main subproc. The raw pointer is non-owning and grants no dereference rights.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    unsafe { subproc::current_ptr() }
+pub(crate) extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
+    subproc::current_ptr()
 }
 
 // SAFETY: this is the crate's unique definition of the C ABI symbol.
@@ -771,13 +770,13 @@ pub extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
     subproc::main_id()
 }
 
-// SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
+// SAFETY: this is the crate's unique definition of the C ABI symbol.
 #[unsafe(no_mangle)]
-/// # Safety
-/// Returns the current subproc identifier for the bounded crate state.
-pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    unsafe { subproc::current_id() }
+/// Returns the current subproc identifier without forcing thread-local
+/// initialization. The opaque identifier is non-owning and does not extend the
+/// lifetime of a current-thread subprocess association.
+pub extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
+    subproc::current_id()
 }
 
 // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.

@@ -446,8 +446,11 @@ unsafe fn mi_prim_tls_slot_theap(slot: usize, expansion_slot: usize) -> *mut mi_
 /// # Safety
 ///
 /// Reads the current thread's raw default thread heap slot. The caller must
-/// tolerate a null result and must not dereference the returned pointer without
-/// validating initialization.
+/// tolerate a null result. A nonnull value is allocator-published live
+/// current-thread metadata or the static empty sentinel; both have a readable,
+/// initialized TLD pointer/header while published. Reading fields that require
+/// an initialized heap still requires validating that the value is not the
+/// empty sentinel, and the raw result does not extend any metadata lifetime.
 #[inline(always)]
 pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
     if MI_TLS_MODEL_THREAD_LOCAL {

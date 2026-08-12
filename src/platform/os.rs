@@ -789,9 +789,9 @@ pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
     let start = range.start();
     let csize = range.size().get();
 
-    // SAFETY: allocator lifecycle keeps current-subprocess lookup and registry
-    // metadata live during this synchronous statistics update.
-    let subproc = unsafe { _mi_subproc() };
+    // The noninitializing lookup is safe; the operation contract keeps the
+    // returned subprocess statistics live for this synchronous update.
+    let subproc = _mi_subproc();
     if !subproc.is_null() {
         // SAFETY: the live subprocess prefix contains aligned atomic statistics;
         // all concurrent accesses to these fields use the atomic MT protocol.

@@ -195,33 +195,42 @@ pub(super) fn main_ptr() -> *mut mi_subproc_t {
     main_typed().ptr().as_ptr()
 }
 
-unsafe fn current_typed() -> BorrowedSubproc {
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
+fn current_typed() -> BorrowedSubproc {
+    // SAFETY: every TLS backend only reads the allocator-controlled current-
+    // thread default slot. A nonnull value was published through the validated
+    // default-theap path; thread teardown replaces that slot with the static
+    // empty sentinel before releasing any live thread-heap or TLD backing.
     let theap = unsafe { crate::platform::_mi_theap_default_raw() };
     let subproc = if theap.is_null() {
         main_typed().ptr()
     } else {
-        // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
+        // SAFETY: a nonnull TLS value is either live current-thread metadata,
+        // whose initialized TLD remains live while published, or
+        // `_mi_theap_empty`. The sentinel's `tld` field statically points to
+        // `tld_empty`, whose initialized `subproc` field statically points to
+        // `subproc_main`; both TLD pointers are nonnull and properly aligned.
         let tld = unsafe { TldPtr::new_unchecked((*theap).tld) };
-        // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
+        // SAFETY: the preceding live-or-static TLD proof keeps its initialized
+        // subproc header readable. A missing association falls back to the
+        // process-lifetime main subproc without another TLS access.
         unsafe { tld.subproc() }.unwrap_or_else(|| main_typed().ptr())
     };
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
+    // SAFETY: `subproc` is either the process-lifetime main static or the live
+    // registry-owned subprocess associated with the published current TLD.
+    // This non-owning witness is used only for the immediate accessor result.
     unsafe { BorrowedSubproc::new(subproc) }
 }
 
-pub(super) unsafe fn current_ptr() -> *mut mi_subproc_t {
-    // SAFETY: current lookup preserves the non-initializing raw TLS path.
-    unsafe { current_typed().ptr().as_ptr() }
+pub(super) fn current_ptr() -> *mut mi_subproc_t {
+    current_typed().ptr().as_ptr()
 }
 
 pub(super) fn main_id() -> mi_subproc_id_t {
     to_id(Some(main_typed().ptr()))
 }
 
-pub(super) unsafe fn current_id() -> mi_subproc_id_t {
-    // SAFETY: subproc ID conversion and current/main subproc lookup use typed subproc witnesses.
-    to_id(Some(unsafe { current_typed().ptr() }))
+pub(super) fn current_id() -> mi_subproc_id_t {
+    to_id(Some(current_typed().ptr()))
 }
 
 pub(super) unsafe fn ensure_heap_main(subproc: *mut mi_subproc_t) -> *mut mi_heap_t {

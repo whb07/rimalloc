@@ -252,7 +252,7 @@ fn mi_page_map_sub_index(raw: usize) -> Option<crate::core_types::PageMapSubInde
 }
 
 #[cfg(target_pointer_width = "32")]
-type PageMapGetIndex = (PageMapPrimaryIndex, *mut u8, SliceCount);
+type PageMapGetIndex = (PageMapPrimaryIndex, SliceCount);
 
 #[cfg(not(target_pointer_width = "32"))]
 type PageMapGetIndex = (
@@ -262,15 +262,21 @@ type PageMapGetIndex = (
 );
 
 struct PageMapPageSpan {
-    page_start: *mut u8,
+    page_start: crate::types::ptr::PageStart,
     slice_count: SliceCount,
 }
 
+/// # Safety
+/// `page` must identify live initialized page metadata whose allocation area, slice metadata, and
+/// backing remain readable and stable through the returned span's use. The area's start must be at
+/// or after its slice start in the same allocation, and the capped page size plus their address
+/// difference must be representable as a nonzero `SliceCount`. Concurrent page teardown, metadata
+/// relink, or backing release must be excluded.
 unsafe fn mi_page_map_page_span(page: PagePtr) -> Option<PageMapPageSpan> {
     // SAFETY: `PagePtr` proves live initialized page metadata for the
     // registered block-area range.
     let area = unsafe { page.area()? };
-    let page_start = area.start().as_ptr();
+    let page_start = area.start();
     let mut page_size = area.byte_len();
     let page = page.as_ptr();
     if page_size > MI_LARGE_PAGE_SIZE {
@@ -280,7 +286,8 @@ unsafe fn mi_page_map_page_span(page: PagePtr) -> Option<PageMapPageSpan> {
     // initialized for deriving the registered slice span.
     let slice_start = unsafe { mi_page_slice_start(page) };
     let slice_count = mi_slice_count_of_size(page_size)
-        + (crate::core_types::ptr_addr_diff(page_start, slice_start) / MI_ARENA_SLICE_SIZE);
+        + (crate::core_types::ptr_addr_diff(page_start.as_ptr(), slice_start)
+            / MI_ARENA_SLICE_SIZE);
     let slice_count = SliceCount::from_usize(slice_count)?;
     Some(PageMapPageSpan {
         page_start,
@@ -289,30 +296,27 @@ unsafe fn mi_page_map_page_span(page: PagePtr) -> Option<PageMapPageSpan> {
 }
 
 #[cfg(target_pointer_width = "32")]
-unsafe fn mi_page_map_get_idx_from_span(
-    page: PagePtr,
-    span: PageMapPageSpan,
-) -> Option<PageMapGetIndex> {
+fn mi_page_map_get_idx_from_span(page: PagePtr, span: PageMapPageSpan) -> Option<PageMapGetIndex> {
     let location = PageMapLocation::from_ptr(page.as_ptr().cast::<c_void>());
-    Some((location.index(), span.page_start, span.slice_count))
+    Some((location.index(), span.slice_count))
 }
 
 #[cfg(not(target_pointer_width = "32"))]
-unsafe fn mi_page_map_get_idx_from_span(
-    _page: PagePtr,
-    span: PageMapPageSpan,
-) -> Option<PageMapGetIndex> {
-    let location = PageMapLocation::from_ptr(span.page_start.cast::<c_void>())?;
+fn mi_page_map_get_idx_from_span(_page: PagePtr, span: PageMapPageSpan) -> Option<PageMapGetIndex> {
+    let location = PageMapLocation::from_ptr(span.page_start.as_ptr().cast::<c_void>())?;
     Some((location.index(), location.sub_index(), span.slice_count))
 }
 
+/// # Safety
+/// `page` must identify live initialized page metadata whose allocation area, slice start, size, and
+/// backing remain readable and stable through coordinate derivation. Its area and slice start must
+/// belong to the same allocation with the area start no earlier than the slice start. Concurrent
+/// page-map teardown, page metadata relink, or backing release must be excluded.
 unsafe fn mi_page_map_get_idx(page: PagePtr) -> Option<PageMapGetIndex> {
     // SAFETY: typed page witness scopes page span
     // derivation before conversion into page-map indexes.
     let span = unsafe { mi_page_map_page_span(page) }?;
-    // SAFETY: span came from the same typed page and is
-    // validated into typed index/count domains by the helper.
-    unsafe { mi_page_map_get_idx_from_span(page, span) }
+    mi_page_map_get_idx_from_span(page, span)
 }
 
 #[cfg(not(target_pointer_width = "32"))]
@@ -557,7 +561,7 @@ unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
     crate::internal::mi_assert!(!(unsafe { _mi_page_map }).is_null());
     // SAFETY: typed page metadata is converted once
     // into page-map index and slice-count domains.
-    let Some((idx, _page_start, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
+    let Some((idx, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
         crate::internal::mi_assert_internal!(false);
         return false;
     };
@@ -623,7 +627,7 @@ unsafe fn mi_page_map_unregister_typed(page: PagePtr) {
     crate::internal::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
     // SAFETY: typed page metadata is converted into the
     // 32-bit registration index and slice-count domains.
-    let Some((idx, _page_start, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
+    let Some((idx, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };

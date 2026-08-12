@@ -1120,60 +1120,79 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
 ///
 /// # Safety
 /// `theap` must be a live initialized locally owned thread heap, under current-thread ownership or
-/// exclusive initialization/teardown access, and `queue` must be the live queue selected from that
-/// heap's fixed bin table. Its first/last pointers, count, block-size classification, and every
-/// linked page's next/previous links, owner association, classification, geometry, metadata, and
-/// backing must remain initialized and readable throughout traversal. The caller must hold the
-/// corresponding current-thread local mutation ownership or exclusive initialization/teardown
-/// access and exclude concurrent relink, non-protocol metadata mutation, or page/heap teardown.
-/// Protocol atomic remote-free publication is permitted because this validation does not inspect
-/// or mutate remote free-list heads.
+/// exclusive initialization/teardown access, and `pq` must be the exact live queue selected from
+/// that heap's fixed bin table. The queue's endpoints, count, and block-size classification and the
+/// finite linked chain's page links, owner association, classification, geometry, metadata, and
+/// backing must remain initialized, live, readable, and stable throughout traversal. The caller
+/// must exclude concurrent relink, non-protocol metadata mutation, page or heap teardown, and
+/// incompatible diagnostic callback reentry. Protocol atomic remote-free publication is permitted
+/// because this validation does not inspect or mutate remote free-list heads. Any diagnostic
+/// callback and opaque callback arguments reached by a failed assertion must remain valid and must
+/// not unwind.
 #[inline]
 pub(crate) unsafe fn mi_page_queue_is_valid_typed(
     theap: crate::core_types::ThreadHeapLocal,
     pq: crate::core_types::PageQueuePtr,
 ) -> bool {
-    // SAFETY: the caller keeps the exact heap-owned queue and each linked page live with stable
-    // non-atomic topology/classification fields. This coherent read-only traversal checks backward
-    // links, bin compatibility, owner association, terminal identity, and the final stored count.
-    unsafe {
-        let theap = theap.ptr().as_ptr();
-        let pq = pq.as_ptr();
-        crate::internal::MI_UNUSED_RELEASE(&theap);
-        let mut count = 0usize;
-        crate::internal::MI_UNUSED_RELEASE(&count);
-        let mut prev = None;
-        crate::internal::MI_UNUSED_RELEASE(&prev);
-        let queue = page_queue_ptr(pq);
-        let block_size = mi_page_queue_block_size_raw(pq);
-        let mut page = queue.first();
-        while let Some(page_ptr) = page {
-            let page_raw = page_ptr.as_ptr();
-            crate::internal::mi_assert_internal!(page_ptr.queue_prev() == prev);
-            if mi_page_is_in_full(page_raw) {
-                crate::internal::mi_assert_internal!(
-                    _mi_wsize_from_size(block_size) == MI_LARGE_MAX_OBJ_WSIZE + 2
-                );
-            } else if mi_page_is_huge(page_raw) {
-                crate::internal::mi_assert_internal!(
-                    _mi_wsize_from_size(block_size) == MI_LARGE_MAX_OBJ_WSIZE + 1
-                );
-            } else {
-                crate::internal::mi_assert_internal!(mi_page_block_size(page_raw) == block_size);
-            }
-            crate::internal::mi_assert_internal!((*page_raw).theap == theap);
-            if page_ptr.queue_next().is_none() {
-                crate::internal::mi_assert_internal!(
-                    queue.last().is_some_and(|last| last == page_ptr)
-                );
-            }
-            count += 1;
-            prev = page;
-            page = page_ptr.queue_next();
+    let theap = theap.ptr().as_ptr();
+    let pq = pq.as_ptr();
+    crate::internal::MI_UNUSED_RELEASE(&theap);
+    let mut count = 0usize;
+    crate::internal::MI_UNUSED_RELEASE(&count);
+    let mut prev = None;
+    crate::internal::MI_UNUSED_RELEASE(&prev);
+    // SAFETY: `pq` is the caller-proven non-null fixed-bin queue and remains initialized and live.
+    let queue = unsafe { page_queue_ptr(pq) };
+    // SAFETY: the caller keeps this queue's initialized block-size classification stable.
+    let block_size = unsafe { mi_page_queue_block_size_raw(pq) };
+    // SAFETY: the caller keeps the queue head initialized and stable throughout traversal.
+    let mut page = unsafe { queue.first() };
+    while let Some(page_ptr) = page {
+        let page_raw = page_ptr.as_ptr();
+        // SAFETY: every linked page remains live and its backward link stays stable. Keeping this
+        // read in the assertion operand preserves its assertion-only evaluation.
+        crate::internal::mi_assert_internal!(unsafe { page_ptr.queue_prev() } == prev);
+        // SAFETY: the linked page remains live with stable initialized owner flags.
+        if unsafe { mi_page_is_in_full(page_raw) } {
+            crate::internal::mi_assert_internal!(
+                _mi_wsize_from_size(block_size) == MI_LARGE_MAX_OBJ_WSIZE + 2
+            );
+        } else if unsafe {
+            // SAFETY: the non-full linked page retains stable initialized shape, block-size, and
+            // backing metadata while its huge-page classification is read.
+            mi_page_is_huge(page_raw)
+        } {
+            crate::internal::mi_assert_internal!(
+                _mi_wsize_from_size(block_size) == MI_LARGE_MAX_OBJ_WSIZE + 1
+            );
+        } else {
+            // SAFETY: this ordinary linked page retains stable initialized block-size metadata.
+            crate::internal::mi_assert_internal!(
+                unsafe { mi_page_block_size(page_raw) } == block_size
+            );
         }
-        crate::internal::mi_assert_internal!(mi_page_queue_count_typed(pq).get() == count);
-        true
+        // SAFETY: the caller keeps the linked page live and its owner association stable. Keeping
+        // this read in the assertion operand preserves its assertion-only evaluation.
+        crate::internal::mi_assert_internal!(unsafe { (*page_raw).theap } == theap);
+        // SAFETY: every linked page remains live and its forward link stays stable. This is the
+        // original terminal-check read; traversal deliberately reads the link again below.
+        if unsafe { page_ptr.queue_next() }.is_none() {
+            // SAFETY: the caller keeps the queue tail initialized and stable. Keeping this read in
+            // the assertion operand preserves its assertion-only evaluation.
+            crate::internal::mi_assert_internal!(
+                unsafe { queue.last() }.is_some_and(|last| last == page_ptr)
+            );
+        }
+        count += 1;
+        prev = page;
+        // SAFETY: every linked page remains live and its forward link stays stable. This preserves
+        // the original second read used to advance the traversal.
+        page = unsafe { page_ptr.queue_next() };
     }
+    // SAFETY: the caller keeps the queue count initialized and stable. Keeping this read in the
+    // assertion operand preserves its assertion-only evaluation.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_queue_count_typed(pq) }.get() == count);
+    true
 }
 
 /// # Safety
@@ -1861,6 +1880,7 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
 mod tests {
     use super::*;
     use crate::bits::{MI_INTPTR_SIZE, MI_SIZE_BITS, mi_clz};
+    use core::mem::MaybeUninit;
 
     const LARGE_WSIZE_MAX_FOR_BIN_TEST: usize = (4 * 1024 * 1024) / MI_INTPTR_SIZE;
 
@@ -1905,5 +1925,65 @@ mod tests {
             }
         }
         assert!(transitions > 0);
+    }
+
+    #[test]
+    fn queue_validator_accepts_empty_linked_normal_and_full_queues() {
+        let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
+        let mut normal_page = MaybeUninit::<mi_page_t>::zeroed();
+        let mut full_page = MaybeUninit::<mi_page_t>::zeroed();
+
+        // SAFETY: the stack-local heap receives the allocator's initialized fixed queue table.
+        // Both stack-local pages remain live and initialize exactly the owner, classification, and
+        // null link fields read by the validator. Queue endpoint/count mutations are exclusive,
+        // and the fixture performs no callback, relink, metadata mutation, or teardown during each
+        // read-only validation.
+        unsafe {
+            let theap_raw = theap.as_mut_ptr();
+            (*theap_raw).pages = crate::allocator::init::MI_PAGE_QUEUES_EMPTY();
+            let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap_raw),
+            );
+
+            let block_size = crate::core_types::BlockSize::new_unchecked(64);
+            let normal_queue = owner.ptr().page_queue(mi_bin_from_block_size(block_size));
+            assert!(mi_page_queue_is_valid_typed(owner, normal_queue));
+
+            let thread_id = crate::core_types::ThreadId::new(0x1000)
+                .expect("fixture thread id must not overlap page flag bits");
+            let normal_raw = normal_page.as_mut_ptr();
+            (*normal_raw).theap = theap_raw;
+            (*normal_raw).block_size = block_size.get();
+            (*normal_raw).xthread_id = crate::core_types::PageThreadId::from_parts(
+                crate::core_types::PageOwnerId::Thread(thread_id),
+                crate::core_types::PageFlags::new(0).expect("zero page flags"),
+            )
+            .raw();
+            let normal = PagePtr::new_unchecked(normal_raw);
+            normal.set_queue_prev(None);
+            normal.set_queue_next(None);
+            normal_queue.set_first(Some(normal));
+            normal_queue.set_last(Some(normal));
+            normal_queue.set_count(crate::core_types::PageQueueCount::new(1));
+            assert!(mi_page_queue_is_valid_typed(owner, normal_queue));
+
+            let full_queue = owner
+                .ptr()
+                .page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
+            let full_raw = full_page.as_mut_ptr();
+            (*full_raw).theap = theap_raw;
+            (*full_raw).xthread_id = crate::core_types::PageThreadId::from_parts(
+                crate::core_types::PageOwnerId::Thread(thread_id),
+                crate::core_types::PageFlags::IN_FULL_QUEUE,
+            )
+            .raw();
+            let full = PagePtr::new_unchecked(full_raw);
+            full.set_queue_prev(None);
+            full.set_queue_next(None);
+            full_queue.set_first(Some(full));
+            full_queue.set_last(Some(full));
+            full_queue.set_count(crate::core_types::PageQueueCount::new(1));
+            assert!(mi_page_queue_is_valid_typed(owner, full_queue));
+        }
     }
 }

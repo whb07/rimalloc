@@ -93,44 +93,76 @@ unsafe fn try_reabandon_mapped(
     reabandoned
 }
 
+/// Release a claimed abandoned page back to the remote-free ownership protocol.
+///
+/// # Safety
+/// `page` must be the unique live ownership claim for an initialized abandoned,
+/// non-all-free page. Its atomic thread-free word, metadata, backing, encoded
+/// links and keys, counts, MemId, arena/page-map registration, associated heap,
+/// and stats must remain live through return or a terminal consuming path.
+/// `tf_expect` must be an owned observation of that page's thread-free word
+/// produced by the preceding collection transaction; its optional head must be
+/// the exact head still published there. Protocol remote pushes may race only
+/// through the atomic thread-free word; competing ownership transitions,
+/// relinking, reclamation, backing release, and teardown are excluded. Arena,
+/// purge, commit, tracking, and diagnostic callbacks plus opaque arguments must
+/// remain valid for synchronous invocation, must not incompatibly reenter this
+/// page, heap, or arena, and must not unwind. A successful release CAS consumes
+/// the claim into `StillAbandoned`; nested collection may instead consume it
+/// into `Destroyed` or `Mapped`, after which this function performs no page
+/// access.
 unsafe fn release_abandoned_ownership(
     mut page: crate::core_types::OwnedAbandonedPage,
     mut tf_expect: crate::core_types::ThreadFreeWord,
 ) -> crate::core_types::AbandonedDisposition {
-    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
-    unsafe {
+    // SAFETY: the unique claimed witness and function contract keep the page's
+    // initialized state and atomic thread-free field live. Snapshot the atomic
+    // field only after validating the exact abandoned, owned, non-all-free state.
+    let atomic_tf = unsafe {
         let page_raw = page.page().as_ptr();
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
         crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
         crate::internal::mi_assert_internal!(!mi_page_all_free(page_raw));
+        page.page().thread_free_cell()
+    };
 
-        let atomic_tf = page.page().thread_free_cell();
+    #[cfg(feature = "bench-diagnostics")]
+    crate::allocator::bench_diagnostics::ownership_release_cas_attempt();
+    // SAFETY: `atomic_tf` projects the retained live page's thread-free word;
+    // `tf_expect` is the caller-provided owned observation and each failed CAS
+    // refreshes it before the retry body examines the newly published head.
+    while !(unsafe { atomic_tf.release_acq_rel(&mut tf_expect) }) {
+        #[cfg(feature = "bench-diagnostics")]
+        crate::allocator::bench_diagnostics::ownership_release_cas_retry();
+        crate::internal::mi_assert_internal!(tf_expect.is_owned());
+        while tf_expect.head().is_some() {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::allocator::bench_diagnostics::ownership_release_nested_collection();
+            // SAFETY: the retained unique claim keeps the page, encoded links,
+            // keys, counts, and backing stable while the observed remote head is
+            // collected into its abandoned-page free lists.
+            unsafe { crate::allocator::page::collect_page_free_lists_abandoned(&page, false) };
+            // SAFETY: after collection the same unique claim and terminal
+            // lifecycle contract permit freeing an all-free page. Success
+            // consumes it, so this function returns without further page use.
+            page = match unsafe { try_free_abandoned(page) } {
+                Ok(page) => return crate::core_types::AbandonedDisposition::Destroyed(page),
+                Err(page) => page,
+            };
+            // SAFETY: a non-all-free retained claim still satisfies the stable
+            // MemId/arena/map and callback contract for the consuming mapped-
+            // reabandon attempt. Success is terminal; failure returns the claim.
+            page = match unsafe { try_reabandon_mapped(page) } {
+                Ok(disposition) => return disposition,
+                Err(page) => page,
+            };
+            tf_expect = atomic_tf.load_relaxed();
+        }
+        crate::internal::mi_assert_internal!(tf_expect.head().is_none());
         #[cfg(feature = "bench-diagnostics")]
         crate::allocator::bench_diagnostics::ownership_release_cas_attempt();
-        while !atomic_tf.release_acq_rel(&mut tf_expect) {
-            #[cfg(feature = "bench-diagnostics")]
-            crate::allocator::bench_diagnostics::ownership_release_cas_retry();
-            crate::internal::mi_assert_internal!(tf_expect.is_owned());
-            while tf_expect.head().is_some() {
-                #[cfg(feature = "bench-diagnostics")]
-                crate::allocator::bench_diagnostics::ownership_release_nested_collection();
-                crate::allocator::page::collect_page_free_lists_abandoned(&page, false);
-                page = match try_free_abandoned(page) {
-                    Ok(page) => return crate::core_types::AbandonedDisposition::Destroyed(page),
-                    Err(page) => page,
-                };
-                page = match try_reabandon_mapped(page) {
-                    Ok(disposition) => return disposition,
-                    Err(page) => page,
-                };
-                tf_expect = atomic_tf.load_relaxed();
-            }
-            crate::internal::mi_assert_internal!(tf_expect.head().is_none());
-            #[cfg(feature = "bench-diagnostics")]
-            crate::allocator::bench_diagnostics::ownership_release_cas_attempt();
-        }
-        crate::core_types::AbandonedDisposition::StillAbandoned
     }
+    crate::core_types::AbandonedDisposition::StillAbandoned
 }
 
 /// # Safety

@@ -307,41 +307,50 @@ pub(super) unsafe fn is_theap_main(theap: *const mi_theap_t) -> bool {
     ptr::eq(main_heap, heap)
 }
 
-pub(super) unsafe fn new() -> mi_subproc_id_t {
+/// Allocate, initialize, and publish a new subprocess, returning its opaque ID.
+/// A null ID reports metadata-allocation failure.
+pub(super) fn new() -> mi_subproc_id_t {
     main_init();
     let seq = SUBPROC_TOTAL_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
     let mut memid = mi_memid_t::default();
-    // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
+    // SAFETY: `memid` is writable for the allocation result. The allocator's
+    // process lifecycle and metadata callbacks remain initialized and do not
+    // unwind or incompatibly reenter subprocess creation during this call.
     let subproc_ptr = unsafe {
         _mi_meta_zalloc(size_of::<MiSubprocPrefix>(), ptr::addr_of_mut!(memid))
             .cast::<MiSubprocPrefix>()
     };
     if subproc_ptr.is_null() {
-        // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
+        // SAFETY: a null pointer is the allocator's opaque allocation-failure ID.
         return unsafe { super::_mi_subproc_to_id(ptr::null_mut()) };
     }
-    // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
+    // SAFETY: `_mi_meta_zalloc` returned writable storage for the complete
+    // prefix and `memid` describes that backing. The node remains unpublished
+    // and exclusively owned while its initialized value is written.
     unsafe {
         subproc_ptr.write(MiSubprocPrefix::new_with_memid(
             crate::types::SubprocSeq::new(seq),
             memid,
         ))
     };
-    // SAFETY: initializing lock words for a freshly allocated local prefix.
-    // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
+    // SAFETY: both lock words belong to the initialized, unpublished prefix and
+    // have not previously been initialized or exposed to another thread.
     unsafe {
         mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).arena_reserve_lock));
         mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).heaps_lock));
     }
     // SAFETY: `main_init` initialized the registry lock.
     let registry = unsafe { subproc_registry::SubprocRegistryGuard::acquire() };
-    // SAFETY: fresh metadata is initialized and not yet linked.
+    // SAFETY: the nonnull prefix is fully initialized and still unlinked. The
+    // registry guard serializes its one-time intrusive-list publication; the
+    // metadata backing remains live until a later successful detach destroys it.
     unsafe {
         registry.push_front(SubprocPtr::new_unchecked(
             subproc_ptr.cast::<mi_subproc_t>(),
         ))
     };
-    // SAFETY: the returned identifier is the just-linked initialized node.
+    // SAFETY: publication completed under the registry guard, so this live
+    // node's address is now a valid opaque allocator ID.
     unsafe { super::_mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>()) }
 }
 

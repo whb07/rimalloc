@@ -828,13 +828,12 @@ pub extern "C" fn mi_thread_init() {
     thread::init();
 }
 
-// SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
 #[unsafe(no_mangle)]
-/// # Safety
-/// The returned opaque identifier must only be passed back to this crate's subproc functions.
-pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
-    // SAFETY: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
-    unsafe { subproc::new() }
+/// Allocate a subprocess and return its opaque identifier, or a null identifier
+/// if its metadata allocation fails. A nonnull identifier may only be passed
+/// back to this crate's subprocess functions.
+pub extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
+    subproc::new()
 }
 
 // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.

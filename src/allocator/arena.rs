@@ -2111,48 +2111,71 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
 /// live registered detached abandoned page with stable MemId, geometry, page-map
 /// registration, heap arena bit, and backing. `current_theap`, when present,
 /// must be the matching live current-thread stats owner; otherwise the owning
-/// heap's atomic stats must remain live. Relink, competing claim, non-protocol
-/// metadata mutation, and teardown are excluded through the terminal release;
-/// protocol remote-head publication remains permitted.
+/// heap's atomic stats must remain live. For arena pages, the decoded range must
+/// remain allocated and clear in `slices_free`, and its `(slice start, full
+/// size, MemId)` must identify the same live, not-yet-freed backing allocation.
+/// The arena table, free/committed/page bitmaps, subprocess statistics, tracking
+/// state, and stored arena, purge, release, OS, diagnostic callbacks and opaque
+/// arguments must remain live and valid for synchronous use, must not
+/// incompatibly reenter this page, heap, or arena, and must not unwind. Relink,
+/// competing claim, non-protocol metadata mutation, and teardown are excluded
+/// through the terminal release; protocol remote-head publication remains
+/// permitted. This call consumes the page and backing exactly once. The returned
+/// `DestroyedPage` retains only terminal identity and must not be used to access
+/// the released page.
 pub(crate) unsafe fn _mi_arenas_page_free_internal<S>(
     page_wrapper: crate::core_types::AllFreePage<S>,
     current_theap: Option<crate::core_types::ThreadHeapLocal>,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY: the contract keeps one claimed, detached, all-free page, its
-    // optional stats owner, registration, arena publication, metadata, and
-    // backing live for this synchronous transaction. The block performs the
-    // ordered accounting, unregister, bitmap, metadata, and backing release
-    // without letting a raw capability escape.
-    unsafe {
-        // Validate all capability-coupled page and arena state before mutation.
-        let page_ptr = page_wrapper.page();
-        let page = page_ptr.as_ptr();
-        let current_theapx = current_theap
-            .map(|theap| theap.ptr().as_ptr())
-            .unwrap_or(ptr::null_mut());
-        crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
-            mi_page_slice_start(page).cast(),
-            MI_PAGE_ALIGN
-        ));
-        crate::internal::mi_assert_internal!(
-            crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
-        );
-        crate::internal::mi_assert_internal!(mi_page_is_owned(page));
-        crate::internal::mi_assert_internal!(mi_page_all_free(page));
-        crate::internal::mi_assert_internal!(mi_page_is_abandoned(page));
-        crate::internal::mi_assert_internal!(
-            page_ptr.queue_next().is_none() && page_ptr.queue_prev().is_none()
-        );
-        let arena_membership = if mi_page_memid_is_arena(page) {
-            let membership = PageArenaMembership::from_page(page_ptr).unwrap_unchecked();
-            Some(membership)
-        } else {
-            None
-        };
+    let page_ptr = page_wrapper.page();
+    let page = page_ptr.as_ptr();
+    let current_theapx = current_theap
+        .map(|theap| theap.ptr().as_ptr())
+        .unwrap_or(ptr::null_mut());
 
-        // Reconcile the page counts before removing publication.
-        let stats_bin = _mi_page_stats_bin(page);
-        if !current_theapx.is_null() {
+    // SAFETY: the claimed page keeps its initialized slice geometry live for
+    // this assertion-only alignment check.
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        unsafe { mi_page_slice_start(page) }.cast(),
+        MI_PAGE_ALIGN
+    ));
+    // SAFETY: the same stable geometry permits the original page-start lookup
+    // and page-map round trip, evaluated only with internal assertions enabled.
+    crate::internal::mi_assert_internal!(unsafe {
+        crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+    });
+    // SAFETY: the retained thread-free claim keeps the initialized ownership
+    // word stable through this assertion-only predicate.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    // SAFETY: the all-free capability and excluded non-protocol mutation keep
+    // the initialized used count stable through this assertion-only predicate.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_all_free(page) });
+    // SAFETY: the detached all-free page remains in its caller-proven abandoned
+    // state through this assertion-only predicate.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    // SAFETY: the caller excludes relinking; preserve the original next read
+    // followed by the short-circuited previous read inside the assertion.
+    crate::internal::mi_assert_internal!(unsafe {
+        page_ptr.queue_next().is_none() && page_ptr.queue_prev().is_none()
+    });
+    // SAFETY: the page's initialized MemId remains stable through this arena
+    // classification before any publication is removed.
+    let arena_membership = if unsafe { mi_page_memid_is_arena(page) } {
+        // SAFETY: the caller-proven arena page retains its live heap, MemId,
+        // arena table, and published start bit through the operation snapshot.
+        let membership = unsafe { PageArenaMembership::from_page(page_ptr).unwrap_unchecked() };
+        Some(membership)
+    } else {
+        None
+    };
+
+    // SAFETY: the claimed initialized page keeps its block-size classification
+    // stable while selecting the accounting bin before publication removal.
+    let stats_bin = unsafe { _mi_page_stats_bin(page) };
+    if !current_theapx.is_null() {
+        // SAFETY: the supplied current-thread stats owner remains live and
+        // exclusively mutable; preserve bin-before-pages decrement order.
+        unsafe {
             crate::internal::__mi_stat_decrease(
                 ptr::addr_of_mut!((*current_theapx).stats.page_bins[stats_bin]),
                 1,
@@ -2161,25 +2184,40 @@ pub(crate) unsafe fn _mi_arenas_page_free_internal<S>(
                 ptr::addr_of_mut!((*current_theapx).stats.pages),
                 1,
             );
-        } else {
-            let heap = mi_page_heap(page);
+        }
+    } else {
+        // SAFETY: the page's initialized heap association remains live and
+        // stable while selecting the atomic statistics owner.
+        let heap = unsafe { mi_page_heap(page) };
+        // SAFETY: the owning heap's atomic statistics remain live; preserve
+        // bin-before-pages decrement order under the MT protocol.
+        unsafe {
             crate::internal::__mi_stat_decrease_mt(
                 ptr::addr_of_mut!((*heap).stats.page_bins[stats_bin]),
                 1,
             );
             crate::internal::__mi_stat_decrease_mt(ptr::addr_of_mut!((*heap).stats.pages), 1);
         }
+    }
 
-        if MI_DEBUG > 1
-            && !mi_page_is_full_local(page)
-            && let Some(membership) = arena_membership.as_ref()
-        {
-            let bin = mi_bin_from_block_size(mi_page_block_size_typed(page));
-            let arena = membership.arena().as_ptr();
-            let range = membership.range();
-            let slice_index = range.start_usize();
-            let slice_count = range.count_usize();
-            let arena_pages = membership.arena_pages().as_ptr();
+    // SAFETY: the page's initialized full flag remains stable; short circuiting
+    // preserves the original debug-gate-before-full-read order.
+    if MI_DEBUG > 1
+        && !unsafe { mi_page_is_full_local(page) }
+        && let Some(membership) = arena_membership.as_ref()
+    {
+        // SAFETY: the live page's initialized block size remains stable while
+        // selecting the debug abandoned-bitmap bin.
+        let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) });
+        let arena = membership.arena().as_ptr();
+        let range = membership.range();
+        let slice_index = range.start_usize();
+        let slice_count = range.count_usize();
+        let arena_pages = membership.arena_pages().as_ptr();
+        // SAFETY: this operation-scoped membership snapshot keeps the arena,
+        // page table, and checked bitmap range live for the ordered debug-only
+        // verification; no publication has been removed yet.
+        unsafe {
             crate::internal::mi_assert_internal!(mi_bbitmap_is_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
                 slice_index,
@@ -2205,21 +2243,30 @@ pub(crate) unsafe fn _mi_arenas_page_free_internal<S>(
                 1
             ));
         }
+    }
 
-        // Remove page-map and arena publication before backing release.
-        _mi_page_map_unregister(page);
-        if let Some(membership) = arena_membership {
-            let arena = membership.arena().as_ptr();
-            let range = membership.range();
-            let slice_index = range.start_usize();
-            let slice_count = range.count_usize();
-            let arena_pages = membership.arena_pages().as_ptr();
-            mi_bitmap_clear((*arena_pages).pages, slice_index);
-            let committed = crate::allocator::page::mi_page_slice_committed(page);
-            if !committed.is_zero() {
-                let total_slices = committed.get() / MI_ARENA_SLICE_SIZE;
-                crate::internal::mi_assert_internal!(slice_count >= total_slices);
-                if total_slices > 0 {
+    // SAFETY: the page is still registered and the caller owns this terminal
+    // transition; unregister it before clearing arena publication or backing.
+    unsafe { _mi_page_map_unregister(page) };
+    if let Some(membership) = arena_membership {
+        let arena = membership.arena().as_ptr();
+        let range = membership.range();
+        let slice_index = range.start_usize();
+        let slice_count = range.count_usize();
+        let arena_pages = membership.arena_pages().as_ptr();
+        // SAFETY: the validated membership identifies this live heap table and
+        // published start bit; this is its single terminal clear.
+        unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
+        // SAFETY: the page metadata remains live after unregister and before
+        // backing release; preserve the committed-size read after page-bit clear.
+        let committed = unsafe { crate::allocator::page::mi_page_slice_committed(page) };
+        if !committed.is_zero() {
+            let total_slices = committed.get() / MI_ARENA_SLICE_SIZE;
+            crate::internal::mi_assert_internal!(slice_count >= total_slices);
+            if total_slices > 0 {
+                // SAFETY: the decoded arena range bounds `total_slices`; publish
+                // committed coverage only after clearing the heap page bit.
+                unsafe {
                     mi_bitmap_setN(
                         (*arena.cast::<MiArenaPrefix>()).slices_committed,
                         slice_index,
@@ -2227,8 +2274,12 @@ pub(crate) unsafe fn _mi_arenas_page_free_internal<S>(
                         ptr::null_mut(),
                     );
                 }
-                let extra = committed.get() % MI_ARENA_SLICE_SIZE;
-                if extra > 0 {
+            }
+            let extra = committed.get() % MI_ARENA_SLICE_SIZE;
+            if extra > 0 {
+                // SAFETY: the live arena names its live subprocess statistics;
+                // atomically remove the partial committed tail after bitmap publication.
+                unsafe {
                     crate::internal::__mi_stat_decrease_mt(
                         ptr::addr_of_mut!(
                             (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed
@@ -2236,18 +2287,31 @@ pub(crate) unsafe fn _mi_arenas_page_free_internal<S>(
                         crate::core_types::CommittedBytes::new(extra).get(),
                     );
                 }
-            } else {
-                crate::internal::mi_assert_internal!(mi_bitmap_is_setN(
+            }
+        } else {
+            // SAFETY: the stable membership range covers initialized committed
+            // bitmap storage for this assertion-only zero-commit check.
+            crate::internal::mi_assert_internal!(unsafe {
+                mi_bitmap_is_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
                     slice_index,
                     slice_count,
-                ));
-            }
+                )
+            });
         }
-        // Complete metadata/backing release, then terminalize the identity.
-        if mi_page_meta_is_separated(page) {
-            (*page).block_size = 0;
-        }
+    }
+    // SAFETY: page metadata remains live until backing release; preserve the
+    // separated-metadata predicate before the conditional block-size clear.
+    if unsafe { mi_page_meta_is_separated(page) } {
+        // SAFETY: this terminal path exclusively owns the separate page metadata
+        // and clears its block size immediately before releasing the backing.
+        unsafe { (*page).block_size = 0 };
+    }
+    // SAFETY: all registration and arena publication has been removed in the
+    // required order. Materialize slice start, full size, then MemId in the
+    // original call expression, consume the backing once, and terminalize the
+    // all-free capability without any subsequent page access.
+    unsafe {
         _mi_arenas_free(
             mi_page_slice_start(page).cast(),
             mi_page_full_size(PagePtr::new_unchecked(page)).get(),

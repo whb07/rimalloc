@@ -1628,28 +1628,40 @@ unsafe fn mi_find_free_page_typed(
     queue: crate::core_types::NormalPageQueue,
     block_size: crate::core_types::BlockSize,
 ) -> Option<crate::core_types::AvailablePage> {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        if let Some(page) = queue.ptr().first() {
-            let local = crate::core_types::assume_local_page(page);
-            if let Ok(available) = local.try_ensure_available() {
-                let page_raw = available.page().as_ptr();
-                if MI_SECURE >= 2
-                    && mi_page_capacity_count(page_raw).get()
-                        < mi_page_reserved_count(page_raw).get()
-                    && ((_mi_theap_random_next(theap.ptr().as_ptr()) & 1) == 1)
-                {
-                    let _ = mi_page_extend_free(theap.ptr().as_ptr(), page_raw);
+    // SAFETY: the caller keeps the exact live queue and its initialized head stable under
+    // exclusive local ownership for this single front-page snapshot.
+    if let Some(page) = unsafe { queue.ptr().first() } {
+        // SAFETY: the caller proves the front page is live and current-thread owned with stable
+        // local/available free lists; construct and consume the Local capability exactly once.
+        let local = unsafe { crate::core_types::assume_local_page(page) };
+        // SAFETY: the same exclusive page-local epoch permits the one availability refinement,
+        // including its ordered local-to-available transfer when required.
+        if let Ok(available) = unsafe { local.try_ensure_available() } {
+            let page_raw = available.page().as_ptr();
+            if MI_SECURE >= 2
+                && unsafe {
+                    // SAFETY: the available page and current-thread heap remain live. Preserve the
+                    // capacity read, reserved read, comparison short circuit, then random-state
+                    // mutation only when every preceding condition succeeds.
+                    mi_page_capacity_count(page_raw).get() < mi_page_reserved_count(page_raw).get()
+                        && ((_mi_theap_random_next(theap.ptr().as_ptr()) & 1) == 1)
                 }
-                mi_page_reset_retire_expire(page_raw);
-                return Some(available);
+            {
+                // SAFETY: the selected page and owner remain live and exclusively locally mutable;
+                // extension may synchronously use the caller-proven commit callback and its state.
+                let _ = unsafe { mi_page_extend_free(theap.ptr().as_ptr(), page_raw) };
             }
+            // SAFETY: extension has completed or was skipped, and the same live selected page's
+            // retirement countdown is exclusively locally mutable before returning its witness.
+            unsafe { mi_page_reset_retire_expire(page_raw) };
+            return Some(available);
         }
-        // SAFETY: the caller-proven current-thread queue epoch covers the complete active search;
-        // success establishes immediate availability before this consumed refinement.
-        mi_page_queue_find_free_ex_active(theap, queue, block_size, true)
-            .and_then(|active| active.try_available().ok())
     }
+    // SAFETY: only front-page absence or failed availability refinement reaches this fallback. The
+    // caller-proven current-thread queue epoch covers the complete active search; success
+    // establishes immediate availability before the returned Active capability is consumed once.
+    unsafe { mi_page_queue_find_free_ex_active(theap, queue, block_size, true) }
+        .and_then(|active| active.try_available().ok())
 }
 
 /// Allocate one singleton huge page and return its available-list capability.

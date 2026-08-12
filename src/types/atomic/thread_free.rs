@@ -98,14 +98,6 @@ impl DetachedRemoteList {
     }
 
     /// # Safety
-    /// `head` must be null or the uniquely detached head accepted at a raw
-    /// compatibility ingress.
-    #[inline(always)]
-    pub(crate) unsafe fn from_raw_compat(head: Option<BlockPtr>) -> Self {
-        Self(head)
-    }
-
-    /// # Safety
     /// The detached chain must belong to `page` and remain uniquely owned.
     #[inline]
     pub(crate) unsafe fn into_batch_for_local(
@@ -227,9 +219,8 @@ impl AtomicThreadFree {
     /// Atomically detach the current remote free-list head while preserving the
     /// ownership bit in `xthread_free`.
     ///
-    /// Mirrors the CAS loop in `mi_page_thread_free_collect`; returning a
-    /// `DetachedRemoteList` makes subsequent collection consume a uniquely
-    /// owned chain instead of a raw `mi_block_t*`.
+    /// Returning a `DetachedRemoteList` makes subsequent collection consume a
+    /// uniquely owned chain instead of a raw `mi_block_t*`.
     ///
     /// # Safety
     /// `self` must point to a valid page's `xthread_free` field.

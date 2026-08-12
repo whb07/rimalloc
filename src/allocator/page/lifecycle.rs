@@ -1,13 +1,17 @@
 use crate::allocator::options::_mi_error_message_fmt;
 use crate::core_types::{
-    AvailableFreeList, BatchValidationError, BlockPtr, DetachedRemoteList, Errno, LocalFreeList,
-    LocalPage, OwnedAbandonedPage, PagePtr, PublishedRemoteHead,
+    AvailableFreeList, BatchValidationError, DetachedRemoteList, Errno, LocalFreeList, LocalPage,
+    OwnedAbandonedPage, PagePtr, PublishedRemoteHead,
 };
 use crate::internal::mi_block_next;
-use crate::types::{mi_block_t, mi_page_t};
+use crate::types::mi_page_t;
 
 #[cfg(test)]
+use crate::core_types::BlockPtr;
+#[cfg(test)]
 use crate::internal::mi_block_set_next;
+#[cfg(test)]
+use crate::types::mi_block_t;
 #[cfg(test)]
 use core::ptr;
 
@@ -88,25 +92,6 @@ pub(crate) unsafe fn mi_page_decrement_retire_expire(
         let expire = mi_page_retire_expire(page).decrement();
         mi_page_set_retire_expire(page, expire);
         expire
-    }
-}
-
-/// # Safety
-/// `page` must be owned by the current thread, and `head` must be a detached
-/// thread-free list for that page.
-#[inline]
-pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut mi_block_t) {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        if head.is_null() {
-            return;
-        }
-
-        let page_ptr = PagePtr::new_unchecked(page);
-        let remote = DetachedRemoteList::from_raw_compat(Some(BlockPtr::new_unchecked(head)));
-        let local = page_ptr.local_free();
-        let local_page = crate::core_types::assume_local_page(page_ptr);
-        let _ = collect_remote_for_local_page(&local_page, remote, local);
     }
 }
 
@@ -254,41 +239,6 @@ pub(crate) unsafe fn collect_remote_for_owned_abandoned_page(
         Ok(None) => Ok(local),
         Ok(Some(batch)) => Ok(unsafe { batch.collect_into_owned_abandoned_page(page, local) }),
         Err(error) => Err(report_remote_list_corruption(error)),
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by the current thread heap.
-#[inline]
-pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let page_ptr = PagePtr::new_unchecked(page);
-        let local_page = crate::core_types::assume_local_page(page_ptr);
-        let atomic_tf = page_ptr.thread_free_cell();
-        let remote = atomic_tf.detach_head();
-        if remote.is_empty() {
-            return;
-        }
-        let _ = mi_page_thread_free_collect_typed(local_page, remote);
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by the current allocator state.
-#[inline]
-pub(crate) unsafe fn mi_page_thread_free_collect_typed(
-    page: LocalPage,
-    remote: DetachedRemoteList,
-) -> LocalFreeList {
-    // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
-    unsafe {
-        let page_ptr = page.page();
-        let local = page_ptr.local_free();
-        match collect_remote_for_local_page(&page, remote, local) {
-            Ok(local) => local,
-            Err(_) => page_ptr.local_free(),
-        }
     }
 }
 

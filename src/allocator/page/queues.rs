@@ -48,10 +48,27 @@ pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
     }
 }
 
+/// Detach one page from its owning heap queue.
+///
 /// # Safety
-/// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
+/// `queue` must be nonnull and point to a live initialized normal, huge, or full queue in a live
+/// initialized locally owned heap under current-thread ownership or exclusive collection/teardown
+/// access. `page` must be nonnull and point to a live initialized page owned by that heap, linked
+/// exactly once in `queue`, and block-size/classification compatible with it. The queue's first/
+/// last links and nonzero count, every linked page and adjacent link, the heap's direct cache and
+/// nonzero page count, and the page's owner, class, flag, and link metadata must remain live,
+/// initialized, and internally consistent.
+///
+/// The caller must exclusively own local queue-link, queue-count, direct-cache, page-count, and
+/// page-flag mutation throughout the removal; protocol atomic remote-free publication is
+/// permitted. Allocator diagnostics must remain valid, must not unwind, and must not incompatibly
+/// reenter page, queue, or heap mutation. On return the page is detached with both links and its
+/// full-queue flag cleared, both counts are decremented, and the direct cache reflects a changed
+/// queue front where applicable.
 pub(crate) unsafe fn mi_page_queue_remove_raw(queue: *mut mi_page_queue_t, page: *mut mi_page_t) {
-    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
+    // SAFETY: the raw contract supplies one live queue and its exactly linked live page under an
+    // exclusive local removal epoch. Constructing non-owning typed views and immediately
+    // dispatching preserves that ownership and does not extend any lifetime.
     unsafe {
         let queue = PageQueuePtr::new_unchecked(queue);
         let page = PagePtr::new_unchecked(page);
@@ -59,16 +76,30 @@ pub(crate) unsafe fn mi_page_queue_remove_raw(queue: *mut mi_page_queue_t, page:
     }
 }
 
+/// Detach one page from its owning heap queue.
+///
 /// # Safety
-/// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
+/// `queue` must be a live initialized normal, huge, or full queue in the live locally owned heap
+/// that owns `page`. `page` must be live, initialized, linked exactly once in `queue`, and block-
+/// size/classification compatible with it. The queue's first/last links and nonzero count, every
+/// linked page and adjacent link, the heap's direct cache and nonzero page count, and the page's
+/// owner, class, flag, and link metadata must remain live, initialized, and internally consistent.
+/// Local relinking, cache/count/flag mutation, and heap teardown are excluded; protocol atomic
+/// remote-free publication is permitted. Allocator diagnostics must remain valid, non-unwinding,
+/// and free of incompatible reentry. On return the page is detached, its links and full flag are
+/// cleared, the queue and heap counts are decremented, and any changed normal-queue front has been
+/// published to the direct cache.
 #[inline]
 pub(crate) unsafe fn mi_page_queue_remove_typed(queue: PageQueuePtr, page: PagePtr) {
-    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
-    unsafe {
-        let queue_ptr = queue;
-        let queue = queue.as_ptr();
-        let page_ptr = page;
-        let page = page.as_ptr();
+    let queue_ptr = queue;
+    let queue = queue.as_ptr();
+    let page_ptr = page;
+    let page = page.as_ptr();
+
+    // SAFETY: the contract keeps the live page, owning heap, source queue, classification, count,
+    // and existing topology stable while this read-only preflight verifies the removal domain and
+    // snapshots the heap association used by the subsequent publication epoch.
+    let theap = unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_expensive!(mi_page_queue_contains(queue, page));
         crate::internal::mi_assert_internal!(super::mi_page_queue_count_typed(queue).get() >= 1);
@@ -78,7 +109,15 @@ pub(crate) unsafe fn mi_page_queue_remove_typed(queue: PageQueuePtr, page: PageP
                 || (super::mi_page_is_huge(page) && super::mi_page_queue_is_huge(queue))
                 || (super::mi_page_is_in_full(page) && super::mi_page_queue_is_full(queue))
         );
-        let theap = super::mi_page_theap(page);
+        super::mi_page_theap(page)
+    };
+
+    // SAFETY: the successful preflight and function contract give exclusive local ownership of
+    // every affected adjacent link, queue endpoint/count, direct-cache entry, heap count, and page
+    // flag/link field. This single mutation epoch preserves the original adjacent-link, tail,
+    // head/cache, heap count, queue count, link-clear, then full-flag-clear publication order and
+    // retains the repeated endpoint reads used by the branch structure.
+    unsafe {
         let prev = page_ptr.queue_prev();
         let next = page_ptr.queue_next();
         if let Some(prev) = prev {
@@ -555,6 +594,129 @@ pub(super) unsafe fn mi_theap_direct_cache_start(
 mod tests {
     use super::*;
     use core::mem::MaybeUninit;
+
+    #[test]
+    fn remove_detaches_middle_head_tail_sole_and_full_pages() {
+        let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
+        let mut pages = [const { MaybeUninit::<mi_page_t>::zeroed() }; 5];
+
+        // SAFETY: the stack-local heap initializes its queue table, direct cache, and page count.
+        // The five stack-local pages initialize the owner, class, flags, and exact queue links used
+        // by the normal middle/head/tail/sole sequence and sole full-queue case. The heap, queues,
+        // pages, and every exclusively mutated field remain live throughout each removal.
+        unsafe {
+            let theap = theap.as_mut_ptr();
+            (*theap).pages = crate::allocator::init::MI_PAGE_QUEUES_EMPTY();
+            (*theap).pages_free_direct = crate::allocator::init::MI_SMALL_PAGES_EMPTY();
+            (*theap).page_count = 5;
+
+            let block_size = crate::core_types::BlockSize::new_unchecked(64);
+            let thread_id = crate::core_types::ThreadId::new(8)
+                .expect("fixture thread id must not overlap page flag bits")
+                .get();
+            let normal = crate::core_types::PageQueuePtr::new_unchecked(ptr::addr_of_mut!(
+                (*theap).pages[mi_bin_from_block_size(block_size).as_usize()]
+            ));
+            let full = crate::core_types::PageQueuePtr::new_unchecked(ptr::addr_of_mut!(
+                (*theap).pages[MI_BIN_FULL]
+            ));
+            let page_ptrs = pages.each_mut().map(|page| {
+                let page = page.as_mut_ptr();
+                (*page).theap = theap;
+                (*page).block_size = block_size.get();
+                (*page).xthread_id = thread_id;
+                PagePtr::new_unchecked(page)
+            });
+            let [first, middle, remaining, tail, full_page] = page_ptrs;
+
+            first.set_queue_prev(None);
+            first.set_queue_next(Some(middle));
+            middle.set_queue_prev(Some(first));
+            middle.set_queue_next(Some(remaining));
+            remaining.set_queue_prev(Some(middle));
+            remaining.set_queue_next(Some(tail));
+            tail.set_queue_prev(Some(remaining));
+            tail.set_queue_next(None);
+            normal.set_first(Some(first));
+            normal.set_last(Some(tail));
+            normal.set_count(crate::core_types::PageQueueCount::new(4));
+
+            let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            );
+            let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(normal);
+            mi_theap_queue_first_update_typed(owner, normal_queue);
+            let direct_idx = mi_direct_bin_from_size(block_size.get());
+
+            mi_page_queue_remove_typed(normal, middle);
+            assert_eq!(normal.first(), Some(first));
+            assert_eq!(normal.last(), Some(tail));
+            assert_eq!(normal.count().get(), 3);
+            assert_eq!(first.queue_prev(), None);
+            assert_eq!(first.queue_next(), Some(remaining));
+            assert_eq!(remaining.queue_prev(), Some(first));
+            assert_eq!(remaining.queue_next(), Some(tail));
+            assert_eq!(tail.queue_prev(), Some(remaining));
+            assert_eq!(tail.queue_next(), None);
+            assert_eq!(middle.queue_prev(), None);
+            assert_eq!(middle.queue_next(), None);
+            assert!(!mi_page_is_in_full(middle.as_ptr()));
+            assert_eq!(owner.ptr().direct_page(direct_idx), first);
+            assert_eq!((*theap).page_count, 4);
+
+            mi_page_queue_remove_raw(normal.as_ptr(), first.as_ptr());
+            assert_eq!(normal.first(), Some(remaining));
+            assert_eq!(normal.last(), Some(tail));
+            assert_eq!(normal.count().get(), 2);
+            assert_eq!(first.queue_prev(), None);
+            assert_eq!(first.queue_next(), None);
+            assert_eq!(remaining.queue_prev(), None);
+            assert_eq!(remaining.queue_next(), Some(tail));
+            assert_eq!(tail.queue_prev(), Some(remaining));
+            assert_eq!(tail.queue_next(), None);
+            assert_eq!(owner.ptr().direct_page(direct_idx), remaining);
+            assert_eq!((*theap).page_count, 3);
+
+            mi_page_queue_remove_typed(normal, tail);
+            assert_eq!(normal.first(), Some(remaining));
+            assert_eq!(normal.last(), Some(remaining));
+            assert_eq!(normal.count().get(), 1);
+            assert_eq!(remaining.queue_prev(), None);
+            assert_eq!(remaining.queue_next(), None);
+            assert_eq!(tail.queue_prev(), None);
+            assert_eq!(tail.queue_next(), None);
+            assert_eq!(owner.ptr().direct_page(direct_idx), remaining);
+            assert_eq!((*theap).page_count, 2);
+
+            mi_page_queue_remove_typed(normal, remaining);
+            assert_eq!(normal.first(), None);
+            assert_eq!(normal.last(), None);
+            assert_eq!(normal.count().get(), 0);
+            assert_eq!(remaining.queue_prev(), None);
+            assert_eq!(remaining.queue_next(), None);
+            assert_eq!(
+                owner.ptr().direct_page(direct_idx).as_ptr(),
+                ptr::addr_of!(_mi_page_empty).cast_mut()
+            );
+            assert_eq!((*theap).page_count, 1);
+
+            mi_page_set_in_full(full_page.as_ptr(), true);
+            full_page.set_queue_prev(None);
+            full_page.set_queue_next(None);
+            full.set_first(Some(full_page));
+            full.set_last(Some(full_page));
+            full.set_count(crate::core_types::PageQueueCount::new(1));
+
+            mi_page_queue_remove_typed(full, full_page);
+            assert_eq!(full.first(), None);
+            assert_eq!(full.last(), None);
+            assert_eq!(full.count().get(), 0);
+            assert_eq!(full_page.queue_prev(), None);
+            assert_eq!(full_page.queue_next(), None);
+            assert!(!mi_page_is_in_full(full_page.as_ptr()));
+            assert_eq!((*theap).page_count, 0);
+        }
+    }
 
     #[test]
     fn push_front_and_tail_publish_empty_and_nonempty_queues() {

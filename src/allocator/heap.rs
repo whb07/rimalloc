@@ -560,14 +560,19 @@ pub unsafe extern "C" fn mi_check_owned(p: *const c_void) -> bool {
     unsafe { mi_any_heap_contains(p) }
 }
 
+/// Returns false for full pages (`used == capacity`) and pages whose capacity
+/// has not reached their reservation (`capacity < reserved`).
+///
 /// # Safety
 ///
-/// `heap` may be null. A non-null `p` must be suitable for mimalloc's safe page
-/// lookup. The resolved page must remain live and initialized with stable
-/// used/capacity/reserved counts, queue links, and heap association. A non-null
-/// `heap` must remain live and initialized. Page/heap teardown, reassignment,
-/// queue relink, and non-protocol metadata mutation must not race; protocol
-/// remote-free publication is permitted while these inspected fields stay stable.
+/// `p` may be null or arbitrary for the registered page-map lookup. The page
+/// map and any resolved page backing must remain live and initialized through
+/// the query. A resolved page must have stable counts satisfying
+/// `used <= capacity <= reserved`, stable queue links, and a stable live heap
+/// association. A non-null `heap` must remain live and initialized. Page/heap
+/// teardown, reassignment, queue relink, and non-protocol metadata mutation must
+/// not race; protocol remote-free publication is permitted while these
+/// inspected fields stay stable. No pointer or witness is retained.
 // SAFETY: under-utilized inspection converts
 // raw heap/page metadata to typed witnesses before reading page counters.
 #[unsafe(no_mangle)]
@@ -579,66 +584,78 @@ pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
     if p.is_null() {
         return false;
     }
-    // SAFETY: non-null `p` is suitable for
-    // allocator page lookup by API contract.
-    unsafe {
-        let heap = if heap.is_null() {
-            None
-        } else {
-            BorrowedHeap::from_lookup_raw(heap)
-        };
-        let page = _mi_safe_ptr_page(p);
-        let Some(page) = PagePtr::new(page) else {
-            return false;
-        };
-        mi_unsafe_heap_page_is_under_utilized_typed(heap, page, perc_threshold)
-    }
+    let heap = if heap.is_null() {
+        None
+    } else {
+        // SAFETY: the caller keeps this non-null heap live and initialized for
+        // the synchronous identity comparison; the witness is not retained.
+        unsafe { BorrowedHeap::from_lookup_raw(heap) }
+    };
+    // SAFETY: the caller keeps the initialized page map and any registered
+    // backing reached from arbitrary `p` live through the query.
+    let page = unsafe { _mi_safe_ptr_page(p) };
+    let Some(page) = PagePtr::new(page) else {
+        return false;
+    };
+    // SAFETY: a non-null lookup result names caller-stabilized initialized page
+    // metadata with the count, queue, and heap-association invariants required
+    // by the typed query; the optional heap is likewise live and stable.
+    unsafe { mi_unsafe_heap_page_is_under_utilized_typed(heap, page, perc_threshold) }
 }
 
 /// Inspect utilization and optional heap ownership for a mapped page.
+/// Full pages and pages with capacity below their reservation are not treated
+/// as under-utilized.
 ///
 /// # Safety
-/// `page` must remain live and initialized with stable used/capacity/reserved
-/// counts, queue links, and heap association satisfying allocator invariants.
-/// If present, `heap` must remain live and initialized. Page/heap teardown,
-/// reassignment, queue relink, and non-protocol metadata mutation must not race;
-/// protocol remote-free publication is permitted while these fields remain
-/// stable. Neither witness is retained.
+/// `page` must remain live and initialized with stable counts satisfying
+/// `used <= capacity <= reserved`, stable queue links, and a stable live heap
+/// association. If present, `heap` must remain live and initialized. Page/heap
+/// teardown, reassignment, queue relink, and non-protocol metadata mutation must
+/// not race; protocol remote-free publication is permitted while these fields
+/// remain stable. Neither witness is retained.
 #[inline]
 unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
     heap: Option<BorrowedHeap>,
     page: PagePtr,
     perc_threshold: usize,
 ) -> bool {
-    // SAFETY: the caller stabilizes the initialized page counters, queue links,
-    // and heap association, plus the optional borrowed heap, for this one
-    // synchronous classification.
-    unsafe {
-        let page_raw = page.as_ptr();
-        let used = crate::allocator::page::mi_page_used_count(page_raw);
-        let capacity = crate::allocator::page::mi_page_capacity_count(page_raw);
-        let reserved = crate::allocator::page::mi_page_reserved_count(page_raw);
-        if used.get() == capacity.get() || capacity.get() < reserved.get() {
-            return false;
-        }
-        if page.queue_prev().is_none() {
-            return false;
-        }
-
-        let Some(page_heap) = HeapPtr::new(mi_page_heap(page_raw)) else {
-            return false;
-        };
-        if let Some(heap) = heap
-            && !core::ptr::eq(page_heap.as_ptr(), heap.ptr().as_ptr())
-        {
-            return false;
-        }
-
-        if perc_threshold >= 100 {
-            return true;
-        }
-        perc_threshold >= ((100usize * used.as_usize()) / capacity.as_usize())
+    let page_raw = page.as_ptr();
+    // SAFETY: the caller keeps the live initialized page and the coupled count
+    // fields stable with `used <= capacity <= reserved` for this ordered
+    // snapshot. Preserve the historical used, capacity, then reserved reads.
+    let (used, capacity, reserved) = unsafe {
+        (
+            crate::allocator::page::mi_page_used_count(page_raw),
+            crate::allocator::page::mi_page_capacity_count(page_raw),
+            crate::allocator::page::mi_page_reserved_count(page_raw),
+        )
+    };
+    if used.get() == capacity.get() || capacity.get() < reserved.get() {
+        return false;
     }
+    // SAFETY: the caller keeps the live page's initialized queue links stable
+    // through this read; the returned link is tested only for absence.
+    if unsafe { page.queue_prev().is_none() } {
+        return false;
+    }
+
+    // SAFETY: the caller keeps the page's live heap association stable; the
+    // owner lookup is synchronous and its result is not retained.
+    let page_heap = unsafe { mi_page_heap(page_raw) };
+    let Some(page_heap) = HeapPtr::new(page_heap) else {
+        return false;
+    };
+    if let Some(heap) = heap
+        && !core::ptr::eq(page_heap.as_ptr(), heap.ptr().as_ptr())
+    {
+        return false;
+    }
+
+    if perc_threshold >= 100 {
+        return true;
+    }
+    perc_threshold >= ((100usize * used.as_usize()) / capacity.as_usize())
 }
 
 /// # Safety

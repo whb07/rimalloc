@@ -47,9 +47,7 @@ fn heap_witnesses_preserve_heap_pointer() {
 
 #[test]
 fn main_heap_checked_constructor_accepts_only_main_heap() {
-    // SAFETY: `mi_heap_main` returns the
-    // allocator-owned main heap pointer for checked witness construction.
-    let main_raw = unsafe { mi_heap_main() };
+    let main_raw = mi_heap_main();
     // SAFETY: the main heap pointer is non-null
     // allocator metadata for this process.
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
@@ -78,9 +76,7 @@ fn main_heap_checked_constructor_accepts_only_main_heap() {
 
 #[test]
 fn owned_heap_checked_constructor_rejects_main_heap() {
-    // SAFETY: `mi_heap_main` returns the
-    // allocator-owned main heap pointer for checked witness construction.
-    let main_raw = unsafe { mi_heap_main() };
+    let main_raw = mi_heap_main();
     // SAFETY: the main heap pointer is non-null
     // allocator metadata for this process.
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
@@ -109,9 +105,7 @@ fn owned_heap_checked_constructor_rejects_main_heap() {
 
 #[test]
 fn main_heap_cannot_create_owned_delete_witness() {
-    // SAFETY: `mi_heap_main` returns the
-    // allocator-owned main heap pointer for checked witness construction.
-    let main_raw = unsafe { mi_heap_main() };
+    let main_raw = mi_heap_main();
     // SAFETY: the main heap pointer is non-null
     // allocator metadata for this process.
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
@@ -142,9 +136,7 @@ fn borrowed_heap_raw_constructors_reject_null_and_preserve_heap() {
         "lookup raw constructor should preserve failed heap lookups"
     );
 
-    // SAFETY: `mi_heap_main` returns the
-    // allocator-owned main heap pointer for borrowed witness construction.
-    let main_raw = unsafe { mi_heap_main() };
+    let main_raw = mi_heap_main();
     // SAFETY: raw constructor accepts non-null
     // heap metadata returned by the allocator.
     let main = unsafe { BorrowedHeap::from_allocation_raw(main_raw) }
@@ -197,9 +189,7 @@ fn thread_heap_borrowed_accepts_only_initialized_theaps() {
 
 #[test]
 fn thread_heap_state_classifies_main_initialized_uninitialized_and_deleted() {
-    // SAFETY: `mi_heap_main` returns the
-    // allocator-owned main heap pointer for stack-local thread-heap metadata.
-    let main_raw = unsafe { mi_heap_main() };
+    let main_raw = mi_heap_main();
     // SAFETY: the main heap pointer is non-null
     // allocator metadata for this process.
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };

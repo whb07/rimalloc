@@ -259,22 +259,34 @@ unsafe fn ensure_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
     unsafe { MainHeap::new_unchecked(heap) }
 }
 
-pub(super) unsafe fn heap_main() -> *mut mi_heap_t {
-    // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
+/// Returns the current subprocess main heap, attempting the existing lazy
+/// process-main initialization when needed. The raw result is non-owning and
+/// grants no dereference rights; it may remain null when a custom subprocess
+/// has no registered main heap.
+pub(super) fn heap_main() -> *mut mi_heap_t {
+    // SAFETY: every TLS backend only reads the allocator-controlled current-
+    // thread default slot. A nonnull value is live current-thread metadata or
+    // the static empty sentinel, with an initialized TLD header while published.
     let theap = unsafe { crate::platform::_mi_theap_default_raw() };
     let subproc = if theap.is_null() {
         main_addr()
     } else {
-        // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
+        // SAFETY: the preceding live-or-static-sentinel proof keeps the TLD
+        // pointer and its initialized subproc association readable here.
         let tld = unsafe { (*theap).tld };
-        // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
+        // SAFETY: live current-thread metadata keeps its associated subprocess
+        // live, while the sentinel TLD statically names the process main subproc.
         unsafe { (*tld).subproc }
     };
-    // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
+    // SAFETY: `subproc` is the process main static or the live subprocess
+    // associated with the published current TLD, and remains readable through
+    // this immediate main-heap load.
     let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if heap.is_null() {
         mi_heap_main_init();
-        // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
+        // SAFETY: the initialization attempt preserves the same live subprocess
+        // association for this immediate second pointer-value read; the result
+        // may remain null for a custom subprocess without a registered heap.
         heap = unsafe { mi_subproc_heap_main_raw(subproc) };
         crate::internal::mi_assert_internal!(!heap.is_null());
     }

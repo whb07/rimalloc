@@ -790,13 +790,14 @@ pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     unsafe { subproc::ensure_heap_main(subproc) }
 }
 
-// SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
+// SAFETY: this is the crate's unique definition of the C ABI symbol.
 #[unsafe(no_mangle)]
-/// # Safety
-/// Returns the current subproc main heap for the bounded init/runtime scaffold.
-pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
-    // SAFETY: current main-heap lookup preserves raw default-thread and subproc association semantics.
-    unsafe { subproc::heap_main() }
+/// Returns the current subprocess main heap, attempting the existing lazy
+/// process-main initialization when needed. The raw pointer is non-owning and
+/// grants no dereference or lifetime rights; it may remain null when a custom
+/// subprocess has no registered main heap.
+pub extern "C" fn mi_heap_main() -> *mut mi_heap_t {
+    subproc::heap_main()
 }
 
 // SAFETY: main-heap predicates compare validated heap and thread-heap associations.

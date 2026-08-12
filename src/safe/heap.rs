@@ -488,9 +488,7 @@ impl MainHeap {
     /// Does not panic.
     #[inline]
     pub fn get() -> Result<Self, HeapError> {
-        // SAFETY: returns the process main heap or null if
-        // runtime initialization is unavailable.
-        let ptr = unsafe { crate::allocator::init::mi_heap_main() };
+        let ptr = crate::allocator::init::mi_heap_main();
         let ptr = NonNull::new(ptr).ok_or(HeapError::MainUnavailable)?;
         Ok(Self {
             ptr,

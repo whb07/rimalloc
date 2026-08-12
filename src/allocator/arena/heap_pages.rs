@@ -208,9 +208,7 @@ pub unsafe extern "C" fn mi_heap_visit_blocks(
     arg: *mut c_void,
 ) -> bool {
     let heap = if heap.is_null() {
-        // SAFETY: null heap follows the public
-        // C ABI convention for selecting the process main heap.
-        unsafe { mi_heap_main() }
+        crate::allocator::init::mi_heap_main()
     } else {
         heap
     };
@@ -244,9 +242,7 @@ pub unsafe extern "C" fn mi_heap_visit_abandoned_blocks(
     arg: *mut c_void,
 ) -> bool {
     let heap = if heap.is_null() {
-        // SAFETY: null heap follows the public
-        // C ABI convention for selecting the process main heap.
-        unsafe { mi_heap_main() }
+        crate::allocator::init::mi_heap_main()
     } else {
         heap
     };
@@ -376,9 +372,7 @@ unsafe extern "C" fn mi_heap_delete_page(
         let mut arena_pages_target =
             unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena_id) };
         if arena_pages_target.is_null() {
-            // SAFETY: fallback to the main heap
-            // preserves transfer when the requested target lacks arena tables.
-            heap_target = unsafe { mi_heap_main() };
+            heap_target = crate::allocator::init::mi_heap_main();
             // SAFETY: the fallback main heap is live initialized allocator metadata, so its owning
             // thread-heap prefix is readable for target stats.
             theap_target = unsafe { mi_heap_theap(heap_target) };
@@ -504,9 +498,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_move_pages(
         return;
     };
     if heap_to.is_null() {
-        // SAFETY: null target follows the
-        // internal ABI convention for moving pages to the main heap.
-        heap_to = unsafe { mi_heap_main() };
+        heap_to = crate::allocator::init::mi_heap_main();
     }
     let Some(heap_to) = HeapPtr::new(heap_to) else {
         crate::internal::mi_assert_internal!(false);

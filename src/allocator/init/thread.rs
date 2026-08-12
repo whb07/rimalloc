@@ -595,9 +595,7 @@ pub(super) fn init() {
     if unsafe { init_default() }.is_null() {
         return;
     }
-    // SAFETY: successful default initialization published the current
-    // subprocess main heap and keeps it live through the stats update.
-    let heap = unsafe { mi_heap_main() };
+    let heap = mi_heap_main();
     // SAFETY: `heap` is the live subprocess main-heap prefix; its atomic thread
     // statistic is initialized and remains valid during this lifecycle update.
     unsafe {

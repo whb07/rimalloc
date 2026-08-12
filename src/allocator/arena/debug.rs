@@ -596,9 +596,7 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
 /// Arena/page teardown, registry relinking, and non-atomic metadata mutation must not race; atomic
 /// bitmap updates through allocator protocols remain permitted.
 pub unsafe extern "C" fn mi_debug_show_arenas() {
-    // SAFETY: process initialization keeps the main heap live for the process lifetime; this call
-    // obtains its current initialized pointer without transferring ownership.
-    let Some(heap) = HeapPtr::new(unsafe { mi_heap_main() }) else {
+    let Some(heap) = HeapPtr::new(crate::allocator::init::mi_heap_main()) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };

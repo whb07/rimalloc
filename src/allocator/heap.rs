@@ -68,9 +68,7 @@ pub(crate) unsafe fn mi_heap_theap_typed(heap: Option<HeapPtr>) -> Option<Thread
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_set_numa_affinity(heap: *mut mi_heap_t, numa_node: i32) {
     let heap = if heap.is_null() {
-        // SAFETY: null heap selects the process
-        // main heap by API contract.
-        HeapPtr::new(unsafe { mi_heap_main() })
+        HeapPtr::new(mi_heap_main())
     } else {
         HeapPtr::new(heap)
     };
@@ -114,9 +112,7 @@ pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
     let Some(heap) = (unsafe { BorrowedHeap::from_lookup_raw(heap) }) else {
         return;
     };
-    // SAFETY: source validation completed first, and the allocator keeps the
-    // live main heap available for the destination statistics protocol.
-    let Some(main) = HeapPtr::new(unsafe { mi_heap_main() }) else {
+    let Some(main) = HeapPtr::new(mi_heap_main()) else {
         return;
     };
     // SAFETY: the caller exclusively owns the live source through its reset;
@@ -143,9 +139,7 @@ pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t) -> *mut mi_heap_t {
     crate::allocator::init::mi_thread_init();
-    // SAFETY: successful current-thread initialization keeps the live process
-    // main heap and its subprocess association available for this construction.
-    let heap_main = unsafe { mi_heap_main() };
+    let heap_main = mi_heap_main();
     if heap_main.is_null() {
         return ptr::null_mut();
     }
@@ -507,9 +501,7 @@ pub unsafe extern "C" fn mi_any_heap_contains(p: *const c_void) -> bool {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_void) -> bool {
     let heap = if heap.is_null() {
-        // SAFETY: null heap selects the main
-        // heap by API contract.
-        unsafe { mi_heap_main() }
+        mi_heap_main()
     } else {
         heap.cast_mut()
     };
@@ -526,13 +518,7 @@ pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_vo
 // into a borrowed witness before comparing allocator page ownership.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_void) -> bool {
-    let heap = if heap.is_null() {
-        // SAFETY: null heap selects the main
-        // heap by API contract.
-        unsafe { mi_heap_main() }
-    } else {
-        heap
-    };
+    let heap = if heap.is_null() { mi_heap_main() } else { heap };
     // SAFETY: forwards this API's
     // ownership-inspection contract.
     let Some(heap) = (unsafe { BorrowedHeap::from_lookup_raw(heap) }) else {

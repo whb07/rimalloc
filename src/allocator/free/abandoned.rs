@@ -29,45 +29,68 @@ unsafe fn try_free_abandoned(
     Ok(unsafe { _mi_arenas_page_free_internal(all_free, None) })
 }
 
+/// Try to re-publish a claimed abandoned page through mapped-abandoned state.
+///
+/// # Safety
+/// `page` must be the unique live ownership claim for an initialized abandoned,
+/// non-all-free page. Its count fields, flags, MemId, associated heap and stats,
+/// arena membership, page-map registration, metadata, and backing must remain
+/// live and stable until this call returns or consumes the claim. Concurrent
+/// claim, reassignment, relink, backing release, or teardown is excluded;
+/// protocol remote-free publication may continue through allocator atomics.
+/// Arena, purge, commit, tracking, and diagnostic callbacks and opaque arguments
+/// must remain valid for synchronous invocation, must not incompatibly reenter
+/// this page, heap, or arena, and must not unwind. Every rejected path returns
+/// the original ownership witness unchanged; success consumes it into the exact
+/// terminal disposition.
 unsafe fn try_reabandon_mapped(
     page: crate::core_types::OwnedAbandonedPage,
 ) -> Result<crate::core_types::AbandonedDisposition, crate::core_types::OwnedAbandonedPage> {
-    // SAFETY: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
-    unsafe {
+    #[cfg(feature = "bench-diagnostics")]
+    crate::allocator::bench_diagnostics::reabandon_attempt();
+    let page_raw = page.page().as_ptr();
+    // SAFETY: the unique claimed witness keeps the initialized used/reserved
+    // fields live and stable while protocol remote publication may continue.
+    if unsafe { mi_page_is_mostly_used(page_raw) } {
         #[cfg(feature = "bench-diagnostics")]
-        crate::allocator::bench_diagnostics::reabandon_attempt();
-        let page_raw = page.page().as_ptr();
-        if mi_page_is_mostly_used(page_raw) {
-            #[cfg(feature = "bench-diagnostics")]
-            crate::allocator::bench_diagnostics::reabandon_fail_mostly_used();
-            return Err(page);
-        }
-        let arena_memid = match crate::core_types::MemId::view((*page_raw).memid) {
-            crate::core_types::MemIdView::Arena(arena_memid) => arena_memid,
-            _ => {
-                #[cfg(feature = "bench-diagnostics")]
-                crate::allocator::bench_diagnostics::reabandon_fail_non_arena();
-                return Err(page);
-            }
-        };
-        if mi_page_is_abandoned_mapped(page_raw) {
-            #[cfg(feature = "bench-diagnostics")]
-            crate::allocator::bench_diagnostics::reabandon_fail_already_mapped();
-            return Err(page);
-        }
-
-        crate::internal::mi_assert!(!mi_page_is_full(page_raw));
-        let reabandoned = _mi_arenas_page_try_reabandon_to_mapped_arena(page, arena_memid);
-        #[cfg(feature = "bench-diagnostics")]
-        {
-            if reabandoned.is_ok() {
-                crate::allocator::bench_diagnostics::reabandon_success();
-            } else {
-                crate::allocator::bench_diagnostics::reabandon_fail_arena_reject();
-            }
-        }
-        reabandoned
+        crate::allocator::bench_diagnostics::reabandon_fail_mostly_used();
+        return Err(page);
     }
+    // SAFETY: the contract keeps this claimed page's MemId field initialized,
+    // readable, and stable through the classification and possible transition.
+    let memid = unsafe { (*page_raw).memid };
+    let arena_memid = match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::Arena(arena_memid) => arena_memid,
+        _ => {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::allocator::bench_diagnostics::reabandon_fail_non_arena();
+            return Err(page);
+        }
+    };
+    // SAFETY: the unique claim keeps the atomic owner/flag word live; protocol
+    // remote-head publication does not change its mapped-abandoned flag.
+    if unsafe { mi_page_is_abandoned_mapped(page_raw) } {
+        #[cfg(feature = "bench-diagnostics")]
+        crate::allocator::bench_diagnostics::reabandon_fail_already_mapped();
+        return Err(page);
+    }
+
+    // SAFETY: the claimed page is initialized and count-stable. The preceding
+    // mostly-used rejection excludes a full page.
+    crate::internal::mi_assert!(!unsafe { mi_page_is_full(page_raw) });
+    // SAFETY: the retained unique claim, decoded matching arena MemId, stable
+    // backing/map/heap state, and callback obligations establish the complete
+    // consuming reabandon transaction. Failure returns the same witness.
+    let reabandoned = unsafe { _mi_arenas_page_try_reabandon_to_mapped_arena(page, arena_memid) };
+    #[cfg(feature = "bench-diagnostics")]
+    {
+        if reabandoned.is_ok() {
+            crate::allocator::bench_diagnostics::reabandon_success();
+        } else {
+            crate::allocator::bench_diagnostics::reabandon_fail_arena_reject();
+        }
+    }
+    reabandoned
 }
 
 unsafe fn release_abandoned_ownership(

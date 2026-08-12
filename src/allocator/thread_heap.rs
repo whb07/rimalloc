@@ -1031,41 +1031,25 @@ unsafe fn mi_theap_set_default_typed(theap: ThreadHeapLocal) {
     }
 }
 
-/// # Safety
+/// Initialize and publish newly allocated thread-heap metadata.
 ///
-/// `theap`, `heap`, and `tld` must point to valid writable allocator metadata
-/// objects that are not concurrently initialized elsewhere.
-// SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_theap_init(
-    theap: *mut mi_theap_t,
-    heap: *mut mi_heap_t,
-    tld: *mut mi_tld_t,
-) {
-    crate::internal::mi_assert_internal!(!theap.is_null());
-    crate::internal::mi_assert_internal!(!heap.is_null());
-    crate::internal::mi_assert_internal!(!tld.is_null());
-
-    let Some(theap) = ThreadHeapPtr::new(theap) else {
-        return;
-    };
-    let Some(heap) = HeapPtr::new(heap) else {
-        return;
-    };
-    let Some(tld) = TldPtr::new(tld) else {
-        return;
-    };
-
-    // SAFETY: raw pointers were validated into typed metadata wrappers above.
-    // SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
-    unsafe { _mi_theap_init_typed(theap, heap, tld) };
-}
-
+/// # Safety
+/// `theap` must identify live, aligned, writable storage for one `mi_theap_t`
+/// whose `memid` describes that exact backing. `heap` and `tld` must identify
+/// live initialized owners for the new thread heap. The caller must exclusively
+/// own initialization of `theap` and the relevant heap/TLD list publication;
+/// concurrent lookup, relink, teardown, or use before publication is excluded.
+/// The template, subprocess stats, allocator options, random state, guarded
+/// configuration, and list locks must remain initialized and live. Registered
+/// diagnostic or guarded callbacks and opaque arguments must be valid for any
+/// synchronous invocation, exclude incompatible reentry, and must not unwind.
 #[inline]
 unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr) {
     let theap_raw = theap.as_ptr();
     let tld_raw = tld.as_ptr();
-    // SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+    // SAFETY: the caller exclusively owns this exact writable allocation. Save
+    // its backing MemId, copy the initialized empty template, restore the MemId,
+    // and establish the initial owner/refcount fields in the original order.
     unsafe {
         let memid = (*theap_raw).memid;
         _mi_memcpy(
@@ -1080,7 +1064,11 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
         crate::internal::mi_assert_internal!(
             (*theap_raw).stats.size == size_of::<crate::allocator::stats::mi_stats_t>()
         );
+    }
 
+    // SAFETY: the newly initialized metadata and live TLD are still exclusively
+    // owned. Options are initialized before applying the thread-pool override.
+    unsafe {
         _mi_theap_options_init(theap_raw);
         if (*tld_raw).is_in_threadpool {
             let configured = crate::allocator::policy::ThreadHeapPolicy::from_fields(
@@ -1092,9 +1080,17 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
                 crate::allocator::policy::ActivePolicy::adjust_for_thread_pool(configured);
             (*theap_raw).page_full_retain = adjusted.page_full_retain().get();
         }
+    }
 
-        let tld_theaps_head = lists::push_tld_front(tld, theap);
+    // SAFETY: the caller owns TLD-list publication, and `theap` has initialized
+    // clear template links. Preserve publication before random-state setup and
+    // use the returned former head only while both metadata objects stay live.
+    let tld_theaps_head = unsafe { lists::push_tld_front(tld, theap) };
 
+    // SAFETY: after TLD publication the caller still excludes concurrent use.
+    // The old head, if any, and subprocess/configuration state stay live while
+    // random, cookie, guarded state, and stats are initialized in exact order.
+    unsafe {
         if let Some(tld_theaps_head) = tld_theaps_head {
             _mi_random_split(
                 ptr::addr_of_mut!((*tld_theaps_head.as_ptr()).random),
@@ -1109,16 +1105,25 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
         (*theap_raw).cookie = _mi_random_next(ptr::addr_of_mut!((*theap_raw).random)) | 1;
         _mi_theap_guarded_init(theap_raw);
         __mi_stat_increase_mt(ptr::addr_of_mut!((*_mi_subproc()).stats.theaps), 1);
-
-        lists::push_heap_front(heap, theap);
     }
+
+    // SAFETY: initialization and accounting are complete; the caller owns the
+    // live heap list and `theap` has clear heap-list links for final publication.
+    unsafe { lists::push_heap_front(heap, theap) };
 }
 
 /// # Safety
 ///
-/// `heap` and `tld` must point to valid allocator metadata objects used to own
-/// the new thread heap.
-// SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+/// `heap` and `tld` must point to live initialized allocator metadata objects
+/// used to own the new thread heap. Their allocation policy, exclusive-arena
+/// selection, thread sequence, NUMA node, list heads/locks, options, random
+/// state, subprocess association/stats, and guarded configuration must remain
+/// stable through allocation and publication. The caller must exclusively own
+/// the relevant heap/TLD lifecycle against concurrent teardown or relink.
+/// Allocation, commit, purge, guarded, tracking, and diagnostic callbacks and
+/// opaque arguments must remain valid for synchronous invocation, exclude
+/// incompatible reentry, and must not unwind. On failure nothing is published;
+/// on success the returned pointer is the newly initialized, linked thread heap.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_create(
     heap: *mut mi_heap_t,
@@ -1134,25 +1139,47 @@ pub(crate) unsafe extern "C" fn _mi_theap_create(
         return ptr::null_mut();
     };
 
-    // SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
+    // SAFETY: the raw contract supplies the live heap/TLD owners, stable policy
+    // and allocation state, exclusive lifecycle epoch, and callback obligations
+    // required by the typed allocation-and-publication transaction.
     unsafe { _mi_theap_create_typed(heap, tld) }
         .map(ThreadHeapPtr::as_ptr)
         .unwrap_or(ptr::null_mut())
 }
 
+/// Allocate, initialize, and publish one thread heap.
+///
+/// # Safety
+/// `heap` and `tld` must be live initialized matching owners under an exclusive
+/// create/publication epoch. Their allocation policy, exclusive-arena field,
+/// thread sequence, NUMA node, list heads/locks, options, random state,
+/// subprocess association/stats, and guarded configuration must remain stable.
+/// No concurrent teardown, relink, or premature use of the new metadata is
+/// permitted. Allocation, commit, purge, guarded, tracking, and diagnostic
+/// callbacks and opaque arguments must remain valid for synchronous invocation,
+/// exclude incompatible reentry, and must not unwind. Failure publishes no
+/// thread heap; success returns the initialized heap linked into both owners.
 #[inline]
 unsafe fn _mi_theap_create_typed(heap: HeapPtr, tld: TldPtr) -> Option<ThreadHeapPtr> {
-    // SAFETY: create and init paths allocate and link thread-heap metadata behind heap and TLD locks.
-    unsafe {
-        let heap_raw = heap.as_ptr();
-        let tld_raw = tld.as_ptr();
-
-        let mut memid = mi_memid_t::default();
-        let theap = if (*heap_raw).exclusive_arena.is_null() {
+    let heap_raw = heap.as_ptr();
+    let tld_raw = tld.as_ptr();
+    let mut memid = mi_memid_t::default();
+    // SAFETY: the caller keeps the initialized heap and its exclusive-arena
+    // selection field live and stable for both policy reads in this allocation.
+    let use_meta = unsafe { (*heap_raw).exclusive_arena.is_null() };
+    let theap = if use_meta {
+        // SAFETY: the live metadata allocator and callbacks accept the writable
+        // MemId out-slot and return zeroed backing for the requested object.
+        unsafe {
             _mi_meta_zalloc(size_of::<mi_theap_t>(), ptr::addr_of_mut!(memid)).cast::<mi_theap_t>()
-        } else {
-            let size = _mi_align_up(size_of::<mi_theap_t>(), MI_ARENA_MIN_OBJ_SIZE);
-            let theap = _mi_arenas_alloc(
+        }
+    } else {
+        let size = _mi_align_up(size_of::<mi_theap_t>(), MI_ARENA_MIN_OBJ_SIZE);
+        // SAFETY: the contract keeps heap/TLD allocation inputs, arena registry,
+        // callbacks, and MemId out-slot valid. Preserve the second arena-field
+        // read and the TLD sequence/NUMA reads at the allocation call.
+        let theap = unsafe {
+            _mi_arenas_alloc(
                 heap_raw,
                 size,
                 true,
@@ -1162,29 +1189,34 @@ unsafe fn _mi_theap_create_typed(heap: HeapPtr, tld: TldPtr) -> Option<ThreadHea
                 crate::core_types::NumaNode::new((*tld_raw).numa_node).get(),
                 ptr::addr_of_mut!(memid),
             )
-            .cast::<mi_theap_t>();
-            if !theap.is_null() {
-                let allocated_size = match crate::core_types::MemId::view(memid) {
-                    crate::core_types::MemIdView::Arena(a) => {
-                        a.range().count_usize() * crate::allocator::arena::MI_ARENA_SLICE_SIZE
-                    }
-                    crate::core_types::MemIdView::Os(os) => os.size.get(),
-                    crate::core_types::MemIdView::External(external) => external.size.get(),
-                    _ => 0,
-                };
-                crate::internal::mi_assert_internal!(allocated_size >= size);
-            }
-            theap
+            .cast::<mi_theap_t>()
         };
-
-        if theap.is_null() {
-            _mi_error_message_fmt(
-                Errno::ENOMEM,
-                format_args!("unable to allocate theap meta-data\n"),
-            );
-            return None;
+        if !theap.is_null() {
+            let allocated_size = match crate::core_types::MemId::view(memid) {
+                crate::core_types::MemIdView::Arena(a) => {
+                    a.range().count_usize() * crate::allocator::arena::MI_ARENA_SLICE_SIZE
+                }
+                crate::core_types::MemIdView::Os(os) => os.size.get(),
+                crate::core_types::MemIdView::External(external) => external.size.get(),
+                _ => 0,
+            };
+            crate::internal::mi_assert_internal!(allocated_size >= size);
         }
+        theap
+    };
 
+    if theap.is_null() {
+        _mi_error_message_fmt(
+            Errno::ENOMEM,
+            format_args!("unable to allocate theap meta-data\n"),
+        );
+        return None;
+    }
+
+    // SAFETY: successful allocation returned live aligned writable backing and
+    // matching MemId. Publish the MemId before consuming the uninitialized
+    // storage through the complete initialization/list transaction.
+    unsafe {
         (*theap).memid = memid;
         let theap = ThreadHeapPtr::new_unchecked(theap);
         _mi_theap_init_typed(theap, heap, tld);

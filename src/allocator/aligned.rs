@@ -705,63 +705,6 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned(
     unsafe { mi_heap_calloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
-/// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
-/// valid for aligned allocation.
-pub unsafe fn mi_theap_realloc_zero_aligned_at(
-    theap: *mut mi_theap_t,
-    p: *mut c_void,
-    newsize: usize,
-    alignment: usize,
-    offset: usize,
-    zero: bool,
-) -> *mut c_void {
-    if alignment != 0 && alignment <= size_of::<usize>() && offset == 0 {
-        let layout = if zero {
-            crate::core_types::LayoutRequest::zalloc(newsize)
-        } else {
-            crate::core_types::LayoutRequest::malloc(newsize)
-        };
-        let Ok(layout) = layout else {
-            return core::ptr::null_mut();
-        };
-        // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
-        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
-    }
-    let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
-        return core::ptr::null_mut();
-    };
-    let zeroed = if zero {
-        crate::core_types::Zeroed::Yes
-    } else {
-        crate::core_types::Zeroed::No
-    };
-    let offset = crate::core_types::AlignmentOffset::new(offset);
-    let Ok(layout) =
-        crate::core_types::LayoutRequest::aligned_at(newsize, alignment, offset, zeroed)
-    else {
-        return core::ptr::null_mut();
-    };
-    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
-        let Some(request) = (unsafe {
-            crate::allocator::alloc::mi_realloc_request_from_user(
-                user,
-                layout,
-                core::ptr::null_mut(),
-            )
-        }) else {
-            return core::ptr::null_mut();
-        };
-        request
-    } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
-    };
-    // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
-    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment_typed, offset) }
-}
-
 unsafe fn mi_theap_realloc_zero_aligned_at_req(
     theap: *mut mi_theap_t,
     request: crate::core_types::ReallocRequest,
@@ -871,70 +814,6 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
         }
     }
     newp
-}
-
-#[inline]
-/// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
-/// valid for aligned allocation.
-pub unsafe fn mi_theap_realloc_zero_aligned(
-    theap: *mut mi_theap_t,
-    p: *mut c_void,
-    newsize: usize,
-    alignment: usize,
-    zero: bool,
-) -> *mut c_void {
-    if alignment != 0 && alignment <= size_of::<usize>() {
-        let layout = if zero {
-            crate::core_types::LayoutRequest::zalloc(newsize)
-        } else {
-            crate::core_types::LayoutRequest::malloc(newsize)
-        };
-        let Ok(layout) = layout else {
-            return core::ptr::null_mut();
-        };
-        // SAFETY: naturally aligned requests use the ordinary realloc path, matching C mimalloc.
-        return unsafe { crate::allocator::alloc::mi_theap_realloc_layout(theap, p, layout) };
-    }
-    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
-        return core::ptr::null_mut();
-    };
-    let zeroed = if zero {
-        crate::core_types::Zeroed::Yes
-    } else {
-        crate::core_types::Zeroed::No
-    };
-    let offset = crate::core_types::AlignmentOffset::new(0);
-    let layout = if alignment.get() <= size_of::<usize>() {
-        if zero {
-            crate::core_types::LayoutRequest::zalloc(newsize)
-        } else {
-            crate::core_types::LayoutRequest::malloc(newsize)
-        }
-    } else {
-        crate::core_types::LayoutRequest::aligned_at(newsize, alignment.get(), offset, zeroed)
-    };
-    let Ok(layout) = layout else {
-        return core::ptr::null_mut();
-    };
-    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
-        // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
-        let Some(request) = (unsafe {
-            crate::allocator::alloc::mi_realloc_request_from_user(
-                user,
-                layout,
-                core::ptr::null_mut(),
-            )
-        }) else {
-            return core::ptr::null_mut();
-        };
-        request
-    } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
-    };
-    // SAFETY: aligned realloc request builders validate old user pointers and checked layout inputs.
-    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
 #[inline]

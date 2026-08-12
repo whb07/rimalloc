@@ -2086,8 +2086,10 @@ pub unsafe extern "C" fn mi_heap_rezalloc(
     let Some(theap) = (unsafe { mi_heap_borrowed_theap_local(heap) }) else {
         return ptr::null_mut();
     };
-    // SAFETY: the localized heap and validated request retain the documented
-    // zero-new-tail policy and ownership protocol through terminal disposition.
+    // SAFETY: `req` was constructed immediately above from this
+    // `LayoutRequest::zalloc` layout, so it retains that identical layout and
+    // `Zeroed::Yes` policy. The localized heap and caller-proven old allocation
+    // remain live and stable through terminal disposition.
     unsafe { mi_theap_realloc_typed(theap, req) }
 }
 

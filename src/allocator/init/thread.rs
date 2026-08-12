@@ -450,10 +450,14 @@ pub(super) fn main_safe() -> *mut mi_theap_t {
 }
 
 #[inline(always)]
-pub(super) unsafe fn init_default() -> *mut mi_theap_t {
-    // SAFETY: thread init installs a default heap only after process and TLD setup.
+pub(super) fn init_default() -> *mut mi_theap_t {
+    // SAFETY: `mi_process_init_inner` reaches this point after establishing the
+    // primitive and allocator TLS scaffolding, while `init` first completes
+    // process initialization. Both are the current thread's initialization
+    // epoch; the lookup returns live local metadata or the static empty sentinel.
     let mut theap = unsafe { crate::platform::_mi_theap_default() };
-    // SAFETY: thread init installs a default heap only after process and TLD setup.
+    // SAFETY: the TLS lookup returns live allocator metadata or the static
+    // sentinel, whose initialized heap-pointer field is readable for this probe.
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
     }
@@ -469,10 +473,21 @@ pub(super) unsafe fn init_default() -> *mut mi_theap_t {
         if tld.is_null() {
             return ptr::null_mut();
         }
-        // SAFETY: thread init installs a default heap only after process and TLD setup.
+        // SAFETY: `tld_alloc_non_main` returned a fresh current-thread TLD
+        // associated with the initialized main subproc, and `mi_heap_main`
+        // returns its live main heap. Process initialization keeps their policy,
+        // list, option, random, guarded, stats, and callback state stable; this
+        // current-thread initialization epoch excludes teardown, relink, and
+        // incompatible callback reentry or unwind. Creation consumes neither
+        // raw owner.
         theap = unsafe { _mi_theap_create(mi_heap_main(), tld) };
     }
-    // SAFETY: thread init installs a default heap only after process and TLD setup.
+    if theap.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: `theap` is the initialized static main thread heap or the newly
+    // created heap for this current thread. This lifecycle epoch exclusively
+    // owns publication to the current thread's default TLS slot.
     unsafe { _mi_theap_default_set(theap) };
     theap
 }
@@ -588,9 +603,7 @@ pub(super) fn init() {
     if unsafe { crate::platform::_mi_thread_is_initialized() } {
         return;
     }
-    // SAFETY: this is the current thread's initialization epoch; process state
-    // is initialized and no concurrent actor mutates this thread's TLS/TLD.
-    if unsafe { init_default() }.is_null() {
+    if init_default().is_null() {
         return;
     }
     let heap = mi_heap_main();

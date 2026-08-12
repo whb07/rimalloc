@@ -500,26 +500,46 @@ pub unsafe fn mi_theap_visit_pages(
     unsafe { mi_theap_visit_pages_typed(theap, include_full, state) }
 }
 
+/// Traverse the selected page queues of one thread heap.
+///
+/// # Safety
+/// `theap` must identify a live initialized locally owned thread heap under
+/// current-thread ownership or exclusive initialization/teardown access. Its
+/// page count, queue array, queue links, page metadata, geometry, and backing
+/// must remain live throughout traversal. Protocol remote-free publication may
+/// continue only through allocator atomics. If present, `state.visitor` must
+/// have the declared ABI, and it and both opaque arguments must remain valid for
+/// every synchronous invocation and must not unwind. After `next` is captured,
+/// the callback may detach and terminally consume the current page, but must not
+/// relink it into the unvisited traversal or mutate the captured successor,
+/// remaining queue topology, heap, or queue before traversal resumes.
 unsafe fn mi_theap_visit_pages_typed(
     theap: ThreadHeapPtr,
     include_full: bool,
     state: TheapPageVisitState,
 ) -> bool {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    unsafe {
-        let theap_ptr = theap.as_ptr();
-        if (*theap_ptr).page_count == 0 {
-            return false;
-        }
-        let mut count = 0usize;
-        let total = (*theap_ptr).page_count;
-        let max_bin = if include_full {
-            MI_BIN_FULL
-        } else {
-            MI_BIN_FULL - 1
-        };
+    let theap_ptr = theap.as_ptr();
+    // SAFETY: the contract keeps this initialized heap's page-count field live
+    // and readable for the initial empty check. Callbacks have not run yet.
+    if unsafe { (*theap_ptr).page_count == 0 } {
+        return false;
+    }
+    let mut count = 0usize;
+    // SAFETY: preserve the original second page-count read before traversal;
+    // the field is still live and callbacks have not yet run.
+    let total = unsafe { (*theap_ptr).page_count };
+    let max_bin = if include_full {
+        MI_BIN_FULL
+    } else {
+        MI_BIN_FULL - 1
+    };
 
-        for i in 0..=max_bin {
+    for i in 0..=max_bin {
+        // SAFETY: `i` selects a live queue from this heap. The caller keeps its
+        // topology, pages, metadata, geometry, and backing stable except that
+        // the callback may consume the current page after `next` is captured;
+        // the callback contract preserves that successor and the remainder.
+        unsafe {
             let bin = Bin::new_unchecked(i as u16);
             let queue = theap.page_queue(bin);
             let mut page = queue.first();
@@ -538,12 +558,12 @@ unsafe fn mi_theap_visit_pages_typed(
                 page = next;
             }
         }
-
-        crate::internal::mi_assert_internal!(
-            !include_full || crate::internal::MI_DEBUG <= 1 || count == total
-        );
-        true
     }
+
+    crate::internal::mi_assert_internal!(
+        !include_full || crate::internal::MI_DEBUG <= 1 || count == total
+    );
+    true
 }
 
 /// # Safety
@@ -581,8 +601,16 @@ unsafe fn mi_theap_page_is_valid_typed(theap: ThreadHeapPtr, page: PagePtr) -> b
 
 /// # Safety
 ///
-/// `theap`, `pq`, and `page` must be valid allocator objects from the same
-/// thread heap. `arg_collect` must point to a valid `mi_collect_t` value.
+/// `theap` must be the current-thread-local owner of the live initialized
+/// `page`, and `pq` must be that page's compatible normal, huge, or full queue.
+/// The caller must exclusively own local mutation of the heap TLD, queue links,
+/// page free lists, capacity/countdown fields, and stats; protocol remote-free
+/// publication may continue only through allocator atomics. Page metadata,
+/// geometry, backing, arena/MemId, heap/TLD, and queue storage must remain live
+/// and stable; the page must not be retired before collection. `arg_collect`
+/// must be nonnull, aligned, readable initialized `mi_collect_t` storage. Arena,
+/// purge, commit, tracking, and diagnostic callbacks and opaque arguments must
+/// remain synchronously valid, exclude incompatible reentry, and not unwind.
 // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
 pub unsafe extern "C" fn mi_theap_page_collect(
     theap: *mut mi_theap_t,
@@ -602,28 +630,59 @@ pub unsafe extern "C" fn mi_theap_page_collect(
     }
 }
 
+/// Collect one page reached through its owning thread-heap queue.
+///
+/// # Safety
+/// `theap` must be the current-thread-local owner of the live initialized
+/// `page`, and `queue` must be that page's compatible owning normal, huge, or
+/// full queue. The caller must exclusively own local mutation of the heap TLD,
+/// queue links, page free lists, capacity/countdown fields, and stats; protocol
+/// remote-free publication may continue only through allocator atomics. Page
+/// metadata, geometry, backing, arena membership, MemId, heap/TLD, and queue
+/// storage must remain live until the page is either retained or consumed by a
+/// terminal free/abandon transition. A page satisfying the terminal release
+/// predicate must already have been transitioned out of retired state by the
+/// preceding retired-page collection; a retained retired page has a nonzero
+/// countdown. The collect mode must be valid. Arena,
+/// purge, commit, tracking, and diagnostic callbacks and opaque arguments must
+/// remain valid for synchronous invocation, exclude incompatible reentry that
+/// mutates this heap/page/queue transaction, and must not unwind.
 unsafe fn mi_theap_page_collect_typed(
     theap: ThreadHeapLocal,
     queue: PageQueuePtr,
     page: PagePtr,
     collect: mi_collect_t,
 ) -> bool {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
-    unsafe {
+    // SAFETY: the live local heap/page/queue relation and exclusive mutation
+    // epoch permit validation, construction of the sole local capability, and
+    // collection of the remote list into local page state in this exact order.
+    let local_page = unsafe {
         crate::internal::mi_assert_internal!(mi_theap_page_is_valid_typed(theap.ptr(), page));
-
         let local_page = crate::core_types::assume_local_page(page);
-        let page = local_page.page().as_ptr();
-        _mi_page_free_collect(page, collect as i32 >= mi_collect_t::MI_FORCE as i32);
+        _mi_page_free_collect(
+            local_page.page().as_ptr(),
+            collect as i32 >= mi_collect_t::MI_FORCE as i32,
+        );
+        local_page
+    };
+    let page = local_page.page().as_ptr();
 
-        if mi_page_all_free(page) {
-            if collect as i32 >= mi_collect_t::MI_FORCE as i32
-                || crate::allocator::page::mi_page_retire_expire(page).is_zero()
-            {
+    // SAFETY: collection has completed and the caller-owned page metadata and
+    // used/free-list state remain stable for this release predicate.
+    if unsafe { mi_page_all_free(page) } {
+        let force = collect as i32 >= mi_collect_t::MI_FORCE as i32;
+        // Preserve the original short circuit: forced collection does not read
+        // the retirement countdown.
+        let release = force || {
+            // SAFETY: the page remains live and exclusively locally owned,
+            // so its initialized retirement countdown is stable here.
+            unsafe { crate::allocator::page::mi_page_retire_expire(page).is_zero() }
+        };
+        if release {
+            // SAFETY: the visitor's owning queue and stable full flag classify
+            // this non-retired all-free page for exactly one terminal release.
+            unsafe {
                 if crate::allocator::page::mi_page_is_in_full(page) {
-                    // SAFETY: the release predicate is evaluated after retired-page collection, so
-                    // this local page is not retired. Its stable full flag and the visitor's owning
-                    // queue identity classify it as Full in the compatible full queue.
                     let full = local_page.into_full_after_classification();
                     let Ok(all_free) = full.try_mark_all_free() else {
                         crate::internal::mi_assert_internal!(false);
@@ -632,9 +691,6 @@ unsafe fn mi_theap_page_collect_typed(
                     let full_queue = crate::core_types::FullPageQueue::new_unchecked(queue);
                     let _ = _mi_page_free_full_internal(all_free, full_queue);
                 } else {
-                    // SAFETY: the release predicate is evaluated after retired-page collection, so
-                    // this local page is not retired. Its clear full flag and the visitor's owning
-                    // queue identity classify it as Active in the compatible normal or huge queue.
                     let active = local_page.into_active_after_classification();
                     let Ok(all_free) = active.try_mark_all_free() else {
                         crate::internal::mi_assert_internal!(false);
@@ -644,7 +700,12 @@ unsafe fn mi_theap_page_collect_typed(
                     let _ = _mi_page_free_active_internal(all_free, normal_queue);
                 }
             }
-        } else if collect == mi_collect_t::MI_ABANDON {
+        }
+    } else if collect == mi_collect_t::MI_ABANDON {
+        // SAFETY: the stable full flag and owning queue classify the retained
+        // non-all-free local page, which is consumed once through detach and
+        // arena publication under the callback/reentry contract.
+        unsafe {
             let page_for_abandon = if crate::allocator::page::mi_page_is_in_full(page) {
                 local_page
                     .into_full_after_classification()
@@ -654,14 +715,11 @@ unsafe fn mi_theap_page_collect_typed(
                     .into_active_after_classification()
                     .into_abandon_candidate()
             };
-            // SAFETY: the current-thread collection epoch keeps page ownership and its full/active
-            // classification stable. The consumed capability and owning queue remain live through
-            // detach and arena publication, with local relink and teardown excluded.
             let _ = _mi_page_abandon_internal(page_for_abandon, queue);
         }
-
-        true
     }
+
+    true
 }
 
 /// # Safety

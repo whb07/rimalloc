@@ -389,42 +389,61 @@ unsafe fn mi_theap_malloc_small_zero_typed(
 /// # Safety
 /// `theap` must identify a live current-thread heap. The caller must have
 /// exclusive mutation rights over its local TLD state, direct cache, page queues,
-/// free lists, and statistics; protocol atomic remote-free publication is
-/// permitted. `layout` and `flags` must agree on zeroing, and any nonzero huge
-/// alignment in `flags` must be valid for the request. If nonnull, `usable` must
-/// be aligned and uniquely writable for one `usize` throughout the call.
+/// free lists, guarded-sampling state, and statistics; protocol atomic remote-free
+/// publication is permitted. `layout` and `flags` must agree on zeroing, and any
+/// nonzero huge alignment in `flags` must be valid for the request. The page map,
+/// backing metadata, guarded configuration, and allocator lifecycle must remain
+/// stable. Heap collection, deferred-free, arena allocation/commit/purge/release,
+/// guarded protection, tracking, and diagnostic callbacks plus their opaque
+/// arguments must remain valid for synchronous invocation, must not incompatibly
+/// reenter this heap's local allocation state, and must not unwind. If nonnull,
+/// `usable` must be aligned and uniquely writable for one `usize` throughout the
+/// call and must not overlap allocator metadata.
 unsafe fn mi_theap_malloc_generic(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
     flags: crate::core_types::MallocGenericFlags,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: the caller keeps the current-thread heap's local allocation and
-    // collection state exclusively mutable, supplies matching layout/flags, and
-    // keeps the optional output writable through guarded/generic dispatch and
-    // allocation tracking.
+    let raw_theap = theap.ptr().as_ptr();
+    let size = layout.requested().get();
+    let zero = flags.zeroed() == crate::core_types::Zeroed::Yes;
+    // SAFETY: the caller keeps the current-thread heap and its TLD live and
+    // stable; preserve the original short-circuit owner-field reads followed
+    // by the thread-id query only when both stored-owner comparisons require it.
     unsafe {
-        let raw_theap = theap.ptr().as_ptr();
-        let size = layout.requested().get();
-        let zero = flags.zeroed() == crate::core_types::Zeroed::Yes;
         crate::internal::mi_assert!(
             (*(*raw_theap).tld).thread_id == 0 || (*(*raw_theap).tld).thread_id == _mi_thread_id()
         );
-
-        if MI_GUARDED != 0
-            && flags.huge_alignment().get() == 0
-            && mi_unlikely(mi_theap_malloc_use_guarded(theap, layout.effective()))
-        {
-            return _mi_theap_malloc_guarded(raw_theap, size, zero);
-        }
-
-        let p = _mi_malloc_generic_typed(theap.ptr(), layout, flags, usable);
-        mi_track_malloc(p, size, zero);
-        if cfg!(debug_assertions) && !p.is_null() && zero {
-            crate::internal::mi_assert_expensive!(crate::internal::mi_mem_is_zero(p, size));
-        }
-        p
     }
+
+    if MI_GUARDED != 0
+        && flags.huge_alignment().get() == 0
+        // SAFETY: the caller grants exclusive guarded-sampling mutation on the
+        // live current-thread heap; `layout` supplies the validated effective size.
+        && mi_unlikely(unsafe { mi_theap_malloc_use_guarded(theap, layout.effective()) })
+    {
+        // SAFETY: the caller keeps the heap, backing state, OS configuration,
+        // and synchronous guarded allocation/protection callbacks valid; this
+        // terminal branch preserves the original guarded allocation dispatch.
+        return unsafe { _mi_theap_malloc_guarded(raw_theap, size, zero) };
+    }
+
+    // SAFETY: the caller keeps the current-thread heap's queues, backing state,
+    // stats, and synchronous allocator callbacks valid and locally exclusive;
+    // `layout` and `flags` satisfy the function contract and `usable` remains
+    // valid at its optional write.
+    let p = unsafe { _mi_malloc_generic_typed(theap.ptr(), layout, flags, usable) };
+    // SAFETY: generic allocation returns null or a live allocation covering the
+    // requested size; the tracking backend remains valid and cannot
+    // incompatibly reenter or unwind.
+    unsafe { mi_track_malloc(p, size, zero) };
+    if cfg!(debug_assertions) && !p.is_null() && zero {
+        // SAFETY: the successful zeroing allocation remains live and readable
+        // for its requested size through this assertion-only probe.
+        crate::internal::mi_assert_expensive!(unsafe { crate::internal::mi_mem_is_zero(p, size) });
+    }
+    p
 }
 
 #[inline(always)]

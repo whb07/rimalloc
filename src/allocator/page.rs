@@ -1195,49 +1195,84 @@ pub(crate) unsafe fn mi_page_queue_is_valid_typed(
     true
 }
 
+/// Select the queue for an ordinary page block size in a local thread heap.
+///
 /// # Safety
-/// `theap` must be valid, and `page` must point to page metadata owned by that heap.
+/// `theap` must identify a live initialized thread heap under current-thread
+/// ownership or exclusive initialization/reclaim/teardown access. Its complete
+/// fixed queue table and the queue selected by `block_size` must remain live,
+/// initialized, and stable through the projection. Concurrent local queue-table
+/// mutation or heap teardown is excluded; protocol atomic remote-free
+/// publication is permitted.
 #[inline]
 pub(crate) unsafe fn mi_theap_page_queue_of_typed(
     theap: crate::core_types::ThreadHeapLocal,
     block_size: crate::core_types::BlockSize,
 ) -> crate::core_types::PageQueuePtr {
-    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
-    unsafe {
-        let bin = mi_bin_from_block_size(block_size);
-        crate::internal::mi_assert_internal!(bin.as_usize() <= MI_BIN_HUGE);
-        theap.ptr().page_queue(bin)
-    }
+    let bin = mi_bin_from_block_size(block_size);
+    crate::internal::mi_assert_internal!(bin.as_usize() <= MI_BIN_HUGE);
+    // SAFETY: the typed bin is within the ordinary/huge portion of the fixed queue table, and the
+    // caller keeps that initialized table live and stable for the address projection.
+    unsafe { theap.ptr().page_queue(bin) }
 }
 
+/// Select the owning heap queue implied by one page's classification.
+///
 /// # Safety
-/// `theap` must be valid. `page` must point to page metadata owned by `theap`.
+/// `theap` must be nonnull and point to the live initialized locally owned
+/// thread heap associated with `page`, under current-thread ownership or
+/// exclusive initialization/reclaim/teardown access. `page` must be nonnull
+/// live initialized allocator metadata with a nonzero block size; its full
+/// flag, huge-page geometry/MemId/reserved metadata, block size, and owner
+/// association must remain stable. The heap's complete fixed queue table and
+/// every selected queue block-size field must remain live, initialized, and
+/// stable. The page need not yet be linked in the selected queue. Concurrent
+/// local classification, owner, geometry, queue-table mutation, or teardown is
+/// excluded; protocol atomic remote-free publication is permitted. Any
+/// diagnostic callback and opaque argument reached by an assertion must remain
+/// valid, must not incompatibly reenter these page/heap metadata, and must not
+/// unwind.
 #[inline]
 pub unsafe fn mi_theap_page_queue_of(
     theap: *mut mi_theap_t,
     page: *const mi_page_t,
 ) -> *mut mi_page_queue_t {
-    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
-    unsafe {
-        crate::internal::mi_assert_internal!(!theap.is_null());
-        let bin = mi_page_bin_typed(page).as_usize();
-        let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
+    crate::internal::mi_assert_internal!(!theap.is_null());
+    // SAFETY: the caller keeps the page's initialized classification and geometry live and stable;
+    // the helper preserves the full-then-huge-then-normal read order.
+    let bin = unsafe { mi_page_bin_typed(page) }.as_usize();
+    // SAFETY: the raw contract identifies this nonnull live initialized heap as the page's local
+    // owner or the exclusive reclaim target for this operation.
+    let theap = unsafe {
+        crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        let block_size = crate::core_types::BlockSize::new_unchecked(mi_page_block_size(page));
-        let pq = if mi_page_is_in_full(page) || mi_page_is_huge(page) {
-            theap.ptr().page_queue(Bin::new_unchecked(bin as u16))
-        } else {
-            mi_theap_page_queue_of_typed(theap, block_size)
-        };
-        let pq = pq.as_ptr();
-        crate::internal::mi_assert_internal!(
-            (mi_page_block_size(page) == mi_page_queue_block_size_raw(pq))
-                || (mi_page_is_huge(page) && mi_page_queue_is_huge(pq))
-                || (mi_page_is_in_full(page) && mi_page_queue_is_full(pq))
-        );
-        pq
-    }
+        )
+    };
+    // SAFETY: the caller keeps the page's initialized nonzero block size live and stable for this
+    // original unconditional read and typed materialization after bin classification.
+    let block_size =
+        unsafe { crate::core_types::BlockSize::new_unchecked(mi_page_block_size(page)) };
+    // SAFETY: the caller keeps both classification sources stable. This coherent condition retains
+    // the original full-first short circuit and reads huge metadata only when the page is not full.
+    let pq = if unsafe { mi_page_is_in_full(page) || mi_page_is_huge(page) } {
+        // SAFETY: `mi_page_bin_typed` bounded this special bin, and the caller keeps the complete
+        // initialized queue table live through its exact address projection.
+        unsafe { theap.ptr().page_queue(Bin::new_unchecked(bin as u16)) }
+    } else {
+        // SAFETY: this normal page's stable block size selects its live initialized owning queue in
+        // the caller-proven local heap.
+        unsafe { mi_theap_page_queue_of_typed(theap, block_size) }
+    };
+    let pq = pq.as_ptr();
+    // SAFETY: the caller keeps the page and selected queue classification metadata stable. Keeping
+    // every repeated read in this assertion operand preserves its block-size, huge, then full
+    // short-circuit order and assertion-only evaluation.
+    crate::internal::mi_assert_internal!(unsafe {
+        (mi_page_block_size(page) == mi_page_queue_block_size_raw(pq))
+            || (mi_page_is_huge(page) && mi_page_queue_is_huge(pq))
+            || (mi_page_is_in_full(page) && mi_page_queue_is_full(pq))
+    });
+    pq
 }
 
 /// # Safety
@@ -1928,16 +1963,17 @@ mod tests {
     }
 
     #[test]
-    fn queue_validator_accepts_empty_linked_normal_and_full_queues() {
+    fn queue_validator_and_selector_cover_normal_huge_and_full_queues() {
         let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
         let mut normal_page = MaybeUninit::<mi_page_t>::zeroed();
+        let mut huge_page = MaybeUninit::<mi_page_t>::zeroed();
         let mut full_page = MaybeUninit::<mi_page_t>::zeroed();
 
         // SAFETY: the stack-local heap receives the allocator's initialized fixed queue table.
-        // Both stack-local pages remain live and initialize exactly the owner, classification, and
-        // null link fields read by the validator. Queue endpoint/count mutations are exclusive,
-        // and the fixture performs no callback, relink, metadata mutation, or teardown during each
-        // read-only validation.
+        // All three stack-local pages remain live and initialize exactly the owner, classification,
+        // geometry, and null link fields read by validation and selection. Queue endpoint/count
+        // mutations are exclusive, and the fixture performs no callback, relink, metadata mutation,
+        // or teardown during each read-only validation/selection.
         unsafe {
             let theap_raw = theap.as_mut_ptr();
             (*theap_raw).pages = crate::allocator::init::MI_PAGE_QUEUES_EMPTY();
@@ -1966,12 +2002,52 @@ mod tests {
             normal_queue.set_last(Some(normal));
             normal_queue.set_count(crate::core_types::PageQueueCount::new(1));
             assert!(mi_page_queue_is_valid_typed(owner, normal_queue));
+            assert_eq!(
+                mi_page_bin_typed(normal_raw),
+                mi_bin_from_block_size(block_size)
+            );
+            assert_eq!(
+                mi_theap_page_queue_of(theap_raw, normal_raw),
+                normal_queue.as_ptr()
+            );
+            assert_eq!(mi_page_queue_of(normal_raw), normal_queue.as_ptr());
+
+            let huge_queue = owner
+                .ptr()
+                .page_queue(Bin::new_unchecked(MI_BIN_HUGE as u16));
+            let huge_block_size = crate::core_types::BlockSize::new_unchecked(
+                MI_LARGE_MAX_OBJ_SIZE + size_of::<usize>(),
+            );
+            let huge_raw = huge_page.as_mut_ptr();
+            (*huge_raw).theap = theap_raw;
+            (*huge_raw).reserved = 1;
+            (*huge_raw).block_size = huge_block_size.get();
+            (*huge_raw).xthread_id = crate::core_types::PageThreadId::from_parts(
+                crate::core_types::PageOwnerId::Thread(thread_id),
+                crate::core_types::PageFlags::new(0).expect("zero page flags"),
+            )
+            .raw();
+            let huge = PagePtr::new_unchecked(huge_raw);
+            huge.set_queue_prev(None);
+            huge.set_queue_next(None);
+            huge_queue.set_first(Some(huge));
+            huge_queue.set_last(Some(huge));
+            huge_queue.set_count(crate::core_types::PageQueueCount::new(1));
+            assert!(mi_page_queue_is_valid_typed(owner, huge_queue));
+            assert_eq!(mi_page_bin_typed(huge_raw).as_usize(), MI_BIN_HUGE);
+            assert_eq!(
+                mi_theap_page_queue_of(theap_raw, huge_raw),
+                huge_queue.as_ptr()
+            );
+            assert_eq!(mi_page_queue_of(huge_raw), huge_queue.as_ptr());
 
             let full_queue = owner
                 .ptr()
                 .page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
             let full_raw = full_page.as_mut_ptr();
             (*full_raw).theap = theap_raw;
+            (*full_raw).reserved = 1;
+            (*full_raw).block_size = huge_block_size.get();
             (*full_raw).xthread_id = crate::core_types::PageThreadId::from_parts(
                 crate::core_types::PageOwnerId::Thread(thread_id),
                 crate::core_types::PageFlags::IN_FULL_QUEUE,
@@ -1984,6 +2060,12 @@ mod tests {
             full_queue.set_last(Some(full));
             full_queue.set_count(crate::core_types::PageQueueCount::new(1));
             assert!(mi_page_queue_is_valid_typed(owner, full_queue));
+            assert_eq!(mi_page_bin_typed(full_raw).as_usize(), MI_BIN_FULL);
+            assert_eq!(
+                mi_theap_page_queue_of(theap_raw, full_raw),
+                full_queue.as_ptr()
+            );
+            assert_eq!(mi_page_queue_of(full_raw), full_queue.as_ptr());
         }
     }
 }

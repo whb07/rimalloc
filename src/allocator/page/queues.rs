@@ -50,11 +50,26 @@ pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const m
     ptr::eq(list, page.cast_mut())
 }
 
+/// Resolve the exact queue containing a non-abandoned page.
+///
 /// # Safety
-/// `page` must point to non-abandoned page metadata owned by this allocator.
+/// `page` must be nonnull and point to live initialized non-abandoned page
+/// metadata linked exactly once in its owning live initialized thread heap's
+/// compatible normal, huge, or full queue. The page's owner association,
+/// classification, block size, geometry, backing, and forward/backward links,
+/// and the heap's complete queue table, selected queue endpoints/count, and
+/// finite linked chain must remain initialized, readable, live, and stable.
+/// The caller must hold current-thread local ownership or exclusive
+/// initialization/collection/teardown access and exclude concurrent local
+/// relink, owner/classification/geometry mutation, page/heap teardown, and
+/// incompatible diagnostic callback reentry. Protocol atomic remote-free
+/// publication is permitted. Any diagnostic callback and opaque argument
+/// reached by membership assertions must remain valid and must not unwind.
 #[inline]
 pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
-    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
+    // SAFETY: the caller keeps the non-abandoned page, its owner heap, selected queue, and complete
+    // finite link topology live and stable. Resolve the owner, derive the queue, then validate exact
+    // membership in that order as one coherent non-owning lookup epoch.
     unsafe {
         let theap = crate::allocator::page::mi_page_theap(page);
         let pq = super::mi_theap_page_queue_of(theap, page);

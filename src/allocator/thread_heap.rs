@@ -771,10 +771,14 @@ pub unsafe extern "C" fn mi_theap_page_collect(
 /// terminal free/abandon transition. A page satisfying the terminal release
 /// predicate must already have been transitioned out of retired state by the
 /// preceding retired-page collection; a retained retired page has a nonzero
-/// countdown. The collect mode must be valid. Arena,
-/// purge, commit, tracking, and diagnostic callbacks and opaque arguments must
-/// remain valid for synchronous invocation, exclude incompatible reentry that
-/// mutates this heap/page/queue transaction, and must not unwind.
+/// countdown. The page's used count, retirement countdown, and full
+/// classification must remain stable between each read and the corresponding
+/// consuming transition. Arena, purge, commit, tracking, and diagnostic
+/// callbacks and opaque arguments must remain valid for synchronous invocation,
+/// exclude incompatible reentry that mutates this heap/page/queue transaction,
+/// and must not unwind. A terminal branch consumes the sole local-page
+/// capability and neither this function nor its caller may access the page
+/// afterward.
 unsafe fn mi_theap_page_collect_typed(
     theap: ThreadHeapLocal,
     queue: PageQueuePtr,
@@ -807,42 +811,58 @@ unsafe fn mi_theap_page_collect_typed(
             unsafe { crate::allocator::page::mi_page_retire_expire(page).is_zero() }
         };
         if release {
-            // SAFETY: the visitor's owning queue and stable full flag classify
-            // this non-retired all-free page for exactly one terminal release.
-            unsafe {
-                if crate::allocator::page::mi_page_is_in_full(page) {
-                    let full = local_page.into_full_after_classification();
-                    let Ok(all_free) = full.try_mark_all_free() else {
-                        crate::internal::mi_assert_internal!(false);
-                        return true;
-                    };
+            // SAFETY: the live locally owned page retains its initialized stable full flag until
+            // the corresponding capability transition below consumes `local_page`.
+            let is_full = unsafe { crate::allocator::page::mi_page_is_in_full(page) };
+            if is_full {
+                // SAFETY: the stable full classification and exact owning queue refine the sole
+                // local-page capability without duplicating it.
+                let full = unsafe { local_page.into_full_after_classification() };
+                let Ok(all_free) = full.try_mark_all_free() else {
+                    crate::internal::mi_assert_internal!(false);
+                    return true;
+                };
+                // SAFETY: the repeated zero-used refinement and stable full classification prove
+                // the exact all-free/full queue capability consumed by terminal release. No page
+                // access follows this call.
+                unsafe {
                     let full_queue = crate::core_types::FullPageQueue::new_unchecked(queue);
                     let _ = _mi_page_free_full_internal(all_free, full_queue);
-                } else {
-                    let active = local_page.into_active_after_classification();
-                    let Ok(all_free) = active.try_mark_all_free() else {
-                        crate::internal::mi_assert_internal!(false);
-                        return true;
-                    };
+                }
+            } else {
+                // SAFETY: the stable non-full, non-retired classification and exact owning queue
+                // refine the sole local-page capability without duplicating it.
+                let active = unsafe { local_page.into_active_after_classification() };
+                let Ok(all_free) = active.try_mark_all_free() else {
+                    crate::internal::mi_assert_internal!(false);
+                    return true;
+                };
+                // SAFETY: the repeated zero-used refinement and stable active classification prove
+                // the exact all-free/source queue capability consumed by terminal release. No page
+                // access follows this call.
+                unsafe {
                     let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(queue);
                     let _ = _mi_page_free_active_internal(all_free, normal_queue);
                 }
             }
         }
     } else if collect == mi_collect_t::MI_ABANDON {
-        // SAFETY: the stable full flag and owning queue classify the retained
-        // non-all-free local page, which is consumed once through detach and
-        // arena publication under the callback/reentry contract.
+        // SAFETY: the retained non-all-free page remains live and locally owned with its initialized
+        // full flag stable until the corresponding capability transition consumes `local_page`.
+        let is_full = unsafe { crate::allocator::page::mi_page_is_in_full(page) };
+        let page_for_abandon = if is_full {
+            // SAFETY: the stable full classification and exact owning queue refine the sole local
+            // capability before packaging it for the abandon transition.
+            unsafe { local_page.into_full_after_classification() }.into_abandon_candidate()
+        } else {
+            // SAFETY: the stable active/non-full classification and exact owning queue refine the
+            // sole local capability before packaging it for the abandon transition.
+            unsafe { local_page.into_active_after_classification() }.into_abandon_candidate()
+        };
+        // SAFETY: the consumed active/full capability and exact owning queue remain live under the
+        // exclusive local epoch. Abandon may retain or terminally release the page; neither this
+        // function nor its caller accesses the consumed page afterward.
         unsafe {
-            let page_for_abandon = if crate::allocator::page::mi_page_is_in_full(page) {
-                local_page
-                    .into_full_after_classification()
-                    .into_abandon_candidate()
-            } else {
-                local_page
-                    .into_active_after_classification()
-                    .into_abandon_candidate()
-            };
             let _ = _mi_page_abandon_internal(page_for_abandon, queue);
         }
     }

@@ -318,6 +318,7 @@ unsafe fn _mi_page_free_after_remove<S>(
 
 // SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
+    // SAFETY: page is a live active page witnessed via PagePtr::new_unchecked; try_mark_all_free is valid on exclusive owned page.
     unsafe {
         let active =
             crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));

@@ -618,6 +618,7 @@ pub(crate) extern "C" fn _mi_preloading() -> bool {
 // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_is_redirected() -> bool {
+    // SAFETY: _mi_is_redirected reads process-wide allocator state which is initialized before use and accessed via safe synchronization.
     unsafe { crate::prim::_mi_is_redirected() }
 }
 

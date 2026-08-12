@@ -265,6 +265,7 @@ pub(super) unsafe fn guarded_init(theap: *mut mi_theap_t) {
             // ownership, and the contract grants exclusive access to the live
             // heap's random state when the configured seed requests one.
             let seed = if seed == 0 {
+                // SAFETY: theap is the current-thread locally owned heap validated by ownership proof; random state is exclusively mutable here.
                 unsafe { crate::internal::_mi_theap_random_next(theap.ptr().as_ptr()) }
             } else {
                 seed

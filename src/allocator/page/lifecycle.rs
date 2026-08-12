@@ -220,6 +220,7 @@ pub(crate) unsafe fn collect_remote_for_local_page(
     // detached owner establish page identity and unique collection access.
     match unsafe { detached.into_batch_for_local(page) } {
         Ok(None) => Ok(local),
+        // SAFETY: detached chain is uniquely owned from the abandoned page; into_batch_for_local validates encoded links under exclusive collection.
         Ok(Some(batch)) => Ok(unsafe { batch.collect_into_local_page(page, local) }),
         Err(error) => Err(report_remote_list_corruption(error)),
     }
@@ -237,6 +238,7 @@ pub(crate) unsafe fn collect_remote_for_owned_abandoned_page(
     // abandoned ownership and the detached owner exclude competing collectors.
     match unsafe { detached.into_batch_for_abandoned(page) } {
         Ok(None) => Ok(local),
+        // SAFETY: detached chain is uniquely owned from the owned abandoned page; into_batch_for_abandoned validates links under exclusive ownership.
         Ok(Some(batch)) => Ok(unsafe { batch.collect_into_owned_abandoned_page(page, local) }),
         Err(error) => Err(report_remote_list_corruption(error)),
     }
@@ -252,6 +254,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
         // SAFETY: the detached head and
         // current local list belong to the proven owner page.
         let local = unsafe { page_ptr.local_free() };
+        // SAFETY: owner page's thread-free word is exclusively accessible via the page-proven claim; detach_head atomically removes the published list.
         let _ = unsafe { owner.collect_remote(remote, local) };
     }
 
@@ -334,6 +337,7 @@ pub(crate) unsafe fn collect_page_free_lists_abandoned(page: &OwnedAbandonedPage
 // SAFETY: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
+    // SAFETY: page is owned by the current thread heap; the collection operates on exclusively owned local/page metadata.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         let page_ptr = PagePtr::new_unchecked(page);

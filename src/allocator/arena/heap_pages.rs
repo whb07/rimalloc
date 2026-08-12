@@ -56,6 +56,7 @@ unsafe fn mi_heap_visit_page(page: PagePtr, vinfo: &mut mi_heap_visit_info_t) ->
         return false;
     }
     if vinfo.visit_blocks {
+        // SAFETY: area and page are live validated witnesses from the heap-visit protocol; visit_page_blocks only traverses linked blocks.
         unsafe {
             // SAFETY: `area` matches this live page, and a continuing callback preserved its
             // backing, geometry, callback, and opaque argument for synchronous block traversal.

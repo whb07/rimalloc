@@ -273,6 +273,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
 // returned by allocation, reclaims meta bitmap ranges, and delegates non-meta
 // memory to the arena free path.
 pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
+    // SAFETY: p, size, and memid describe a live allocation from _mi_meta_zalloc; the meta-page and block range are live and stable.
     unsafe {
         if p.is_null() {
             return;

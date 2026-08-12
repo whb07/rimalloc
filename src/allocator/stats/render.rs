@@ -76,8 +76,8 @@ impl StatCounterSnapshot {
 
 fn c_char_buffer_str(buf: &[c_char]) -> &str {
     // SAFETY: fixed formatting buffers are written only from ASCII format fragments and
-    // always NUL-terminated by `mi_vsnprintf_args`.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // always NUL-terminated by `mi_vsnprintf_args`; `buf.as_ptr()` is valid for the
+    // NUL-terminated read and `CStr::from_ptr` does not retain the pointer.
     unsafe { str::from_utf8_unchecked(CStr::from_ptr(buf.as_ptr()).to_bytes()) }
 }
 
@@ -141,8 +141,8 @@ fn mi_printf_amount(
         _mi_fprintf(out, arg, format_args!("{rendered:>12}"));
         return;
     }
-    // SAFETY: `fmt` is expected to point to a valid NUL-terminated C string.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: `fmt` is non-null per the preceding `is_null` check and points to a
+    // valid NUL-terminated C string; `CStr::from_ptr` borrows it for the call only.
     let fmt_bytes = unsafe { CStr::from_ptr(fmt) }.to_bytes();
     if fmt_bytes == b"%s" {
         _mi_fprintf(out, arg, format_args!("{rendered}"));
@@ -323,8 +323,10 @@ fn mi_buffered_flush(buf: &mut buffered_t) {
     if buf.buf.is_null() {
         return;
     }
-    // SAFETY: `buf.buf` points to writable storage of at least `count + 1` bytes.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: `buf.buf` is non-null per the check and points to writable storage
+    // of at least `count + 1` bytes; `buf.used <= count` per construction, so
+    // `add(buf.used)` is in-bounds for the NUL write and `_mi_fputs` reads
+    // the NUL-terminated buffer without retaining it.
     unsafe {
         *buf.buf.add(buf.used) = 0;
         _mi_fputs(buf.out, buf.arg, ptr::null(), buf.buf);
@@ -340,8 +342,10 @@ unsafe extern "C" fn mi_buffered_out(msg: *const c_char, arg: *mut c_void) {
     if msg.is_null() || arg.is_null() {
         return;
     }
-    // SAFETY: caller passes a valid `buffered_t` as `arg` and `msg` is a NUL-terminated string.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: caller passes a valid `buffered_t` as `arg` (live, aligned, uniquely
+    // writable `buffered_t` with writable backing buffer per `_mi_stats_print`) and
+    // `msg` is a NUL-terminated string per the C callback contract; the non-null
+    // checks above ensure both pointers are dereferenceable.
     unsafe {
         let buf = &mut *(arg as *mut buffered_t);
         let mut src = msg;
@@ -398,7 +402,8 @@ pub(super) unsafe fn _mi_stats_print(
         mi_print_header("blocks", out, arg);
         mi_stats_print_bins(
             &stats.malloc_bins,
-            // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+            // SAFETY: `MI_BIN_HUGE as u16` is a valid `StatsBin` discriminant
+            // within the fixed-size `malloc_bins` array (0..=MI_BIN_HUGE).
             unsafe { StatsBin::new_unchecked(MI_BIN_HUGE as u16) },
             out,
             arg,
@@ -484,7 +489,9 @@ pub(super) unsafe fn _mi_stats_print(
             arg,
             format_args!("  {:<10}: {:>5}\n", "numa nodes", _mi_os_numa_node_count()),
         );
-        // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY: `out`/`arg` are the validated snapshot output callback/arg from
+        // `_mi_stats_print`'s caller, remaining live and valid for synchronous
+        // process-info printing; the callee does not retain them and does not unwind.
         unsafe { mi_process_info_print_out_impl(out, arg) };
     }
     _mi_fprintf(out, arg, format_args!("\n"));
@@ -503,8 +510,9 @@ pub(super) unsafe fn mi_process_info_print_out_impl(out: Option<mi_output_fun>, 
     let mut current_commit = 0usize;
     let mut peak_commit = 0usize;
     let mut page_faults = 0usize;
-    // SAFETY: local pointers below are valid writable outputs.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: `&mut elapsed` etc. are live, aligned, stack-owned `usize` slots
+    // exclusive for this call, valid for `mi_process_info_impl` to write one
+    // `usize` each; no aliasing with `out`/`arg`.
     unsafe {
         mi_process_info_impl(ProcessInfoOutput {
             elapsed_msecs: &mut elapsed,
@@ -551,8 +559,8 @@ pub(super) unsafe fn mi_process_info_print_out_impl(out: Option<mi_output_fun>, 
 #[inline(always)]
 pub(super) fn mi_process_info_print_impl() {
     // Keep the public-symbol call so interposition and release codegen match the pre-split path.
-    // SAFETY: null output selects the default output sink.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: `None`/`null_mut()` selects the default output sink per the stats
+    // callback contract; no output buffer is dereferenced and the call does not unwind.
     unsafe { super::mi_process_info_print_out(None, ptr::null_mut()) }
 }
 
@@ -580,7 +588,6 @@ impl Default for mi_json_buf_s {
 fn mi_json_buf_expand(hbuf: &mut mi_json_buf_t) -> bool {
     if !hbuf.buf.is_null() && hbuf.size > 0 {
         // SAFETY: `buf` is valid for `size` bytes when non-null.
-        // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { *hbuf.buf.add(hbuf.size - 1) = 0 };
     }
     if hbuf.size > usize::MAX / 2 || !hbuf.can_realloc {
@@ -592,7 +599,6 @@ fn mi_json_buf_expand(hbuf: &mut mi_json_buf_t) -> bool {
         2 * hbuf.size
     };
     // SAFETY: `mi_rezalloc` accepts null for fresh allocation and preserves the old contents.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let newbuf = unsafe { mi_rezalloc(hbuf.buf.cast(), newsize).cast::<c_char>() };
     if newbuf.is_null() {
         return false;
@@ -612,13 +618,11 @@ fn mi_json_buf_print(hbuf: &mut mi_json_buf_t, msg: &str) {
         }
         crate::internal::mi_debug_assert!(hbuf.used < hbuf.size);
         // SAFETY: capacity is ensured just above and `used < size`.
-        // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { *hbuf.buf.add(hbuf.used) = byte as c_char };
         hbuf.used += 1;
     }
     crate::internal::mi_debug_assert!(hbuf.used < hbuf.size);
     // SAFETY: capacity is ensured above and the trailing NUL fits.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { *hbuf.buf.add(hbuf.used) = 0 };
 }
 
@@ -815,7 +819,6 @@ pub(super) unsafe fn mi_stats_get_json_from_impl(
     let mut hbuf = mi_json_buf_t::default();
     if output_size > 0 && !output_buf.is_null() {
         // SAFETY: caller provides `output_buf` writable for `output_size` bytes.
-        // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { ptr::write_bytes(output_buf, 0, output_size) };
         hbuf.buf = output_buf;
         hbuf.size = output_size;
@@ -836,8 +839,9 @@ pub(super) unsafe fn mi_stats_get_json_from_impl(
     let mut current_commit = 0usize;
     let mut peak_commit = 0usize;
     let mut page_faults = 0usize;
-    // SAFETY: local pointers below are valid writable outputs.
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: `&mut elapsed` etc. are live, aligned, stack-owned `usize` slots
+    // exclusive for this call, valid for `mi_process_info_impl` to write one
+    // `usize` each; no aliasing with `hbuf` and the buffer remains live.
     unsafe {
         mi_process_info_impl(ProcessInfoOutput {
             elapsed_msecs: &mut elapsed,
@@ -900,7 +904,6 @@ pub(super) unsafe fn mi_stats_get_json_from_impl(
     if hbuf.used >= hbuf.size {
         if hbuf.can_realloc {
             // SAFETY: the buffer came from mimalloc when `can_realloc` is true.
-            // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
             unsafe { mi_free(hbuf.buf.cast()) };
         }
         ptr::null_mut()

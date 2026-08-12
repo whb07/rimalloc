@@ -871,13 +871,13 @@ ownership.
 
 ### Work
 
-- [ ] Find `unsafe fn` bodies containing ordinary control flow around only one
+- [x] Find `unsafe fn` bodies containing ordinary control flow around only one
       or two unsafe operations.
-- [ ] Keep the function unsafe only if callers must uphold an invariant. A
+- [x] Keep the function unsafe only if callers must uphold an invariant. A
       function is not unsafe merely because its implementation uses unsafe.
-- [ ] Move validation and ordinary calculations outside the smallest possible
+- [x] Move validation and ordinary calculations outside the smallest possible
       `unsafe` block.
-- [ ] Replace whole-function unsafe scopes with operation-level unsafe blocks.
+- [x] Replace whole-function unsafe scopes with operation-level unsafe blocks.
 - [ ] Ensure every remaining unsafe function has a `# Safety` section naming
       pointer validity, lifetime, aliasing, initialization, ownership,
       threading, and unwind requirements that apply.
@@ -886,13 +886,13 @@ ownership.
 
 ### Validation
 
-- [ ] Run Clippy's `missing_safety_doc` and `unsafe_op_in_unsafe_fn` gates and
+- [x] Run Clippy's `missing_safety_doc` and `unsafe_op_in_unsafe_fn` gates and
       `scripts/check-safe-docs.py`.
-- [ ] Run Clippy with all features and confirm `unsafe_op_in_unsafe_fn` remains
+- [x] Run Clippy with all features and confirm `unsafe_op_in_unsafe_fn` remains
       denied.
-- [ ] Record a net reduction in broad unsafe scope. Do not count splitting one
+- [x] Record a net reduction in broad unsafe scope. Do not count splitting one
       broad block into many equivalent blocks as risk reduction.
-- [ ] Run the common Rust validation gate.
+- [x] Run the common Rust validation gate.
 
 ### Completion condition
 

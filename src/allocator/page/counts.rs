@@ -40,6 +40,7 @@ pub(super) unsafe fn mi_page_queue_block_size_raw(pq: *const mi_page_queue_t) ->
 /// `pq` must point to a valid `mi_page_queue_t`.
 // SAFETY: page-queue count helpers read and write allocator-owned queue metadata through typed counters.
 pub unsafe extern "C" fn mi_page_queue_is_huge(pq: *const mi_page_queue_t) -> bool {
+    // SAFETY: pq is a valid page-queue pointer from the caller contract; block size is read from initialized queue metadata.
     unsafe { mi_page_queue_block_size_raw(pq) == (MI_LARGE_MAX_OBJ_SIZE + size_of::<usize>()) }
 }
 
@@ -47,6 +48,7 @@ pub unsafe extern "C" fn mi_page_queue_is_huge(pq: *const mi_page_queue_t) -> bo
 /// `pq` must point to a valid `mi_page_queue_t`.
 // SAFETY: page-queue count helpers read and write allocator-owned queue metadata through typed counters.
 pub unsafe extern "C" fn mi_page_queue_is_full(pq: *const mi_page_queue_t) -> bool {
+    // SAFETY: pq is a valid page-queue pointer from the caller contract; block size is read from initialized queue metadata.
     unsafe {
         mi_page_queue_block_size_raw(pq) == (MI_LARGE_MAX_OBJ_SIZE + (2 * size_of::<usize>()))
     }
@@ -56,6 +58,7 @@ pub unsafe extern "C" fn mi_page_queue_is_full(pq: *const mi_page_queue_t) -> bo
 /// `pq` must point to a valid `mi_page_queue_t`.
 // SAFETY: page-queue count helpers read and write allocator-owned queue metadata through typed counters.
 pub unsafe extern "C" fn mi_page_queue_is_special(pq: *const mi_page_queue_t) -> bool {
+    // SAFETY: pq is a valid page-queue pointer from the caller contract; block size is read from initialized queue metadata.
     unsafe { mi_page_queue_block_size_raw(pq) > MI_LARGE_MAX_OBJ_SIZE }
 }
 

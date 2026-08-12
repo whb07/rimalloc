@@ -120,6 +120,7 @@ pub extern "C" fn mi_malloc(size: usize) -> *mut c_void {
 // SAFETY: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
+    // SAFETY: heap is validated via BorrowedHeap::from_allocation_raw which checks live heap metadata; layout is validated before typed dispatch.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();

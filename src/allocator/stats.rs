@@ -131,7 +131,7 @@ pub type mi_stats_s = mi_stats_t;
 impl Default for mi_stats_t {
     fn default() -> Self {
         // SAFETY: `mi_stats_t` is plain old data; all-zero bytes are valid for every field.
-        // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
         unsafe { core::mem::zeroed() }
     }
 }
@@ -157,7 +157,7 @@ pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
 
 /// # Safety
 /// Any non-null output pointers must be valid for writing one `usize`.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_process_info(
     elapsed_msecs: *mut usize,
@@ -186,14 +186,14 @@ pub unsafe extern "C" fn mi_process_info(
 
 /// # Safety
 /// Output callbacks and argument pointers must follow the C ABI contract when non-null.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_process_info_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     // SAFETY: the compatibility boundary forwards the callback contract.
     unsafe { render::mi_process_info_print_out_impl(out, arg) }
 }
 
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_process_info_print() {
     render::mi_process_info_print_impl()
@@ -216,7 +216,7 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
 /// # Safety
 /// `subproc_id` must identify a live subproc. If `buf` is non-null it must be writable for
 /// `buf_size` bytes.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get_json(
     subproc_id: mi_subproc_id_t,
@@ -238,7 +238,7 @@ pub unsafe extern "C" fn mi_subproc_stats_get_json(
 /// during this call. Any associated local thread heap must be current-thread owned and exclusively
 /// available for destructive stats merge. If `buf` is non-null it must be uniquely writable for
 /// `buf_size` bytes for the duration of this call.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_get_json(
     heap: *mut mi_heap_t,
@@ -257,7 +257,7 @@ pub unsafe extern "C" fn mi_heap_stats_get_json(
 
 /// # Safety
 /// If `buf` is non-null it must be writable for `buf_size` bytes.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_get_json(buf_size: usize, buf: *mut c_char) -> *mut c_char {
     // SAFETY: the current subproc is live and the caller provides the output buffer contract.
@@ -697,16 +697,16 @@ pub unsafe extern "C" fn mi_heap_stats_get(heap: *mut mi_heap_t, stats: *mut mi_
 
 /// # Safety
 /// May collect current-thread allocator state and must not race with allocator teardown.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_collect_reduce(_target_thread_owned: usize) {
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     unsafe { crate::allocator::thread_heap::mi_collect(false) };
 }
 
 /// # Safety
 /// `subproc_id` must identify a live subproc and any output callback must obey the C ABI.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_print_out(
     subproc_id: mi_subproc_id_t,
@@ -718,7 +718,7 @@ pub unsafe extern "C" fn mi_subproc_stats_print_out(
         return;
     }
     let mut stats = initialized_stats();
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     unsafe {
         if mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
             _mi_stats_print(
@@ -734,52 +734,52 @@ pub unsafe extern "C" fn mi_subproc_stats_print_out(
 
 /// # Safety
 /// Any output callback must obey the C ABI.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     unsafe { mi_subproc_stats_print_out(mi_subproc_current(), out, arg) };
 }
 
 /// # Safety
 /// `out`, when non-null, must be a valid `mi_output_fun` callback pointer encoded as `void*`.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_print(out: *mut c_void) {
     let out_fun = if out.is_null() {
         None
     } else {
         // The legacy C API accepts an output callback through a `void*`.
-        // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+        // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
         Some(unsafe { core::mem::transmute::<*mut c_void, mi_output_fun>(out) })
     };
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     unsafe { mi_stats_print_out(out_fun, ptr::null_mut()) };
 }
 
 /// # Safety
 /// Any output callback must obey the C ABI.
-// SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+// SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_thread_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     let theap = unsafe { _mi_theap_default() };
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     if theap.is_null() || !unsafe { mi_theap_is_initialized(theap) } {
         return;
     }
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     let theap_ptr = unsafe { ThreadHeapPtr::new_unchecked(theap) };
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     let Some(heap) = (unsafe { theap_ptr.heap() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     let heap_seq = crate::core_types::HeapSeq::new(unsafe {
         (*heap.as_ptr().cast::<MiHeapStatsPrefix>()).heap_seq
     });
-    // SAFETY: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
+    // SAFETY: the caller's validated stats/buffer/callback witness keeps this exact operation's pointers and atomic protocol valid for the synchronous call.
     unsafe {
         _mi_stats_print(
             "heap",

@@ -9,6 +9,7 @@ use super::mi_interpose_s;
 #[inline]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe fn mi_forward1<R, A>(fun: unsafe extern "C" fn(A) -> R, x: A) -> R {
+    // SAFETY: the caller provides an `x` accepted by `fun`; the call preserves the declared C ABI.
     unsafe { fun(x) }
 }
 
@@ -31,6 +32,7 @@ pub unsafe fn mi_forward3<R, A, B, C>(
 #[inline]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe fn mi_forward02<A, B>(fun: unsafe extern "C" fn(A, B), x: A, y: B) {
+    // SAFETY: the caller provides `x` and `y` accepted by `fun`; the call preserves the declared C ABI.
     unsafe { fun(x, y) }
 }
 

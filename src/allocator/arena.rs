@@ -1705,6 +1705,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
         // arena/range MemId; the backing and callback remain live, and is_zero
         // is uniquely writable for this synchronous commit.
         let mut is_zero = false;
+        // SAFETY: memid is the arena/range MemId from the pending backing; mi_arena_commit is called with exclusive backing ownership, live arena, and writable is_zero slot.
         if !unsafe {
             let (arena_ptr, range) = match crate::core_types::MemId::view(memid) {
                 crate::core_types::MemIdView::Arena(a) => (a.arena(), a.range()),
@@ -1793,6 +1794,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     // SAFETY: the initialized metadata location and MemId remain stable, so its
     // separate/colocated classification is readable.
     crate::internal::mi_assert_internal!(
+        // SAFETY: page is a freshly initialized live page with stable free-list head and metadata classification before registration.
         page_meta_is_separate == unsafe { mi_page_meta_is_separated(page) }
     );
     // SAFETY: the freshly initialized page geometry remains stable and its

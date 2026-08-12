@@ -838,6 +838,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     // SAFETY: initial zeroing flag determines whether
     // the first committed submap range needs explicit clearing.
     if !unsafe { mi_page_map_memid.initially_zero } {
+        // SAFETY: page/queue pointers are live validated metadata under exclusive thread-heap ownership.
         unsafe { _mi_memzero_aligned(sub0.cast::<c_void>(), submap_size) };
     }
 
@@ -877,6 +878,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
     // SAFETY: destroy checks initialized global base
     // before tearing down submaps and the top-level table.
     crate::internal::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    // SAFETY: page/queue pointers are live validated metadata under exclusive thread-heap ownership.
     if unsafe { _mi_page_map }.is_null() {
         return;
     }
@@ -1095,6 +1097,7 @@ unsafe fn mi_page_map_set_range(
     // SAFETY: typed range bounds every submap write; on
     // failure, the same typed range is cleared for rollback.
     if !unsafe { mi_page_map_set_range_prim(page, idx, sub_idx, slice_count) } {
+        // SAFETY: page/queue pointers are live validated metadata under exclusive thread-heap ownership.
         unsafe { mi_page_map_clear_range_prim(idx, sub_idx, slice_count) };
         return false;
     }

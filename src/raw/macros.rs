@@ -666,6 +666,7 @@ pub static _mi_cxx_interposes: [mi_interpose_s; 8] = [
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_malloc_size_checked(p: *mut c_void) -> usize {
+    // SAFETY: p is the caller-provided raw pointer cast to const; mi_is_in_heap_region only inspects the page map and handles null.
     if !unsafe { crate::mimalloc::mi_is_in_heap_region(p.cast_const()) } {
         return 0;
     }
@@ -912,6 +913,7 @@ pub unsafe extern "C" fn _aligned_recalloc(
 )]
 // SAFETY: scalar C++ delete shims preserve Itanium delete symbols while forwarding to the matching free path.
 pub unsafe extern "C" fn mi_cxx_delete(p: *mut c_void) {
+    // SAFETY: p is the caller-provided pointer from the C/C++ delete/free ABI; mi_free safely handles null and heap-ownership checks.
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
@@ -924,6 +926,7 @@ pub unsafe extern "C" fn mi_cxx_delete(p: *mut c_void) {
 )]
 // SAFETY: array C++ delete shims preserve Itanium array-delete symbols while forwarding to the matching free path.
 pub unsafe extern "C" fn mi_cxx_delete_array(p: *mut c_void) {
+    // SAFETY: p is the caller-provided pointer from the C/C++ delete/free ABI; mi_free safely handles null and heap-ownership checks.
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
@@ -936,6 +939,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array(p: *mut c_void) {
 )]
 // SAFETY: scalar C++ delete shims preserve Itanium delete symbols while forwarding to the matching free path.
 pub unsafe extern "C" fn mi_cxx_delete_sized(p: *mut c_void, n: usize) {
+    // SAFETY: p and n are the caller-provided pointer and size from the C++ delete ABI; mi_free_size validates heap ownership before freeing.
     unsafe { crate::mimalloc::mi_free_size(p, n) }
 }
 
@@ -948,6 +952,7 @@ pub unsafe extern "C" fn mi_cxx_delete_sized(p: *mut c_void, n: usize) {
 )]
 // SAFETY: array C++ delete shims preserve Itanium array-delete symbols while forwarding to the matching free path.
 pub unsafe extern "C" fn mi_cxx_delete_array_sized(p: *mut c_void, n: usize) {
+    // SAFETY: p and n are the caller-provided pointer and size from the C++ delete ABI; mi_free_size validates heap ownership before freeing.
     unsafe { crate::mimalloc::mi_free_size(p, n) }
 }
 
@@ -960,6 +965,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array_sized(p: *mut c_void, n: usize) {
 )]
 // SAFETY: aligned C++ shims preserve align_val_t ABI variants while forwarding to aligned allocator exports.
 pub unsafe extern "C" fn mi_cxx_delete_aligned(p: *mut c_void, al: usize) {
+    // SAFETY: `p` and `al` are forwarded unchanged to the matching aligned-free ABI entrypoint.
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
@@ -972,6 +978,7 @@ pub unsafe extern "C" fn mi_cxx_delete_aligned(p: *mut c_void, al: usize) {
 )]
 // SAFETY: aligned C++ shims preserve align_val_t ABI variants while forwarding to aligned allocator exports.
 pub unsafe extern "C" fn mi_cxx_delete_array_aligned(p: *mut c_void, al: usize) {
+    // SAFETY: `p` and `al` are forwarded unchanged to the matching aligned-free ABI entrypoint.
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
@@ -984,6 +991,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array_aligned(p: *mut c_void, al: usize) 
 )]
 // SAFETY: aligned C++ shims preserve align_val_t ABI variants while forwarding to aligned allocator exports.
 pub unsafe extern "C" fn mi_cxx_delete_sized_aligned(p: *mut c_void, n: usize, al: usize) {
+    // SAFETY: `p`, `n`, and `al` are forwarded unchanged to the matching sized aligned-free ABI entrypoint.
     unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }
 }
 
@@ -996,6 +1004,7 @@ pub unsafe extern "C" fn mi_cxx_delete_sized_aligned(p: *mut c_void, n: usize, a
 )]
 // SAFETY: aligned C++ shims preserve align_val_t ABI variants while forwarding to aligned allocator exports.
 pub unsafe extern "C" fn mi_cxx_delete_array_sized_aligned(p: *mut c_void, n: usize, al: usize) {
+    // SAFETY: `p`, `n`, and `al` are forwarded unchanged to the matching sized aligned-free ABI entrypoint.
     unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }
 }
 
@@ -1009,6 +1018,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array_sized_aligned(p: *mut c_void, n: us
 // SAFETY: nothrow C++ shims consume the tag ABI and forward through null-returning allocation paths.
 pub unsafe extern "C" fn mi_cxx_delete_nothrow(p: *mut c_void, tag: mi_nothrow_t) {
     crate::internal::MI_UNUSED(&tag);
+    // SAFETY: p is the caller-provided pointer from the C/C++ delete/free ABI; mi_free safely handles null and heap-ownership checks.
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
@@ -1022,6 +1032,7 @@ pub unsafe extern "C" fn mi_cxx_delete_nothrow(p: *mut c_void, tag: mi_nothrow_t
 // SAFETY: nothrow C++ shims consume the tag ABI and forward through null-returning allocation paths.
 pub unsafe extern "C" fn mi_cxx_delete_array_nothrow(p: *mut c_void, tag: mi_nothrow_t) {
     crate::internal::MI_UNUSED(&tag);
+    // SAFETY: p is the caller-provided pointer from the C/C++ delete/free ABI; mi_free safely handles null and heap-ownership checks.
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
@@ -1078,6 +1089,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array_aligned_nothrow(
 )]
 // SAFETY: C++ new shims preserve pointer-width Itanium new symbols while forwarding to mi_new.
 pub unsafe extern "C" fn mi_cxx_new_64(n: usize) -> *mut c_void {
+    // SAFETY: `n` is forwarded unchanged to the matching C++ new allocation entrypoint.
     unsafe { crate::mimalloc::mi_new(n) }
 }
 
@@ -1098,6 +1110,7 @@ pub unsafe extern "C" fn mi_cxx_new_64(n: usize) -> *mut c_void {
 )]
 // SAFETY: C++ new shims preserve pointer-width Itanium new symbols while forwarding to mi_new.
 pub unsafe extern "C" fn mi_cxx_new_array_64(n: usize) -> *mut c_void {
+    // SAFETY: `n` is forwarded unchanged to the matching C++ new allocation entrypoint.
     unsafe { crate::mimalloc::mi_new(n) }
 }
 
@@ -1118,6 +1131,7 @@ pub unsafe extern "C" fn mi_cxx_new_array_64(n: usize) -> *mut c_void {
 // SAFETY: nothrow C++ shims consume the tag ABI and forward through null-returning allocation paths.
 pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
     crate::internal::MI_UNUSED(&tag);
+    // SAFETY: `n` is forwarded unchanged to the matching nothrow C++ new allocation entrypoint.
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
@@ -1138,6 +1152,7 @@ pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *
 // SAFETY: nothrow C++ shims consume the tag ABI and forward through null-returning allocation paths.
 pub unsafe extern "C" fn mi_cxx_new_array_64_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
     crate::internal::MI_UNUSED(&tag);
+    // SAFETY: `n` is forwarded unchanged to the matching nothrow C++ new allocation entrypoint.
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
@@ -1157,6 +1172,7 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_nothrow(n: usize, tag: mi_nothrow_t
 )]
 // SAFETY: aligned C++ shims preserve align_val_t ABI variants while forwarding to aligned allocator exports.
 pub unsafe extern "C" fn mi_cxx_new_64_aligned(n: usize, al: usize) -> *mut c_void {
+    // SAFETY: n and al are the caller-provided size and alignment from the C++ new ABI; mi_new_aligned validates alignment and returns null on failure.
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
@@ -1176,6 +1192,7 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned(n: usize, al: usize) -> *mut c_vo
 )]
 // SAFETY: aligned C++ shims preserve align_val_t ABI variants while forwarding to aligned allocator exports.
 pub unsafe extern "C" fn mi_cxx_new_array_64_aligned(n: usize, al: usize) -> *mut c_void {
+    // SAFETY: n and al are the caller-provided size and alignment from the C++ new ABI; mi_new_aligned validates alignment and returns null on failure.
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
@@ -1521,6 +1538,7 @@ pub unsafe fn mi_unix_malloc(size: usize) -> *mut c_void {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_malloc_export(size: usize) -> *mut c_void {
+    // SAFETY: `size` is forwarded unchanged to the raw Unix malloc facade.
     unsafe { mi_unix_malloc(size) }
 }
 
@@ -1561,6 +1579,7 @@ pub unsafe fn mi_unix_calloc(count: usize, size: usize) -> *mut c_void {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_calloc_export(count: usize, size: usize) -> *mut c_void {
+    // SAFETY: `count` and `size` are forwarded unchanged to the raw Unix calloc facade.
     unsafe { mi_unix_calloc(count, size) }
 }
 
@@ -1610,6 +1629,7 @@ pub unsafe fn mi_unix_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_realloc_export(p: *mut c_void, newsize: usize) -> *mut c_void {
+    // SAFETY: `p` and `newsize` are forwarded unchanged to the raw Unix realloc facade.
     unsafe { mi_unix_realloc(p, newsize) }
 }
 
@@ -1658,6 +1678,7 @@ pub unsafe fn mi_unix_free(p: *mut c_void) {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_free_export(p: *mut c_void) {
+    // SAFETY: `p` is forwarded unchanged to the raw Unix free facade.
     unsafe { mi_unix_free(p) }
 }
 
@@ -1678,6 +1699,7 @@ pub unsafe fn mi_unix_strdup(s: *const c_char) -> *mut c_char {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_strdup_export(s: *const c_char) -> *mut c_char {
+    // SAFETY: `s` is forwarded unchanged to the raw Unix strdup facade.
     unsafe { mi_unix_strdup(s) }
 }
 
@@ -1698,6 +1720,7 @@ pub unsafe fn mi_unix_strndup(s: *const c_char, n: usize) -> *mut c_char {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_strndup_export(s: *const c_char, n: usize) -> *mut c_char {
+    // SAFETY: `s` and `n` are forwarded unchanged to the raw Unix strndup facade.
     unsafe { mi_unix_strndup(s, n) }
 }
 
@@ -1726,6 +1749,7 @@ pub unsafe fn mi_unix_reallocf(p: *mut c_void, newsize: usize) -> *mut c_void {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_reallocf_export(p: *mut c_void, newsize: usize) -> *mut c_void {
+    // SAFETY: `p` and `newsize` are forwarded unchanged to the raw Unix reallocf facade.
     unsafe { mi_unix_reallocf(p, newsize) }
 }
 
@@ -1754,6 +1778,7 @@ pub unsafe fn mi_unix_malloc_size(p: *const c_void) -> usize {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_malloc_size_export(p: *const c_void) -> usize {
+    // SAFETY: `p` is forwarded unchanged to the raw Unix malloc-size facade.
     unsafe { mi_unix_malloc_size(p) }
 }
 
@@ -1783,6 +1808,7 @@ pub unsafe fn mi_unix_malloc_good_size(size: usize) -> usize {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_malloc_good_size_export(size: usize) -> usize {
+    // SAFETY: `size` is forwarded unchanged to the raw Unix good-size facade.
     unsafe { mi_unix_malloc_good_size(size) }
 }
 
@@ -1796,6 +1822,7 @@ pub unsafe extern "C" fn mi_unix_malloc_good_size_export(size: usize) -> usize {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_malloc_usable_size_export(p: *const c_void) -> usize {
+    // SAFETY: `p` is forwarded unchanged to the raw Unix usable-size facade.
     unsafe { mi_unix_malloc_usable_size(p) }
 }
 
@@ -1816,6 +1843,7 @@ pub unsafe fn mi_unix_valloc(size: usize) -> *mut c_void {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_valloc_export(size: usize) -> *mut c_void {
+    // SAFETY: `size` is forwarded unchanged to the raw Unix valloc facade.
     unsafe { mi_unix_valloc(size) }
 }
 
@@ -1836,6 +1864,7 @@ pub unsafe fn mi_unix_vfree(p: *mut c_void) {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_vfree_export(p: *mut c_void) {
+    // SAFETY: `p` is forwarded unchanged to the raw Unix vfree facade.
     unsafe { mi_unix_vfree(p) }
 }
 
@@ -1905,6 +1934,7 @@ pub unsafe fn mi_unix_cfree(p: *mut c_void) {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_cfree_export(p: *mut c_void) {
+    // SAFETY: `p` is forwarded unchanged to the raw Unix cfree facade.
     unsafe { mi_unix_cfree(p) }
 }
 
@@ -1925,6 +1955,7 @@ pub unsafe fn mi_unix_pvalloc(size: usize) -> *mut c_void {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_pvalloc_export(size: usize) -> *mut c_void {
+    // SAFETY: `size` is forwarded unchanged to the raw Unix pvalloc facade.
     unsafe { mi_unix_pvalloc(size) }
 }
 
@@ -1945,6 +1976,7 @@ pub unsafe fn mi_unix_memalign(alignment: usize, size: usize) -> *mut c_void {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_unix_memalign_export(alignment: usize, size: usize) -> *mut c_void {
+    // SAFETY: `alignment` and `size` are forwarded unchanged to the raw Unix memalign facade.
     unsafe { mi_unix_memalign(alignment, size) }
 }
 
@@ -2122,6 +2154,7 @@ pub unsafe extern "C" fn mi_wasi_libc_memalign_export(
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_malloc_export(size: usize) -> *mut c_void {
+    // SAFETY: `size` is forwarded unchanged to the raw Linux libc malloc facade.
     unsafe { mi_linux_libc_malloc(size) }
 }
 
@@ -2140,6 +2173,7 @@ pub unsafe extern "C" fn mi_linux_libc_malloc_export(size: usize) -> *mut c_void
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_calloc_export(count: usize, size: usize) -> *mut c_void {
+    // SAFETY: `count` and `size` are forwarded unchanged to the raw Linux libc calloc facade.
     unsafe { mi_linux_libc_calloc(count, size) }
 }
 
@@ -2153,6 +2187,7 @@ pub unsafe extern "C" fn mi_linux_libc_calloc_export(count: usize, size: usize) 
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_realloc_export(p: *mut c_void, size: usize) -> *mut c_void {
+    // SAFETY: `p` and `size` are forwarded unchanged to the raw Linux libc realloc facade.
     unsafe { mi_linux_libc_realloc(p, size) }
 }
 
@@ -2171,6 +2206,7 @@ pub unsafe extern "C" fn mi_linux_libc_realloc_export(p: *mut c_void, size: usiz
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_free_export(p: *mut c_void) {
+    // SAFETY: `p` is forwarded unchanged to the raw Linux libc free facade.
     unsafe { mi_linux_libc_free(p) }
 }
 
@@ -2184,6 +2220,7 @@ pub unsafe extern "C" fn mi_linux_libc_free_export(p: *mut c_void) {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_cfree_export(p: *mut c_void) {
+    // SAFETY: `p` is forwarded unchanged to the raw Linux libc cfree facade.
     unsafe { mi_linux_libc_cfree(p) }
 }
 
@@ -2196,6 +2233,7 @@ pub unsafe extern "C" fn mi_linux_libc_cfree_export(p: *mut c_void) {
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_valloc_export(size: usize) -> *mut c_void {
+    // SAFETY: `size` is forwarded unchanged to the raw Linux libc valloc facade.
     unsafe { mi_linux_libc_valloc(size) }
 }
 
@@ -2208,6 +2246,7 @@ pub unsafe extern "C" fn mi_linux_libc_valloc_export(size: usize) -> *mut c_void
 )]
 // SAFETY: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
 pub unsafe extern "C" fn mi_linux_libc_pvalloc_export(size: usize) -> *mut c_void {
+    // SAFETY: `size` is forwarded unchanged to the raw Linux libc pvalloc facade.
     unsafe { mi_linux_libc_pvalloc(size) }
 }
 

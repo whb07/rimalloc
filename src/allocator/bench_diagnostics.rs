@@ -470,6 +470,7 @@ impl PageBatchBenchFixture {
         let page_storage =
             unsafe { crate::mimalloc::mi_zalloc(mem::size_of::<mi_page_t>()) }.cast::<mi_page_t>();
         let blocks =
+            // SAFETY: block_count is validated and mi_page_t size is known; mi_zalloc handles zeroed allocation and returns null on failure.
             unsafe { crate::mimalloc::mi_zalloc(block_count * mem::size_of::<mi_block_t>()) }
                 .cast::<mi_block_t>();
         // SAFETY: the opaque fixture allocation
@@ -653,6 +654,7 @@ pub unsafe extern "C" fn mi_bench_page_batch_fixture_prepare(fixture: *mut c_voi
     let Some(fixture) = (unsafe { fixture.cast::<PageBatchBenchFixture>().as_ref() }) else {
         return false;
     };
+    // SAFETY: fixture is a live exclusive handle validated by the caller contract; its prepare/run methods are safely callable.
     unsafe { fixture.prepare() };
     true
 }
@@ -671,6 +673,7 @@ pub unsafe extern "C" fn mi_bench_page_batch_fixture_run(fixture: *mut c_void) -
     let Some(fixture) = (unsafe { fixture.cast::<PageBatchBenchFixture>().as_ref() }) else {
         return false;
     };
+    // SAFETY: fixture is a live exclusive handle validated by the caller contract; its prepare/run methods are safely callable.
     unsafe { fixture.run() }
 }
 

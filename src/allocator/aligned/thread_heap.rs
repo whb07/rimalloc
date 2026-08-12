@@ -79,6 +79,7 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
         if let Some(available) = available {
             // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
             let page_ptr = available.page();
+            // SAFETY: page_ptr is a live page from the local heap's typed AvailablePage witness; free_raw only reads the free-list head without aliasing.
             let free = unsafe { page_ptr.free_raw() };
             if mi_likely(((free as usize) + offset_raw) & align_mask == 0) {
                 // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.

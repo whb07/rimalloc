@@ -59,6 +59,7 @@ fn mi_set_errno(_err: c_int) {}
 // SAFETY: forwards the raw allocation pointer to the
 // mimalloc usable-size boundary under the caller's ownership contract.
 pub unsafe extern "C" fn mi_malloc_usable_size(p: *const c_void) -> usize {
+    // SAFETY: p is the caller-provided allocation pointer; mi_usable_size handles null and validates heap ownership.
     unsafe { mi_usable_size(p) }
 }
 
@@ -72,6 +73,7 @@ pub unsafe extern "C" fn mi_malloc_usable_size(p: *const c_void) -> usize {
 // SAFETY: forwards the raw allocation pointer to the
 // mimalloc usable-size boundary under the caller's ownership contract.
 pub unsafe extern "C" fn mi_malloc_size(p: *const c_void) -> usize {
+    // SAFETY: p is the caller-provided allocation pointer; mi_usable_size handles null and validates heap ownership.
     unsafe { mi_usable_size(p) }
 }
 
@@ -85,6 +87,7 @@ pub unsafe extern "C" fn mi_malloc_size(p: *const c_void) -> usize {
 // SAFETY: heap-region inspection gates the raw free so
 // non-mimalloc pointers are ignored like the C compatibility helper.
 pub unsafe extern "C" fn mi_cfree(p: *mut c_void) {
+    // SAFETY: p is the caller-provided pointer cast to const; mi_is_in_heap_region only inspects heap region metadata.
     if unsafe { mi_is_in_heap_region(p.cast_const()) } {
         // SAFETY: the region check accepted `p`; the
         // function contract requires owned mimalloc pointers to be freeable.
@@ -138,6 +141,7 @@ pub unsafe extern "C" fn mi_posix_memalign(
 // SAFETY: forwards to mimalloc's aligned allocator and
 // preserves the raw free ownership contract.
 pub unsafe extern "C" fn mi_memalign(alignment: usize, size: usize) -> *mut c_void {
+    // SAFETY: size and alignment are caller-provided; mi_malloc_aligned validates layout and returns null on failure.
     let p = unsafe { mi_malloc_aligned(size, alignment) };
     crate::internal::mi_assert_internal!(_mi_is_aligned(p, alignment));
     p
@@ -153,6 +157,7 @@ pub unsafe extern "C" fn mi_memalign(alignment: usize, size: usize) -> *mut c_vo
 // SAFETY: uses the current OS page-size wrapper before
 // forwarding to the memalign compatibility helper.
 pub unsafe extern "C" fn mi_valloc(size: usize) -> *mut c_void {
+    // SAFETY: crate::os::_mi_os_page_size_typed() is initialized after OS init and provides the page-size alignment; mi_memalign validates the derived size.
     unsafe { mi_memalign(crate::os::_mi_os_page_size_typed().get(), size) }
 }
 
@@ -166,6 +171,7 @@ pub unsafe extern "C" fn mi_valloc(size: usize) -> *mut c_void {
 // SAFETY: page-size lookup and aligned allocation
 // preserve the C helper's overflow/null behavior.
 pub unsafe extern "C" fn mi_pvalloc(size: usize) -> *mut c_void {
+    // SAFETY: OS page size is initialized during allocator startup and remains immutable; the typed wrapper is safely readable.
     let psize = unsafe { crate::os::_mi_os_page_size_typed().get() };
     if size >= usize::MAX - psize {
         return ptr::null_mut();
@@ -186,6 +192,7 @@ pub unsafe extern "C" fn mi_pvalloc(size: usize) -> *mut c_void {
 // SAFETY: forwards directly to mimalloc's aligned
 // allocation path and preserves the caller's raw ownership obligations.
 pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut c_void {
+    // SAFETY: size and alignment are caller-provided; mi_malloc_aligned validates layout and returns null on failure.
     let p = unsafe { mi_malloc_aligned(size, alignment) };
     crate::internal::mi_assert_internal!(_mi_is_aligned(p, alignment));
     p
@@ -278,6 +285,7 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
 // SAFETY: forwards to mimalloc expand and publishes
 // allocation failure through errno.
 pub unsafe extern "C" fn mi__expand(p: *mut c_void, newsize: usize) -> *mut c_void {
+    // SAFETY: p and newsize are caller-provided; mi_expand validates heap ownership and handles null.
     let res = unsafe { mi_expand(p, newsize) };
     if res.is_null() {
         mi_set_errno(ENOMEM);
@@ -295,6 +303,7 @@ pub unsafe extern "C" fn mi__expand(p: *mut c_void, newsize: usize) -> *mut c_vo
 // SAFETY: forwards the nullable C string to mimalloc's
 // strdup helper and preserves ownership of the returned duplicate.
 pub unsafe extern "C" fn mi_mbsdup(s: *const u8) -> *mut u8 {
+    // SAFETY: s is the caller-provided nullable C string; mi_strdup handles null and validates readable bytes up to NUL.
     unsafe { mi_strdup(s.cast::<i8>()).cast::<u8>() }
 }
 

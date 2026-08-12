@@ -78,13 +78,21 @@ core::arch::global_asm!(
 );
 
 /// # Safety
-///
-/// `page` must identify live initialized page metadata with stable encoded-list
-/// keys. `list` must be null or a readable, well-formed, terminating encoded
-/// list of aligned blocks from that page; its head and links must remain stable
-/// for the traversal, or be a protocol-safe remote snapshot whose published
-/// links remain readable and are not relinked. `elem` is used only for pointer
-/// comparison and need not be dereferenceable.
+/// - Pointer validity: `page` must be non-null and point to live initialized
+///   page metadata; `list` must be null or point to a readable, well-formed,
+///   terminating encoded list of aligned blocks from that page.
+/// - Lifetime: `page` and the list head/links must remain live and stable for
+///   the traversal, or be a protocol-safe remote snapshot whose published links
+///   remain readable and are not relinked during the call.
+/// - Aliasing: shared read-only access to page keys and list links is
+///   permitted; no mutable alias may race the traversal.
+/// - Initialization: page keys and the encoded list must be initialized and
+///   well-formed (terminating, same-page).
+/// - Ownership: caller retains ownership of page and list storage.
+/// - Threading: concurrent local mutation is excluded; only protocol-safe
+///   remote-list publication of initialized links is permitted.
+/// - Unwind: must not unwind; `elem` is used only for pointer comparison and
+///   need not be dereferenceable.
 unsafe fn mi_list_contains(
     page: *const mi_page_t,
     mut list: *const mi_block_t,
@@ -104,28 +112,44 @@ unsafe fn mi_list_contains(
 }
 
 /// # Safety
-/// `page` and `user` must identify the same live allocation. The page's backing, start, and nonzero
-/// block size must remain readable and stable through the call. The allocation area must contain
-/// `user`, its block size must partition the page geometry, and the derived block start must be
-/// nonnull and no later than `user`.
+/// - Pointer validity: `page` must be a live initialized page and `user` must
+///   point into that page's backing allocation area.
+/// - Lifetime: page backing, start, and block-size metadata must remain live and
+///   readable and stable through the call.
+/// - Aliasing: shared read-only access to page geometry is permitted; no
+///   mutable alias may race the address-to-block calculation.
+/// - Initialization: page start and block size must be initialized and the
+///   allocation area must contain `user`; block size must partition the page
+///   geometry so the derived block start is non-null and no later than `user`.
+/// - Ownership: caller retains ownership of page and user storage.
+/// - Threading: concurrent free/realloc or page teardown must not race.
+/// - Unwind: must not unwind.
 #[inline(never)]
 unsafe fn mi_page_ptr_unalign_typed(
     page: crate::core_types::PagePtr,
     user: crate::core_types::UserPtr,
 ) -> crate::core_types::BlockPtr {
-    // SAFETY: the caller couples this user address to the live page and keeps its backing, start,
-    // and block geometry stable for the complete address-to-block calculation.
-    unsafe {
-        let diff = user
-            .as_ptr()
+    // SAFETY: the caller couples this user address to the live page and keeps its
+    // backing, start, and block geometry stable for the diff calculation;
+    // `mi_page_start` only reads the initialized page start field.
+    let diff = unsafe {
+        user.as_ptr()
             .cast::<u8>()
-            .offset_from(mi_page_start(page.as_ptr())) as usize;
-        let block_size = mi_page_block_size(page.as_ptr());
-        let adjust = if _mi_is_power_of_two(block_size) {
-            diff & (block_size - 1)
-        } else {
-            diff % block_size
-        };
+            .offset_from(mi_page_start(page.as_ptr())) as usize
+    };
+    // SAFETY: the caller keeps the live page's initialized block size readable
+    // and stable for the geometry query.
+    let block_size = unsafe { mi_page_block_size(page.as_ptr()) };
+    let adjust = if _mi_is_power_of_two(block_size) {
+        diff & (block_size - 1)
+    } else {
+        diff % block_size
+    };
+    // SAFETY: `adjust <= diff` by construction and `user` is at least `adjust`
+    // bytes after the derived block start; the resulting block address is
+    // non-null and within the same allocation area per the caller's geometry
+    // guarantee, and `BlockPtr::new_unchecked` only wraps the validated address.
+    unsafe {
         crate::core_types::BlockPtr::new_unchecked(
             user.as_ptr().cast::<u8>().sub(adjust).cast::<mi_block_t>(),
         )
@@ -133,33 +157,49 @@ unsafe fn mi_page_ptr_unalign_typed(
 }
 
 /// # Safety
-///
-/// `page` must identify live initialized page metadata and `block` must be a
-/// readable, aligned block location in that page; the block may already be
-/// free. The caller must locally own the page or hold its abandoned-page claim.
-/// Its encoded keys and local free-list heads and links must remain stable, and
-/// a remote-list snapshot must contain fully initialized readable links that
-/// are not relinked after publication. Any registered diagnostic callback must
-/// not unwind.
+/// - Pointer validity: `page` must be non-null live initialized page metadata;
+///   `block` must be a readable aligned block location in that page.
+/// - Lifetime: page backing, initialized keys, local lists, and any remote
+///   snapshot must remain live and stable for the call; the block may already
+///   be free but must remain comparable.
+/// - Aliasing: shared read-only access to keys/lists is permitted; no mutable
+///   alias may race the traversal.
+/// - Initialization: page keys and local lists must be initialized and
+///   well-formed; remote snapshot must contain initialized readable links not
+///   relinked after publication.
+/// - Ownership: caller must locally own the page or hold its abandoned-page
+///   claim; caller retains ownership.
+/// - Threading: concurrent local mutation is excluded; only protocol atomic
+///   remote publication of initialized links is permitted.
+/// - Unwind: diagnostic callback must not unwind.
 unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_block_t) -> bool {
-    // SAFETY: the caller provides stable page keys and local lists plus a
-    // protocol-safe remote snapshot, all as readable same-page encoded lists.
-    // The diagnostic path may invoke only a non-unwinding registered callback.
-    unsafe {
-        let page_ptr = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
-        if mi_list_contains(page, page_ptr.free().as_raw(), block)
-            || mi_list_contains(page, page_ptr.local_free().as_raw(), block)
-            || mi_list_contains(page, mi_page_thread_free(page), block)
-        {
-            let block_size = mi_page_block_size(page);
-            _mi_error_message_fmt(
-                Errno::EAGAIN,
-                format_args!("double free detected of block {block:p} with size {block_size}\n"),
-            );
-            return true;
-        }
-        false
+    // SAFETY: `page` is the caller-validated live page; `page.cast_mut()` is
+    // derived from that live page and `PagePtr::new_unchecked` only re-wraps
+    // the validated address without dereferencing.
+    let page_ptr = unsafe { crate::core_types::PagePtr::new_unchecked(page.cast_mut()) };
+    // SAFETY: `page`/`page_ptr` and `free` list are caller-validated stable
+    // readable same-page encoded lists for this double-free traversal.
+    let in_free = unsafe { mi_list_contains(page, page_ptr.free().as_raw(), block) };
+    // SAFETY: `page` and `local_free` list are caller-validated stable lists.
+    let in_local_free = unsafe { mi_list_contains(page, page_ptr.local_free().as_raw(), block) };
+    // SAFETY: `page` and `thread_free` is the protocol-safe remote snapshot
+    // whose published links remain readable and not relinked.
+    let thread_free = unsafe { mi_page_thread_free(page) };
+    let in_thread_free = unsafe { mi_list_contains(page, thread_free, block) };
+    if in_free || in_local_free || in_thread_free {
+        // SAFETY: `page` is a live initialized page; `mi_page_block_size` only
+        // reads its initialized block-size field under the caller's stability.
+        let block_size = unsafe { mi_page_block_size(page) };
+        // `block`/`block_size` are validated for the diagnostic; the
+        // registered error callback is synchronous, non-unwinding, and does
+        // not incompatibly reenter page/list mutation.
+        _mi_error_message_fmt(
+            Errno::EAGAIN,
+            format_args!("double free detected of block {block:p} with size {block_size}\n"),
+        );
+        return true;
     }
+    false
 }
 
 /// Decode one allocated block's padding trailer into its stored delta and page
@@ -359,33 +399,42 @@ pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t)
 }
 
 /// # Safety
-/// `page` must identify live initialized page metadata and `block` must identify
-/// a readable, aligned block location in that page; the block may already be
-/// free. The page backing, encoded-list keys, and local free-list heads and
-/// links must remain stable and readable for the call. The caller must locally
-/// own the page or hold its abandoned-page claim. Concurrent protocol
-/// remote-free publication may update the remote head only after initializing
-/// each readable link and must not relink an already-published node. Any
-/// registered diagnostic callback must not unwind.
+/// `page` must identify live initialized page metadata (pointer validity, lifetime, initialization)
+/// and `block` must identify a readable, aligned block location in that page (pointer validity,
+/// aliasing, initialization); the block may already be free. The page backing,
+/// initialized encoded-list keys, and local free-list heads and links must remain readable and
+/// stable for the call (lifetime, aliasing, ownership, threading). The caller must locally own the
+/// page or hold its abandoned-page claim. Concurrent protocol remote-free publication may update
+/// the remote head only after initializing each readable link and must not relink an
+/// already-published node. Any registered diagnostic callback must not unwind.
 pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_block_t) -> bool {
     if MI_ENCODE_FREELIST == 0 || (crate::internal::MI_SECURE < 4 && MI_DEBUG == 0) {
         return false;
     }
 
-    // SAFETY: the caller supplies a live page and a matching readable aligned
-    // block location, possibly already free, owns or has claimed the page,
-    // keeps its keys and local lists stable, and permits only protocol
-    // publication of initialized remote links during this coherent traversal.
-    unsafe {
-        let keys = mi_page_keys(page);
-        let n = mi_block_nextx(page.cast::<c_void>(), block, &keys);
-        if ((n as usize) & (MI_INTPTR_SIZE - 1)) == 0
-            && (n.is_null() || mi_is_in_same_page(block.cast::<c_void>(), n.cast::<c_void>()))
-        {
-            return mi_check_is_double_freex(page, block);
-        }
-        false
+    // SAFETY: the caller keeps the live page's initialized encoding keys readable and stable.
+    let keys = unsafe { mi_page_keys(page) };
+    // SAFETY: the caller provides a readable aligned block location in that page and keeps the
+    // complete block-link word stable; `keys` are the exact stable keys for its encoding.
+    let n = unsafe { mi_block_nextx(page.cast::<c_void>(), block, &keys) };
+    let aligned = ((n as usize) & (MI_INTPTR_SIZE - 1)) == 0;
+    if !aligned {
+        return false;
     }
+    let same_page = if n.is_null() {
+        true
+    } else {
+        // SAFETY: `block` resolves to the same live page whose geometry is stable; `n` is only
+        // compared geometrically and not dereferenced.
+        unsafe { mi_is_in_same_page(block.cast::<c_void>(), n.cast::<c_void>()) }
+    };
+    if !same_page {
+        return false;
+    }
+    // SAFETY: the caller supplies a live page and matching readable aligned block location that
+    // passed the encoded-link sanity checks; local lists and any remote snapshot remain readable
+    // and stable as required for the full double-free traversal.
+    unsafe { mi_check_is_double_freex(page, block) }
 }
 
 /// Return the usable size of one validated block, excluding padding or its
@@ -393,14 +442,14 @@ pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_b
 ///
 /// # Safety
 /// `page` must identify live initialized page metadata with stable block-size
-/// and usable-size fields. When padding is enabled and `is_guarded` is false,
-/// `block` must be the aligned start of a live block in `page`; its initialized
-/// padding trailer and the page keys used by its canary must remain readable
-/// and stable, with no concurrent free, realloc, or user write to that trailer.
-/// When `is_guarded` is true, it must truthfully classify the block and the
-/// page's block size must cover its trailing OS guard page; allocator OS-page
-/// configuration must be initialized and stable. The page registration,
-/// metadata, and backing must not be concurrently torn down or released.
+/// and usable-size fields (pointer validity, lifetime, initialization). When padding is enabled and
+/// `is_guarded` is false, `block` must be the aligned start of a live block in `page` (pointer
+/// validity, aliasing); its initialized padding trailer and the page keys used by its canary must
+/// remain readable and stable (lifetime, aliasing, ownership, threading), with no concurrent free,
+/// realloc, or user write to that trailer. When `is_guarded` is true, it must truthfully classify
+/// the block and the page's block size must cover its trailing OS guard page; allocator OS-page
+/// configuration must be initialized and stable. The page registration, metadata, and backing must
+/// not be concurrently torn down or released. No unwind is expected.
 pub(crate) unsafe fn mi_page_usable_size_of_typed(
     page: *const mi_page_t,
     block: *const mi_block_t,
@@ -409,26 +458,25 @@ pub(crate) unsafe fn mi_page_usable_size_of_typed(
     if MI_PADDING == 0 {
         let _ = block;
         let _ = is_guarded;
-        // SAFETY: the caller keeps the live page's initialized usable block
-        // size readable and stable for this query.
+        // SAFETY: the caller keeps the live page's initialized usable block size readable and stable.
         return unsafe { mi_page_usable_block_size(page) };
     }
 
     if is_guarded {
-        // SAFETY: the caller keeps this guarded page's initialized block size
-        // and the process OS-page configuration stable; the block covers the
-        // trailing guard page removed by the checked subtraction below.
-        let (bsize, os_page_size) =
-            unsafe { (mi_page_block_size(page), _mi_os_page_size_typed().get()) };
+        // SAFETY: the caller keeps this guarded page's initialized block size readable and stable.
+        let bsize = unsafe { mi_page_block_size(page) };
+        // SAFETY: the OS page-size configuration is initialized and stable for this query; reading
+        // it does not touch the block itself and the guarded block is known to cover the trailing guard page.
+        let os_page_size = unsafe { _mi_os_page_size_typed().get() };
         crate::core_types::UsableSize::new(bsize)
             .checked_sub(os_page_size)
             .unwrap_or_else(|_| crate::core_types::UsableSize::new(0))
     } else {
         let mut bsize = 0usize;
         let mut delta = 0usize;
-        // SAFETY: `block` is the matching live block start in `page`; its
-        // initialized padding trailer and page canary keys remain readable and
-        // stable while the helper balances its tracking visibility changes.
+        // SAFETY: `block` is the matching live block start in this live page; its initialized
+        // padding trailer and the page's canary keys remain readable and stable while the helper
+        // balances its tracking visibility changes.
         let ok = unsafe { mi_page_decode_padding(page, block, &mut delta, &mut bsize) };
         crate::internal::mi_assert_internal!(ok);
         crate::internal::mi_assert_internal!(delta <= bsize);
@@ -443,44 +491,70 @@ pub(crate) unsafe fn mi_page_usable_size_of_typed(
 }
 
 /// # Safety
-/// `page` and `block` must refer to a valid block owned by that page.
+/// `page` must be nonnull and identify the live owning page (pointer validity, lifetime,
+/// initialization, ownership) and `block` must be the aligned start of a live block in that page
+/// (pointer validity, aliasing, initialization, threading) that remains stable for the query. When
+/// `is_guarded` is true it must truthfully classify the block. No concurrent free/realloc or
+/// teardown may race, and no unwind is expected.
 pub unsafe fn mi_page_usable_size_of(
     page: *const mi_page_t,
     block: *const mi_block_t,
     is_guarded: bool,
 ) -> usize {
-    // SAFETY: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
+    // SAFETY: the caller provides a live page and its live block that remain stable for the
+    // usable-size query; `is_guarded` truthfully classifies the block and OS-page configuration
+    // is stable as required by the typed helper.
     unsafe { mi_page_usable_size_of_typed(page, block, is_guarded).get() }
 }
 
 /// # Safety
-/// `page` and `block` must refer to a valid block being freed.
+/// `page` must be nonnull and identify the live owning page of the freed block (pointer validity,
+/// lifetime, initialization, ownership). `block` must be the start of that live block (pointer
+/// validity, aliasing) but is otherwise ignored on non-stat builds. The page's usable-size and
+/// block-size metadata must remain readable and stable (aliasing, threading), and the current
+/// thread's heap stats must be live and exclusively mutable (ownership, threading). No unwind is
+/// expected from stats helpers.
 pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
-    // SAFETY: free stat updates mutate current thread-heap counters for caller-validated blocks.
-    unsafe {
-        let _ = block;
-        if crate::types::MI_STAT == 0 {
-            return;
-        }
+    let _ = block;
+    if crate::types::MI_STAT == 0 {
+        return;
+    }
 
-        let theap: *mut mi_theap_t = _mi_theap_default();
-        if !mi_theap_is_initialized(theap) {
-            return;
-        }
+    // SAFETY: the caller ensures the current thread's default heap pointer is readable; the
+    // raw thread-heap accessor returns either null or a live allocator-owned thread-heap.
+    let theap: *mut mi_theap_t = unsafe { _mi_theap_default() };
+    // SAFETY: `theap` is either null or the live allocator-owned thread-heap just returned;
+    // checking its initialized flag only reads that heap's stable `tld`/`heap` link.
+    let initialized = unsafe { mi_theap_is_initialized(theap) };
+    if !initialized {
+        return;
+    }
 
-        let bsize = mi_page_usable_block_size(page);
-        if bsize.get() <= MI_LARGE_MAX_OBJ_SIZE {
+    // SAFETY: the caller keeps the live page's initialized usable block size readable and stable.
+    let bsize = unsafe { mi_page_usable_block_size(page) };
+    if bsize.get() <= MI_LARGE_MAX_OBJ_SIZE {
+        // SAFETY: `theap` is the live initialized current-thread heap and its `malloc_normal`
+        // stat counter remains live and exclusively mutable for this thread.
+        unsafe {
             __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize.get());
-            if crate::types::MI_STAT > 1 {
+        }
+        if crate::types::MI_STAT > 1 {
+            let bin = mi_bin_from_usable(bsize);
+            // SAFETY: `theap` is live and initialized and `bin` is in range for this usable size;
+            // the targeted `malloc_bins[bin]` counter remains live and exclusively mutable.
+            unsafe {
                 __mi_stat_decrease(
-                    ptr::addr_of_mut!(
-                        (*theap).stats.malloc_bins[mi_bin_from_usable(bsize).as_usize()]
-                    ),
+                    ptr::addr_of_mut!((*theap).stats.malloc_bins[bin.as_usize()]),
                     1,
                 );
             }
-        } else {
-            let page_block_size = mi_page_block_size(page);
+        }
+    } else {
+        // SAFETY: the caller keeps the live page's initialized block size readable and stable.
+        let page_block_size = unsafe { mi_page_block_size(page) };
+        // SAFETY: `theap` is the live initialized current-thread heap and its `malloc_huge`
+        // counter remains live and exclusively mutable.
+        unsafe {
             __mi_stat_decrease(
                 ptr::addr_of_mut!((*theap).stats.malloc_huge),
                 page_block_size,
@@ -492,9 +566,10 @@ pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
 /// # Safety
 /// `page_wrapper` must identify a live page owned by the current thread and `block_wrapper` must
 /// identify one allocated block from that page, already validated and not concurrently freed or
-/// reallocated. The page registration, backing, geometry, keys, padding and guard metadata must
-/// remain live and stable through the call. The caller must have exclusive access to the block link,
-/// local free list, used count, retirement state, owning normal/full queue, and current-thread stats;
+/// reallocated (pointer validity, lifetime, initialization, aliasing, ownership, threading). The
+/// page registration, backing, geometry, keys, padding and guard metadata must remain live and
+/// stable through the call. The caller must have exclusive access to the block link, local free
+/// list, used count, retirement state, owning normal/full queue, and current-thread stats;
 /// protocol remote publication may occur only through allocator atomics. When `mode` requests full
 /// handling, the page's full-queue membership must match its flag. Tracking, diagnostic, arena, and
 /// purge callbacks and opaque arguments must remain valid for synchronous invocation, exclude
@@ -509,51 +584,74 @@ pub(crate) unsafe fn mi_free_block_local(
     let was_guarded = block_wrapper.is_guarded();
     let check_full = mode.check_full();
 
-    // SAFETY: the caller keeps this validated block and locally owned page live with stable
-    // geometry, keys, padding, guard, tracking, and stats state. Diagnostics and tracking callbacks
-    // satisfy the synchronous validity, reentry, and non-unwind contract.
-    unsafe {
-        if mi_check_is_double_free(page, block) {
-            return;
-        }
-        if !was_guarded {
-            mi_check_padding(page, block);
-        }
-        mi_stat_free(page, block);
-        mi_track_free_size(
-            block.cast::<c_void>(),
-            mi_page_usable_size_of(page, block, was_guarded),
-        );
-        if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
-            _mi_memset_aligned(
-                block.cast::<c_void>(),
-                MI_DEBUG_FREED as i32,
-                mi_page_block_size(page),
-            );
+    // SAFETY: the caller keeps this locally owned page and its validated block live with stable
+    // backing and readable keys; `block` is a readable aligned location that may already be free.
+    let is_double_free = unsafe { mi_check_is_double_free(page, block) };
+    if is_double_free {
+        return;
+    }
+    if !was_guarded {
+        // SAFETY: the caller provides the live page and its live allocated block with stable
+        // usable-size, padding, and trailing-fill metadata for the overflow check.
+        unsafe { mi_check_padding(page, block) };
+    }
+    // SAFETY: the caller keeps the live page and its block stable and owns the current-thread
+    // stats exclusively for this accounting update.
+    unsafe { mi_stat_free(page, block) };
+    // SAFETY: the caller keeps the live page and its block stable for the usable-size query
+    // required by the free-size tracking callback, which remains valid and non-unwinding.
+    let usable = unsafe { mi_page_usable_size_of(page, block, was_guarded) };
+    // SAFETY: `block` is the validated live block start and `usable` is its validated usable size;
+    // the tracking callback remains valid and non-unwinding per the caller's contract.
+    unsafe { mi_track_free_size(block.cast::<c_void>(), usable) };
+    if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
+        // SAFETY: the caller keeps the live page's initialized block size readable and stable.
+        let block_size = unsafe { mi_page_block_size(page) };
+        // SAFETY: `block` points to `block_size` initialized bytes in this live allocation that
+        // remain live and exclusively accessible; filling them with the debug pattern is in-bounds.
+        unsafe {
+            _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, block_size);
         }
     }
 
     // SAFETY: after validation/accounting, the caller still exclusively owns this page's block
-    // link, local list, used count, retirement state, and queue membership. This coherent terminal
-    // epoch publishes the block locally and performs the resulting retire or unfull transition;
-    // arena/purge callbacks cannot incompatibly reenter or unwind.
-    unsafe {
-        let used = page_wrapper.push_free_block(block_wrapper.into_free_block());
-        if used.get() == 0 {
-            if crate::allocator::page::mi_page_retire_expire(page).is_zero() {
-                let active = crate::core_types::assume_active_page(
-                    crate::core_types::PagePtr::new_unchecked(page),
-                );
-                let Ok(all_free) = active.try_mark_all_free() else {
-                    crate::internal::mi_assert_internal!(false);
-                    return;
-                };
-                _mi_page_retire_internal(all_free);
-            }
-        } else if check_full && crate::allocator::page::mi_page_is_in_full(page) {
-            let _ = _mi_page_unfull_internal(crate::core_types::assume_full_page(
-                crate::core_types::PagePtr::new_unchecked(page),
-            ));
+    // link, local list, used count, retirement state, and queue membership. This publication
+    // pushes the block onto the local free list with stable page keys encoding.
+    let used = unsafe { page_wrapper.push_free_block(block_wrapper.into_free_block()) };
+    if used.get() == 0 {
+        // SAFETY: the caller keeps the live page's retire-expire field readable and stable.
+        let expire_is_zero =
+            unsafe { crate::allocator::page::mi_page_retire_expire(page).is_zero() };
+        if expire_is_zero {
+            // SAFETY: the page was just proven all-free with stable counts; constructing the
+            // active-page witness from the live raw page is valid for this retire transition.
+            let active = unsafe {
+                crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(
+                    page,
+                ))
+            };
+            let Ok(all_free) = active.try_mark_all_free() else {
+                crate::internal::mi_assert_internal!(false);
+                return;
+            };
+            // SAFETY: the caller exclusively owns the retired page's metadata and the retire
+            // callback remains valid, non-reentrant, and non-unwinding for this synchronous retire.
+            unsafe { _mi_page_retire_internal(all_free) };
+        }
+    } else if check_full {
+        // SAFETY: the caller keeps the live page's full-queue flag readable and stable.
+        let is_full = unsafe { crate::allocator::page::mi_page_is_in_full(page) };
+        if is_full {
+            // SAFETY: the page is currently full and locally owned; constructing the full-page
+            // witness from the live raw page authorizes the unfull transition that the caller
+            // exclusively owns.
+            let full_page = unsafe {
+                crate::core_types::assume_full_page(crate::core_types::PagePtr::new_unchecked(page))
+            };
+            // SAFETY: the caller exclusively owns the full-queue membership and heap
+            // linkage for this locally owned page; the unfull operation remains valid and
+            // non-unwinding.
+            let _ = unsafe { _mi_page_unfull_internal(full_page) };
         }
     }
 }
@@ -579,48 +677,59 @@ pub(crate) unsafe fn mi_free_block_mt(
     let block = bp.as_ptr();
     let was_guarded = block_wrapper.is_guarded();
 
-    // SAFETY: the validated foreign block and page remain live with stable usable-size, guard, stats,
-    // and tracking metadata. This epoch completes accounting and optional debug fill before any
-    // remote publication; registered callbacks satisfy the stated reentry and non-unwind contract.
-    unsafe {
-        mi_stat_free(page, block);
-        mi_track_free_size(
-            block.cast::<c_void>(),
-            mi_page_usable_size_of_typed(page, block, was_guarded).get(),
-        );
+    // SAFETY: the caller keeps the live foreign page and validated block stable for the stat
+    // update; the current-thread heap stats remain live and exclusively mutable.
+    unsafe { mi_stat_free(page, block) };
+    // SAFETY: the caller keeps the live foreign page and validated block stable with truthful
+    // guard classification and stable OS-page config for the usable-size query that feeds the
+    // tracking callback, which remains valid and non-unwinding.
+    let usable = unsafe { mi_page_usable_size_of_typed(page, block, was_guarded).get() };
+    // SAFETY: `block` is the validated live block start and `usable` is its validated size;
+    // the tracking callback remains valid and non-unwinding per the contract.
+    unsafe { mi_track_free_size(block.cast::<c_void>(), usable) };
 
-        if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
-            let mut dbgsize = crate::mimalloc::mi_usable_size(block.cast::<c_void>());
-            if dbgsize > MI_MiB {
-                dbgsize = MI_MiB;
-            }
+    if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
+        // SAFETY: `block` remains the validated live block storage; `mi_usable_size` only reads
+        // page-map/metadata for the size query under the caller's live-backing contract.
+        let mut dbgsize = unsafe { crate::mimalloc::mi_usable_size(block.cast::<c_void>()) };
+        if dbgsize > MI_MiB {
+            dbgsize = MI_MiB;
+        }
+        // SAFETY: `block` points to `dbgsize` initialized bytes in this live allocation (clamped
+        // to MI_MiB) that remain live and exclusively accessible; filling them is in-bounds.
+        unsafe {
             _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
         }
     }
 
-    // SAFETY: accounting and fill precede publication exactly as required. The page and its atomic
-    // remote-free/owner state remain live, the caller exclusively owns `bp`'s link until each CAS,
-    // stable page keys encode every retry, and successful publication transfers the block once.
-    // An observed abandoned owner supplies the protocol state for synchronous collection; its arena
-    // and backing remain live and callbacks cannot incompatibly reenter or unwind.
-    unsafe {
-        let atomic_tf = page_ptr.thread_free_cell();
-
-        let mut expected = atomic_tf.load_relaxed();
-        let (previous, published) = loop {
-            mi_block_set_next_typed(page_ptr, bp, expected.head());
-            match atomic_tf.try_push(expected, bp) {
-                crate::core_types::RemotePushResult::Published { previous, head } => {
-                    break (previous, head);
-                }
-                crate::core_types::RemotePushResult::Retry { observed } => {
-                    expected = observed;
-                }
+    // SAFETY: the caller's accounting and fill precede publication as required; `page_ptr` is a
+    // live page whose published remote-free head remains readable under the protocol and does
+    // not extend any lifetime.
+    let atomic_tf = unsafe { page_ptr.thread_free_cell() };
+    let mut expected = atomic_tf.load_relaxed();
+    // SAFETY: each loop iteration exclusively owns `bp`'s in-bounds link word and the caller's
+    // stable page keys encode it before the atomic compare-exchange that publishes the block once;
+    // retries only reload a new observed snapshot and never relink a published node.
+    let (previous, published) = loop {
+        // SAFETY: the caller exclusively owns `bp`'s link for this encode; page keys remain stable.
+        unsafe { mi_block_set_next_typed(page_ptr, bp, expected.head()) };
+        match atomic_tf.try_push(expected, bp) {
+            crate::core_types::RemotePushResult::Published { previous, head } => {
+                break (previous, head);
             }
-        };
+            crate::core_types::RemotePushResult::Retry { observed } => {
+                expected = observed;
+            }
+        }
+    };
 
-        if !previous.is_owned() {
-            crate::internal::mi_assert_internal!(mi_page_is_abandoned(page));
+    if !previous.is_owned() {
+        // SAFETY: the abandoned owner observation proves the page is abandoned and still live.
+        let is_abandoned = unsafe { mi_page_is_abandoned(page) };
+        crate::internal::mi_assert_internal!(is_abandoned);
+        // SAFETY: the abandoned page's arena and backing remain live and the published remote head
+        // plus collection callback satisfy the synchronous validity and non-unwind contract.
+        unsafe {
             collect_after_remote_free(
                 crate::core_types::assume_owned_abandoned_page(
                     crate::core_types::PagePtr::new_unchecked(page),
@@ -628,20 +737,21 @@ pub(crate) unsafe fn mi_free_block_mt(
                 published,
             )
             .discard();
-        } else {
-            published.leave_published();
         }
+    } else {
+        published.leave_published();
     }
 }
 
 /// # Safety
-/// `page`, `block`, and `p` must identify the same live guarded allocation. The page's backing,
-/// start, block size, interior-pointer geometry, `MemId`, and guard tag must remain readable and
-/// stable through the permission transition; the block must not be pinned or concurrently freed,
-/// reused, unmapped, or torn down. The OS page size and protection dispatch must be initialized and
-/// stable, the derived guard page must be aligned and mapped for unprotection, and warning callbacks
-/// and opaque arguments must remain valid for synchronous, non-unwinding reporting and must not
-/// incompatibly reenter this page/guard/OS-protection transition.
+/// `page`, `block`, and `p` must identify the same live guarded allocation (pointer validity,
+/// lifetime, aliasing, initialization, ownership, threading). The page's backing, start, block size,
+/// interior-pointer geometry, `MemId`, and guard tag must remain readable and stable through the
+/// permission transition; the block must not be pinned or concurrently freed, reused, unmapped, or
+/// torn down. The OS page size and protection dispatch must be initialized and stable, the derived
+/// guard page must be aligned and mapped for unprotection, and warning callbacks and opaque
+/// arguments must remain valid for synchronous, non-unwinding reporting and must not incompatibly
+/// reenter this page/guard/OS-protection transition.
 unsafe fn mi_block_unguard(
     page: crate::core_types::PagePtr,
     block: crate::core_types::GuardedBlock,
@@ -651,30 +761,41 @@ unsafe fn mi_block_unguard(
         return;
     }
 
-    // SAFETY: the caller supplies one live guarded allocation and stable page/block geometry; this
-    // coherent epoch validates the guard state, derives the mapped guard page, and removes its OS
-    // protection without allowing incompatible access or teardown.
-    unsafe {
-        let page = page.as_ptr();
-        let block = block.block().as_ptr();
-        let p = p.as_ptr();
-        crate::internal::mi_assert_internal!(mi_block_ptr_is_guarded(block, p));
-        crate::internal::mi_assert_internal!(mi_page_has_interior_pointers(page));
-        crate::internal::mi_assert_internal!(
-            p.cast::<u8>().offset_from(block.cast::<u8>())
-                >= core::mem::size_of::<mi_block_t>() as isize
-        );
-        crate::internal::mi_assert_internal!(crate::core_types::BlockLink::is_guarded_raw(block));
+    let page_raw = page.as_ptr();
+    let block_raw = block.block().as_ptr();
+    let p_raw = p.as_ptr();
+    // SAFETY: the caller guarantees `block_raw` and `p_raw` identify the same live guarded
+    // allocation and the guard tag remains readable; validating the tag reads the block link.
+    crate::internal::mi_assert_internal!(unsafe { mi_block_ptr_is_guarded(block_raw, p_raw) });
+    // SAFETY: the caller keeps the live page's interior-pointer flag readable and stable.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_has_interior_pointers(page_raw) });
+    // SAFETY: the caller guarantees `p_raw` is inside the same live block as `block_raw` and at
+    // least `size_of::<mi_block_t>()` past it, so the byte offset is in-bounds and stable.
+    crate::internal::mi_assert_internal!(unsafe {
+        p_raw.cast::<u8>().offset_from(block_raw.cast::<u8>())
+            >= core::mem::size_of::<mi_block_t>() as isize
+    });
+    // SAFETY: the caller keeps the live block's link readable; the guarded tag check reads it.
+    crate::internal::mi_assert_internal!(unsafe {
+        crate::core_types::BlockLink::is_guarded_raw(block_raw)
+    });
 
-        let bsize = mi_page_block_size(page);
-        let psize = _mi_os_page_size_typed().get();
-        crate::internal::mi_assert_internal!(bsize > psize);
-        crate::internal::mi_assert_internal!(!(*page).memid.is_pinned);
+    // SAFETY: the caller keeps the live page's initialized block size readable and stable.
+    let bsize = unsafe { mi_page_block_size(page_raw) };
+    // SAFETY: the OS page-size configuration is initialized and stable.
+    let psize = unsafe { _mi_os_page_size_typed().get() };
+    crate::internal::mi_assert_internal!(bsize > psize);
+    // SAFETY: the caller keeps the live page's `memid.is_pinned` flag readable and stable.
+    crate::internal::mi_assert_internal!(unsafe { !(*page_raw).memid.is_pinned });
 
-        let gpage = block.cast::<u8>().add(bsize - psize).cast::<c_void>();
-        crate::internal::mi_assert_internal!((gpage as usize).is_multiple_of(psize));
-        crate::os::_mi_os_unprotect(gpage, psize);
-    }
+    // SAFETY: `bsize > psize` and `block_raw` is the live block start, so `block_raw + bsize - psize`
+    // is the in-bounds start of the trailing guard page within that allocation.
+    let gpage = unsafe { block_raw.cast::<u8>().add(bsize - psize).cast::<c_void>() };
+    crate::internal::mi_assert_internal!((gpage as usize).is_multiple_of(psize));
+    // SAFETY: `gpage` is the aligned, mapped guard page derived above and `psize` is the live
+    // OS page size; the unprotect call removes protection for exactly that page without racing
+    // teardown, using the initialized OS protection dispatch.
+    unsafe { crate::os::_mi_os_unprotect(gpage, psize) };
 }
 
 /// # Safety

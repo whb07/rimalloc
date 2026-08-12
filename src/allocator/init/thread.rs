@@ -121,30 +121,50 @@ unsafe fn done_typed(default_theap: ThreadHeapPtr) {
 }
 
 #[cfg(feature = "guarded")]
+/// Apply the guarded sampling configuration to a current-thread heap.
+///
+/// # Safety
+/// `theap` may be null. A nonnull value must remain live initialized allocator
+/// metadata with stable heap/TLD ownership through the locality probe. If it
+/// belongs to the current thread, guarded sampling fields and any random state
+/// accessed for a zero seed must be exclusively mutable for this call;
+/// incompatible reentry, concurrent local allocation/configuration, and
+/// teardown are excluded. Protocol remote-free publication remains permitted.
 pub(super) unsafe fn guarded_set_sample_rate(
     theap: *mut mi_theap_t,
     sample_rate: usize,
     seed: usize,
 ) {
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    let Some(theap) = ThreadHeapPtr::new(theap) else {
+        return;
+    };
+    // SAFETY: the raw contract keeps the nonnull thread heap, its stable TLD
+    // association, and ownership metadata live through classification. The
+    // primitive supplies the executing thread's valid allocator thread ID; on
+    // successful locality classification the caller grants exclusive guarded
+    // configuration/random-state mutation to the typed operation.
     unsafe {
-        if let Some(theap) = ThreadHeapPtr::new(theap) {
-            let current = ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id());
-            if let Ok(theap) = theap.try_local(current) {
-                guarded_set_sample_rate_typed(theap, GuardedSampleRate::new(sample_rate), seed);
-            }
+        let current = ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id());
+        if let Ok(theap) = theap.try_local(current) {
+            guarded_set_sample_rate_typed(theap, GuardedSampleRate::new(sample_rate), seed);
         }
     }
 }
 
 #[cfg(feature = "guarded")]
+/// # Safety
+/// `theap` must remain a live current-thread heap with exclusive access to its
+/// guarded sampling fields and, when a zero seed and rate greater than one need
+/// a random value, its initialized random state.
 unsafe fn guarded_set_sample_rate_typed(
     theap: ThreadHeapLocal,
     sample_rate: GuardedSampleRate,
     seed: usize,
 ) {
     let theap = theap.ptr().as_ptr();
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    // SAFETY: the typed witness and function contract keep the guarded fields
+    // exclusively writable. A random draw occurs only for a zero seed and rate
+    // greater than one, which also makes the modulo divisor nonzero.
     unsafe {
         (*theap).guarded_sample_rate = sample_rate.get();
         let mut sample_count = GuardedSampleCount::new(sample_rate.get());
@@ -161,73 +181,114 @@ unsafe fn guarded_set_sample_rate_typed(
 }
 
 #[cfg(feature = "guarded")]
+/// Apply guarded size bounds to a current-thread heap.
+///
+/// # Safety
+/// `theap` may be null. A nonnull value must remain live initialized allocator
+/// metadata with stable heap/TLD ownership through the locality probe. If it
+/// belongs to the current thread, its guarded size fields must be exclusively
+/// mutable for this call; incompatible reentry, concurrent local allocation or
+/// configuration, and teardown are excluded. Protocol remote-free publication
+/// remains permitted.
 pub(super) unsafe fn guarded_set_size_bound(theap: *mut mi_theap_t, min: usize, max: usize) {
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    let Some(theap) = ThreadHeapPtr::new(theap) else {
+        return;
+    };
+    // SAFETY: the raw contract keeps the nonnull heap and stable TLD ownership
+    // metadata live through classification. The primitive supplies the current
+    // allocator thread ID; a successful classification grants exclusive guarded
+    // size-field mutation to the typed operation.
     unsafe {
-        if let Some(theap) = ThreadHeapPtr::new(theap) {
-            let current = ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id());
-            if let Ok(theap) = theap.try_local(current) {
-                let min = GuardedSizeMin::new(min);
-                let max = GuardedSizeMax::new(if min.get() > max { min.get() } else { max });
-                guarded_set_size_bound_typed(theap, min, max);
-            }
+        let current = ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id());
+        if let Ok(theap) = theap.try_local(current) {
+            let min = GuardedSizeMin::new(min);
+            let max = GuardedSizeMax::new(if min.get() > max { min.get() } else { max });
+            guarded_set_size_bound_typed(theap, min, max);
         }
     }
 }
 
 #[cfg(feature = "guarded")]
+/// # Safety
+/// `theap` must remain a live current-thread heap with exclusive access to its
+/// guarded size-bound fields. `min <= max` must hold.
 unsafe fn guarded_set_size_bound_typed(
     theap: ThreadHeapLocal,
     min: GuardedSizeMin,
     max: GuardedSizeMax,
 ) {
     let theap = theap.ptr().as_ptr();
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    // SAFETY: the typed witness and contract keep both guarded size fields
+    // exclusively writable, and the caller supplies the ordered bounds.
     unsafe {
         (*theap).guarded_size_min = min.get();
         (*theap).guarded_size_max = max.get();
     }
 }
 
+/// Initialize guarded configuration for a current-thread heap.
+///
+/// # Safety
+/// `theap` may be null. With `guarded` enabled, a nonnull value must remain live
+/// initialized allocator metadata with stable heap/TLD ownership through the
+/// locality probe. A current-thread heap's guarded fields and random state must
+/// be exclusively mutable. Allocator option storage and any registered
+/// diagnostic callback plus opaque argument must remain valid; callback unwind
+/// and incompatible reentry, concurrent local allocation/configuration, and
+/// teardown are excluded. Concurrent atomic option updates and protocol
+/// remote-free publication remain permitted. Without `guarded`, the pointer is
+/// not accessed.
 pub(super) unsafe fn guarded_init(theap: *mut mi_theap_t) {
     #[cfg(feature = "guarded")]
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
-    unsafe {
-        if let Some(theap) = ThreadHeapPtr::new(theap) {
+    {
+        let Some(theap) = ThreadHeapPtr::new(theap) else {
+            return;
+        };
+        // SAFETY: the raw contract keeps this nonnull heap and stable TLD
+        // ownership metadata live through the probe; the primitive supplies
+        // the executing thread's valid allocator thread ID.
+        let theap = unsafe {
             let current = ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id());
-            if let Ok(theap) = theap.try_local(current) {
-                let sample_rate =
-                    mi_option_get_clamp(mi_option_t::mi_option_guarded_sample_rate, 0, c_long::MAX)
-                        as usize;
-                let mut sample_count = sample_rate;
-                if sample_rate > 1 {
-                    let seed = mi_option_get(mi_option_t::mi_option_guarded_sample_seed) as usize;
-                    let seed = if seed == 0 {
-                        crate::internal::_mi_theap_random_next(theap.ptr().as_ptr())
-                    } else {
-                        seed
-                    };
-                    sample_count = (seed % sample_rate) + 1;
-                }
-                let size_min =
-                    mi_option_get_clamp(mi_option_t::mi_option_guarded_min, 0, c_long::MAX)
-                        as usize;
-                let size_max =
-                    mi_option_get_clamp(mi_option_t::mi_option_guarded_max, 0, c_long::MAX)
-                        as usize;
-                let config = GuardedConfig::from_clamped_raw(
-                    size_min,
-                    if size_min > size_max {
-                        size_min
-                    } else {
-                        size_max
-                    },
-                    sample_rate,
-                    sample_count,
-                );
-                guarded_init_typed(theap, config);
-            }
+            let Ok(theap) = theap.try_local(current) else {
+                return;
+            };
+            theap
+        };
+
+        let sample_rate =
+            mi_option_get_clamp(mi_option_t::mi_option_guarded_sample_rate, 0, c_long::MAX)
+                as usize;
+        let mut sample_count = sample_rate;
+        if sample_rate > 1 {
+            let seed = mi_option_get(mi_option_t::mi_option_guarded_sample_seed) as usize;
+            // SAFETY: locality classification above proves current-thread
+            // ownership, and the contract grants exclusive access to the live
+            // heap's random state when the configured seed requests one.
+            let seed = if seed == 0 {
+                unsafe { crate::internal::_mi_theap_random_next(theap.ptr().as_ptr()) }
+            } else {
+                seed
+            };
+            sample_count = (seed % sample_rate) + 1;
         }
+        let size_min =
+            mi_option_get_clamp(mi_option_t::mi_option_guarded_min, 0, c_long::MAX) as usize;
+        let size_max =
+            mi_option_get_clamp(mi_option_t::mi_option_guarded_max, 0, c_long::MAX) as usize;
+        let config = GuardedConfig::from_clamped_raw(
+            size_min,
+            if size_min > size_max {
+                size_min
+            } else {
+                size_max
+            },
+            sample_rate,
+            sample_count,
+        );
+        // SAFETY: the successful locality probe and caller contract keep the
+        // heap live and its guarded fields exclusively mutable; the safe policy
+        // calculations above produced a normalized configuration.
+        unsafe { guarded_init_typed(theap, config) };
     }
     #[cfg(not(feature = "guarded"))]
     {
@@ -237,9 +298,14 @@ pub(super) unsafe fn guarded_init(theap: *mut mi_theap_t) {
 }
 
 #[cfg(feature = "guarded")]
+/// # Safety
+/// `theap` must remain a live current-thread heap whose guarded configuration
+/// fields are exclusively mutable for this initialization.
 unsafe fn guarded_init_typed(theap: ThreadHeapLocal, config: GuardedConfig) {
     let theap = theap.ptr().as_ptr();
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    // SAFETY: the typed witness and function contract keep the four guarded
+    // fields exclusively writable; `GuardedConfig` carries normalized bounds
+    // and sampling values.
     unsafe {
         (*theap).guarded_size_min = config.size_min().get();
         (*theap).guarded_size_max = config.size_max().get();
@@ -248,21 +314,45 @@ unsafe fn guarded_init_typed(theap: ThreadHeapLocal, config: GuardedConfig) {
     }
 }
 
+/// Initialize allocation policy fields for a current-thread heap.
+///
+/// # Safety
+/// `theap` may be null. A nonnull value must remain live initialized allocator
+/// metadata with stable heap/TLD ownership through the locality probe. If it
+/// belongs to the current thread, its policy fields must be exclusively mutable;
+/// allocator option storage and any registered diagnostic callback plus opaque
+/// argument must remain valid. Callback unwind and incompatible reentry,
+/// concurrent local allocation/configuration, and teardown are excluded.
+/// Concurrent atomic option updates and protocol remote-free publication remain
+/// permitted.
 pub(super) unsafe fn options_init(theap: *mut mi_theap_t) {
-    if let Some(theap) = ThreadHeapPtr::new(theap) {
-        // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
-        let current = unsafe { ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id()) };
-        // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
-        if let Ok(theap) = unsafe { theap.try_local(current) } {
-            // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
-            unsafe { options_init_typed(theap) };
+    let Some(theap) = ThreadHeapPtr::new(theap) else {
+        return;
+    };
+    // SAFETY: the raw contract keeps the nonnull heap and stable TLD ownership
+    // metadata live. The primitive supplies the current allocator thread ID;
+    // successful classification grants exclusive policy-field mutation through
+    // the typed operation.
+    unsafe {
+        let current = ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id());
+        if let Ok(theap) = theap.try_local(current) {
+            options_init_typed(theap);
         }
     }
 }
 
+/// # Safety
+/// `theap` must remain a live current-thread heap whose allocation-policy fields
+/// are exclusively mutable. Global option storage and any registered diagnostic
+/// callback plus opaque argument must remain valid; callback unwind and
+/// incompatible reentry are excluded. Concurrent atomic option updates remain
+/// permitted.
 unsafe fn options_init_typed(theap: ThreadHeapLocal) {
     let theap = theap.ptr().as_ptr();
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    // SAFETY: the typed witness and function contract keep this live local
+    // heap's policy fields exclusively writable. The policy snapshot uses live
+    // option storage and valid, non-unwinding diagnostics before the three
+    // ordered stores.
     unsafe {
         let policy = crate::allocator::policy::ActivePolicy::thread_heap_policy();
         (*theap).allow_page_reclaim = policy.allow_page_reclaim();
@@ -295,7 +385,14 @@ pub(super) fn theap_main_init() {
             crate::internal::_mi_random_init(ptr::addr_of_mut!(theap_main.random));
             theap_main.cookie =
                 crate::internal::_mi_theap_random_next(ptr::addr_of_mut!(theap_main));
+            // SAFETY: one-time main-heap initialization owns this live static
+            // metadata and its policy fields. Option storage and diagnostics
+            // remain valid and non-unwinding, and no incompatible reentry,
+            // allocation, or teardown can observe it before publication.
             super::_mi_theap_options_init(ptr::addr_of_mut!(theap_main));
+            // SAFETY: the same unpublished current-thread static remains live
+            // with exclusive guarded/random configuration access, after options
+            // initialization and before any allocator use.
             super::_mi_theap_guarded_init(ptr::addr_of_mut!(theap_main));
         }
     }

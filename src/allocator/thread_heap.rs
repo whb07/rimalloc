@@ -1088,6 +1088,10 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
     // SAFETY: the newly initialized metadata and live TLD are still exclusively
     // owned. Options are initialized before applying the thread-pool override.
     unsafe {
+        // SAFETY: `theap` is live, initialized, current-thread local, and still
+        // unpublished; its policy fields are exclusively writable, and option
+        // storage plus any diagnostic callback/argument remain valid and
+        // non-unwinding for this synchronous snapshot.
         _mi_theap_options_init(theap_raw);
         if (*tld_raw).is_in_threadpool {
             let configured = crate::allocator::policy::ThreadHeapPolicy::from_fields(
@@ -1122,6 +1126,10 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
             _mi_random_init(ptr::addr_of_mut!((*theap_raw).random));
         }
         (*theap_raw).cookie = _mi_random_next(ptr::addr_of_mut!((*theap_raw).random)) | 1;
+        // SAFETY: the initialized current-thread heap remains exclusively owned
+        // during publication setup; guarded fields/random state are mutable,
+        // option storage and diagnostics are valid and non-unwinding, and
+        // incompatible reentry is excluded.
         _mi_theap_guarded_init(theap_raw);
         __mi_stat_increase_mt(ptr::addr_of_mut!((*_mi_subproc()).stats.theaps), 1);
     }

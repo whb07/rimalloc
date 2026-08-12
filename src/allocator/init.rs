@@ -622,8 +622,12 @@ pub extern "C" fn mi_is_redirected() -> bool {
 }
 
 /// # Safety
-/// `theap` must be null or point to a valid thread heap owned by this allocator.
-// SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+/// `theap` may be null. A nonnull value must remain live initialized allocator
+/// metadata with stable heap/TLD ownership through the locality probe. If it is
+/// current-thread local, its guarded sampling fields and any random state used
+/// for a zero seed must be exclusively mutable; incompatible reentry, concurrent
+/// local allocation/configuration, and teardown are excluded. Protocol remote
+/// frees remain permitted.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
     theap: *mut mi_theap_t,
@@ -631,7 +635,9 @@ pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
     seed: usize,
 ) {
     #[cfg(feature = "guarded")]
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    // SAFETY: the public contract keeps any nonnull heap and its ownership
+    // metadata live through the internal locality probe and grants exclusive
+    // local guarded/random mutation when classification succeeds.
     unsafe {
         thread::guarded_set_sample_rate(theap, sample_rate, seed)
     };
@@ -644,8 +650,11 @@ pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
 }
 
 /// # Safety
-/// `theap` must be null or point to a valid thread heap owned by this allocator.
-// SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+/// `theap` may be null. A nonnull value must remain live initialized allocator
+/// metadata with stable heap/TLD ownership through the locality probe. If it is
+/// current-thread local, its guarded size fields must be exclusively mutable;
+/// incompatible reentry, concurrent local allocation/configuration, and
+/// teardown are excluded. Protocol remote frees remain permitted.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
     theap: *mut mi_theap_t,
@@ -653,7 +662,9 @@ pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
     max: usize,
 ) {
     #[cfg(feature = "guarded")]
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    // SAFETY: the public contract keeps any nonnull heap and its ownership
+    // metadata live through the internal locality probe and grants exclusive
+    // local guarded-size mutation when classification succeeds.
     unsafe {
         thread::guarded_set_size_bound(theap, min, max)
     };
@@ -665,19 +676,34 @@ pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
     }
 }
 
-// SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+/// # Safety
+/// `theap` may be null. With `guarded` enabled, a nonnull value must remain live
+/// initialized allocator metadata with stable heap/TLD ownership through the
+/// locality probe. Current-thread guarded fields and random state must be
+/// exclusively mutable. Option storage and any registered diagnostic callback
+/// plus opaque argument must remain valid; callback unwind, incompatible
+/// reentry, and teardown are excluded. Concurrent atomic option updates and
+/// protocol remote frees remain permitted. Without `guarded`, the pointer is
+/// not accessed.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    // SAFETY: the raw boundary contract supplies the exact live/locality,
+    // option, guarded-field, and random-state obligations of the worker.
     unsafe { thread::guarded_init(theap) };
 }
 
-// SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
 /// # Safety
-/// `theap` must be valid when non-null.
+/// `theap` may be null. A nonnull value must remain live initialized allocator
+/// metadata with stable heap/TLD ownership through the locality probe. If it is
+/// current-thread local, its allocation-policy fields must be exclusively
+/// mutable. Option storage and any registered diagnostic callback plus opaque
+/// argument must remain valid; callback unwind, incompatible reentry, and
+/// teardown are excluded. Concurrent atomic option updates and protocol remote
+/// frees remain permitted.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
-    // SAFETY: guarded allocation and option setup mutate only validated thread-heap configuration.
+    // SAFETY: the raw boundary contract supplies the worker's exact live,
+    // locality, option-access, and exclusive policy-field mutation obligations.
     unsafe { thread::options_init(theap) };
 }
 

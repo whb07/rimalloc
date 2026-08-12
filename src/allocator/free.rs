@@ -489,21 +489,30 @@ pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
     }
 }
 
+/// # Safety
+/// `page_wrapper` must identify a live page owned by the current thread and `block_wrapper` must
+/// identify one allocated block from that page, already validated and not concurrently freed or
+/// reallocated. The page registration, backing, geometry, keys, padding and guard metadata must
+/// remain live and stable through the call. The caller must have exclusive access to the block link,
+/// local free list, used count, retirement state, owning normal/full queue, and current-thread stats;
+/// protocol remote publication may occur only through allocator atomics. When `mode` requests full
+/// handling, the page's full-queue membership must match its flag. Tracking, diagnostic, arena, and
+/// purge callbacks and opaque arguments must remain valid for synchronous invocation, exclude
+/// incompatible reentry that mutates this page or heap, and must not unwind.
 pub(crate) unsafe fn mi_free_block_local(
     page_wrapper: crate::core_types::LocalPage,
     block_wrapper: crate::core_types::BlockForFree,
     mode: crate::core_types::LocalFreeMode,
 ) {
-    // SAFETY: local frees mutate the owning page free list after validation and optional padding checks.
+    let page = page_wrapper.page().as_ptr();
+    let block = block_wrapper.block().as_ptr();
+    let was_guarded = block_wrapper.is_guarded();
+    let check_full = mode.check_full();
+
+    // SAFETY: the caller keeps this validated block and locally owned page live with stable
+    // geometry, keys, padding, guard, tracking, and stats state. Diagnostics and tracking callbacks
+    // satisfy the synchronous validity, reentry, and non-unwind contract.
     unsafe {
-        let page = page_wrapper.page().as_ptr();
-        let block = block_wrapper.block().as_ptr();
-        let was_guarded = block_wrapper.is_guarded();
-        let check_full = mode.check_full();
-        // SAFETY: the typed witnesses identify a live locally owned page and a
-        // matching readable aligned block location, possibly already free;
-        // page keys and local lists are stable, remote publication follows the
-        // allocator protocol, and registered diagnostics cannot unwind.
         if mi_check_is_double_free(page, block) {
             return;
         }
@@ -522,9 +531,13 @@ pub(crate) unsafe fn mi_free_block_local(
                 mi_page_block_size(page),
             );
         }
+    }
 
-        // SAFETY: `page_wrapper` proves local ownership and `block_wrapper`
-        // carries the freed block witness for the same page.
+    // SAFETY: after validation/accounting, the caller still exclusively owns this page's block
+    // link, local list, used count, retirement state, and queue membership. This coherent terminal
+    // epoch publishes the block locally and performs the resulting retire or unfull transition;
+    // arena/purge callbacks cannot incompatibly reenter or unwind.
+    unsafe {
         let used = page_wrapper.push_free_block(block_wrapper.into_free_block());
         if used.get() == 0 {
             if crate::allocator::page::mi_page_retire_expire(page).is_zero() {
@@ -545,17 +558,31 @@ pub(crate) unsafe fn mi_free_block_local(
     }
 }
 
+/// # Safety
+/// `page_wrapper` must identify a live page not owned by the current thread and `block_wrapper` must
+/// identify one allocated block from that page, already validated and not concurrently freed or
+/// reallocated. The page registration, backing, geometry, keys, guard metadata, atomic owner word,
+/// and atomic remote-free word must remain live through publication. The caller must exclusively own
+/// the block link while it is encoded and published; concurrent owner changes and other remote frees
+/// are permitted only through allocator atomics. If publication observes an abandoned owner, the
+/// page's abandoned/arena metadata and backing must remain valid through collection. Current-thread
+/// stats access and tracking must follow allocator protocol. Tracking, diagnostic, arena, and purge
+/// callbacks and opaque arguments must remain valid for synchronous invocation, exclude incompatible
+/// reentry that mutates this block or page, and must not unwind.
 pub(crate) unsafe fn mi_free_block_mt(
     page_wrapper: crate::core_types::ForeignPage,
     block_wrapper: crate::core_types::BlockForFree,
 ) {
-    // SAFETY: remote frees publish blocks through the typed atomic thread-free word.
+    let page_ptr = page_wrapper.page();
+    let page = page_ptr.as_ptr();
+    let bp = block_wrapper.block();
+    let block = bp.as_ptr();
+    let was_guarded = block_wrapper.is_guarded();
+
+    // SAFETY: the validated foreign block and page remain live with stable usable-size, guard, stats,
+    // and tracking metadata. This epoch completes accounting and optional debug fill before any
+    // remote publication; registered callbacks satisfy the stated reentry and non-unwind contract.
     unsafe {
-        let page_ptr = page_wrapper.page();
-        let page = page_ptr.as_ptr();
-        let bp = block_wrapper.block();
-        let block = bp.as_ptr();
-        let was_guarded = block_wrapper.is_guarded();
         mi_stat_free(page, block);
         mi_track_free_size(
             block.cast::<c_void>(),
@@ -569,7 +596,14 @@ pub(crate) unsafe fn mi_free_block_mt(
             }
             _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
         }
+    }
 
+    // SAFETY: accounting and fill precede publication exactly as required. The page and its atomic
+    // remote-free/owner state remain live, the caller exclusively owns `bp`'s link until each CAS,
+    // stable page keys encode every retry, and successful publication transfers the block once.
+    // An observed abandoned owner supplies the protocol state for synchronous collection; its arena
+    // and backing remain live and callbacks cannot incompatibly reenter or unwind.
+    unsafe {
         let atomic_tf = page_ptr.thread_free_cell();
 
         let mut expected = atomic_tf.load_relaxed();

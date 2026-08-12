@@ -1248,12 +1248,18 @@ unsafe fn mi_theap_realloc_validated_core(
 }
 
 /// # Safety
-/// If `p` is nonnull, it must identify a live allocation returned by this allocator. Its page and
-/// block metadata must remain stable, without concurrent free or realloc, for as long as the
-/// returned `OldAllocation` is used; copying that witness does not extend this lifetime. If
-/// nonnull, `usable_pre` must be aligned and writable for one `usize` when accessed and must not
-/// overlap allocator metadata. It may point within the old user allocation if that storage is
-/// still live at the access.
+/// A null `p` returns `Some(None)` without accessing `usable_pre`. Otherwise,
+/// `p` must identify a live allocation returned by this allocator. Its page-map
+/// registration, page and block metadata, and backing must remain readable and
+/// stable, without concurrent free, realloc, or teardown, for as long as the
+/// returned `OldAllocation` is used; copying that witness does not extend this
+/// lifetime. `None` reports failed pointer validation after writing zero to a
+/// nonnull `usable_pre`; `Some(Some(..))` reports a validated allocation without
+/// writing it. If nonnull, `usable_pre` must be aligned and uniquely writable
+/// for one `usize` when accessed and must not overlap allocator metadata. It
+/// may point within the old user allocation if that storage is still live at the
+/// access. Diagnostic callbacks and their opaque arguments must remain valid,
+/// must not incompatibly reenter allocator state, and must not unwind.
 unsafe fn mi_realloc_old_from_ptr(
     p: *mut c_void,
     usable_pre: *mut usize,
@@ -1261,18 +1267,19 @@ unsafe fn mi_realloc_old_from_ptr(
     let Some(_user) = crate::core_types::UserPtr::new(p) else {
         return Some(None);
     };
-    // SAFETY: the caller keeps this nonnull allocator allocation and its page/block metadata
-    // stable through use of the returned witness. The optional failure output is writable at the
-    // access and does not overlap allocator metadata.
-    unsafe {
-        let Some(old) = mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) else {
-            if !usable_pre.is_null() {
-                *usable_pre = 0;
-            }
-            return None;
-        };
-        Some(Some(old))
-    }
+    // SAFETY: the caller keeps this nonnull allocator allocation and its
+    // metadata stable through use of the returned witness; validation uses the
+    // fixed valid UTF-8 diagnostic string.
+    let old = unsafe { mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) };
+    let Some(old) = old else {
+        if !usable_pre.is_null() {
+            // SAFETY: the caller supplies uniquely writable output storage at
+            // this validation-failure access, disjoint from allocator metadata.
+            unsafe { *usable_pre = 0 };
+        }
+        return None;
+    };
+    Some(Some(old))
 }
 
 /// # Safety

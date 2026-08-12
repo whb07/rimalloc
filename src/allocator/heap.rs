@@ -99,24 +99,30 @@ unsafe fn mi_heap_set_numa_affinity_typed(heap: HeapPtr, numa_node: crate::core_
 
 /// # Safety
 ///
-/// `heap` may be null. A non-null heap and its initialized statistics must
-/// remain live, and the caller must own exclusive access to its source counters
-/// for this destructive merge/reset. The live main heap's destination statistics
-/// must remain available through the allocator statistics protocol. Heap/main
-/// teardown and concurrent source-stat updates must not race.
+/// A null `heap` is a no-op and does not resolve the main heap. A non-null heap
+/// and its initialized statistics must remain live, and the caller must own
+/// exclusive access to its source counters for this destructive merge/reset.
+/// The live main heap's destination statistics must remain available through
+/// the allocator statistics protocol. Heap/main teardown and concurrent
+/// source-stat updates must not race.
 // SAFETY: stats merge accepts nullable heap
 // metadata and immediately converts it to a borrowed heap witness.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
-    // SAFETY: the caller keeps the optional heap and its stats live under the
-    // allocator stats protocol; the main heap remains live for the same merge.
+    // SAFETY: a non-null input remains a live initialized heap with exclusively
+    // owned source statistics; null maps to `None` without dereference.
+    let Some(heap) = (unsafe { BorrowedHeap::from_lookup_raw(heap) }) else {
+        return;
+    };
+    // SAFETY: source validation completed first, and the allocator keeps the
+    // live main heap available for the destination statistics protocol.
+    let Some(main) = HeapPtr::new(unsafe { mi_heap_main() }) else {
+        return;
+    };
+    // SAFETY: the caller exclusively owns the live source through its reset;
+    // the main destination remains live, aligned, and atomic-compatible, with
+    // every concurrent destination access following the atomic stats protocol.
     unsafe {
-        let Some(heap) = BorrowedHeap::from_lookup_raw(heap) else {
-            return;
-        };
-        let Some(main) = HeapPtr::new(mi_heap_main()) else {
-            return;
-        };
         _mi_stats_merge_into(main.stats(), heap.ptr().stats());
     }
 }

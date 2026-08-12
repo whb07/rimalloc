@@ -634,23 +634,30 @@ pub(crate) unsafe fn mi_free_block_mt(
     }
 }
 
+/// # Safety
+/// `page`, `block`, and `p` must identify the same live guarded allocation. The page's backing,
+/// start, block size, interior-pointer geometry, `MemId`, and guard tag must remain readable and
+/// stable through the permission transition; the block must not be pinned or concurrently freed,
+/// reused, unmapped, or torn down. The OS page size and protection dispatch must be initialized and
+/// stable, the derived guard page must be aligned and mapped for unprotection, and warning callbacks
+/// and opaque arguments must remain valid for synchronous, non-unwinding reporting and must not
+/// incompatibly reenter this page/guard/OS-protection transition.
 unsafe fn mi_block_unguard(
     page: crate::core_types::PagePtr,
     block: crate::core_types::GuardedBlock,
     p: crate::core_types::UserPtr,
 ) {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
+    if MI_GUARDED == 0 {
+        return;
+    }
+
+    // SAFETY: the caller supplies one live guarded allocation and stable page/block geometry; this
+    // coherent epoch validates the guard state, derives the mapped guard page, and removes its OS
+    // protection without allowing incompatible access or teardown.
     unsafe {
         let page = page.as_ptr();
         let block = block.block().as_ptr();
         let p = p.as_ptr();
-        if MI_GUARDED == 0 {
-            let _ = page;
-            let _ = block;
-            let _ = p;
-            return;
-        }
-
         crate::internal::mi_assert_internal!(mi_block_ptr_is_guarded(block, p));
         crate::internal::mi_assert_internal!(mi_page_has_interior_pointers(page));
         crate::internal::mi_assert_internal!(
@@ -671,33 +678,40 @@ unsafe fn mi_block_unguard(
 }
 
 /// # Safety
-/// `page`, `block`, and `p` must describe the same allocated block.
+/// `page`, `block`, and `p` must describe the same live allocation. The page's backing, geometry,
+/// guard metadata, `MemId`, and protection state must remain stable through detection and any
+/// synchronous unprotection; the allocation must not be concurrently freed, reused, unmapped, or
+/// torn down. If guarded mode and the runtime tag both confirm a guarded block, the OS protection
+/// dispatch and warning callback/opaque argument must be initialized, valid, and non-unwinding,
+/// and must not incompatibly reenter this page/guard/OS-protection transition. When guarded mode
+/// is disabled or the typed `was_guarded` flag is false, this function returns `false` without raw
+/// page/block access; otherwise it may read the block link to confirm the runtime guard tag.
 pub(crate) unsafe fn mi_block_check_unguard(
     page: crate::core_types::PagePtr,
     block: &crate::core_types::BlockForFree,
     p: crate::core_types::UserPtr,
 ) -> bool {
-    // SAFETY: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
-    unsafe {
-        let block_ptr = block.block();
-        let user = p.as_ptr();
-        if MI_GUARDED != 0
-            && block.is_guarded()
-            && mi_block_ptr_is_guarded(block_ptr.as_ptr(), user)
-        {
-            mi_block_unguard(
-                page,
-                crate::core_types::GuardedBlock::after_guarded_detection(block_ptr),
-                p,
-            );
-            true
-        } else {
-            let _ = page;
-            let _ = block;
-            let _ = p;
-            false
-        }
+    let block_ptr = block.block();
+    if MI_GUARDED == 0 || !block.is_guarded() {
+        return false;
     }
+
+    // SAFETY: the caller's validated page/block/user epoch keeps the raw guard tag readable for
+    // this exact runtime classification; the tag check may inspect the block link before failure.
+    if !unsafe { mi_block_ptr_is_guarded(block_ptr.as_ptr(), p.as_ptr()) } {
+        return false;
+    }
+
+    // SAFETY: the tag-confirmed guarded witness and caller contract authorize the synchronous OS
+    // unprotection transition; the worker returns true regardless of the primitive's bool result.
+    unsafe {
+        mi_block_unguard(
+            page,
+            crate::core_types::GuardedBlock::after_guarded_detection(block_ptr),
+            p,
+        );
+    }
+    true
 }
 
 #[allow(clippy::absurd_extreme_comparisons)]
@@ -962,7 +976,9 @@ pub(crate) unsafe fn mi_validate_pointer(
 /// A valid `lookup` must still identify the same live registered allocation, page backing, block,
 /// and guard metadata produced by pointer validation. They must remain stable against concurrent
 /// free, realloc, page-map teardown, or backing release through the returned witness's use. For a
-/// guarded block, its protection geometry must remain valid for synchronous unprotection.
+/// guarded block, its protection geometry and initialized OS protection dispatch must remain valid
+/// for synchronous unprotection. Warning callbacks and opaque arguments used by an unprotect
+/// failure must remain valid, exclude incompatible reentry, and must not unwind.
 unsafe fn mi_prepare_validated_free(
     lookup: crate::core_types::PointerLookup,
 ) -> Option<crate::core_types::ValidatedFree> {

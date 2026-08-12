@@ -1151,13 +1151,17 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
 /// `theap` must identify a live current-thread heap whose local allocation state
 /// is exclusively mutable for this call; protocol atomic remote-free publication
 /// is permitted. If `old` is present, it must identify a live allocator
-/// allocation whose page and block metadata remain stable with no concurrent free
-/// or realloc until this call returns or frees it. The Copy witness does not
-/// extend those lifetimes. `zero_new_tail` must agree with `layout`. Each nonnull
-/// usable-size output must be valid, aligned, and writable for one `usize` when
-/// accessed, and must not overlap allocator metadata. The outputs may alias each
-/// other or lie within the live old allocation's user storage because every
-/// output write occurs before a moved-success release of that storage.
+/// allocation whose page-map registration, page and block metadata, and backing
+/// remain initialized and stable with no concurrent free, realloc, or teardown
+/// until this call returns or frees it. The Copy witness does not extend those
+/// lifetimes. `zero_new_tail` must agree with `layout`. Each nonnull usable-size
+/// output must be valid, aligned, and uniquely writable for one `usize` when
+/// accessed, and must not overlap allocator metadata. The outputs may alias
+/// each other or lie within the live old allocation's user storage because every
+/// output write occurs before a moved-success release of that storage. Any
+/// synchronous allocation, deferred-free, collection, arena, guarded-allocation,
+/// tracking, or diagnostic callbacks and their opaque arguments must remain
+/// valid, must not incompatibly reenter local heap state, and must not unwind.
 ///
 /// On allocation failure, an existing old allocation remains live. On in-place
 /// success it remains the returned allocation. On moved success this call copies
@@ -1177,67 +1181,71 @@ unsafe fn mi_theap_realloc_validated_core(
     let new_requested = layout.requested();
     let newsize = new_requested.get();
 
-    // SAFETY: the caller keeps any old allocation and its page metadata live and
-    // stable. Both optional outputs are valid when written; these writes precede
-    // every possible old-user-storage release. The current-thread heap remains
-    // exclusively available for the same-heap in-place decision.
-    unsafe {
-        let (page, size) = if let Some(old) = old {
-            let page = old.page().as_ptr();
-            let size = old.usable();
-            if !usable_pre.is_null() {
-                *usable_pre = mi_page_usable_block_size(page).get();
-            }
-            (page, size.get())
-        } else {
-            if !usable_pre.is_null() {
-                *usable_pre = 0;
-            }
-            (ptr::null_mut(), 0usize)
-        };
-
-        if mi_unlikely(
-            newsize <= size
-                && newsize >= (size / 2)
-                && newsize > 0
-                && mi_page_heap(page) == _mi_theap_heap(theap.ptr().as_ptr()),
-        ) {
-            crate::internal::mi_assert_internal!(!p.is_null());
-            if !usable_post.is_null() {
-                *usable_post = mi_page_usable_block_size(page).get();
-            }
-            return p;
+    let (page, size) = if let Some(old) = old {
+        let page = old.page().as_ptr();
+        let size = old.usable();
+        if !usable_pre.is_null() {
+            // SAFETY: the caller keeps the old page metadata live and stable,
+            // and supplies uniquely writable output storage before any release.
+            unsafe { *usable_pre = mi_page_usable_block_size(page).get() };
         }
+        (page, size.get())
+    } else {
+        if !usable_pre.is_null() {
+            // SAFETY: the caller supplies uniquely writable output storage;
+            // there is no old allocation to inspect on this null-realloc path.
+            unsafe { *usable_pre = 0 };
+        }
+        (ptr::null_mut(), 0usize)
+    };
+
+    if mi_unlikely(
+        newsize <= size
+            && newsize >= (size / 2)
+            && newsize > 0
+            // SAFETY: numeric checks above short-circuit before the old-page
+            // and current-heap metadata reads; the caller keeps both stable.
+            && unsafe { mi_page_heap(page) == _mi_theap_heap(theap.ptr().as_ptr()) },
+    ) {
+        crate::internal::mi_assert_internal!(!p.is_null());
+        if !usable_post.is_null() {
+            // SAFETY: an in-place result keeps the old page live, and the
+            // caller supplies uniquely writable output storage before return.
+            unsafe { *usable_post = mi_page_usable_block_size(page).get() };
+        }
+        return p;
     }
 
     // SAFETY: the caller keeps the current-thread heap's local allocation state
     // exclusive, `layout` is validated, and `usable_post` is valid when accessed.
     let newp = unsafe { mi_theap_umalloc_typed(theap, layout, usable_post) };
     if mi_likely(!newp.is_null()) {
-        // SAFETY: `newp` is the newly allocated writable block. The caller keeps
-        // any old allocation readable and stable until this transaction finishes;
-        // the validated sizes bound tail initialization and the preserved copy.
-        // Tracking is restored before the terminal old-allocation free.
-        unsafe {
-            let preserve =
-                old.map(|old| crate::core_types::PreserveBytes::new(old.usable(), new_requested));
-            let preserved = preserve.map_or(0, |preserve| preserve.get());
-            if zero_new_tail == crate::core_types::Zeroed::Yes && newsize > preserved {
-                let start = if preserved >= size_of::<isize>() {
-                    preserved - size_of::<isize>()
-                } else {
-                    0
-                };
-                _mi_memzero(newp.cast::<u8>().add(start).cast(), newsize - start);
-            } else if newsize == 0 {
-                *newp.cast::<u8>() = 0;
-            }
-            if mi_likely(!p.is_null()) {
-                let Some(preserve) = preserve else {
-                    crate::internal::mi_assert_internal!(false);
-                    return ptr::null_mut();
-                };
-                let copysize = preserve.get();
+        let preserve =
+            old.map(|old| crate::core_types::PreserveBytes::new(old.usable(), new_requested));
+        let preserved = preserve.map_or(0, |preserve| preserve.get());
+        if zero_new_tail == crate::core_types::Zeroed::Yes && newsize > preserved {
+            let start = if preserved >= size_of::<isize>() {
+                preserved - size_of::<isize>()
+            } else {
+                0
+            };
+            // SAFETY: `newp` is the newly allocated writable block, and the
+            // validated sizes bound this tail range.
+            unsafe { _mi_memzero(newp.cast::<u8>().add(start).cast(), newsize - start) };
+        } else if newsize == 0 {
+            // SAFETY: `newp` is the newly allocated writable block.
+            unsafe { *newp.cast::<u8>() = 0 };
+        }
+        if mi_likely(!p.is_null()) {
+            let Some(preserve) = preserve else {
+                crate::internal::mi_assert_internal!(false);
+                return ptr::null_mut();
+            };
+            let copysize = preserve.get();
+            // SAFETY: the caller keeps the old allocation readable and stable;
+            // tracking is restored before the copy, which precedes this sole
+            // terminal free with no later old-page access.
+            unsafe {
                 mi_track_mem_defined(p, copysize);
                 _mi_memcpy(newp, p, copysize);
                 mi_free(p);

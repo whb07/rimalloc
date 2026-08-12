@@ -615,12 +615,21 @@ unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapL
 }
 
 /// # Safety
-/// `theap` may be null or an allocator default/lazy sentinel supported by the
-/// current configuration. Otherwise it must identify a live initialized
-/// current-thread heap whose local allocation state is exclusively mutable for
-/// this call; protocol atomic remote-free publication is permitted. If nonnull,
-/// `usable` must be aligned and uniquely writable for one `usize` throughout the
-/// call. `huge_alignment` may be arbitrary and is validated before allocation.
+/// `theap` must be null, one of the allocator's static empty/wrong-thread
+/// sentinels, or a live aligned allocator current-thread heap whose `heap`
+/// pointer field is initialized and readable. Any nonnull input metadata must
+/// remain live and readable through resolution. The process/TLS lifecycle must
+/// permit current-thread initialization and default-heap lookup. After
+/// successful resolution, the selected heap's local allocation state must be
+/// exclusively mutable for this call; protocol atomic remote-free publication
+/// is permitted.
+/// Any initialization, deferred-free, collection, arena commit/purge, or error
+/// callbacks and their opaque arguments reached synchronously must remain valid,
+/// must not incompatibly reenter the selected heap's local allocation state,
+/// and must not unwind. If nonnull, `usable` must be aligned and uniquely
+/// writable for one `usize` throughout the call. `huge_alignment` may be
+/// arbitrary and is validated before allocation; when a request is small
+/// (`size <= MI_SMALL_SIZE_MAX`), it must be zero.
 #[inline(always)]
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     theap: *mut mi_theap_t,
@@ -629,36 +638,48 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     huge_alignment: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: the caller keeps any non-sentinel heap live, current-thread owned,
-    // and locally exclusive, and keeps the optional output writable. The
-    // debug-only evenness assertion preserves the existing internal diagnostic;
-    // the typed conversion rejects invalid scalar alignments before dispatch.
-    unsafe {
-        crate::internal::mi_assert!((huge_alignment & 1) == 0);
-        let Some(huge_alignment) = maybe_alignment_or_report(huge_alignment) else {
+    crate::internal::mi_assert!((huge_alignment & 1) == 0);
+    let Some(huge_alignment) = maybe_alignment_or_report(huge_alignment) else {
+        return ptr::null_mut();
+    };
+    let Some(layout) = malloc_layout_or_report(size, zero) else {
+        return ptr::null_mut();
+    };
+    if !theap.is_null() || !MI_THEAP_INITASNULL {
+        // SAFETY: the raw-boundary contract limits `theap` to resolver-accepted
+        // states, keeps any nonnull metadata readable through its probe, and
+        // permits current-thread initialization and default-heap lookup.
+        let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
             return ptr::null_mut();
         };
-        let Some(layout) = malloc_layout_or_report(size, zero) else {
-            return ptr::null_mut();
-        };
-        if !theap.is_null() || !MI_THEAP_INITASNULL {
-            let Some(theap) = _mi_theap_or_default_typed(theap) else {
-                return ptr::null_mut();
-            };
+        // SAFETY: successful resolution supplies an initialized nonnull
+        // current-thread heap. The caller keeps its local state exclusive, all
+        // reached callbacks valid and non-unwinding, and `usable` writable
+        // through this terminal allocation dispatch.
+        unsafe {
             _mi_theap_malloc_zero_ex_typed(
                 ThreadHeapLocal::new_unchecked(theap),
                 layout,
                 huge_alignment,
                 usable,
             )
-        } else {
-            let flags = crate::core_types::MallocGenericFlags::new(
-                layout.zeroed(),
-                crate::core_types::MaybeHugeAlignment::new(huge_alignment.get()),
-            );
-            let Some(theap) = _mi_theap_or_default_typed(theap) else {
-                return ptr::null_mut();
-            };
+        }
+    } else {
+        let flags = crate::core_types::MallocGenericFlags::new(
+            layout.zeroed(),
+            crate::core_types::MaybeHugeAlignment::new(huge_alignment.get()),
+        );
+        // SAFETY: this branch proves the configured lazy-null resolver state;
+        // the caller's process/TLS lifecycle permits current-thread
+        // initialization and default-heap lookup.
+        let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
+            return ptr::null_mut();
+        };
+        // SAFETY: successful lazy resolution supplies an initialized nonnull
+        // current-thread heap. The validated layout and flags preserve the
+        // requested zeroing/alignment policy; the caller keeps local state
+        // exclusive, callbacks valid and non-unwinding, and `usable` writable.
+        unsafe {
             mi_theap_malloc_generic(ThreadHeapLocal::new_unchecked(theap), layout, flags, usable)
         }
     }

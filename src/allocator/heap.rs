@@ -199,41 +199,56 @@ pub unsafe extern "C" fn mi_heap_new() -> *mut mi_heap_t {
 ///
 /// # Safety
 /// `heap` must remain live with initialized thread-heap list, lock, statistics,
-/// and list nodes. The caller must own the heap delete/destroy epoch: no new
-/// thread heap may attach and no competing teardown or list relink may occur.
-/// Existing users may finish only through the thread-heap refcount protocol;
-/// this function waits until those references are released.
+/// and list nodes. Every linked thread heap must belong to `heap` and remain
+/// live with stable `hnext`, associated TLD and list lock, statistics,
+/// refcount, MemId, and backing through its detach attempt. The caller must own
+/// the heap delete/destroy epoch: no new thread heap may attach and no competing
+/// teardown or list relink may occur. Existing users may finish only through
+/// the thread-heap refcount protocol. Release, arena, tracking, and diagnostic
+/// callbacks and opaque arguments must remain valid for synchronous use, must
+/// not incompatibly reenter either protected list, and must not unwind. A
+/// successfully detached node may be released and must not be accessed again.
 unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
     let heap = heap.as_ptr();
-    // SAFETY: the exclusive teardown epoch keeps the list, nodes, lock, and
-    // counter live. The lock serializes each traversal while refcount failures
-    // are retried only after releasing it.
-    unsafe {
-        loop {
+    loop {
+        // SAFETY: the exclusive teardown epoch keeps the heap list, lock, and
+        // every linked node live for this complete lock-held pass. Snapshot
+        // `hnext` before the free attempt: success may unlink and release the
+        // current node, while failure leaves it live for a later pass. The
+        // callee uses the already-held heap-list lock (`false`) and acquires the
+        // matching TLD-list lock (`true`). No current-node access follows the
+        // call, and the lock is released before any retry accounting or yield.
+        let all_freed = unsafe {
             let mut all_freed = true;
             mi_lock_acquire(ptr::addr_of_mut!((*heap).theaps_lock));
             let mut theap = (*heap).theaps;
             while !theap.is_null() {
                 let next = (*theap).hnext;
-                // SAFETY: the exclusive heap teardown epoch keeps this node,
-                // its TLD, stats, refcount, and backing live. The heap-list
-                // lock is already held (`false`), while the TLD-list lock must
-                // be acquired (`true`); only refcounted users may remain.
                 if !_mi_theap_free(theap, false, true) {
                     all_freed = false;
                 }
                 theap = next;
             }
             mi_lock_release(ptr::addr_of_mut!((*heap).theaps_lock));
+            all_freed
+        };
 
-            if all_freed {
-                crate::internal::mi_assert_internal!((*heap).theaps.is_null());
-                break;
-            }
-
-            __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*heap).stats.heaps_delete_wait), 1);
-            _mi_prim_thread_yield();
+        if all_freed {
+            // SAFETY: no concurrent attach/relink is permitted by the
+            // teardown contract, and the successful pass emptied the list.
+            let empty = unsafe { (*heap).theaps.is_null() };
+            crate::internal::mi_assert_internal!(empty);
+            break;
         }
+
+        // SAFETY: the exclusive teardown epoch keeps the heap's atomic wait
+        // counter live; this update occurs after releasing the list lock.
+        unsafe {
+            __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*heap).stats.heaps_delete_wait), 1);
+        }
+        // SAFETY: allocator process initialization is complete; the primitive
+        // yield retains and dereferences none of the heap/list pointers.
+        unsafe { _mi_prim_thread_yield() };
     }
 }
 

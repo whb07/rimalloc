@@ -1258,32 +1258,28 @@ fn mi_memid_is_refcounted(memid: mi_memid_t) -> bool {
     }
 }
 
-#[inline(always)]
-unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
-    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
-    unsafe {
-        let Some(theap) = ThreadHeapPtr::new(theap) else {
-            return;
-        };
-        let theap = ThreadHeapLocal::new_unchecked(theap);
-        let raw = theap.ptr().as_ptr();
-        let memid = (*raw).memid;
-        let memid_view = crate::core_types::MemId::view(memid);
-        let size = crate::core_types::ReservedBytes::new(size_of::<mi_theap_t>());
-        mi_theap_free_mem_typed(theap, memid, memid_view, size);
-    }
-}
-
+/// Release thread-heap metadata after its final reference is consumed.
+///
+/// # Safety
+/// `theap` must identify live allocator-owned metadata whose refcount has just
+/// transitioned to zero and whose `raw_memid`/`memid` describe its exact live
+/// backing. `size` must be the original thread-heap metadata size. No other
+/// access, refcount operation, TLS reference, or teardown may race or occur
+/// after this call. Subprocess stats and release callbacks/opaque arguments
+/// must remain valid synchronously, exclude incompatible reentry, and not
+/// unwind. This call may free the backing and consumes all access to `theap`.
 #[inline(always)]
 unsafe fn mi_theap_free_mem_typed(
-    theap: ThreadHeapLocal,
+    theap: ThreadHeapPtr,
     raw_memid: mi_memid_t,
     memid: crate::core_types::MemIdView,
     size: crate::core_types::ReservedBytes,
 ) {
-    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
+    // SAFETY: the final-reference contract keeps the exact backing, matching
+    // MemId, subprocess stats, and release machinery live for this terminal
+    // dispatch. No page-local ownership is required to release metadata.
     unsafe {
-        let raw = theap.ptr().as_ptr();
+        let raw = theap.as_ptr();
         __mi_stat_decrease_mt(ptr::addr_of_mut!((*_mi_subproc()).stats.theaps), 1);
         match memid {
             crate::core_types::MemIdView::HeapMain => {
@@ -1308,36 +1304,30 @@ unsafe fn mi_theap_free_mem_typed(
 
 #[inline(always)]
 unsafe fn mi_theap_free_arena_mem(
-    theap: ThreadHeapLocal,
+    theap: ThreadHeapPtr,
     memid: mi_memid_t,
     _range: crate::core_types::SliceRange,
     size: crate::core_types::ReservedBytes,
 ) {
     // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
     unsafe {
-        let raw = theap.ptr().as_ptr();
+        let raw = theap.as_ptr();
         let alloc_size =
             crate::core_types::ReservedBytes::new(_mi_align_up(size.get(), MI_ARENA_MIN_OBJ_SIZE));
         _mi_arenas_free(raw.cast(), alloc_size.get(), memid);
     }
 }
 
-/// # Safety
+/// Add one live reference to refcounted thread-heap metadata.
 ///
-/// `theap` must be null or point to a valid thread heap metadata object.
-// SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_theap_incref(theap: *mut mi_theap_t) {
-    let Some(theap) = ThreadHeapPtr::new(theap) else {
-        return;
-    };
-    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
-    unsafe { _mi_theap_incref_typed(theap) };
-}
-
+/// # Safety
+/// `theap` must remain live through the AcqRel increment, with a stable MemId
+/// and refcount. The caller must already own a live reference or otherwise
+/// exclude the final decrement and backing release until this increment lands.
 #[inline(always)]
-unsafe fn _mi_theap_incref_typed(theap: ThreadHeapPtr) {
-    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
+pub(crate) unsafe fn _mi_theap_incref_typed(theap: ThreadHeapPtr) {
+    // SAFETY: the caller keeps the MemId and atomic refcount live and excludes
+    // the terminal release while this conditional AcqRel increment executes.
     unsafe {
         if mi_memid_is_refcounted((*theap.as_ptr()).memid) {
             theap.refcount_cell().incref_acq_rel();
@@ -1345,29 +1335,31 @@ unsafe fn _mi_theap_incref_typed(theap: ThreadHeapPtr) {
     }
 }
 
+/// Drop one live reference, releasing backing on the final decrement.
+///
+/// # Safety
+/// `theap` must identify live allocator-owned metadata with a stable MemId and
+/// one reference owned by the caller. Its refcount, subprocess stats, backing,
+/// and release callbacks/opaque arguments must remain valid through the AcqRel
+/// decrement and possible terminal free. Concurrent users may act only through
+/// valid references. The caller must not access `theap` after this call because
+/// it may free the backing.
 #[inline(always)]
-unsafe fn mi_theap_decref_inline(theap: ThreadHeapPtr) {
-    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
+pub(crate) unsafe fn mi_theap_decref_inline(theap: ThreadHeapPtr) {
+    // SAFETY: the caller owns one reference and keeps MemId/refcount/backing
+    // release state valid. Snapshot the MemId before the decrement; on the
+    // final transition, pass the exact value into terminal dispatch.
     unsafe {
-        if mi_memid_is_refcounted((*theap.as_ptr()).memid)
-            && theap.refcount_cell().decref_acq_rel() == 1
-        {
-            mi_theap_free_mem(theap.as_ptr());
+        let raw_memid = (*theap.as_ptr()).memid;
+        if mi_memid_is_refcounted(raw_memid) && theap.refcount_cell().decref_acq_rel() == 1 {
+            mi_theap_free_mem_typed(
+                theap,
+                raw_memid,
+                crate::core_types::MemId::view(raw_memid),
+                crate::core_types::ReservedBytes::new(size_of::<mi_theap_t>()),
+            );
         }
     }
-}
-
-/// # Safety
-///
-/// `theap` must be null or point to a valid thread heap metadata object.
-// SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
-    let Some(theap) = ThreadHeapPtr::new(theap) else {
-        return;
-    };
-    // SAFETY: refcount paths release backing thread-heap metadata only after typed ownership checks.
-    unsafe { mi_theap_decref_inline(theap) };
 }
 
 /// # Safety

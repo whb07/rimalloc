@@ -20,6 +20,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 #[cfg(any(windows, target_os = "openbsd", target_os = "android"))]
 use crate::allocator::options::_mi_error_message_fmt;
+use crate::allocator::thread_heap::{_mi_theap_incref_typed, mi_theap_decref_inline};
 use crate::internal::atomic::{mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t};
 use crate::internal::bits::MI_SIZE_SIZE;
 #[cfg(windows)]
@@ -571,11 +572,17 @@ unsafe fn theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Option<Th
         );
     }
 
-    // SAFETY: cached thread-heap association validates local ownership before TLS publication.
+    // SAFETY: TLS now holds the new live thread-heap pointer before its AcqRel
+    // increment. The caller retains the new heap's existing reference through
+    // this point, and the old TLS reference remains live until decremented.
+    // Preserve new incref before old decref; the latter is terminal, so `prev`
+    // is not accessed afterward.
     unsafe {
-        crate::internal::_mi_theap_incref(theap_raw);
-        crate::internal::_mi_theap_decref(
-            prev.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut()),
-        );
+        if let Some(theap) = theap_ptr {
+            _mi_theap_incref_typed(theap);
+        }
+        if let Some(prev) = prev {
+            mi_theap_decref_inline(prev);
+        }
     }
 }

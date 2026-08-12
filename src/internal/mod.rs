@@ -58,9 +58,7 @@ pub(crate) use crate::allocator::stats::{
     __mi_stat_counter_increase, __mi_stat_counter_increase_mt, __mi_stat_decrease,
     __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
 };
-pub(crate) use crate::allocator::thread_heap::{
-    _mi_theap_decref, _mi_theap_incref, _mi_theap_random_next,
-};
+pub(crate) use crate::allocator::thread_heap::_mi_theap_random_next;
 use crate::core_types::PageQueuePtr;
 #[cfg(feature = "guarded")]
 use crate::core_types::{GuardedConfig, GuardedDecision};

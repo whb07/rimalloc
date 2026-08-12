@@ -1075,9 +1075,13 @@ pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_voi
 
 /// # Safety
 /// `p` must identify a live nonnull allocation returned by this allocator. Its
-/// page and block metadata must remain stable, with no concurrent free or
-/// realloc, for as long as the returned witness is used. `msg` must point to a
-/// live NUL-terminated diagnostic string for this call.
+/// page-map registration, page and block metadata, and backing must remain
+/// readable and stable, with no concurrent free, realloc, or teardown, for as
+/// long as the returned witness is used. `msg` must point to a live
+/// NUL-terminated UTF-8 diagnostic string for this call. Diagnostic callbacks and
+/// their opaque arguments must remain valid, not unwind, and not incompatibly
+/// reenter allocation state. The returned copyable witness does not extend any
+/// of these lifetimes.
 unsafe fn mi_realloc_old_allocation(
     p: *mut c_void,
     msg: *const c_char,
@@ -1085,22 +1089,19 @@ unsafe fn mi_realloc_old_allocation(
     // SAFETY: the caller keeps the nonnull allocation and its metadata stable;
     // `msg` remains a readable NUL-terminated diagnostic string while pointer
     // validation derives the matching page and block location.
+    let lookup = unsafe { crate::allocator::free::mi_validate_pointer(p, msg) };
+    let crate::core_types::PointerLookup::Valid(valid) = lookup else {
+        return None;
+    };
+    let (user, page, location) = valid.into_parts();
+    // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and
+    // supplies the block location derived by the validation boundary. The
+    // caller keeps that geometry live and stable through the returned witness.
     unsafe {
-        match crate::allocator::free::mi_validate_pointer(p, msg) {
-            crate::core_types::PointerLookup::Valid(valid) => {
-                let (user, page, location) = valid.into_parts();
-                let usable =
-                    crate::allocator::free::mi_usable_size_from_validated_location(page, location);
-                // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and
-                // supplies the block start derived by the validation boundary.
-                Some(crate::core_types::OldAllocation::from_validated_parts(
-                    user, usable, page,
-                ))
-            }
-            crate::core_types::PointerLookup::Null | crate::core_types::PointerLookup::Invalid => {
-                None
-            }
-        }
+        let usable = crate::allocator::free::mi_usable_size_from_validated_location(page, location);
+        Some(crate::core_types::OldAllocation::from_validated_parts(
+            user, usable, page,
+        ))
     }
 }
 

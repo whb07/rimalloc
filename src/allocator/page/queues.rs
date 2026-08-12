@@ -354,31 +354,56 @@ pub(super) unsafe fn mi_page_queue_push_typed(
 }
 
 /// # Safety
-/// `theap` must be the local owner of the page, and `queue` must be the exact
-/// normal queue represented by `queued`.
+/// `theap` must identify the live initialized locally owned heap that owns `queued.page()`, under
+/// current-thread ownership or exclusive collection access. `queue` must be the exact live
+/// initialized normal queue represented by `queued`, and the page must be live, initialized,
+/// linked exactly once in that queue, not marked full, and block-size compatible with it. The
+/// queue's initialized block size and first/last links, every adjacent page link, the owning
+/// heap's complete page-queue array and direct cache, and the page's owner, class, flag, and link
+/// metadata must remain live, initialized, and internally consistent. Any preceding queue entries
+/// inspected to derive the direct-cache range must retain their initialized block sizes and array
+/// positions.
+///
+/// The caller must exclusively own local queue-link and direct-cache mutation throughout the
+/// operation, and concurrent local relinking, cache mutation, and heap teardown are excluded;
+/// protocol atomic remote-free publication is permitted. Allocator diagnostics must remain valid,
+/// must not unwind, and must not incompatibly reenter page, queue, or heap mutation. If the page is
+/// already first, it is returned unchanged. Otherwise it is relinked at the front and the direct
+/// cache is updated; queue and heap page counts and the page's full flag are unchanged.
 #[inline]
 pub(super) unsafe fn mi_page_queue_move_to_front_typed(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
     queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
-    // SAFETY: queue link mutations update first/last pointers, counts, and in-full state together.
+    let page_ptr = queued.page();
+    let page = page_ptr.as_ptr();
+    let queue_ptr;
+    let first;
+
+    // SAFETY: the contract keeps the live page, its exact owning normal queue, heap association,
+    // queue endpoints, and link metadata stable while this read-only preflight verifies identity
+    // and snapshots the current queue front.
     unsafe {
-        let page_ptr = queued.page();
-        let page = page_ptr.as_ptr();
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.ptr().as_ptr());
         crate::internal::mi_assert_internal!(queue.ptr() == queued.normal_queue().ptr());
-        let queue_ptr = queue.ptr();
-        let Some(first) = queue_ptr.first() else {
-            crate::internal::mi_assert_internal!(false);
-            return queued;
-        };
-        if ptr::eq(first.as_ptr(), page) {
-            return queued;
-        }
+        queue_ptr = queue.ptr();
+        first = queue_ptr.first();
+    }
+    let Some(first) = first else {
+        crate::internal::mi_assert_internal!(false);
+        return queued;
+    };
+    if ptr::eq(first.as_ptr(), page) {
+        return queued;
+    }
 
-        // The typed witness carries the exact normal queue containing this
-        // page, so relinking preserves its non-full flag and both page counts.
+    // SAFETY: the successful preflight and function contract give exclusive local ownership of
+    // the page, both affected adjacent links, the queue endpoints, and the owning heap's direct
+    // cache. This single mutation epoch preserves the original unlink, tail repair, front-link,
+    // front publication, then cache-publication order without changing either count or the full
+    // flag. The typed witness remains the sole membership capability for the same page and queue.
+    unsafe {
         crate::internal::mi_assert_internal!(first.queue_prev().is_none());
         let Some(prev) = page_ptr.queue_prev() else {
             crate::internal::mi_assert_internal!(false);
@@ -1004,6 +1029,26 @@ mod tests {
             let active = crate::core_types::assume_active_page(last);
             let queued = crate::core_types::QueuedPage::try_queue(active, normal)
                 .expect("last page remains linked in the normal queue");
+            let _ = mi_page_queue_move_to_front_typed(owner, normal, queued);
+
+            assert_eq!(queue.first(), Some(last));
+            assert_eq!(queue.last(), Some(first));
+            assert_eq!(last.queue_prev(), None);
+            assert_eq!(last.queue_next(), Some(middle));
+            assert_eq!(middle.queue_prev(), Some(last));
+            assert_eq!(middle.queue_next(), Some(first));
+            assert_eq!(first.queue_prev(), Some(middle));
+            assert_eq!(first.queue_next(), None);
+            assert_eq!(queue.count().get(), 3);
+            assert_eq!((*theap).page_count, 3);
+            assert_eq!((*first.as_ptr()).xthread_id, thread_id);
+            assert_eq!((*middle.as_ptr()).xthread_id, thread_id);
+            assert_eq!((*last.as_ptr()).xthread_id, thread_id);
+            assert_eq!(owner.ptr().direct_page(direct_idx), last);
+
+            let active = crate::core_types::assume_active_page(last);
+            let queued = crate::core_types::QueuedPage::try_queue(active, normal)
+                .expect("front page remains linked in the normal queue");
             let _ = mi_page_queue_move_to_front_typed(owner, normal, queued);
 
             assert_eq!(queue.first(), Some(last));

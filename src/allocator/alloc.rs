@@ -2098,41 +2098,51 @@ unsafe fn mi_block_ptr_set_guarded(
         // unchanged user address when guarded allocation support is disabled.
         return Some(unsafe { UserPtr::new_unchecked(block.cast()) });
     }
-    // SAFETY: this coherent page/backing epoch derives the caller-provided live block's stable page,
-    // exclusively marks its interior-pointer state, validates its representable header/object/guard
-    // geometry, and either terminally frees the unpublished block or protects its aligned trailing
-    // page. The initialized MemId and OS-page configuration remain stable; diagnostics cannot
-    // retain transient state, reenter mutation of this allocation, or unwind.
-    let (block_size, os_page_size, guard_page) = unsafe {
-        let page = _mi_ptr_page(block.cast());
+    // SAFETY: the caller keeps this nonnull block's page metadata live and
+    // stable while its page identity is derived.
+    let page = unsafe { _mi_ptr_page(block.cast()) };
+    // SAFETY: this guarded allocation exclusively owns non-atomic page metadata
+    // and publishes the interior-pointer state before geometry validation.
+    unsafe {
         mi_page_set_has_interior_pointers(crate::core_types::PagePtr::new_unchecked(page), true);
-        let block_size = mi_page_block_size(page);
-        let os_page_size = _mi_os_page_size_typed().get();
-        crate::internal::mi_assert_internal!(
-            block_size >= obj_size + os_page_size + size_of::<mi_block_t>()
-        );
-        if block_size < obj_size + os_page_size + size_of::<mi_block_t>() {
-            mi_free(block.cast());
-            return None;
-        }
+    }
+    // SAFETY: the caller keeps the page's initialized block-size metadata live
+    // and stable through this operation.
+    let block_size = unsafe { mi_page_block_size(page) };
+    // SAFETY: allocator initialization keeps this nonzero OS-page configuration
+    // frozen and readable for the guarded allocation operation.
+    let os_page_size = unsafe { _mi_os_page_size_typed().get() };
+    crate::internal::mi_assert_internal!(
+        block_size >= obj_size + os_page_size + size_of::<mi_block_t>()
+    );
+    if block_size < obj_size + os_page_size + size_of::<mi_block_t>() {
+        // SAFETY: failed geometry consumes this unpublished guarded block by
+        // its sole terminal free, with no later block or page access.
+        unsafe { mi_free(block.cast()) };
+        return None;
+    }
 
-        let guard_page = block.cast::<u8>().add(block_size - os_page_size);
-        crate::internal::mi_assert_internal!(_mi_is_aligned(block.cast(), os_page_size));
-        crate::internal::mi_assert_internal!(_mi_is_aligned(guard_page.cast(), os_page_size));
-        if !(*page).memid.is_pinned && _mi_is_aligned(guard_page.cast(), os_page_size) {
-            let ok = crate::os::_mi_os_protect(guard_page.cast(), os_page_size);
-            if mi_unlikely(!ok) {
-                crate::allocator::options::_mi_warning_message_fmt(format_args!(
-                    "failed to set a guard page behind an object (object {block:p} of size {block_size})\n"
-                ));
-            }
-        } else {
+    // SAFETY: validated geometry keeps this guard-page offset inside the live
+    // block backing and representable.
+    let guard_page = unsafe { block.cast::<u8>().add(block_size - os_page_size) };
+    crate::internal::mi_assert_internal!(_mi_is_aligned(block.cast(), os_page_size));
+    crate::internal::mi_assert_internal!(_mi_is_aligned(guard_page.cast(), os_page_size));
+    // SAFETY: the initialized MemId remains stable. Its pinned read deliberately
+    // precedes the repeated alignment read, preserving the original short circuit.
+    if !unsafe { (*page).memid.is_pinned } && _mi_is_aligned(guard_page.cast(), os_page_size) {
+        // SAFETY: the validated trailing guard page is live, aligned, and
+        // suitable for the synchronous OS protection primitive when unpinned.
+        let ok = unsafe { crate::os::_mi_os_protect(guard_page.cast(), os_page_size) };
+        if mi_unlikely(!ok) {
             crate::allocator::options::_mi_warning_message_fmt(format_args!(
-                "unable to set a guard page behind an object due to pinned memory (large OS pages?) (object {block:p} of size {block_size})\n"
+                "failed to set a guard page behind an object (object {block:p} of size {block_size})\n"
             ));
         }
-        (block_size, os_page_size, guard_page)
-    };
+    } else {
+        crate::allocator::options::_mi_warning_message_fmt(format_args!(
+            "unable to set a guard page behind an object due to pinned memory (large OS pages?) (object {block:p} of size {block_size})\n"
+        ));
+    }
 
     let mut offset = block_size - os_page_size - obj_size;
     crate::internal::mi_assert_internal!(offset > size_of::<mi_block_t>());
@@ -2140,10 +2150,9 @@ unsafe fn mi_block_ptr_set_guarded(
     if offset > crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN {
         offset = crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN;
     }
-    // SAFETY: this coherent publication epoch uses the validated, bounded offset to derive the
-    // in-block nonnull user address; the equivalent guard-relative address remains within the same
-    // backing. Tracking sees the live allocation, object bounds, and initialized block header
-    // before the user pointer is published.
+    // SAFETY: the validated bounded offset derives a nonnull in-block user
+    // address. The equivalent guard-relative address stays in the same backing;
+    // tracking finishes before the user pointer is published.
     unsafe {
         let p = block.cast::<u8>().add(offset).cast::<c_void>();
         crate::internal::mi_assert_internal!(p.cast::<u8>() == guard_page.sub(obj_size));

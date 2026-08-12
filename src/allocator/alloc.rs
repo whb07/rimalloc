@@ -798,14 +798,14 @@ unsafe fn mi_heap_malloc_typed(
     heap: BorrowedHeap,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY: the caller keeps the heap live, current-thread owned, and locally
-    // exclusive while its thread heap is projected and used for allocation.
-    unsafe {
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return ptr::null_mut();
-        };
-        _mi_theap_malloc_zero_typed(theap, layout, ptr::null_mut())
-    }
+    // SAFETY: the caller keeps the heap and its current-thread association live
+    // and stable while the local thread-heap witness is projected.
+    let Some(theap) = (unsafe { mi_heap_borrowed_theap_local(heap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the caller keeps the localized heap's allocation state exclusive,
+    // stable, and callback-safe through this terminal allocation dispatch.
+    unsafe { _mi_theap_malloc_zero_typed(theap, layout, ptr::null_mut()) }
 }
 
 fn product_size_or_report(

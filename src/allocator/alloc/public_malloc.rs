@@ -185,23 +185,32 @@ pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
 /// nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
-    // SAFETY: the caller-provided bound and heap contract keep the selected
-    // current-thread allocation state exclusively owned through zeroing dispatch.
-    unsafe {
-        if theap.is_null() && MI_THEAP_INITASNULL {
-            return mi_theap_malloc_small_zero(
+    if theap.is_null() && MI_THEAP_INITASNULL {
+        // SAFETY: the raw-boundary contract permits the configured lazy-null
+        // resolver state through this terminal bounded zeroing dispatch.
+        return unsafe {
+            mi_theap_malloc_small_zero(
                 theap,
                 crate::core_types::RequestedSize::new(size),
                 crate::core_types::Zeroed::Yes,
                 ptr::null_mut(),
-            );
-        }
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
+            )
         };
+    }
+    let size = crate::core_types::RequestedSize::new(size);
+    // SAFETY: the raw-boundary contract limits `theap` to resolver-accepted
+    // states, keeps any nonnull metadata readable through its probe, and permits
+    // current-thread initialization and default-heap lookup.
+    let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: successful resolution supplies an initialized nonnull
+    // current-thread heap. The caller keeps local state exclusive and callbacks
+    // valid and non-unwinding through this terminal bounded zeroing dispatch.
+    unsafe {
         mi_theap_malloc_small_zero_typed(
             ThreadHeapLocal::new_unchecked(theap),
-            crate::core_types::RequestedSize::new(size),
+            size,
             crate::core_types::Zeroed::Yes,
             ptr::null_mut(),
         )

@@ -543,10 +543,11 @@ impl MiSubprocPrefix {
     }
 }
 
-unsafe fn mi_subproc_prefix(subproc: *mut mi_subproc_t) -> *mut MiSubprocPrefix {
-    // SAFETY: callers provide a non-null live subprocess pointer, so it can be
-    // represented by the non-null typed pointer before the address-only cast.
-    unsafe { mi_subproc_prefix_typed(SubprocPtr::new_unchecked(subproc)) }
+/// Project a possibly null or dangling subprocess pointer to the corresponding
+/// prefix address without accessing it. The raw result grants no validity,
+/// liveness, or dereference permission.
+fn mi_subproc_prefix(subproc: *mut mi_subproc_t) -> *mut MiSubprocPrefix {
+    subproc.cast::<MiSubprocPrefix>()
 }
 
 /// Project a non-null subprocess pointer to its internal prefix address.

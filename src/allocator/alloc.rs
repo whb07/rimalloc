@@ -2198,33 +2198,37 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
         return ptr::null_mut();
     }
 
-    // SAFETY: this coherent backing-allocation epoch reads the frozen nonzero OS-page config and
-    // an atomic guarded-precision option snapshot. The maximum-size rejection bounds every
-    // alignment addition, yielding a normalized padded layout containing header, object, and guard
-    // page. The raw heap satisfies the supported lazy/default or live current-thread protocol;
-    // successful localization establishes exclusive local allocation mutation, and failure
-    // publishes nothing. Any synchronous allocator callbacks obey the caller-provided lifecycle,
-    // reentrancy, and unwind constraints.
-    let (block, obj_size, req_size) = unsafe {
-        let os_page_size = _mi_os_page_size_typed().get();
-        let obj_size = if mi_option_is_enabled(mi_option_t::mi_option_guarded_precise) {
-            size
-        } else {
-            _mi_align_up(size, MI_MAX_ALIGN_SIZE)
-        };
-        let bsize = _mi_align_up(
-            _mi_align_up(obj_size, MI_MAX_ALIGN_SIZE) + size_of::<mi_block_t>(),
-            MI_MAX_ALIGN_SIZE,
-        );
-        let req_size = _mi_align_up(bsize + os_page_size, os_page_size);
-        let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
+    // SAFETY: allocator initialization keeps this nonzero OS-page configuration
+    // frozen and readable for guarded allocation.
+    let os_page_size = unsafe { _mi_os_page_size_typed().get() };
+    let precise = mi_option_is_enabled(mi_option_t::mi_option_guarded_precise);
+    let obj_size = if precise {
+        size
+    } else {
+        _mi_align_up(size, MI_MAX_ALIGN_SIZE)
+    };
+    let bsize = _mi_align_up(
+        _mi_align_up(obj_size, MI_MAX_ALIGN_SIZE) + size_of::<mi_block_t>(),
+        MI_MAX_ALIGN_SIZE,
+    );
+    let req_size = _mi_align_up(bsize + os_page_size, os_page_size);
+    // SAFETY: the size rejection above bounds every alignment addition, so this
+    // padded request contains its header, object, and trailing guard page.
+    let layout = unsafe {
+        crate::core_types::LayoutRequest::from_padded_unchecked(
             crate::core_types::PaddedSize::new_unchecked(req_size),
             crate::core_types::Zeroed::No,
-        );
-        let Some(theap_typed) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
-        };
-        let block = _mi_malloc_generic_typed(
+        )
+    };
+    // SAFETY: the raw heap satisfies the supported lazy/default or live
+    // current-thread protocol while the resolver localizes it.
+    let Some(theap_typed) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: successful localization proves exclusive local allocation state;
+    // allocation failure publishes no guarded block.
+    let block = unsafe {
+        _mi_malloc_generic_typed(
             theap_typed,
             layout,
             crate::core_types::MallocGenericFlags::new(
@@ -2233,51 +2237,68 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
             ),
             ptr::null_mut(),
         )
-        .cast::<mi_block_t>();
-        if block.is_null() {
-            return ptr::null_mut();
-        }
-        (block, obj_size, req_size)
-    };
-    // SAFETY: this coherent guarded-publication epoch owns the nonnull unpublished generic block
-    // and its page. It initializes the block tag, then the guarded request construction and
-    // allocator size-class bounds establish
-    // `header < block_size - os_page_size - obj_size <= MI_PAGE_MAX_OVERALLOC_ALIGN` for the helper.
-    // The helper consumes the guarded transition and frees once on rejection. On success `p`
-    // identifies `obj_size` writable bytes; optional zeroing and tracking finish before publication.
-    let p = unsafe {
-        let block_ptr = crate::core_types::BlockPtr::new_unchecked(block);
-        crate::core_types::BlockTag::write_guarded_to(block_ptr);
-        let Some(user) = mi_block_ptr_set_guarded(
+    }
+    .cast::<mi_block_t>();
+    if block.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: the nonnull unpublished generic block is the sole guarded-block
+    // transition input; its tag must be initialized before guarded setup.
+    let block_ptr = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
+    // SAFETY: exclusive ownership permits this guarded tag publication.
+    unsafe { crate::core_types::BlockTag::write_guarded_to(block_ptr) };
+    // SAFETY: guarded request construction and allocator size-class bounds
+    // establish the helper's geometry contract; it consumes and frees once on
+    // rejection, or returns the in-block user address on success.
+    let Some(user) = (unsafe {
+        mi_block_ptr_set_guarded(
             crate::core_types::GuardedBlock::after_guarded_detection(block_ptr),
             crate::core_types::UsableSize::new(obj_size),
-        ) else {
-            return ptr::null_mut();
-        };
-        let p = user.as_ptr();
-        if zero {
-            _mi_memzero_aligned(p, obj_size);
-        }
-        mi_track_malloc(p, obj_size, zero);
-        p
+        )
+    }) else {
+        return ptr::null_mut();
     };
-    // SAFETY: the caller-provided raw heap is either initialized or a supported default/lazy
-    // value. Allocator lifecycle keeps the selected default heap live; this current-thread epoch
-    // exclusively updates its guarded and requested statistics.
-    unsafe {
-        let theap = if mi_theap_is_initialized(theap) {
+    let p = user.as_ptr();
+    if zero {
+        // SAFETY: successful guarded setup yields `obj_size` writable user
+        // bytes before publication.
+        unsafe { _mi_memzero_aligned(p, obj_size) };
+    }
+    // SAFETY: tracking observes the live initialized guarded allocation before
+    // it is published to the caller.
+    unsafe { mi_track_malloc(p, obj_size, zero) };
+    // SAFETY: the caller-provided raw heap is either initialized or a supported
+    // default/lazy value while the initialized-state probe is evaluated.
+    let stats_theap = unsafe {
+        if mi_theap_is_initialized(theap) {
             theap
         } else {
             _mi_theap_default()
-        };
-        if mi_theap_is_initialized(theap) {
-            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_guarded_count), 1);
-            if MI_STAT > 1 {
+        }
+    };
+    // SAFETY: allocator lifecycle keeps the selected default heap live; this
+    // current-thread epoch exclusively updates its guarded/requested statistics.
+    if unsafe { mi_theap_is_initialized(stats_theap) } {
+        // SAFETY: the repeated initialized-state check proves the selected
+        // statistics field is live for this exclusive guarded-count increment.
+        unsafe {
+            __mi_stat_counter_increase(
+                ptr::addr_of_mut!((*stats_theap).stats.malloc_guarded_count),
+                1,
+            );
+        }
+        if MI_STAT > 1 {
+            // SAFETY: the same exclusive statistics epoch updates requested
+            // bytes in the original decrease-then-increase order.
+            unsafe {
                 __mi_stat_adjust_decrease(
-                    ptr::addr_of_mut!((*theap).stats.malloc_requested),
+                    ptr::addr_of_mut!((*stats_theap).stats.malloc_requested),
                     req_size,
                 );
-                __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_requested), size);
+                __mi_stat_increase(
+                    ptr::addr_of_mut!((*stats_theap).stats.malloc_requested),
+                    size,
+                );
             }
         }
     }

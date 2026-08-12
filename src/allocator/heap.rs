@@ -643,55 +643,91 @@ unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
 
 /// # Safety
 ///
-/// `heap` must be a live heap pointer with initialized thread-local metadata.
-// SAFETY: lazy thread-heap initialization uses
-// the heap's reserved TLS key and publishes a per-thread theap for that heap.
+/// `heap` must be nonnull live initialized heap metadata. Its main-heap
+/// classification, reserved TLS key, subprocess association, allocation policy,
+/// locks, and list metadata must remain stable through this call; heap teardown
+/// or concurrent non-protocol mutation must not race. The current thread must
+/// exclusively own its value for that TLS key, which must be null or name a live
+/// initialized thread heap for `heap`, and its initialized default thread heap
+/// and TLD must remain live. Allocator TLS, allocation, arena, commit, purge,
+/// guarded, tracking, and diagnostic callbacks and opaque arguments must remain
+/// valid for synchronous use, must not incompatibly reenter initialization of
+/// this same heap-local TLS slot, and must not unwind. Failure after publishing
+/// the BUSY sentinel restores the slot to null before returning.
 #[inline(never)]
 unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let heap = heap.cast_mut();
     crate::internal::mi_assert_internal!(!heap.is_null());
 
-    // SAFETY: caller passes a live heap pointer
-    // with initialized heap-local metadata.
-    unsafe {
-        if _mi_is_heap_main(heap) {
-            let theap = crate::allocator::init::_mi_theap_main_safe();
-            crate::internal::mi_assert_internal!(
-                !theap.is_null() && _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))
-            );
-            return theap;
-        }
+    // SAFETY: the caller stabilizes this live heap's identity and initialized
+    // metadata for the main-heap classification; no TLS or teardown mutation
+    // races this lookup.
+    if unsafe { _mi_is_heap_main(heap) } {
+        let theap = crate::allocator::init::_mi_theap_main_safe();
+        crate::internal::mi_assert_internal!(
+            !theap.is_null()
+                // SAFETY: the safe accessor returned allocator-owned live
+                // thread-heap metadata. Its initialized heap association may
+                // be read and classified for this assertion-only check.
+                && unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
+        );
+        return theap;
+    }
 
-        crate::internal::mi_assert_internal!((*heap).theap != 0);
-        if (*heap).theap == 0 {
+    crate::internal::mi_assert_internal!(
+        // SAFETY: the caller keeps the live non-main heap's reserved TLS key
+        // initialized and stable for this assertion-only validation.
+        unsafe { (*heap).theap != 0 }
+    );
+    // SAFETY: the caller keeps the live non-main heap's reserved TLS key
+    // initialized and stable for this runtime validation.
+    if unsafe { (*heap).theap == 0 } {
+        _mi_error_message_fmt(
+            Errno::EFAULT,
+            format_args!("no thread-local reserved for heap ({:p})\n", heap),
+        );
+        return ptr::null_mut();
+    }
+
+    // SAFETY: the caller keeps the live non-main heap's reserved TLS key
+    // initialized and stable for the current-thread lookup.
+    let mut theap = _mi_thread_local_get(unsafe { (*heap).theap }).cast::<mi_theap_t>();
+    if theap.is_null() {
+        // Publishing BUSY reserves this current-thread slot before allocation;
+        // the safe TLS boundary reports whether backing could be acquired.
+        if !_mi_thread_local_set(
+            // SAFETY: the caller keeps the live heap's reserved TLS key stable
+            // through this current-thread publication.
+            unsafe { (*heap).theap },
+            MI_THEAP_TLS_BUSY.cast::<c_void>(),
+        ) {
             _mi_error_message_fmt(
                 Errno::EFAULT,
-                format_args!("no thread-local reserved for heap ({:p})\n", heap),
+                format_args!("unable to allocate memory for thread local storage\n"),
             );
             return ptr::null_mut();
         }
-
-        let mut theap = _mi_thread_local_get((*heap).theap).cast::<mi_theap_t>();
+        // SAFETY: the current thread's default TLD and heap remain live through
+        // theap creation, and the constructor's callbacks are synchronous and
+        // obey the no-incompatible-reentry/no-unwind contract.
+        theap = unsafe { _mi_theap_create(heap, (*_mi_theap_default_safe()).tld) };
+        // Publish either the initialized result or null. In particular, create
+        // failure clears BUSY before the diagnostic callback can run.
+        _mi_thread_local_set(
+            // SAFETY: the caller keeps the live heap's reserved TLS key stable
+            // through this terminal current-thread publication.
+            unsafe { (*heap).theap },
+            theap.cast::<c_void>(),
+        );
         if theap.is_null() {
-            if !_mi_thread_local_set((*heap).theap, MI_THEAP_TLS_BUSY.cast::<c_void>()) {
-                _mi_error_message_fmt(
-                    Errno::EFAULT,
-                    format_args!("unable to allocate memory for thread local storage\n"),
-                );
-                return ptr::null_mut();
-            }
-            theap = _mi_theap_create(heap, (*_mi_theap_default_safe()).tld);
-            _mi_thread_local_set((*heap).theap, theap.cast::<c_void>());
-            if theap.is_null() {
-                _mi_error_message_fmt(
-                    Errno::EFAULT,
-                    format_args!("unable to allocate memory for a thread local heap\n"),
-                );
-                return ptr::null_mut();
-            }
+            _mi_error_message_fmt(
+                Errno::EFAULT,
+                format_args!("unable to allocate memory for a thread local heap\n"),
+            );
+            return ptr::null_mut();
         }
-        theap
     }
+    theap
 }
 
 /// # Safety

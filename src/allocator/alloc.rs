@@ -604,14 +604,16 @@ unsafe fn mi_theap_malloc_small_zero(
 /// teardown for the returned local witness's use.
 unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapLocal> {
     // SAFETY: the caller keeps the heap and association live and current-thread
-    // owned while the raw thread heap is projected and classified.
-    unsafe {
-        let theap = _mi_heap_theap(heap.ptr().as_ptr());
-        if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
-            return None;
-        }
-        ThreadHeapPtr::new(theap).map(|theap| ThreadHeapLocal::new_unchecked(theap))
+    // owned while the raw thread heap is resolved and classified.
+    let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
+    if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
+        return None;
     }
+    let theap = ThreadHeapPtr::new(theap)?;
+    // SAFETY: `_mi_heap_theap` resolved this live current-thread association,
+    // and the wrong-thread sentinel was rejected before constructing the local
+    // witness. The caller keeps the association stable through its use.
+    Some(unsafe { ThreadHeapLocal::new_unchecked(theap) })
 }
 
 /// # Safety

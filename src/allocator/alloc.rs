@@ -1007,31 +1007,39 @@ pub extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
 }
 
 /// # Safety
-/// `heap` must identify a live initialized heap owned by the current thread and
-/// remain stable without concurrent teardown. The caller must have exclusive
-/// mutation rights over its local allocation state; protocol atomic remote-free
-/// publication is permitted. A nonnull result is allocator-owned and may be
-/// released with `mi_free`.
+/// If nonnull, `heap` must identify live initialized current-thread heap
+/// metadata with a stable association to its thread heap. The caller must keep
+/// the selected local TLD, direct cache, page queues, free lists, statistics,
+/// and guarded-allocation sampling state exclusively mutable for this call;
+/// protocol atomic remote-free publication is permitted. Page-map, arena,
+/// backing-memory, allocator-configuration, and lifecycle state must remain
+/// initialized and stable. Any synchronous collection, deferred-free, arena,
+/// guarded-allocation, tracking, or diagnostic callbacks and opaque arguments
+/// reached during allocation must remain valid, must not incompatibly reenter
+/// local heap state, and must not unwind. A nonnull result is allocator-owned
+/// and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_mallocn(
     heap: *mut mi_heap_t,
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY: the caller keeps the heap live and current-thread owned through
-    // raw classification, checked-product validation, and allocation dispatch.
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return core::ptr::null_mut();
-        };
-        let Some(req) = alloc_product_or_report(count, size) else {
-            return core::ptr::null_mut();
-        };
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return core::ptr::null_mut();
-        };
-        _mi_theap_malloc_zero_typed(theap, req.layout(), ptr::null_mut())
-    }
+    // SAFETY: the raw-boundary contract keeps any nonnull heap metadata live,
+    // current-thread owned, and stable through this classification.
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some(req) = alloc_product_or_report(count, size) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: the caller keeps the heap and its current-thread association live
+    // and stable while the local thread-heap witness is projected.
+    let Some(theap) = (unsafe { mi_heap_borrowed_theap_local(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: the caller keeps the localized heap's allocation state exclusive,
+    // stable, and callback-safe through this terminal allocation dispatch.
+    unsafe { _mi_theap_malloc_zero_typed(theap, req.layout(), ptr::null_mut()) }
 }
 
 /// # Safety

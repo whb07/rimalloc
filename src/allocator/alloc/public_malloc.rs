@@ -77,26 +77,41 @@ pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize)
 }
 
 /// # Safety
-/// `theap` may be null only when lazy initialization is enabled; otherwise it
-/// must identify a live initialized current-thread heap. The caller must have
-/// exclusive mutation rights over its local allocation state, while protocol
-/// atomic remote-free publication is permitted. A nonnull result is
-/// allocator-owned and may be released with `mi_free`.
+/// `theap` must be null, one of the allocator's static empty/wrong-thread
+/// sentinels, or a live aligned allocator current-thread heap whose `heap`
+/// pointer field is initialized and readable. Any nonnull input metadata must
+/// remain live and readable through resolution. The process/TLS lifecycle must
+/// permit current-thread initialization and default-heap lookup. After
+/// successful resolution, the selected heap's local TLD, direct cache, page
+/// queues, free lists, statistics, and guarded-allocation sampling state must be
+/// exclusively mutable for this call; protocol atomic remote-free publication is
+/// permitted. Page-map, arena, backing-memory, allocator-configuration, and
+/// lifecycle state must remain initialized and stable.
+/// Any initialization, deferred-free, collection, arena, guarded-allocation,
+/// tracking, or diagnostic callbacks and their opaque arguments reached
+/// synchronously must remain valid, must not incompatibly reenter local heap
+/// state, and must not unwind. A nonnull result is allocator-owned and may be
+/// released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
-    // SAFETY: the caller keeps the raw current-thread heap and its local state
-    // live and exclusive through lazy handling, layout validation, and ordinary
-    // unaligned allocation dispatch.
+    if theap.is_null() && MI_THEAP_INITASNULL {
+        // SAFETY: the raw-boundary contract permits the configured lazy-null
+        // resolver state through this terminal unaligned allocation dispatch.
+        return unsafe { _mi_theap_malloc_zero(theap, size, false, ptr::null_mut()) };
+    }
+    let Some(layout) = malloc_layout_or_report(size, false) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the raw-boundary contract limits `theap` to resolver-accepted
+    // states, keeps any nonnull metadata readable through its probe, and permits
+    // current-thread initialization and default-heap lookup.
+    let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: successful resolution supplies an initialized nonnull
+    // current-thread heap. The caller keeps local state exclusive and callbacks
+    // valid and non-unwinding through this terminal allocation dispatch.
     unsafe {
-        if theap.is_null() && MI_THEAP_INITASNULL {
-            return _mi_theap_malloc_zero(theap, size, false, ptr::null_mut());
-        }
-        let Some(layout) = malloc_layout_or_report(size, false) else {
-            return ptr::null_mut();
-        };
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
-        };
         _mi_theap_malloc_zero_typed(
             ThreadHeapLocal::new_unchecked(theap),
             layout,

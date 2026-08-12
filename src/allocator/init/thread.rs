@@ -478,12 +478,18 @@ pub(super) fn init_default() -> *mut mi_theap_t {
         // returns its live main heap. Process initialization keeps their policy,
         // list, option, random, guarded, stats, and callback state stable; this
         // current-thread initialization epoch excludes teardown, relink, and
-        // incompatible callback reentry or unwind. Creation consumes neither
-        // raw owner.
-        theap = unsafe { _mi_theap_create(mi_heap_main(), tld) };
-    }
-    if theap.is_null() {
-        return ptr::null_mut();
+        // incompatible callback reentry or unwind. Failure publishes nothing
+        // and leaves the fresh TLD exclusively owned here; success transfers
+        // that TLD into the newly linked thread heap.
+        let new_theap = unsafe { _mi_theap_create(mi_heap_main(), tld) };
+        if new_theap.is_null() {
+            // `_mi_theap_create` published nothing, so the fresh TLD still has
+            // no heap-list consumers. Roll back its initialized lock, subproc
+            // thread count, and metadata backing exactly once.
+            tld_free(tld);
+            return ptr::null_mut();
+        }
+        theap = new_theap;
     }
     // SAFETY: `theap` is the initialized static main thread heap or the newly
     // created heap for this current thread. This lifecycle epoch exclusively

@@ -126,12 +126,23 @@ pub type mi_theap_area_visit_fun = unsafe extern "C" fn(
 struct TheapAreaVisitCallback(mi_theap_area_visit_fun);
 
 impl TheapAreaVisitCallback {
+    /// # Safety
+    /// `vfun` must be nonnull, properly aligned, initialized, and readable as
+    /// an `mi_theap_area_visit_fun` slot for this copy. The stored callback
+    /// must have the declared ABI and remain valid for every later invocation.
     #[inline(always)]
     unsafe fn from_raw_slot(vfun: *mut c_void) -> Self {
-        // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+        // SAFETY: the caller keeps this function-pointer slot live, aligned,
+        // initialized, and readable for the exact typed copy.
         unsafe { Self(*vfun.cast::<mi_theap_area_visit_fun>()) }
     }
 
+    /// # Safety
+    /// `theap` must remain live and initialized, `area` must be nonnull,
+    /// aligned, initialized callback storage valid for the synchronous call,
+    /// and `arg` must satisfy the callback's opaque-argument contract. The
+    /// callback must not retain `area`, incompatibly reenter the traversal, or
+    /// unwind across its C ABI.
     #[inline(always)]
     unsafe fn invoke(
         self,
@@ -139,7 +150,8 @@ impl TheapAreaVisitCallback {
         area: *const mi_theap_area_ex_t,
         arg: *mut c_void,
     ) -> bool {
-        // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+        // SAFETY: the caller supplies the live heap, synchronous initialized
+        // area storage, opaque argument, and callback ABI/lifetime guarantees.
         unsafe { (self.0)(theap.as_ptr().cast_const(), area, arg) }
     }
 }
@@ -373,7 +385,15 @@ pub(crate) unsafe fn visit_page_blocks(
     result
 }
 
-// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+/// # Safety
+/// `theap`, `pq`, and `page` must be nonnull live allocator metadata from one
+/// initialized thread heap reached by its synchronous page traversal. The
+/// current thread or an exclusive initialization/teardown owner must keep the
+/// page association, counts, geometry, and backing stable through callback
+/// return. `vfun` must be nonnull, aligned, initialized, readable
+/// `mi_theap_area_visit_fun` storage that remains live for this invocation;
+/// `arg` must satisfy that callback's contract. The callback must not retain
+/// stack area storage, incompatibly reenter the traversal, or unwind.
 unsafe extern "C" fn mi_theap_visit_areas_page(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -381,9 +401,11 @@ unsafe extern "C" fn mi_theap_visit_areas_page(
     vfun: *mut c_void,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+    crate::internal::MI_UNUSED(&pq);
+    // SAFETY: the page traversal supplies nonnull same-heap metadata and a
+    // live initialized callback slot. The typed worker receives the complete
+    // page/backing/callback lifetime and non-reentry contract unchanged.
     unsafe {
-        crate::internal::MI_UNUSED(&pq);
         let theap = ThreadHeapPtr::new_unchecked(theap);
         let page = PagePtr::new_unchecked(page);
         let visitor = TheapAreaVisitCallback::from_raw_slot(vfun);
@@ -391,27 +413,40 @@ unsafe extern "C" fn mi_theap_visit_areas_page(
     }
 }
 
+/// Visit one page through the internal extended-area callback.
+///
+/// # Safety
+/// `theap` must identify the live initialized owner of `page`. The current
+/// thread or an exclusive initialization/teardown owner must keep the page's
+/// association, counts, geometry, and backing stable through the synchronous
+/// callback. `visitor` must remain valid with the declared ABI and `arg` must
+/// satisfy its opaque-argument contract. During the callback it must not write
+/// the stack-local extended area (`area` or `page`), incompatibly reenter this
+/// traversal, or invalidate the page/backing/geometry. A `true` result must
+/// preserve the allocation snapshot needed by any later block walk. It must
+/// not retain the stack-local area or unwind across the C ABI.
 unsafe fn mi_theap_visit_areas_page_typed(
     theap: ThreadHeapPtr,
     page: PagePtr,
     visitor: TheapAreaVisitCallback,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    unsafe {
-        crate::internal::mi_assert_internal!(mi_page_theap(page.as_ptr()) == theap.as_ptr());
-        // SAFETY: page traversal keeps the page metadata and block backing
-        // live, with stable geometry, through the callback invocation below.
-        let Some(area) = heap_area_for_page(page) else {
-            crate::internal::mi_assert_internal!(false);
-            return false;
-        };
-        let xarea = mi_theap_area_ex_t {
-            area,
-            page: page.as_ptr(),
-        };
-        visitor.invoke(theap, ptr::addr_of!(xarea), arg)
-    }
+    // SAFETY: the traversal contract keeps the page's initialized heap
+    // association live and stable for this same-owner assertion.
+    crate::internal::mi_assert_internal!(unsafe { mi_page_theap(page.as_ptr()) == theap.as_ptr() });
+    // SAFETY: the caller keeps the page metadata, counts, geometry, and block
+    // backing live and stable through construction and callback return.
+    let Some(area) = (unsafe { heap_area_for_page(page) }) else {
+        crate::internal::mi_assert_internal!(false);
+        return false;
+    };
+    let xarea = mi_theap_area_ex_t {
+        area,
+        page: page.as_ptr(),
+    };
+    // SAFETY: `xarea` is initialized stack-local storage matching this live
+    // page, while the callback and opaque argument remain valid synchronously.
+    unsafe { visitor.invoke(theap, ptr::addr_of!(xarea), arg) }
 }
 
 /// # Safety
@@ -440,38 +475,57 @@ unsafe fn mi_theap_visit_areas(
     unsafe { mi_theap_visit_pages(theap.cast_mut(), page_visitor, true, visitor_arg, arg) }
 }
 
-// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
+/// # Safety
+/// `theap` must be nonnull and identify the live initialized thread heap that
+/// owns the page represented by `xarea`. `xarea` and `arg` must be nonnull,
+/// aligned, initialized, respectively readable area and dispatch storage for
+/// this synchronous invocation; neither may be concurrently mutated. Their
+/// page, counts, geometry, backing, heap association, callback values, and
+/// opaque argument must remain live through return. During the callback, it
+/// must not directly or indirectly write the internal dispatch storage or
+/// either field of the current extended area, incompatibly reenter traversal,
+/// or invalidate the current page, its backing/geometry, or the later block
+/// walk. A `true` result must preserve those values for that walk. It must not
+/// retain stack-local storage or unwind across the C ABI.
 #[inline(never)]
 unsafe extern "C" fn mi_theap_area_visitor(
     theap: *const mi_theap_t,
     xarea: *const mi_theap_area_ex_t,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
-    unsafe {
+    // SAFETY: the callback contract keeps `theap`, `xarea`, and `arg` aligned,
+    // initialized, and live. Read only the fields needed for the first callback;
+    // later traversal state is deliberately not read before it returns.
+    let continue_visit = unsafe {
         let args = arg.cast::<mi_visit_blocks_args_t>();
-        if !(*args).visitor.invoke(
+        (*args).visitor.invoke(
             HeapPtr::new_unchecked(_mi_theap_heap(theap.cast_mut())),
             ptr::addr_of!((*xarea).area),
             ptr::null_mut(),
             (*xarea).area.block_size,
             (*args).arg,
-        ) {
-            return false;
-        }
-        if (*args).visit_blocks {
-            // SAFETY: the area callback supplies a live page and its matching
-            // area projection. A continuing callback must preserve the page
-            // backing and geometry for the duration of block traversal.
+        )
+    };
+    if !continue_visit {
+        return false;
+    }
+    // SAFETY: a continuing callback preserves this initialized dispatch slot
+    // and the exact original post-callback read of its `visit_blocks` flag.
+    if unsafe { (*arg.cast::<mi_visit_blocks_args_t>()).visit_blocks } {
+        // SAFETY: the callback contract and its true result preserve the live
+        // matching area/page, callback, opaque argument, backing, and geometry.
+        // These fields are intentionally reread only after the first callback.
+        unsafe {
+            let args = arg.cast::<mi_visit_blocks_args_t>();
             visit_page_blocks(
                 &(*xarea).area,
                 PagePtr::new_unchecked((*xarea).page),
                 (*args).visitor,
                 (*args).arg,
             )
-        } else {
-            true
         }
+    } else {
+        true
     }
 }
 
@@ -482,11 +536,11 @@ unsafe extern "C" fn mi_theap_area_visitor(
 /// queues/free lists and metadata, and whose page backing and geometry remain
 /// valid through the synchronous traversal. `visitor`, when present, and `arg`
 /// must satisfy the block callback contract for every invocation and remain
-/// valid until traversal returns. The callback must not unwind across the C ABI
-/// or incompatibly reenter page traversal. A callback that returns `true` may
-/// allocate and change availability, but must not free or invalidate the current
-/// page's snapshotted allocation state, backing, block geometry, later callback
-/// blocks, or current area descriptor.
+/// valid until traversal returns. During invocation it must not write the
+/// current area descriptor, unwind across the C ABI, or incompatibly reenter
+/// page traversal. A callback that returns `true` may allocate and change
+/// availability, but must not free or invalidate the current page's snapshotted
+/// allocation state, backing, block geometry, or later callback blocks.
 // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_visit_blocks(

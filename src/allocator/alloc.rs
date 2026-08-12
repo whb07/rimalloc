@@ -987,22 +987,24 @@ pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
 /// A nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
-    if let Some(req) = alloc_product_or_report(count, size) {
-        // SAFETY: allocator lifecycle keeps the current thread's default heap
-        // live and its local allocation state exclusively owned while this
-        // synchronous checked-product allocation runs.
-        unsafe {
-            let Some(theap) = _mi_theap_or_default_typed(_mi_theap_default()) else {
-                return core::ptr::null_mut();
-            };
-            _mi_theap_malloc_zero_typed(
-                ThreadHeapLocal::new_unchecked(theap),
-                req.layout(),
-                ptr::null_mut(),
-            )
-        }
-    } else {
-        core::ptr::null_mut()
+    let Some(req) = alloc_product_or_report(count, size) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: allocator lifecycle supplies the supported default-heap state;
+    // this resolves it once after checked-product validation and before dispatch.
+    let Some(theap) = (unsafe { _mi_theap_or_default_typed(_mi_theap_default()) }) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: resolution establishes the live current-thread heap witness; the
+    // allocator lifecycle supplies its exclusive local allocation state. `req`
+    // retains its complete checked product layout and `Zeroed::No` policy; no
+    // usable-size output is requested.
+    unsafe {
+        _mi_theap_malloc_zero_typed(
+            ThreadHeapLocal::new_unchecked(theap),
+            req.layout(),
+            ptr::null_mut(),
+        )
     }
 }
 

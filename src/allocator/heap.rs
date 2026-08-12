@@ -215,6 +215,10 @@ unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
             let mut theap = (*heap).theaps;
             while !theap.is_null() {
                 let next = (*theap).hnext;
+                // SAFETY: the exclusive heap teardown epoch keeps this node,
+                // its TLD, stats, refcount, and backing live. The heap-list
+                // lock is already held (`false`), while the TLD-list lock must
+                // be acquired (`true`); only refcounted users may remain.
                 if !_mi_theap_free(theap, false, true) {
                     all_freed = false;
                 }

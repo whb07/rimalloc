@@ -1372,9 +1372,19 @@ pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
 
 /// # Safety
 ///
-/// `theap` must point to a valid thread heap. Lock flags must accurately reflect
-/// whether the caller already holds the corresponding heap and TLD locks.
-// SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+/// `theap` must point to live allocator-owned thread-heap metadata whose heap
+/// field may be atomically detached by this call. For an initialized heap, its
+/// associated heap, TLD, list links, source and destination stats, refcount,
+/// MemId, and backing must remain live through the terminal decref. The caller
+/// must own the teardown/unlink epoch: no concurrent heap-field detach, list
+/// relink, stats reset, TLD clear, or non-refcounted metadata access may occur.
+/// If an acquire flag is `true`, this call acquires/releases that list lock; if
+/// it is `false`, the caller must already hold the matching heap or TLD lock.
+/// Existing references may finish only through the refcount protocol. Release,
+/// arena, tracking, and diagnostic callbacks and opaque arguments must remain
+/// valid for synchronous invocation, exclude incompatible reentry, and must not
+/// unwind. `true` means this call detached and unlinked the heap; `false` means
+/// it was uninitialized, deleted, or already detached.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_free(
     theap: *mut mi_theap_t,
@@ -1385,60 +1395,99 @@ pub(crate) unsafe extern "C" fn _mi_theap_free(
     let Some(theap) = ThreadHeapPtr::new(theap) else {
         return true;
     };
-    // SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+    // SAFETY: the raw boundary contract keeps all lifecycle metadata and locks
+    // live, grants the exclusive detach/unlink epoch, defines each lock flag's
+    // polarity, and retains backing validity through terminal decref.
     unsafe { _mi_theap_free_typed(theap, acquire_heap_theaps_lock, acquire_tld_theaps_lock) }
 }
 
+/// Atomically detach and unlink one initialized thread heap.
+///
+/// # Safety
+/// `theap` must identify live allocator-owned thread-heap metadata. Its heap
+/// field, associated heap and TLD, list links, source/destination stats,
+/// refcount, MemId, and backing must remain live until terminal decref. The
+/// caller must exclude concurrent detach, list relink, stats reset, TLD clear,
+/// teardown, and non-refcounted metadata access. A `true` acquire flag means
+/// this function must acquire/release that list lock; a `false` flag means the
+/// caller already holds it. Existing users may finish only through refcounting.
+/// Release, arena, tracking, and diagnostic callbacks and opaque arguments must
+/// remain valid for synchronous invocation, exclude incompatible reentry, and
+/// must not unwind. After terminal decref no field of `theap` may be accessed.
 #[inline]
 unsafe fn _mi_theap_free_typed(
     theap: ThreadHeapPtr,
     acquire_heap_theaps_lock: bool,
     acquire_tld_theaps_lock: bool,
 ) -> bool {
-    // SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
-    unsafe {
-        let theap = match theap.state() {
+    // SAFETY: the caller keeps metadata live for state classification and owns
+    // the lifecycle epoch against concurrent detach or state mutation.
+    let theap = unsafe {
+        match theap.state() {
             ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => {
                 theap.ptr().as_ptr()
             }
             ThreadHeapState::Uninitialized | ThreadHeapState::Deleted => return false,
-        };
-
-        let heap = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!((*theap).heap))
-            .exchange_acq_rel(ptr::null_mut());
-        if heap.is_null() {
-            return false;
         }
+    };
 
+    // SAFETY: the heap pointer field is live atomic-compatible storage. The
+    // AcqRel exchange is the unique detach claim; null reports a prior detach.
+    let heap = unsafe {
+        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!((*theap).heap))
+            .exchange_acq_rel(ptr::null_mut())
+    };
+    if heap.is_null() {
+        return false;
+    }
+
+    // SAFETY: successful detach exclusively owns this source stats reset, and
+    // the associated heap's atomic destination stats remain live for the merge.
+    unsafe {
         _mi_stats_merge_into(
             ptr::addr_of_mut!((*heap).stats),
             ptr::addr_of_mut!((*theap).stats),
         );
+    }
 
-        let theap_ptr = ThreadHeapPtr::new_unchecked(theap);
-        lists::remove_from_heap(
-            HeapPtr::new_unchecked(heap),
-            theap_ptr,
-            acquire_heap_theaps_lock,
-        );
-        lists::remove_from_tld(
-            TldPtr::new_unchecked((*theap).tld),
-            theap_ptr,
-            acquire_tld_theaps_lock,
-        );
+    // SAFETY: the detach claim and lock-flag contract grant the heap-list and
+    // TLD-list unlink epochs. Snapshot the live TLD before clearing it, then
+    // preserve heap unlink -> TLD unlink -> TLD clear exactly.
+    let theap_ptr = unsafe { ThreadHeapPtr::new_unchecked(theap) };
+    unsafe {
+        let heap = HeapPtr::new_unchecked(heap);
+        let tld = TldPtr::new_unchecked((*theap).tld);
+        lists::remove_from_heap(heap, theap_ptr, acquire_heap_theaps_lock);
+        lists::remove_from_tld(tld, theap_ptr, acquire_tld_theaps_lock);
 
         theap_ptr.set_tld(None);
-        mi_theap_decref_inline(theap_ptr);
-        true
     }
+
+    // SAFETY: all metadata reads and list mutations are complete. Consume the
+    // final reference under the backing/MemId release contract; do not access
+    // `theap` or `theap_ptr` after this call.
+    unsafe {
+        mi_theap_decref_inline(theap_ptr);
+    }
+    true
 }
 
 /// # Safety
 ///
-/// `theap` must point to a valid initialized thread heap with no concurrent
-/// users. `acquire_tld_theaps_lock` must reflect whether the caller already
-/// holds the TLD thread-heap list lock.
-// SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+/// `theap` must point to live initialized allocator-owned thread-heap metadata
+/// with an associated heap, TLD, heap/TLD list links, source/destination stats,
+/// refcount, MemId, and backing that remain live through terminal decref. The
+/// caller must own the exclusive drained teardown epoch: no concurrent heap
+/// detach, list relink, stats reset, TLD clear, or non-refcounted metadata use
+/// may occur, and the page collection performed here must leave the heap valid
+/// for unlinking. `acquire_tld_theaps_lock == true` means this call acquires
+/// and releases the TLD thread-heap list lock; `false` means the caller holds
+/// it for the complete unlink. The heap-list lock is acquired internally by
+/// the delegated free operation. Release, arena, tracking, and diagnostic
+/// callbacks and opaque arguments must remain valid synchronously, exclude
+/// incompatible reentry, and must not unwind.
+// SAFETY: delete drains the heap, then delegates to the free boundary whose
+// contract covers the exclusive heap/TLD unlink and terminal refcount release.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_delete(
     theap: *mut mi_theap_t,
@@ -1447,13 +1496,29 @@ pub(crate) unsafe extern "C" fn _mi_theap_delete(
     let Some(theap) = ThreadHeapPtr::new(theap) else {
         return;
     };
-    // SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+    // SAFETY: the raw delete contract keeps the drained heap/TLD metadata,
+    // list locks, callbacks, and terminal refcount release valid, including
+    // the exact TLD-lock flag polarity delegated to _mi_theap_free.
     unsafe { _mi_theap_delete_typed(theap, acquire_tld_theaps_lock) };
 }
 
+/// Drain and terminally detach one initialized thread heap.
+///
+/// # Safety
+/// `theap` must identify live initialized allocator-owned metadata with live
+/// associated heap/TLD, both list memberships, stats, refcount, MemId, and
+/// backing through the delegated terminal decref. The caller must exclude
+/// concurrent detach/relink/reset and provide exclusive drained collection;
+/// callbacks and opaque arguments must be synchronously valid, exclude
+/// incompatible reentry, and not unwind. `acquire_tld_theaps_lock == true`
+/// means the delegated free operation acquires/releases the TLD list lock;
+/// `false` means the caller already holds it for the entire unlink. The heap
+/// list lock is acquired by that delegated operation. No field may be accessed
+/// after its terminal decref can release the backing.
 #[inline]
 unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: bool) {
-    // SAFETY: free and delete paths unlink initialized thread heaps under heap and TLD list locks.
+    // SAFETY: the caller supplies the drained exclusive lifecycle epoch and
+    // the exact TLD lock polarity required by the delegated free boundary.
     unsafe {
         let theap_raw = match theap.state() {
             ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => {
@@ -1471,6 +1536,9 @@ unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: 
 
         _mi_theap_collect_abandon(theap_raw);
         crate::internal::mi_assert_internal!((*theap_raw).page_count == 0);
+        // SAFETY: delete owns this drained heap's teardown epoch and keeps its
+        // lists, stats, refcount, MemId, and backing live. Acquire the heap-list
+        // lock; the caller's flag states whether to acquire the TLD-list lock.
         _mi_theap_free(theap_raw, true, acquire_tld_theaps_lock);
     }
 }

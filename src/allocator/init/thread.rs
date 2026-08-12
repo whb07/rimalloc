@@ -492,7 +492,10 @@ unsafe fn theaps_done(tld: *mut mi_tld_t) {
             let next = unsafe { (*theap).tnext };
             // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
             crate::internal::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
-            // SAFETY: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
+            // SAFETY: thread teardown keeps this node, heap/TLD lists, stats,
+            // refcount, MemId, and backing live. The heap-list lock must be
+            // acquired (`true`), while the TLD-list lock is held (`false`);
+            // only refcounted users may remain during this retry loop.
             if !unsafe { _mi_theap_free(theap, true, false) } {
                 all_freed = false;
             }

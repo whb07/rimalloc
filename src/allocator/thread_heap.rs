@@ -479,13 +479,15 @@ unsafe extern "C" fn mi_theap_area_visitor(
 /// # Safety
 ///
 /// `theap`, when non-null, must point to a live initialized thread heap whose
-/// page backing and geometry remain valid through the synchronous traversal.
-/// `visitor`, when present, and `arg` must satisfy the block callback contract
-/// for every invocation and remain valid until traversal returns. The callback
-/// must not unwind across the C ABI. A callback that returns `true` may allocate
-/// and change availability, but must not free or invalidate the current page
-/// backing, change its block geometry, or mutate the current area descriptor
-/// before the next callback invocation or traversal return.
+/// current thread (or exclusive initialization/teardown owner) may mutate local
+/// queues/free lists and metadata, and whose page backing and geometry remain
+/// valid through the synchronous traversal. `visitor`, when present, and `arg`
+/// must satisfy the block callback contract for every invocation and remain
+/// valid until traversal returns. The callback must not unwind across the C ABI
+/// or incompatibly reenter page traversal. A callback that returns `true` may
+/// allocate and change availability, but must not free or invalidate the current
+/// page's snapshotted allocation state, backing, block geometry, later callback
+/// blocks, or current area descriptor.
 // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_visit_blocks(

@@ -1885,34 +1885,52 @@ pub unsafe extern "C" fn mi_recalloc(p: *mut c_void, count: usize, size: usize) 
 }
 
 /// # Safety
-/// `heap` must identify a live initialized heap owned by the current thread and
-/// remain stable without concurrent teardown or non-protocol mutation. `p` must
-/// be null or a live allocation returned by this allocator; its page and block
-/// metadata must remain stable with no concurrent free or realloc. On success,
-/// the old allocation is consumed; on failure it remains live.
+/// Null `heap` returns null. If nonnull, `heap` must identify a live initialized
+/// heap owned by the current thread, with a stable heap-to-thread-heap
+/// association and no concurrent teardown, reassignment, or non-protocol
+/// mutation. The caller must keep the selected local TLD, direct cache, page
+/// queues, free lists, statistics, and guarded-allocation sampling state
+/// exclusively mutable; protocol atomic remote-free publication is permitted.
+/// `p` must be null or a live allocation returned by this allocator whose
+/// page-map registration, page and block metadata, and backing remain stable
+/// without concurrent free, realloc, or teardown until this call returns or
+/// consumes it. Page-map, arena, allocator configuration, and lifecycle state
+/// must remain initialized and stable. Synchronous initialization,
+/// deferred-free, collection, arena, guarded-allocation, tracking, or
+/// diagnostic callbacks and their opaque arguments must remain valid, must not
+/// incompatibly reenter local heap state, and must not unwind. A null `p`
+/// requests a new allocation. Invalid layout, request validation, heap
+/// localization, or allocation failure returns null with a nonnull `p` live; an
+/// in-place success returns it, while a moved success frees it once after
+/// copying its preserved prefix.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc(
     heap: *mut mi_heap_t,
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY: the caller keeps the raw heap and optional old allocation live
-    // through classification, current-thread localization, and realloc dispatch.
-    unsafe {
-        let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
-            return core::ptr::null_mut();
-        };
-        let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) else {
-            return core::ptr::null_mut();
-        };
-        let Some(req) = mi_realloc_request_from_ptr(p, layout, ptr::null_mut()) else {
-            return core::ptr::null_mut();
-        };
-        let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
-            return core::ptr::null_mut();
-        };
-        mi_theap_realloc_typed(theap, req)
-    }
+    // SAFETY: the caller proves that nonnull `heap` is live initialized heap
+    // metadata; this operation only classifies that raw pointer.
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: the caller keeps any nonnull old allocation and its metadata
+    // stable through validation; the null output requires no writable storage.
+    let Some(req) = (unsafe { mi_realloc_request_from_ptr(p, layout, ptr::null_mut()) }) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: the caller keeps the classified heap current-thread owned with a
+    // stable association while the resolver localizes it.
+    let Some(theap) = (unsafe { mi_heap_borrowed_theap_local(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: successful localization proves the live current-thread heap; the
+    // caller preserves its exclusive allocation state and the request's old
+    // allocation remains stable through the terminal realloc disposition.
+    unsafe { mi_theap_realloc_typed(theap, req) }
 }
 
 /// # Safety

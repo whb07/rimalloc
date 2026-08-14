@@ -129,7 +129,6 @@ pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_voi
     diagnostics::mi_register_output(out, arg);
 }
 
-// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void) {
     diagnostics::mi_register_error(fun, arg);

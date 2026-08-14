@@ -573,21 +573,6 @@ pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::Pag
 
 /// # Safety
 /// `page` must be abandoned page metadata whose thread-free ownership may be claimed.
-#[inline]
-pub(crate) unsafe fn mi_page_claim_ownership(
-    page: crate::core_types::AbandonedPage,
-) -> Option<crate::core_types::OwnedAbandonedPage> {
-    unsafe {
-        let page_ptr = page.page();
-        let atomic_tf = page_ptr.thread_free_cell();
-        if atomic_tf.claim_acq_rel() {
-            Some(crate::core_types::assume_owned_abandoned_page(page_ptr))
-        } else {
-            None
-        }
-    }
-}
-
 /// # Safety
 /// `block` and `p` must refer to the same allocated block when guarded allocation is enabled.
 #[inline]

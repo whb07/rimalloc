@@ -24,7 +24,7 @@ coordinated disclosure, and changelog/advisory publication.
 signoff unless a future release explicitly introduces a separate
 `PUBLIC_API.md`. Release review must treat any mismatch between that inventory
 and the source as release-blocking until the inventory, compatibility policy,
-and source-shape checks agree.
+and API/ABI checks agree.
 
 The production contract is split into compatibility tiers:
 
@@ -38,21 +38,11 @@ The production contract is split into compatibility tiers:
 - Tier I is private implementation machinery and is not public API.
 
 Release signoff must confirm that no new crate-root public item was added
-without inventory classification, compatibility review, and corresponding
-source-shape check updates.
+without inventory classification, compatibility review, and corresponding API
+snapshot updates.
 
-Production status:
-
-- Supported: Tier S safe Rust facade, Tier U unsafe callback guards, and Tier C
-  dynamic C ABI release artifacts `c-abi-cdylib` and `interpose-cdylib`.
-- Preview-only: staticlib release artifacts `c-abi-static-preview` and
-  `interpose-static-preview`.
-- Unstable: Tier R raw Rust facade path stability, translated implementation
-  modules, internal strict types, extension ABI, and static archive internal
-  symbols.
-- Unsupported: source-present non-maintained platforms are not release artifact
-  targets.
-- Maintained target: Linux x86_64 GNU only.
+`docs/platforms.md` owns the maintained-target and artifact-status matrix used
+for release qualification.
 
 ## Raw Facade Release Policy
 
@@ -316,25 +306,22 @@ Before publishing or tagging a release:
    dependency/build-tool report from the release notes.
 20. Run `scripts/check-release-reproducibility.py` and confirm the second
    checkout reproduces artifact names and ABI symbol manifests.
-21. Run `scripts/check-generated-artifacts.py` and confirm generated release,
-   benchmark, fuzz, and local analysis outputs are either ignored local scratch
-   or documented checked-in evidence in `docs/generated-artifacts.md`.
-22. Create and verify the signed annotated source tag with the release SSH
+21. Create and verify the signed annotated source tag with the release SSH
    signing key.
-23. Run `scripts/check-layout.sh` for ABI/layout audits.
-24. Run boundary checks: `scripts/check-strict-types.py`,
-   `scripts/check-safe-boundary.py`, `scripts/check-layer-boundaries.py`,
+22. Run `scripts/check-layout.sh` for ABI/layout audits.
+23. Run boundary checks: `scripts/check-strict-types.py`,
+   `scripts/check-layer-boundaries.py`,
    and `scripts/check-ffi-boundary.py`.
-25. Run `scripts/check-release-thread-stress.py`.
-26. Run `scripts/check-safety-stress.sh`.
-27. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
+24. Run `scripts/check-release-thread-stress.py`.
+25. Run `scripts/check-safety-stress.sh`.
+26. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
    toolchain.
-28. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
+27. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-29. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
+28. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-30. Run `scripts/check-valgrind-tracking-parity.py`.
-31. Before a release candidate, run `scripts/check-bench-full.sh`, capture
+29. Run `scripts/check-valgrind-tracking-parity.py`.
+30. Before a release candidate, run `scripts/check-bench-full.sh`, capture
    `scripts/env-info.sh`, preserve each mode's `manifest.json`,
    `environment.txt`, `commands.txt`, and `resource-results.jsonl`, preserve
    `criterion/`, `threshold-results.csv`, and `benchmark-review.json` for all
@@ -344,21 +331,21 @@ Before publishing or tagging a release:
    update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,
    artifact modes, Rust/C ratios, and noisy-benchmark notes for the release
    commit.
-32. For new strict internal wrappers on allocator hot paths, attach
+31. For new strict internal wrappers on allocator hot paths, attach
    `scripts/capture-release-assembly.sh` output covering free-list pop, local
    free, remote free, small page lookup, and any changed hot path; fail signoff
    unless the evidence shows no added branch, call, memory traffic, stack spill,
    formatting, allocation, panic path, bounds-check slow path, or wrapper
    constructor traffic without measured justification.
-33. Publish the per-release performance summary in `BENCHMARK_RESULTS.md` or an
+32. Publish the per-release performance summary in `BENCHMARK_RESULTS.md` or an
    attached report, summarizing geomean Rust/C ratios, hot-path deltas against
    previous release evidence, noisy watch items, release-blocking regressions,
    and links to raw Criterion summaries or threshold CSV artifacts.
-34. Update release notes with the unsupported-target triage language from
+33. Update release notes with the unsupported-target triage language from
    `docs/platforms.md`; do not market Linux aarch64, macOS, Windows, WASI,
    Emscripten, or other source-present targets as maintained unless that
    platform completed the promotion checklist.
-35. Update `CHANGELOG.md`, `README.md`, and compatibility notes, and link the
+34. Update `CHANGELOG.md`, `README.md`, and compatibility notes, and link the
    release notes to `BENCHMARK_RESULTS.md` or the attached performance report.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
@@ -373,7 +360,7 @@ The crate denies broken rustdoc links and warns on bare URLs today. A global
 that lint globally:
 
 1. Keep raw internals private according to [TYPES_SPEC.md](../TYPES_SPEC.md)
-   and [MIGRATION_PHASES.md](../MIGRATION_PHASES.md).
+   and [strict-types.md](strict-types.md).
 2. Confirm every Tier S safe Rust item has examples and error/panic notes.
 3. Confirm every public unsafe Tier R item has a `# Safety` section or is kept
    out of the public raw facade.

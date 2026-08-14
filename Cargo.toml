@@ -31,7 +31,6 @@ include = [
   "/PARITY.md",
   "/BENCHMARK_RESULTS.md",
   "/UPSTREAM_DIFF.md",
-  "/MIGRATION_PHASES.md",
   "/TYPES_SPEC.md",
 ]
 

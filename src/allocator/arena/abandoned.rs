@@ -174,10 +174,8 @@ pub(super) unsafe fn mi_arena_try_claim_abandoned_at(
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
     // SAFETY: the caller guarantees this projected live page is initialized and
     // abandoned, with atomic ownership available for a competing claim.
-    let abandoned = unsafe { crate::types::assume_abandoned_page(page_ptr) };
-    // SAFETY: the abandoned witness and caller's liveness contract permit the
-    // atomic ownership claim; failure leaves the page abandoned.
-    if unsafe { mi_page_claim_ownership(abandoned) }.is_none() {
+    let abandoned = unsafe { crate::allocator::raw_bridge::assume_abandoned_page(page_ptr) };
+    if abandoned.try_claim_ownership().is_err() {
         *keep_abandoned = true;
         false
     } else {

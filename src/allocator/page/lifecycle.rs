@@ -292,7 +292,7 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         let page_ptr = PagePtr::new_unchecked(page);
-        let local_page = crate::core_types::assume_local_page(page_ptr);
+        let local_page = crate::allocator::raw_bridge::assume_local_page(page_ptr);
         collect_page_free_lists_local(&local_page, force);
     }
 }
@@ -388,7 +388,7 @@ mod tests {
             mi_block_set_next(page, head, tail);
             mi_block_set_next(page, tail, ptr::null_mut());
 
-            let owned = crate::core_types::assume_owned_abandoned_page(page_ptr);
+            let owned = crate::allocator::raw_bridge::assume_owned_abandoned_page(page_ptr);
             let published = PublishedRemoteHead::from_raw_compat(head_ptr);
             let (published, detached) = published.detach_tail(&owned);
             assert_eq!(published.head().as_ptr(), head);

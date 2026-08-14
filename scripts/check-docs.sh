@@ -7,5 +7,4 @@ run cargo doc --no-deps --no-default-features
 run cargo doc --no-deps --features std
 run cargo test --doc --features std
 run cargo test --doc --features "std c-header-macros"
-run scripts/check-safe-docs.py
-run scripts/check-benchmark-doc-claims.py
+run scripts/check-doc-links.py

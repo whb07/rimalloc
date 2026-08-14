@@ -34,13 +34,13 @@ architectural rules Rust visibility cannot currently express:
 - raw block-link access stays behind free-list helpers;
 - packed thread-owner and thread-free bit operations stay behind typed owners;
 - pointer-to-atomic casts stay in atomic owner modules;
-- raw page-state bridge calls stay at reviewed allocator ingress points;
+- unchecked raw page-state construction is private to the allocator subtree;
 - metadata pointer wrappers do not implement `Deref`;
 - allocator internals do not introduce dynamic dispatch.
 
 The checker has no debt allowlist, per-file caps, wildcard counts, or
-documentation snapshot. Raw pointers and bare integers at mechanical C
-boundaries are reviewed as code, not mirrored into a ledger.
+documentation snapshot. Rust privacy, rather than the checker, confines raw
+page-state construction.
 
 Run:
 

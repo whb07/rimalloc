@@ -819,7 +819,7 @@ mod tests {
             let _ = mi_page_queue_push_typed(
                 owner,
                 front_queue,
-                crate::core_types::assume_active_page(front_first),
+                crate::allocator::raw_bridge::assume_active_page(front_first),
             );
             assert_eq!(front.first(), Some(front_first));
             assert_eq!(front.last(), Some(front_first));
@@ -838,7 +838,7 @@ mod tests {
             let _ = mi_page_queue_push_typed(
                 owner,
                 front_queue,
-                crate::core_types::assume_active_page(front_second),
+                crate::allocator::raw_bridge::assume_active_page(front_second),
             );
             assert_eq!(front.first(), Some(front_second));
             assert_eq!(front.last(), Some(front_first));
@@ -859,7 +859,7 @@ mod tests {
             let _ = mi_page_queue_push_at_end_typed(
                 owner,
                 tail_queue,
-                crate::core_types::assume_active_page(tail_first),
+                crate::allocator::raw_bridge::assume_active_page(tail_first),
             );
             assert_eq!(tail.first(), Some(tail_first));
             assert_eq!(tail.last(), Some(tail_first));
@@ -878,7 +878,7 @@ mod tests {
             let _ = mi_page_queue_push_at_end_typed(
                 owner,
                 tail_queue,
-                crate::core_types::assume_active_page(tail_second),
+                crate::allocator::raw_bridge::assume_active_page(tail_second),
             );
             assert_eq!(tail.first(), Some(tail_first));
             assert_eq!(tail.last(), Some(tail_second));
@@ -1028,7 +1028,7 @@ mod tests {
 
             let normal = crate::core_types::NormalPageQueue::new_unchecked(queue);
             let direct_idx = mi_direct_bin_from_size(block_size.get());
-            let active = crate::core_types::assume_active_page(middle);
+            let active = crate::allocator::raw_bridge::assume_active_page(middle);
             let queued = crate::core_types::QueuedPage::try_queue(active, normal)
                 .expect("middle page is linked in the normal queue");
             let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
@@ -1051,7 +1051,7 @@ mod tests {
             assert_eq!((*last.as_ptr()).xthread_id, thread_id);
             assert_eq!(owner.ptr().direct_page(direct_idx), middle);
 
-            let active = crate::core_types::assume_active_page(last);
+            let active = crate::allocator::raw_bridge::assume_active_page(last);
             let queued = crate::core_types::QueuedPage::try_queue(active, normal)
                 .expect("last page remains linked in the normal queue");
             let _ = mi_page_queue_move_to_front_typed(owner, normal, queued);
@@ -1071,7 +1071,7 @@ mod tests {
             assert_eq!((*last.as_ptr()).xthread_id, thread_id);
             assert_eq!(owner.ptr().direct_page(direct_idx), last);
 
-            let active = crate::core_types::assume_active_page(last);
+            let active = crate::allocator::raw_bridge::assume_active_page(last);
             let queued = crate::core_types::QueuedPage::try_queue(active, normal)
                 .expect("front page remains linked in the normal queue");
             let _ = mi_page_queue_move_to_front_typed(owner, normal, queued);

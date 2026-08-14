@@ -28,7 +28,6 @@ use super::{mi_option_t, storage};
 
 const MI_MAX_DELAY_OUTPUT: usize = 16 * 1024;
 
-// SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
 unsafe extern "C" {
     #[link_name = "abort"]
     fn c_abort() -> !;
@@ -51,7 +50,6 @@ thread_local! {
     static recurse: Cell<bool> = const { Cell::new(false) };
 }
 
-// SAFETY: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
 #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 unsafe extern "C" {
     fn _mi_tls_recurse_get() -> c_int;
@@ -60,7 +58,7 @@ unsafe extern "C" {
 
 struct DelayedOutputBuffer(UnsafeCell<[u8; MI_MAX_DELAY_OUTPUT + 1]>);
 
-// SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
+// SAFETY: every access to the buffer is serialized by `out_buf_lock`.
 unsafe impl Sync for DelayedOutputBuffer {}
 
 static out_buf: DelayedOutputBuffer =
@@ -84,7 +82,7 @@ fn option_is_enabled(option: mi_option_t) -> bool {
 
 struct LockedErrorHandler(UnsafeCell<ErrorCallback>);
 
-// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
+// SAFETY: every access to the callback is serialized by `mi_error_handler_lock`.
 unsafe impl Sync for LockedErrorHandler {}
 
 static mut mi_error_handler_lock: mi_lock_t = mi_lock_s::new();
@@ -94,7 +92,6 @@ static mi_error_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 
 #[inline]
 fn error_handler_load() -> ErrorCallback {
-    // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
     unsafe {
         let lock =
             MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
@@ -105,7 +102,6 @@ fn error_handler_load() -> ErrorCallback {
 
 #[inline]
 fn error_handler_store(fun: ErrorCallback) {
-    // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
     unsafe {
         let lock =
             MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
@@ -154,14 +150,12 @@ unsafe extern "C" fn mi_out_stderr(msg: *const c_char, arg: *mut c_void) {
     }
 }
 
-// SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
 unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
     let _ = arg;
     if msg.is_null() || out_len.load(Ordering::Acquire) >= MI_MAX_DELAY_OUTPUT {
         return;
     }
 
-    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     let msg_bytes = unsafe { CStr::from_ptr(msg).to_bytes() };
     let mut n = msg_bytes.len();
     if n == 0 || n >= MI_MAX_DELAY_OUTPUT {
@@ -170,25 +164,21 @@ unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
 
     // Manual lock handling keeps this translated callback buffer path close to
     // upstream and makes the callback-holding lifetime explicit.
-    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
     let start = out_len.fetch_add(n, Ordering::AcqRel);
     if start < MI_MAX_DELAY_OUTPUT {
         if start + n >= MI_MAX_DELAY_OUTPUT {
             n = MI_MAX_DELAY_OUTPUT - start - 1;
         }
-        // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
         let buf = unsafe { &mut *out_buf.0.get() };
         buf[start..start + n].copy_from_slice(&msg_bytes[..n]);
     }
-    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
 }
 
 fn mi_out_buf_flush(out: OutputCallback, no_more_buf: bool, arg: OutputCallbackArg) {
     // Intentionally holds the output buffer lock while invoking `out`, matching
     // the existing delayed-output flush semantics.
-    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
     let mut count = out_len.fetch_add(
         if no_more_buf { MI_MAX_DELAY_OUTPUT } else { 1 },
@@ -197,23 +187,18 @@ fn mi_out_buf_flush(out: OutputCallback, no_more_buf: bool, arg: OutputCallbackA
     if count > MI_MAX_DELAY_OUTPUT {
         count = MI_MAX_DELAY_OUTPUT;
     }
-    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     let buf = unsafe { &mut *out_buf.0.get() };
     buf[count] = 0;
-    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { out.invoke(buf.as_ptr().cast::<c_char>(), arg) };
     if !no_more_buf {
         buf[count] = b'\n';
     }
-    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
 }
 
-// SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
 unsafe extern "C" fn mi_out_buf_stderr(msg: *const c_char, arg: *mut c_void) {
     // SAFETY: stderr output validates C strings before forwarding to the primitive backend.
     unsafe { mi_out_stderr(msg, arg) };
-    // SAFETY: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_out_buf(msg, arg) };
 }
 
@@ -222,7 +207,6 @@ fn mi_out_get_default(parg: Option<&mut OutputCallbackArg>) -> OutputCallback {
         *arg = OutputCallbackArg::from_raw(mi_out_arg.load(Ordering::Acquire));
     }
     let callback =
-        // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
         unsafe { OutputCallback::from_storage_ptr(mi_out_default.load(Ordering::Acquire)) };
     OutputCallback::new(callback.raw().or(Some(mi_out_buf)))
 }
@@ -246,7 +230,6 @@ fn mi_add_stderr_output() {
 #[inline(never)]
 fn mi_recurse_enter_prim() -> bool {
     #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
-    // SAFETY: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
     unsafe {
         if _mi_tls_recurse_get() != 0 {
             false
@@ -282,7 +265,6 @@ fn mi_recurse_enter() -> bool {
 #[inline(never)]
 fn mi_recurse_exit_prim() {
     #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
-    // SAFETY: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
     unsafe {
         _mi_tls_recurse_set(0);
     }
@@ -307,7 +289,6 @@ fn mi_recurse_exit() {
 ///
 /// `prefix` and `message`, when non-null, must point to valid nul-terminated
 /// C strings. If `out` is supplied, it must be callable with `arg`.
-// SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_fputs(
     out: Option<mi_output_fun>,
@@ -326,20 +307,16 @@ pub(crate) unsafe extern "C" fn _mi_fputs(
         let mut default_arg = OutputCallbackArg::null();
         let default_out = mi_out_get_default(Some(&mut default_arg));
         if !prefix.is_null() {
-            // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
             unsafe { default_out.invoke(prefix, default_arg) };
         }
-        // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
         unsafe { default_out.invoke(message, default_arg) };
         mi_recurse_exit();
     } else if let Some(out) = out {
         let out = OutputCallback::new(Some(out));
         let arg = OutputCallbackArg::from_raw(arg);
         if !prefix.is_null() {
-            // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
             unsafe { out.invoke(prefix, arg) };
         }
-        // SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
         unsafe { out.invoke(message, arg) };
     }
 }
@@ -347,7 +324,6 @@ pub(crate) unsafe extern "C" fn _mi_fputs(
 pub(crate) fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, args: fmt::Arguments<'_>) {
     let mut text = StackMessage::new();
     if fmt::write(&mut text, args).is_ok() {
-        // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
         unsafe { _mi_fputs(out, arg, ptr::null(), text.as_c_ptr()) };
     }
 }
@@ -404,7 +380,6 @@ fn mi_vfprintf(
     if !wrote {
         return;
     }
-    // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
     unsafe { _mi_fputs(out, arg, prefix, text.as_c_ptr()) };
 }
 
@@ -415,12 +390,10 @@ fn mi_vfprintf_thread(
     args: fmt::Arguments<'_>,
 ) {
     if !prefix.is_null() {
-        // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
         let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
         if prefix_len <= 32 && !_mi_is_main_thread() {
             let mut tprefix = StackMessage::new();
             let prefix_bytes =
-                // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
                 unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
             tprefix.write_bytes(prefix_bytes);
             let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
@@ -441,21 +414,17 @@ fn mi_vfputs_thread(
         return;
     }
     if !prefix.is_null() {
-        // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
         let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
         if prefix_len <= 32 && !_mi_is_main_thread() {
             let mut tprefix = StackMessage::new();
             let prefix_bytes =
-                // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
                 unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
             tprefix.write_bytes(prefix_bytes);
             let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
-            // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
             unsafe { _mi_fputs(out, arg, tprefix.as_c_ptr(), message) };
             return;
         }
     }
-    // SAFETY: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
     unsafe { _mi_fputs(out, arg, prefix, message) };
 }
 
@@ -554,7 +523,6 @@ pub(crate) fn _mi_error_message_fmt(err: Errno, args: fmt::Arguments<'_>) {
     let handler = error_handler_load();
     let arg = ErrorCallbackArg::from_raw(mi_error_arg.load(Ordering::Acquire));
     if handler.is_some() {
-        // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
         unsafe { handler.invoke(err.get(), arg) };
     } else {
         mi_error_default(err);
@@ -568,7 +536,6 @@ pub(super) unsafe fn error_message(err: c_int, fmt: *const c_char) {
     let handler = error_handler_load();
     let arg = ErrorCallbackArg::from_raw(mi_error_arg.load(Ordering::Acquire));
     if handler.is_some() {
-        // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
         unsafe { handler.invoke(err.get(), arg) };
     } else {
         mi_error_default(err);
@@ -577,12 +544,10 @@ pub(super) unsafe fn error_message(err: c_int, fmt: *const c_char) {
 
 pub(super) fn mi_error_default(err: Errno) {
     if err == Errno::EFAULT && (MI_DEBUG > 0 || cfg!(feature = "secure")) {
-        // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
         unsafe { c_abort() };
     }
 }
 
-// SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
 pub(super) fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
     let callback = OutputCallback::new(Some(out.unwrap_or(mi_out_stderr)));
     let arg = OutputCallbackArg::from_raw(arg);
@@ -593,7 +558,6 @@ pub(super) fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
     }
 }
 
-// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
 pub(super) fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void) {
     let callback = ErrorCallback::new(fun);
     let arg = ErrorCallbackArg::from_raw(arg);
@@ -601,7 +565,6 @@ pub(super) fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void) {
     mi_error_arg.store(arg.as_ptr(), Ordering::Release);
 }
 
-// SAFETY: option printing formats static option names and values through the registered output path.
 pub(super) fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     let (out, arg) = if let Some(out) = out {
         (out, arg)
@@ -628,7 +591,6 @@ pub(super) fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_void)
         let value = option_get(option);
         let desc = storage::option_descriptor(i);
         // SAFETY: option names are static ASCII strings from the translated option table.
-        // SAFETY: option printing formats static option names and values through the registered output path.
         let name = unsafe { core::str::from_utf8_unchecked(CStr::from_ptr(desc.name).to_bytes()) };
         _mi_fprintf(
             Some(out),
@@ -661,7 +623,6 @@ pub(super) fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_void)
     }
 }
 
-// SAFETY: option printing formats static option names and values through the registered output path.
 pub(super) fn mi_options_print() {
     mi_options_print_out(None, ptr::null_mut());
 }
@@ -670,7 +631,6 @@ pub(super) fn mi_options_print() {
 ///
 /// `assertion`, `fname`, and `func`, when non-null, must point to valid
 /// nul-terminated C strings. This function aborts and does not return.
-// SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
 #[cold]
 pub(super) unsafe fn mi_assert_fail(
     assertion: *const c_char,
@@ -681,24 +641,19 @@ pub(super) unsafe fn mi_assert_fail(
     let assertion = if assertion.is_null() {
         ""
     } else {
-        // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
         unsafe { CStr::from_ptr(assertion).to_str().unwrap_or("") }
     };
     let fname = if fname.is_null() {
         ""
     } else {
-        // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
         unsafe { CStr::from_ptr(fname).to_str().unwrap_or("") }
     };
     let func = if func.is_null() {
         ""
     } else {
-        // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
         unsafe { CStr::from_ptr(func).to_str().unwrap_or("") }
     };
-    // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
     unsafe {
-        // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
         unsafe extern "C" {
             fn dprintf(
                 fd: core::ffi::c_int,
@@ -735,7 +690,6 @@ pub(super) unsafe fn mi_assert_fail(
             fname, line, func, assertion
         ),
     );
-    // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
     unsafe { c_abort() };
 }
 

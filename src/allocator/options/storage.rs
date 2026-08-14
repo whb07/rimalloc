@@ -142,7 +142,7 @@ static OPTION_INITS: [AtomicU8; MI_OPTION_COUNT] =
 
 struct LockedOptions(UnsafeCell<[mi_option_desc_t; MI_OPTION_COUNT]>);
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
+// SAFETY: every mutable table access is serialized by `options_lock`.
 unsafe impl Sync for LockedOptions {}
 
 static mut options_lock: mi_lock_t = mi_lock_s::new();
@@ -440,7 +440,6 @@ static OPTIONS: LockedOptions = LockedOptions(UnsafeCell::new([
 
 #[inline]
 fn with_options_table<R>(f: impl FnOnce(&mut [mi_option_desc_t; MI_OPTION_COUNT]) -> R) -> R {
-    // SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
     unsafe {
         let lock = MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(options_lock)));
         let _lock = MiLockGuard::acquire(lock);
@@ -523,7 +522,6 @@ fn get_env_value_stack<'a>(suffix: &[u8], value_buf: &'a mut [c_char; 65]) -> Op
     if !build_mimalloc_env_name(&mut env_name, suffix) {
         return None;
     }
-    // SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
     if !unsafe {
         libc::_mi_getenv(
             env_name.as_ptr().cast(),
@@ -533,7 +531,6 @@ fn get_env_value_stack<'a>(suffix: &[u8], value_buf: &'a mut [c_char; 65]) -> Op
     } {
         return None;
     }
-    // SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
     let value = unsafe { CStr::from_ptr(value_buf.as_ptr()) };
     value.to_str().ok()
 }
@@ -647,14 +644,12 @@ fn parse_option_value(raw: &str, size_in_kib: bool) -> Option<c_long> {
 }
 
 fn mi_option_init(desc: &mut mi_option_desc_t, warn: WarningSink) {
-    // SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
     let name = unsafe { CStr::from_ptr(desc.name) };
     let name_str = name.to_str().unwrap_or("");
     let mut value_buf = [0 as c_char; 65];
     let mut found = get_env_value_stack(name.to_bytes(), &mut value_buf);
 
     if found.is_none() && !desc.legacy_name.is_null() {
-        // SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
         let legacy = unsafe { CStr::from_ptr(desc.legacy_name) };
         let legacy_str = legacy.to_str().unwrap_or("");
         found = get_env_value_stack(legacy.to_bytes(), &mut value_buf);
@@ -713,7 +708,6 @@ pub(super) fn option_get_fast(option: mi_option_t) -> c_long {
     option_value_load(idx)
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_get(option: mi_option_t, warn: WarningSink) -> c_long {
     let idx = option.as_usize();
     crate::internal::mi_assert!(idx < MI_OPTION_COUNT);
@@ -743,7 +737,6 @@ pub(super) fn option_get(option: mi_option_t, warn: WarningSink) -> c_long {
     option_value_load(idx)
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_get_clamp(
     option: mi_option_t,
     min: c_long,
@@ -760,7 +753,6 @@ pub(super) fn option_get_clamp(
     }
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_get_size(option: mi_option_t, warn: WarningSink) -> usize {
     let x = option_get(option, warn);
     let mut size = if x < 0 { 0 } else { x as usize };
@@ -775,7 +767,6 @@ pub(super) fn option_get_size(option: mi_option_t, warn: WarningSink) -> usize {
     size
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_set(option: mi_option_t, value: c_long) {
     let idx = option.as_usize();
     crate::internal::mi_assert!(idx < MI_OPTION_COUNT);
@@ -809,7 +800,6 @@ pub(super) fn option_set(option: mi_option_t, value: c_long) {
     }
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_set_default(option: mi_option_t, value: c_long) {
     let idx = option.as_usize();
     crate::internal::mi_assert!(idx < MI_OPTION_COUNT);
@@ -825,27 +815,22 @@ pub(super) fn option_set_default(option: mi_option_t, value: c_long) {
     });
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_is_enabled(option: mi_option_t, warn: WarningSink) -> bool {
     option_get(option, warn) != 0
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_set_enabled(option: mi_option_t, enable: bool) {
     option_set(option, if enable { 1 } else { 0 });
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_set_enabled_default(option: mi_option_t, enable: bool) {
     option_set_default(option, if enable { 1 } else { 0 });
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_enable(option: mi_option_t) {
     option_set_enabled(option, true);
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 pub(super) fn option_disable(option: mi_option_t) {
     option_set_enabled(option, false);
 }

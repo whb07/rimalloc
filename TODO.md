@@ -67,37 +67,6 @@ scripts/check-docs.sh
 Release qualification is owned by [`docs/release.md`](docs/release.md) and must
 not be duplicated here.
 
-## Completed results retained from the improvement series
-
-Detailed completion history belongs in Git. The retained results are:
-
-- Deleted the 193-file `release_fast_path_audit` harness, unsafe evidence
-  ledgers, migration/count allowlists, marker IDs, wording assertions, and
-  benchmark-as-local-gate machinery (`4c51636`).
-- Replaced capability-linearity text inspection with compiler assertions.
-- Fixed the concurrency-model script so a zero-test selection fails and all six
-  intended Loom models execute.
-- Split initialization, option, statistics, and arena responsibilities by
-  lifecycle or invariant rather than by a line-count cap.
-- Removed synthetic reachability helpers, broad internal re-exports, and
-  accidental crate-root coupling.
-- Centralized repeated page, block, heap, arena, subprocess, TLS, statistics,
-  free-route, and OS pointer invariants in typed operation boundaries.
-- Removed or narrowed many unsafe caller obligations. Further safety narrowing
-  must accompany a concrete task below and reduce production obligations or
-  complexity rather than expand comments around unchanged operations.
-- Isolated all eight process-global callback behaviors in dedicated child test
-  processes and enabled them in normal test runs.
-- Deleted the internal unsafe comment-marker auditor, lexical unsafe inventory,
-  and their release/documentation wiring while retaining behavior and boundary
-  checks.
-- Deleted the unsafe-scope completion-evidence document and removed historical
-  extraction-plan text from `ARCHITECTURE.md`.
-- Made the zero-allocation assembly evidence filename agree with its captured
-  `_mi_theap_malloc_zero` symbol and archive contract.
-
----
-
 # Priority 0 — Correctness and ineffective tests
 
 ## 1. Resolve or close the thread-lifecycle TSan finding
@@ -196,55 +165,3 @@ Done when a general improvement reduces the gap. If repeated measurements show
 noise or compiler behavior, record that result only in `PERFORMANCE_WORKLOG.md`
 and remove this conditional task in the same results change; do not modify
 production or create a standalone TODO commit.
-
----
-
-# Priority 2 — Remove maintenance machinery and duplicated policy
-
-## 5. Replace the raw-bridge caller allowlist with enforceable boundaries
-
-Problem: `scripts/check-strict-types.py` contains an exact
-`RAW_BRIDGE_CALLERS` file allowlist and rejects inventory changes. This is a
-source ledger, while the actual requirement is that unchecked state
-construction remain confined to owning modules.
-
-- [ ] Group each remaining `assume_*` bridge by the invariant owner that can
-  validate or construct the state.
-- [ ] Use Rust module privacy, private fields, checked constructors, or an
-  operation-specific safe transition to make unauthorized construction
-  unnameable or unusable.
-- [ ] Remove a bridge entry only when its caller obligation has disappeared;
-  do not move the same allowlist into another script or document.
-- [ ] Delete `RAW_BRIDGE_CALLERS` and its inventory-equality check when the
-  compiler-enforced boundaries cover every remaining bridge. Retain unrelated
-  strict-type checks only where Rust visibility cannot express the boundary.
-
-Verify: compile-fail or module tests for the new private boundaries, focused
-state-transition tests, `scripts/check-strict-types.py`, relevant Miri/parity
-checks, and the common Rust gate.
-
-Done when exact caller-file bookkeeping is gone and callers have fewer
-unchecked construction obligations. Deleting the allowlist without replacing
-its real boundary protection is not completion.
-
-## 6. Give duplicated policy one owner
-
-Problem: feature and target-status policy is repeated in README and release
-documentation, while this backlog previously duplicated the release checklist.
-
-- [ ] Make `docs/features.md` the owner of feature semantics and supported
-  combinations; replace README's repeated feature list with a short summary and
-  link.
-- [ ] Make `docs/platforms.md` the owner of maintained-target and artifact-status
-  claims; replace repeated status matrices in README and `docs/release.md` with
-  contextual summaries and links.
-- [ ] Keep `docs/release.md` as the sole release qualification checklist. Other
-  documents may name focused checks but must not copy the full sequence.
-- [ ] Preserve experiment history only in `PERFORMANCE_WORKLOG.md` and current
-  benchmark results in their existing result owner.
-
-Verify: documentation formatting/checks, doctests, generated-artifact checks,
-and focused `rg` comparisons showing the repeated lists were removed.
-
-Done when each named policy has one update location and tracked duplicated text
-decreases. Do not add a policy index or enforcement ledger.

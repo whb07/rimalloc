@@ -296,7 +296,7 @@ unsafe extern "C" fn mi_heap_delete_page(
     if is_abandoned {
         // SAFETY: classification above established abandoned state for this live page; exclusive
         // deletion excludes a competing non-protocol metadata transition.
-        let abandoned = unsafe { crate::core_types::assume_abandoned_page(page_ptr) };
+        let abandoned = unsafe { crate::allocator::raw_bridge::assume_abandoned_page(page_ptr) };
         let Ok(owned) = abandoned.try_claim_ownership() else {
             crate::internal::mi_assert_internal!(false);
             return false;

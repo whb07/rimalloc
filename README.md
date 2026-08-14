@@ -103,7 +103,7 @@ uses the full release checkout and the commands documented in
 `docs/ffi-linking.md` and `docs/release.md`.
 
 The C ABI compatibility surface and the crate-root safe Rust facade are both
-tracked by source-shape, layout, symbol, lint, package, and benchmark gates.
+tracked by API snapshots, layout, symbol, lint, package, and benchmark gates.
 
 ## API Surfaces
 
@@ -136,18 +136,8 @@ The crate root exposes only the intended safe Rust facade, the explicit
 `unsafe_callbacks` namespace, and the `raw` facade; implementation modules are
 private so translation structure does not become an accidental SemVer contract.
 
-Production status:
-
-- Supported: Tier S safe Rust facade, Tier U unsafe callback guards, and Tier C
-  dynamic C ABI release artifacts `c-abi-cdylib` and `interpose-cdylib`.
-- Preview-only: staticlib release artifacts `c-abi-static-preview` and
-  `interpose-static-preview`.
-- Unstable: Tier R raw Rust facade path stability, translated implementation
-  modules, internal strict types, extension ABI, and static archive internal
-  symbols.
-- Unsupported: source-present non-maintained platforms are not release artifact
-  targets.
-- Maintained target: Linux x86_64 GNU only.
+The maintained-target and artifact-status matrix is owned by
+`docs/platforms.md`.
 
 The raw Rust facade is unstable as a Rust path surface; use it only behind an
 explicit unsafe boundary and expect inventory or migration notes before treating
@@ -155,39 +145,13 @@ paths as stable.
 
 ## Features
 
-Default features are empty.
-
-- `std`: opt into `std` for tooling, tests, examples, and benchmarks. Linux
-  builds without this feature use `no_std`.
-- `bench`: enable Criterion benchmark targets; implies `std`.
-- `compare`: enable comparison-oriented benchmark and test code.
-- `bench-diagnostics`: enable benchmark-only hotspot counters.
-- `secure`: enable secure-mode padding and encoded free lists.
-- `guarded`: enable guarded allocation sampling.
-- `track-valgrind`: enable Valgrind tracking shims.
-- `track-asan`: enable ASan tracking shims.
-- `c-header-macros`: expose raw mimalloc C-header compatibility macros.
-- `c-abi`: enable build-script setup for C ABI artifacts.
-- `cxx-overrides`: compile and link C++ operator new/delete overrides; implies
-  `c-abi`.
-- `tls-shim`: compile and link the Linux initial-exec TLS shim; implies
-  `c-abi`.
-- `interpose`: aggregate C ABI/interposition build mode; implies `c-abi`,
-  `cxx-overrides`, and `tls-shim`.
-
-When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
-builds, Valgrind mode takes precedence.
+Default features are empty. `docs/features.md` owns feature semantics,
+dependencies, supported combinations, and verification commands.
 
 ## Supported Targets
 
-The maintained target for the current port is Linux x86_64 GNU only. Linux
-aarch64, macOS, and Windows may have CI smoke jobs, but those jobs check source
-health and basic allocator behavior only; they do not imply maintained target
-support. WASI, Emscripten, and other translated platform code are
-source-present only unless `docs/platforms.md` promotes them with the required
-evidence.
-See `docs/platforms.md` and `docs/limitations.md` for the current support
-matrix and caveats.
+See `docs/platforms.md` for the maintained-target and artifact-status matrix,
+and `docs/limitations.md` for current caveats.
 
 ## Verification
 

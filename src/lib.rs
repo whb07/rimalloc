@@ -205,6 +205,16 @@
 
 #![cfg_attr(mi_sanitizer_runtime, feature(sanitize))]
 #![cfg_attr(all(not(test), target_os = "linux", not(feature = "std")), no_std)]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::expect_used,
+        clippy::panic,
+        clippy::todo,
+        clippy::unimplemented,
+        clippy::unwrap_used
+    )
+)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![warn(rustdoc::bare_urls)]
 

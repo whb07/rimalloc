@@ -229,7 +229,7 @@ pub(crate) unsafe fn visit_page_blocks(
     // before geometry/free-list traversal, preserving the original order.
     let mut abandoned_owner = unsafe {
         if mi_page_is_abandoned(page) {
-            let abandoned = crate::core_types::assume_abandoned_page(page_ptr);
+            let abandoned = crate::allocator::raw_bridge::assume_abandoned_page(page_ptr);
             let Ok(owner) = abandoned.try_claim_ownership() else {
                 return false;
             };
@@ -781,7 +781,7 @@ unsafe fn mi_theap_page_collect_typed(
     // collection of the remote list into local page state in this exact order.
     let local_page = unsafe {
         crate::internal::mi_assert_internal!(mi_theap_page_is_valid_typed(theap.ptr(), page));
-        let local_page = crate::core_types::assume_local_page(page);
+        let local_page = crate::allocator::raw_bridge::assume_local_page(page);
         _mi_page_free_collect(
             local_page.page().as_ptr(),
             collect as i32 >= mi_collect_t::MI_FORCE as i32,

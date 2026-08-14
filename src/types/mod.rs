@@ -112,10 +112,8 @@ pub(crate) use atomic::{
     OnceStatePtr, PublishedRemoteHead, RemotePushResult,
 };
 mod padding;
-mod raw_bridge;
 
 pub(crate) use padding::{Padding, PaddingCanary, PaddingDelta, PaddingPtr};
-pub(crate) use raw_bridge::*;
 
 #[cfg(test)]
 mod layout_tests;

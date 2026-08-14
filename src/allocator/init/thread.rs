@@ -45,10 +45,8 @@ pub(super) unsafe fn done(theap: *mut mi_theap_t) {
     if default_theap.is_null() {
         default_theap = mi_theap_main_tls_peek();
         if default_theap.is_null() {
-            // SAFETY: thread-done entry resolves the current default thread heap before typed teardown.
             default_theap = unsafe { crate::platform::_mi_theap_default() };
             crate::internal::mi_assert_internal!(
-                // SAFETY: thread-done entry resolves the current default thread heap before typed teardown.
                 default_theap.is_null() || unsafe { _mi_is_theap_main(default_theap) }
             );
         }
@@ -57,7 +55,6 @@ pub(super) unsafe fn done(theap: *mut mi_theap_t) {
     let Some(default_theap) = ThreadHeapPtr::new(default_theap) else {
         return;
     };
-    // SAFETY: thread-done entry resolves the current default thread heap before typed teardown.
     unsafe { done_typed(default_theap) };
 }
 
@@ -71,32 +68,24 @@ pub(super) unsafe fn done(theap: *mut mi_theap_t) {
 /// valid for synchronous invocation, tolerate compatible allocator reentry,
 /// preserve the teardown topology, and must not unwind.
 unsafe fn done_typed(default_theap: ThreadHeapPtr) {
-    // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let theap = match unsafe { default_theap.state() } {
         ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => theap,
         ThreadHeapState::Uninitialized | ThreadHeapState::Deleted => return,
     };
-    // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let current = unsafe { ThreadId::new_unchecked(crate::platform::_mi_prim_thread_id()) };
-    // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let Ok(default_theap) = (unsafe { theap.try_local(current) }) else {
         return;
     };
     crate::allocator::threadlocal::_mi_thread_locals_thread_done();
 
     let default_theap = default_theap.ptr().as_ptr();
-    // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let tld = unsafe { (*default_theap).tld };
-    // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let subproc = unsafe { (*tld).subproc };
-    // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if heap.is_null() {
         mi_heap_main_init();
-        // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
         heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     }
-    // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     unsafe {
         __mi_stat_decrease_mt(
             ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
@@ -104,7 +93,6 @@ unsafe fn done_typed(default_theap: ThreadHeapPtr) {
         )
     };
 
-    // SAFETY: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     if unsafe { (*tld).thread_id } != crate::platform::_mi_prim_thread_id() {
         return;
     }

@@ -1,4 +1,5 @@
 #![deny(clippy::must_use_candidate)]
+#![deny(missing_docs)]
 
 mod allocation;
 mod error;

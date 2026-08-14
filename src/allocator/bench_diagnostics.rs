@@ -562,7 +562,7 @@ impl PageBatchBenchFixture {
             unsafe { crate::allocator::page::_mi_page_free_collect(self.page_storage, true) };
             return true;
         }
-        let owner = unsafe { crate::core_types::assume_local_page(self.page) };
+        let owner = unsafe { crate::allocator::raw_bridge::assume_local_page(self.page) };
         if self.kind == PAGE_BATCH_LOCAL {
             let Ok(Some(batch)) = (unsafe { owner.detach_local_free_batch() }) else {
                 return false;

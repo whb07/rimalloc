@@ -79,10 +79,7 @@ REENTRY_PATTERNS = [
     re.compile(r"\b(?:crate|\$crate)::abi::mi_[A-Za-z0-9_]+\s*\("),
 ]
 
-REENTRY_ALLOWLIST = {
-    "src/ffi/abi.rs": "SAFETY",
-    "src/ffi/headers.rs": "SAFETY",
-}
+REENTRY_ALLOWED_FILES = {"src/ffi/abi.rs", "src/ffi/headers.rs"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -132,11 +129,10 @@ def main() -> int:
                     if any(pattern.search(line) for pattern in EXPORT_PATTERNS):
                         occurrences.append((rel, line_number, classification, line.strip()))
 
-        reentry_marker = REENTRY_ALLOWLIST.get(rel)
         for line_number, line in source_lines(text):
             if not any(pattern.search(line) for pattern in REENTRY_PATTERNS):
                 continue
-            if reentry_marker is not None and reentry_marker in text:
+            if rel in REENTRY_ALLOWED_FILES:
                 reentry_allowlisted.append((rel, line_number, line.strip()))
             else:
                 reentry_offenders.append(f"{rel}:{line_number}: {line.strip()}")

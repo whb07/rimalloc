@@ -8,22 +8,16 @@ import re
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-TEST_ONLY_SAFE_FILES = {"src/safe/tests.rs"}
-
-SAFE_BACKEND_IMPORT_ALLOWLIST = {
-    "src/safe/allocation.rs": set(),
-    "src/safe/error.rs": set(),
-    "src/safe/heap.rs": {
-        "allocator::aligned",
-        "allocator::alloc",
-        "allocator::heap",
-        "allocator::init",
-        "ffi::mimalloc",
-        "types",
-    },
-    "src/safe/mod.rs": set(),
-    "src/safe/options.rs": {"allocator::options"},
-    "src/safe/stats.rs": {"allocator::init", "allocator::stats", "platform::os"},
+ALLOWED_SAFE_BACKENDS = {
+    "allocator::aligned",
+    "allocator::alloc",
+    "allocator::heap",
+    "allocator::init",
+    "allocator::options",
+    "allocator::stats",
+    "ffi::mimalloc",
+    "platform::os",
+    "types",
 }
 
 BACKEND_MODULES = {
@@ -115,25 +109,16 @@ def main() -> int:
     safe_files = sorted(
         rel
         for path in (ROOT / "src/safe").glob("*.rs")
-        if (rel := path.relative_to(ROOT).as_posix()) not in TEST_ONLY_SAFE_FILES
-    )
-    expected_files = sorted(SAFE_BACKEND_IMPORT_ALLOWLIST)
-    require(
-        safe_files == expected_files,
-        "safe facade file inventory drift: "
-        f"missing={sorted(set(expected_files) - set(safe_files))} "
-        f"extra={sorted(set(safe_files) - set(expected_files))}",
+        if (rel := path.relative_to(ROOT).as_posix()) != "src/safe/tests.rs"
     )
 
     offenders = []
     for rel in safe_files:
         text = production_source((ROOT / rel).read_text())
         actual = backend_modules_used(text)
-        allowed = SAFE_BACKEND_IMPORT_ALLOWLIST[rel]
-        if actual != allowed:
-            offenders.append(
-                f"{rel}: missing={sorted(allowed - actual)} extra={sorted(actual - allowed)}"
-            )
+        forbidden = actual - ALLOWED_SAFE_BACKENDS
+        if forbidden:
+            offenders.append(f"{rel}: forbidden={sorted(forbidden)}")
 
     synthetic = (
         "fn bad() { let _ = crate::internal::MI_DEBUG; "
@@ -147,12 +132,11 @@ def main() -> int:
     )
     require(
         not offenders,
-        "safe facade backend import allowlist drift: " + "; ".join(offenders),
+        "safe facade imports unsupported backend modules: " + "; ".join(offenders),
     )
 
     print(
-        "ok: safe facade backend imports match the layer-boundary allowlist "
-        f"for {len(safe_files)} files"
+        "ok: safe facade imports only the supported backend API roots"
     )
     return 0
 

@@ -4,6 +4,7 @@ use super::freelist_wrappers::{AvailableFreeList, LocalFreeList};
 use super::ptr::{PagePtr, ThreadHeapPtr};
 use core::{marker::PhantomData, ptr};
 
+#[repr(transparent)]
 #[derive(Debug)]
 #[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct Page<S> {
@@ -23,6 +24,7 @@ impl Page<Uninit> {
     /// `ptr` must identify page metadata that is being initialized and is not
     /// yet represented by another page-state witness.
     #[inline(always)]
+    #[cfg(test)]
     pub(in crate::types) unsafe fn new_unchecked(ptr: PagePtr) -> Self {
         Self {
             ptr,
@@ -168,6 +170,7 @@ impl_page_witness!(
     "`page` must have completed the transition to destroyed/free-to-arena state."
 );
 
+#[repr(transparent)]
 #[derive(Debug)]
 #[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct AllFreePage<S> {
@@ -200,20 +203,6 @@ impl AllFreePage<Active> {
     /// `page` must be an active page whose blocks are all free.
     #[inline(always)]
     pub(in crate::types) unsafe fn active_unchecked(page: ActivePage) -> Self {
-        Self {
-            page: Page {
-                ptr: page.page(),
-                _state: PhantomData,
-            },
-        }
-    }
-}
-
-impl AllFreePage<Abandoned> {
-    /// # Safety
-    /// `page` must be an abandoned page whose blocks are all free.
-    #[inline(always)]
-    pub(in crate::types) unsafe fn abandoned_unchecked(page: AbandonedPageType) -> Self {
         Self {
             page: Page {
                 ptr: page.page(),

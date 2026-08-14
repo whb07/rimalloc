@@ -338,7 +338,6 @@ pub unsafe extern "C" fn _mi_os_large_page_size() -> usize {
     if large != 0 {
         large
     } else {
-        // SAFETY: the caller keeps initialized OS configuration stable.
         unsafe { _mi_os_page_size_typed().get() }
     }
 }
@@ -350,7 +349,6 @@ pub unsafe extern "C" fn _mi_os_large_page_size() -> usize {
 pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
     let minsize = mi_option_get_size(mi_option_t::mi_option_minimal_purge_size);
     if minsize != 0 {
-        // SAFETY: the caller keeps initialized OS configuration stable.
         _mi_align_up(minsize, unsafe { _mi_os_page_size_typed().get() })
     } else {
         // SAFETY: the caller keeps initialized OS configuration stable while
@@ -358,10 +356,8 @@ pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
         let has_transparent_huge_pages =
             unsafe { (*mi_os_mem_config_ptr()).has_transparent_huge_pages };
         if has_transparent_huge_pages && mi_option_get(mi_option_t::mi_option_allow_thp) == 2 {
-            // SAFETY: the caller keeps initialized OS configuration stable.
             unsafe { _mi_os_large_page_size() }
         } else {
-            // SAFETY: the caller keeps initialized OS configuration stable.
             unsafe { _mi_os_page_size_typed().get() }
         }
     }
@@ -372,7 +368,6 @@ pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
 /// rewritten by `_mi_os_init`.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
-    // SAFETY: the caller keeps initialized OS configuration stable.
     let gsize = unsafe { _mi_os_page_size_typed().get() };
     crate::internal::mi_debug_assert!(gsize <= (MI_ARENA_SLICE_SIZE / 4));
     gsize
@@ -408,7 +403,6 @@ pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize)
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
     let align_size = if size < 512 * MI_KiB {
-        // SAFETY: the caller keeps initialized OS configuration stable.
         unsafe { _mi_os_page_size_typed().get() }
     } else if size < 2 * MI_MiB {
         64 * MI_KiB

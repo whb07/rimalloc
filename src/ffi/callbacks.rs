@@ -6,6 +6,7 @@
 //! synchronization, lifetime, reentrancy, and allocator-entry obligations.
 
 #![deny(clippy::must_use_candidate)]
+#![deny(missing_docs)]
 
 use core::ffi::c_void;
 use core::ptr;

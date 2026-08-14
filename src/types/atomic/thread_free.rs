@@ -231,9 +231,6 @@ impl AtomicThreadFree {
     /// (bit 0 of `xthread_free`). Returns `true` if the bit was previously clear
     /// (i.e. this thread successfully claimed ownership).
     ///
-    /// Mirrors `mi_page_claim_ownership` in `internal.rs`: a single
-    /// `fetch_or(1, AcqRel)`.
-    ///
     /// # Safety
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]

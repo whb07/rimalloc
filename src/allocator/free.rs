@@ -559,9 +559,9 @@ pub(crate) unsafe fn mi_free_block_local(
             unsafe { crate::allocator::page::mi_page_retire_expire(page).is_zero() };
         if expire_is_zero {
             let active = unsafe {
-                crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(
-                    page,
-                ))
+                crate::allocator::raw_bridge::assume_active_page(
+                    crate::core_types::PagePtr::new_unchecked(page),
+                )
             };
             let Ok(all_free) = active.try_mark_all_free() else {
                 crate::internal::mi_assert_internal!(false);
@@ -573,7 +573,9 @@ pub(crate) unsafe fn mi_free_block_local(
         let is_full = unsafe { crate::allocator::page::mi_page_is_in_full(page) };
         if is_full {
             let full_page = unsafe {
-                crate::core_types::assume_full_page(crate::core_types::PagePtr::new_unchecked(page))
+                crate::allocator::raw_bridge::assume_full_page(
+                    crate::core_types::PagePtr::new_unchecked(page),
+                )
             };
             let _ = unsafe { _mi_page_unfull_internal(full_page) };
         }
@@ -634,7 +636,7 @@ pub(crate) unsafe fn mi_free_block_mt(
         crate::internal::mi_assert_internal!(is_abandoned);
         unsafe {
             collect_after_remote_free(
-                crate::core_types::assume_owned_abandoned_page(
+                crate::allocator::raw_bridge::assume_owned_abandoned_page(
                     crate::core_types::PagePtr::new_unchecked(page),
                 ),
                 published,
@@ -861,7 +863,7 @@ pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *
     let parts = validated.into_parts();
     // SAFETY: this local assembly operand is selected only after the fast caller classifies `page`
     // as current-thread owned; that owner state remains stable through the terminal local mutation.
-    let page_wrapper = unsafe { crate::core_types::assume_local_page(parts.page) };
+    let page_wrapper = unsafe { crate::allocator::raw_bridge::assume_local_page(parts.page) };
 
     // SAFETY: the caller supplies exclusive local page/free-list/full-queue/accounting access; the
     // validated block belongs to this page and callbacks cannot incompatibly reenter or unwind.
@@ -907,7 +909,7 @@ pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut
     let parts = validated.into_parts();
     // SAFETY: this remote assembly operand is selected only after the fast caller classifies `page`
     // as foreign; that owner state remains protocol-stable through atomic publication.
-    let page_wrapper = unsafe { crate::core_types::assume_foreign_page(parts.page) };
+    let page_wrapper = unsafe { crate::allocator::raw_bridge::assume_foreign_page(parts.page) };
 
     // SAFETY: the validated block belongs to this live foreign page, whose atomic remote-free word
     // is the sole publication path; callbacks cannot incompatibly reenter or unwind.
@@ -1282,7 +1284,7 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_internal!(!mt_free.is_null());
         collect_after_remote_free(
-            crate::core_types::assume_owned_abandoned_page(
+            crate::allocator::raw_bridge::assume_owned_abandoned_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             ),
             crate::core_types::PublishedRemoteHead::from_raw_compat(

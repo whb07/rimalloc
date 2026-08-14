@@ -33,9 +33,9 @@ keeping translated allocator code close enough to upstream to audit.
 
 Tier S may call Tier I only through reviewed backend contacts that enforce
 safe ownership, lifetime, nullability, initialization, and error mapping at the
-safe boundary. `scripts/check-layer-boundaries.py` keeps those contacts
-file-specific so a new safe facade file cannot import allocator internals
-without updating the allowlist and this policy.
+safe boundary. `scripts/check-layer-boundaries.py` rejects imports outside the
+small set of backend API roots used by the safe facade; it does not mirror each
+safe source file or its exact imports in a ledger.
 
 Tier U must stay under the `unsafe_callbacks` namespace. Callback guards are
 process-global and unsafe to construct because synchronization, callback

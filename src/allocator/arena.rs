@@ -50,11 +50,10 @@ use crate::internal::{
     _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex, _mi_os_has_overcommit,
     _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc, _mi_theap_heap,
     _mi_thread_id, _mi_toupper, MI_DEBUG, mi_mem_is_zero, mi_mul_overflow, mi_page_all_free,
-    mi_page_block_size, mi_page_block_size_typed, mi_page_claim_ownership,
-    mi_page_clear_abandoned_mapped, mi_page_committed_typed, mi_page_heap, mi_page_is_abandoned,
-    mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned, mi_page_is_singleton,
-    mi_page_meta_is_separated, mi_page_slice_start, mi_page_start, mi_size_of_slices,
-    mi_slice_count_of_size,
+    mi_page_block_size, mi_page_block_size_typed, mi_page_clear_abandoned_mapped,
+    mi_page_committed_typed, mi_page_heap, mi_page_is_abandoned, mi_page_is_abandoned_mapped,
+    mi_page_is_full, mi_page_is_owned, mi_page_is_singleton, mi_page_meta_is_separated,
+    mi_page_slice_start, mi_page_start, mi_size_of_slices, mi_slice_count_of_size,
 };
 use crate::mimalloc::{mi_heap_main, mi_heap_theap, mi_heap_zalloc_aligned};
 use crate::os::{
@@ -459,7 +458,7 @@ impl RegisteredFreshPage {
         let registered = core::mem::ManuallyDrop::new(self);
         // SAFETY: registration publishes fully prepared page metadata, while
         // this consuming boundary retains exclusive initialization ownership.
-        unsafe { crate::core_types::assume_uninit_page(registered.page) }
+        unsafe { crate::allocator::raw_bridge::assume_uninit_page(registered.page) }
     }
 }
 
@@ -1394,7 +1393,9 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                     ptr::addr_of_mut!((*theap).stats.pages_abandoned),
                     1,
                 );
-                Some(crate::core_types::assume_owned_abandoned_page(page))
+                Some(crate::allocator::raw_bridge::assume_owned_abandoned_page(
+                    page,
+                ))
             }
         };
         let Some(owned_page) = owned_page else {
@@ -2036,13 +2037,10 @@ pub(crate) unsafe fn _mi_arenas_page_alloc(
         // page map, OS state, and callbacks live for singleton initialization.
         unsafe { mi_arenas_page_singleton_alloc(owner, block_size, block_alignment) }
     } else if block_size_raw <= MI_SMALL_MAX_OBJ_SIZE {
-        // SAFETY: the outer contract establishes the regular allocation epoch.
         unsafe { mi_arenas_page_regular_alloc(owner, MI_SMALL_PAGE_SLICE_COUNT, block_size) }
     } else if block_size_raw <= MI_MEDIUM_MAX_OBJ_SIZE {
-        // SAFETY: the outer contract establishes the regular allocation epoch.
         unsafe { mi_arenas_page_regular_alloc(owner, MI_MEDIUM_PAGE_SLICE_COUNT, block_size) }
     } else if MI_ENABLE_LARGE_PAGES != 0 && block_size_raw <= MI_LARGE_MAX_OBJ_SIZE {
-        // SAFETY: the outer contract establishes the regular allocation epoch.
         unsafe { mi_arenas_page_regular_alloc(owner, MI_LARGE_PAGE_SLICE_COUNT, block_size) }
     } else {
         // SAFETY: the outer contract keeps the thread heap, registry/backing,
@@ -2091,10 +2089,10 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
     // SAFETY: the raw contract establishes abandoned state for this registered
     // page while its thread-free ownership claim remains held.
-    let abandoned = unsafe { crate::core_types::assume_abandoned_page(page_ptr) };
+    let abandoned = unsafe { crate::allocator::raw_bridge::assume_abandoned_page(page_ptr) };
     // SAFETY: the raw contract establishes zero used blocks and detached queue
     // state for this claimed abandoned page.
-    let all_free = unsafe { crate::core_types::assume_all_free_abandoned(abandoned) };
+    let all_free = unsafe { crate::allocator::raw_bridge::assume_all_free_abandoned(abandoned) };
     let current_theap = if current_theapx.is_null() {
         None
     } else {
@@ -2363,7 +2361,7 @@ pub(crate) unsafe fn _mi_arenas_page_abandon(
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
     // SAFETY: the raw abandon boundary above establishes live abandoned page
     // metadata with the remote-free ownership claim still held.
-    let page = unsafe { crate::core_types::assume_owned_abandoned_page(page_ptr) };
+    let page = unsafe { crate::allocator::raw_bridge::assume_owned_abandoned_page(page_ptr) };
     // SAFETY: the caller supplies the non-null live current-thread local heap
     // matching this page's retained association and abandoned stats owner.
     let current_theap = unsafe {
@@ -2448,7 +2446,7 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
             }
             crate::core_types::PageAbandonOutcome::Destroyed => {
                 Ok(crate::core_types::AbandonedDisposition::Destroyed(
-                    crate::core_types::assume_destroyed_after_arena_free(page_ptr),
+                    crate::allocator::raw_bridge::assume_destroyed_after_arena_free(page_ptr),
                 ))
             }
         }

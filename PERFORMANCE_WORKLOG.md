@@ -821,7 +821,6 @@ Validation passed after the final implementation:
 - `python3 scripts/check-strict-types.py`
 - `bash scripts/check-layout.sh`
 - `python3 scripts/check-ffi-boundary.py`
-- `python3 scripts/check-safe-boundary.py`
 - `bash scripts/check-raw-facade.sh`
 - `python3 scripts/check-release-integrity.py`
 

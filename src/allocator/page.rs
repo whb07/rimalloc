@@ -183,7 +183,7 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
         // geometry, backing, and remote-free state. Consume Active through the complete abandon or
         // terminal-release transition, then do not access the page again in this branch.
         unsafe {
-            let active = crate::core_types::assume_active_page(
+            let active = crate::allocator::raw_bridge::assume_active_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
             let _ = _mi_page_abandon_internal(
@@ -202,7 +202,7 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
         unsafe {
             let full_queue = ThreadHeapPtr::new_unchecked(theap)
                 .page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
-            let active = crate::core_types::assume_active_page(
+            let active = crate::allocator::raw_bridge::assume_active_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
             let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(
@@ -335,8 +335,9 @@ unsafe fn _mi_page_free_after_remove<S>(
 
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     unsafe {
-        let active =
-            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
+        let active = crate::allocator::raw_bridge::assume_active_page(
+            crate::core_types::PagePtr::new_unchecked(page),
+        );
         let Ok(all_free) = active.try_mark_all_free() else {
             crate::internal::mi_assert_internal!(false);
             return;
@@ -487,7 +488,8 @@ unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLo
                 // SAFETY: the live current-thread normal-queue front has the required nonzero
                 // retirement countdown, and the caller excludes relink, conflicting mutation, and
                 // teardown.
-                let retired = unsafe { crate::core_types::assume_retired_page(page_ptr) };
+                let retired =
+                    unsafe { crate::allocator::raw_bridge::assume_retired_page(page_ptr) };
                 // SAFETY: the caller keeps the retired page metadata live and stable while its
                 // used-count predicate is snapshotted before any countdown or state transition.
                 let all_free = unsafe { mi_page_all_free(page) };
@@ -1659,7 +1661,7 @@ unsafe fn mi_page_queue_find_free_ex_active(
                 // its sole capability through terminal removal and release before replacing the
                 // raw candidate identity; do not access the released candidate afterward.
                 unsafe {
-                    let active = crate::core_types::assume_active_page(
+                    let active = crate::allocator::raw_bridge::assume_active_page(
                         crate::core_types::PagePtr::new_unchecked(page_candidate),
                     );
                     let all_free = active.try_mark_all_free().unwrap_unchecked();
@@ -1778,8 +1780,9 @@ unsafe fn mi_page_queue_find_free_ex_active(
     // exact compatible normal queue. Consume it into the queued witness, move that witness to the
     // front, then clear retirement only through the returned queued page identity.
     let queued = unsafe {
-        let active =
-            crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
+        let active = crate::allocator::raw_bridge::assume_active_page(
+            crate::core_types::PagePtr::new_unchecked(page),
+        );
         let queued = crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
             active, queue,
         );
@@ -1820,7 +1823,7 @@ unsafe fn mi_find_free_page_typed(
     if let Some(page) = unsafe { queue.ptr().first() } {
         // SAFETY: the caller proves the front page is live and current-thread owned with stable
         // local/available free lists; construct and consume the Local capability exactly once.
-        let local = unsafe { crate::core_types::assume_local_page(page) };
+        let local = unsafe { crate::allocator::raw_bridge::assume_local_page(page) };
         // SAFETY: the same exclusive page-local epoch permits the one availability refinement,
         // including its ordered local-to-available transfer when required.
         if let Ok(available) = unsafe { local.try_ensure_available() } {

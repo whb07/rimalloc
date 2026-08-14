@@ -159,8 +159,8 @@ allocation through accessors or `into_parts`.
 Fallible constructors use established Rust names: `new`, `zeroed`, and
 `with_*` return `Result` when allocation can fail; raw-code conversion is
 available through `from_raw` and `TryFrom`. Public fallible methods document
-`# Errors` and `# Panics`, and `scripts/check-safe-docs.py` verifies that
-coverage for public safe `Result` methods.
+`# Errors` and `# Panics`; compiler and Clippy lints enforce documentation for
+public safe `Result` methods.
 
 ## Tier U Unsafe Rust Callbacks
 
@@ -200,7 +200,7 @@ scripts/check-api-inventory.py
 scripts/check-raw-facade.sh
 ```
 
-Current raw users and raw module classifications are tracked in
+Migration guidance for removed implementation-module paths is in
 `docs/raw-facade-migration.md`.
 
 ### Raw ABI Type Inventory

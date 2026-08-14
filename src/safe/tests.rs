@@ -5,11 +5,11 @@ use core::fmt::{self, Write};
 use core::mem::MaybeUninit;
 use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::process::Command;
 use std::sync::Mutex;
 
 use crate::unsafe_callbacks::{DeferredFreeCallbackGuard, ErrorCallbackGuard};
 
-static CALLBACK_TEST_LOCK: Mutex<()> = Mutex::new(());
 static FAILURE_INJECTION_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 struct ShowErrorsGuard(c_long);
@@ -774,8 +774,8 @@ impl DeferredFreeCallbackRestoreGuard {
     fn new() -> Self {
         Self {
             // SAFETY: tests snapshot the current
-            // process-global callback state while holding the callback
-            // serialization lock.
+            // process-global callback state inside the isolated callback test
+            // process.
             snapshot: unsafe { crate::allocator::page::registered_deferred_free_callback() },
         }
     }
@@ -784,7 +784,7 @@ impl DeferredFreeCallbackRestoreGuard {
 impl Drop for DeferredFreeCallbackRestoreGuard {
     fn drop(&mut self) {
         // SAFETY: tests restore the exact callback
-        // snapshot captured under the callback serialization lock.
+        // snapshot captured inside the isolated callback test process.
         unsafe { crate::allocator::page::restore_deferred_free_callback(self.snapshot) };
     }
 }
@@ -814,10 +814,30 @@ fn trigger_deferred_free_callback(theap: *mut crate::types::mi_theap_t, force: b
     unsafe { crate::allocator::page::_mi_deferred_free(theap, force) };
 }
 
+const CALLBACK_TEST_CHILD: &str = "MIMALLOC_CALLBACK_TEST_CHILD";
+
+fn enter_isolated_callback_test(name: &str) -> bool {
+    if std::env::var_os(CALLBACK_TEST_CHILD).as_deref() == Some(std::ffi::OsStr::new(name)) {
+        return true;
+    }
+
+    let full_name = format!("safe::tests::{name}");
+    let status = Command::new(std::env::current_exe().expect("current unit-test executable"))
+        .args(["--exact", &full_name])
+        .env(CALLBACK_TEST_CHILD, name)
+        .status()
+        .expect("launch isolated callback test process");
+    assert!(status.success(), "isolated callback test failed: {name}");
+    false
+}
+
 #[test]
-#[ignore = "process-global callback registration must run serialized"]
 fn error_callback_guard_invokes_and_restores_previous_callback_quietly() {
-    let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
+    if !enter_isolated_callback_test(
+        "error_callback_guard_invokes_and_restores_previous_callback_quietly",
+    ) {
+        return;
+    }
     let _restore = ErrorCallbackRestoreGuard::new();
     let _quiet_expected_errors = ShowErrorsGuard::disabled();
     PREVIOUS_ERROR_CALLBACK_HITS.store(0, Ordering::SeqCst);
@@ -828,9 +848,8 @@ fn error_callback_guard_invokes_and_restores_previous_callback_quietly() {
         let mut callback = |_err: i32| {
             hits += 1;
         };
-        // SAFETY: this test holds the process-wide callback test lock,
-        // triggers the callback synchronously, and restores the original
-        // registration before releasing the lock.
+        // SAFETY: this test runs in an isolated process, triggers the callback
+        // synchronously, and restores the original registration before exit.
         let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
         trigger_error_callback();
     }
@@ -841,9 +860,11 @@ fn error_callback_guard_invokes_and_restores_previous_callback_quietly() {
 }
 
 #[test]
-#[ignore = "process-global callback registration must run serialized"]
 fn nested_error_callback_guards_restore_lifo_previous_callbacks() {
-    let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
+    if !enter_isolated_callback_test("nested_error_callback_guards_restore_lifo_previous_callbacks")
+    {
+        return;
+    }
     let _restore = ErrorCallbackRestoreGuard::new();
     let _quiet_expected_errors = ShowErrorsGuard::disabled();
     PREVIOUS_ERROR_CALLBACK_HITS.store(0, Ordering::SeqCst);
@@ -858,9 +879,9 @@ fn nested_error_callback_guards_restore_lifo_previous_callbacks() {
         inner_hits.fetch_add(1, Ordering::SeqCst);
     };
 
-    // SAFETY: this test serializes process-global callback registration,
-    // invokes callbacks synchronously, and drops nested guards in LIFO
-    // order before the borrowed callbacks go out of scope.
+    // SAFETY: this test runs in an isolated process, invokes callbacks
+    // synchronously, and drops nested guards in LIFO order before the borrowed
+    // callbacks go out of scope.
     let outer_guard = unsafe { ErrorCallbackGuard::new(&mut outer_callback) };
     trigger_error_callback();
 
@@ -880,9 +901,10 @@ fn nested_error_callback_guards_restore_lifo_previous_callbacks() {
 }
 
 #[test]
-#[ignore = "process-global callback registration must run serialized"]
 fn panicking_error_callback_is_caught_before_c_abi_return() {
-    let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
+    if !enter_isolated_callback_test("panicking_error_callback_is_caught_before_c_abi_return") {
+        return;
+    }
     let _restore = ErrorCallbackRestoreGuard::new();
     let _quiet_expected_errors = ShowErrorsGuard::disabled();
     let old_hook = std::panic::take_hook();
@@ -892,9 +914,8 @@ fn panicking_error_callback_is_caught_before_c_abi_return() {
         let mut callback = |_err: i32| {
             panic!("callback panic should be caught");
         };
-        // SAFETY: this test holds the process-wide callback test lock,
-        // triggers the callback synchronously, and restores the original
-        // registration before releasing the lock.
+        // SAFETY: this test runs in an isolated process, triggers the callback
+        // synchronously, and restores the original registration before exit.
         let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
         trigger_error_callback();
     }
@@ -903,34 +924,37 @@ fn panicking_error_callback_is_caught_before_c_abi_return() {
 }
 
 #[test]
-#[ignore = "process-global callback registration must run serialized"]
 fn deferred_free_callback_guard_registers_and_restores() {
-    let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
+    if !enter_isolated_callback_test("deferred_free_callback_guard_registers_and_restores") {
+        return;
+    }
     let restore = DeferredFreeCallbackRestoreGuard::new();
     {
         let mut callback = |_force: bool, _heartbeat: u64| {};
-        // SAFETY: this test holds the process-wide callback test lock and
-        // only observes registration state without concurrent allocator
-        // callback entry.
+        // SAFETY: this test runs in an isolated process and only observes
+        // registration state without concurrent allocator callback entry.
         let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
         let current = unsafe { crate::allocator::page::registered_deferred_free_callback() };
         assert!(current.0.is_some());
     }
-    // SAFETY: the callback test lock is still held
-    // and the guard has restored the previous registration.
+    // SAFETY: the callback test remains isolated and the guard has restored the
+    // previous registration.
     let restored = unsafe { crate::allocator::page::registered_deferred_free_callback() };
     assert_eq!(callback_addr(restored.0), callback_addr(restore.snapshot.0));
     assert_eq!(restored.1, restore.snapshot.1);
 }
 
 #[test]
-#[ignore = "process-global callback registration must run serialized"]
 fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
-    let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
+    if !enter_isolated_callback_test(
+        "nested_deferred_free_callback_guards_restore_lifo_previous_callbacks",
+    ) {
+        return;
+    }
     let _restore = DeferredFreeCallbackRestoreGuard::new();
     PREVIOUS_DEFERRED_CALLBACK_HITS.store(0, Ordering::SeqCst);
-    // SAFETY: this test holds the callback
-    // serialization lock and installs a test-only previous callback.
+    // SAFETY: this test runs in an isolated process and installs a test-only
+    // previous callback that is restored before the process exits.
     unsafe {
         crate::allocator::page::mi_register_deferred_free(
             Some(previous_deferred_free_callback),
@@ -947,9 +971,9 @@ fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
         inner_hits.fetch_add(1, Ordering::SeqCst);
     };
 
-    // SAFETY: this test serializes process-global callback registration,
-    // invokes callbacks synchronously on a local thread-heap fixture, and drops
-    // nested guards in LIFO order before borrowed callbacks go out of scope.
+    // SAFETY: this test runs in an isolated process, invokes callbacks
+    // synchronously on a local thread-heap fixture, and drops nested guards in
+    // LIFO order before borrowed callbacks go out of scope.
     with_test_thread_heap(|theap| {
         let outer_guard = unsafe { DeferredFreeCallbackGuard::new(&mut outer_callback) };
         trigger_deferred_free_callback(theap, false);
@@ -971,9 +995,12 @@ fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
 }
 
 #[test]
-#[ignore = "process-global callback registration must run serialized"]
 fn error_callback_allows_allocator_reentry_without_recursive_error() {
-    let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
+    if !enter_isolated_callback_test(
+        "error_callback_allows_allocator_reentry_without_recursive_error",
+    ) {
+        return;
+    }
     let _restore = ErrorCallbackRestoreGuard::new();
     let _quiet_expected_errors = ShowErrorsGuard::disabled();
     let hits = AtomicUsize::new(0);
@@ -991,9 +1018,9 @@ fn error_callback_allows_allocator_reentry_without_recursive_error() {
         }
     };
 
-    // SAFETY: this test holds the process-wide callback lock, invokes the
-    // callback synchronously, and records any callback allocation failure
-    // instead of panicking inside the panic-catching trampoline.
+    // SAFETY: this test runs in an isolated process, invokes the callback
+    // synchronously, and records any callback allocation failure instead of
+    // panicking inside the panic-catching trampoline.
     let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
     trigger_error_callback();
 
@@ -1003,9 +1030,12 @@ fn error_callback_allows_allocator_reentry_without_recursive_error() {
 }
 
 #[test]
-#[ignore = "process-global callback registration must run serialized"]
 fn deferred_free_callback_allows_allocator_reentry_and_suppresses_recursive_entry() {
-    let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
+    if !enter_isolated_callback_test(
+        "deferred_free_callback_allows_allocator_reentry_and_suppresses_recursive_entry",
+    ) {
+        return;
+    }
     let _restore = DeferredFreeCallbackRestoreGuard::new();
     let hits = AtomicUsize::new(0);
     let reentry_ok = AtomicBool::new(false);
@@ -1028,11 +1058,10 @@ fn deferred_free_callback_allows_allocator_reentry_and_suppresses_recursive_entr
             }
         };
 
-        // SAFETY: this test holds the process-wide callback lock and
-        // invokes the deferred-free callback synchronously on a local
-        // thread-heap fixture. The recursive trigger exercises the
-        // allocator's per-thread reentry suppression before the borrowed
-        // callback can be entered again.
+        // SAFETY: this test runs in an isolated process and invokes the
+        // deferred-free callback synchronously on a local thread-heap fixture.
+        // The recursive trigger exercises the allocator's per-thread reentry
+        // suppression before the borrowed callback can be entered again.
         let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
         trigger_deferred_free_callback(theap, true);
     });
@@ -1043,9 +1072,12 @@ fn deferred_free_callback_allows_allocator_reentry_and_suppresses_recursive_entr
 }
 
 #[test]
-#[ignore = "process-global callback registration must run serialized"]
 fn panicking_deferred_free_callback_is_caught_before_c_abi_return() {
-    let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
+    if !enter_isolated_callback_test(
+        "panicking_deferred_free_callback_is_caught_before_c_abi_return",
+    ) {
+        return;
+    }
     let _restore = DeferredFreeCallbackRestoreGuard::new();
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
@@ -1054,9 +1086,8 @@ fn panicking_deferred_free_callback_is_caught_before_c_abi_return() {
         let mut callback = |_force: bool, _heartbeat: u64| {
             panic!("deferred-free callback panic should be caught");
         };
-        // SAFETY: this test holds the process-wide callback test lock,
-        // triggers the callback synchronously, and restores the original
-        // registration before releasing the lock.
+        // SAFETY: this test runs in an isolated process, triggers the callback
+        // synchronously, and restores the original registration before exit.
         let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
         with_test_thread_heap(|theap| trigger_deferred_free_callback(theap, false));
     }

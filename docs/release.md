@@ -324,11 +324,7 @@ Before publishing or tagging a release:
 23. Run `scripts/check-layout.sh` for ABI/layout audits.
 24. Run boundary checks: `scripts/check-strict-types.py`,
    `scripts/check-safe-boundary.py`, `scripts/check-layer-boundaries.py`,
-   `scripts/check-ffi-boundary.py`, and
-   `scripts/check-unsafe-proofs.py --report`. Unsafe lexical counts and
-   proof-marker findings are advisory and may be recorded for review; use
-   `scripts/check-unsafe-proofs.py --deny` only after its checked-in source
-   backlog is empty.
+   and `scripts/check-ffi-boundary.py`.
 25. Run `scripts/check-release-thread-stress.py`.
 26. Run `scripts/check-safety-stress.sh`.
 27. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri

@@ -44,7 +44,7 @@ ASSEMBLY_SYMBOLS = {
     "mi_free.asm",
     "mi_route_free.asm",
     "mi_free_block_local.asm",
-    "_mi_theap_malloc_zero_ex.asm",
+    "_mi_theap_malloc_zero.asm",
 }
 
 

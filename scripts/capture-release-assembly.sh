@@ -125,7 +125,7 @@ capture_symbol mi_free
 capture_symbol mi_route_free
 capture_symbol mi_route_free mi_free_block_local \
   'mi_free_block_local is inlined into this emitted caller'
-capture_symbol _mi_theap_malloc_zero_ex_typed _mi_theap_malloc_zero_ex \
-  '_mi_theap_malloc_zero_ex is inlined; this is its emitted typed implementation'
+capture_symbol _mi_theap_malloc_zero _mi_theap_malloc_zero \
+  '_mi_theap_malloc_zero_ex and its typed implementation are inlined into this emitted zero-allocation dispatch owner'
 
 printf 'manifest -> %s\n' "$out_dir/manifest.txt"

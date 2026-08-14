@@ -14,14 +14,12 @@ use super::{
 
 #[inline]
 pub(super) fn mi_bitmap_chunkmap_set(bitmap: &mut mi_bitmap_t, chunk_idx: usize) {
-    // SAFETY: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
     mi_bchunk_set(&bitmap.chunkmap, chunk_idx, None);
 }
 
 #[inline(never)]
 pub(super) fn mi_bitmap_chunkmap_try_clear(bitmap: &mut mi_bitmap_t, chunk_idx: usize) -> bool {
-    // SAFETY: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
     if !mi_bchunk_all_are_clear_relaxed(&bitmap.chunks[chunk_idx]) {
         return false;
@@ -40,7 +38,6 @@ pub(super) fn mi_bbitmap_set_chunk_bin(
     chunk_idx: usize,
     bin: mi_chunkbin_t,
 ) {
-    // SAFETY: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     let mut ibin = MI_CBIN_SMALL;
     while (ibin as i32) < (MI_CBIN_NONE as i32) {
@@ -75,7 +72,6 @@ pub(super) fn mi_bbitmap_chunkmap_set(
     chunk_idx: usize,
     check_all_set: bool,
 ) {
-    // SAFETY: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     if check_all_set && mi_bchunk_all_are_set_relaxed(&bbitmap.chunks[chunk_idx]) {
         mi_bbitmap_set_chunk_bin(bbitmap, chunk_idx, MI_CBIN_NONE);
@@ -86,7 +82,6 @@ pub(super) fn mi_bbitmap_chunkmap_set(
 
 #[inline(never)]
 pub(super) fn mi_bbitmap_chunkmap_try_clear(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize) -> bool {
-    // SAFETY: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     if !mi_bchunk_all_are_clear_relaxed(&bbitmap.chunks[chunk_idx]) {
         return false;
@@ -136,7 +131,6 @@ pub unsafe fn mi_bbitmap_debug_get_bin(
     chunkmap_bins: *const mi_bchunk_t,
     chunk_idx: usize,
 ) -> mi_chunkbin_t {
-    // SAFETY: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let chunkmap_bins = core::slice::from_raw_parts(chunkmap_bins, MI_CBIN_COUNT as usize - 1);
         let mut ibin = MI_CBIN_SMALL;

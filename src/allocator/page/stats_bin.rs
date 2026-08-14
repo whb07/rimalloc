@@ -54,7 +54,6 @@ pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
 pub(crate) unsafe fn _mi_page_stats_bin_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::StatsBin {
-    // SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
     unsafe {
         let bin = if mi_page_is_huge(page) {
             MI_BIN_HUGE
@@ -73,10 +72,8 @@ pub(crate) unsafe fn _mi_page_stats_bin_typed(
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
-// SAFETY: page metadata accessors, stats/bin helpers, and C-shaped entrypoints preserve typed counts and public ABI contracts.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_stats_bin(page: *const mi_page_t) -> usize {
-    // SAFETY: page is live page metadata; stats bin projection reads typed scalar domains without aliasing.
     unsafe {
         let bin = _mi_page_stats_bin_typed(page).as_usize();
         crate::internal::mi_assert_internal!(bin <= MI_BIN_HUGE);

@@ -19,20 +19,14 @@ impl AtomicThreadHeapRefcount {
     }
 
     pub(crate) unsafe fn store_seq_cst(self, value: usize) {
-        // SAFETY: the caller provides a valid thread
-        // heap refcount field and preserves the existing SeqCst store.
         unsafe { self.0.store(value, Ordering::SeqCst) }
     }
 
     pub(crate) unsafe fn incref_acq_rel(self) -> usize {
-        // SAFETY: the caller provides a valid thread
-        // heap refcount field and preserves the existing AcqRel increment.
         unsafe { self.0.fetch_add(1, Ordering::AcqRel) }
     }
 
     pub(crate) unsafe fn decref_acq_rel(self) -> usize {
-        // SAFETY: the caller provides a valid thread
-        // heap refcount field and preserves the existing AcqRel decrement.
         unsafe { self.0.fetch_sub(1, Ordering::AcqRel) }
     }
 }

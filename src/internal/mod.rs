@@ -143,7 +143,6 @@ pub type mi_submap_t = *mut *mut mi_page_t;
 
 #[cold]
 pub(crate) fn _mi_rust_assert_fail(assertion: *const c_char, fname: *const c_char, line: u32) -> ! {
-    // SAFETY: runtime assertion shims forward caller-proven C strings into the audited abort path.
     unsafe { crate::allocator::options::_mi_assert_fail(assertion, fname, line, ptr::null()) }
 }
 
@@ -240,13 +239,11 @@ pub const fn MI_UNUSED_RELEASE<T>(_x: &T) {}
 /// `x` must be valid for writes of one `T`.
 #[inline]
 pub unsafe fn _mi_memzero_var<T>(x: *mut T) {
-    // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         ptr::write_bytes(x, 0, 1);
     }
 }
 
-// SAFETY: internal declarations preserve translated C helper signatures without dereferencing pointers.
 unsafe extern "C" {
     pub fn _mi_fputs(
         out: Option<mi_output_fun>,
@@ -340,7 +337,6 @@ pub const fn _mi_clamp(sz: usize, min: usize, max: usize) -> usize {
 /// `p..p + size` must be valid for reads.
 #[inline]
 pub unsafe fn mi_mem_is_zero(p: *const c_void, size: usize) -> bool {
-    // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         let bytes = p.cast::<u8>();
         let mut i = 0;
@@ -364,7 +360,6 @@ pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectB
     let idx = crate::core_types::WordCount::from_size(size).get();
     crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
     crate::internal::mi_debug_assert!(u16::try_from(idx).is_ok());
-    // SAFETY: direct bin derivation checks page queue table bounds before unchecked construction.
     unsafe { crate::core_types::DirectBin::new_unchecked(idx as u16) }
 }
 
@@ -393,7 +388,6 @@ pub fn mi_mul_overflow(count: usize, size: usize, total: &mut usize) -> bool {
 /// `theap` must point to initialized thread-heap metadata.
 #[inline]
 pub unsafe fn _mi_theap_heap(theap: *const mi_theap_t) -> *mut mi_heap_t {
-    // SAFETY: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     unsafe {
         crate::core_types::AtomicPtrField::from_raw(ptr::addr_of!((*theap).heap).cast_mut())
             .load(crate::core_types::MemoryOrder::Acquire)
@@ -404,7 +398,6 @@ pub unsafe fn _mi_theap_heap(theap: *const mi_theap_t) -> *mut mi_heap_t {
 /// `theap` must be null or point to thread-heap metadata allocated by this allocator.
 #[inline]
 pub unsafe fn mi_theap_is_initialized(theap: *const mi_theap_t) -> bool {
-    // SAFETY: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     !theap.is_null() && !unsafe { _mi_theap_heap(theap) }.is_null()
 }
 
@@ -417,7 +410,6 @@ pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
     theap: crate::core_types::ThreadHeapLocal,
     padded: crate::core_types::PaddedSize,
 ) -> Option<crate::core_types::AvailablePage> {
-    // SAFETY: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     unsafe {
         let bin = mi_direct_bin_from_padded(padded);
         theap.direct_available_page(bin)
@@ -432,7 +424,6 @@ pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
 /// address below `mi_page_map_max_address`.
 #[inline]
 pub unsafe fn _mi_page_map_at(idx: crate::core_types::PageMapPrimaryIndex) -> mi_submap_t {
-    // SAFETY: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
         crate::core_types::AtomicPtrField::from_raw(_mi_page_map_base().add(idx.get()))
             .load(crate::core_types::MemoryOrder::Acquire)
@@ -477,7 +468,6 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be a pointer in the allocator's page-map domain.
 #[inline]
 pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
         let location = crate::core_types::PageMapLocation::from_ptr(p).unwrap_unchecked();
         _mi_page_map_at(location.index())
@@ -491,7 +481,6 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be a pointer in the allocator's page-map domain.
 #[inline]
 pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
         let Some(location) = crate::core_types::PageMapLocation::from_ptr(p) else {
             return ptr::null_mut();
@@ -509,7 +498,6 @@ pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be null or a pointer allocated by this allocator.
 #[inline]
 pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    // SAFETY: page-map lookup helpers convert allocator addresses through validated submap indexes.
     unsafe {
         crate::internal::mi_assert_internal!(
             p.is_null() || crate::mimalloc::mi_is_in_heap_region(p)
@@ -528,7 +516,6 @@ pub const fn mi_page_info_size() -> usize {
 }
 
 #[inline]
-// SAFETY: page owner helpers resolve heap, thread heap, and queue pointers from caller-proven metadata.
 pub(crate) unsafe fn mi_page_queue(
     theap: *const mi_theap_t,
     block_size: crate::core_types::BlockSize,
@@ -559,7 +546,6 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
     page: crate::core_types::PagePtr,
     has_aligned: bool,
 ) {
-    // SAFETY: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
         page.thread_id_cell().set_flags(
             crate::core_types::PageFlags::HAS_INTERIOR_POINTERS,
@@ -572,7 +558,6 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
 /// `page` must point to mutable abandoned-mapped page metadata owned by this allocator.
 #[inline]
 pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::PagePtr) {
-    // SAFETY: page flag and owner-id helpers use typed atomic thread-id fields for state updates.
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_is_abandoned_mapped(page.as_ptr()));
         let atomic_tid = page.thread_id_cell();
@@ -592,7 +577,6 @@ pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::Pag
 pub(crate) unsafe fn mi_page_claim_ownership(
     page: crate::core_types::AbandonedPage,
 ) -> Option<crate::core_types::OwnedAbandonedPage> {
-    // SAFETY: thread-free ownership word helpers preserve atomic head and ownership encoding invariants.
     unsafe {
         let page_ptr = page.page();
         let atomic_tf = page_ptr.thread_free_cell();
@@ -608,7 +592,6 @@ pub(crate) unsafe fn mi_page_claim_ownership(
 /// `block` and `p` must refer to the same allocated block when guarded allocation is enabled.
 #[inline]
 pub unsafe fn mi_block_ptr_is_guarded(block: *const mi_block_t, p: *const c_void) -> bool {
-    // SAFETY: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
     unsafe {
         if MI_GUARDED == 0 {
             MI_UNUSED(&block);
@@ -635,7 +618,6 @@ pub(crate) unsafe fn mi_theap_malloc_use_guarded(
     }
     #[cfg(feature = "guarded")]
     {
-        // SAFETY: thread-heap and allocation shims project typed heap metadata from caller-proven raw pointers.
         unsafe {
             let theap = theap.ptr().as_ptr();
             let size = size.get();
@@ -665,7 +647,6 @@ pub(crate) unsafe fn mi_theap_malloc_use_guarded(
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
-    // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         #[cfg(target_arch = "x86_64")]
         {
@@ -729,7 +710,6 @@ pub const fn _mi_random_shuffle(mut x: usize) -> usize {
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 unsafe fn mi_cpu_stosb_max() -> usize {
     let max: usize;
-    // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         core::arch::asm!(
             "mov {max}, qword ptr [rip + _mi_cpu_stosb_max]",
@@ -743,7 +723,6 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 #[inline]
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 unsafe fn mi_cpu_stosb_max() -> usize {
-    // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe { crate::allocator::init::_mi_cpu_stosb_max }
 }
 
@@ -766,7 +745,6 @@ pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) -> *mut
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
-    // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         #[cfg(target_arch = "x86_64")]
         {
@@ -784,7 +762,6 @@ pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
 /// helper.
 #[inline]
 pub unsafe fn _mi_memset_aligned(dst: *mut c_void, val: i32, n: usize) {
-    // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         _mi_memset(dst, val, n);
     }
@@ -794,7 +771,6 @@ pub unsafe fn _mi_memset_aligned(dst: *mut c_void, val: i32, n: usize) {
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn _mi_memzero(dst: *mut c_void, n: usize) {
-    // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         _mi_memset(dst, 0, n);
     }
@@ -805,7 +781,6 @@ pub unsafe fn _mi_memzero(dst: *mut c_void, n: usize) {
 /// helper.
 #[inline]
 pub unsafe fn _mi_memzero_aligned(dst: *mut c_void, n: usize) {
-    // SAFETY: copy, fill, and zero helpers operate on caller-proven byte ranges and architecture thresholds.
     unsafe {
         _mi_memset_aligned(dst, 0, n);
     }

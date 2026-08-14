@@ -37,11 +37,7 @@ fn padding_delta_rejects_out_of_range_values() {
 
 #[test]
 fn padding_canary_uses_typed_page_and_block() {
-    // SAFETY: dangling non-null pointers are
-    // used only as opaque canary inputs and are never dereferenced.
     let page = unsafe { PagePtr::new_unchecked(core::ptr::NonNull::dangling().as_ptr()) };
-    // SAFETY: dangling non-null pointers are
-    // used only as opaque canary inputs and are never dereferenced.
     let block = unsafe { BlockPtr::new_unchecked(core::ptr::NonNull::dangling().as_ptr()) };
     let keys = PageKeys::from_raw([1, 2]);
 
@@ -57,25 +53,17 @@ fn padding_ptr_reads_and_writes_stack_metadata() {
         canary: 0x1234_5678,
         delta: 4,
     };
-    // SAFETY: `raw` is stack-local writable
-    // padding metadata for exercising the typed padding pointer wrapper.
     let ptr = unsafe { PaddingPtr::new_unchecked(core::ptr::addr_of_mut!(raw)) };
 
-    // SAFETY: `ptr` points at initialized
-    // stack-local padding metadata.
     let initial = unsafe { ptr.read() };
     assert_eq!(initial.canary(), PaddingCanary(0x1234_5678));
     assert_eq!(initial.delta(), PaddingDelta(4));
 
     let updated = Padding::new(PaddingCanary(0x8765_4321), PaddingDelta(8));
-    // SAFETY: `ptr` points at writable
-    // stack-local padding metadata.
     unsafe { ptr.write(updated) };
 
     assert_eq!(raw.canary, 0x8765_4321);
     assert_eq!(raw.delta, 8);
-    // SAFETY: `ptr` still points at the same
-    // initialized stack-local padding metadata after the write.
     assert_eq!(unsafe { ptr.read() }.delta(), PaddingDelta(8));
 }
 
@@ -86,12 +74,8 @@ fn padding_ptr_can_update_delta_without_touching_canary() {
         canary: 0xfeed_beef,
         delta: 1,
     };
-    // SAFETY: `raw` is stack-local writable
-    // padding metadata for exercising the delta-only update path.
     let ptr = unsafe { PaddingPtr::new_unchecked(core::ptr::addr_of_mut!(raw)) };
 
-    // SAFETY: `ptr` points at writable
-    // stack-local padding metadata.
     unsafe { ptr.write_delta(PaddingDelta(9)) };
 
     assert_eq!(raw.canary, 0xfeed_beef);
@@ -101,15 +85,9 @@ fn padding_ptr_can_update_delta_without_touching_canary() {
 #[test]
 fn padding_ptr_from_block_usable_points_after_usable_bytes() {
     let mut bytes = [0u8; 64];
-    // SAFETY: stack-local bytes provide a
-    // non-null aligned block fixture for pointer arithmetic only.
     let block = unsafe { BlockPtr::new_unchecked(bytes.as_mut_ptr().cast()) };
-    // SAFETY: the usable size is within the
-    // stack-local byte fixture, so the derived padding pointer remains in-bounds.
     let padding = unsafe { PaddingPtr::from_block_usable(block, UsableSize::new(32)) };
 
-    // SAFETY: adding 32 stays within the
-    // stack-local byte fixture used for the expected pointer comparison.
     assert_eq!(padding.as_ptr().cast::<u8>(), unsafe {
         bytes.as_mut_ptr().add(32)
     });

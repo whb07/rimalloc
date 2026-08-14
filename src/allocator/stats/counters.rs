@@ -29,9 +29,6 @@ use super::{
 ///   internal synchronization is performed.
 /// - Unwind: must not unwind.
 pub unsafe fn mi_stats_header_init(stats: *mut mi_stats_t) {
-    // SAFETY: `stats` is caller-provided live, aligned, writable `mi_stats_t`;
-    // `(*stats).size` and `(*stats).version` are in-bounds `usize` fields
-    // properly aligned for `usize` writes with exclusive access.
     unsafe {
         (*stats).size = core::mem::size_of::<mi_stats_t>();
         (*stats).version = MI_STAT_VERSION;
@@ -49,13 +46,9 @@ pub unsafe fn mi_stats_header_init(stats: *mut mi_stats_t) {
 /// - Threading: caller must prevent concurrent access to `stats`.
 /// - Unwind: must not unwind.
 pub unsafe fn mi_stats_init(stats: *mut mi_stats_t) {
-    // SAFETY: `stats` points to valid, aligned, writable `mi_stats_t` storage
-    // for `size_of::<mi_stats_t>` bytes, live for this zeroing.
     unsafe {
         ptr::write_bytes(stats, 0, 1);
     }
-    // SAFETY: `stats` remains live and zeroed, valid for header writes to
-    // `size` and `version` with exclusive access.
     unsafe {
         mi_stats_header_init(stats);
     }
@@ -79,9 +72,6 @@ pub(super) fn mi_stats_get_bin_size_typed(bin: StatsBin) -> StatBinSize {
 
 pub(super) fn initialized_stats() -> mi_stats_t {
     let mut stats = mi_stats_t::default();
-    // SAFETY: `&mut stats` is stack-owned, live, aligned, and exclusively
-    // writable `mi_stats_t` valid for `mi_stats_init` to zero and write the
-    // header fields.
     unsafe { mi_stats_init(&mut stats) };
     stats
 }
@@ -102,10 +92,6 @@ unsafe fn mi_stat_update_mt(stat: *mut mi_stat_count_t, amount: i64) {
     if amount == 0 {
         return;
     }
-    // SAFETY: `stat` is live, aligned, atomic-compatible `mi_stat_count_t`;
-    // `addr_of_mut!` projects to `current`/`peak`/`total` without creating an
-    // exclusive reference, and the relaxed atomic helpers are valid for these
-    // fields under the MT protocol.
     unsafe {
         let current = mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).current), amount);
         mi_atomic_maxi64_relaxed(ptr::addr_of_mut!((*stat).peak), current + amount);
@@ -143,9 +129,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase_mt(
     stat: *mut mi_stat_counter_t,
     amount: usize,
 ) {
-    // SAFETY: `stat` is live, aligned, atomic-compatible `mi_stat_counter_t`;
-    // `addr_of_mut!((*stat).total)` is a valid `i64` slot for relaxed atomic
-    // add under the MT protocol.
     unsafe {
         mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).total), amount as i64);
     }
@@ -165,8 +148,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
     stat: *mut mi_stat_counter_t,
     amount: usize,
 ) {
-    // SAFETY: `stat` is caller-provided live, aligned, exclusively writable
-    // `mi_stat_counter_t`; `(*stat).total` is valid for plain `i64` write.
     unsafe {
         (*stat).total += amount as i64;
     }
@@ -183,9 +164,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
 /// - Unwind: must not unwind.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_increase_mt(stat: *mut mi_stat_count_t, amount: usize) {
-    // SAFETY: `stat` is live, aligned, atomic-compatible count storage;
-    // `mi_stat_update_mt` performs the atomic `current`/`peak`/`total` updates
-    // under the MT protocol.
     unsafe { mi_stat_update_mt(stat, amount as i64) };
 }
 
@@ -199,9 +177,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_increase_mt(stat: *mut mi_stat_count_t
 /// - Unwind: must not unwind.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_increase(stat: *mut mi_stat_count_t, amount: usize) {
-    // SAFETY: `stat` is caller-provided live, aligned, exclusively writable
-    // local count storage; `&mut *stat` is exclusive for this non-atomic
-    // update.
     unsafe { mi_stat_update(&mut *stat, amount as i64) };
 }
 
@@ -216,8 +191,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_increase(stat: *mut mi_stat_count_t, a
 /// - Unwind: must not unwind.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_decrease_mt(stat: *mut mi_stat_count_t, amount: usize) {
-    // SAFETY: `stat` is live aligned atomic-compatible count storage; the
-    // delegated `mi_stat_update_mt` uses relaxed atomics for `current`/`peak`.
     unsafe { mi_stat_update_mt(stat, -(amount as i64)) };
 }
 
@@ -231,7 +204,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_decrease_mt(stat: *mut mi_stat_count_t
 /// - Unwind: must not unwind.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_decrease(stat: *mut mi_stat_count_t, amount: usize) {
-    // SAFETY: `stat` is caller-provided live aligned exclusive count storage.
     unsafe { mi_stat_update(&mut *stat, -(amount as i64)) };
 }
 
@@ -247,8 +219,6 @@ unsafe fn mi_stat_adjust_mt(stat: *mut mi_stat_count_t, amount: i64) {
     if amount == 0 {
         return;
     }
-    // SAFETY: `stat` is live, aligned, atomic-compatible `current`/`total`
-    // fields; raw projection avoids exclusive reference under MT sharing.
     unsafe {
         mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).current), amount);
         mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).total), amount);
@@ -278,9 +248,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase_mt(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
-    // SAFETY: `stat` is live, aligned, atomic-compatible `current`/`total`
-    // storage under the MT protocol; `mi_stat_adjust_mt` performs the two
-    // relaxed atomic adds without peak tracking.
     unsafe { mi_stat_adjust_mt(stat, amount as i64) };
 }
 
@@ -297,9 +264,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
-    // SAFETY: `stat` is caller-provided live, aligned, exclusively writable
-    // local count storage; `&mut *stat` gives exclusive access for the
-    // non-atomic `current`/`total` adjustment without peak tracking.
     unsafe { mi_stat_adjust(&mut *stat, amount as i64) };
 }
 
@@ -317,8 +281,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease_mt(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
-    // SAFETY: `stat` is live, aligned, atomic-compatible storage; the
-    // delegated adjust helper uses relaxed atomics for `current`/`total`.
     unsafe { mi_stat_adjust_mt(stat, -(amount as i64)) };
 }
 
@@ -335,8 +297,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
-    // SAFETY: `stat` is caller-provided live aligned exclusive local storage;
-    // `&mut *stat` provides exclusive access for non-atomic adjust.
     unsafe { mi_stat_adjust(&mut *stat, -(amount as i64)) };
 }
 
@@ -357,10 +317,6 @@ pub(super) unsafe fn mi_stat_count_add_mt(stat: *mut mi_stat_count_t, src: *cons
     if ptr::eq(stat.cast_const(), src) {
         return;
     }
-    // SAFETY: `stat` and `src` are live, aligned, atomic-compatible per the
-    // contract; each relaxed `total`/`current`/`peak` load is race-free under
-    // the atomic stats protocol, and destination updates use relaxed
-    // atomics on distinct `stat` fields.
     unsafe {
         let total = mi_atomic_loadi64_explicit(
             ptr::addr_of!((*src).total),
@@ -395,9 +351,6 @@ unsafe fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_st
     if ptr::eq(stat.cast_const(), src) {
         return;
     }
-    // SAFETY: both counters are live, aligned, atomic-compatible per caller;
-    // relaxed `total` load and conditional `total` add use the same atomic
-    // stats protocol as concurrent counter updates.
     unsafe {
         let total = mi_atomic_loadi64_explicit(
             ptr::addr_of!((*src).total),
@@ -427,9 +380,6 @@ unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t
     if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {
         return;
     }
-    // SAFETY: `stats` and `src` are live, non-null, distinct, aligned
-    // `mi_stats_t` instances with atomic-compatible counter fields per the
-    // contract; null and self-add have been excluded.
     unsafe { mi_stats_add_nonnull(stats, src) };
 }
 
@@ -448,9 +398,6 @@ unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t
 unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     macro_rules! MI_STAT_COUNT {
         ($field:ident) => {
-            // SAFETY: `stats`/`src` are live aligned `mi_stats_t` with
-            // atomic-compatible count fields; this projects to the
-            // corresponding `current`/`peak`/`total` triple for atomic add.
             unsafe {
                 mi_stat_count_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -461,9 +408,6 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     }
     macro_rules! MI_STAT_COUNTER {
         ($field:ident) => {
-            // SAFETY: `stats`/`src` are live aligned `mi_stats_t` with
-            // atomic-compatible counter fields; projection to `total` is
-            // valid for relaxed atomic load/add.
             unsafe {
                 mi_stat_counter_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -511,23 +455,12 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     MI_STAT_COUNTER!(heaps_delete_wait);
 
     if MI_STAT > 1 {
-        // SAFETY: `stats.malloc_bins` and `src.malloc_bins` are in-bounds
-        // fixed arrays of `mi_stat_count_t` within live `mi_stats_t`; raw
-        // `addr_of_mut!`/`addr_of!` plus cast yields valid atomic-compatible
-        // count storage for each bin entry.
         let stats_malloc_bins =
             unsafe { ptr::addr_of_mut!((*stats).malloc_bins).cast::<mi_stat_count_t>() };
-        // SAFETY: `src.malloc_bins` is the corresponding source bin array,
-        // live and aligned, valid for pointer arithmetic within its bounds.
         let src_malloc_bins =
             unsafe { ptr::addr_of!((*src).malloc_bins).cast::<mi_stat_count_t>() };
         for i in 0..=MI_BIN_HUGE {
-            // SAFETY: `i` is `0..=MI_BIN_HUGE` so `i as u16` is a valid
-            // `StatsBin`; `new_unchecked` is sound for this bounded range.
             let bin = unsafe { StatsBin::new_unchecked(i as u16) };
-            // SAFETY: `bin` is within both fixed-size malloc bin arrays and
-            // the enclosing `stats`/`src` `mi_stats_t` remain live with
-            // atomic-compatible counters.
             unsafe {
                 mi_stat_count_add_mt(
                     stats_malloc_bins.add(bin.as_usize()),
@@ -536,18 +469,11 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
             };
         }
     }
-    // SAFETY: `stats.page_bins` and `src.page_bins` are valid atomic-compatible
-    // `mi_stat_count_t` arrays within live `mi_stats_t` values.
     let stats_page_bins =
         unsafe { ptr::addr_of_mut!((*stats).page_bins).cast::<mi_stat_count_t>() };
-    // SAFETY: source page bin array is live, aligned, and in-bounds for
-    // `MI_BIN_HUGE+1` entries.
     let src_page_bins = unsafe { ptr::addr_of!((*src).page_bins).cast::<mi_stat_count_t>() };
     for i in 0..=MI_BIN_HUGE {
-        // SAFETY: `i` bounded by `MI_BIN_HUGE`, valid `StatsBin` domain.
         let bin = unsafe { StatsBin::new_unchecked(i as u16) };
-        // SAFETY: `bin` indexes both destination and source page bin arrays
-        // which are within live `mi_stats_t` with atomic counters.
         unsafe {
             mi_stat_count_add_mt(
                 stats_page_bins.add(bin.as_usize()),
@@ -567,8 +493,6 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
 /// - Threading: counters either exclusive or atomic protocol.
 /// - Unwind: must not unwind.
 pub(super) unsafe fn mi_stats_add_into(to: *mut mi_stats_t, from: *const mi_stats_t) {
-    // SAFETY: `to`/`from` are live aligned `mi_stats_t` with atomic-compatible
-    // counters per caller; `mi_stats_add` handles null/self checks.
     unsafe { mi_stats_add(to, from) };
 }
 
@@ -589,24 +513,16 @@ pub(super) unsafe fn mi_stats_copy(
     if stats_to.is_null() {
         return false;
     }
-    // SAFETY: `stats_to` is caller-provided live aligned storage; reading
-    // `size`/`version` is valid for aligned `usize` fields.
     let (to_size, to_version) = unsafe { ((*stats_to).size, (*stats_to).version) };
     if to_size != size_of::<mi_stats_t>() || to_version != MI_STAT_VERSION || stats_from.is_null() {
         return false;
     }
-    // SAFETY: `stats_from` is non-null per check, live aligned `mi_stats_t`;
-    // `size` is immutable after publication and read is valid.
     let from_size = unsafe { (*stats_from).size };
     if from_size != to_size {
         return false;
     }
 
-    // SAFETY: source is live aligned initialized stats; snapshot performs
-    // atomic loads per the atomic-or-exclusive contract.
     let snapshot = unsafe { mi_stats_snapshot_atomic(stats_from) };
-    // SAFETY: `stats_to` is exclusive writable `mi_stats_t` per contract;
-    // `ptr::write` copies the initialized snapshot value without dropping old.
     unsafe { ptr::write(stats_to, snapshot) };
     true
 }
@@ -620,25 +536,18 @@ pub(super) unsafe fn mi_stats_copy(
 /// - Threading: counters either exclusive or atomic protocol during snapshot.
 /// - Unwind: must not unwind.
 pub(super) unsafe fn mi_stats_snapshot_atomic(stats_from: *const mi_stats_t) -> mi_stats_t {
-    // SAFETY: source header `size`/`version` are immutable after publication
-    // and `stats_from` remains live per contract.
     let (from_size, from_version) = unsafe { ((*stats_from).size, (*stats_from).version) };
     let mut snapshot = initialized_stats();
     snapshot.size = from_size;
     snapshot.version = from_version;
     macro_rules! MI_STAT_COUNT {
         ($field:ident) => {
-            // SAFETY: `stats_from.$field` is live, aligned, atomic-compatible
-            // count storage per contract; snapshot destination is fresh
-            // exclusive stack storage.
             snapshot.$field =
                 unsafe { mi_stat_count_snapshot(ptr::addr_of!((*stats_from).$field)) };
         };
     }
     macro_rules! MI_STAT_COUNTER {
         ($field:ident) => {
-            // SAFETY: `stats_from.$field` is live aligned atomic-compatible
-            // counter storage; value is written to fresh exclusive snapshot.
             snapshot.$field =
                 unsafe { mi_stat_counter_snapshot(ptr::addr_of!((*stats_from).$field)) };
         };
@@ -682,8 +591,6 @@ pub(super) unsafe fn mi_stats_snapshot_atomic(stats_from: *const mi_stats_t) -> 
     MI_STAT_COUNTER!(heaps_delete_wait);
 
     for i in 0..snapshot._stat_reserved.len() {
-        // SAFETY: `i` is in-bounds for both `snapshot` and source
-        // `_stat_reserved` fixed arrays; source remains live aligned.
         snapshot._stat_reserved[i] = unsafe {
             mi_stat_count_snapshot(
                 ptr::addr_of!((*stats_from)._stat_reserved)
@@ -693,8 +600,6 @@ pub(super) unsafe fn mi_stats_snapshot_atomic(stats_from: *const mi_stats_t) -> 
         };
     }
     for i in 0..snapshot._stat_counter_reserved.len() {
-        // SAFETY: `i` in-bounds for `_stat_counter_reserved` arrays; source
-        // remains live aligned atomic-compatible.
         snapshot._stat_counter_reserved[i] = unsafe {
             mi_stat_counter_snapshot(
                 ptr::addr_of!((*stats_from)._stat_counter_reserved)
@@ -704,8 +609,6 @@ pub(super) unsafe fn mi_stats_snapshot_atomic(stats_from: *const mi_stats_t) -> 
         };
     }
     for i in 0..=MI_BIN_HUGE {
-        // SAFETY: `i` in `0..=MI_BIN_HUGE` is in-bounds for both malloc/page
-        // bin fixed arrays; source remains live.
         unsafe {
             snapshot.malloc_bins[i] = mi_stat_count_snapshot(
                 ptr::addr_of!((*stats_from).malloc_bins)
@@ -720,8 +623,6 @@ pub(super) unsafe fn mi_stats_snapshot_atomic(stats_from: *const mi_stats_t) -> 
         }
     }
     for i in 0..MI_CHUNKBIN_COUNT {
-        // SAFETY: `i` in `0..MI_CHUNKBIN_COUNT` is in-bounds for chunk bin
-        // array; source remains live.
         snapshot.chunk_bins[i] = unsafe {
             mi_stat_count_snapshot(
                 ptr::addr_of!((*stats_from).chunk_bins)
@@ -743,8 +644,6 @@ pub(super) unsafe fn mi_stats_snapshot_atomic(stats_from: *const mi_stats_t) -> 
 /// - Threading: either exclusive or atomic protocol for concurrent access.
 /// - Unwind: must not unwind.
 unsafe fn mi_stat_count_snapshot(src: *const mi_stat_count_t) -> mi_stat_count_t {
-    // SAFETY: `src` is live aligned atomic-compatible count storage per
-    // contract; each field is loaded with relaxed atomics.
     unsafe {
         mi_stat_count_t {
             total: mi_atomic_loadi64_explicit(
@@ -774,8 +673,6 @@ unsafe fn mi_stat_count_snapshot(src: *const mi_stat_count_t) -> mi_stat_count_t
 unsafe fn mi_stat_counter_snapshot(src: *const mi_stat_counter_t) -> mi_stat_counter_t {
     mi_stat_counter_t {
         total: unsafe {
-            // SAFETY: `src.total` is live aligned atomic-compatible `total`
-            // field per contract; relaxed load is valid.
             mi_atomic_loadi64_explicit(
                 ptr::addr_of!((*src).total),
                 mi_memory_order_e::mi_memory_order_relaxed,
@@ -937,14 +834,9 @@ pub(crate) unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: 
     if to.is_null() || from.is_null() || core::ptr::eq(to, from) {
         return;
     }
-    // SAFETY: `to` and `from` are caller-provided live, aligned, distinct
-    // `mi_stats_t` values; `to` is atomic-compatible destination and `from` is
-    // exclusively owned source for destructive merge.
     unsafe {
         mi_stats_add_nonnull(to, from);
     }
-    // SAFETY: `from` is live, aligned, writable `mi_stats_t` of
-    // `size_of::<mi_stats_t>` bytes, exclusive for this zeroing.
     unsafe {
         _mi_memzero(from.cast(), size_of::<mi_stats_t>());
     }
@@ -969,17 +861,11 @@ impl StatBinSize {
 pub(super) fn stats_bin_iter() -> impl Iterator<Item = StatsBin> {
     (0..=MI_BIN_HUGE).map(|index| {
         crate::internal::mi_debug_assert!(u16::try_from(index).is_ok());
-        // SAFETY: `index` is `0..=MI_BIN_HUGE` per the iterator range, so
-        // `index as u16` is within `StatsBin` domain (`<= MI_BIN_HUGE`);
-        // `StatsBin::new_unchecked` is sound for this bounded bin index.
         unsafe { StatsBin::new_unchecked(index as u16) }
     })
 }
 
 #[inline(always)]
 fn stats_bin_as_bin(bin: StatsBin) -> Bin {
-    // SAFETY: `bin` is a `StatsBin` (`0..=MI_BIN_HUGE`) which is within
-    // mimalloc's regular bin table (`< MI_BIN_COUNT`); `Bin::new_unchecked`
-    // is sound for this stats-to-regular bin conversion.
     unsafe { Bin::new_unchecked(bin.get()) }
 }

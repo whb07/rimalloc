@@ -764,7 +764,6 @@ unsafe fn mi_os_decommit_ex(
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool {
     // SAFETY: the caller keeps the primitive range live and its full committed
@@ -1584,7 +1583,6 @@ pub(crate) unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_
 
 /// # Safety
 /// `memid` must point to writable memory-id storage.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_alloc_aligned(
     size: usize,
@@ -1594,7 +1592,6 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned(
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
     if !memid.is_null() {
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
         unsafe {
             *memid = _mi_memid_none();
         }
@@ -1618,7 +1615,6 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned(
 
 /// # Safety
 /// `memid` must point to writable memory-id storage. `offset` must be within `size`.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     size: usize,
     alignment: usize,
@@ -1628,12 +1624,10 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
     if !memid.is_null() {
-        // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
         unsafe {
             *memid = _mi_memid_none();
         }
     }
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     let os_page_size = unsafe { _mi_os_page_size_typed() };
     if memid.is_null() || offset > size {
         return core::ptr::null_mut();
@@ -1642,7 +1636,6 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
         return core::ptr::null_mut();
     };
     if offset == 0 {
-        // SAFETY: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
         return unsafe { _mi_os_alloc_aligned(size, alignment.get(), commit, allow_large, memid) };
     }
 
@@ -1655,16 +1648,13 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     let Some(oversize) = size.checked_add(extra).filter(|total| *total < usize::MAX) else {
         return core::ptr::null_mut();
     };
-    // SAFETY: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
     let start =
         unsafe { _mi_os_alloc_aligned(oversize, alignment.get(), commit, allow_large, memid) };
     if start.is_null() {
         return core::ptr::null_mut();
     }
 
-    // SAFETY: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
     let p = unsafe { start.cast::<u8>().add(extra) }.cast::<c_void>();
-    // SAFETY: offset-aligned allocation preserves caller offset, page alignment, and memid out-pointer contracts.
     crate::internal::mi_assert!(unsafe {
         crate::internal::_mi_is_aligned(p.cast::<u8>().add(offset).cast(), alignment.get())
     });
@@ -1915,7 +1905,6 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
             let addr = ptr::without_provenance_mut::<c_void>(start + offset);
             let mut is_zero = false;
             let mut p: *mut c_void = ptr::null_mut();
-            // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
             let err = _mi_prim_alloc_huge_os_pages(
                 addr,
                 MI_HUGE_OS_PAGE_SIZE,
@@ -2104,7 +2093,6 @@ pub unsafe extern "C" fn mi_os_commit(p: *mut c_void, size: usize) {
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_alloc_aligned(
     size: usize,
@@ -2113,7 +2101,6 @@ pub unsafe extern "C" fn mi_os_alloc_aligned(
     base: *mut *mut c_void,
     full_size: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     unsafe {
         mi_os_alloc_aligned_ex(
             size,
@@ -2130,14 +2117,12 @@ pub unsafe extern "C" fn mi_os_alloc_aligned(
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_alloc(
     size: usize,
     commit: bool,
     full_size: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     unsafe {
         mi_os_alloc_aligned(
             size,
@@ -2151,7 +2136,6 @@ pub unsafe extern "C" fn mi_os_alloc(
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_alloc_aligned_allow_large(
     size: usize,
@@ -2162,7 +2146,6 @@ pub unsafe extern "C" fn mi_os_alloc_aligned_allow_large(
     base: *mut *mut c_void,
     full_size: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     unsafe {
         mi_os_alloc_aligned_ex(
             size,
@@ -2179,7 +2162,6 @@ pub unsafe extern "C" fn mi_os_alloc_aligned_allow_large(
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-// SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_free(p: *mut c_void, size: usize) {
     if p.is_null() || size == 0 {
@@ -2193,7 +2175,6 @@ pub unsafe extern "C" fn mi_os_free(p: *mut c_void, size: usize) {
         crate::core_types::Pinned(false),
     )
     .into_raw();
-    // SAFETY: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
     unsafe { _mi_os_free(p, size, memid) };
 }
 

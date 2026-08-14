@@ -212,7 +212,9 @@ evidence before the fix is complete:
 - Keep the minimized corpus input or add a focused regression test.
 - Run the relevant sanitizer, Miri, Loom, parity, or stress check and record
   environmental limitations in the change description.
-- Update the local `// SAFETY:` explanation when the operation's proof changes.
+- Update the owning boundary or type documentation when its proof obligation
+  changes; add a local comment only for a non-obvious operation-specific
+  invariant.
 
 Private security reproducers stay out of the public corpus until coordinated
 disclosure allows publication. `SECURITY.md` and

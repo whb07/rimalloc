@@ -118,16 +118,11 @@ Keep unsafe blocks as small as practical and wrap the exact unsafe operation.
 Avoid broad unsafe regions that mix pointer operations with ordinary control
 flow.
 
-Every unsafe block, unsafe impl, unsafe extern boundary, or unsafe attribute
-needs a nearby safety comment with this shape:
-
-```rust
-// SAFETY: <why the operation is valid here>.
-```
-
-The comment should state the relevant pointer validity, aliasing, lifetime,
-initialization, threading, ownership, and unwind invariants. Public unsafe
-functions must also document caller obligations in a `# Safety` rustdoc section.
+Public unsafe functions must document caller obligations in a `# Safety`
+rustdoc section. Use a local safety comment only when it explains a non-obvious
+operation-specific invariant not enforced by the surrounding types or
+validation. Do not add comments merely to inventory unsafe syntax or repeat a
+function's caller contract beside each operation.
 
 ## Hot Paths
 

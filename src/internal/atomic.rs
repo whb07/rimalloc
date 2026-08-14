@@ -111,8 +111,6 @@ impl Default for pthread_mutex_t {
 
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 #[link(name = "pthread")]
-// SAFETY: declares Linux pthread mutex imports
-// used only by the release lock facade.
 unsafe extern "C" {
     fn pthread_mutex_trylock(mutex: *mut pthread_mutex_t) -> c_int;
     fn pthread_mutex_lock(mutex: *mut pthread_mutex_t) -> c_int;
@@ -158,8 +156,6 @@ pub unsafe fn mi_atomic_guard_enter(
     guard: *mut mi_atomic_guard_t,
 ) -> Option<mi_atomic_guard_scope_t> {
     let field = crate::core_types::AtomicUsizeField::from_raw(guard.cast::<usize>());
-    // SAFETY: callers provide a live atomic guard
-    // word and the typed guard wrapper owns release-on-drop.
     unsafe { crate::core_types::AtomicGuard::try_acquire(field) }
         .map(|_guard| mi_atomic_guard_scope_t { _guard })
 }
@@ -170,8 +166,6 @@ pub unsafe fn mi_atomic_do_once_enter(
     once: *mut mi_atomic_once_t,
 ) -> Option<mi_atomic_once_scope_t> {
     let state = crate::core_types::OnceStatePtr::from_raw(once.cast::<usize>());
-    // SAFETY: callers provide a live once-state
-    // word and the typed once wrapper owns release-on-drop.
     unsafe { crate::core_types::OnceGuard::try_enter(state) }
         .map(|_once| mi_atomic_once_scope_t { _once })
 }
@@ -180,8 +174,6 @@ macro_rules! mi_atomic_guard {
     ($guard:expr, $body:block) => {{
         let _mi_guard_ptr: *mut $crate::atomic::mi_atomic_guard_t = $guard;
         if let Some(_mi_guard_scope) =
-            // SAFETY: macro callers pass the same
-            // raw guard pointer required by the guard-enter helper.
             unsafe { $crate::atomic::mi_atomic_guard_enter(_mi_guard_ptr) }
         {
             let _mi_guard_scope = _mi_guard_scope;
@@ -192,8 +184,6 @@ macro_rules! mi_atomic_guard {
 pub(crate) use mi_atomic_guard;
 
 #[inline]
-// SAFETY: preserve the C mi_memory_order_e
-// mapping in one place so callers cannot invent local ordering translations.
 fn load_order(order: mi_memory_order_e) -> Ordering {
     match order {
         mi_memory_order_e::mi_memory_order_relaxed => Ordering::Relaxed,
@@ -235,36 +225,26 @@ fn cas_failure_order(order: mi_memory_order_e) -> Ordering {
 
 #[inline]
 unsafe fn atomic_usize<'a>(p: *mut usize) -> &'a AtomicUsize {
-    // SAFETY: callers prove `p` is atomic `usize`
-    // storage for the duration of the returned shared view.
     unsafe { &*(p as *mut AtomicUsize) }
 }
 
 #[inline]
 unsafe fn atomic_usize_const<'a>(p: *const usize) -> &'a AtomicUsize {
-    // SAFETY: callers prove `p` is atomic `usize`
-    // storage for the duration of the returned shared view.
     unsafe { &*(p as *const AtomicUsize) }
 }
 
 #[inline]
 unsafe fn atomic_isize<'a>(p: *mut isize) -> &'a AtomicIsize {
-    // SAFETY: callers prove `p` is atomic `isize`
-    // storage for the duration of the returned shared view.
     unsafe { &*(p as *mut AtomicIsize) }
 }
 
 #[inline]
 unsafe fn atomic_i64<'a>(p: *mut i64) -> &'a AtomicI64 {
-    // SAFETY: callers prove `p` is atomic `i64`
-    // storage for the duration of the returned shared view.
     unsafe { &*(p as *mut AtomicI64) }
 }
 
 #[inline]
 unsafe fn atomic_i64_const<'a>(p: *const i64) -> &'a AtomicI64 {
-    // SAFETY: callers prove `p` is atomic `i64`
-    // storage for the duration of the returned shared view.
     unsafe { &*(p as *const AtomicI64) }
 }
 
@@ -284,15 +264,11 @@ pub extern "C" fn mi_atomic_thread_fence(mo: mi_memory_order_e) {
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically for
 /// the duration of this operation.
-// SAFETY: C ABI fetch-add preserves the raw
-// pointer atomic contract and central memory-order mapping.
 pub unsafe extern "C" fn mi_atomic_fetch_add_explicit(
     p: *mut usize,
     add: usize,
     mo: mi_memory_order_e,
 ) -> usize {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicUsize` for one fetch-add operation.
     unsafe { atomic_usize(p) }.fetch_add(add, rmw_order(mo))
 }
 
@@ -300,15 +276,11 @@ pub unsafe extern "C" fn mi_atomic_fetch_add_explicit(
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically for
 /// the duration of this operation.
-// SAFETY: C ABI fetch-sub preserves the raw
-// pointer atomic contract and central memory-order mapping.
 pub unsafe extern "C" fn mi_atomic_fetch_sub_explicit(
     p: *mut usize,
     sub: usize,
     mo: mi_memory_order_e,
 ) -> usize {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicUsize` for one fetch-sub operation.
     unsafe { atomic_usize(p) }.fetch_sub(sub, rmw_order(mo))
 }
 
@@ -316,15 +288,11 @@ pub unsafe extern "C" fn mi_atomic_fetch_sub_explicit(
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically for
 /// the duration of this operation.
-// SAFETY: C ABI fetch-and preserves the raw
-// pointer atomic contract and central memory-order mapping.
 pub unsafe extern "C" fn mi_atomic_fetch_and_explicit(
     p: *mut usize,
     x: usize,
     mo: mi_memory_order_e,
 ) -> usize {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicUsize` for one fetch-and operation.
     unsafe { atomic_usize(p) }.fetch_and(x, rmw_order(mo))
 }
 
@@ -332,15 +300,11 @@ pub unsafe extern "C" fn mi_atomic_fetch_and_explicit(
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically for
 /// the duration of this operation.
-// SAFETY: C ABI fetch-or preserves the raw pointer
-// atomic contract and central memory-order mapping.
 pub unsafe extern "C" fn mi_atomic_fetch_or_explicit(
     p: *mut usize,
     x: usize,
     mo: mi_memory_order_e,
 ) -> usize {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicUsize` for one fetch-or operation.
     unsafe { atomic_usize(p) }.fetch_or(x, rmw_order(mo))
 }
 
@@ -349,8 +313,6 @@ pub unsafe extern "C" fn mi_atomic_fetch_or_explicit(
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_increment_acq_rel(p: *mut usize) -> usize {
-    // SAFETY: forwards the caller-proven atomic
-    // storage to the C ABI fetch-add helper with acq_rel ordering.
     unsafe { mi_atomic_fetch_add_explicit(p, 1, mi_memory_order_e::mi_memory_order_acq_rel) }
 }
 
@@ -364,8 +326,6 @@ pub unsafe fn mi_atomic_cas_ptr_weak_release<T>(
     expected: *mut *mut T,
     desired: *mut T,
 ) -> bool {
-    // SAFETY: pointer CAS is represented as a
-    // pointer-sized `usize` CAS while preserving the caller's expected slot.
     unsafe {
         mi_atomic_compare_exchange_weak_explicit(
             p.cast::<usize>(),
@@ -383,8 +343,6 @@ pub unsafe fn mi_atomic_cas_ptr_weak_release<T>(
 /// `p` must point to valid pointer-sized storage that is only accessed
 /// atomically.
 pub unsafe fn mi_atomic_load_ptr_acquire<T>(p: *const *mut T) -> *mut T {
-    // SAFETY: pointer loads use the pointer-sized
-    // atomic load helper and restore the raw pointer value unchanged.
     unsafe { mi_atomic_load_acquire(p.cast::<usize>()) as *mut T }
 }
 
@@ -394,8 +352,6 @@ pub unsafe fn mi_atomic_load_ptr_acquire<T>(p: *const *mut T) -> *mut T {
 /// `p` must point to valid pointer-sized storage that is only accessed
 /// atomically.
 pub unsafe fn mi_atomic_store_ptr_release<T>(p: *mut *mut T, x: *mut T) {
-    // SAFETY: pointer stores use the pointer-sized
-    // atomic store helper and preserve the raw pointer bits unchanged.
     unsafe { mi_atomic_store_release(p.cast::<usize>(), x as usize) };
 }
 
@@ -409,8 +365,6 @@ pub unsafe fn mi_atomic_cas_ptr_strong_release<T>(
     expected: *mut *mut T,
     desired: *mut T,
 ) -> bool {
-    // SAFETY: pointer CAS is represented as a
-    // pointer-sized `usize` CAS while preserving the caller's expected slot.
     unsafe {
         mi_atomic_cas_strong_release(
             p.cast::<usize>(),
@@ -426,8 +380,6 @@ pub unsafe fn mi_atomic_cas_ptr_strong_release<T>(
 /// `p` must point to valid pointer-sized storage that is only accessed
 /// atomically.
 pub unsafe fn mi_atomic_exchange_ptr_relaxed<T>(p: *mut *mut T, x: *mut T) -> *mut T {
-    // SAFETY: pointer exchange uses the
-    // pointer-sized atomic exchange helper and restores the old pointer value.
     unsafe { mi_atomic_exchange_relaxed(p.cast::<usize>(), x as usize) as *mut T }
 }
 
@@ -437,8 +389,6 @@ pub unsafe fn mi_atomic_exchange_ptr_relaxed<T>(p: *mut *mut T, x: *mut T) -> *m
 /// `p` must point to valid pointer-sized storage that is only accessed
 /// atomically.
 pub unsafe fn mi_atomic_exchange_ptr_acq_rel<T>(p: *mut *mut T, x: *mut T) -> *mut T {
-    // SAFETY: pointer exchange uses the
-    // pointer-sized atomic exchange helper and restores the old pointer value.
     unsafe { mi_atomic_exchange_acq_rel(p.cast::<usize>(), x as usize) as *mut T }
 }
 
@@ -454,8 +404,6 @@ pub unsafe fn mi_atomic_cas_weak(
     mem_success: mi_memory_order_e,
     mem_fail: mi_memory_order_e,
 ) -> bool {
-    // SAFETY: weak CAS forwards caller-proven raw
-    // atomic storage and expected slot to the C ABI CAS helper.
     unsafe { mi_atomic_compare_exchange_weak_explicit(p, expected, desired, mem_success, mem_fail) }
 }
 
@@ -471,8 +419,6 @@ pub unsafe fn mi_atomic_cas_strong(
     mem_success: mi_memory_order_e,
     mem_fail: mi_memory_order_e,
 ) -> bool {
-    // SAFETY: strong CAS forwards caller-proven raw
-    // atomic storage and expected slot to the C ABI CAS helper.
     unsafe {
         mi_atomic_compare_exchange_strong_explicit(p, expected, desired, mem_success, mem_fail)
     }
@@ -483,8 +429,6 @@ pub unsafe fn mi_atomic_cas_strong(
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_load_acquire(p: *const usize) -> usize {
-    // SAFETY: acquire load forwards caller-proven
-    // atomic storage to the explicit load helper.
     unsafe { mi_atomic_load_explicit(p, mi_memory_order_e::mi_memory_order_acquire) }
 }
 
@@ -493,8 +437,6 @@ pub unsafe fn mi_atomic_load_acquire(p: *const usize) -> usize {
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_store_release(p: *mut usize, x: usize) {
-    // SAFETY: release store forwards caller-proven
-    // atomic storage to the explicit store helper.
     unsafe { mi_atomic_store_explicit(p, x, mi_memory_order_e::mi_memory_order_release) };
 }
 
@@ -503,8 +445,6 @@ pub unsafe fn mi_atomic_store_release(p: *mut usize, x: usize) {
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_exchange_relaxed(p: *mut usize, x: usize) -> usize {
-    // SAFETY: relaxed exchange forwards
-    // caller-proven atomic storage to the explicit exchange helper.
     unsafe { mi_atomic_exchange_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed) }
 }
 
@@ -513,8 +453,6 @@ pub unsafe fn mi_atomic_exchange_relaxed(p: *mut usize, x: usize) -> usize {
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_exchange_acq_rel(p: *mut usize, x: usize) -> usize {
-    // SAFETY: acq_rel exchange forwards
-    // caller-proven atomic storage to the explicit exchange helper.
     unsafe { mi_atomic_exchange_explicit(p, x, mi_memory_order_e::mi_memory_order_acq_rel) }
 }
 
@@ -528,8 +466,6 @@ pub unsafe fn mi_atomic_cas_weak_relaxed(
     expected: *mut usize,
     desired: usize,
 ) -> bool {
-    // SAFETY: relaxed weak CAS forwards
-    // caller-proven raw storage and expected slot to the CAS helper.
     unsafe {
         mi_atomic_cas_weak(
             p,
@@ -551,8 +487,6 @@ pub unsafe fn mi_atomic_cas_weak_release(
     expected: *mut usize,
     desired: usize,
 ) -> bool {
-    // SAFETY: release weak CAS forwards
-    // caller-proven raw storage and expected slot to the CAS helper.
     unsafe {
         mi_atomic_cas_weak(
             p,
@@ -574,8 +508,6 @@ pub unsafe fn mi_atomic_cas_weak_acq_rel(
     expected: *mut usize,
     desired: usize,
 ) -> bool {
-    // SAFETY: acq_rel weak CAS forwards
-    // caller-proven raw storage and expected slot to the CAS helper.
     unsafe {
         mi_atomic_cas_weak(
             p,
@@ -597,8 +529,6 @@ pub unsafe fn mi_atomic_cas_strong_release(
     expected: *mut usize,
     desired: usize,
 ) -> bool {
-    // SAFETY: release strong CAS forwards
-    // caller-proven raw storage and expected slot to the CAS helper.
     unsafe {
         mi_atomic_cas_strong(
             p,
@@ -620,8 +550,6 @@ pub unsafe fn mi_atomic_cas_strong_acq_rel(
     expected: *mut usize,
     desired: usize,
 ) -> bool {
-    // SAFETY: acq_rel strong CAS forwards
-    // caller-proven raw storage and expected slot to the CAS helper.
     unsafe {
         mi_atomic_cas_strong(
             p,
@@ -638,8 +566,6 @@ pub unsafe fn mi_atomic_cas_strong_acq_rel(
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_add_relaxed(p: *mut usize, x: usize) -> usize {
-    // SAFETY: relaxed add forwards caller-proven
-    // atomic storage to the explicit fetch-add helper.
     unsafe { mi_atomic_fetch_add_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed) }
 }
 
@@ -648,8 +574,6 @@ pub unsafe fn mi_atomic_add_relaxed(p: *mut usize, x: usize) -> usize {
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_sub_relaxed(p: *mut usize, x: usize) -> usize {
-    // SAFETY: relaxed sub forwards caller-proven
-    // atomic storage to the explicit fetch-sub helper.
     unsafe { mi_atomic_fetch_sub_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed) }
 }
 
@@ -658,8 +582,6 @@ pub unsafe fn mi_atomic_sub_relaxed(p: *mut usize, x: usize) -> usize {
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_and_relaxed(p: *mut usize, x: usize) -> usize {
-    // SAFETY: relaxed and forwards caller-proven
-    // atomic storage to the explicit fetch-and helper.
     unsafe { mi_atomic_fetch_and_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed) }
 }
 
@@ -668,8 +590,6 @@ pub unsafe fn mi_atomic_and_relaxed(p: *mut usize, x: usize) -> usize {
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_or_relaxed(p: *mut usize, x: usize) -> usize {
-    // SAFETY: relaxed or forwards caller-proven
-    // atomic storage to the explicit fetch-or helper.
     unsafe { mi_atomic_fetch_or_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed) }
 }
 
@@ -678,8 +598,6 @@ pub unsafe fn mi_atomic_or_relaxed(p: *mut usize, x: usize) -> usize {
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_increment_relaxed(p: *mut usize) -> usize {
-    // SAFETY: relaxed increment forwards
-    // caller-proven atomic storage to the relaxed add helper.
     unsafe { mi_atomic_add_relaxed(p, 1) }
 }
 
@@ -688,8 +606,6 @@ pub unsafe fn mi_atomic_increment_relaxed(p: *mut usize) -> usize {
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_loadi64_acquire(p: *const i64) -> i64 {
-    // SAFETY: acquire i64 load forwards
-    // caller-proven atomic storage to the explicit load helper.
     unsafe { mi_atomic_loadi64_explicit(p, mi_memory_order_e::mi_memory_order_acquire) }
 }
 
@@ -698,8 +614,6 @@ pub unsafe fn mi_atomic_loadi64_acquire(p: *const i64) -> i64 {
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
 pub unsafe fn mi_atomic_storei64_release(p: *mut i64, x: i64) {
-    // SAFETY: release i64 store forwards
-    // caller-proven atomic storage to the explicit store helper.
     unsafe { mi_atomic_storei64_explicit(p, x, mi_memory_order_e::mi_memory_order_release) };
 }
 
@@ -707,8 +621,6 @@ pub unsafe fn mi_atomic_storei64_release(p: *mut i64, x: i64) {
 ///
 /// `p` and `expected` must point to valid `usize` storage that is only accessed
 /// atomically for this compare-exchange operation.
-// SAFETY: C ABI strong CAS reads and updates the
-// caller-provided expected slot according to the C atomic contract.
 pub unsafe extern "C" fn mi_atomic_compare_exchange_strong_explicit(
     p: *mut usize,
     expected: *mut usize,
@@ -716,11 +628,7 @@ pub unsafe extern "C" fn mi_atomic_compare_exchange_strong_explicit(
     mo1: mi_memory_order_e,
     mo2: mi_memory_order_e,
 ) -> bool {
-    // SAFETY: caller-provided expected storage is
-    // readable for the current comparison value.
     let current = unsafe { *expected };
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicUsize` for one compare-exchange operation.
     match unsafe { atomic_usize(p) }.compare_exchange(
         current,
         desired,
@@ -729,8 +637,6 @@ pub unsafe extern "C" fn mi_atomic_compare_exchange_strong_explicit(
     ) {
         Ok(_) => true,
         Err(actual) => {
-            // SAFETY: failed CAS writes the actual
-            // value back to the caller-provided expected slot.
             unsafe { *expected = actual };
             false
         }
@@ -741,8 +647,6 @@ pub unsafe extern "C" fn mi_atomic_compare_exchange_strong_explicit(
 ///
 /// `p` and `expected` must point to valid `usize` storage that is only accessed
 /// atomically for this compare-exchange operation.
-// SAFETY: weak CAS currently delegates to the
-// strong helper while preserving expected-slot update semantics.
 pub unsafe extern "C" fn mi_atomic_compare_exchange_weak_explicit(
     p: *mut usize,
     expected: *mut usize,
@@ -750,78 +654,52 @@ pub unsafe extern "C" fn mi_atomic_compare_exchange_weak_explicit(
     mo1: mi_memory_order_e,
     mo2: mi_memory_order_e,
 ) -> bool {
-    // SAFETY: caller-proven raw storage and
-    // expected slot are forwarded unchanged to the strong CAS helper.
     unsafe { mi_atomic_compare_exchange_strong_explicit(p, expected, desired, mo1, mo2) }
 }
 
 /// # Safety
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
-// SAFETY: C ABI exchange preserves the raw pointer
-// atomic contract and central memory-order mapping.
 pub unsafe extern "C" fn mi_atomic_exchange_explicit(
     p: *mut usize,
     exchange: usize,
     mo: mi_memory_order_e,
 ) -> usize {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicUsize` for one swap operation.
     unsafe { atomic_usize(p) }.swap(exchange, rmw_order(mo))
 }
 
 /// # Safety
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
-// SAFETY: C ABI load preserves the raw pointer
-// atomic contract and central memory-order mapping.
 pub unsafe extern "C" fn mi_atomic_load_explicit(p: *const usize, mo: mi_memory_order_e) -> usize {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicUsize` for one load operation.
     unsafe { atomic_usize_const(p) }.load(load_order(mo))
 }
 
 /// # Safety
 ///
 /// `p` must point to valid `usize` storage that is only accessed atomically.
-// SAFETY: C ABI store preserves the raw pointer
-// atomic contract and central memory-order mapping.
 pub unsafe extern "C" fn mi_atomic_store_explicit(p: *mut usize, x: usize, mo: mi_memory_order_e) {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicUsize` for one store operation.
     unsafe { atomic_usize(p) }.store(x, store_order(mo));
 }
 
 /// # Safety
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
-// SAFETY: C ABI i64 load preserves the raw pointer
-// atomic contract and central memory-order mapping.
 pub unsafe extern "C" fn mi_atomic_loadi64_explicit(p: *const i64, mo: mi_memory_order_e) -> i64 {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicI64` for one load operation.
     unsafe { atomic_i64_const(p) }.load(load_order(mo))
 }
 
 /// # Safety
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
-// SAFETY: C ABI i64 store preserves the raw pointer
-// atomic contract and central memory-order mapping.
 pub unsafe extern "C" fn mi_atomic_storei64_explicit(p: *mut i64, x: i64, mo: mi_memory_order_e) {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicI64` for one store operation.
     unsafe { atomic_i64(p) }.store(x, store_order(mo));
 }
 
 /// # Safety
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
-// SAFETY: C ABI relaxed i64 add preserves the raw
-// pointer atomic contract.
 pub unsafe extern "C" fn mi_atomic_addi64_relaxed(p: *mut i64, add: i64) -> i64 {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicI64` for one fetch-add operation.
     unsafe { atomic_i64(p) }.fetch_add(add, Ordering::Relaxed)
 }
 
@@ -829,15 +707,9 @@ pub unsafe extern "C" fn mi_atomic_addi64_relaxed(p: *mut i64, add: i64) -> i64 
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
 /// `padd` must point to readable `i64` storage.
-// SAFETY: C ABI void add reads the volatile delta
-// and applies it to caller-proven i64 atomic storage when nonzero.
 pub unsafe extern "C" fn mi_atomic_void_addi64_relaxed(p: *mut i64, padd: *const i64) {
-    // SAFETY: `padd` is caller-provided readable
-    // storage for the volatile addend.
     let add = unsafe { read_volatile(padd) };
     if add != 0 {
-        // SAFETY: caller-proven raw storage is
-        // viewed as `AtomicI64` for one relaxed fetch-add operation.
         unsafe { atomic_i64(p) }.fetch_add(add, Ordering::Relaxed);
     }
 }
@@ -845,11 +717,7 @@ pub unsafe extern "C" fn mi_atomic_void_addi64_relaxed(p: *mut i64, padd: *const
 /// # Safety
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
-// SAFETY: C ABI max helper loops over
-// caller-proven i64 atomic storage until the relaxed maximum is published.
 pub unsafe extern "C" fn mi_atomic_maxi64_relaxed(p: *mut i64, x: i64) {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicI64` for relaxed load and weak CAS operations.
     let atomic = unsafe { atomic_i64(p) };
     let mut current = atomic.load(Ordering::Relaxed);
     while current < x {
@@ -863,11 +731,7 @@ pub unsafe extern "C" fn mi_atomic_maxi64_relaxed(p: *mut i64, x: i64) {
 /// # Safety
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
-// SAFETY: C ABI acq_rel i64 add preserves the raw
-// pointer atomic contract.
 pub unsafe extern "C" fn mi_atomic_addi64_acq_rel(p: *mut i64, i: i64) {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicI64` for one acq_rel fetch-add operation.
     unsafe { atomic_i64(p) }.fetch_add(i, Ordering::AcqRel);
 }
 
@@ -875,18 +739,12 @@ pub unsafe extern "C" fn mi_atomic_addi64_acq_rel(p: *mut i64, i: i64) {
 ///
 /// `p` and `exp` must point to valid `i64` storage that is only accessed
 /// atomically for this compare-exchange operation.
-// SAFETY: C ABI i64 strong CAS reads and updates
-// the caller-provided expected slot according to the C atomic contract.
 pub unsafe extern "C" fn mi_atomic_casi64_strong_acq_rel(
     p: *mut i64,
     exp: *mut i64,
     des: i64,
 ) -> bool {
-    // SAFETY: caller-provided expected storage is
-    // readable for the current comparison value.
     let current = unsafe { *exp };
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicI64` for one compare-exchange operation.
     match unsafe { atomic_i64(p) }.compare_exchange(
         current,
         des,
@@ -895,8 +753,6 @@ pub unsafe extern "C" fn mi_atomic_casi64_strong_acq_rel(
     ) {
         Ok(_) => true,
         Err(actual) => {
-            // SAFETY: failed CAS writes the actual
-            // value back to the caller-provided expected slot.
             unsafe { *exp = actual };
             false
         }
@@ -906,22 +762,14 @@ pub unsafe extern "C" fn mi_atomic_casi64_strong_acq_rel(
 /// # Safety
 ///
 /// `p` must point to valid `isize` storage that is only accessed atomically.
-// SAFETY: C ABI isize add preserves the raw
-// pointer atomic contract.
 pub unsafe extern "C" fn mi_atomic_addi(p: *mut isize, add: isize) -> isize {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicIsize` for one acq_rel fetch-add operation.
     unsafe { atomic_isize(p) }.fetch_add(add, Ordering::AcqRel)
 }
 
 /// # Safety
 ///
 /// `p` must point to valid `isize` storage that is only accessed atomically.
-// SAFETY: C ABI isize sub preserves the raw
-// pointer atomic contract.
 pub unsafe extern "C" fn mi_atomic_subi(p: *mut isize, sub: isize) -> isize {
-    // SAFETY: caller-proven raw storage is viewed
-    // as `AtomicIsize` for one acq_rel fetch-sub operation.
     unsafe { atomic_isize(p) }.fetch_sub(sub, Ordering::AcqRel)
 }
 
@@ -929,11 +777,7 @@ pub unsafe extern "C" fn mi_atomic_subi(p: *mut isize, sub: isize) -> isize {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY: Linux release lock acquisition delegates
-// to pthread over the caller-provided lock object's mutex field.
 pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
-    // SAFETY: caller-proven lock storage contains
-    // an initialized pthread mutex field.
     unsafe { pthread_mutex_trylock(ptr::addr_of_mut!((*lock).mutex)) == 0 }
 }
 
@@ -941,12 +785,8 @@ pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY: fallback lock acquisition uses the
-// in-struct atomic mutex word with acquire/release semantics.
 pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
     let expected = 0;
-    // SAFETY: caller-proven lock storage contains
-    // the fallback atomic mutex word.
     unsafe {
         (*lock)
             .mutex
@@ -960,11 +800,7 @@ pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY: Linux release lock acquisition delegates
-// to pthread and reports nonzero errors through the allocator error path.
 pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
-    // SAFETY: caller-proven lock storage contains
-    // an initialized pthread mutex field.
     let err = unsafe { pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex)) };
     if err != 0 {
         crate::allocator::options::_mi_error_message_fmt(
@@ -978,11 +814,7 @@ pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY: fallback lock acquisition spins over the
-// same in-struct atomic mutex word used by try-acquire.
 pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
-    // SAFETY: caller-proven lock storage is
-    // repeatedly passed to the fallback try-acquire helper.
     while unsafe { !mi_lock_try_acquire(lock) } {
         spin_loop();
     }
@@ -992,11 +824,7 @@ pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to a valid acquired allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY: Linux release lock release delegates to
-// pthread over the caller-provided lock object's mutex field.
 pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
-    // SAFETY: caller-proven lock storage contains
-    // an initialized acquired pthread mutex field.
     unsafe { pthread_mutex_unlock(ptr::addr_of_mut!((*lock).mutex)) };
 }
 
@@ -1004,11 +832,7 @@ pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to a valid acquired allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY: fallback lock release publishes zero to
-// the in-struct atomic mutex word with release ordering.
 pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
-    // SAFETY: caller-proven lock storage contains
-    // the fallback atomic mutex word.
     unsafe { (*lock).mutex.mutex.store(0, Ordering::Release) };
 }
 
@@ -1016,12 +840,8 @@ pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
 ///
 /// `lock`, when non-null, must point to writable allocator lock storage.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY: Linux lock init overwrites only non-null
-// caller-provided lock storage with the pthread initializer layout.
 pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
     if !lock.is_null() {
-        // SAFETY: non-null lock storage is writable
-        // for one pthread mutex initializer value.
         unsafe { (*lock).mutex = pthread_mutex_t::new() };
     }
 }
@@ -1030,11 +850,7 @@ pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to writable allocator lock storage.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY: fallback lock init resets the in-struct
-// atomic mutex word through the release helper.
 pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
-    // SAFETY: caller-proven lock storage is passed
-    // to the fallback release helper for zero initialization.
     unsafe { mi_lock_release(lock) };
 }
 
@@ -1042,11 +858,7 @@ pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to an initialized allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-// SAFETY: Linux lock teardown delegates to pthread
-// over the caller-provided initialized mutex field.
 pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
-    // SAFETY: caller-proven lock storage contains
-    // an initialized pthread mutex field.
     unsafe { pthread_mutex_destroy(ptr::addr_of_mut!((*lock).mutex)) };
 }
 
@@ -1054,8 +866,6 @@ pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to an initialized allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-// SAFETY: fallback lock teardown is a compatibility
-// no-op because the atomic mutex word owns no external resources.
 pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
     let _ = lock;
 }
@@ -1064,11 +874,7 @@ pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
 ///
 /// `once` must point to a valid allocator once-state object.
 #[inline(never)]
-// SAFETY: once enter coordinates a caller-provided
-// once state through acquire/release tid publication and the local lock.
 pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> bool {
-    // SAFETY: caller-proven once storage contains
-    // an initialized atomic tid field.
     let once_tid = unsafe { (*once).tid.load(Ordering::Acquire) };
     if once_tid == 1 {
         return false;
@@ -1078,12 +884,8 @@ pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> b
         return false;
     }
 
-    // SAFETY: caller-proven once storage contains
-    // the lock used to serialize first entry.
     unsafe { mi_lock_acquire(&mut (*once).lock) };
     let expected = 0usize;
-    // SAFETY: caller-proven once storage contains
-    // an initialized atomic tid field for entry publication.
     if unsafe {
         (*once)
             .tid
@@ -1092,8 +894,6 @@ pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> b
     } {
         true
     } else {
-        // SAFETY: failed first-entry publication
-        // releases the lock acquired for this once state.
         unsafe { mi_lock_release(&mut (*once).lock) };
         false
     }
@@ -1104,17 +904,9 @@ pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> b
 /// `once` must point to a once-state object previously entered by the current
 /// thread.
 #[inline(never)]
-// SAFETY: once release publishes completion and
-// releases the lock only for an entered caller-provided once state.
 pub unsafe extern "C" fn _mi_atomic_once_release(once: *mut mi_atomic_once_t) {
-    // SAFETY: caller-proven once storage contains
-    // an initialized atomic tid field.
     if unsafe { (*once).tid.load(Ordering::Acquire) } > 1 {
-        // SAFETY: completion is published with
-        // release ordering to the caller-provided once tid field.
         unsafe { (*once).tid.store(1, Ordering::Release) };
-        // SAFETY: the once lock was acquired by
-        // the matching enter path for this caller-provided once state.
         unsafe { mi_lock_release(&mut (*once).lock) };
     }
 }

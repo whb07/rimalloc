@@ -13,12 +13,10 @@ use super::{
     mi_heap_malloc_typed, mi_malloc, mi_realloc, mi_theap_malloc,
 };
 
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
 unsafe extern "C" {
     fn abort() -> !;
 }
 
-// SAFETY: C++ new-handler lookup and invocation preserve platform ABI and abort/nothrow policy.
 type StdNewHandler = Option<unsafe extern "C" fn()>;
 
 #[cfg(all(unix, not(target_os = "wasi")))]
@@ -153,7 +151,6 @@ pub(crate) unsafe extern "C" fn mi_theap_alloc_new(
 /// Any nonnull C++ new-handler returned for a synchronous allocation retry must remain live, use the
 /// declared ABI, and not unwind across this Rust/C ABI boundary. A nonnull result is allocator-owned
 /// and may be released through this allocator.
-// SAFETY: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
     // SAFETY: the caller supplies the default-heap allocation epoch and guarantees any
@@ -166,7 +163,6 @@ pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
 /// exclusively by this call. Any nonnull C++ new-handler returned during a retry must remain
 /// synchronously callable with the declared ABI and must not unwind across this Rust/C ABI boundary.
 /// A nonnull result is allocator-owned and may be released through this allocator.
-// SAFETY: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_alloc_new(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     // SAFETY: the caller guarantees `heap` names a live heap for this classification and subsequent
@@ -221,7 +217,6 @@ unsafe fn mi_theap_alloc_new_n(
 /// Any nonnull C++ new-handler returned for a synchronous overflow or allocation retry must remain
 /// live, use the declared ABI, and not unwind across this Rust/C ABI boundary. A nonnull result is
 /// allocator-owned and may be released through this allocator.
-// SAFETY: C++ new_n paths validate checked products before typed allocation and retry dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_n(count: usize, size: usize) -> *mut c_void {
     match alloc_product_or_report(count, size) {
@@ -244,14 +239,12 @@ pub unsafe extern "C" fn mi_new_n(count: usize, size: usize) -> *mut c_void {
 /// exclusively by this call. Any nonnull C++ new-handler returned for the synchronous overflow or
 /// allocation retry must remain live, use the declared ABI, and not unwind across this Rust/C ABI
 /// boundary. A nonnull result is allocator-owned and may be released through this allocator.
-// SAFETY: C++ new_n paths validate checked products before typed allocation and retry dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_alloc_new_n(
     heap: *mut mi_heap_t,
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY: C++ new_n paths validate checked products before typed allocation and retry dispatch.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -296,7 +289,6 @@ unsafe fn mi_heap_alloc_new_n_typed(
 /// Any nonnull C++ new-handler returned during a synchronous allocation retry must remain live, use
 /// the declared ABI, and not unwind across this Rust/C ABI boundary. A nonnull result is
 /// allocator-owned and may be released through this allocator.
-// SAFETY: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
     let p = mi_malloc(size);
@@ -313,7 +305,6 @@ pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
 /// `alignment` must be valid for the aligned allocation API. Returned memory must be released
 /// through this allocator. Any nonnull C++ new-handler returned during a retry must remain live,
 /// use the declared ABI, and not unwind across this Rust/C ABI boundary.
-// SAFETY: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_aligned(size: usize, alignment: usize) -> *mut c_void {
     let Some(alignment) = alignment_or_report(size, alignment) else {
@@ -332,7 +323,6 @@ unsafe fn mi_new_aligned_typed(
     size: crate::core_types::RequestedSize,
     alignment: crate::core_types::Alignment,
 ) -> *mut c_void {
-    // SAFETY: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
     unsafe {
         let mut p: *mut c_void;
         loop {
@@ -350,7 +340,6 @@ unsafe fn mi_new_aligned_typed(
 /// `alignment` must be valid for the aligned allocation API. Returned memory must be released
 /// through this allocator. Any nonnull C++ new-handler returned during a retry must remain live,
 /// use the declared ABI, and not unwind across this Rust/C ABI boundary.
-// SAFETY: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_aligned_nothrow(size: usize, alignment: usize) -> *mut c_void {
     let Some(alignment) = alignment_or_report(size, alignment) else {
@@ -369,7 +358,6 @@ unsafe fn mi_new_aligned_nothrow_typed(
     size: crate::core_types::RequestedSize,
     alignment: crate::core_types::Alignment,
 ) -> *mut c_void {
-    // SAFETY: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
     unsafe {
         let mut p: *mut c_void;
         loop {
@@ -388,7 +376,6 @@ unsafe fn mi_new_aligned_nothrow_typed(
 /// realloc for the duration of the call. Any nonnull C++ new-handler returned during a retry must
 /// remain synchronously callable with the declared ABI and must not unwind across this Rust/C ABI
 /// boundary.
-// SAFETY: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     let mut q: *mut c_void;
@@ -409,7 +396,6 @@ pub unsafe extern "C" fn mi_new_realloc(p: *mut c_void, newsize: usize) -> *mut 
 /// realloc for the duration of the call. Any nonnull C++ new-handler returned for the synchronous
 /// overflow or allocation retry must remain live, use the declared ABI, and not unwind across this
 /// Rust/C ABI boundary.
-// SAFETY: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_reallocn(
     p: *mut c_void,

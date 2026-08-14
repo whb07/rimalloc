@@ -141,8 +141,6 @@ impl DeferredFreeCallback {
         if ptr.is_null() {
             Self::none()
         } else {
-            // SAFETY: callers pass pointers produced
-            // by `DeferredFreeCallback::storage_ptr` for this callback family.
             let fun = unsafe { core::mem::transmute::<*mut c_void, mi_deferred_free_fun>(ptr) };
             Self::new(Some(fun))
         }
@@ -156,8 +154,6 @@ impl DeferredFreeCallback {
         arg: DeferredFreeCallbackArg,
     ) {
         if let Some(fun) = self.raw() {
-            // SAFETY: the caller upholds the C
-            // callback contract; typed wrappers only forward raw ABI values.
             unsafe { fun(force, heartbeat.get(), arg.as_ptr()) };
         }
     }
@@ -177,8 +173,6 @@ impl OutputCallback {
         if ptr.is_null() {
             Self::none()
         } else {
-            // SAFETY: callers pass pointers produced
-            // by `OutputCallback::storage_ptr` for this callback family.
             let fun = unsafe { core::mem::transmute::<*mut c_void, mi_output_fun>(ptr) };
             Self::new(Some(fun))
         }
@@ -187,8 +181,6 @@ impl OutputCallback {
     #[inline(always)]
     pub(crate) unsafe fn invoke(self, message: *const c_char, arg: OutputCallbackArg) {
         if let Some(fun) = self.raw() {
-            // SAFETY: the caller guarantees `message`
-            // and `arg` satisfy the registered output callback ABI contract.
             unsafe { fun(message, arg.as_ptr()) };
         }
     }
@@ -198,8 +190,6 @@ impl ErrorCallback {
     #[inline(always)]
     pub(crate) unsafe fn invoke(self, err: i32, arg: ErrorCallbackArg) {
         if let Some(fun) = self.raw() {
-            // SAFETY: the caller guarantees `arg`
-            // satisfies the registered error callback ABI contract.
             unsafe { fun(err, arg.as_ptr()) };
         }
     }
@@ -209,8 +199,6 @@ impl HeapVisitCallback {
     #[inline(always)]
     pub(crate) unsafe fn invoke(self, heap: HeapPtr, arg: HeapVisitCallbackArg) -> bool {
         match self.raw() {
-            // SAFETY: the caller supplies a live heap
-            // witness and callback argument for the traversal callback.
             Some(fun) => unsafe { fun(heap.as_ptr(), arg.as_ptr()) },
             None => false,
         }
@@ -228,8 +216,6 @@ impl BlockVisitCallback {
         arg: BlockVisitCallbackArg,
     ) -> bool {
         match self.raw() {
-            // SAFETY: the caller supplies live
-            // traversal pointers and an opaque callback argument.
             Some(fun) => unsafe { fun(heap.as_ptr(), area, block, block_size, arg.as_ptr()) },
             None => false,
         }
@@ -258,8 +244,6 @@ impl ThreadLocalClaimCallback {
         arena: Option<ArenaPtr>,
         keep_set: *mut bool,
     ) -> bool {
-        // SAFETY: the caller supplies the typed arena
-        // witness and writable keep-set pointer required by the claim callback.
         unsafe {
             (self.raw())(
                 slice_index,

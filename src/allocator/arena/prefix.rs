@@ -19,14 +19,10 @@ pub(super) struct MiHeapPrefix {
     pub(super) arena_pages_lock: crate::atomic::mi_lock_t,
 }
 
-// SAFETY: callers pass live heap metadata whose
-// prefix layout is checked against the translated C layout.
 pub(super) unsafe fn mi_heap_abandoned_count(
     heap: *mut mi_heap_t,
     bin: crate::core_types::Bin,
 ) -> crate::core_types::AtomicAbandonedCount {
-    // SAFETY: the heap prefix owns the abandoned
-    // count array and `bin` is a checked bin index.
     unsafe {
         crate::core_types::AtomicAbandonedCount::from_cell(ptr::addr_of!(
             (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin.as_usize()]
@@ -34,27 +30,17 @@ pub(super) unsafe fn mi_heap_abandoned_count(
     }
 }
 
-// SAFETY: callers pass live arena metadata whose
-// prefix carries the registered arena table index.
 pub(super) unsafe fn mi_arena_index(arena: *mut mi_arena_t) -> crate::core_types::ArenaIndex {
-    // SAFETY: the arena prefix is allocator-owned
-    // and initialized before arena registration exposes it to callers.
     let arena_idx = unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx };
     crate::internal::mi_assert!(arena_idx < MI_MAX_ARENAS);
-    // SAFETY: the bounds check above proves the
-    // value fits the internal arena index domain.
     unsafe { crate::core_types::ArenaIndex::new_unchecked(arena_idx as u16) }
 }
 
-// SAFETY: callers pass a borrowed heap witness
-// and a checked arena index for the heap arena-page cell.
 pub(super) unsafe fn mi_heap_arena_page_cell(
     heap: BorrowedHeap,
     arena_idx: crate::core_types::ArenaIndex,
 ) -> crate::core_types::AtomicArenaPage {
     let heap = heap.ptr().as_ptr();
-    // SAFETY: the heap prefix owns the arena page
-    // table and `arena_idx` has already been checked for the table domain.
     unsafe {
         crate::core_types::AtomicArenaPage::from_cell(ptr::addr_of!(
             (*heap.cast::<MiHeapPrefix>()).arena_pages[arena_idx.get() as usize]
@@ -79,14 +65,10 @@ pub(super) struct MiSubprocPrefix {
     pub(super) heap_count: AtomicUsize,
 }
 
-// SAFETY: callers pass live subproc metadata and
-// a checked arena index for the arena pointer table cell.
 pub(super) unsafe fn mi_subproc_arena_cell(
     subproc: *mut mi_subproc_t,
     arena_idx: ArenaIndex,
 ) -> crate::core_types::AtomicPtrField<mi_arena_t> {
-    // SAFETY: the subproc prefix owns the arena
-    // table and `arena_idx` has already been checked for the table domain.
     unsafe {
         crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(
             (*subproc.cast::<MiSubprocPrefix>()).arenas[arena_idx.get() as usize]

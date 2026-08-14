@@ -15,13 +15,9 @@ pub(crate) extern "C" fn _mi_arena_id_none() -> mi_arena_id_t {
 /// # Safety
 /// `id` must be either null or a valid top-level `mi_arena_t*`.
 #[inline(never)]
-// SAFETY: this raw C ABI shim checks the arena
-// prefix parent field before returning the arena pointer unchanged.
 pub(crate) unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t {
     let arena = id.cast::<mi_arena_t>();
     crate::internal::mi_assert_internal!(
-        // SAFETY: non-null arena ids point to
-        // initialized top-level arena metadata by the internal arena-id contract.
         arena.is_null() || unsafe { (*arena.cast::<MiArenaPrefix>()).parent.is_null() }
     );
     arena
@@ -29,21 +25,15 @@ pub(crate) unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_
 
 /// # Safety
 /// `arena` must be null or a valid top-level `mi_arena_t*`.
-// SAFETY: this exported arena-id converter keeps
-// C ABI shape and wraps non-null arenas before typed validation.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arena_id_from_arena(arena: *mut mi_arena_t) -> mi_arena_id_t {
     let Some(arena) = ArenaPtr::new(arena) else {
         return _mi_arena_id_none();
     };
-    // SAFETY: `ArenaPtr::new` proved the pointer
-    // is non-null; the typed helper checks top-level arena state.
     unsafe { mi_arena_id_from_arena_typed(arena) }
 }
 
 pub(super) unsafe fn mi_arena_id_from_arena_typed(arena: ArenaPtr) -> mi_arena_id_t {
-    // SAFETY: `ArenaPtr` is a non-null arena
-    // witness and `parent()` only reads the arena prefix parent field.
     crate::internal::mi_assert_internal!(unsafe { arena.parent().is_none() });
     arena.as_ptr().cast::<c_void>()
 }
@@ -113,19 +103,13 @@ pub(super) unsafe fn mi_memid_create_arena(
     let slice_count = range.count_usize();
     crate::internal::mi_assert_internal!(slice_count > 0);
     crate::internal::mi_assert_internal!(
-        // SAFETY: arena allocation callers pass
-        // initialized arena metadata and a range validated for that arena.
         slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
     crate::core_types::MemId::<crate::core_types::ArenaMem>::arena(
-        // SAFETY: `arena` is allocator-owned
-        // arena metadata selected before this memid construction boundary.
         unsafe { crate::core_types::ArenaPtr::new_unchecked(arena) },
         range,
         crate::core_types::InitiallyCommitted(false),
         crate::core_types::InitiallyZero(false),
-        // SAFETY: the arena prefix memid owns the
-        // pinned flag copied into the allocation memid.
         crate::core_types::Pinned(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned }),
     )
     .into_raw()
@@ -134,8 +118,6 @@ pub(super) unsafe fn mi_memid_create_arena(
 #[inline]
 pub(super) unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool {
     matches!(
-        // SAFETY: callers pass live page metadata
-        // before classifying the page memid view.
         crate::core_types::MemId::view(unsafe { (*page).memid }),
         crate::core_types::MemIdView::Arena(_)
     )
@@ -150,8 +132,6 @@ pub(super) fn mi_memid_is_os(memid: mi_memid_t) -> bool {
 
 pub(super) unsafe fn mi_page_full_size(page: PagePtr) -> crate::core_types::ReservedBytes {
     let page_raw = page.as_ptr();
-    // SAFETY: page memid size helpers project arena, OS, and external allocation extents.
-    // witness and the memid field is read-only for size classification here.
     let memid = unsafe { (*page_raw).memid };
     match crate::core_types::MemId::view(memid) {
         crate::core_types::MemIdView::Arena(arena_memid) => {
@@ -168,8 +148,6 @@ pub(super) unsafe fn mi_page_full_size(page: PagePtr) -> crate::core_types::Rese
 
             let page_ptr = page_raw.cast::<u8>();
             crate::internal::mi_assert_internal!(base <= page_ptr);
-            // SAFETY: the base and page pointer
-            // come from the same OS allocation memid range.
             let presize = unsafe { page_ptr.offset_from(base) };
             crate::internal::mi_assert_internal!(os_size.get() as isize >= presize);
             if presize > os_size.get() as isize {
@@ -188,8 +166,6 @@ pub(super) unsafe fn mi_page_full_size(page: PagePtr) -> crate::core_types::Rese
 
             let page_ptr = page_raw.cast::<u8>();
             crate::internal::mi_assert_internal!(base <= page_ptr);
-            // SAFETY: the base and page pointer
-            // come from the same external allocation memid range.
             let presize = unsafe { page_ptr.offset_from(base) };
             crate::internal::mi_assert_internal!(os_size as isize >= presize);
             if presize > os_size as isize {

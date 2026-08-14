@@ -60,7 +60,6 @@ pub const MI_MAX_BLOCKS: usize = MI_SMALL_PAGE_SIZE / core::mem::size_of::<*cons
 /// the remaining unvisited forward chain, or relink the current page into that
 /// chain. The callback must not unwind across the C ABI or incompatibly reenter
 /// page traversal.
-// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub type theap_page_visitor_fun = unsafe extern "C" fn(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -90,7 +89,6 @@ impl TheapPageVisitCallback {
         page: PagePtr,
         state: TheapPageVisitState,
     ) -> bool {
-        // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
         unsafe {
             (self.0)(
                 theap.as_ptr(),
@@ -125,7 +123,6 @@ pub type mi_theap_area_ex_t = mi_theap_area_ex_s;
 /// that are valid only for the synchronous invocation. `arg` must satisfy the
 /// callback's contract and remain valid through that invocation. The callback
 /// must not unwind across the C ABI.
-// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub type mi_theap_area_visit_fun = unsafe extern "C" fn(
     theap: *const mi_theap_t,
     area: *const mi_theap_area_ex_t,
@@ -551,7 +548,6 @@ unsafe extern "C" fn mi_theap_area_visitor(
 /// page traversal. A callback that returns `true` may allocate and change
 /// availability, but must not free or invalidate the current page's snapshotted
 /// allocation state, backing, block geometry, or later callback blocks.
-// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_visit_blocks(
     theap: *const mi_theap_t,
@@ -698,7 +694,6 @@ unsafe fn mi_theap_visit_pages_typed(
 ///
 /// `theap`, `pq`, and `page` must be valid allocator objects from the same
 /// thread heap.
-// SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
 pub unsafe extern "C" fn mi_theap_page_is_valid(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -706,7 +701,6 @@ pub unsafe extern "C" fn mi_theap_page_is_valid(
     arg1: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         crate::internal::MI_UNUSED(&arg1);
         crate::internal::MI_UNUSED(&arg2);
@@ -718,7 +712,6 @@ pub unsafe extern "C" fn mi_theap_page_is_valid(
 }
 
 unsafe fn mi_theap_page_is_valid_typed(theap: ThreadHeapPtr, page: PagePtr) -> bool {
-    // SAFETY: visitation callbacks and page-area walks keep allocator metadata behind typed wrappers.
     unsafe {
         let page = page.as_ptr();
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.as_ptr());
@@ -739,7 +732,6 @@ unsafe fn mi_theap_page_is_valid_typed(theap: ThreadHeapPtr, page: PagePtr) -> b
 /// must be nonnull, aligned, readable initialized `mi_collect_t` storage. Arena,
 /// purge, commit, tracking, and diagnostic callbacks and opaque arguments must
 /// remain synchronously valid, exclude incompatible reentry, and not unwind.
-// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
 pub unsafe extern "C" fn mi_theap_page_collect(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -747,7 +739,6 @@ pub unsafe extern "C" fn mi_theap_page_collect(
     arg_collect: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    // SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
     unsafe {
         crate::internal::MI_UNUSED(&arg2);
         let theap = ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap));
@@ -1074,7 +1065,6 @@ pub unsafe extern "C" fn mi_theap_collect(theap: *mut mi_theap_t, force: bool) {
 ///
 /// Must be called only after allocator process/thread initialization has made
 /// the default thread heap accessible.
-// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_collect(force: bool) {
     unsafe {
@@ -1085,7 +1075,6 @@ pub unsafe extern "C" fn mi_collect(force: bool) {
 /// # Safety
 ///
 /// `heap` must be null or point to a heap managed by this allocator.
-// SAFETY: collection paths visit initialized thread heaps and merge stats through typed wrappers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_collect(heap: *mut mi_heap_t, force: bool) {
     unsafe {
@@ -1130,7 +1119,6 @@ unsafe fn mi_heap_collect_typed(heap: Option<BorrowedHeap>, force: bool) {
 ///
 /// Must be called only after allocator process/thread initialization has made
 /// the default thread heap accessible.
-// SAFETY: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_get_default() -> *mut mi_theap_t {
     unsafe {
@@ -1148,7 +1136,6 @@ pub unsafe extern "C" fn mi_theap_get_default() -> *mut mi_theap_t {
 ///
 /// `theap`, when non-null, must point to a valid initialized thread heap whose
 /// lifetime covers subsequent default-thread-heap use.
-// SAFETY: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_set_default(theap: *mut mi_theap_t) -> *mut mi_theap_t {
     unsafe {
@@ -1162,7 +1149,6 @@ pub unsafe extern "C" fn mi_theap_set_default(theap: *mut mi_theap_t) -> *mut mi
 }
 
 unsafe fn mi_theap_set_default_typed(theap: ThreadHeapLocal) {
-    // SAFETY: default thread-heap shims preserve initialized TLS ownership and raw C ABI behavior.
     unsafe {
         crate::allocator::init::_mi_theap_default_set(theap.ptr().as_ptr());
     }
@@ -1372,7 +1358,6 @@ unsafe fn _mi_theap_create_typed(heap: HeapPtr, tld: TldPtr) -> Option<ThreadHea
 /// # Safety
 ///
 /// `theap` must point to a valid initialized thread heap.
-// SAFETY: random helpers read initialized thread-heap random state through typed wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) -> usize {
     unsafe {
@@ -1383,7 +1368,6 @@ pub(crate) unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) ->
 
 #[inline(always)]
 unsafe fn _mi_theap_random_next_typed(theap: ThreadHeapLocal) -> usize {
-    // SAFETY: random helpers read initialized thread-heap random state through typed wrappers.
     unsafe {
         let theap = theap.ptr().as_ptr();
         _mi_random_next(ptr::addr_of_mut!((*theap).random))

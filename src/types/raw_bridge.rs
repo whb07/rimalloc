@@ -17,8 +17,6 @@ use super::{
 /// initialized. Legal callers: registered fresh-page publication.
 #[inline(always)]
 pub(crate) unsafe fn assume_uninit_page(page: PagePtr) -> Page<Uninit> {
-    // SAFETY: the initialization ingress owns
-    // the raw metadata exclusively and this bridge performs no mutation.
     unsafe { Page::<Uninit>::new_unchecked(page) }
 }
 
@@ -29,9 +27,6 @@ macro_rules! raw_page_bridge {
         #[inline(always)]
         #[doc = $marker]
         pub(crate) unsafe fn $name(page: PagePtr) -> $output {
-            // SAFETY: this module is the sole
-            // allocator-facing constructor bridge; the function-specific
-            // contract is established by its audited ingress caller.
             unsafe { <$output>::new_unchecked(page) }
         }
     };
@@ -66,8 +61,6 @@ pub(crate) unsafe fn assume_destroyed_after_arena_free(page: PagePtr) -> Destroy
 /// arena free classification boundaries.
 #[inline(always)]
 pub(crate) unsafe fn assume_all_free_abandoned(page: AbandonedPage) -> AllFreePage<Abandoned> {
-    // SAFETY: the caller establishes
-    // the all-free metadata predicate at the arena ingress boundary.
     unsafe { AllFreePage::abandoned_unchecked(page) }
 }
 raw_page_bridge!(

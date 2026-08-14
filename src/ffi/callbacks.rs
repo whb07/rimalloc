@@ -132,12 +132,7 @@ impl<'a, F: FnMut(bool, u64)> DeferredFreeCallbackGuard<'a, F> {
     /// cannot trigger the same callback or violate the required synchronization.
     #[inline]
     pub unsafe fn new(callback: &'a mut F) -> Self {
-        // SAFETY: this snapshots global callback state
-        // before replacing it with a trampoline tied to `callback`.
         let previous = unsafe { crate::allocator::page::registered_deferred_free_callback() };
-        // SAFETY: the guard stores `callback` for at
-        // least as long as the registration is active and restores the previous
-        // callback in `Drop`.
         unsafe {
             crate::allocator::page::mi_register_deferred_free(
                 Some(deferred_free_callback_trampoline::<F>),
@@ -153,20 +148,14 @@ impl<'a, F: FnMut(bool, u64)> DeferredFreeCallbackGuard<'a, F> {
 
 impl<F: FnMut(bool, u64)> Drop for DeferredFreeCallbackGuard<'_, F> {
     fn drop(&mut self) {
-        // SAFETY: restoring the exact callback snapshot
-        // captured during guard construction.
         unsafe { crate::allocator::page::restore_deferred_free_callback(self.previous) };
     }
 }
 
-// SAFETY: registered only with callback arguments
-// created by `ErrorCallbackGuard`, and it catches Rust panics before ABI return.
 unsafe extern "C" fn error_callback_trampoline<F: FnMut(i32)>(err: i32, arg: *mut c_void) {
     if arg.is_null() {
         return;
     }
-    // SAFETY: guard construction stores a valid `&mut F`
-    // as the callback argument for the active registration lifetime.
     let Some(callback) = (unsafe { arg.cast::<F>().as_mut() }) else {
         return;
     };
@@ -180,9 +169,6 @@ unsafe extern "C" fn error_callback_trampoline<F: FnMut(i32)>(err: i32, arg: *mu
     }
 }
 
-// SAFETY: registered only with callback arguments
-// created by `DeferredFreeCallbackGuard`, and it catches Rust panics before ABI
-// return.
 unsafe extern "C" fn deferred_free_callback_trampoline<F: FnMut(bool, u64)>(
     force: bool,
     heartbeat: u64,
@@ -191,8 +177,6 @@ unsafe extern "C" fn deferred_free_callback_trampoline<F: FnMut(bool, u64)>(
     if arg.is_null() {
         return;
     }
-    // SAFETY: guard construction stores a valid `&mut F`
-    // as the callback argument for the active registration lifetime.
     let Some(callback) = (unsafe { arg.cast::<F>().as_mut() }) else {
         return;
     };

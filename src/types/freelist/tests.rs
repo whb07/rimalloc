@@ -19,8 +19,6 @@ fn thread_free_word_round_trips_owner_without_head() {
 #[test]
 fn thread_free_word_preserves_aligned_head_pointer() {
     let mut block = crate::types::mi_block_t::default();
-    // SAFETY: stack-local block metadata is
-    // non-null and aligned for exercising packed thread-free word helpers.
     let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
 
     let word = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
@@ -36,8 +34,6 @@ fn thread_free_word_preserves_aligned_head_pointer() {
 #[test]
 fn thread_free_word_updates_owner_without_decoding_head() {
     let mut block = crate::types::mi_block_t::default();
-    // SAFETY: stack-local block metadata is
-    // non-null and aligned for exercising packed thread-free word helpers.
     let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
     let word = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
 
@@ -52,8 +48,6 @@ fn thread_free_word_updates_owner_without_decoding_head() {
 #[test]
 fn thread_free_word_clears_head_without_decoding_owner() {
     let mut block = crate::types::mi_block_t::default();
-    // SAFETY: stack-local block metadata is
-    // non-null and aligned for exercising packed thread-free word helpers.
     let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
     let owned = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
     let unowned = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Unowned);
@@ -81,14 +75,10 @@ fn default_freelist_links_are_raw_pointers() {
         next: raw_next as usize,
     };
 
-    // SAFETY: the test passes stack-local
-    // block metadata and no page context to characterize raw unencoded links.
     let decoded = unsafe { crate::internal::mi_block_nextx(ptr::null(), &block, &keys) };
     assert_eq!(decoded, raw_next);
 
     let replacement = 0x8765_4321usize as *const crate::types::mi_block_t;
-    // SAFETY: the replacement pointer is
-    // opaque test data written to stack-local block metadata for link decoding.
     unsafe { crate::internal::mi_block_set_nextx(ptr::null(), &mut block, replacement, &keys) };
     assert_eq!(block.next, replacement as usize);
 }

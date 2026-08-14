@@ -87,8 +87,6 @@ fn scalar_constructor_boundaries_cover_overflow_and_limits() {
 #[test]
 fn block_size_usable_subtracts_padding_domain() {
     let raw = crate::types::MI_PADDING_SIZE + 64;
-    // SAFETY: `raw` includes the padding
-    // domain required by `BlockSize` and stays local to the wrapper test.
     let block = unsafe { BlockSize::new_unchecked(raw) };
     assert_eq!(block.usable().get(), 64);
 }
@@ -96,8 +94,6 @@ fn block_size_usable_subtracts_padding_domain() {
 #[test]
 fn full_block_size_preserves_block_size_domain() {
     let raw = crate::types::MI_PADDING_SIZE + 128;
-    // SAFETY: `raw` includes the padding
-    // domain required by `BlockSize` and stays local to the wrapper test.
     let block = unsafe { BlockSize::new_unchecked(raw) };
     assert_eq!(FullBlockSize::from_block_size(block).get(), raw);
 }
@@ -198,8 +194,6 @@ fn heartbeat_preserves_raw_value_and_wraps_on_increment() {
 
 #[test]
 fn os_page_size_preserves_nonzero_raw_value() {
-    // SAFETY: `4096` is a concrete non-zero
-    // OS page-size fixture used only for scalar wrapper testing.
     let page_size = unsafe { OsPageSize::new_unchecked(4096) };
     assert_eq!(page_size.get(), 4096);
 }
@@ -223,8 +217,6 @@ fn bin_rejects_indexes_outside_page_queue_table() {
     );
     assert!(Bin::new(crate::types::MI_BIN_COUNT as u16).is_none());
 
-    // SAFETY: `3` is within the page-queue
-    // bin table bounds checked above.
     let unchecked = unsafe { Bin::new_unchecked(3) };
     assert_eq!(unchecked.0, 3);
 }
@@ -238,8 +230,6 @@ fn stats_bin_rejects_indexes_above_huge_bin() {
     );
     assert!(StatsBin::new((crate::allocator::stats::MI_BIN_HUGE + 1) as u16).is_none());
 
-    // SAFETY: `3` is within the stats-bin
-    // table bounds checked above.
     let unchecked = unsafe { StatsBin::new_unchecked(3) };
     assert_eq!(unchecked.as_usize(), 3);
 }
@@ -256,8 +246,6 @@ fn arena_index_rejects_indexes_outside_arena_table() {
     assert!(ArenaIndex::from_usize(crate::types::MI_MAX_ARENAS).is_none());
     assert!(ArenaIndex::from_usize(u16::MAX as usize + 1).is_none());
 
-    // SAFETY: `3` is within the arena table
-    // bounds checked above.
     let unchecked = unsafe { ArenaIndex::new_unchecked(3) };
     assert_eq!(unchecked.get(), 3);
 }
@@ -268,8 +256,6 @@ fn maybe_alignment_accepts_zero_or_power_of_two() {
     assert_eq!(MaybeAlignment::new(64).map(MaybeAlignment::get), Some(64));
     assert!(MaybeAlignment::new(24).is_none());
 
-    // SAFETY: this deliberately non-power-of-two
-    // optional alignment fixture stays local to the raw-domain preservation test.
     let unchecked = unsafe { MaybeAlignment::new_unchecked(24) };
     assert_eq!(unchecked.get(), 24);
 }

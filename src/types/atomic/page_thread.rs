@@ -25,8 +25,6 @@ impl AtomicPageThreadId {
     /// `self.0` must point to a valid page's `xthread_id` field.
     #[inline(always)]
     pub(crate) unsafe fn load(self) -> PageThreadId {
-        // SAFETY: the caller provides a valid page
-        // `xthread_id` atomic field and this wrapper preserves relaxed loading.
         PageThreadId::new(unsafe { self.0.load(Ordering::Relaxed) })
     }
 
@@ -36,8 +34,6 @@ impl AtomicPageThreadId {
     /// `self.0` must point to a valid page's `xthread_id` field.
     #[inline(always)]
     pub(crate) unsafe fn load_relaxed(self) -> PageThreadId {
-        // SAFETY: compatibility shim forwards to the
-        // typed relaxed page-thread-id loader with the same caller contract.
         unsafe { self.load() }
     }
 
@@ -50,8 +46,6 @@ impl AtomicPageThreadId {
     /// `self.0` must point to a valid page's `xthread_id` field.
     #[inline(always)]
     pub(crate) unsafe fn set_flags(self, flags: PageFlags, set: bool) -> PageThreadId {
-        // SAFETY: the caller provides a valid page
-        // `xthread_id` atomic field; the RMW keeps C's relaxed flag update.
         let old = if set {
             unsafe { self.0.fetch_or(flags.bits(), Ordering::Relaxed) }
         } else {
@@ -70,14 +64,10 @@ impl AtomicPageThreadId {
     /// concurrent free-path readers that require Acq/Rel ordering).
     #[inline(always)]
     pub(crate) unsafe fn store_owner(self, owner: PageOwnerId) {
-        // SAFETY: the caller provides a valid page
-        // `xthread_id` field and page state that permits relaxed owner updates.
         let current = unsafe { self.0.load(Ordering::Relaxed) };
         // `with_owner` preserves the existing flag bits, so no separate
         // `.with_flags(...)` is needed.
         let new = PageThreadId::new(current).with_owner(owner);
-        // SAFETY: the new typed word preserves the
-        // existing flag bits and writes only the page owner encoding.
         unsafe { self.0.store(new.raw(), Ordering::Relaxed) };
     }
 
@@ -93,9 +83,6 @@ impl AtomicPageThreadId {
         new: PageThreadId,
     ) -> bool {
         let mut raw_expected = expected.raw();
-        // SAFETY: the caller provides a valid page
-        // `xthread_id` field; failure writes the observed raw word back to a typed
-        // `PageThreadId`.
         let exchanged = unsafe {
             self.0.compare_exchange_weak(
                 &mut raw_expected,

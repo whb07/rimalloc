@@ -8,9 +8,6 @@ use core::{mem::MaybeUninit, ptr};
 
 fn with_page<R>(xthread_id: usize, f: impl FnOnce(PagePtr) -> R) -> R {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
-    // SAFETY: this initializes only the
-    // stack-local page fields needed by page-state typestate tests. The page is
-    // never registered with allocator globals and is used only while live here.
     unsafe {
         ptr::addr_of_mut!((*page.as_mut_ptr()).xthread_id).write(xthread_id);
         f(PagePtr::new_unchecked(page.as_mut_ptr()))
@@ -18,9 +15,6 @@ fn with_page<R>(xthread_id: usize, f: impl FnOnce(PagePtr) -> R) -> R {
 }
 
 fn heap_owner() -> ThreadHeapLocal {
-    // SAFETY: this is a non-null identity
-    // witness for tests that only preserve or compare ownership; no test
-    // dereferences the dangling thread-heap pointer.
     unsafe {
         ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(
             core::ptr::NonNull::<mi_theap_t>::dangling().as_ptr(),
@@ -30,9 +24,6 @@ fn heap_owner() -> ThreadHeapLocal {
 
 #[test]
 fn uninit_initialize_yields_active_page() {
-    // SAFETY: the page pointer comes from
-    // `with_page` and is used only to exercise the uninit-to-active witness
-    // transition while the stack-local page is live.
     with_page(0, |page| unsafe {
         let active = Page::<Uninit>::new_unchecked(page).initialize(heap_owner());
         assert_eq!(active.page().as_ptr(), page.as_ptr());
@@ -43,9 +34,6 @@ fn uninit_initialize_yields_active_page() {
 fn active_available_and_pop_free_block_update_page_state() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
-    // SAFETY: this builds the minimal
-    // stack-local page/block metadata needed for one available free block and
-    // consumes it before either stack value leaves scope.
     unsafe {
         let raw = page.as_mut_ptr();
         ptr::addr_of_mut!((*raw).free).write(ptr::addr_of_mut!(block));
@@ -79,9 +67,6 @@ fn active_available_and_pop_free_block_update_page_state() {
 fn local_push_free_block_updates_local_list_and_used_count() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
-    // SAFETY: this builds the minimal
-    // stack-local page/block metadata needed to push one freed block onto the
-    // page-local free list before the locals leave scope.
     unsafe {
         let raw = page.as_mut_ptr();
         ptr::addr_of_mut!((*raw).local_free).write(ptr::null_mut());
@@ -303,9 +288,6 @@ fn all_free_and_retire_preserve_page_identity() {
 
 #[test]
 fn abandon_and_reclaim_transitions_preserve_page_identity() {
-    // SAFETY: the stack-local page is
-    // used only as an identity witness while exercising abandon and reclaim
-    // typestate transitions.
     with_page(0, |page| unsafe {
         match ActivePage::new_unchecked(page).into_abandon_candidate() {
             PageForAbandon::Active(active) => assert_eq!(active.page().as_ptr(), page.as_ptr()),
@@ -425,9 +407,6 @@ fn local_active_classification_refines_all_free_without_duplicating_identity() {
 
 #[test]
 fn abandoned_claim_ownership_uses_thread_free_ownership_bit() {
-    // SAFETY: the fixture writes a
-    // concrete unowned thread-free word into stack-local page metadata before
-    // claiming ownership through the typed abandoned-page wrapper.
     with_page(0, |page| unsafe {
         let thread_free = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Unowned);
         ptr::addr_of_mut!((*page.as_ptr()).xthread_free).write(thread_free.raw());
@@ -450,8 +429,6 @@ fn abandoned_mapped_classification_remains_distinct() {
     let flags = PageFlags::HAS_INTERIOR_POINTERS;
     let mapped = PageThreadId::from_parts(PageOwnerId::AbandonedMapped, flags);
 
-    // SAFETY: the fixture sets only the
-    // owner/flag word needed to classify a stack-local page as abandoned-mapped.
     with_page(mapped.raw(), |page| unsafe {
         match page.snapshot_free_route(current) {
             FreeRouteSnapshot::AbandonedMapped(mapped_page) => {
@@ -468,8 +445,6 @@ fn abandoned_mapped_classification_remains_distinct() {
     });
 
     let abandoned = PageThreadId::from_parts(PageOwnerId::Abandoned, flags);
-    // SAFETY: the fixture sets only the
-    // owner/flag word needed to classify a stack-local page as abandoned.
     with_page(abandoned.raw(), |page| unsafe {
         match page.snapshot_free_route(current) {
             FreeRouteSnapshot::Abandoned(abandoned_page) => {

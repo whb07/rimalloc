@@ -3,11 +3,7 @@ use core::mem::MaybeUninit;
 
 fn with_arena_slice_count<R>(count: usize, f: impl FnOnce(ArenaPtr) -> R) -> R {
     let mut raw = MaybeUninit::<crate::types::mi_arena_t>::zeroed();
-    // SAFETY: `raw` is stack-local arena
-    // metadata, and the pointer remains valid for the duration of `f`.
     let arena = unsafe { ArenaPtr::new_unchecked(raw.as_mut_ptr()) };
-    // SAFETY: the test has unique access to
-    // the stack-local arena metadata before passing the typed pointer to `f`.
     unsafe { (*arena.as_ptr()).slice_count = count }
     f(arena)
 }

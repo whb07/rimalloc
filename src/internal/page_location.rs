@@ -7,7 +7,6 @@ use crate::types::mi_page_t;
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
-    // SAFETY: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe { (*page).page_start }
 }
 
@@ -15,7 +14,6 @@ pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
-    // SAFETY: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe {
         matches!(
             crate::core_types::MemId::view((*page).memid),
@@ -28,7 +26,6 @@ pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
-    // SAFETY: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe {
         if super::MI_PAGE_META_IS_SEPARATED != 0 {
             mi_page_is_in_arena(page)
@@ -44,7 +41,6 @@ pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_slice_start(page: *const mi_page_t) -> *mut u8 {
-    // SAFETY: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe {
         if mi_page_meta_is_separated(page) {
             super::_mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN).cast::<u8>()
@@ -61,7 +57,6 @@ pub unsafe fn mi_page_slice_offset_of(
     page: *const mi_page_t,
     offset_relative_to_page_start: usize,
 ) -> usize {
-    // SAFETY: page location helpers derive arena, slice, and address ranges from allocator metadata.
     unsafe {
         ((*page).page_start as usize - mi_page_slice_start(page) as usize)
             + offset_relative_to_page_start

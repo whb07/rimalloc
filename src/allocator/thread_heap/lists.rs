@@ -11,15 +11,11 @@ use crate::core_types::{HeapPtr, ThreadHeapPtr, TldPtr};
 
 #[inline(always)]
 unsafe fn heap_next(theap: ThreadHeapPtr) -> Option<ThreadHeapPtr> {
-    // SAFETY: callers provide thread-heap
-    // metadata linked through the heap-local thread-heap list protocol.
     unsafe { ThreadHeapPtr::new((*theap.as_ptr()).hnext) }
 }
 
 #[inline(always)]
 unsafe fn set_heap_next(theap: ThreadHeapPtr, next: Option<ThreadHeapPtr>) {
-    // SAFETY: caller owns mutation of the
-    // thread heap's heap-local list links.
     unsafe {
         (*theap.as_ptr()).hnext = next.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
     }
@@ -27,15 +23,11 @@ unsafe fn set_heap_next(theap: ThreadHeapPtr, next: Option<ThreadHeapPtr>) {
 
 #[inline(always)]
 unsafe fn heap_prev(theap: ThreadHeapPtr) -> Option<ThreadHeapPtr> {
-    // SAFETY: callers provide thread-heap
-    // metadata linked through the heap-local thread-heap list protocol.
     unsafe { ThreadHeapPtr::new((*theap.as_ptr()).hprev) }
 }
 
 #[inline(always)]
 unsafe fn set_heap_prev(theap: ThreadHeapPtr, prev: Option<ThreadHeapPtr>) {
-    // SAFETY: caller owns mutation of the
-    // thread heap's heap-local list links.
     unsafe {
         (*theap.as_ptr()).hprev = prev.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
     }
@@ -43,15 +35,11 @@ unsafe fn set_heap_prev(theap: ThreadHeapPtr, prev: Option<ThreadHeapPtr>) {
 
 #[inline(always)]
 unsafe fn tld_next(theap: ThreadHeapPtr) -> Option<ThreadHeapPtr> {
-    // SAFETY: callers provide thread-heap
-    // metadata linked through the TLD-local thread-heap list protocol.
     unsafe { ThreadHeapPtr::new((*theap.as_ptr()).tnext) }
 }
 
 #[inline(always)]
 unsafe fn set_tld_next(theap: ThreadHeapPtr, next: Option<ThreadHeapPtr>) {
-    // SAFETY: caller owns mutation of the
-    // thread heap's TLD-local list links.
     unsafe {
         (*theap.as_ptr()).tnext = next.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
     }
@@ -59,15 +47,11 @@ unsafe fn set_tld_next(theap: ThreadHeapPtr, next: Option<ThreadHeapPtr>) {
 
 #[inline(always)]
 unsafe fn tld_prev(theap: ThreadHeapPtr) -> Option<ThreadHeapPtr> {
-    // SAFETY: callers provide thread-heap
-    // metadata linked through the TLD-local thread-heap list protocol.
     unsafe { ThreadHeapPtr::new((*theap.as_ptr()).tprev) }
 }
 
 #[inline(always)]
 unsafe fn set_tld_prev(theap: ThreadHeapPtr, prev: Option<ThreadHeapPtr>) {
-    // SAFETY: caller owns mutation of the
-    // thread heap's TLD-local list links.
     unsafe {
         (*theap.as_ptr()).tprev = prev.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
     }
@@ -77,8 +61,6 @@ unsafe fn set_tld_prev(theap: ThreadHeapPtr, prev: Option<ThreadHeapPtr>) {
 /// `tld` must own initialized TLD metadata, and `theap` must be initialized
 /// with clear TLD-list links.
 pub(super) unsafe fn push_tld_front(tld: TldPtr, theap: ThreadHeapPtr) -> Option<ThreadHeapPtr> {
-    // SAFETY: this critical section owns head,
-    // next, and prev updates for the TLD-local thread-heap list.
     unsafe {
         mi_lock_acquire(tld.thread_heaps_lock());
         let first = tld.thread_heaps();
@@ -97,8 +79,6 @@ pub(super) unsafe fn push_tld_front(tld: TldPtr, theap: ThreadHeapPtr) -> Option
 /// `heap` must own initialized heap metadata, and `theap` must be initialized
 /// with clear heap-list links.
 pub(super) unsafe fn push_heap_front(heap: HeapPtr, theap: ThreadHeapPtr) {
-    // SAFETY: this critical section owns head,
-    // next, and prev updates for the heap-local thread-heap list.
     unsafe {
         mi_lock_acquire(heap.thread_heaps_lock());
         let first = heap.thread_heaps();
@@ -116,8 +96,6 @@ pub(super) unsafe fn push_heap_front(heap: HeapPtr, theap: ThreadHeapPtr) {
 /// `heap` must own initialized heap metadata, and `theap` must be linked in
 /// that heap's thread-heap list.
 pub(super) unsafe fn remove_from_heap(heap: HeapPtr, theap: ThreadHeapPtr, acquire_lock: bool) {
-    // SAFETY: caller selects whether the heap
-    // thread-heap list lock is already held; this block owns unlinking.
     unsafe {
         if acquire_lock {
             mi_lock_acquire(heap.thread_heaps_lock());
@@ -145,8 +123,6 @@ pub(super) unsafe fn remove_from_heap(heap: HeapPtr, theap: ThreadHeapPtr, acqui
 /// `tld` must own initialized TLD metadata, and `theap` must be linked in that
 /// TLD's thread-heap list.
 pub(super) unsafe fn remove_from_tld(tld: TldPtr, theap: ThreadHeapPtr, acquire_lock: bool) {
-    // SAFETY: caller selects whether the TLD
-    // thread-heap list lock is already held; this block owns unlinking.
     unsafe {
         if acquire_lock {
             mi_lock_acquire(tld.thread_heaps_lock());

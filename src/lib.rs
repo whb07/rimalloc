@@ -327,15 +327,8 @@ pub use safe::{
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MiMalloc;
 
-// SAFETY: `MiMalloc` is a zero-sized facade over the
-// process allocator. Each unsafe trait method delegates to mimalloc while
-// preserving Rust's `GlobalAlloc` null-on-failure and caller-layout contract.
 unsafe impl core::alloc::GlobalAlloc for MiMalloc {
-    // SAFETY: the trait method preserves the caller-owned
-    // layout contract before selecting the matching mimalloc allocation path.
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        // SAFETY: `GlobalAlloc` callers provide a valid
-        // non-zero `Layout`; over-aligned requests use mimalloc's aligned path.
         unsafe {
             if layout.align() <= types::MI_MAX_ALIGN_SIZE {
                 allocator::alloc::mi_malloc(layout.size()).cast()
@@ -345,11 +338,7 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         }
     }
 
-    // SAFETY: the zeroed trait method has the same layout
-    // contract as `alloc` and only changes the selected mimalloc entry point.
     unsafe fn alloc_zeroed(&self, layout: core::alloc::Layout) -> *mut u8 {
-        // SAFETY: same layout contract as `alloc`, with
-        // the zeroing path selected before returning to the caller.
         unsafe {
             if layout.align() <= types::MI_MAX_ALIGN_SIZE {
                 allocator::alloc::mi_zalloc(layout.size()).cast()
@@ -359,25 +348,16 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         }
     }
 
-    // SAFETY: the trait caller supplies the live pointer
-    // and original layout; mimalloc owns the matching deallocation boundary.
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: core::alloc::Layout) {
-        // SAFETY: `GlobalAlloc` requires `ptr` to be a
-        // live allocation from this allocator with its original layout.
         unsafe { allocator::free::mi_free(ptr.cast()) }
     }
 
-    // SAFETY: reallocation keeps the trait's caller-owned
-    // pointer/layout contract and routes over-aligned layouts explicitly.
     unsafe fn realloc(
         &self,
         ptr: *mut u8,
         layout: core::alloc::Layout,
         new_size: usize,
     ) -> *mut u8 {
-        // SAFETY: `GlobalAlloc` requires `ptr` and
-        // `layout` to identify a live allocation; mimalloc preserves contents
-        // on success and returns null on failure.
         unsafe {
             if layout.align() <= types::MI_MAX_ALIGN_SIZE {
                 allocator::alloc::mi_realloc(ptr.cast(), new_size).cast()
@@ -391,8 +371,6 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
 #[cfg(all(not(test), target_os = "linux", not(feature = "std")))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
-    // SAFETY: the no_std panic handler forwards a static
-    // message to mimalloc's aborting assertion path and never unwinds.
     unsafe {
         allocator::options::_mi_assert_fail(
             c"panic".as_ptr(),
@@ -404,19 +382,13 @@ fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
 }
 
 #[cfg(all(not(test), target_os = "linux", not(feature = "std")))]
-// SAFETY: declaration of the platform abort symbol used
-// only by the no_std personality shim.
 unsafe extern "C" {
     #[link_name = "abort"]
     fn c_abort() -> !;
 }
 
 #[cfg(all(not(test), target_os = "linux", not(feature = "std")))]
-// SAFETY: this no-std export satisfies the runtime
-// personality symbol by aborting instead of unwinding across the boundary.
 #[unsafe(no_mangle)]
 extern "C" fn rust_eh_personality() {
-    // SAFETY: no_std builds abort if an unwinding
-    // personality is reached.
     unsafe { c_abort() }
 }

@@ -90,8 +90,6 @@ impl RemoteFreeBatch {
 
 #[inline]
 unsafe fn classify_foreign_link(page: PagePtr, block: BlockPtr) -> BatchValidationError {
-    // SAFETY: allocator page lookup accepts an
-    // arbitrary candidate address and returns null when it is unregistered.
     let owner = unsafe { crate::internal::_mi_ptr_page(block.as_ptr().cast()) };
     if !owner.is_null() && owner != page.as_ptr() {
         BatchValidationError::DifferentPage
@@ -133,21 +131,13 @@ unsafe fn scan_detached_chain_impl<const VALIDATE_BLOCKS: bool>(
     let mut current = head;
     let mut observed = 0usize;
     loop {
-        // SAFETY: hardened callers classify
-        // membership before dereferencing a block. Trusted callers discharge
-        // the same-page invariant through the detached-list owner proof.
         if validated_range.is_some_and(|range| !range.contains(current)) {
             return Err(unsafe { classify_foreign_link(page, current) });
         }
 
         observed += 1;
-        // SAFETY: hardened callers validated
-        // membership above; trusted callers guarantee membership and readable
-        // link storage through the constructor contract.
         let next = unsafe { current.next(page) };
         let Some(next) = next else {
-            // SAFETY: observed is in 1..=capacity
-            // and therefore fits the page's u16 count domain.
             let len = unsafe { BatchLen::new_unchecked(observed as u16) };
             return Ok(BatchCore {
                 page,
@@ -179,8 +169,6 @@ unsafe fn scan_detached_chain(
     head: BlockPtr,
     capacity: PageCapacity,
 ) -> Result<BatchCore, BatchValidationError> {
-    // SAFETY: the caller provides the live page
-    // and unique detached chain required by the validating scanner.
     unsafe { scan_detached_chain_impl::<true>(page, head, capacity) }
 }
 
@@ -197,9 +185,6 @@ unsafe fn scan_trusted_detached_chain(
     head: BlockPtr,
     capacity: PageCapacity,
 ) -> Result<BatchCore, BatchValidationError> {
-    // SAFETY: the caller's detached-list
-    // ownership proof establishes page identity; the scanner retains C's
-    // capacity bound before following more than one page of links.
     unsafe { scan_detached_chain_impl::<false>(page, head, capacity) }
 }
 
@@ -213,8 +198,6 @@ impl RemoteFreeBatch {
         capacity: PageCapacity,
         used: UsedBlockCount,
     ) -> Result<Self, BatchValidationError> {
-        // SAFETY: the detached-list owner provides
-        // live page metadata and unique traversal access.
         #[cfg(feature = "bench-diagnostics")]
         crate::allocator::bench_diagnostics::remote_list_detached();
         let core = match if cfg!(any(
@@ -222,13 +205,8 @@ impl RemoteFreeBatch {
             feature = "secure",
             feature = "bench-diagnostics"
         )) {
-            // SAFETY: hardened builds validate
-            // every block before following its encoded link.
             unsafe { scan_detached_chain(page, head, capacity) }
         } else {
-            // SAFETY: the unsafe
-            // constructor contract requires this uniquely detached chain to
-            // belong to `page`; ordinary release retains C's bounded scan.
             unsafe { scan_trusted_detached_chain(page, head, capacity) }
         } {
             Ok(core) => core,
@@ -260,8 +238,6 @@ impl RemoteFreeBatch {
         owner: &LocalPage,
         current: LocalFreeList,
     ) -> LocalFreeList {
-        // SAFETY: the typed local owner
-        // and detached batch establish exclusive page-local splice access.
         unsafe { self.collect_into_page(owner.page(), current) }
     }
 
@@ -273,20 +249,14 @@ impl RemoteFreeBatch {
         owner: &OwnedAbandonedPage,
         current: LocalFreeList,
     ) -> LocalFreeList {
-        // SAFETY: claimed abandoned-page
-        // ownership and the detached batch exclude competing collectors.
         unsafe { self.collect_into_page(owner.page(), current) }
     }
 
     #[inline]
     unsafe fn collect_into_page(self, owner: PagePtr, current: LocalFreeList) -> LocalFreeList {
         crate::internal::mi_debug_assert!(owner == self.page());
-        // SAFETY: the batch tail is
-        // detached and all links share the owner's page-local encoding keys.
         unsafe { self.tail().set_next(owner, current.head()) };
         let new_local = LocalFreeList::from_head(self.head());
-        // SAFETY: batch construction
-        // proved len <= used, so subtraction and metadata publication agree.
         unsafe {
             owner.set_local_free(LocalFreeList::from_head(self.head()));
             let used = owner.used();
@@ -308,8 +278,6 @@ impl LocalFreeBatch {
         owner: &LocalPage,
         available: AvailableFreeList,
     ) -> AvailableFreeList {
-        // SAFETY: LocalPage proves
-        // exclusive current-thread access to the destination page lists.
         unsafe { self.prepend_to_page(owner.page(), available) }
     }
 
@@ -321,8 +289,6 @@ impl LocalFreeBatch {
         owner: &OwnedAbandonedPage,
         available: AvailableFreeList,
     ) -> AvailableFreeList {
-        // SAFETY: claimed abandoned-page
-        // ownership excludes competing collectors for the destination lists.
         unsafe { self.prepend_to_page(owner.page(), available) }
     }
 
@@ -333,8 +299,6 @@ impl LocalFreeBatch {
         available: AvailableFreeList,
     ) -> AvailableFreeList {
         crate::internal::mi_debug_assert!(owner == self.page());
-        // SAFETY: the local batch is
-        // uniquely detached and its tail may be linked to the current free head.
         unsafe { self.tail().set_next(owner, available.head()) };
         AvailableFreeList::from_head(self.head())
     }
@@ -349,8 +313,6 @@ impl LocalPage {
     pub(crate) unsafe fn detach_local_free_batch(
         &self,
     ) -> Result<Option<LocalFreeBatch>, BatchValidationError> {
-        // SAFETY: LocalPage proves
-        // exclusive current-thread access to the page-local list.
         unsafe { detach_local_free_batch(self.page()) }
     }
 }
@@ -364,8 +326,6 @@ impl OwnedAbandonedPage {
     pub(crate) unsafe fn detach_local_free_batch(
         &self,
     ) -> Result<Option<LocalFreeBatch>, BatchValidationError> {
-        // SAFETY: claimed
-        // abandoned-page ownership excludes competing local-list collectors.
         unsafe { detach_local_free_batch(self.page()) }
     }
 }
@@ -374,22 +334,14 @@ impl OwnedAbandonedPage {
 unsafe fn detach_local_free_batch(
     page: PagePtr,
 ) -> Result<Option<LocalFreeBatch>, BatchValidationError> {
-    // SAFETY: the local owner may read
-    // its page-local list and capacity metadata.
     let local = unsafe { page.local_free() };
     let Some(head) = local.head() else {
         return Ok(None);
     };
-    // SAFETY: the local owner may read
-    // initialized page capacity while validating its current chain.
     let capacity = unsafe { page.capacity() };
-    // SAFETY: the current local list
-    // remains published and unchanged throughout the bounded scan.
     let core = unsafe { scan_detached_chain(page, head, capacity) }?;
     #[cfg(feature = "bench-diagnostics")]
     crate::allocator::bench_diagnostics::local_tail_scan(core.len().get() as usize);
-    // SAFETY: validation succeeded, so
-    // clearing the field uniquely transfers the complete chain to the batch.
     unsafe { page.set_local_free(LocalFreeList::empty()) };
     Ok(Some(LocalFreeBatch(core)))
 }

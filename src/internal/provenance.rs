@@ -9,13 +9,7 @@ mod miri {
     #[derive(Clone, Copy)]
     struct ProvenancePtr(*mut c_void);
 
-    // SAFETY: this module is compiled only
-    // under Miri. The registry stores raw pointer values for later
-    // reconstruction on the same interpreter thread model; it never grants
-    // aliasing or lifetime permissions by itself.
     unsafe impl Send for ProvenancePtr {}
-    // SAFETY: see the `Send` impl;
-    // synchronization is provided by `RwLock`.
     unsafe impl Sync for ProvenancePtr {}
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

@@ -129,8 +129,6 @@ pub(crate) fn _mi_random_shuffle(mut x: usize) -> usize {
 
 #[inline]
 fn _mi_prim_clock_now() -> mi_msecs_t {
-    // SAFETY: the random weak-seed path only
-    // reads the platform clock through the primitive C-compatible boundary.
     unsafe { crate::prim::_mi_prim_clock_now() }
 }
 
@@ -182,15 +180,11 @@ fn mi_random_init_ex(ctx: &mut mi_random_ctx_t, use_weak: bool) {
 ///
 /// `ctx` and `ctx_new` must be valid, writable random contexts. They must be
 /// distinct, and `ctx` must already be initialized.
-// SAFETY: raw random context shims preserve
-// the upstream C ABI and immediately convert to borrowed context references.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_split(
     ctx: *mut mi_random_ctx_t,
     ctx_new: *mut mi_random_ctx_t,
 ) {
-    // SAFETY: callers provide distinct,
-    // writable random contexts; after this point the split logic uses borrows.
     let ctx = unsafe { &mut *ctx };
     let ctx_new = unsafe { &mut *ctx_new };
     crate::internal::mi_debug_assert!(mi_random_is_initialized(ctx));
@@ -206,12 +200,8 @@ pub(crate) unsafe extern "C" fn _mi_random_split(
 ///
 /// `ctx` must point to an initialized random context that is writable for the
 /// duration of the call.
-// SAFETY: raw random context shims preserve
-// the upstream C ABI and immediately convert to a borrowed context reference.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize {
-    // SAFETY: caller supplies a live,
-    // initialized writable context; the random loop uses the borrowed value.
     let ctx = unsafe { &mut *ctx };
     crate::internal::mi_debug_assert!(mi_random_is_initialized(ctx));
     loop {
@@ -242,24 +232,16 @@ pub(crate) extern "C" fn _mi_os_random_weak(extra_seed: usize) -> usize {
 /// # Safety
 ///
 /// `ctx` must point to a writable random context.
-// SAFETY: raw random context shims preserve
-// the upstream C ABI and immediately convert to a borrowed context reference.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_init(ctx: *mut mi_random_ctx_t) {
-    // SAFETY: caller supplies a live writable
-    // context; initialization performs ordinary borrowed state updates.
     mi_random_init_ex(unsafe { &mut *ctx }, false);
 }
 
 /// # Safety
 ///
 /// `ctx` must point to a writable random context.
-// SAFETY: raw random context shims preserve
-// the upstream C ABI and immediately convert to a borrowed context reference.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t) {
-    // SAFETY: caller supplies a live writable
-    // context; weak initialization performs ordinary borrowed state updates.
     mi_random_init_ex(unsafe { &mut *ctx }, true);
 }
 
@@ -267,12 +249,8 @@ pub(crate) unsafe extern "C" fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t) 
 ///
 /// `ctx` must point to a writable random context that was previously
 /// initialized by the random initialization routines.
-// SAFETY: raw random context shims preserve
-// the upstream C ABI and immediately convert to a borrowed context reference.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ctx_t) {
-    // SAFETY: caller supplies a live writable
-    // context; after the raw pointer conversion, reinitialization is borrowed.
     let ctx = unsafe { &mut *ctx };
     if ctx.weak {
         mi_random_init_ex(ctx, false);

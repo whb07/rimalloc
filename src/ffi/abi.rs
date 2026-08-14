@@ -49,13 +49,6 @@ pub const mi_attr_alloc_size2: () = ();
 pub const mi_attr_alloc_align: () = ();
 pub const MI_HAS_HEAP_STL_ALLOCATOR: usize = 1;
 
-// SAFETY: these are public C header compatibility
-// macros. They intentionally expand through the public raw C-shaped facade, not
-// crate-private internals, so downstream macro expansion observes header-like
-// allocation semantics.
-// SAFETY: these typed macros intentionally do not
-// wrap raw allocation calls in internal `unsafe` blocks. Callers must expand
-// them inside an unsafe boundary, matching the raw C-shaped function contract.
 #[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! mi_malloc_tp {
@@ -129,10 +122,6 @@ macro_rules! mi_heap_recalloc_tp {
     }};
 }
 
-// SAFETY: this block declares the raw mimalloc C
-// ABI only. It performs no calls or pointer dereferences, and keeps upstream
-// nullable raw pointer signatures for callers to uphold at each unsafe call
-// site.
 unsafe extern "C" {
     pub fn mi_malloc(size: usize) -> *mut c_void;
     pub fn mi_calloc(count: usize, size: usize) -> *mut c_void;

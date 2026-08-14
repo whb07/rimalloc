@@ -74,10 +74,12 @@ formatting, panic, lock, or syscall behavior to allocator critical paths.
 
 ## Unsafe Evidence
 
-`docs/unsafe-audit.md` owns the unsafe-code policy. Each unsafe operation has a
-local `// SAFETY:` proof, while behavior, concurrency, provenance, ABI, and
-code-generation claims are covered by the focused test or tool appropriate to
-the risk. The project does not maintain a parallel operation-ID ledger.
+`docs/unsafe-audit.md` owns the unsafe-code policy. Unsafe caller obligations
+belong in public contracts and compiler-enforced internal boundaries; local
+comments are reserved for non-obvious operation-specific invariants. Behavior,
+concurrency, provenance, ABI, and code-generation claims are covered by the
+focused test or tool appropriate to the risk. The project does not maintain a
+parallel operation-ID ledger.
 
 Allocator hot paths are guarded by the default `no_std` build, allocation
 boundary tests, and release evidence. New strict internal wrappers on hot paths

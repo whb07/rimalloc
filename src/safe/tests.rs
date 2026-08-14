@@ -59,8 +59,6 @@ fn owned_allocation_covers_sizes_and_alignments() {
 #[test]
 fn zeroed_allocation_returns_zeroed_bytes() {
     let allocation = Allocation::zeroed_with_size_align(32, 8).expect("allocation");
-    // SAFETY: the zeroed allocation is live for
-    // its stored length and is only read during this test.
     let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
     assert!(bytes.iter().all(|byte| *byte == 0));
 }
@@ -78,8 +76,6 @@ fn zeroed_allocation_covers_sizes_and_alignments() {
             assert_eq!(allocation.layout().align(), align);
             assert_eq!(allocation.as_ptr() as usize % align, 0);
 
-            // SAFETY: each zeroed allocation is
-            // live for its stored length and is only read during this test.
             let bytes =
                 unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
             assert!(bytes.iter().all(|byte| *byte == 0));
@@ -96,13 +92,9 @@ fn uninitialized_allocation_can_be_written_before_unsafe_read() {
     );
 
     for i in 0..allocation.len() {
-        // SAFETY: `i` stays within the allocation
-        // length and the test owns unique mutable access.
         unsafe { allocation.as_mut_ptr().add(i).write((i % 251) as u8) };
     }
 
-    // SAFETY: every byte was initialized by the
-    // loop above and the allocation remains live for its stored length.
     let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
     assert_eq!(bytes[0], 0);
     assert_eq!(bytes[31], 31);
@@ -116,8 +108,6 @@ fn maybe_uninit_allocation_views_initialize_without_raw_pointer_loop() {
         slot.write((idx + 1) as u8);
     }
 
-    // SAFETY: the loop above initializes every
-    // byte in the allocation before the initialized transition.
     let initialized = unsafe { allocation.assume_initialized() };
     assert_eq!(initialized.as_bytes(), &[1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -168,14 +158,10 @@ fn byte_allocation_constructors_use_alignment_one() {
 fn allocation_is_move_only_and_drops_once() {
     let mut allocation = Allocation::with_size_align(64, 16).expect("allocation");
     let ptr = allocation.as_mut_ptr();
-    // SAFETY: the allocation is live, uniquely
-    // owned, and large enough for one byte.
     unsafe { ptr.write(42) };
 
     let moved = allocation;
     assert_eq!(moved.as_ptr(), ptr.cast_const());
-    // SAFETY: `moved` still owns the live
-    // allocation and the first byte was initialized above.
     assert_eq!(unsafe { moved.as_ptr().read() }, 42);
 }
 
@@ -260,22 +246,16 @@ fn allocation_resize_grow_shrink_same_and_zero_edges() {
     let layout = Layout::from_size_align(16, 8).expect("layout");
     let mut allocation = Allocation::new(layout).expect("allocation");
     for idx in 0..allocation.len() {
-        // SAFETY: `idx` stays within the live
-        // allocation and the test owns unique mutable access.
         unsafe { allocation.as_mut_ptr().add(idx).write(idx as u8) };
     }
 
     let grown_layout = Layout::from_size_align(64, 8).expect("layout");
     let grown = allocation.resize(grown_layout).expect("grow");
-    // SAFETY: the grown allocation is live and the
-    // prefix length is the initialized prefix written above.
     let grown_bytes = unsafe { core::slice::from_raw_parts(grown.as_ptr(), 16) };
     assert_eq!(grown_bytes, (0u8..16).collect::<Vec<_>>().as_slice());
 
     let shrunk_layout = Layout::from_size_align(8, 8).expect("layout");
     let shrunk = grown.resize(shrunk_layout).expect("shrink");
-    // SAFETY: the shrunk allocation is live and
-    // the requested prefix is within the new layout.
     let shrunk_bytes = unsafe { core::slice::from_raw_parts(shrunk.as_ptr(), 8) };
     assert_eq!(shrunk_bytes, (0u8..8).collect::<Vec<_>>().as_slice());
 
@@ -339,12 +319,8 @@ fn initialized_allocation_exposes_safe_slices_and_clone() {
 fn uninitialized_allocation_requires_explicit_initialization() {
     let mut allocation = Allocation::with_size_align(8, 8).expect("allocation");
     for idx in 0..allocation.len() {
-        // SAFETY: `idx` stays within the live
-        // allocation and the test owns unique mutable access.
         unsafe { allocation.as_mut_ptr().add(idx).write((idx + 1) as u8) };
     }
-    // SAFETY: the loop above initializes every
-    // byte before the initialized transition.
     let initialized = unsafe { allocation.assume_initialized() };
     assert_eq!(initialized.as_bytes(), &[1, 2, 3, 4, 5, 6, 7, 8]);
 }
@@ -389,8 +365,6 @@ fn deterministic_resize_failure_preserves_original_allocation() {
     assert!(matches!(err.kind(), ResizeErrorKind::Alloc(_)));
     assert_eq!(err.allocation().layout(), old_layout);
     let allocation = err.into_allocation();
-    // SAFETY: failed resize preserves the original
-    // live allocation and all bytes were initialized before the failure.
     let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
     assert_eq!(bytes, &[1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -442,15 +416,11 @@ fn heap_zeroed_allocation_and_resize_preserve_ownership() {
 
     let mut allocation = zeroed.into_allocation();
     for idx in 0..allocation.len() {
-        // SAFETY: `idx` stays within the live heap
-        // allocation and the test owns unique mutable access.
         unsafe { allocation.as_mut_ptr().add(idx).write(idx as u8) };
     }
     let grown = allocation
         .resize(Layout::from_size_align(32, 8).expect("layout"))
         .expect("grow");
-    // SAFETY: the grown heap allocation is live and the
-    // prefix length is the initialized prefix written above.
     let bytes = unsafe { core::slice::from_raw_parts(grown.as_ptr(), 16) };
     assert_eq!(bytes, (0u8..16).collect::<Vec<_>>().as_slice());
 
@@ -505,9 +475,6 @@ fn deterministic_heap_allocation_failure_preserves_heap_ownership() {
 #[test]
 fn raw_product_allocation_failure_is_deterministic_and_null_returning() {
     let _quiet_expected_errors = ShowErrorsGuard::disabled();
-    // SAFETY: this test calls raw allocation
-    // entrypoints with overflow requests and asserts their null-return
-    // failure contract without dereferencing returned pointers.
     unsafe {
         assert!(crate::mimalloc::mi_mallocn(usize::MAX, 2).is_null());
         assert!(crate::mimalloc::mi_calloc(usize::MAX, 2).is_null());
@@ -562,8 +529,6 @@ fn maybe_uninit_heap_views_initialize_without_raw_pointer_loop() {
         slot.write((idx + 10) as u8);
     }
 
-    // SAFETY: the loop above initializes every byte in
-    // the heap allocation before the initialized transition.
     let initialized = unsafe { allocation.assume_initialized() };
     assert_eq!(initialized.as_bytes(), &[10, 11, 12, 13, 14, 15]);
 
@@ -605,8 +570,6 @@ fn main_heap_allocations_outlive_temporary_handle() {
     }
 
     allocation.as_uninit_slice_mut()[0].write(42);
-    // SAFETY: the single live byte was initialized before
-    // the initialized transition.
     let initialized = unsafe { allocation.assume_initialized() };
     assert_eq!(initialized.as_bytes()[0], 42);
     assert_eq!(zeroed.as_bytes(), &[0, 0, 0]);
@@ -701,15 +664,10 @@ fn stats_and_process_info_are_typed_and_nonprinting() {
     assert_eq!(info.system_time().as_millis(), info.system_msecs() as u128);
     assert!(info.page_size().is_some_and(|page_size| page_size > 0));
     assert!(info.page_faults().get() >= 0);
-    // SAFETY: querying the platform page size
-    // reads allocator primitive state and does not dereference caller data.
     let raw_page_size = unsafe { crate::os::_mi_os_page_size() };
     assert_eq!(info.page_size(), Some(raw_page_size));
 
     let mut raw_page_faults = 0usize;
-    // SAFETY: null out-pointers are accepted by
-    // the raw process-info API, and `raw_page_faults` is valid writable
-    // local storage for the only non-null out-pointer.
     unsafe {
         crate::allocator::stats::mi_process_info(
             ptr::null_mut(),
@@ -731,15 +689,10 @@ fn stats_and_process_info_are_typed_and_nonprinting() {
 static PREVIOUS_ERROR_CALLBACK_HITS: AtomicUsize = AtomicUsize::new(0);
 static PREVIOUS_DEFERRED_CALLBACK_HITS: AtomicUsize = AtomicUsize::new(0);
 
-// SAFETY: test-only C ABI callback used as a
-// previous error registration fixture; it only updates an atomic counter.
 unsafe extern "C" fn previous_error_callback(_err: i32, _arg: *mut c_void) {
     PREVIOUS_ERROR_CALLBACK_HITS.fetch_add(1, Ordering::SeqCst);
 }
 
-// SAFETY: test-only C ABI callback used as a
-// previous deferred-free registration fixture; it only updates an atomic
-// counter.
 unsafe extern "C" fn previous_deferred_free_callback(
     _force: bool,
     _heartbeat: u64,
@@ -773,9 +726,6 @@ struct DeferredFreeCallbackRestoreGuard {
 impl DeferredFreeCallbackRestoreGuard {
     fn new() -> Self {
         Self {
-            // SAFETY: tests snapshot the current
-            // process-global callback state inside the isolated callback test
-            // process.
             snapshot: unsafe { crate::allocator::page::registered_deferred_free_callback() },
         }
     }
@@ -783,8 +733,6 @@ impl DeferredFreeCallbackRestoreGuard {
 
 impl Drop for DeferredFreeCallbackRestoreGuard {
     fn drop(&mut self) {
-        // SAFETY: tests restore the exact callback
-        // snapshot captured inside the isolated callback test process.
         unsafe { crate::allocator::page::restore_deferred_free_callback(self.snapshot) };
     }
 }
@@ -797,9 +745,6 @@ fn trigger_error_callback() {
 }
 
 fn with_test_thread_heap<R>(f: impl FnOnce(*mut crate::types::mi_theap_t) -> R) -> R {
-    // SAFETY: the zeroed values are local callback
-    // test fixtures and are initialized only enough for deferred-free
-    // reentry suppression through the `tld` field.
     let mut tld = unsafe { MaybeUninit::<crate::types::mi_tld_t>::zeroed().assume_init() };
     let mut theap = unsafe { MaybeUninit::<crate::types::mi_theap_t>::zeroed().assume_init() };
     theap.tld = ptr::from_mut(&mut tld);
@@ -808,9 +753,6 @@ fn with_test_thread_heap<R>(f: impl FnOnce(*mut crate::types::mi_theap_t) -> R) 
 
 fn trigger_deferred_free_callback(theap: *mut crate::types::mi_theap_t, force: bool) {
     assert!(!theap.is_null());
-    // SAFETY: `theap` comes from
-    // `with_test_thread_heap` and stays live for this synchronous callback
-    // trigger.
     unsafe { crate::allocator::page::_mi_deferred_free(theap, force) };
 }
 
@@ -886,7 +828,6 @@ fn nested_error_callback_guards_restore_lifo_previous_callbacks() {
     trigger_error_callback();
 
     {
-        // SAFETY: same synchronization and LIFO nesting contract as above.
         let _inner_guard = unsafe { ErrorCallbackGuard::new(&mut inner_callback) };
         trigger_error_callback();
     }
@@ -979,7 +920,6 @@ fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
         trigger_deferred_free_callback(theap, false);
 
         {
-            // SAFETY: same synchronization and LIFO nesting contract as above.
             let _inner_guard = unsafe { DeferredFreeCallbackGuard::new(&mut inner_callback) };
             trigger_deferred_free_callback(theap, true);
         }
@@ -1144,8 +1084,6 @@ fn callback_addr<T>(callback: Option<T>) -> usize
 where
     T: Copy,
 {
-    // SAFETY: callback function pointer options are
-    // copied to an integer address only for equality checks in tests.
     callback.map_or(0, |callback| unsafe {
         core::mem::transmute_copy::<T, usize>(&callback)
     })

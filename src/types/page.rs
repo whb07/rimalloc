@@ -259,8 +259,6 @@ impl RegisteredPageRange {
     /// The caller must have registered `page` in the page map for
     /// `index/sub_index..+slice_count`, and that registration must still be
     /// valid for the lifetime of this witness.
-    // SAFETY: this constructor only packages the
-    // caller's registered page-map range proof into a typed witness.
     #[inline(always)]
     pub(crate) unsafe fn new_unchecked(
         page: PagePtr,

@@ -53,8 +53,6 @@ impl ThreadFreeWord {
 
         #[cfg(not(miri))]
         {
-            // SAFETY: the word was formed
-            // from a block pointer plus the low ownership bit in this type.
             ptr_val as *mut mi_block_t
         }
     }
@@ -65,10 +63,6 @@ impl ThreadFreeWord {
         if ptr.is_null() {
             None
         } else {
-            // SAFETY: the packed thread-free word stores
-            // a block pointer with only the ownership bit masked into bit 0.
-            // A nonzero head has been reconstructed through the provenance
-            // helper above, and `BlockPtr` only adds the non-null invariant.
             Some(unsafe { BlockPtr::new_unchecked(ptr) })
         }
     }
@@ -96,8 +90,6 @@ impl ThreadFreeWord {
     pub(crate) fn from_parts(head: Option<BlockPtr>, owned: ThreadFreeOwner) -> Self {
         let ptr_val = match head {
             Some(ptr) => {
-                // SAFETY: expose only the
-                // block address bits needed for the xthread_free packed word.
                 let val = ptr_exposed_addr(ptr.as_ptr());
                 crate::internal::mi_assert_internal!((val & Self::OWNED_BIT) == 0);
                 crate::internal::provenance::remember_address(val, ptr.as_ptr());

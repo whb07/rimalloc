@@ -119,13 +119,11 @@ pub const mi_option_limit_os_alloc: mi_option_t = mi_option_t::mi_option_disallo
 
 const MI_OPTION_COUNT: usize = mi_option_t::_mi_option_last.as_usize();
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_version() -> i32 {
     MI_MALLOC_VERSION
 }
 
-// SAFETY: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
     diagnostics::mi_register_output(out, arg);
@@ -139,7 +137,6 @@ pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void)
 
 /// # Safety
 /// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
-// SAFETY: warning and error display paths bound counters and route through C-compatible message output.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
@@ -149,7 +146,6 @@ pub(crate) unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
 
 /// # Safety
 /// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
-// SAFETY: allocation and error failures invoke registered callbacks or the default abort policy.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char) {
@@ -164,73 +160,61 @@ pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
     storage::option_get_fast(option)
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
     storage::option_get(option, diagnostics::_mi_warning_message_fmt)
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get_clamp(option: mi_option_t, min: c_long, max: c_long) -> c_long {
     storage::option_get_clamp(option, min, max, diagnostics::_mi_warning_message_fmt)
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get_size(option: mi_option_t) -> usize {
     storage::option_get_size(option, diagnostics::_mi_warning_message_fmt)
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
     storage::option_set(option, value);
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
     storage::option_set_default(option, value);
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_is_enabled(option: mi_option_t) -> bool {
     storage::option_is_enabled(option, diagnostics::_mi_warning_message_fmt)
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_enabled(option: mi_option_t, enable: bool) {
     storage::option_set_enabled(option, enable);
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_enabled_default(option: mi_option_t, enable: bool) {
     storage::option_set_enabled_default(option, enable);
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_enable(option: mi_option_t) {
     storage::option_enable(option);
 }
 
-// SAFETY: option descriptor state is read or mutated through mimalloc locks, atomics, and bounded environment strings.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_disable(option: mi_option_t) {
     storage::option_disable(option);
 }
 
-// SAFETY: option printing formats static option names and values through the registered output path.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     diagnostics::mi_options_print_out(out, arg);
 }
 
-// SAFETY: option printing formats static option names and values through the registered output path.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_options_print() {
     diagnostics::mi_options_print();
@@ -240,7 +224,6 @@ pub extern "C" fn mi_options_print() {
 ///
 /// `assertion`, `fname`, and `func`, when non-null, must point to valid
 /// nul-terminated C strings. This function aborts and does not return.
-// SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
 #[cold]
 pub unsafe extern "C" fn _mi_assert_fail(
     assertion: *const c_char,
@@ -296,7 +279,6 @@ mod tests {
             "allocator::options::tests::mimalloc_assert_fail_aborts_instead_of_unwinding";
 
         if std::env::var_os(CHILD_ENV).is_some() {
-            // SAFETY: assertion failure shims read caller C strings, emit diagnostics, and abort.
             unsafe {
                 _mi_assert_fail(
                     c"false".as_ptr(),

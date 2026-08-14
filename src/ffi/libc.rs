@@ -12,8 +12,6 @@ use core::ptr;
 
 use crate::bits::MI_SIZE_BITS;
 
-// SAFETY: declares the Unix formatting primitive used
-// only by `_mi_vsnprintf`, which preserves the caller-provided C varargs ABI.
 #[cfg(unix)]
 unsafe extern "C" {
     fn vsnprintf(buf: *mut c_char, bufsize: usize, fmt: *const c_char, args: *mut c_void) -> c_int;
@@ -52,8 +50,6 @@ pub(crate) extern "C" fn _mi_toupper(c: c_char) -> c_char {
 ///
 /// `s` and `t`, when non-null, must point to readable C strings for at least
 /// `n` bytes or until their first nul byte.
-// SAFETY: the exported C-shaped helper inherits
-// bounded readable C-string pointers from its callers.
 #[inline(never)]
 #[allow(clippy::many_single_char_names)]
 pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> i32 {
@@ -62,8 +58,6 @@ pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char,
     }
     let mut i = 0usize;
     while i < n {
-        // SAFETY: `i < n`, and the helper contract
-        // requires both strings to be readable until `n` or their first nul.
         let a = unsafe { *as_bytes_ptr(s).add(i) };
         let b = unsafe { *as_bytes_ptr(t).add(i) };
         if _mi_toupper(a as c_char) != _mi_toupper(b as c_char) {
@@ -80,8 +74,6 @@ pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char,
 /// # Safety
 ///
 /// `s` and `t`, when non-null, must point to readable nul-terminated C strings.
-// SAFETY: nullable equality handling is explicit; live
-// inputs inherit the readable nul-terminated C-string contract.
 #[inline(never)]
 #[allow(clippy::many_single_char_names)]
 pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) -> bool {
@@ -93,8 +85,6 @@ pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) ->
     }
     let mut i = 0usize;
     loop {
-        // SAFETY: the function contract requires both
-        // strings to be readable through their first nul byte.
         let a = unsafe { *as_bytes_ptr(s).add(i) };
         let b = unsafe { *as_bytes_ptr(t).add(i) };
         if a != b {
@@ -111,8 +101,6 @@ pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) ->
 ///
 /// `dest` must be writable for `dest_size` bytes when non-null. `src`, when
 /// non-null, must point to a readable nul-terminated C string.
-// SAFETY: the C-shaped copy helper validates null and
-// zero-capacity inputs before bounded destination writes.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlcpy(
     dest: *mut c_char,
@@ -122,16 +110,9 @@ pub(crate) unsafe extern "C" fn _mi_strlcpy(
     if dest.is_null() || src.is_null() || dest_size == 0 {
         return;
     }
-    // SAFETY: non-null `src` is required to point to a
-    // readable nul-terminated C string.
     let src_bytes = unsafe { CStr::from_ptr(src) }.to_bytes();
     let n = min(src_bytes.len(), dest_size - 1);
-    // SAFETY: `dest` is writable for `dest_size` bytes
-    // by contract, `n` is at most `dest_size - 1`, and `src_bytes` came from
-    // the non-null source C string.
     unsafe { ptr::copy_nonoverlapping(src_bytes.as_ptr(), as_bytes_mut_ptr(dest), n) };
-    // SAFETY: `n < dest_size`, so the terminator write
-    // stays in-bounds.
     unsafe { *as_bytes_mut_ptr(dest).add(n) = 0 };
 }
 
@@ -140,8 +121,6 @@ pub(crate) unsafe extern "C" fn _mi_strlcpy(
 /// `dest` must be writable for `dest_size` bytes and contain a nul byte within
 /// that range when non-null. `src`, when non-null, must point to a readable
 /// nul-terminated C string.
-// SAFETY: the C-shaped concatenation helper scans only
-// within the caller-provided destination capacity before reusing `strlcpy`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlcat(
     dest: *mut c_char,
@@ -153,8 +132,6 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
     }
     let mut len = 0usize;
     while len < dest_size {
-        // SAFETY: the loop bounds every destination
-        // read by `dest_size`.
         if unsafe { *as_bytes_ptr(dest).add(len) } == 0 {
             break;
         }
@@ -163,8 +140,6 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
     if len >= dest_size {
         return;
     }
-    // SAFETY: `len < dest_size`, so the suffix pointer
-    // and remaining capacity describe the writable tail of `dest`.
     unsafe {
         _mi_strlcpy(dest.add(len), src, dest_size - len);
     }
@@ -174,16 +149,12 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
 ///
 /// `s`, when non-null, must be readable for `max_len` bytes or until its first
 /// nul byte.
-// SAFETY: null is handled explicitly; otherwise reads
-// are bounded by `max_len`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize {
     if s.is_null() {
         return 0;
     }
     let mut len = 0usize;
-    // SAFETY: each byte read is within the caller's
-    // `max_len` readable prefix or stops at the first nul.
     while len < max_len && unsafe { *as_bytes_ptr(s).add(len) } != 0 {
         len += 1;
     }
@@ -193,12 +164,8 @@ pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) ->
 /// # Safety
 ///
 /// `s` must point to a readable nul-terminated C string when non-null.
-// SAFETY: delegates to the bounded scanner with the
-// C `strlen` contract supplied by callers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
-    // SAFETY: `_mi_strlen` inherits the readable
-    // nul-terminated string contract and maps it to an unbounded C-style scan.
     unsafe { _mi_strnlen(s, usize::MAX) }
 }
 
@@ -207,8 +174,6 @@ pub(crate) unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
 /// `s`, when non-null, must be readable for `max_len` bytes or until its first
 /// nul byte. `pat`, when non-null, must point to a readable nul-terminated C
 /// string.
-// SAFETY: the search helper treats nulls explicitly and
-// bounds all haystack reads by `max_len`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnstr(
     s: *mut c_char,
@@ -221,8 +186,6 @@ pub(crate) unsafe extern "C" fn _mi_strnstr(
     if pat.is_null() {
         return s;
     }
-    // SAFETY: both scans use the caller-provided
-    // readable C-string contracts.
     let s_len = unsafe { _mi_strnlen(s, max_len) };
     let pat_len = unsafe { _mi_strlen(pat) };
     if pat_len == 0 || pat_len > s_len {
@@ -234,14 +197,10 @@ pub(crate) unsafe extern "C" fn _mi_strnstr(
     let mut start = 0usize;
     while start <= end {
         let mut i = 0usize;
-        // SAFETY: `start <= end` keeps haystack reads
-        // within `s_len`, and `i < pat_len` bounds pattern reads.
         while i < pat_len && unsafe { *s_bytes.add(start + i) == *pat_bytes.add(i) } {
             i += 1;
         }
         if i == pat_len {
-            // SAFETY: the matching offset is within the
-            // bounded haystack slice.
             return unsafe { s.add(start) };
         }
         start += 1;
@@ -253,8 +212,6 @@ pub(crate) unsafe extern "C" fn _mi_strnstr(
 ///
 /// `name` must point to a readable nul-terminated C string. `result` must be
 /// writable for `result_size` bytes.
-// SAFETY: validates nullable output buffers before
-// forwarding to the platform primitive environment reader.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_getenv(
     name: *const c_char,
@@ -264,8 +221,6 @@ pub(crate) unsafe extern "C" fn _mi_getenv(
     if name.is_null() || result.is_null() || result_size < 64 {
         return false;
     }
-    // SAFETY: after local validation the platform
-    // primitive receives the same readable name and writable result contract.
     unsafe { crate::prim::_mi_prim_getenv(name, result, result_size) }
 }
 
@@ -275,18 +230,12 @@ fn mi_outc(c: c_char, out: &mut *mut c_char, end: *mut c_char) {
     if (p as usize) >= (end as usize) {
         return;
     }
-    // SAFETY: `p < end` leaves room for exactly one
-    // formatting byte in the caller-owned output range.
     unsafe {
         *p = c;
     }
-    // SAFETY: advancing by one stays at or before the
-    // end pointer after the checked byte write.
     *out = unsafe { p.add(1) };
 }
 
-// SAFETY: number formatting receives a caller-owned
-// output range and only writes through `mi_outc`.
 #[inline(never)]
 unsafe fn mi_out_num(
     mut x: u128,
@@ -317,12 +266,8 @@ unsafe fn mi_out_num(
     if prefix != 0 {
         mi_outc(prefix, out, end);
     }
-    // SAFETY: both pointers are into the same output
-    // range produced by repeated `mi_outc` writes.
     let len = unsafe { (*out).offset_from(start) as usize };
     for i in 0..(len / 2) {
-        // SAFETY: `i` and `len - i - 1` are in the
-        // initialized digit range `[start, start + len)`.
         unsafe {
             let c = *start.add(len - i - 1);
             *start.add(len - i - 1) = *start.add(i);
@@ -468,9 +413,6 @@ pub(crate) fn mi_vsnprintf_args(buf: &mut [c_char], args: fmt::Arguments<'_>) ->
             let available = self.cap.saturating_sub(self.used);
             let n = min(s.len(), available);
             if n > 0 {
-                // SAFETY: `ptr` is valid for `cap`
-                // bytes by construction, and `n` is clamped to the remaining
-                // space.
                 unsafe {
                     ptr::copy_nonoverlapping(s.as_ptr(), self.ptr.add(self.used), n);
                 }
@@ -500,8 +442,6 @@ pub(crate) fn mi_vsnprintf_args(buf: &mut [c_char], args: fmt::Arguments<'_>) ->
 /// `buf` must be writable for `bufsize` bytes. `fmt` must point to a readable
 /// nul-terminated C format string, and `args` must be a valid varargs object
 /// for that format on platforms that forward to C `vsnprintf`.
-// SAFETY: the C-shaped formatting helper validates the
-// output buffer and format pointer before delegating to platform formatting.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_vsnprintf(
     buf: *mut c_char,
@@ -512,18 +452,12 @@ pub(crate) unsafe extern "C" fn _mi_vsnprintf(
     if buf.is_null() || bufsize == 0 || fmt.is_null() {
         return 0;
     }
-    // SAFETY: the caller-provided buffer is writable
-    // for `bufsize`, so pre-clearing the last byte is in-bounds.
     unsafe {
         *as_bytes_mut_ptr(buf).add(bufsize - 1) = 0;
     }
     #[cfg(unix)]
     {
-        // SAFETY: Unix builds forward the caller's
-        // valid C format string and varargs object to `vsnprintf`.
         let written = unsafe { vsnprintf(buf, bufsize, fmt, args) };
-        // SAFETY: the output buffer remains writable
-        // for `bufsize` after the C call; the trailing nul is enforced.
         unsafe {
             *as_bytes_mut_ptr(buf).add(bufsize - 1) = 0;
         }
@@ -532,8 +466,6 @@ pub(crate) unsafe extern "C" fn _mi_vsnprintf(
     #[cfg(not(unix))]
     {
         let _ = args;
-        // SAFETY: non-Unix fallback reads the
-        // validated format C string and writes through the bounded Rust helper.
         let fmt_str = unsafe { CStr::from_ptr(fmt) }.to_string_lossy();
         // SAFETY: the raw boundary checked that `buf` is nonnull and the caller
         // guarantees it is writable for `bufsize` elements for this call.
@@ -550,23 +482,17 @@ mod tests {
     use core::ptr;
 
     fn c_bytes(buf: &[c_char]) -> &[u8] {
-        // SAFETY: test buffers passed here are
-        // explicitly nul-terminated by the helper under test.
         unsafe { CStr::from_ptr(buf.as_ptr()).to_bytes() }
     }
 
     #[test]
     fn string_helpers_handle_null_truncation_and_search_edges() {
         let mut copied = [b'X' as c_char; 5];
-        // SAFETY: `copied` is writable and the source
-        // is a static C string.
         unsafe { _mi_strlcpy(copied.as_mut_ptr(), c"abcdef".as_ptr(), copied.len()) };
         assert_eq!(c_bytes(&copied), b"abcd");
         assert_eq!(copied[4], 0);
 
         let mut unchanged = [b'X' as c_char; 4];
-        // SAFETY: null inputs are valid edge cases for
-        // these compatibility helpers.
         unsafe {
             _mi_strlcpy(unchanged.as_mut_ptr(), ptr::null(), unchanged.len());
             _mi_strlcat(ptr::null_mut(), c"x".as_ptr(), 0);
@@ -574,8 +500,6 @@ mod tests {
         assert_eq!(unchanged, [b'X' as c_char; 4]);
 
         let mut concatenated = [0 as c_char; 6];
-        // SAFETY: `concatenated` is writable and both
-        // inputs are static C strings.
         unsafe {
             _mi_strlcpy(
                 concatenated.as_mut_ptr(),
@@ -598,8 +522,6 @@ mod tests {
             0,
             b'z' as c_char,
         ];
-        // SAFETY: `bounded` is readable and contains a
-        // nul terminator.
         unsafe {
             assert_eq!(_mi_strnlen(bounded.as_ptr(), 2), 2);
             assert_eq!(_mi_strnlen(bounded.as_ptr(), bounded.len()), 3);
@@ -608,16 +530,11 @@ mod tests {
         }
 
         let mut haystack = [b'a' as c_char, b'b' as c_char, b'c' as c_char, 0];
-        // SAFETY: `haystack` and the pattern are
-        // readable C strings within the bounded search length.
         let found = unsafe { _mi_strnstr(haystack.as_mut_ptr(), haystack.len(), c"bc".as_ptr()) };
         assert!(!found.is_null());
-        // SAFETY: `found` came from inside `haystack`.
         let offset = unsafe { found.offset_from(haystack.as_mut_ptr()) };
         assert_eq!(offset, 1);
 
-        // SAFETY: a null pattern is a valid edge case
-        // and returns the haystack pointer.
         let found = unsafe { _mi_strnstr(haystack.as_mut_ptr(), haystack.len(), ptr::null()) };
         assert_eq!(found, haystack.as_mut_ptr());
     }

@@ -62,18 +62,11 @@ impl PublishedRemoteHead {
     ) -> (PublishedRemoteHead, Option<DetachedRemoteList>) {
         let page_raw = page.page().as_ptr();
         let head_raw = self.0.as_ptr();
-        // SAFETY: owned
-        // abandoned-page protocol excludes another collector while the
-        // published head remains visible to remote pushers.
         let next = unsafe { crate::internal::mi_block_next(page_raw, head_raw) };
         if next.is_null() {
             return (self, None);
         }
-        // SAFETY: severing the
-        // head link uniquely detaches the old tail without unpublishing head.
         unsafe { crate::internal::mi_block_set_next(page_raw, head_raw, core::ptr::null_mut()) };
-        // SAFETY: `next` was a
-        // non-null tail link from the published chain and is now detached.
         let tail = unsafe { BlockPtr::new_unchecked(next) };
         (self, Some(DetachedRemoteList(Some(tail))))
     }
@@ -104,8 +97,6 @@ impl DetachedRemoteList {
         self,
         page: &LocalPage,
     ) -> Result<Option<RemoteFreeBatch>, BatchValidationError> {
-        // SAFETY: LocalPage
-        // supplies the matching live page metadata for this detached owner.
         unsafe { self.into_batch(page.page()) }
     }
 
@@ -116,8 +107,6 @@ impl DetachedRemoteList {
         self,
         page: &OwnedAbandonedPage,
     ) -> Result<Option<RemoteFreeBatch>, BatchValidationError> {
-        // SAFETY: claimed
-        // abandoned ownership supplies the matching live page metadata.
         unsafe { self.into_batch(page.page()) }
     }
 
@@ -129,11 +118,7 @@ impl DetachedRemoteList {
         let Some(head) = self.0 else {
             return Ok(None);
         };
-        // SAFETY: the page
-        // witness provides initialized capacity and used metadata.
         let (capacity, used) = unsafe { (page.capacity(), page.used()) };
-        // SAFETY: consuming
-        // DetachedRemoteList transfers unique traversal ownership to the batch.
         unsafe { RemoteFreeBatch::from_detached(page, head, capacity, used) }.map(Some)
     }
 }
@@ -154,16 +139,12 @@ impl AtomicThreadFree {
     }
 
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord {
-        // SAFETY: `AtomicThreadFree` is constructed
-        // only for valid `xthread_free` atomic fields and preserves relaxed load.
         ThreadFreeWord::from_raw(unsafe { self.field().load(Ordering::Relaxed) })
     }
 
     pub(crate) fn try_push(self, expected: ThreadFreeWord, block: BlockPtr) -> RemotePushResult {
         let new_tf = ThreadFreeWord::from_parts(Some(block), ThreadFreeOwner::Owned);
         let mut raw_expected = expected.raw();
-        // SAFETY: the caller provides a valid
-        // `xthread_free` field; failure updates the typed expected word.
         if unsafe {
             self.field().compare_exchange_weak(
                 &mut raw_expected,
@@ -199,8 +180,6 @@ impl AtomicThreadFree {
         }
         let new = expected.with_owner(ThreadFreeOwner::Unowned);
         let mut raw_expected = expected.raw();
-        // SAFETY: the caller provides a valid
-        // `xthread_free` field; the CAS clears only the ownership bit.
         if unsafe {
             self.field().compare_exchange_weak(
                 &mut raw_expected,
@@ -226,8 +205,6 @@ impl AtomicThreadFree {
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]
     pub(crate) unsafe fn detach_head(self) -> DetachedRemoteList {
-        // SAFETY: the caller provides a valid
-        // `xthread_free` field; relaxed load mirrors the C collect loop pre-read.
         let mut old = ThreadFreeWord::from_raw(unsafe { self.field().load(Ordering::Relaxed) });
         loop {
             let head = old.head();
@@ -236,8 +213,6 @@ impl AtomicThreadFree {
             }
             let new = old.without_head();
             let mut raw_old = old.raw();
-            // SAFETY: the CAS detaches only the
-            // remote-list head while preserving the owner bit in the typed word.
             if unsafe {
                 self.field().compare_exchange_weak(
                     &mut raw_old,
@@ -263,8 +238,6 @@ impl AtomicThreadFree {
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]
     pub(crate) unsafe fn claim_acq_rel(self) -> bool {
-        // SAFETY: the caller provides a valid
-        // `xthread_free` field and this RMW sets only the owner bit.
         let old = unsafe { self.field().fetch_or(1, Ordering::AcqRel) };
         (old & 1) == 0
     }

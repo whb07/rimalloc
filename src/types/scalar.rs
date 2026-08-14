@@ -86,8 +86,6 @@ impl RequestedSize {
             self.0.checked_add(crate::types::MI_PADDING_SIZE).is_some(),
             "requested size + padding must not overflow"
         );
-        // SAFETY: caller guarantees the padded
-        // sum is non-zero and cannot overflow on this hot path.
         unsafe { PaddedSize::new_unchecked(self.0.wrapping_add(crate::types::MI_PADDING_SIZE)) }
     }
 }
@@ -100,8 +98,6 @@ pub(crate) struct EffectiveSize(pub(crate) NonZeroUsize);
 impl EffectiveSize {
     /// # Safety
     /// `size` must be non-zero.
-    // SAFETY: unchecked effective-size
-    // construction is only valid after callers prove the non-zero size domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
         Self(unsafe { NonZeroUsize::new_unchecked(size) })
@@ -120,8 +116,6 @@ pub(crate) struct PaddedSize(pub(crate) NonZeroUsize);
 impl PaddedSize {
     /// # Safety
     /// `size` must be non-zero.
-    // SAFETY: unchecked padded-size construction
-    // is only valid after callers prove the non-zero padded-size domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
         Self(unsafe { NonZeroUsize::new_unchecked(size) })
@@ -168,8 +162,6 @@ impl UsableOut {
 
     /// # Safety
     /// If non-null, the wrapped pointer must be valid for a `usize` write.
-    // SAFETY: nullable usable-size out pointer is
-    // checked for null before writing the caller-provided storage.
     #[inline(always)]
     pub(crate) unsafe fn write_if_present(self, usable: UsableSize) {
         if !self.0.is_null() {
@@ -191,8 +183,6 @@ impl BlockSize {
 
     /// # Safety
     /// `size` must be non-zero.
-    // SAFETY: unchecked block-size construction is
-    // only valid after callers prove the non-zero block-size domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
         Self(unsafe { NonZeroUsize::new_unchecked(size) })
@@ -252,8 +242,6 @@ impl Alignment {
     #[inline(always)]
     pub(crate) fn new(align: usize) -> Option<Self> {
         if align.is_power_of_two() {
-            // SAFETY: `usize::is_power_of_two`
-            // rejects zero and proves the alignment domain.
             Some(unsafe { Self::new_unchecked(align) })
         } else {
             None
@@ -261,8 +249,6 @@ impl Alignment {
     }
     /// # Safety
     /// `align` must be a non-zero power of two.
-    // SAFETY: unchecked alignment construction is
-    // only valid after callers prove non-zero power-of-two alignment.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(align: usize) -> Self {
         Self(unsafe { NonZeroUsize::new_unchecked(align) })
@@ -289,8 +275,6 @@ impl MaybeAlignment {
     }
     /// # Safety
     /// `align` must be zero or a power of two.
-    // SAFETY: unchecked optional alignment keeps
-    // the raw zero-or-power-of-two domain in a transparent wrapper.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(align: usize) -> Self {
         Self(align)
@@ -472,7 +456,6 @@ impl BatchLen {
     /// `value` must be non-zero.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(value: u16) -> Self {
-        // SAFETY: the caller proves the batch is non-empty.
         Self(unsafe { NonZeroU16::new_unchecked(value) })
     }
 
@@ -525,8 +508,6 @@ impl PageCapacity {
 
     /// # Safety
     /// Caller must prove `used <= capacity <= reserved`.
-    // SAFETY: unchecked page capacity construction
-    // is reserved for callers that have already proved page count ordering.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(capacity: u16) -> Self {
         Self(capacity)
@@ -726,8 +707,6 @@ pub(crate) struct OsPageSize(pub(crate) NonZeroUsize);
 impl OsPageSize {
     /// # Safety
     /// `size` must be nonzero.
-    // SAFETY: unchecked OS page-size construction
-    // is only valid after platform initialization proves a non-zero page size.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
         Self(unsafe { NonZeroUsize::new_unchecked(size) })
@@ -756,8 +735,6 @@ impl PageMapIndex {
 
     /// # Safety
     /// `index` must be less than `MI_PAGE_MAP_COUNT`.
-    // SAFETY: unchecked page-map index
-    // construction is reserved for callers that already proved top-level bounds.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: usize) -> Self {
         Self(index)
@@ -819,8 +796,6 @@ impl PageMapSubIndex {
 
     /// # Safety
     /// `index` must be less than `MI_PAGE_MAP_SUB_COUNT`.
-    // SAFETY: unchecked page-map sub-index
-    // construction is reserved for callers that already proved submap bounds.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: usize) -> Self {
         Self(index)
@@ -848,8 +823,6 @@ impl Bin {
     }
     /// # Safety
     /// `index` must be less than `MI_BIN_COUNT`.
-    // SAFETY: unchecked bin construction is
-    // reserved for callers that already proved the page-queue bin domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: u16) -> Self {
         Self(index)
@@ -876,8 +849,6 @@ impl StatsBin {
     }
     /// # Safety
     /// `index` must be less than or equal to `MI_BIN_HUGE`.
-    // SAFETY: unchecked stats-bin construction is
-    // reserved for callers that already proved the stats bin domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: u16) -> Self {
         Self(index)
@@ -900,8 +871,6 @@ pub(crate) struct DirectBin(pub(crate) u16);
 impl DirectBin {
     /// # Safety
     /// `index` must be less than `MI_PAGES_DIRECT`.
-    // SAFETY: unchecked direct-bin construction is
-    // reserved for callers that already proved the direct-page bin domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(index: u16) -> Self {
         Self(index)
@@ -952,15 +921,11 @@ impl SliceCount {
         if count == 0 || count > u32::MAX as usize {
             None
         } else {
-            // SAFETY: the const branch rejects zero
-            // and values outside the non-zero `u32` slice-count domain.
             Some(unsafe { Self::new_unchecked(count as u32) })
         }
     }
     /// # Safety
     /// `count` must be non-zero.
-    // SAFETY: unchecked slice-count construction
-    // is only valid after callers prove the non-zero `u32` count domain.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(count: u32) -> Self {
         Self(unsafe { NonZeroU32::new_unchecked(count) })
@@ -991,8 +956,6 @@ impl ArenaIndex {
     }
     /// # Safety
     /// `idx` must be less than `MI_MAX_ARENAS`.
-    // SAFETY: unchecked arena-index construction
-    // is reserved for callers that already proved arena table bounds.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(idx: u16) -> Self {
         Self(idx)

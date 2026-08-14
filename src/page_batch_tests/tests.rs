@@ -13,9 +13,6 @@ struct SyntheticPage {
 
 impl SyntheticPage {
     fn new(used: u16) -> Self {
-        // SAFETY: allocator-backed
-        // fixture storage stays in the allocator heap region required by debug
-        // encoded-link checks and is released exactly once by Drop.
         unsafe {
             let page_storage: *mut mi_page_t =
                 crate::mimalloc::mi_zalloc(core::mem::size_of::<mi_page_t>()).cast();
@@ -38,11 +35,7 @@ impl SyntheticPage {
 
     fn initialize(&mut self) {
         let raw_page = self.page_storage;
-        // SAFETY: allocator-backed
-        // page and block storage have stable addresses for the fixture lifetime.
         let page = unsafe { PagePtr::new_unchecked(raw_page) };
-        // SAFETY: writes initialize the
-        // exact metadata fields read by batch traversal and accounting.
         unsafe {
             (*raw_page).used = self.used;
             (*raw_page).capacity = SYNTHETIC_CAPACITY as u16;
@@ -60,24 +53,18 @@ impl SyntheticPage {
     }
 
     fn block(&mut self, slot: usize) -> BlockPtr {
-        // SAFETY: the bounded slot points
-        // into stable allocator-backed block storage for this synthetic page.
         unsafe { BlockPtr::new_unchecked(self.blocks.add(slot)) }
     }
 
     unsafe fn link(&mut self, indexes: &[usize]) {
         let page = self.page();
         for pair in indexes.windows(2) {
-            // SAFETY: both indexes are
-            // blocks in this page and use its disabled fixture keys.
             unsafe {
                 self.block(pair[0])
                     .set_next(page, Some(self.block(pair[1])))
             };
         }
         if let Some(&tail) = indexes.last() {
-            // SAFETY: the selected tail is
-            // writable block storage in this synthetic page.
             unsafe { self.block(tail).set_next(page, None) };
         }
     }
@@ -89,8 +76,6 @@ impl SyntheticPage {
         let mut current = head;
         while let Some(block) = current {
             order.push((block.as_ptr() as usize - base) / stride);
-            // SAFETY: the synthetic list
-            // contains only fixture blocks and is capacity bounded.
             current = unsafe { block.next(self.page()) };
         }
         order
@@ -107,8 +92,6 @@ impl SyntheticPage {
         let stride = core::mem::size_of::<mi_block_t>();
         let mut snapshot = [None; SYNTHETIC_CAPACITY];
         for (slot, next_slot) in snapshot.iter_mut().enumerate() {
-            // SAFETY: every
-            // fixture block is readable with the synthetic page's keys.
             *next_slot = unsafe { self.block(slot).next(self.page()) }
                 .map(|next| (next.as_ptr() as usize - base) / stride);
         }
@@ -118,8 +101,6 @@ impl SyntheticPage {
 
 impl Drop for SyntheticPage {
     fn drop(&mut self) {
-        // SAFETY: both pointers were
-        // returned by mi_zalloc and remain uniquely owned by this fixture.
         unsafe {
             crate::mimalloc::mi_free(self.blocks.cast());
             crate::mimalloc::mi_free(self.page_storage.cast());
@@ -173,22 +154,16 @@ fn shuffled_indexes(state: &mut u64) -> [usize; SYNTHETIC_CAPACITY] {
 }
 
 unsafe fn reference_prepend_local_to_available(page: PagePtr) {
-    // SAFETY: reference fixtures
-    // contain valid null-terminated page-local chains.
     let local = unsafe { page.local_free() };
     let Some(mut tail) = local.head() else {
         return;
     };
     loop {
-        // SAFETY: tail remains in
-        // the bounded reference local chain.
         let Some(next) = (unsafe { tail.next(page) }) else {
             break;
         };
         tail = next;
     }
-    // SAFETY: the reference tail
-    // is writable and the destination is the same page's available list.
     unsafe {
         let available = page.free();
         tail.set_next(page, available.head());
@@ -201,16 +176,12 @@ unsafe fn reference_collect_remote_into_local(page: PagePtr, head: BlockPtr) {
     let mut tail = head;
     let mut count = 1u16;
     loop {
-        // SAFETY: the reference
-        // remote chain is valid, page-local, and capacity bounded.
         let Some(next) = (unsafe { tail.next(page) }) else {
             break;
         };
         tail = next;
         count += 1;
     }
-    // SAFETY: the known tail and
-    // current local head share this page's encoding domain.
     unsafe {
         let local = page.local_free();
         tail.set_next(page, local.head());
@@ -220,8 +191,6 @@ unsafe fn reference_collect_remote_into_local(page: PagePtr, head: BlockPtr) {
 }
 
 unsafe fn reference_available_pop(page: PagePtr) -> BlockPtr {
-    // SAFETY: the reference page
-    // has a nonempty valid available chain and spare used capacity.
     unsafe {
         let available = page.free();
         let Some(head) = available.head() else {
@@ -250,9 +219,6 @@ struct SamePageBlocks {
 
 impl SamePageBlocks {
     fn new(required: usize) -> Self {
-        // SAFETY: allocations stay live
-        // for the fixture, and page/block witnesses are used only with their
-        // allocator-reported owning page.
         unsafe {
             assert!(required <= MAX_PAGE_BLOCKS);
             let mut all = [core::ptr::null_mut(); MAX_TRACKED_BLOCKS];
@@ -296,8 +262,6 @@ impl SamePageBlocks {
     }
 
     fn link_prefix(&self, len: usize) {
-        // SAFETY: selected blocks belong
-        // to this page and remain live for the fixture.
         unsafe {
             assert!(len > 0 && len <= self.selected_len);
             for slot in 1..len {
@@ -309,9 +273,6 @@ impl SamePageBlocks {
     }
 
     fn full_page() -> Self {
-        // SAFETY: a dedicated heap keeps
-        // unrelated parallel tests from redirecting same-size allocations to
-        // another page before this fixture reaches the reported capacity.
         unsafe {
             let heap = crate::allocator::heap::mi_heap_new();
             assert!(!heap.is_null());
@@ -357,8 +318,6 @@ impl SamePageBlocks {
 
 impl Drop for SamePageBlocks {
     fn drop(&mut self) {
-        // SAFETY: every pointer was
-        // returned by mi_malloc and is freed exactly once at fixture teardown.
         unsafe {
             for &block in &self.all[..self.all_len] {
                 crate::mimalloc::mi_free(block.cast());
@@ -369,8 +328,6 @@ impl Drop for SamePageBlocks {
 
 #[test]
 fn scans_basic_detached_chain_lengths_exactly() {
-    // SAFETY: the fixture owns each block
-    // and supplies the allocator-reported page and capacity.
     unsafe {
         let fixture = SamePageBlocks::new(16);
         let capacity = fixture.page.capacity();
@@ -397,8 +354,6 @@ fn scans_basic_detached_chain_lengths_exactly() {
 
 #[test]
 fn trusted_and_validating_scans_match_for_valid_chains() {
-    // SAFETY: the fixture owns every
-    // block and supplies a valid page-homogeneous chain to both scanners.
     unsafe {
         let fixture = SamePageBlocks::new(16);
         let capacity = fixture.page.capacity();
@@ -418,8 +373,6 @@ fn trusted_and_validating_scans_match_for_valid_chains() {
 
 #[test]
 fn scans_capacity_boundary_lengths_exactly() {
-    // SAFETY: the fixture owns a complete
-    // page-capacity set of live blocks and page-local encoded links.
     unsafe {
         let fixture = SamePageBlocks::full_page();
         let capacity = fixture.page.capacity();
@@ -437,8 +390,6 @@ fn scans_capacity_boundary_lengths_exactly() {
 
 #[test]
 fn capacity_bound_rejects_cycles_self_loops_and_duplicate_nodes() {
-    // SAFETY: all cyclic links remain
-    // within the live fixture page and traversal is capacity bounded.
     unsafe {
         let fixture = SamePageBlocks::new(3);
         let capacity = fixture.page.capacity();
@@ -486,8 +437,6 @@ fn capacity_bound_rejects_cycles_self_loops_and_duplicate_nodes() {
 
 #[test]
 fn rejects_a_link_to_a_different_page_without_following_it() {
-    // SAFETY: all allocations remain live;
-    // page identity is checked before constructing the foreign link witness.
     unsafe {
         let first = SamePageBlocks::new(1);
         let foreign_raw = crate::mimalloc::mi_malloc(32768).cast::<mi_block_t>();
@@ -508,8 +457,6 @@ fn rejects_a_link_to_a_different_page_without_following_it() {
 
 #[test]
 fn rejects_a_misaligned_in_page_link_without_following_it() {
-    // SAFETY: the intentionally interior
-    // pointer is only encoded and classified; the scan must not dereference it.
     unsafe {
         let fixture = SamePageBlocks::new(1);
         let interior = fixture.block(0).as_ptr().cast::<u8>().add(1).cast();
@@ -525,8 +472,6 @@ fn rejects_a_misaligned_in_page_link_without_following_it() {
 
 #[test]
 fn zero_capacity_rejects_a_nonempty_chain_before_traversal() {
-    // SAFETY: the live head is paired with
-    // an artificial zero capacity specifically to prove pre-traversal rejection.
     unsafe {
         let fixture = SamePageBlocks::new(1);
         let capacity = PageCapacity::new_unchecked(0);
@@ -544,8 +489,6 @@ fn zero_capacity_rejects_a_nonempty_chain_before_traversal() {
 fn empty_local_list_converts_to_no_batch_without_mutation() {
     let mut fixture = SyntheticPage::new(2);
     fixture.initialize();
-    // SAFETY: the synthetic page has
-    // an initialized empty local list and valid page metadata.
     unsafe {
         let owner = LocalPage::new_unchecked(fixture.page());
         assert!(
@@ -572,8 +515,6 @@ fn remote_batch_splices_destinations_and_subtracts_used_once() {
     for destination in [&[][..], &[3][..], &[3, 4, 5][..]] {
         let mut fixture = SyntheticPage::new(7);
         fixture.initialize();
-        // SAFETY: all list indexes belong
-        // to the stable synthetic page and each chain is uniquely owned.
         unsafe {
             fixture.link(&[0, 1, 2]);
             fixture.link(destination);
@@ -606,8 +547,6 @@ fn local_batch_splices_destinations_without_changing_used() {
     for destination in [&[][..], &[3][..], &[3, 4, 5][..]] {
         let mut fixture = SyntheticPage::new(4);
         fixture.initialize();
-        // SAFETY: all page metadata and
-        // encoded links are confined to the stable synthetic fixture.
         unsafe {
             fixture.link(&[0, 1, 2]);
             fixture.link(destination);
@@ -852,9 +791,6 @@ fn local_page_ensure_available_preserves_or_clears_zero_status_with_publication(
 fn abandoned_owner_detaches_and_splices_local_batch_without_local_proof() {
     let mut fixture = SyntheticPage::new(4);
     fixture.initialize();
-    // SAFETY: this fixture models a
-    // uniquely claimed abandoned page; its local and available chains are
-    // page-homogeneous and no other collector can observe them.
     unsafe {
         fixture.link(&[0, 1, 2]);
         fixture.link(&[3, 4]);
@@ -882,8 +818,6 @@ fn abandoned_owner_detaches_and_splices_local_batch_without_local_proof() {
 fn remote_batch_rejects_length_greater_than_used_without_mutation() {
     let mut fixture = SyntheticPage::new(2);
     fixture.initialize();
-    // SAFETY: the three-block detached
-    // chain belongs to the fixture page; used is intentionally smaller.
     unsafe {
         fixture.link(&[0, 1, 2]);
         let error = RemoteFreeBatch::from_detached(
@@ -927,8 +861,6 @@ fn randomized_reference_algorithms_match_batch_transitions() {
         reference.initialize();
         candidate.initialize();
 
-        // SAFETY: both fixtures
-        // receive identical valid topologies in independent stable storage.
         unsafe {
             for fixture in [&mut reference, &mut candidate] {
                 fixture.link(&indexes[..local_len]);
@@ -999,8 +931,6 @@ fn randomized_reference_algorithms_match_batch_transitions() {
         reference.initialize();
         candidate.initialize();
 
-        // SAFETY: both remote
-        // fixtures contain the same valid detached and local page chains.
         unsafe {
             for fixture in [&mut reference, &mut candidate] {
                 fixture.link(&indexes[..remote_len]);
@@ -1070,8 +1000,6 @@ fn randomized_reference_algorithms_match_batch_transitions() {
         reference.initialize();
         candidate.initialize();
 
-        // SAFETY: both fixtures
-        // contain identical nonempty available lists with consistent counts.
         unsafe {
             for fixture in [&mut reference, &mut candidate] {
                 fixture.link(&indexes[..available_len]);

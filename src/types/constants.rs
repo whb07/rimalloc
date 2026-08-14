@@ -213,8 +213,6 @@ pub struct mi_heap_area_t {
 /// registered hook. Reentrancy: allocator calls from the callback follow the C
 /// contract and are parity-tested, but callback code must tolerate allocator
 /// reentry. Unwind: the callback must not panic or unwind across the C ABI.
-// SAFETY: raw callback typedefs are ABI
-// declarations only; callers uphold the documented C callback contract.
 pub type mi_deferred_free_fun = unsafe extern "C" fn(force: bool, heartbeat: u64, arg: *mut c_void);
 
 /// Output callback used by registered output and `*_print_out` APIs.
@@ -228,8 +226,6 @@ pub type mi_deferred_free_fun = unsafe extern "C" fn(force: bool, heartbeat: u64
 /// callback follow the C contract and are parity-tested, but callback code must
 /// tolerate allocator reentry. Unwind: the callback must not panic or unwind
 /// across the C ABI.
-// SAFETY: raw callback typedefs are ABI
-// declarations only; callers uphold the documented C callback contract.
 pub type mi_output_fun = unsafe extern "C" fn(msg: *const c_char, arg: *mut c_void);
 
 /// Error callback registered through `mi_register_error`.
@@ -241,8 +237,6 @@ pub type mi_output_fun = unsafe extern "C" fn(msg: *const c_char, arg: *mut c_vo
 /// Reentrancy: allocator calls from the callback follow the C contract and are
 /// parity-tested, but callback code must tolerate allocator reentry. Unwind:
 /// the callback must not panic or unwind across the C ABI.
-// SAFETY: raw callback typedefs are ABI
-// declarations only; callers uphold the documented C callback contract.
 pub type mi_error_fun = unsafe extern "C" fn(err: i32, arg: *mut c_void);
 
 /// Heap-visitor callback used by subprocess heap traversal.
@@ -255,8 +249,6 @@ pub type mi_error_fun = unsafe extern "C" fn(err: i32, arg: *mut c_void);
 /// calls from the callback follow the C contract and are parity-tested, but
 /// callback code must tolerate allocator reentry. Unwind: the callback must not
 /// panic or unwind across the C ABI.
-// SAFETY: raw callback typedefs are ABI
-// declarations only; callers uphold the documented C callback contract.
 pub type mi_heap_visit_fun = unsafe extern "C" fn(heap: *mut mi_heap_t, arg: *mut c_void) -> bool;
 
 /// Block-visitor callback used by heap and thread-heap block traversal.
@@ -274,8 +266,6 @@ pub type mi_heap_visit_fun = unsafe extern "C" fn(heap: *mut mi_heap_t, arg: *mu
 /// next callback invocation or traversal return, and must not mutate the
 /// current `mi_heap_area_t` descriptor. Unwind: the callback must not panic or
 /// unwind across the C ABI.
-// SAFETY: raw callback typedefs are ABI
-// declarations only; callers uphold the documented C callback contract.
 pub type mi_block_visit_fun = unsafe extern "C" fn(
     heap: *const mi_heap_t,
     area: *const mi_heap_area_t,
@@ -295,8 +285,6 @@ pub type mi_block_visit_fun = unsafe extern "C" fn(
 /// from the callback follow the C contract and are parity-tested, but callback
 /// code must tolerate allocator reentry. Unwind: the callback must not panic or
 /// unwind across the C ABI.
-// SAFETY: raw callback typedefs are ABI
-// declarations only; callers uphold the documented C callback contract.
 pub type mi_commit_fun_t = unsafe extern "C" fn(
     commit: bool,
     start: *mut c_void,
@@ -304,12 +292,8 @@ pub type mi_commit_fun_t = unsafe extern "C" fn(
     is_zero: *mut bool,
     user_arg: *mut c_void,
 ) -> bool;
-// SAFETY: raw bitmap/arena callback typedefs
-// preserve the C ABI shape; typed wrappers classify callback use at call sites.
 pub type mi_claim_fun_t =
     unsafe extern "C" fn(slice_index: usize, arena: *mut mi_arena_t, keep_set: *mut bool) -> bool;
-// SAFETY: raw bitmap/arena callback typedefs
-// preserve the C ABI shape; typed wrappers classify callback use at call sites.
 pub type mi_forall_set_fun_t = unsafe extern "C" fn(
     slice_index: usize,
     slice_count: usize,
@@ -437,10 +421,6 @@ pub struct mi_page_s {
     pub memid: crate::internal::memid::mi_memid_t,
 }
 
-// SAFETY: required only for immutable sentinel page
-// statics such as `_mi_page_empty`. Live allocator pages remain raw-pointer
-// state and must be accessed through allocator synchronization and typestate
-// wrappers, not shared safe references.
 unsafe impl Sync for mi_page_s {}
 
 #[repr(C)]
@@ -478,9 +458,6 @@ pub struct mi_theap_s {
     pub stats: mi_stats_t,
 }
 
-// SAFETY: required only for immutable empty thread-heap
-// sentinel statics. Live thread heaps remain thread-owned allocator state and
-// must be accessed through raw allocator paths or narrower typestate wrappers.
 unsafe impl Sync for mi_theap_s {}
 
 #[repr(C)]

@@ -7,9 +7,6 @@ use core::{mem::MaybeUninit, ptr};
 fn encoded_pointer_round_trips_block_and_null() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
-    // SAFETY: this builds
-    // stack-local page/block metadata used only for encoded pointer round-trip
-    // assertions; the records are not registered with allocator globals.
     unsafe {
         let raw_page = page.as_mut_ptr();
         #[cfg(any(
@@ -37,9 +34,6 @@ fn encoded_pointer_round_trips_block_and_null() {
 #[test]
 fn block_tag_explicit_aligned_write_is_not_guarded() {
     let mut block = mi_block_t::default();
-    // SAFETY: the raw block pointer
-    // is derived from a stack-local block and is used only to exercise guarded
-    // versus aligned tag writes.
     unsafe {
         let block_ptr = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
         BlockTag::write_guarded_to(block_ptr);
@@ -54,8 +48,6 @@ fn block_tag_explicit_aligned_write_is_not_guarded() {
 fn available_pop_consumes_available_page_witness() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
-    // SAFETY: the fixture writes the
-    // minimal stack-local page fields needed to model one available free block.
     unsafe {
         let raw_page = page.as_mut_ptr();
         #[cfg(any(
@@ -84,9 +76,6 @@ fn available_pop_consumes_available_page_witness() {
 fn local_push_requires_free_block_witness() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
-    // SAFETY: the fixture constructs
-    // local page and free-block witnesses from stack-local records for this
-    // assertion only.
     unsafe {
         let raw_page = page.as_mut_ptr();
         #[cfg(any(

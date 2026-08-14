@@ -23,13 +23,14 @@ keeps upstream behavior and generated code reviewable. New Rust-native helpers
 should narrow the unsafe surface by validating once and returning a typed
 value, not by wrapping and immediately reconstructing raw state.
 
-## Local safety comments
+## Safety documentation
 
-Every unsafe block or implementation needs a nearby `// SAFETY:` comment that
-states why the operation is valid at that point. Explain the applicable
-validity, bounds, provenance, initialization, aliasing, lifetime, ownership,
-threading, or unwind invariant. Public unsafe functions also require a
-`# Safety` section describing caller obligations.
+Public unsafe functions require a `# Safety` section describing caller
+obligations. Add a local safety comment only when an unsafe operation depends
+on a non-obvious invariant that is not already enforced by its types,
+validation, or surrounding contract. Do not annotate every unsafe block,
+repeat caller contracts at each operation, or use subsystem-level slogans as
+proof.
 
 Safety comments are not assigned global IDs and are not mirrored into a
 central evidence ledger. Tests and tools should be linked from the owning
@@ -61,7 +62,8 @@ unsafe scopes, stronger typed boundaries, or removal of unsafe operations.
 For an unsafe change, verify:
 
 1. Safe Rust cannot express the operation directly.
-2. The local comment states the exact proof rather than naming a subsystem.
+2. Any retained local comment states an operation-specific invariant rather
+   than naming a subsystem or restating the caller contract.
 3. Callers cannot bypass validation or forge ownership accidentally.
 4. The operation is scoped no wider than the invariant requires.
 5. Relevant boundary, concurrency, provenance, or compatibility tests cover

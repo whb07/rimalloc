@@ -141,8 +141,6 @@ fn mi_printf_amount(
         _mi_fprintf(out, arg, format_args!("{rendered:>12}"));
         return;
     }
-    // SAFETY: `fmt` is non-null per the preceding `is_null` check and points to a
-    // valid NUL-terminated C string; `CStr::from_ptr` borrows it for the call only.
     let fmt_bytes = unsafe { CStr::from_ptr(fmt) }.to_bytes();
     if fmt_bytes == b"%s" {
         _mi_fprintf(out, arg, format_args!("{rendered}"));
@@ -323,10 +321,6 @@ fn mi_buffered_flush(buf: &mut buffered_t) {
     if buf.buf.is_null() {
         return;
     }
-    // SAFETY: `buf.buf` is non-null per the check and points to writable storage
-    // of at least `count + 1` bytes; `buf.used <= count` per construction, so
-    // `add(buf.used)` is in-bounds for the NUL write and `_mi_fputs` reads
-    // the NUL-terminated buffer without retaining it.
     unsafe {
         *buf.buf.add(buf.used) = 0;
         _mi_fputs(buf.out, buf.arg, ptr::null(), buf.buf);
@@ -342,10 +336,6 @@ unsafe extern "C" fn mi_buffered_out(msg: *const c_char, arg: *mut c_void) {
     if msg.is_null() || arg.is_null() {
         return;
     }
-    // SAFETY: caller passes a valid `buffered_t` as `arg` (live, aligned, uniquely
-    // writable `buffered_t` with writable backing buffer per `_mi_stats_print`) and
-    // `msg` is a NUL-terminated string per the C callback contract; the non-null
-    // checks above ensure both pointers are dereferenceable.
     unsafe {
         let buf = &mut *(arg as *mut buffered_t);
         let mut src = msg;
@@ -402,8 +392,6 @@ pub(super) unsafe fn _mi_stats_print(
         mi_print_header("blocks", out, arg);
         mi_stats_print_bins(
             &stats.malloc_bins,
-            // SAFETY: `MI_BIN_HUGE as u16` is a valid `StatsBin` discriminant
-            // within the fixed-size `malloc_bins` array (0..=MI_BIN_HUGE).
             unsafe { StatsBin::new_unchecked(MI_BIN_HUGE as u16) },
             out,
             arg,
@@ -489,9 +477,6 @@ pub(super) unsafe fn _mi_stats_print(
             arg,
             format_args!("  {:<10}: {:>5}\n", "numa nodes", _mi_os_numa_node_count()),
         );
-        // SAFETY: `out`/`arg` are the validated snapshot output callback/arg from
-        // `_mi_stats_print`'s caller, remaining live and valid for synchronous
-        // process-info printing; the callee does not retain them and does not unwind.
         unsafe { mi_process_info_print_out_impl(out, arg) };
     }
     _mi_fprintf(out, arg, format_args!("\n"));
@@ -510,9 +495,6 @@ pub(super) unsafe fn mi_process_info_print_out_impl(out: Option<mi_output_fun>, 
     let mut current_commit = 0usize;
     let mut peak_commit = 0usize;
     let mut page_faults = 0usize;
-    // SAFETY: `&mut elapsed` etc. are live, aligned, stack-owned `usize` slots
-    // exclusive for this call, valid for `mi_process_info_impl` to write one
-    // `usize` each; no aliasing with `out`/`arg`.
     unsafe {
         mi_process_info_impl(ProcessInfoOutput {
             elapsed_msecs: &mut elapsed,
@@ -559,8 +541,6 @@ pub(super) unsafe fn mi_process_info_print_out_impl(out: Option<mi_output_fun>, 
 #[inline(always)]
 pub(super) fn mi_process_info_print_impl() {
     // Keep the public-symbol call so interposition and release codegen match the pre-split path.
-    // SAFETY: `None`/`null_mut()` selects the default output sink per the stats
-    // callback contract; no output buffer is dereferenced and the call does not unwind.
     unsafe { super::mi_process_info_print_out(None, ptr::null_mut()) }
 }
 
@@ -839,9 +819,6 @@ pub(super) unsafe fn mi_stats_get_json_from_impl(
     let mut current_commit = 0usize;
     let mut peak_commit = 0usize;
     let mut page_faults = 0usize;
-    // SAFETY: `&mut elapsed` etc. are live, aligned, stack-owned `usize` slots
-    // exclusive for this call, valid for `mi_process_info_impl` to write one
-    // `usize` each; no aliasing with `hbuf` and the buffer remains live.
     unsafe {
         mi_process_info_impl(ProcessInfoOutput {
             elapsed_msecs: &mut elapsed,

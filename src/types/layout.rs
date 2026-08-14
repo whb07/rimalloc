@@ -101,15 +101,10 @@ impl LayoutRequest {
         // requested size for API-visible accounting, but never build a zero
         // `PaddedSize`.
         let eff_size = requested.effective_size();
-        // SAFETY: `RequestedSize::effective_size`
-        // normalizes zero to the allocator minimum, so this effective size is
-        // nonzero.
         let effective = unsafe { EffectiveSize::new_unchecked(eff_size) };
         Self::from_parts(
             requested,
             effective,
-            // SAFETY: zero is the valid sentinel
-            // for "no explicit alignment" in `MaybeAlignment`.
             unsafe { MaybeAlignment::new_unchecked(0) },
             Zeroed::No,
         )
@@ -123,13 +118,9 @@ impl LayoutRequest {
 
     fn maybe_alignment_from_raw(alignment: usize) -> Result<MaybeAlignment, LayoutError> {
         if alignment == 0 {
-            // SAFETY: zero is the valid sentinel
-            // for "no explicit alignment" in `MaybeAlignment`.
             return Ok(unsafe { MaybeAlignment::new_unchecked(0) });
         }
         let alignment = Alignment::new(alignment).ok_or(LayoutError::AlignmentInvalid)?;
-        // SAFETY: `Alignment::new` accepted this
-        // nonzero power-of-two value, which is a valid `MaybeAlignment`.
         Ok(unsafe { MaybeAlignment::new_unchecked(alignment.get()) })
     }
 
@@ -163,9 +154,6 @@ impl LayoutRequest {
     /// # Safety
     /// `padded` must be the result of adding `MI_PADDING_SIZE` to the logical
     /// requested size for this allocation path.
-    // SAFETY: callers provide a padded allocator
-    // size whose logical requested component can be recovered by subtracting
-    // `MI_PADDING_SIZE`.
     pub(crate) unsafe fn from_padded_unchecked(padded: PaddedSize, zeroed: Zeroed) -> Self {
         crate::internal::mi_debug_assert!(
             padded.get() >= crate::types::MI_PADDING_SIZE,
@@ -175,13 +163,8 @@ impl LayoutRequest {
         let effective_size = RequestedSize::new(requested_size).effective_size();
         Self {
             requested: RequestedSize::new(requested_size),
-            // SAFETY: effective-size normalization
-            // always returns the allocator's nonzero minimum or the nonzero
-            // requested size.
             effective: unsafe { EffectiveSize::new_unchecked(effective_size) },
             padded,
-            // SAFETY: zero is the valid sentinel
-            // for "no explicit alignment" in `MaybeAlignment`.
             alignment: unsafe { MaybeAlignment::new_unchecked(0) },
             zeroed,
         }
@@ -265,8 +248,6 @@ impl PreserveBytes {
 }
 
 impl OldAllocation {
-    // SAFETY: callers have already proven the user
-    // pointer, usable size, and page describe one allocation.
     unsafe fn new(ptr: UserPtr, usable: UsableSize, page: PagePtr) -> Self {
         Self { ptr, usable, page }
     }
@@ -282,8 +263,6 @@ impl OldAllocation {
         usable: UsableSize,
         page: PagePtr,
     ) -> Self {
-        // SAFETY: this public unsafe constructor
-        // carries the same validated allocation proof into the private packer.
         unsafe { Self::new(ptr, usable, page) }
     }
 

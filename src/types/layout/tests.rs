@@ -27,8 +27,6 @@ fn malloc_layout_preserves_requested_and_normalizes_effective_size() {
 
 #[test]
 fn layout_request_from_parts_is_the_checked_padding_path() {
-    // SAFETY: the unchecked scalar values are
-    // concrete valid fixture values used to reach the constructor under test.
     let req = LayoutRequest::from_parts(
         RequestedSize::new(0),
         unsafe { EffectiveSize::new_unchecked(1) },
@@ -78,13 +76,8 @@ fn realloc_request_constructors_distinguish_null_from_existing() {
     assert!(null.ptr().is_none());
     assert!(null.old().is_none());
 
-    // SAFETY: the dangling pointers are never
-    // dereferenced; they are non-null identity witnesses for typed realloc
-    // request construction.
     let user = unsafe { UserPtr::new_unchecked(core::ptr::dangling_mut::<u8>().cast()) };
     let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
-    // SAFETY: the typed parts above are
-    // non-null witnesses and a concrete usable size for request construction.
     let old = unsafe { OldAllocation::from_validated_parts(user, UsableSize::new(128), page) };
     let existing = ReallocRequest::from_existing(old, layout, Zeroed::No);
     assert_eq!(existing.ptr().map(|ptr| ptr.as_ptr()), Some(user.as_ptr()));

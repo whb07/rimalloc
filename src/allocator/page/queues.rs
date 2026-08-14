@@ -579,7 +579,6 @@ pub(super) unsafe fn mi_theap_contains_queue(
     theap: *const crate::types::mi_theap_t,
     pq: *const mi_page_queue_t,
 ) -> bool {
-    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         let start = crate::core_types::ptr_exposed_addr(ptr::addr_of!((*theap).pages[0]));
         let end = crate::core_types::ptr_exposed_addr(ptr::addr_of!((*theap).pages[MI_BIN_FULL]));
@@ -595,7 +594,6 @@ pub(super) unsafe fn mi_theap_queue_index(
     theap: crate::core_types::ThreadHeapPtr,
     queue: PageQueuePtr,
 ) -> usize {
-    // SAFETY: queue validation walks linked pages without mutating queue ownership.
     unsafe {
         queue
             .as_ptr()
@@ -995,9 +993,6 @@ mod tests {
         let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
         let mut pages = [const { MaybeUninit::<mi_page_t>::zeroed() }; 3];
 
-        // SAFETY: the stack-local heap,
-        // queue, and page metadata are initialized for the exact fields read
-        // and written by the typed normal-queue relink operation.
         unsafe {
             let theap = theap.as_mut_ptr();
             (*theap).pages = crate::allocator::init::MI_PAGE_QUEUES_EMPTY();

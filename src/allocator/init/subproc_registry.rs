@@ -179,7 +179,6 @@ impl LockedSubprocHeaps {
         {
             // SAFETY: current is a node reached from the locked live heap list.
             let next = unsafe { (*(current.as_ptr().cast::<MiHeapMainPrefix>())).next };
-            // SAFETY: current is a live heap node reached from the locked heap list; visitor invocation respects heap list protocol.
             ok = unsafe { visitor.invoke(current, arg) };
             heap = HeapPtr::new(next);
         }

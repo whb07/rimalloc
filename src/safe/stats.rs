@@ -146,10 +146,8 @@ impl StatsSnapshot {
     #[inline]
     pub fn capture() -> Result<Self, StatsError> {
         let mut raw = crate::allocator::stats::mi_stats_t::default();
-        // SAFETY: `raw` is a fresh writable stats value.
         unsafe { crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
         crate::allocator::init::mi_thread_init();
-        // SAFETY: `raw` is valid writable stats storage.
         if unsafe { crate::allocator::stats::mi_stats_get(ptr::addr_of_mut!(raw)) } {
             Ok(Self { raw })
         } else {
@@ -170,11 +168,8 @@ impl StatsSnapshot {
     #[inline]
     pub fn for_heap(heap: HeapRef<'_>) -> Result<Self, StatsError> {
         let mut raw = crate::allocator::stats::mi_stats_t::default();
-        // SAFETY: `raw` is a fresh writable stats value.
         unsafe { crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
         crate::allocator::init::mi_thread_init();
-        // SAFETY: `raw` is valid writable stats storage and
-        // `heap` is a live borrowed heap handle.
         if unsafe {
             crate::allocator::stats::mi_heap_stats_get(heap.ptr.as_ptr(), ptr::addr_of_mut!(raw))
         } {
@@ -271,8 +266,6 @@ impl StatsSnapshot {
         if output.is_empty() {
             return Err(StatsError::BufferTooSmall);
         }
-        // SAFETY: `output` is writable for its length and
-        // `self.raw` is an initialized stats snapshot.
         let ptr = unsafe {
             crate::allocator::stats::mi_stats_get_json_from(
                 ptr::addr_of!(self.raw),
@@ -283,8 +276,6 @@ impl StatsSnapshot {
         let Some(ptr) = NonNull::new(ptr) else {
             return Err(StatsError::BufferTooSmall);
         };
-        // SAFETY: successful JSON formatting writes a NUL
-        // terminated string into `output`.
         let bytes = unsafe { CStr::from_ptr(ptr.as_ptr()) }.to_bytes();
         if !bytes.starts_with(b"{") || !bytes.ends_with(b"}\n") {
             return Err(StatsError::BufferTooSmall);
@@ -335,8 +326,6 @@ impl ProcessInfo {
         let mut current_commit = 0usize;
         let mut peak_commit = 0usize;
         let mut page_faults = 0usize;
-        // SAFETY: all out-pointers are valid local
-        // storage for one `usize`.
         unsafe {
             crate::allocator::stats::mi_process_info(
                 &mut elapsed_msecs,
@@ -349,8 +338,6 @@ impl ProcessInfo {
                 &mut page_faults,
             );
         }
-        // SAFETY: querying the platform page size
-        // reads allocator primitive state and does not dereference caller data.
         let page_size = unsafe { crate::platform::os::_mi_os_page_size() };
         Self {
             elapsed_msecs,

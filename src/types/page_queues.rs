@@ -45,9 +45,6 @@ impl NormalPageQueue {
     /// `ptr` must point to initialized page queue metadata.
     #[inline(always)]
     pub(crate) unsafe fn new(ptr: PageQueuePtr) -> Option<Self> {
-        // SAFETY: callers provide initialized
-        // queue metadata; this checked constructor only reads the sentinel
-        // block-size field before packaging a normal-queue witness.
         let block_size = unsafe { ptr.block_size()? };
         if block_size.get() <= crate::types::MI_LARGE_MAX_OBJ_SIZE {
             Some(Self(ptr))
@@ -81,9 +78,6 @@ impl HugePageQueue {
     /// `ptr` must point to initialized page queue metadata.
     #[inline(always)]
     pub(crate) unsafe fn new(ptr: PageQueuePtr) -> Option<Self> {
-        // SAFETY: callers provide initialized
-        // queue metadata; this checked constructor only reads the sentinel
-        // block-size field before packaging a huge-queue witness.
         let block_size = unsafe { ptr.block_size()? };
         if block_size.get() == crate::types::MI_LARGE_MAX_OBJ_SIZE + size_of::<usize>() {
             Some(Self(ptr))
@@ -107,9 +101,6 @@ impl FullPageQueue {
     /// `ptr` must point to initialized page queue metadata.
     #[inline(always)]
     pub(crate) unsafe fn new(ptr: PageQueuePtr) -> Option<Self> {
-        // SAFETY: callers provide initialized
-        // queue metadata; this checked constructor only reads the sentinel
-        // block-size field before packaging a full-queue witness.
         let block_size = unsafe { ptr.block_size()? };
         if block_size.get() == crate::types::MI_LARGE_MAX_OBJ_SIZE + (2 * size_of::<usize>()) {
             Some(Self(ptr))
@@ -155,8 +146,6 @@ impl QueuedPage<NormalQueue> {
 
     #[inline(always)]
     pub(crate) fn into_active(self) -> crate::core_types::ActivePage {
-        // SAFETY: forgetting the more specific
-        // normal-queue membership proof preserves the page's active state.
         unsafe { crate::core_types::ActivePage::new_unchecked(self.page) }
     }
 
@@ -169,11 +158,6 @@ impl QueuedPage<NormalQueue> {
     ) -> Result<Self, crate::core_types::ActivePage> {
         let queue_ptr = queue.ptr().as_ptr();
         let page_ptr = page.page().as_ptr();
-        // SAFETY: callers provide page and
-        // queue metadata from the same initialized heap; this constructor
-        // delegates membership, full-state, block-size, and huge-sentinel
-        // checks to the existing C-shaped page helpers before accepting the
-        // queued-normal witness.
         if unsafe {
             crate::allocator::page::mi_page_queue_contains(queue_ptr, page_ptr)
                 && !crate::allocator::page::mi_page_is_in_full(page_ptr)
@@ -214,8 +198,6 @@ impl QueuedPage<NormalQueue> {
         page: crate::core_types::ActivePage,
         queue: NormalPageQueue,
     ) -> Self {
-        // SAFETY: queue mutation
-        // completed immediately before this consuming transition.
         unsafe { Self::new_unchecked(page, queue) }
     }
 
@@ -225,9 +207,6 @@ impl QueuedPage<NormalQueue> {
     /// in `self.queue`. The caller must exclusively own unlinking and stabilize
     /// all adjacent page links and queue metadata for the operation.
     pub(crate) unsafe fn remove(self) -> crate::core_types::ActivePage {
-        // SAFETY: `self` proves that the page is
-        // linked in `self.queue`; removal delegates list mutation to the page
-        // helper and then restores the active-page witness for the same page.
         unsafe {
             crate::allocator::page::mi_page_queue_remove_typed(self.queue.ptr, self.page);
             crate::core_types::ActivePage::new_unchecked(self.page)
@@ -240,9 +219,6 @@ impl QueuedPage<NormalQueue> {
     /// owning heap's live full queue. The caller must exclusively own the move,
     /// adjacent links, queue metadata, and in-full flag transition.
     pub(crate) unsafe fn into_full(self, to: FullPageQueue) -> crate::core_types::FullPage {
-        // SAFETY: `self` proves a queued normal
-        // page and `to` proves the full queue; the helper performs the raw list
-        // move, after which the in-full bit is set before returning a FullPage.
         unsafe {
             crate::allocator::page::mi_page_queue_enqueue_from_raw(
                 to.ptr(),
@@ -283,10 +259,6 @@ impl QueuedPage<FullQueue> {
         page: crate::core_types::FullPage,
         queue: FullPageQueue,
     ) -> Result<Self, crate::core_types::FullPage> {
-        // SAFETY: callers provide page and
-        // queue metadata from the same initialized heap; this constructor
-        // accepts the full-queue witness only when the page is linked in the
-        // queue and still marked full by the existing page helpers.
         if unsafe {
             crate::allocator::page::mi_page_queue_contains(
                 queue.ptr().as_ptr(),
@@ -308,10 +280,6 @@ impl QueuedPage<FullQueue> {
     /// owning heap's compatible live normal queue. The caller must exclusively
     /// own the move, adjacent links, queue metadata, and in-full flag transition.
     pub(crate) unsafe fn unfull(self, to: NormalPageQueue) -> crate::core_types::ActivePage {
-        // SAFETY: `self` proves a queued full
-        // page and `to` proves a normal queue; the helper performs the raw list
-        // move, after which the in-full bit is cleared before returning
-        // ActivePage.
         unsafe {
             crate::allocator::page::mi_page_queue_enqueue_from_raw(
                 to.ptr(),
@@ -330,9 +298,6 @@ impl QueuedPage<FullQueue> {
     /// in `self.queue`. The caller must exclusively own unlinking and stabilize
     /// all adjacent page links and queue metadata for the operation.
     pub(crate) unsafe fn remove(self) -> crate::core_types::ActivePage {
-        // SAFETY: `self` proves that the full
-        // page is linked in `self.queue`; removal delegates list mutation to
-        // the page helper and returns the page to the active witness domain.
         unsafe {
             crate::allocator::page::mi_page_queue_remove_typed(self.queue.ptr, self.page);
             crate::core_types::ActivePage::new_unchecked(self.page)

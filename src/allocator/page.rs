@@ -333,9 +333,7 @@ unsafe fn _mi_page_free_after_remove<S>(
     destroyed
 }
 
-// SAFETY: retired page collection updates expire counters and queue fronts under thread-heap ownership.
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
-    // SAFETY: page is a live active page witnessed via PagePtr::new_unchecked; try_mark_all_free is valid on exclusive owned page.
     unsafe {
         let active =
             crate::core_types::assume_active_page(crate::core_types::PagePtr::new_unchecked(page));
@@ -1479,7 +1477,6 @@ pub unsafe fn mi_theap_page_queue_of(
 /// # Safety
 /// `theap` must be valid, and `pq` must point to one of its page queues.
 pub unsafe fn mi_theap_queue_first_update(theap: *mut mi_theap_t, pq: *const mi_page_queue_t) {
-    // SAFETY: direct-page cache updates mirror normal queue fronts for small pages.
     unsafe {
         crate::internal::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
         let queue = page_queue_ptr(pq);

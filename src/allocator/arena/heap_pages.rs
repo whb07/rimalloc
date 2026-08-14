@@ -56,7 +56,6 @@ unsafe fn mi_heap_visit_page(page: PagePtr, vinfo: &mut mi_heap_visit_info_t) ->
         return false;
     }
     if vinfo.visit_blocks {
-        // SAFETY: area and page are live validated witnesses from the heap-visit protocol; visit_page_blocks only traverses linked blocks.
         unsafe {
             // SAFETY: `area` matches this live page, and a continuing callback preserved its
             // backing, geometry, callback, and opaque argument for synchronous block traversal.
@@ -334,8 +333,6 @@ unsafe extern "C" fn mi_heap_delete_page(
         // null current thread heap selects the atomic release/accounting path.
         unsafe { _mi_arenas_page_free(page, current_theap) };
     } else if heap_target.is_null() {
-        // SAFETY: destroying a non-empty page
-        // clears its used count before returning the owned page to the arena.
         unsafe {
             crate::allocator::page::mi_page_set_used_count(
                 page,
@@ -493,8 +490,6 @@ pub(crate) unsafe extern "C" fn _mi_heap_move_pages(
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY: the source heap must be uniquely
-    // owned while pages are drained from it.
     let Some(heap_from) = (unsafe { OwnedHeap::new(heap_from) }) else {
         return;
     };
@@ -517,8 +512,6 @@ pub(crate) unsafe extern "C" fn _mi_heap_move_pages(
 /// or relink may race this synchronous destruction.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t) {
-    // SAFETY: main heap pages are never drained
-    // through this destroy helper.
     if unsafe { _mi_is_heap_main(heap_from) } {
         return;
     }
@@ -526,8 +519,6 @@ pub(crate) unsafe extern "C" fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY: non-main source heap ownership is
-    // required before destructive page draining.
     let Some(heap_from) = (unsafe { OwnedHeap::new(heap_from) }) else {
         return;
     };

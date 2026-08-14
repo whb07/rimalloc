@@ -93,9 +93,6 @@ impl MemId<AnyMem> {
         match MemKind::from(code) {
             MemKind::None => MemIdView::None,
             MemKind::External => {
-                // SAFETY: the discriminant is
-                // `MI_MEM_EXTERNAL`, whose C layout stores external memory
-                // metadata in the `os` union arm.
                 let os = unsafe { raw.mem.os };
                 MemIdView::External(ExternalMemId {
                     base: OsMemPtr::new(os.base),
@@ -104,9 +101,6 @@ impl MemId<AnyMem> {
             }
             MemKind::Static => MemIdView::Static,
             MemKind::Meta => {
-                // SAFETY: the discriminant is
-                // `MI_MEM_META`, whose C layout stores meta-page metadata in
-                // the `meta` union arm; invalid payloads are rejected below.
                 let m = unsafe { raw.mem.meta };
                 let Some(block_count) = core::num::NonZeroU32::new(m.block_count) else {
                     return MemIdView::Unknown(code);
@@ -121,8 +115,6 @@ impl MemId<AnyMem> {
                 })
             }
             MemKind::Os | MemKind::OsHuge | MemKind::OsRemap => {
-                // SAFETY: OS, huge-OS, and remap
-                // discriminants all use the `os` union arm in the C layout.
                 let os = unsafe { raw.mem.os };
                 MemIdView::Os(OsMemId {
                     base: OsMemPtr::new(os.base),
@@ -138,10 +130,6 @@ impl MemId<AnyMem> {
                 })
             }
             MemKind::Arena => {
-                // SAFETY: the discriminant is
-                // `MI_MEM_ARENA`, whose C layout stores arena metadata in the
-                // `arena` union arm; null arenas and invalid ranges are
-                // rejected below.
                 let a = unsafe { raw.mem.arena };
                 let Some(arena) = ArenaPtr::new(a.arena) else {
                     return MemIdView::Unknown(code);

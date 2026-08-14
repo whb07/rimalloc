@@ -978,7 +978,6 @@ pub unsafe extern "C" fn mi_ucalloc(count: usize, size: usize, usable: *mut usiz
     }
 }
 
-// SAFETY: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
     mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()
@@ -1049,7 +1048,6 @@ pub unsafe extern "C" fn mi_heap_mallocn(
 /// allocator, not yet freed, and valid for this operation. Its page and
 /// allocation metadata must remain stable for this call, with no concurrent
 /// free or reallocation of `p`.
-// SAFETY: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_void {
     if MI_PADDING != 0 {
@@ -1378,7 +1376,6 @@ pub(crate) unsafe fn mi_realloc_request_from_user(
 /// Heap-localization or allocation failure also leaves it live. In-place success
 /// returns the still-live old allocation; moved success frees it and returns the
 /// new allocation with its preserved prefix.
-// SAFETY: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_realloc(
     theap: *mut mi_theap_t,
@@ -1803,7 +1800,6 @@ pub unsafe extern "C" fn mi_reallocn(p: *mut c_void, count: usize, size: usize) 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator. Non-null usable outputs
 /// must be writable for one `usize` each.
-// SAFETY: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_urealloc(
     p: *mut c_void,
@@ -1811,7 +1807,6 @@ pub unsafe extern "C" fn mi_urealloc(
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
-    // SAFETY: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
     unsafe {
         _mi_theap_realloc_zero(
             _mi_theap_default(),

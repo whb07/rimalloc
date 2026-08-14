@@ -31,14 +31,12 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at(
     let theap = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
     unsafe { mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, usable) }
 }
 
@@ -61,10 +59,8 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
         && MI_GUARDED != 0
         && offset_raw == 0
         && alignment_raw < MI_PAGE_MAX_OVERALLOC_ALIGN
-        // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
         && unsafe { mi_theap_malloc_use_guarded(local_theap, layout.effective()) }
     {
-        // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
         return unsafe { mi_theap_malloc_guarded_aligned(local_theap, layout, alignment, offset) };
     }
 
@@ -73,16 +69,12 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
     {
         let align_mask = alignment_raw - 1;
         let padded = layout.padded();
-        // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
         let available =
             unsafe { crate::internal::_mi_theap_get_free_small_page_typed(local_theap, padded) };
         if let Some(available) = available {
-            // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
             let page_ptr = available.page();
-            // SAFETY: page_ptr is a live page from the local heap's typed AvailablePage witness; free_raw only reads the free-list head without aliasing.
             let free = unsafe { page_ptr.free_raw() };
             if mi_likely(((free as usize) + offset_raw) & align_mask == 0) {
-                // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
                 unsafe {
                     crate::core_types::UsableOut::new(usable)
                         .write_if_present(mi_page_usable_block_size(page_ptr.as_ptr()));
@@ -103,14 +95,12 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
                 crate::internal::mi_assert_internal!(
                     ((p as usize) + offset_raw).is_multiple_of(alignment_raw)
                 );
-                // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
                 unsafe { mi_track_malloc(p, size, zero) };
                 return p;
             }
         }
     }
 
-    // SAFETY: aligned allocation fast paths inspect page free slots and guarded state through typed witnesses.
     unsafe { mi_theap_malloc_zero_aligned_at_generic(theap, layout, alignment, offset, usable) }
 }
 
@@ -132,14 +122,12 @@ pub unsafe fn mi_theap_malloc_aligned_at(
     let theap = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
     unsafe {
         mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
     }
@@ -148,7 +136,6 @@ pub unsafe fn mi_theap_malloc_aligned_at(
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// `alignment` must be valid for aligned allocation.
-// SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc_aligned(
     theap: *mut mi_theap_t,
@@ -162,14 +149,12 @@ pub unsafe extern "C" fn mi_theap_malloc_aligned(
     let theap = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
     unsafe {
         mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
     }
@@ -192,14 +177,12 @@ pub unsafe fn mi_theap_zalloc_aligned_at(
     let theap = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
     unsafe {
         mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
     }
@@ -221,14 +204,12 @@ pub unsafe fn mi_theap_zalloc_aligned(
     let theap = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY: thread-heap aligned allocation builds local heap witnesses after checked layout normalization.
     unsafe {
         mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
     }
@@ -264,14 +245,12 @@ pub unsafe fn mi_theap_calloc_aligned_at(
     let theap = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
     unsafe { mi_theap_calloc_aligned_at_req(theap, request, alignment, offset) }
 }
 
@@ -302,7 +281,6 @@ pub(crate) unsafe fn mi_theap_calloc_aligned_at_req(
             return core::ptr::null_mut();
         }
     };
-    // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
     unsafe {
         mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
     }
@@ -336,14 +314,12 @@ pub unsafe fn mi_theap_calloc_aligned(
     let theap = if MI_THEAP_INITASNULL && theap.is_null() {
         None
     } else {
-        // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             )
         })
     };
-    // SAFETY: aligned calloc paths use checked product requests before heap or thread-heap dispatch.
     unsafe {
         mi_theap_calloc_aligned_at_req(
             theap,

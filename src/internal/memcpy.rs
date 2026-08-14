@@ -933,7 +933,6 @@ mod tests {
 
         for n in 0..=1024 {
             dst.fill(0);
-            // SAFETY: the arrays provide disjoint valid ranges for every tested length.
             unsafe {
                 optimized_memcpy_unified(dst.as_mut_ptr(), src.as_ptr(), n);
             }
@@ -958,7 +957,6 @@ mod tests {
                     1280, 1281, 2048, 4096, 8192,
                 ] {
                     dst.fill(0);
-                    // SAFETY: offsets and lengths stay within separate source and destination arrays.
                     unsafe {
                         optimized_memcpy_unified(
                             dst.as_mut_ptr().add(dst_offset),

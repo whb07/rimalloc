@@ -43,13 +43,10 @@ pub(crate) use tls::{
     mi_theap_main_tls_peek, mi_theap_main_tls_set,
 };
 
-// SAFETY: platform ABI hooks and link-name shims forward into the bounded init lifecycle.
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden _mi_theap_empty");
-// SAFETY: platform ABI hooks and link-name shims forward into the bounded init lifecycle.
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden _mi_cpu_stosb_max");
-// SAFETY: platform ABI hooks and link-name shims forward into the bounded init lifecycle.
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden subproc_main");
 
@@ -360,7 +357,6 @@ const MI_RANDOM_CTX_EMPTY: mi_random_ctx_t = mi_random_ctx_t {
     weak: true,
 };
 
-// SAFETY: empty thread-heap sentinel stays static and typed before TLS exposure.
 #[unsafe(no_mangle)]
 pub(crate) static _mi_theap_empty: mi_theap_t = mi_theap_t {
     tld: ptr::addr_of!(tld_empty).cast_mut(),
@@ -488,7 +484,6 @@ static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
     stats: MI_STATS_NULL(),
 };
 
-// SAFETY: random seeding/reseeding and CPU feature publication use process-local init witnesses.
 #[unsafe(no_mangle)]
 pub(crate) static mut _mi_cpu_stosb_max: usize = 0;
 
@@ -520,7 +515,6 @@ impl MiSubprocPrefix {
     fn new_with_memid(seq: crate::core_types::SubprocSeq, memid: mi_memid_t) -> Self {
         let mut stats = mi_stats_t::default();
         // SAFETY: `stats` points to a valid local `mi_stats_t`.
-        // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
         unsafe { mi_stats_header_init(&mut stats) };
         Self {
             subproc_seq: seq.get(),
@@ -560,9 +554,7 @@ unsafe fn mi_subproc_heap_main_raw(subproc: *mut mi_subproc_t) -> *mut mi_heap_t
     let Some(subproc) = SubprocPtr::new(subproc) else {
         return ptr::null_mut();
     };
-    // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
     let subproc = unsafe { BorrowedSubproc::new(subproc) };
-    // SAFETY: subproc main-heap loads preserve typed subproc and heap witnesses.
     unsafe { subproc::heap_main_typed(subproc) }
         .map(HeapPtr::as_ptr)
         .unwrap_or(ptr::null_mut())
@@ -583,7 +575,6 @@ pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
 
 #[inline(always)]
 fn mi_is_main_thread_fast() -> bool {
-    // SAFETY: main-thread identity compares initialized thread metadata with the current thread ID.
     let main_tid = unsafe { tld_main.thread_id };
     main_tid == 0 || main_tid == tls::current_thread_id()
 }
@@ -602,11 +593,7 @@ pub extern "C" fn mi_thread_done() {
     unsafe { crate::internal::_mi_thread_done(ptr::null_mut()) };
 }
 
-// SAFETY: thread-done entry resolves the current default thread heap before typed teardown.
-/// # Safety
-/// `theap` must be null or the current thread's thread-local heap.
 pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
-    // SAFETY: thread-done entry resolves the current default thread heap before typed teardown.
     unsafe { thread::done(theap) };
 }
 
@@ -615,10 +602,8 @@ pub(crate) extern "C" fn _mi_preloading() -> bool {
     OS_PRELOADING.load(Ordering::Relaxed)
 }
 
-// SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_is_redirected() -> bool {
-    // SAFETY: _mi_is_redirected reads process-wide allocator state which is initialized before use and accessed via safe synchronization.
     unsafe { crate::prim::_mi_is_redirected() }
 }
 
@@ -710,7 +695,6 @@ pub(crate) unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
 
 fn mi_heap_main_init() {
     // SAFETY: mutates the statically allocated main heap during one-time lazy init.
-    // SAFETY: main subproc and main heap publication initialize process-global static metadata once.
     unsafe {
         if heap_main.subproc.is_null() {
             heap_main.subproc = ptr::addr_of_mut!(subproc_main)
@@ -737,20 +721,12 @@ pub(crate) extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
     subproc::main_ptr()
 }
 
-// SAFETY: default thread-heap association validates local ownership before TLS publication.
-/// # Safety
-/// `theap` must be a valid default theap for the current thread.
 pub(crate) unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
-    // SAFETY: default thread-heap association validates local ownership before TLS publication.
     unsafe { tls::theap_default_set(theap) };
 }
 
-// SAFETY: cached thread-heap association validates local ownership before TLS publication.
-/// # Safety
-/// `theap` must be valid for the current thread or the empty sentinel.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
-    // SAFETY: cached thread-heap association validates local ownership before TLS publication.
     unsafe { tls::theap_cached_set(theap) };
 }
 
@@ -802,14 +778,10 @@ pub extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
     subproc::current_id()
 }
 
-// SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
-/// # Safety
-/// `subproc` must point to a valid local subproc prefix.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     subproc: *mut mi_subproc_t,
 ) -> *mut mi_heap_t {
-    // SAFETY: subproc main-heap export initializes and returns a typed main-heap witness.
     unsafe { subproc::ensure_heap_main(subproc) }
 }
 
@@ -823,21 +795,13 @@ pub extern "C" fn mi_heap_main() -> *mut mi_heap_t {
     subproc::heap_main()
 }
 
-// SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-/// # Safety
-/// `heap` must point to a heap prefix compatible with this crate's local scaffold.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
-    // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
     unsafe { subproc::is_heap_main(heap) }
 }
 
-// SAFETY: main-heap predicates compare validated heap and thread-heap associations.
-/// # Safety
-/// `theap` must be null or point to a valid thread-heap structure.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
-    // SAFETY: main-heap predicates compare validated heap and thread-heap associations.
     unsafe { subproc::is_theap_main(theap) }
 }
 
@@ -856,34 +820,27 @@ pub extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     subproc::new()
 }
 
-// SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `subproc_id` must identify a subproc created by this crate.
 pub unsafe extern "C" fn mi_subproc_destroy(subproc_id: mi_subproc_id_t) {
-    // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
     unsafe { subproc::destroy(subproc_id) };
 }
 
-// SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 /// # Safety
 /// Same requirements as `mi_subproc_destroy`.
 pub unsafe extern "C" fn mi_subproc_delete(subproc_id: mi_subproc_id_t) {
-    // SAFETY: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
     unsafe { mi_subproc_destroy(subproc_id) };
 }
 
-// SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `subproc_id` must identify a local subproc created by this crate.
 pub unsafe extern "C" fn mi_subproc_add_current_thread(subproc_id: mi_subproc_id_t) {
-    // SAFETY: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
     unsafe { subproc::add_current_thread(subproc_id) };
 }
 
-// SAFETY: subproc heap visitation locks the heap list and invokes typed heap callbacks.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `subproc_id` must identify a local subproc created by this crate.
@@ -892,15 +849,12 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
     visitor: Option<mi_heap_visit_fun>,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY: subproc heap visitation locks the heap list and invokes typed heap callbacks.
     unsafe { subproc::visit_heaps(subproc_id, visitor, arg) }
 }
 
 unsafe fn mi_process_init_inner() {
-    // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     if let Some(_once) = unsafe { mi_atomic_do_once_enter(ptr::addr_of!(PROCESS_INIT).cast_mut()) }
     {
-        // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
         unsafe {
             _mi_process_is_initialized = true;
             cpu::mi_detect_cpu_features();
@@ -925,13 +879,9 @@ unsafe fn mi_process_init_inner() {
     }
 }
 
-// SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
-/// # Safety
-/// Performs one-time process-global mimalloc initialization for the bounded init/runtime scaffold.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     OS_PRELOADING.store(false, Ordering::Relaxed);
-    // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     unsafe { mi_process_init_inner() };
     mi_heap_main_init();
     tls::mi_tls_slots_init();
@@ -942,52 +892,40 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
         _mi_options_post_init();
         OPTIONS_POST_INIT_STATE.store(2, Ordering::Release);
     }
-    // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     if unsafe { crate::prim::_mi_is_redirected() } {
         _mi_verbose_message(format_args!("malloc is redirected.\n"));
     }
     let mut msg: *const c_char = ptr::null();
-    // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     unsafe { _mi_allocator_init(ptr::addr_of_mut!(msg)) };
     if !msg.is_null()
         && (mi_option_is_enabled(mi_option_t::mi_option_verbose)
             || mi_option_is_enabled(mi_option_t::mi_option_show_errors))
     {
-        // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
         unsafe { _mi_fputs(None, ptr::null_mut(), ptr::null(), msg) };
     }
-    // SAFETY: random seeding/reseeding and CPU feature publication use process-local init witnesses.
     unsafe { crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random)) };
 }
 
-// SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Public C ABI wrapper for process-global initialization.
 pub unsafe extern "C" fn mi_process_init() {
-    // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     unsafe { _mi_auto_process_init() };
 }
 
-// SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
-/// # Safety
-/// Performs process-global teardown for the bounded init/subproc surface and must not race with concurrent mutation of it.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_auto_process_done() {
     if mi_option_get(mi_option_t::mi_option_destroy_on_exit) > 1 {
         return;
     }
-    // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     unsafe { mi_process_done() };
 }
 
-// SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Public C ABI wrapper for process-global teardown.
 pub unsafe extern "C" fn mi_process_done() {
-    // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     if !unsafe { _mi_process_is_initialized } {
         return;
     }
@@ -995,7 +933,6 @@ pub unsafe extern "C" fn mi_process_done() {
         return;
     }
 
-    // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
     unsafe {
         crate::allocator::threadlocal::_mi_thread_locals_done();
         crate::prim::_mi_prim_thread_done_auto_done();
@@ -1024,9 +961,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn auto_process_init_initializes_large_page_config() {
-        // SAFETY: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
         unsafe { super::_mi_auto_process_init() };
-        // SAFETY: process init validation uses process-global initialization witnesses before platform state checks.
         assert!(unsafe { crate::os::_mi_os_canuse_large_page(1 << 30, 2 << 20) });
     }
 

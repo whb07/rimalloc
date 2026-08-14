@@ -190,9 +190,6 @@ impl BlockForFree {
 
     #[inline(always)]
     pub(crate) fn into_free_block(self) -> crate::core_types::FreeBlock {
-        // SAFETY: `BlockForFree` is constructed
-        // only from a successful pointer lookup or the explicit unchecked fast
-        // path that already proves the block is the start of a freeable block.
         unsafe { crate::core_types::validation_extra::FreeBlock::new_unchecked(self.block) }
     }
 }

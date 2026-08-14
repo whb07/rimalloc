@@ -484,7 +484,6 @@ unsafe fn theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<Thre
         }
     // SAFETY: default thread-heap association validates local ownership before TLS publication.
     } else if crate::platform::MI_TLS_MODEL_DYNAMIC_PTHREADS
-        // SAFETY: _mi_theap_default_key is the TLS key initialized during allocator startup; reading it only checks initialization.
         && unsafe { _mi_theap_default_key } != 0
     {
         let _ = crate::allocator::threadlocal::_mi_thread_local_set(

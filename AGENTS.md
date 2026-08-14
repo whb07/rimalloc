@@ -82,6 +82,7 @@ If any command cannot be run or fails for reasons unrelated to your changes, rep
 Audit, compliance, and ratchet-style work must produce a real reduction in risk or complexity, not just larger ledgers. Before declaring any audit or refactoring task done, the code must be measurably better on a metric that matters — not just better documented.
 
 - **Prefer fewer unsafe sites over more evidence rows.** Adding TSV rows, allowlist entries, or test files is not an achievement if the production unsafe count is flat.
+- **Do not manufacture safety churn.** Splitting `unsafe` blocks, expanding `SAFETY` comments, or creating one-issue microcommits is not hardening unless the change fixes behavior, removes a compiler-visible caller obligation, or adds regression evidence for a real defect.
 - **Caps and limits are guardrails, not goals.** Splitting a module to stay under a line limit only counts if the split isolates an invariant or removes a hotspot. Fragmentation for its own sake is still churn.
 - **Verification is a hard gate, not a footnote.** `cargo fmt`, `cargo clippy`, and `cargo test` must pass before claiming progress. A long commit history with no verification commits is a red flag, not a flex.
 - **Commit the actual state.** A dirty working tree full of "TODO backlog" updates at the end of a run means the recorded state is stale. Land or revert it.

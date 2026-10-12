@@ -67,3 +67,68 @@ fn realloc_case(old_size: usize, new_size: usize, alignment: usize) {
     let new_layout = Layout::from_size_align(new_size, alignment).expect("new layout");
     unsafe { MiMalloc.dealloc(new_ptr, new_layout) };
 }
+
+#[test]
+fn tiny_allocations_preserve_requested_alignment() {
+    // Keep blocks live together: immediately freeing each block can repeatedly
+    // reuse an accidentally aligned address. Run without debug/secure padding too.
+    for alignment in [2, 4, 8, 16] {
+        for size in 1..alignment {
+            for zeroed in [false, true] {
+                let layout = Layout::from_size_align(size, alignment).expect("layout");
+                let allocations: [*mut u8; 32] = core::array::from_fn(|_| {
+                    let ptr = unsafe {
+                        if zeroed {
+                            MiMalloc.alloc_zeroed(layout)
+                        } else {
+                            MiMalloc.alloc(layout)
+                        }
+                    };
+                    assert!(!ptr.is_null(), "allocation failed");
+                    ptr
+                });
+
+                for &ptr in &allocations {
+                    assert_eq!(ptr as usize % alignment, 0, "size {size}, align {alignment}");
+                    if zeroed {
+                        let bytes = unsafe { core::slice::from_raw_parts(ptr, size) };
+                        assert!(bytes.iter().all(|&byte| byte == 0));
+                    }
+                }
+                for ptr in allocations {
+                    unsafe { MiMalloc.dealloc(ptr, layout) };
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn tiny_reallocations_preserve_alignment_and_contents() {
+    for alignment in [8, 16] {
+        for new_size in 1..alignment {
+            let old_layout = Layout::from_size_align(64, alignment).expect("old layout");
+            let new_layout = Layout::from_size_align(new_size, alignment).expect("new layout");
+            let allocations: [*mut u8; 32] = core::array::from_fn(|_| {
+                let ptr = unsafe { MiMalloc.alloc(old_layout) };
+                assert!(!ptr.is_null(), "initial allocation failed");
+                unsafe { ptr.write_bytes(0xA5, old_layout.size()) };
+                ptr
+            });
+            let resized = allocations.map(|ptr| {
+                let new_ptr = unsafe { MiMalloc.realloc(ptr, old_layout, new_size) };
+                assert!(!new_ptr.is_null(), "reallocation failed");
+                new_ptr
+            });
+
+            for &ptr in &resized {
+                assert_eq!(ptr as usize % alignment, 0, "size {new_size}, align {alignment}");
+                let bytes = unsafe { core::slice::from_raw_parts(ptr, new_size) };
+                assert!(bytes.iter().all(|&byte| byte == 0xA5));
+            }
+            for ptr in resized {
+                unsafe { MiMalloc.dealloc(ptr, new_layout) };
+            }
+        }
+    }
+}

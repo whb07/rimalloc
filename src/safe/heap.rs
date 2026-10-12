@@ -798,7 +798,10 @@ impl<'heap> RawHeapAllocation<'heap> {
         }
 
         let ptr = unsafe {
-            if layout.align() <= crate::types::MI_MAX_ALIGN_SIZE {
+            // Tiny unaligned blocks need not satisfy a larger Rust layout alignment.
+            if layout.align() <= crate::types::MI_MAX_ALIGN_SIZE
+                && layout.align() <= layout.size()
+            {
                 if zeroed {
                     crate::allocator::alloc::mi_heap_zalloc(heap.as_ptr(), layout.size())
                 } else {
@@ -877,7 +880,9 @@ impl<'heap> RawHeapAllocation<'heap> {
             }
 
             let ptr = unsafe {
-                if old_layout.align() <= crate::types::MI_MAX_ALIGN_SIZE {
+                if old_layout.align() <= crate::types::MI_MAX_ALIGN_SIZE
+                    && old_layout.align() <= new_size
+                {
                     crate::allocator::alloc::mi_heap_realloc(
                         old.heap.as_ptr(),
                         old.ptr.as_ptr().cast::<c_void>(),

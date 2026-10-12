@@ -23,6 +23,18 @@ cargo rustc --features interpose --lib --release -- --crate-type cdylib
 
 ## Choose a Path
 
+For Rust applications that link `std`, enable the `std` feature in the dependency:
+
+```toml
+[dependencies]
+mechanical_mimalloc = { git = "https://github.com/whb07/mechanical_mimalloc", features = ["std"] }
+```
+
+This applies to both Rust paths below and to the raw facade. On Linux, the
+default non-test build is `no_std` and supplies its own panic handler; linking
+that build with `std` would introduce a second panic handler. Enabling `std`
+does not select `MiMalloc` as the global allocator or enable C interposition.
+
 ### 1. Rust Global Allocator
 
 Use `MiMalloc` when you want Rust standard-library allocations in the process to

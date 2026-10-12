@@ -3,9 +3,20 @@
 Default features are intentionally empty. Linux non-test builds use `no_std`
 unless the `std` feature is enabled.
 
+Rust applications that link `std` must enable the `std` feature for this crate.
+Without it, the Linux build supplies its own panic handler, conflicting with
+`std`'s handler. This requirement applies to the global allocator, safe wrappers,
+and raw facade alike; `std` is not just a tooling feature. It does not enable
+C interposition or select the application's global allocator.
+
+The default Linux `no_std` build includes panic-handler ownership for standalone
+allocator artifacts. It is not a panic-handler-free library for embedding in an
+arbitrary `no_std` application that supplies another handler.
+
 ## Features
 
-- `std`: tooling, tests, docs, and examples support. This is opt-in.
+- `std`: integration with Rust applications that link `std`, plus tooling,
+  tests, docs, and examples support. This is opt-in.
 - `bench`: Criterion benchmarks; implies `std`.
 - `compare`: comparison benchmark/test code.
 - `bench-diagnostics`: benchmark-only hotspot counters for local profiling.

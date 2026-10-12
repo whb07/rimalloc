@@ -885,7 +885,7 @@ full presets, fresh per-run result directories, incremental C builds,
 validated scenario names, and fresh processes per scenario and allocator with
 alternating allocator order. The first process of this run reached about
 13 GiB resident memory after earlier workloads, which motivated that
-isolation. The summarizer now fails when a native scenario has only one side
+isolation. The summarizer now warns when a native scenario has only one side
 of the Rust/C pair. Remaining items:
 
 1. Add explicit thread counts for native scenarios and explain the minimum

@@ -8,6 +8,7 @@ import dataclasses
 import difflib
 import pathlib
 import subprocess
+import sys
 import tempfile
 
 

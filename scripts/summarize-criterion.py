@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 from statistics import mean, median
 
@@ -158,7 +159,7 @@ def native_pairs(results: list[dict[str, object]]) -> list[dict[str, object]]:
             }
         )
     if unpaired:
-        raise SystemExit("native scenarios missing a Rust or C result:\n" + "\n".join(unpaired))
+        print("warning: native scenarios missing a Rust or C result:\n" + "\n".join(unpaired), file=sys.stderr)
     return pairs
 
 

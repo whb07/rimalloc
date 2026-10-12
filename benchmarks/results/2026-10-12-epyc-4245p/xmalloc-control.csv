@@ -1,0 +1,16 @@
+round,library,source,xmalloc_testN_median_ms_per_1M_frees
+0,rust_now,0961a24,2.0167
+0,rust_aug10,f018285,1.9728
+0,c,mimalloc-3.3.2,1.8339
+1,rust_aug10,f018285,1.9895
+1,c,mimalloc-3.3.2,1.8361
+1,rust_now,0961a24,2.0323
+2,c,mimalloc-3.3.2,1.8421
+2,rust_now,0961a24,2.0355
+2,rust_aug10,f018285,1.9769
+3,rust_now,0961a24,2.0419
+3,rust_aug10,f018285,1.9695
+3,c,mimalloc-3.3.2,1.8482
+4,rust_aug10,f018285,1.9655
+4,c,mimalloc-3.3.2,1.8415
+4,rust_now,0961a24,2.0436

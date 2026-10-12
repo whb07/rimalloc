@@ -893,3 +893,177 @@ of the Rust/C pair. Remaining items:
 2. Add a C baseline to equivalent hotpath cases with matching call paths;
    the current `compare` feature supplies the system allocator. Verify host
    profiles before applying stored absolute-time thresholds.
+
+## Full Rust and C Comparison October 12 2026
+
+**Measured commit:** `0961a24f442316f10d93c20af7780e56789fe747` (clean tree).
+**Stored results:** `benchmarks/results/2026-10-12-epyc-4245p/` holds each
+suite's `summary.md`, `results.csv`, and `manifest.json` (commands, artifact
+hashes, toolchains, host), plus `xmalloc-control.csv`.
+
+The Rust translation is at parity with C mimalloc 3.3.2 on almost every
+workload. Across 21 native scenarios the Rust/C median geomean is **1.0026
+(+0.26%)**, and 15 of 21 scenarios are within 1%. RocksDB, Redis, Nginx, and
+the architectural memory probes are at parity. Footprint is identical: RSS,
+live bytes, and occupied pages differ by at most 0.12 MiB in the architectural
+probes.
+
+Four native differences reproduced with the same sign in both October runs
+(this run and the first pass above):
+
+| Scenario | First pass | This run | Reading |
+|---|---:|---:|---|
+| `malloc-large` | -6.61% | -6.61% | Rust faster; reproducible |
+| `xmalloc-testN` | +7.61% | +11.69% | Rust slower; reproducible, see below |
+| `sh8benchN` | +2.28% | +1.21% | Rust slightly slower |
+| `sh6benchN` | -3.09% | -1.62% | Rust slightly faster; noisy both times |
+
+The first pass's `larsonN` -8.67% did not reproduce (-0.63% here); that pass ran
+Rust first for every scenario, while this runner isolates each scenario and
+allocator in a fresh process.
+
+### Host and controls
+
+- AMD EPYC 4245P, 6 cores / 12 logical CPUs, 30 GiB, Linux x86_64, cpufreq
+  governor `powersave`; no CPU pinning for native workers.
+- Rust 1.92.0 (fat LTO, one codegen unit, `panic=abort`, `--features
+  interpose` cdylib); C mimalloc 3.3.2 CMake Release with GCC 13.3.0.
+- Commands, from the repository root:
+  `./benchmarks/bench.py run --full`, `./benchmarks/bench.py architecture`,
+  `./benchmarks/bench.py nginx`, all with default controls. Native: 10 samples,
+  3 s measurement target, 1 s warmup, one repetition, each scenario and
+  allocator in a fresh process. Nginx: both profiles, 18 cases, one repetition,
+  2 s warmup and 5 s load. Architecture: 64 MiB, 4 KiB blocks, 4 threads,
+  8 cycles, 3 repetitions.
+
+### Native scenarios
+
+`Rust vs C` is `(Rust median / C median - 1) * 100`; negative means less time
+for Rust.
+
+| Scenario | Metric | Rust median | C median | Rust vs C | Noise |
+|---|---|---:|---:|---:|---|
+| `alloc-test1` | workload | 1.970 s | 1.967 s | +0.16% | stable |
+| `alloc-testN` | workload | 2.274 s | 2.276 s | -0.09% | stable |
+| `barnes` | workload | 1.057 s | 1.062 s | -0.41% | stable |
+| `cache-scratch1` | workload | 663.9 ms | 663.2 ms | +0.11% | stable |
+| `cache-scratchN` | workload | 115.3 ms | 115.6 ms | -0.24% | stable |
+| `cache-thrash1` | workload | 676.6 ms | 670.2 ms | +0.94% | stable |
+| `cache-thrashN` | workload | 115.6 ms | 115.3 ms | +0.27% | stable |
+| `cfrac` | workload | 8.662 s | 8.591 s | +0.83% | stable |
+| `glibc-simple` | workload | 630.1 ms | 625.9 ms | +0.68% | stable |
+| `glibc-thread` | 1M malloc/free pairs | 1.453 ms | 1.450 ms | +0.19% | stable |
+| `larsonN` | 1M alloc/free pairs | 2.482 ms | 2.498 ms | -0.63% | stable |
+| `larsonN-sized` | 1M alloc/free pairs | 2.480 ms | 2.537 ms | -2.25% | stable |
+| `malloc-large-old` | workload | 75.33 ms | 75.23 ms | +0.12% | stable |
+| `malloc-large` | workload | 725.5 us | 776.9 us | -6.61% | stable |
+| `mleak10` | workload | 36.56 ms | 36.22 ms | +0.94% | stable |
+| `mleak100` | workload | 363.1 ms | 364.9 ms | -0.50% | stable |
+| `mstressN` | workload | 395.3 ms | 394.8 ms | +0.13% | stable |
+| `rptestN` | 1M rptest operations | 3.632 s | 3.578 s | +1.51% | stable |
+| `sh6benchN` | workload | 135.7 ms | 138.0 ms | -1.62% | noisy |
+| `sh8benchN` | workload | 298.7 ms | 295.1 ms | +1.21% | stable |
+| `xmalloc-testN` | 1M frees | 2.052 ms | 1.837 ms | +11.69% | stable |
+
+Applications (excluded from the geomean): Redis -0.75% (330.0 vs 332.5 ns per
+request), which is within its resolution: `redis-benchmark` reports
+millisecond-quantized throughput at 100,000 requests, so SET and GET rates were
+identical for both allocators; use `--app-operations 1000000` to resolve
+allocator effects. RocksDB fillrandom +0.37% (819,793 vs 822,826 writes/s).
+
+### Architectural probes
+
+Steady-state medians over cycles 1-7 (cycle 0 includes first-touch faults):
+
+| Phase | Rust vs C time | Rust slower in |
+|---|---:|---:|
+| `cross-thread / fan-out-allocate` | +8.9% | 7/7 cycles |
+| `cross-thread / fan-in-allocate` | +4.4% | 7/7 cycles |
+| `cross-thread / fan-out-free` | +2.7% | 7/7 cycles |
+| `cross-thread / fan-in-free` | -1.2% | 0/7 cycles |
+| `decommit-oscillation / refill-touch` | +1.2% | 6/7 cycles |
+| `thread-churn / create-allocate-exit` | -4.8% | 1/7 cycles |
+| `thread-churn / collect-abandoned` | -5.0% | 3/7 cycles |
+
+The allocate phases that follow remote frees are where Rust consistently loses:
+those allocations must first collect blocks that other threads freed into the
+owner's pages. Local frees are equal or faster. `forced-purge` reads +17% but
+is a 2.5-3 us phase near timer resolution and is not weighed.
+
+### Nginx
+
+72 jobs, all complete. Rust/C throughput geomean is **-1.72%** for production
+and **-0.30%** for `NGX_DEBUG_PALLOC=1`; 13 of 18 cases are within 2% in each
+profile. Only two cases differ by more than 2% with the same sign in both
+profiles: `proxy-262144-on` (-4.3%, -4.6%) and `upload-1048576` (-4.6%,
+-2.0%). Production `headers` read -14.2% but +4.0% under debug-palloc, so it is
+single-run noise. Peak worker RSS geomean is 1.03x (production) and 1.01x
+(debug-palloc). With one 5-second repetition these are screening results; the
+two consistent cases need `--repeats 3 --duration-secs 30` before any claim.
+
+### xmalloc-testN control: host versus regression
+
+The October `xmalloc-testN` gap is much larger than the August result on a
+32-CPU host (Rust/C 0.9725 at `f018285`, 2026-08-10). The harness sizes
+`xmalloc-testN` from the logical CPU count, so this 12-CPU host runs 12+12
+threads, and the August thread sweep (`PERFORMANCE_WORKLOG.md`, X01/X02) showed
+Rust losing at low contention (0.886x at 4+4, 0.983x at 8+8) while winning at
+16+16 and 32+32. To separate host effects from code changes, the `f018285`
+library was rebuilt with the same flags and run under the same harness binary,
+fresh process per run, five rounds with rotating order:
+
+| Library | Median | Range | vs C |
+|---|---:|---:|---:|
+| Rust `0961a24` (current) | 2.0355 ms | 2.0167-2.0436 | +10.53% |
+| Rust `f018285` (2026-08-10) | 1.9728 ms | 1.9655-1.9895 | +7.13% |
+| C mimalloc 3.3.2 | 1.8415 ms | 1.8339-1.8482 | 0 |
+
+The ranges do not overlap. About **7 points** of the gap is the known
+low-contention remote-free deficit exposed by this host's thread count, and
+about **3.2 points** is a regression introduced between `f018285` and
+`5772656` (the August 10-13 hardening series; later commits touch only
+benchmark tooling).
+
+### Analysis: matching and beating C
+
+Rust already beats C where fat LTO and symbol localization remove work C cannot:
+C's exported option getters and cross-file arena/bitmap/page-map calls go
+through the PLT and are never inlined, while Rust inlines them
+(`malloc-large`, -6.6%; the worklog recorded 3.93% fewer instructions and
+4.66% fewer branches for Rust there). The hot `malloc`/`free` entry points are hand-written assembly
+that matches C's fast path, and release builds compile out assertions, stats,
+and free-list encoding on both sides. No build-configuration gap was found.
+
+The only material deficit is the cross-thread free path. Source comparison
+found no extra per-block work in release builds; the extra cost is per
+collection, and with 99.98% length-one detached chains (worklog X01) a
+per-collection cost is effectively a per-free cost. Candidates, in order:
+
+1. **Recover the August regression (~3 points).** Bisect `f018285..5772656`
+   with the control above. Prime candidates promote debug-only checks to
+   release code on every abandon/unabandon/reabandon: `03a0a0d`
+   (`PageArenaMembership::from_page` adds a release bitmap test and MemId
+   decode), `06d2884` (a page-map Acquire load moved out of a debug
+   assertion), `1294a69`/`fb293ab` (reabandon decodes the MemId three times
+   and runs before the early exits), `65af66b` (`mi_page_is_abandoned` load on
+   every remote free), and `fb4e760` (`#[inline(never)]` on `mi_route_free`).
+   The built library shows `PageArenaMembership::from_page` and
+   `collect_after_remote_free` as out-of-line functions with no C counterpart.
+2. **Close the low-contention deficit (~7 points on 12-CPU hosts).** Reduce
+   per-collection work: fold `collect_after_remote_free` into
+   `mi_free_try_collect_mt` (one noinline level, as in C `free.c:357`), give
+   `mi_free_generic_mt` a direct route for pages without interior pointers
+   instead of `mi_pointer_location` plus `PointerLookup::prepare_free`, and
+   carry validated page/arena witnesses through reabandon instead of
+   re-deriving them. Verify with the worklog's 1+1 and 4+4 instruction-per-free
+   protocol, not only the saturated benchmark.
+3. **Smaller items:** `realloc` uses an AVX2 `memcpy` where C uses `rep movsb`
+   below a threshold and libc `memcpy` above it (worth measuring on `cfrac` and
+   `glibc-simple`); make the TLS accessor asm `pure` and drop the redundant null
+   check in `_mi_theap_default`; remove the per-slot `Option` in the page-map
+   fill/clear loops. Keep fat LTO and the export version script; they are the
+   source of Rust's current wins.
+
+Two candidates were ruled out: `_mi_page_free_collect` is out-of-line in the C
+library too (14 call sites), and atomic orderings on the remote-free path are
+equal to or weaker than C's.

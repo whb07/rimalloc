@@ -10,16 +10,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.92.0
-      - name: Run release benchmark gates
-        run: scripts/check-bench-smoke.sh
+      - name: Test benchmark entry point
+        run: python3 -m unittest discover -s benchmarks -p 'test_*.py' -v
+      - name: Run benchmark smoke gate
+        run: ./benchmarks/bench.py smoke
       - name: Capture benchmark environment
+        if: always()
         run: |
-          mkdir -p target/criterion
-          scripts/env-info.sh > target/criterion/benchmark-environment.txt
+          mkdir -p target/bench-smoke/default-rust
+          scripts/env-info.sh > target/bench-smoke/default-rust/benchmark-environment.txt
       - name: Upload benchmark evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-evidence
           path: |
-            target/criterion/benchmark-thresholds-smoke.csv
-            target/criterion/benchmark-environment.txt
+            target/bench-smoke/default-rust/criterion/
+            target/bench-smoke/default-rust/threshold-results.csv
+            target/bench-smoke/default-rust/benchmark-environment.txt
+            target/bench-runs/smoke-*.log

@@ -176,6 +176,11 @@ deny policy for Cargo's default target/feature selection. The
 `scripts/check-lints.sh` entrypoint remains the compatibility sweep for the
 tracked feature matrix.
 
+Run `./benchmarks/bench.py` for the core Rust/C comparison, or add `run --full`
+for all native scenarios plus Redis and RocksDB (which downloads and builds
+them). Build, report, smoke, and release commands are
+documented in [the benchmark guide](benchmarks/README.md).
+
 Benchmark evidence is tracked in `BENCHMARK_RESULTS.md`; policy and thresholds
 are documented in `docs/performance.md`. Performance-sensitive changes should
 include fresh results for the changed benchmark set and a full report when hot

@@ -3,13 +3,35 @@
 Allocator changes must preserve both hot-path behavior and whole-workload
 performance relative to C mimalloc 3.3.2.
 
+## Benchmark entry point
+
+Use `./benchmarks/bench.py` to build and run the core Rust/C comparison and
+write its report. `run --full` selects all native scenarios plus Redis and
+RocksDB. `build` prepares native comparison artifacts; `build --applications`
+also fetches/builds the pinned applications. `report RUN_DIRECTORY` regenerates
+a saved report. See [benchmark commands and controls](../benchmarks/README.md).
+
+These comparisons measure each scenario and allocator in a fresh process,
+alternating allocator order between repetitions. Their build caches and result
+directories are separate. They do not apply historical absolute-time
+thresholds or update reviewed baselines; label them as isolated-process
+evidence when recording results. Existing native workload bodies remain unchanged;
+application workloads and controls are described in the benchmark README.
+Applications are excluded from the native scenario geomean.
+
+`./benchmarks/bench.py nginx` provides a separate HTTP/pool validation suite
+for Rust/C mimalloc, with optional glibc. Production and debug-palloc results
+remain separate; its allocator preflight runs independently from timing. See
+[the Nginx benchmark guide](../benches/nginx/README.md) for methodology and
+local generator limits. It does not alter the release gate workload sets.
+
 ## Required Evidence
 
-- Use `scripts/check-bench-smoke.sh` for fast iteration and for changes that
+- Use `./benchmarks/bench.py smoke` for fast iteration and for changes that
   may affect allocator hot paths.
-- Use `scripts/check-bench-full.sh` before treating allocator-wide results as
+- Use `./benchmarks/bench.py release` before treating allocator-wide results as
   authoritative.
-- Before a release candidate, run `scripts/check-bench-full.sh` and preserve
+- Before a release candidate, run `./benchmarks/bench.py release` and preserve
   each mode's `manifest.json`, `environment.txt`, `commands.txt`, and
   `resource-results.jsonl`; preserve `criterion/` and `threshold-results.csv`
   for all four Criterion modes, their `benchmark-review.json` status, plus the

@@ -757,3 +757,140 @@ The durable evidence archive is
 `c81de4e2914fe9ebc8fb89bebbb9292e7861a6d233cfed1d0fc6cb2fa615191c`.
 Its evidence index records one clean commit across all five artifact manifests,
 the assembly manifest, and the deployed cdylib digest.
+
+## First Pass Rust and C Comparison October 12 2026
+
+**Measured commit:** `5772656bad206bed5e1dc9d003bfab1e45d4cacd`
+
+All 21 native scenarios completed against the Rust translation and vendored C
+mimalloc 3.3.2. The combined Rust/C median geomean was **0.9944**, or **0.56%
+less time for Rust**. Fourteen scenarios were within 1% of C. The largest
+differences were `larsonN` at -8.67%, `malloc-large` at -6.61%, and
+`xmalloc-testN` at +7.61%. These are first-pass observations; repeatability of
+the differences has not been established.
+
+### Host and measurement controls
+
+- Host: AMD EPYC 4245P, 6 physical cores and 12 logical CPUs, Linux x86_64.
+- Compilers: Rust 1.92.0, LLVM 21.1.3, GCC 13.3.0.
+- Criterion: 10 samples, 3-second measurement target, 1-second warmup,
+  flat sampling, without CPU pinning. Fixed-duration workloads exceeded the
+  measurement target to collect all ten samples.
+- Both allocators ran the same Rust workload ports through shared-library
+  function pointers. Rust was measured before C for each scenario.
+- Benchmark executable features: `bench`. The native loader separately built
+  the Rust shared library with `interpose`, release optimization, fat LTO,
+  one codegen unit, and aborting panics. This measures the exported allocator
+  surface, rather than the public Rust `MiMalloc` facade.
+- C library: CMake Release, `-O3 -DNDEBUG`, shared-library allocation overrides,
+  initial-exec TLS, with secure and guarded modes disabled and no LTO.
+- The first process covered 17 scenarios; a fresh second process covered
+  `alloc-test1`, `alloc-testN`, `sh8benchN`, and `rptestN` with the same controls
+  and the same prebuilt libraries. Both processes exited successfully.
+
+### Scenario medians
+
+`Rust vs C` is `(Rust median / C median - 1) * 100`; negative values mean less
+time for Rust. Each time applies to the metric in its row. Workload times are
+not individual allocation latencies, and times normalized to one million
+operations are not the wall-clock duration of a complete scenario.
+
+| Scenario | Metric | Rust median | C median | Rust vs C | Noise |
+|---|---|---:|---:|---:|---|
+| `alloc-test1` | workload | 1.971 s | 1.985 s | -0.70% | stable |
+| `alloc-testN` | workload | 2.277 s | 2.294 s | -0.72% | stable |
+| `barnes` | workload | 1.103 s | 1.105 s | -0.13% | stable |
+| `cache-scratch1` | workload | 663.6 ms | 663.6 ms | -0.01% | stable |
+| `cache-scratchN` | workload | 115 ms | 115.2 ms | -0.09% | stable |
+| `cache-thrash1` | workload | 669.4 ms | 675 ms | -0.82% | stable |
+| `cache-thrashN` | workload | 119.6 ms | 115.8 ms | +3.24% | stable |
+| `cfrac` | workload | 8.738 s | 8.736 s | +0.02% | stable |
+| `glibc-simple` | workload | 625.5 ms | 623.1 ms | +0.40% | stable |
+| `glibc-thread` | 1M malloc/free pairs | 1.435 ms | 1.436 ms | -0.04% | stable |
+| `larsonN` | 1M alloc/free pairs | 2.535 ms | 2.776 ms | -8.67% | stable |
+| `larsonN-sized` | 1M alloc/free pairs | 2.767 ms | 2.789 ms | -0.78% | stable |
+| `malloc-large-old` | workload | 67.05 ms | 68.65 ms | -2.34% | noisy |
+| `malloc-large` | workload | 720.4 us | 771.4 us | -6.61% | stable |
+| `mleak10` | workload | 36.07 ms | 36.13 ms | -0.17% | stable |
+| `mleak100` | workload | 359.8 ms | 360.5 ms | -0.18% | stable |
+| `mstressN` | workload | 404.2 ms | 403.2 ms | +0.25% | stable |
+| `rptestN` | 1M rptest operations | 3.595 s | 3.597 s | -0.07% | stable |
+| `sh6benchN` | workload | 152.2 ms | 157 ms | -3.09% | noisy |
+| `sh8benchN` | workload | 300.9 ms | 294.2 ms | +2.28% | stable |
+| `xmalloc-testN` | 1M frees | 1.992 ms | 1.851 ms | +7.61% | stable |
+
+Noise follows `scripts/summarize-criterion.py`: a mean confidence-interval
+width above 5% or a sample spread above 10% marks a result noisy. A stable
+label describes variation within this run; it does not establish consistency
+across fresh runs. The unweighted scenario geomean is not a prediction of
+application-wide performance.
+
+### Commands and evidence
+
+The initial command, from the repository root, was:
+
+```bash
+CARGO_TARGET_DIR=target/bench-comparison/2026-10-12 \
+MIMALLOC_BENCH_SCENARIOS=glibc-simple,glibc-thread,malloc-large,malloc-large-old,cache-scratch1,cache-thrash1,cache-scratchN,cache-thrashN,xmalloc-testN,mstressN,sh6benchN,larsonN,larsonN-sized,barnes,cfrac,mleak10,mleak100 \
+MIMALLOC_BENCH_ALLOCATORS=mechanical_mimalloc_raw,c-mimalloc-3.3.2 \
+MIMALLOC_BENCH_SAMPLE_SIZE=10 \
+MIMALLOC_BENCH_MEASUREMENT_SECS=3 \
+MIMALLOC_BENCH_WARMUP_SECS=1 \
+cargo bench --locked --features bench --bench mimalloc_bench -- mimalloc-bench-native --noplot
+```
+
+The additional four scenarios used the prebuilt executable and libraries:
+
+```bash
+CARGO_TARGET_DIR=target/bench-comparison/2026-10-12 \
+CRITERION_HOME=target/bench-comparison/2026-10-12/extended/criterion \
+MIMALLOC_RUST_LIB="$PWD/target/bench-comparison/2026-10-12/release/deps/libmechanical_mimalloc-08821712153d43bc.so" \
+MIMALLOC_C_LIB="$PWD/target/bench-comparison/2026-10-12/c-mimalloc-3.3.2/libmimalloc.so.3.3" \
+MIMALLOC_BENCH_SKIP_BUILD=1 \
+MIMALLOC_BENCH_SCENARIOS=alloc-test1,alloc-testN,sh8benchN,rptestN \
+MIMALLOC_BENCH_ALLOCATORS=mechanical_mimalloc_raw,c-mimalloc-3.3.2 \
+MIMALLOC_BENCH_SAMPLE_SIZE=10 \
+MIMALLOC_BENCH_MEASUREMENT_SECS=3 \
+MIMALLOC_BENCH_WARMUP_SECS=1 \
+target/bench-comparison/2026-10-12/release/deps/mimalloc_bench-7a04905565baa6d5 \
+  --bench mimalloc-bench-native --noplot
+```
+
+The executable and Rust library hashes in these filenames are specific to
+this build. Exact resolved commands, library SHA-256 digests, C compiler and
+linker flags, and environment details are preserved in the local artifact
+directory `target/bench-comparison/2026-10-12/`. It contains `commands.txt`,
+`run.json`, `environment.txt`, `libraries.json`, `native.log`, `criterion/`,
+`extended/commands.txt`, `extended/run.log`, `extended/criterion/`,
+`initial-results.csv`, and `first-pass-results.json`. A local
+`first-pass-evidence.tar.gz` bundles the first-pass data without build binaries.
+These files under `target/` are ignored by Git; the table above preserves the
+results in the repository.
+
+Ratios were calculated from Criterion JSON using the actual allocator IDs.
+At the time of this run the summarizer looked up `rust` rather than the
+emitted `mechanical_mimalloc_raw`, so its native-pair table omitted these
+results; `scripts/summarize-criterion.py` now accepts both IDs. No benchmark
+implementation changes were made for this run.
+
+The repeat process was stopped after the first-pass measurements completed.
+No repeat or resource-probe results are included here, and the five-mode
+release gate was not run. Stored absolute-time thresholds were not applied:
+their host profile is a Ryzen 9 5950X with 16 cores and 32 logical CPUs.
+
+### Benchmark cleanup priorities
+
+`benchmarks/bench.py` now provides a single comparison runner with quick and
+full presets, fresh per-run result directories, incremental C builds,
+validated scenario names, and fresh processes per scenario and allocator with
+alternating allocator order. The first process of this run reached about
+13 GiB resident memory after earlier workloads, which motivated that
+isolation. Remaining items:
+
+1. Make the summarizer fail when a requested Rust/C pair is missing, so a
+   comparison cannot silently omit rows from its ratio table.
+2. Add explicit thread counts for native scenarios and explain the minimum
+   runtime of fixed-duration workloads.
+3. Add a C baseline to equivalent hotpath cases with matching call paths;
+   the current `compare` feature supplies the system allocator. Verify host
+   profiles before applying stored absolute-time thresholds.

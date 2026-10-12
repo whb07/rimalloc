@@ -18,9 +18,9 @@ import subprocess
 import sys
 import tempfile
 import time
-import uuid
 
 import applications
+from common import write_json
 
 WORKLOADS = ("static", "churn", "headers", "proxy", "transfer", "burst-idle")
 ALLOCATORS = ("rust", "mimalloc", "glibc")
@@ -388,7 +388,7 @@ def worker(config, directory):
         result.update(status="failed", error=str(error)); raise
     finally:
         if upstream_process: stop(upstream_process)
-        applications.save_result(directory / "nginx.json", result)
+        write_json(directory / "nginx.json", result)
         shutil.rmtree(data, ignore_errors=True)
 
 
@@ -402,7 +402,7 @@ def cpu_set(value):
     return sorted(set(result))
 
 
-def add_arguments(parser, positive):
+def add_arguments(parser, positive, default_jobs):
     parser.add_argument("--workload", action="append", choices=WORKLOADS)
     parser.add_argument("--allocator", action="append", choices=ALLOCATORS, help="default: rust and mimalloc; glibc is optional")
     parser.add_argument("--profile", action="append", choices=("production", "debug-palloc"), help="default: both, reported separately")
@@ -419,7 +419,7 @@ def add_arguments(parser, positive):
     parser.add_argument("--load-cpus")
     parser.add_argument("--upstream-cpus")
     parser.add_argument("--order-seed", type=int, default=12345)
-    parser.add_argument("--jobs", type=positive, default=4)
+    parser.add_argument("--jobs", type=positive, default=default_jobs)
     parser.add_argument("--output", help="new or empty results directory")
 
 
@@ -477,7 +477,7 @@ def report(directory):
                     "requested_bytes_per_request": statistics.median(m["allocator_traffic"]["requested_bytes_per_request"] for m in selected),
                     "idle_final_rss_bytes": statistics.median(m["idle"][-1][-1]["rss_bytes"] for m in selected) if case["workload"] == "burst-idle" else None,
                     "quality_flags": sorted({f for m in selected for f in m["quality_flags"]})})
-    applications.save_result(directory / "results.json", {"complete": complete, "summary": rows, "measurements": measurements, "errors": errors})
+    write_json(directory / "results.json", {"complete": complete, "summary": rows, "measurements": measurements, "errors": errors})
     fields = ("profile", "case", "allocator", "requests_per_second", "payload_bytes_per_second", "p99_us", "peak_worker_rss_bytes", "cpu_seconds_per_request",
               "allocations_per_request", "requested_bytes_per_request", "idle_final_rss_bytes", "quality_flags")
     with (directory / "results.csv").open("w", newline="") as out:
@@ -528,24 +528,19 @@ def run(args, driver):
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         if hard < 65536: raise driver.BenchError("raise the file descriptor hard limit to at least 65536")
         resource.setrlimit(resource.RLIMIT_NOFILE, (65536, hard))
-    directory = driver.repo_path(args.output) if args.output else driver.ROOT / "target/bench-runs" / ("nginx-" + time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + uuid.uuid4().hex[:8])
-    directory.mkdir(parents=True, exist_ok=True)
-    if any(directory.iterdir()): raise driver.BenchError(f"output directory must be empty: {directory}")
+    directory = driver.run_directory(args.output, "nginx-")
     profiles = list(dict.fromkeys(args.profile or ("production", "debug-palloc")))
     allocators = list(dict.fromkeys(args.allocator or ("rust", "mimalloc")))
     selected_cases = cases(list(dict.fromkeys(args.workload or WORKLOADS)))
     controls = {k: getattr(args, k) for k in ("workers", "connections", "load_threads", "duration_secs", "warmup_secs",
                                             "preflight_secs", "repeats", "burst_cycles", "idle_secs", "order_seed")}
     controls.update(sets)
-    manifest = {"schema": 1, "suite": "nginx", "status": "building", "started_utc": driver.utc(), "controls": controls,
-                "profiles": profiles, "allocators": allocators, "cases": selected_cases, "jobs": [],
-                "expected_jobs": len(profiles) * len(allocators) * len(selected_cases) * args.repeats,
-                "host": driver.capture(["lscpu"]), "platform": driver.platform.platform(), "commit": driver.capture(["git", "rev-parse", "HEAD"]),
-                "dirty": bool(driver.capture(["git", "status", "--porcelain"])),
-                "environment": {k: v for k, v in os.environ.items() if k.startswith(("MIMALLOC_", "MALLOC_"))}}
+    manifest = driver.run_manifest(suite="nginx", controls=controls, profiles=profiles, allocators=allocators,
+                                   cases=selected_cases, jobs=[],
+                                   expected_jobs=len(profiles) * len(allocators) * len(selected_cases) * args.repeats)
     path = directory / "manifest.json"; driver.write_json(path, manifest)
     print(f"Results: {directory}; local CPU sets: {sets}; {manifest['expected_jobs']} independent runs", flush=True)
-    try:
+    with driver.run_lifecycle(path, manifest, manifest["jobs"]):
         core = driver.build(args.jobs); manifest["core_artifacts"] = core
         artifacts = build(core, list(dict.fromkeys(("production", *profiles))), args.jobs, driver)
         manifest["artifacts"] = artifacts
@@ -569,16 +564,6 @@ def run(args, driver):
                 driver.execute(command, config_path.parent / "worker.log", {k: v for k, v in os.environ.items() if k != "LD_PRELOAD"})
                 read_result(config_path.parent / "nginx.json", config)
                 job.update(exit_status=0, finished_utc=driver.utc()); driver.write_json(path, manifest)
-        manifest["status"] = "complete"
-    except KeyboardInterrupt:
-        manifest.update(status="interrupted", error="interrupted by user", exit_status=130)
-    except (driver.BenchError, OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
-        manifest.update(status="failed", error=str(error), exit_status=getattr(error, "code", 1))
-    finally:
-        manifest["finished_utc"] = driver.utc()
-        if manifest["jobs"] and "exit_status" not in manifest["jobs"][-1]:
-            manifest["jobs"][-1].update(exit_status=manifest.get("exit_status", 1))
-        driver.write_json(path, manifest)
     if manifest.get("error"): print(manifest["error"], file=sys.stderr)
     return 0 if report(directory) else manifest.get("exit_status", 1)
 

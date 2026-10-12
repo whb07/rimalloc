@@ -7,6 +7,7 @@ import argparse
 import architecture
 import applications
 import nginx
+import contextlib
 import csv
 import hashlib
 import importlib.util
@@ -23,6 +24,8 @@ import subprocess
 import sys
 import time
 import uuid
+
+from common import write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOCATORS = ("mechanical_mimalloc_raw", "c-mimalloc-3.3.2")
@@ -60,18 +63,54 @@ def utc() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def write_json(path: Path, value: object) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
-    temporary.replace(path)
-
-
 def repo_path(value: str) -> Path:
     return (ROOT / value).resolve()
 
 
 def capture(command: list[str]) -> str:
     return subprocess.check_output(command, cwd=ROOT, text=True, stderr=subprocess.STDOUT).strip()
+
+
+def run_directory(output: str | None, prefix: str = "") -> Path:
+    directory = repo_path(output) if output else ROOT / "target/bench-runs" / (
+        prefix + time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + uuid.uuid4().hex[:8])
+    directory.mkdir(parents=True, exist_ok=True)
+    if any(directory.iterdir()):
+        raise BenchError(f"output directory must be empty: {directory}")
+    return directory
+
+
+def run_manifest(**fields: object) -> dict:
+    """Common provenance for every suite's manifest.json."""
+    return {"schema": 1, "status": "building", "started_utc": utc(), **fields,
+            "commit": capture(["git", "rev-parse", "HEAD"]),
+            "dirty": bool(capture(["git", "status", "--porcelain"])),
+            "host": {"platform": platform.platform(), "logical_cpus": os.cpu_count(),
+                     "affinity": sorted(os.sched_getaffinity(0)), "lscpu": capture(["lscpu"])},
+            "allocator_environment": {k: v for k, v in os.environ.items() if k.startswith(("MIMALLOC_", "MALLOC_"))
+                                      and not k.startswith("MIMALLOC_BENCH_")
+                                      and k not in ("MIMALLOC_RUST_LIB", "MIMALLOC_C_LIB")}}
+
+
+@contextlib.contextmanager
+def run_lifecycle(path: Path, manifest: dict, entries: list[dict]):
+    """Record the run's final status and close out an interrupted or failed entry."""
+    try:
+        yield
+        manifest["status"] = "complete"
+    except KeyboardInterrupt:
+        manifest.update(status="interrupted", error="interrupted by user", exit_status=130)
+    except (BenchError, ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError, SystemExit) as error:
+        manifest.update(status="failed", error=str(error), exit_status=getattr(error, "code", 1))
+    finally:
+        manifest["finished_utc"] = utc()
+        if entries and "exit_status" not in entries[-1]:
+            entries[-1].update(exit_status=manifest.get("exit_status", 1), finished_utc=manifest["finished_utc"])
+        write_json(path, manifest)
+
+
+def default_jobs() -> int:
+    return min(len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1, 16)
 
 
 def execute(command: list[str], log: Path, environment: dict[str, str] | None = None, cwd: Path | None = None) -> str:
@@ -314,28 +353,17 @@ def report(directory: Path) -> bool:
 def compare(args: argparse.Namespace) -> int:
     if sys.platform != "linux":
         raise BenchError("the native Rust/C shared-library comparison requires Linux")
-    directory = repo_path(args.output) if args.output else ROOT / "target/bench-runs" / (
-        time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + uuid.uuid4().hex[:8])
-    directory.mkdir(parents=True, exist_ok=True)
-    if any(directory.iterdir()):
-        raise BenchError(f"output directory must be empty: {directory}")
+    directory = run_directory(args.output)
     controls = {name: getattr(args, name) for name in ("samples", "measurement_secs", "warmup_secs", "repeats",
                                                        "app_operations", "app_threads", "app_value_size", "app_timeout")}
     selected = list(SCENARIOS) if args.full else args.scenario or list(QUICK)
-    manifest = {"schema": 1, "status": "building", "started_utc": utc(), "scenarios": selected,
-                "controls": controls, "process_layout": "isolated-scenario-allocator", "workers": [],
-                "commit": capture(["git", "rev-parse", "HEAD"]),
-                "dirty": bool(capture(["git", "status", "--porcelain"])),
-                "host": {"platform": platform.platform(), "logical_cpus": os.cpu_count(),
-                         "affinity": sorted(os.sched_getaffinity(0)), "lscpu": capture(["lscpu"])},
-                "allocator_environment": {k: v for k, v in os.environ.items() if k.startswith("MIMALLOC_")
-                                          and not k.startswith("MIMALLOC_BENCH_")
-                                          and k not in ("MIMALLOC_RUST_LIB", "MIMALLOC_C_LIB")}}
+    manifest = run_manifest(scenarios=selected, controls=controls, process_layout="isolated-scenario-allocator",
+                            workers=[])
     path = directory / "manifest.json"
     write_json(path, manifest)
     print(f"Results: {directory}\nScenarios: {', '.join(selected)}\nControls: {controls}", flush=True)
     print("Measurement seconds are a target, not a cap on fixed-duration workloads.", flush=True)
-    try:
+    with run_lifecycle(path, manifest, manifest["workers"]):
         artifacts = build(args.jobs)
         manifest["artifacts"] = artifacts
         for name in ("harness.log", "rust.log", "c-configure.log", "c-build.log", "artifacts.json"):
@@ -390,17 +418,6 @@ def compare(args: argparse.Namespace) -> int:
                     else:
                         validate_sample(directory / relative / "criterion", full_id(scenario, allocator), args.samples)
                     write_json(path, manifest)
-        manifest["status"] = "complete"
-    except KeyboardInterrupt:
-        manifest.update(status="interrupted", error="interrupted by user", exit_status=130)
-    except (BenchError, ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError, SystemExit) as error:
-        manifest.update(status="failed", error=str(error), exit_status=getattr(error, "code", 1))
-    finally:
-        manifest["finished_utc"] = utc()
-        if manifest["workers"] and "finished_utc" not in manifest["workers"][-1]:
-            manifest["workers"][-1].update(finished_utc=manifest["finished_utc"],
-                                          exit_status=manifest.get("exit_status", 1))
-        write_json(path, manifest)
     complete = report(directory)
     if manifest.get("error"):
         print(manifest["error"], file=sys.stderr)
@@ -433,7 +450,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     run.add_argument("--app-timeout", type=minimum, default=120, help="timeout in seconds per application command")
     run.add_argument("--output", help="new or empty results directory; relative paths start at the repository root")
     nginx_parser = sub.add_parser("nginx", help="compare Nginx production/debug-palloc HTTP workloads")
-    nginx.add_arguments(nginx_parser, minimum)
+    nginx.add_arguments(nginx_parser, minimum, default_jobs())
     architectural = sub.add_parser("architecture", help="compare C++ architectural probes against Rust/C")
     architectural.add_argument("--scenario", action="append", choices=architecture.SCENARIOS)
     architectural.add_argument("--bytes", type=minimum, default=64 * 1024 * 1024, help="requested live payload bytes")
@@ -446,7 +463,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     build_parser.add_argument("--nginx", action="store_true", help="also fetch/build Nginx production/debug-palloc and wrk")
     build_parser.add_argument("--applications", action="store_true", help="also fetch/build pinned Redis and RocksDB")
     for command in (run, build_parser, architectural):
-        command.add_argument("--jobs", type=minimum, default=min(len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1, 16))
+        command.add_argument("--jobs", type=minimum, default=default_jobs())
     sub.add_parser("list", help="list native scenarios; N uses the harness's host-derived thread count")
     report_parser = sub.add_parser("report", help="regenerate a saved comparison without running benchmarks")
     report_parser.add_argument("directory")

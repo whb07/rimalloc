@@ -136,10 +136,14 @@ def native_pairs(results: list[dict[str, object]]) -> list[dict[str, object]]:
         by_group.setdefault(group, {})[value] = result
 
     pairs: list[dict[str, object]] = []
+    unpaired: list[str] = []
     for group, values in sorted(by_group.items()):
         rust = values.get("mechanical_mimalloc_raw") or values.get("rust")
         c = values.get("c-mimalloc-3.3.2")
+        if not rust and not c:
+            continue
         if not rust or not c:
+            unpaired.append(f"- {group}: has {', '.join(sorted(values))}")
             continue
         rust_median = float(rust["median"])
         c_median = float(c["median"])
@@ -153,6 +157,8 @@ def native_pairs(results: list[dict[str, object]]) -> list[dict[str, object]]:
                 "diff_pct": (ratio - 1.0) * 100.0,
             }
         )
+    if unpaired:
+        raise SystemExit("native scenarios missing a Rust or C result:\n" + "\n".join(unpaired))
     return pairs
 
 

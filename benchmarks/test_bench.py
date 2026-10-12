@@ -113,6 +113,17 @@ class EntryPointTests(unittest.TestCase):
             self.assertEqual(len(pairs), 1)
             self.assertEqual(pairs[0]["ratio"], 0.5)
 
+    def test_half_native_pair_is_rejected(self):
+        with self.assertRaisesRegex(SystemExit, "case: has c-mimalloc-3.3.2, renamed"):
+            bench.SUMMARY.native_pairs([
+                {"full_id": "mimalloc-bench-native/case/renamed", "median": 10},
+                {"full_id": "mimalloc-bench-native/case/c-mimalloc-3.3.2", "median": 20},
+            ])
+
+    def test_non_json_child_line_is_plain_output(self):
+        output = bench.execute([sys.executable, "-c", "print('{\"truncated'); print('done')"], self.root / "child.log")
+        self.assertEqual(output, '{"truncated\ndone\n')
+
     def test_reporting_aggregates_repetition_medians_and_keeps_units(self):
         self.saved_run((10, 20, 1000))
         with patch.object(bench, "build") as build, patch.object(bench, "execute") as execute:

@@ -4,6 +4,7 @@ import io
 import json
 import os
 import subprocess
+import tarfile
 from pathlib import Path
 import tempfile
 import unittest
@@ -68,6 +69,30 @@ class ApplicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checksum mismatch"):
             applications.source("redis", self.root)
         self.assertFalse((self.root / "redis-6.2.7").exists())
+
+    def test_interrupted_extraction_and_copy_are_not_reused(self):
+        package = self.root / "package"
+        (package / "pkg-1.0").mkdir(parents=True)
+        (package / "pkg-1.0/file").write_text("data")
+        archive = self.root / "sources/pkg-1.0.tar.gz"
+        archive.parent.mkdir()
+        with tarfile.open(archive, "w:gz") as output:
+            output.add(package / "pkg-1.0", "pkg-1.0")
+        spec = ("1.0", "https://example.invalid/pkg.tar.gz", applications.file_sha256(archive))
+        with patch.object(tarfile.TarFile, "extractall", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                applications.source("pkg", archive.parent, spec)
+        self.assertEqual([p.name for p in archive.parent.iterdir()], [archive.name])
+        directory = applications.source("pkg", archive.parent, spec)
+        self.assertEqual((directory / "file").read_text(), "data")
+
+        copy = self.root / "copy"
+        with patch.object(applications.shutil, "copytree", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                applications.copy_tree(directory, copy)
+        self.assertFalse(copy.exists())
+        applications.copy_tree(directory, copy)
+        self.assertEqual((copy / "file").read_text(), "data")
 
     def test_application_workers_route_and_alternate_without_native_filter(self):
         output = self.root / "run"

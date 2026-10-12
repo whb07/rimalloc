@@ -7,9 +7,6 @@ import os
 from pathlib import Path
 import shlex
 import statistics
-import subprocess
-import time
-import uuid
 
 SCENARIOS = ("segment-occupancy", "cross-thread", "decommit-oscillation", "thread-churn")
 
@@ -113,26 +110,17 @@ def report(directory):
 
 
 def run(args, driver):
-    directory = driver.repo_path(args.output) if args.output else driver.ROOT / "target/bench-runs" / (
-        "architecture-" + time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + uuid.uuid4().hex[:8])
-    directory.mkdir(parents=True, exist_ok=True)
-    if any(directory.iterdir()):
-        raise driver.BenchError(f"output directory must be empty: {directory}")
     controls = {k: getattr(args, k) for k in ("bytes", "block_size", "threads", "cycles", "repeats")}
     if args.bytes // args.block_size < args.threads:
         raise driver.BenchError("provide at least one block per thread")
-    manifest = {"schema": 1, "suite": "architecture", "status": "building", "started_utc": driver.utc(),
-                "scenarios": list(dict.fromkeys(args.scenario or SCENARIOS)), "controls": controls,
-                "allocators": list(driver.ALLOCATORS), "workers": [],
-                "commit": driver.capture(["git", "rev-parse", "HEAD"]),
-                "dirty": bool(driver.capture(["git", "status", "--porcelain"])),
-                "affinity": sorted(os.sched_getaffinity(0)), "lscpu": driver.capture(["lscpu"]),
-                "allocator_environment": {k: v for k, v in os.environ.items() if k.startswith("MIMALLOC_")},
-                "process_layout": "isolated-scenario-allocator"}
+    directory = driver.run_directory(args.output, "architecture-")
+    manifest = driver.run_manifest(suite="architecture", scenarios=list(dict.fromkeys(args.scenario or SCENARIOS)),
+                                   controls=controls, allocators=list(driver.ALLOCATORS), workers=[],
+                                   process_layout="isolated-scenario-allocator")
     path = directory / "manifest.json"
     driver.write_json(path, manifest)
     print(f"Results: {directory}", flush=True)
-    try:
+    with driver.run_lifecycle(path, manifest, manifest["workers"]):
         artifacts = driver.build(args.jobs)
         executable = Path(artifacts["cache"]) / "architectural-bench"
         command = shlex.split(os.environ.get("CXX", "c++")) + ["-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror"]
@@ -165,16 +153,6 @@ def run(args, driver):
                     driver.write_json(directory / relative / "measurements.json", rows)
                     worker.update(exit_status=0, finished_utc=driver.utc())
                     driver.write_json(path, manifest)
-        manifest["status"] = "complete"
-    except KeyboardInterrupt:
-        manifest.update(status="interrupted", error="interrupted by user", exit_status=130)
-    except (driver.BenchError, OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
-        manifest.update(status="failed", error=str(error), exit_status=getattr(error, "code", 1))
-    finally:
-        manifest["finished_utc"] = driver.utc()
-        if manifest["workers"] and "exit_status" not in manifest["workers"][-1]:
-            manifest["workers"][-1].update(exit_status=manifest.get("exit_status", 1), finished_utc=driver.utc())
-        driver.write_json(path, manifest)
     complete = report(directory)
     if manifest.get("error"):
         print(manifest["error"], file=driver.sys.stderr)

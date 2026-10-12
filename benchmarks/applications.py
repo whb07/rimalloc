@@ -18,6 +18,8 @@ import tempfile
 import time
 import urllib.request
 
+from common import write_json
+
 SCENARIOS = {"redis": "per-redis-request", "rocksdb": "per-rocksdb-write"}
 SOURCES = {
     "redis": ("6.2.7", "https://download.redis.io/releases/redis-6.2.7.tar.gz",
@@ -35,6 +37,14 @@ ROCKS_OPTIONS = {
 }
 
 
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def source(name, root, spec=None):
     version, url, digest = spec or SOURCES[name]
     root.mkdir(parents=True, exist_ok=True)
@@ -46,12 +56,12 @@ def source(name, root, spec=None):
         try:
             with urllib.request.urlopen(url, timeout=60) as response, temporary.open("wb") as output:
                 shutil.copyfileobj(response, output)
-            if hashlib.sha256(temporary.read_bytes()).hexdigest() != digest:
+            if file_sha256(temporary) != digest:
                 raise ValueError(f"source checksum mismatch: {name}")
             temporary.replace(archive)
         finally:
             temporary.unlink(missing_ok=True)
-    if hashlib.sha256(archive.read_bytes()).hexdigest() != digest:
+    elif file_sha256(archive) != digest:
         raise ValueError(f"source checksum mismatch: {archive}; remove it and retry")
     directory = root / f"{name}-{version}"
     if not directory.exists():
@@ -252,12 +262,6 @@ def rocksdb_sample(config, directory, environment, commands):
         shutil.rmtree(database, ignore_errors=True)
 
 
-def save_result(path, result):
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
-    temporary.replace(path)
-
-
 def worker(config, directory):
     directory.mkdir(parents=True, exist_ok=True)
     environment = {k: v for k, v in os.environ.items() if k != "LD_PRELOAD"}
@@ -274,9 +278,9 @@ def worker(config, directory):
                 config, sample_dir, environment, result["commands"])
             if not warmup:
                 result["samples"].append(sample)
-            save_result(directory / "application.json", result)
+            write_json(directory / "application.json", result)
     finally:
-        save_result(directory / "application.json", result)
+        write_json(directory / "application.json", result)
 
 
 def measurement(path, scenario, samples):

@@ -885,12 +885,11 @@ full presets, fresh per-run result directories, incremental C builds,
 validated scenario names, and fresh processes per scenario and allocator with
 alternating allocator order. The first process of this run reached about
 13 GiB resident memory after earlier workloads, which motivated that
-isolation. Remaining items:
+isolation. The summarizer now fails when a native scenario has only one side
+of the Rust/C pair. Remaining items:
 
-1. Make the summarizer fail when a requested Rust/C pair is missing, so a
-   comparison cannot silently omit rows from its ratio table.
-2. Add explicit thread counts for native scenarios and explain the minimum
+1. Add explicit thread counts for native scenarios and explain the minimum
    runtime of fixed-duration workloads.
-3. Add a C baseline to equivalent hotpath cases with matching call paths;
+2. Add a C baseline to equivalent hotpath cases with matching call paths;
    the current `compare` feature supplies the system allocator. Verify host
    profiles before applying stored absolute-time thresholds.

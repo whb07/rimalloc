@@ -236,13 +236,15 @@ def build(jobs: int, harness: bool = True) -> dict:
     artifacts.update(rust_library=str(rust_library), c_library=str(c_library))
     artifacts["sha256"] = {name: file_sha256(artifacts[name])
                            for name in ("executable", "rust_library", "c_library") if name in artifacts}
-    write_json(cache / "artifacts.json", artifacts)
+    # Library-only builds share this cache; keep their record from replacing the harness build's.
+    write_json(cache / ("artifacts.json" if harness else "library-artifacts.json"), artifacts)
     return artifacts
 
 
 def copy_build_logs(artifacts: dict, directory: Path, prefix: str = "") -> None:
-    for name in (*artifacts["logs"], "artifacts.json"):
+    for name in artifacts["logs"]:
         shutil.copy2(Path(artifacts["cache"]) / name, directory / (prefix + name))
+    write_json(directory / (prefix + "artifacts.json"), artifacts)
 
 
 def without_preload() -> dict[str, str]:

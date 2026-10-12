@@ -101,6 +101,11 @@ class EntryPointTests(unittest.TestCase):
             self.assertEqual(first["cache"], second["cache"])
             self.assertEqual(first["sha256"], second["sha256"])
             self.assertEqual(sum(c[:2] == ["cmake", "--build"] for c in calls), 2)
+            libraries = bench.build(2, harness=False)
+            self.assertNotIn("executable", libraries)
+            self.assertNotIn(["cargo", "bench"], [c[:2] for c in calls[-4:]])
+            record = json.loads((Path(first["cache"]) / "artifacts.json").read_text())
+            self.assertEqual(record["executable"], first["executable"])
             with patch.dict(os.environ, {"CFLAGS": "-march=native"}):
                 self.assertNotEqual(bench.build(2)["cache"], first["cache"])
 

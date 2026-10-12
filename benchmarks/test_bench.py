@@ -123,6 +123,25 @@ class EntryPointTests(unittest.TestCase):
         self.assertEqual(pairs, [])
         self.assertIn("case: has c-mimalloc-3.3.2, renamed", warning.getvalue())
 
+    def test_unexpected_error_is_recorded_with_numeric_status(self):
+        manifest = {"workers": [{"directory": "worker"}]}
+        with bench.run_lifecycle(self.root / "manifest.json", manifest, manifest["workers"]):
+            raise RuntimeError("probe crashed")
+        saved = json.loads((self.root / "manifest.json").read_text())
+        self.assertEqual((saved["status"], saved["error"], saved["exit_status"]), ("failed", "RuntimeError: probe crashed", 1))
+        self.assertEqual(saved["workers"][0]["exit_status"], 1)
+        with self.assertRaises(SystemExit), bench.run_lifecycle(self.root / "manifest.json", {}, []):
+            raise SystemExit(3)
+
+    def test_missing_criterion_result_is_value_error(self):
+        with self.assertRaisesRegex(ValueError, "missing Criterion results"):
+            bench.SUMMARY.collect_results(self.root, [], {"absent"}, ["absent"])
+
+    def test_undecodable_child_output_is_kept(self):
+        output = bench.execute([sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'bad \\xff byte\\n')"],
+                               self.root / "child.log")
+        self.assertEqual(output, "bad \ufffd byte\n")
+
     def test_non_json_child_line_is_plain_output(self):
         output = bench.execute([sys.executable, "-c", "print('{\"truncated'); print('done')"], self.root / "child.log")
         self.assertEqual(output, '{"truncated\ndone\n')
@@ -192,7 +211,8 @@ class EntryPointTests(unittest.TestCase):
 
     def test_isolated_workers_alternate_order_and_have_distinct_directories(self):
         output = self.root / "run"
-        artifacts = {"executable": "fixture", "rust_library": "rust.so", "c_library": "c.so", "cache": str(self.root)}
+        artifacts = {"executable": "fixture", "rust_library": "rust.so", "c_library": "c.so", "cache": str(self.root),
+                     "logs": ["harness.log", "rust.log", "c-configure.log", "c-build.log"]}
         for name in ("harness.log", "rust.log", "c-configure.log", "c-build.log", "artifacts.json"):
             (self.root / name).write_text("fixture")
         calls = []
@@ -213,7 +233,8 @@ class EntryPointTests(unittest.TestCase):
 
     def test_interrupted_run_preserves_completed_measurements(self):
         output = self.root / "interrupted"
-        artifacts = {"executable": "fixture", "rust_library": "rust.so", "c_library": "c.so", "cache": str(self.root)}
+        artifacts = {"executable": "fixture", "rust_library": "rust.so", "c_library": "c.so", "cache": str(self.root),
+                     "logs": ["harness.log", "rust.log", "c-configure.log", "c-build.log"]}
         for name in ("harness.log", "rust.log", "c-configure.log", "c-build.log", "artifacts.json"):
             (self.root / name).write_text("fixture")
 
@@ -236,7 +257,8 @@ class EntryPointTests(unittest.TestCase):
 
     def test_full_records_host_unavailable_cases(self):
         output = self.root / "full"
-        artifacts = {"executable": "fixture", "rust_library": "rust.so", "c_library": "c.so", "cache": str(self.root)}
+        artifacts = {"executable": "fixture", "rust_library": "rust.so", "c_library": "c.so", "cache": str(self.root),
+                     "logs": ["harness.log", "rust.log", "c-configure.log", "c-build.log"]}
         for name in ("harness.log", "rust.log", "c-configure.log", "c-build.log", "artifacts.json"):
             (self.root / name).write_text("fixture")
         unavailable = {"cache-scratchN", "cache-thrashN"}
@@ -264,10 +286,16 @@ class EntryPointTests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform == "linux", "Linux process-group cleanup")
     def test_interrupt_terminates_active_worker(self):
-        pid_file = self.root / "worker.pid"
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            with self.subTest(signal=signum.name):
+                self.assert_signal_terminates_worker(signum)
+
+    def assert_signal_terminates_worker(self, signum):
+        pid_file = self.root / f"worker-{signum.name}.pid"
         child = "import os,sys,time; open(sys.argv[1],'w').write(str(os.getpid())); print('ready',flush=True); time.sleep(60)"
         driver = (
-            "import sys; sys.path.insert(0,sys.argv[1]); import bench; from pathlib import Path; "
+            "import signal,sys; sys.path.insert(0,sys.argv[1]); import bench; from pathlib import Path; "
+            "[signal.signal(s, bench.interrupt) for s in (signal.SIGTERM, signal.SIGHUP)]; "
             "bench.execute([sys.executable,'-c',sys.argv[2],sys.argv[3]],Path(sys.argv[4]))"
         )
         process = subprocess.Popen([sys.executable, "-c", driver, str(bench.ROOT / "benchmarks"), child,
@@ -277,7 +305,7 @@ class EntryPointTests(unittest.TestCase):
             while process.stdout.readline().strip() != "ready":
                 if process.poll() is not None:
                     self.fail("worker exited before becoming ready")
-            process.send_signal(signal.SIGINT)
+            process.send_signal(signum)
             process.communicate(timeout=10)
             self.assertNotEqual(process.returncode, 0)
             with self.assertRaises(ProcessLookupError):

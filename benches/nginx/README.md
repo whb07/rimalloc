@@ -92,6 +92,8 @@ own soft limit when needed.
   eight independent system allocations of the header sizes.
 - **Reverse proxy** (`proxy`): deterministic 1/16/64/256-KiB upstream files,
   each with proxy buffering on and off while keeping other settings fixed.
+  Upstream connections use HTTP/1.1 keepalive so each request does not pay
+  for a new loopback connection.
   The upstream is a separate glibc Nginx instance pinned to its own CPUs. A
   direct wrk run measures upstream headroom. Less than 25% headroom is flagged;
   it may indicate an upstream **or generator** bottleneck, not an allocator

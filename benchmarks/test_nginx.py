@@ -63,6 +63,44 @@ class NginxTests(unittest.TestCase):
         self.assertEqual(result["size_histogram"], list(range(9, 41)))
         with self.assertRaises(ValueError): nginx.trace_snapshot(self.root, [123, 124])
 
+    def test_proxy_reuses_upstream_connections(self):
+        conf = nginx.configuration(self.root, 8080, 1, [0], self.root, upstream=9090)
+        self.assertIn("upstream backend { server 127.0.0.1:9090; keepalive 64; }", conf)
+        self.assertEqual(conf.count("proxy_http_version 1.1;"), 5)
+        self.assertNotIn("proxy_pass http://127.0.0.1", conf)
+
+    def test_readiness_retries_transient_http_errors(self):
+        process = type("Process", (), {"pid": 1, "poll": lambda self: None})()
+        checks = iter([ValueError("unexpected HTTP status/body: 502, 0"), None])
+        def check(port, case):
+            error = next(checks)
+            if error: raise error
+        with patch.object(nginx, "worker_pids", return_value=[1]), patch.object(nginx, "http_check", side_effect=check):
+            self.assertEqual(nginx.ready(process, 1, {}, 1), [1])
+
+    def test_launch_retries_port_taken_after_probe(self):
+        started = []
+        def start(binary, prefix, conf, environment, cpus):
+            started.append(conf)
+            prefix.mkdir(exist_ok=True)
+            (prefix / "master.log").write_text("" if len(started) > 1 else "bind() failed (98: Address already in use)")
+            return object(), ["nginx"]
+        def ready(process, port, case, workers):
+            if len(started) == 1: raise ValueError("Nginx exited 1")
+            return [7]
+        with patch.object(nginx, "start_nginx", side_effect=start), patch.object(nginx, "ready", side_effect=ready), \
+             patch.object(nginx, "stop"), patch.object(nginx, "free_port", side_effect=[1111, 2222]):
+            process, command, port, pids = nginx.launch("nginx", self.root / "prefix", str, {}, [0], {}, 1)
+        self.assertEqual((started, port, pids), (["1111", "2222"], 2222, [7]))
+
+    def test_stop_tolerates_master_exit_after_timeout(self):
+        process = unittest.mock.Mock()
+        process.poll.return_value = None
+        process.wait.side_effect = [nginx.subprocess.TimeoutExpired("nginx", 5), 0]
+        with patch.object(nginx, "worker_pids", side_effect=FileNotFoundError):
+            nginx.stop(process)
+        process.terminate.assert_called_once()
+
     def test_overlapping_cpus_fail_before_build(self):
         args = bench.parse_args(["nginx", "--server-cpus", "0", "--load-cpus", "0", "--upstream-cpus", "1"])
         with patch.object(nginx.os, "sched_getaffinity", return_value={0, 1, 2}), \
@@ -83,7 +121,8 @@ class NginxTests(unittest.TestCase):
                       "runs": [{"requests_per_second": 1000, "p99_us": 100, "peak_worker_rss_bytes": 4096,
                                 "cpu_seconds_per_request": .00001, "errors": 0}]}
             (directory / "nginx.json").write_text(json.dumps(result))
-            manifest["jobs"].append({"directory": relative, "config": config, "repeat": 1, "exit_status": 0})
+            (directory / "config.json").write_text(json.dumps(config))
+            manifest["jobs"].append({"directory": relative, "repeat": 1, "exit_status": 0})
         (self.root / "manifest.json").write_text(json.dumps(manifest))
         with contextlib.redirect_stdout(io.StringIO()): self.assertTrue(bench.report(self.root))
         result = json.loads((self.root / "results.json").read_text())

@@ -42,6 +42,8 @@ class ApplicationTests(unittest.TestCase):
         for output in (valid.split('"GET"')[0], valid.replace('"20000"', '"nan"'), valid.replace('"20000"', '"0"')):
             with self.assertRaises(ValueError):
                 applications.parse_redis(output)
+        with self.assertRaisesRegex(ValueError, "increase --app-operations"):
+            applications.parse_redis(valid.replace('"20000"', '"inf"'))
 
     def test_rocksdb_parser_rejects_missing_duplicate_and_zero_rates(self):
         valid = "fillrandom   :       2.345 micros/op 426439 ops/sec; 100 MB/s\n"
@@ -82,7 +84,7 @@ class ApplicationTests(unittest.TestCase):
         with patch.object(tarfile.TarFile, "extractall", side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):
                 applications.source("pkg", archive.parent, spec)
-        self.assertEqual([p.name for p in archive.parent.iterdir()], [archive.name])
+        self.assertEqual([p.name for p in archive.parent.iterdir() if p.is_dir()], [])
         directory = applications.source("pkg", archive.parent, spec)
         self.assertEqual((directory / "file").read_text(), "data")
 
@@ -96,7 +98,8 @@ class ApplicationTests(unittest.TestCase):
 
     def test_application_workers_route_and_alternate_without_native_filter(self):
         output = self.root / "run"
-        artifacts = {"executable": "native", "rust_library": "rust.so", "c_library": "c.so", "cache": str(self.root)}
+        artifacts = {"executable": "native", "rust_library": "rust.so", "c_library": "c.so", "cache": str(self.root),
+                     "logs": ["harness.log", "rust.log", "c-configure.log", "c-build.log"]}
         for name in ("harness.log", "rust.log", "c-configure.log", "c-build.log", "artifacts.json"):
             (self.root / name).write_text("fixture")
         calls = []

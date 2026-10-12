@@ -25,7 +25,7 @@ import sys
 import time
 import uuid
 
-from common import write_json
+from common import file_sha256, write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOCATORS = ("mechanical_mimalloc_raw", "c-mimalloc-3.3.2")
@@ -89,7 +89,8 @@ def run_manifest(**fields: object) -> dict:
                      "affinity": sorted(os.sched_getaffinity(0)), "lscpu": capture(["lscpu"])},
             "allocator_environment": {k: v for k, v in os.environ.items() if k.startswith(("MIMALLOC_", "MALLOC_"))
                                       and not k.startswith("MIMALLOC_BENCH_")
-                                      and k not in ("MIMALLOC_RUST_LIB", "MIMALLOC_C_LIB")}}
+                                      and k not in ("MIMALLOC_RUST_LIB", "MIMALLOC_C_LIB")},
+            "caller_ld_preload_removed": os.environ.get("LD_PRELOAD")}
 
 
 @contextlib.contextmanager
@@ -99,9 +100,11 @@ def run_lifecycle(path: Path, manifest: dict, entries: list[dict]):
         yield
         manifest["status"] = "complete"
     except KeyboardInterrupt:
-        manifest.update(status="interrupted", error="interrupted by user", exit_status=130)
-    except (BenchError, ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError, SystemExit) as error:
-        manifest.update(status="failed", error=str(error), exit_status=getattr(error, "code", 1))
+        manifest.update(status="interrupted", error="interrupted", exit_status=130)
+    except Exception as error:
+        expected = isinstance(error, BenchError)
+        manifest.update(status="failed", error=str(error) if expected else f"{type(error).__name__}: {error}",
+                        exit_status=error.code if expected else 1)
     finally:
         manifest["finished_utc"] = utc()
         if entries and "exit_status" not in entries[-1]:
@@ -120,7 +123,7 @@ def execute(command: list[str], log: Path, environment: dict[str, str] | None = 
     lines = []
     with log.open("w") as handle:
         handle.write("+ " + shlex.join(command) + "\n")
-        with subprocess.Popen(command, cwd=cwd or ROOT, env=environment, text=True,
+        with subprocess.Popen(command, cwd=cwd or ROOT, env=environment, text=True, errors="replace",
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               start_new_session=True) as process:
             try:
@@ -137,7 +140,7 @@ def execute(command: list[str], log: Path, environment: dict[str, str] | None = 
                     elif event.get("reason") == "compiler-message":
                         print(event["message"].get("rendered", ""), end="", flush=True)
                 code = process.wait()
-            except KeyboardInterrupt:
+            except BaseException:
                 os.killpg(process.pid, signal.SIGTERM)
                 try:
                     process.wait(timeout=5)
@@ -170,7 +173,16 @@ def cargo_artifact(output: str, name: str, shared: bool = False) -> Path:
     return path
 
 
-def build(jobs: int) -> dict:
+def cargo_config_files() -> dict[str, str]:
+    """Cargo config files that can inject rustflags or profiles into the build."""
+    cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
+    candidates = [d / ".cargo" / n for d in (ROOT, *ROOT.parents) for n in ("config", "config.toml")]
+    candidates += [cargo_home / n for n in ("config", "config.toml")]
+    return {str(p): p.read_text() for p in dict.fromkeys(candidates) if p.is_file()}
+
+
+def build(jobs: int, harness: bool = True) -> dict:
+    """Build the Rust and C shared libraries, plus the Criterion harness unless harness=False."""
     if sys.platform != "linux":
         raise BenchError("the native Rust/C shared-library comparison requires Linux")
     tools = {"cargo": ["cargo"], "rustc": shlex.split(os.environ.get("RUSTC", "rustc")), "cmake": ["cmake"],
@@ -181,27 +193,33 @@ def build(jobs: int) -> dict:
             raise BenchError(f"required build tool is missing: {shlex.join(command)}")
     versions = {name: capture(command + ["--version"]) for name, command in tools.items()}
     rustc = capture(tools["rustc"] + ["--version", "--verbose"])
-    host = next(line.removeprefix("host: ") for line in rustc.splitlines() if line.startswith("host: "))
+    host = next((line.removeprefix("host: ") for line in rustc.splitlines() if line.startswith("host: ")), None)
+    if host is None:
+        raise BenchError(f"{shlex.join(tools['rustc'])} --version --verbose did not report a host triple")
     if os.environ.get("CARGO_BUILD_TARGET", host) != host:
         raise BenchError("comparison executables must target the current host; unset CARGO_BUILD_TARGET")
     flags = {key: os.environ.get(key, "") for key in (
         "CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS",
-        "RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CMAKE_GENERATOR", "CARGO_BUILD_TARGET",
+        "RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CMAKE_GENERATOR", "CARGO_INCREMENTAL",
     )}
     flags.update({k: v for k, v in os.environ.items()
-                  if k.startswith(("CARGO_PROFILE_", "CARGO_TARGET_")) and k != "CARGO_TARGET_DIR"})
+                  if k.startswith(("CARGO_PROFILE_", "CARGO_TARGET_", "CARGO_BUILD_")) and k != "CARGO_TARGET_DIR"})
     config = {"tools": versions, "tool_paths": {name: shutil.which(command[0]) for name, command in tools.items()},
-              "flags": flags, "harness_features": ["bench"],
+              "flags": flags, "cargo_config": cargo_config_files(), "harness_features": ["bench"],
               "rust_library_features": ["interpose"], "c_options": C_OPTIONS}
     key = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:16]
     cache = ROOT / "target/bench-build" / key
     cache.mkdir(parents=True, exist_ok=True)
     environment = {**os.environ, "CARGO_TARGET_DIR": str(cache / "harness")}
     print(f"Build cache: {cache}", flush=True)
-    output = execute(["cargo", "bench", "--locked", "--no-run", "--features", "bench",
-                      "--bench", "mimalloc_bench", "--jobs", str(jobs),
-                      "--message-format=json-render-diagnostics"], cache / "harness.log", environment)
-    executable = cargo_artifact(output, "mimalloc_bench")
+    artifacts = {"cache": str(cache), "configuration": config, "rustc_verbose": rustc,
+                 "logs": ["rust.log", "c-configure.log", "c-build.log"]}
+    if harness:
+        output = execute(["cargo", "bench", "--locked", "--no-run", "--features", "bench",
+                          "--bench", "mimalloc_bench", "--jobs", str(jobs),
+                          "--message-format=json-render-diagnostics"], cache / "harness.log", environment)
+        artifacts["executable"] = str(cargo_artifact(output, "mimalloc_bench"))
+        artifacts["logs"].insert(0, "harness.log")
     environment["CARGO_TARGET_DIR"] = str(cache / "rust-interpose")
     output = execute(["cargo", "rustc", "--locked", "--release", "--features", "interpose",
                       "--lib", "--jobs", str(jobs), "--message-format=json-render-diagnostics",
@@ -215,20 +233,26 @@ def build(jobs: int) -> dict:
     c_library = (c_dir / "libmimalloc.so").resolve()
     if not c_library.is_file():
         raise BenchError(f"CMake did not produce {c_library}")
-    artifacts = {"executable": str(executable), "rust_library": str(rust_library),
-                 "c_library": str(c_library), "cache": str(cache), "configuration": config,
-                 "rustc_verbose": rustc}
-    artifacts["sha256"] = {
-        name: hashlib.sha256(Path(artifacts[name]).read_bytes()).hexdigest()
-        for name in ("executable", "rust_library", "c_library")
-    }
+    artifacts.update(rust_library=str(rust_library), c_library=str(c_library))
+    artifacts["sha256"] = {name: file_sha256(artifacts[name])
+                           for name in ("executable", "rust_library", "c_library") if name in artifacts}
     write_json(cache / "artifacts.json", artifacts)
     return artifacts
 
 
+def copy_build_logs(artifacts: dict, directory: Path, prefix: str = "") -> None:
+    for name in (*artifacts["logs"], "artifacts.json"):
+        shutil.copy2(Path(artifacts["cache"]) / name, directory / (prefix + name))
+
+
+def without_preload() -> dict[str, str]:
+    """Caller environment for workers; a caller LD_PRELOAD would skew allocator measurements."""
+    return {k: v for k, v in os.environ.items() if k != "LD_PRELOAD"}
+
+
 def worker_environment(artifacts: dict, args: argparse.Namespace, criterion: Path,
                        scenario: str, allocator: str) -> dict[str, str]:
-    environment = {key: value for key, value in os.environ.items()
+    environment = {key: value for key, value in without_preload().items()
                    if not key.startswith("MIMALLOC_BENCH_")}
     environment.update({
         "MIMALLOC_RUST_LIB": artifacts["rust_library"], "MIMALLOC_C_LIB": artifacts["c_library"],
@@ -273,11 +297,11 @@ def validate_sample(directory: Path, expected: str, samples: int) -> dict:
 
 def report(directory: Path) -> bool:
     directory = directory.resolve()
-    if json.loads((directory / "manifest.json").read_text()).get("suite") == "nginx":
-        return nginx.report(directory)
-    if json.loads((directory / "manifest.json").read_text()).get("suite") == "architecture":
-        return architecture.report(directory)
     manifest = json.loads((directory / "manifest.json").read_text())
+    if manifest.get("suite") == "nginx":
+        return nginx.report(directory, manifest)
+    if manifest.get("suite") == "architecture":
+        return architecture.report(directory, manifest)
     measurements = []
     errors = []
     for scenario in manifest["scenarios"]:
@@ -298,7 +322,7 @@ def report(directory: Path) -> bool:
                                                  manifest["controls"]["samples"])
                     measurements.append({"scenario": scenario, "repeat": repeat,
                                          "allocator": allocator, **result})
-                except (ValueError, KeyError, TypeError, OSError, SystemExit) as error:
+                except (ValueError, KeyError, TypeError, OSError) as error:
                     errors.append(f"{relative}: {error}")
     rows = []
     for scenario in manifest["scenarios"]:
@@ -366,8 +390,7 @@ def compare(args: argparse.Namespace) -> int:
     with run_lifecycle(path, manifest, manifest["workers"]):
         artifacts = build(args.jobs)
         manifest["artifacts"] = artifacts
-        for name in ("harness.log", "rust.log", "c-configure.log", "c-build.log", "artifacts.json"):
-            shutil.copy2(Path(artifacts["cache"]) / name, directory / name)
+        copy_build_logs(artifacts, directory)
         app_selected = [s for s in selected if s in applications.SCENARIOS]
         if app_selected:
             manifest["application_artifacts"] = applications.build(app_selected, artifacts, args.jobs, sys.modules[__name__])
@@ -404,7 +427,7 @@ def compare(args: argparse.Namespace) -> int:
                         write_json(config_path, config)
                         worker["command"] = [sys.executable, str(ROOT / "benchmarks/applications.py"),
                                              str(config_path), str(directory / relative)]
-                        environment = {k: v for k, v in os.environ.items() if k != "LD_PRELOAD"}
+                        environment = without_preload()
                         worker["application_config"] = config
                     worker["environment"] = {k: v for k, v in environment.items()
                                              if k.startswith("MIMALLOC_") or k == "CRITERION_HOME"}
@@ -464,7 +487,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     build_parser.add_argument("--applications", action="store_true", help="also fetch/build pinned Redis and RocksDB")
     for command in (run, build_parser, architectural):
         command.add_argument("--jobs", type=minimum, default=default_jobs())
-    sub.add_parser("list", help="list native scenarios; N uses the harness's host-derived thread count")
+    sub.add_parser("list", help="list native and application scenarios; N uses the harness's host-derived thread count")
     report_parser = sub.add_parser("report", help="regenerate a saved comparison without running benchmarks")
     report_parser.add_argument("directory")
     for gate in GATES:
@@ -475,8 +498,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return args
 
 
+def interrupt(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt(signal.Signals(signum).name)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    # Cancellation or a closed terminal must stop worker process groups like Ctrl-C does.
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, interrupt)
     try:
         if args.command == "nginx":
             return nginx.run(args, sys.modules[__name__])

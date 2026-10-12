@@ -111,7 +111,7 @@ def collect_results(
     if exact_ids:
         missing = sorted(exact_ids.difference(results_by_id))
         if missing:
-            raise SystemExit(
+            raise ValueError(
                 "missing Criterion results:\n" + "\n".join(f"- {item}" for item in missing)
             )
 
@@ -258,7 +258,10 @@ def main() -> None:
         )
     exact_ids = set(exact_order)
 
-    results = collect_results(Path(args.criterion_dir), args.prefix, exact_ids, exact_order)
+    try:
+        results = collect_results(Path(args.criterion_dir), args.prefix, exact_ids, exact_order)
+    except ValueError as error:
+        raise SystemExit(str(error)) from None
     if not results:
         raise SystemExit("no Criterion results matched")
     print_markdown(results)

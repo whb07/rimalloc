@@ -1,6 +1,7 @@
 """Pinned Redis/RocksDB builds and isolated application benchmark workers."""
+import contextlib
 import csv
-import hashlib
+import fcntl
 import io
 import json
 import math
@@ -18,7 +19,7 @@ import tempfile
 import time
 import urllib.request
 
-from common import write_json
+from common import file_sha256, write_json
 
 SCENARIOS = {"redis": "per-redis-request", "rocksdb": "per-rocksdb-write"}
 SOURCES = {
@@ -37,17 +38,22 @@ ROCKS_OPTIONS = {
 }
 
 
-def file_sha256(path):
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+@contextlib.contextmanager
+def locked(path):
+    """Serialize concurrent runs that share a download or copy destination."""
+    with path.open("w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
 
 
 def source(name, root, spec=None):
     version, url, digest = spec or SOURCES[name]
     root.mkdir(parents=True, exist_ok=True)
+    with locked(root / f".{name}.lock"):
+        return fetch(name, root, version, url, digest)
+
+
+def fetch(name, root, version, url, digest):
     extension = ".tar.bz2" if url.endswith(".tar.bz2") else ".tar.gz"
     archive = root / f"{name}-{version}{extension}"
     if not archive.exists():
@@ -79,12 +85,14 @@ def source(name, root, spec=None):
 
 def copy_tree(source_directory, destination):
     """Copy a source tree once, renaming into place so an interrupted copy is never reused."""
-    if destination.exists():
-        return
-    staging = destination.with_name(f".{destination.name}.partial")
-    shutil.rmtree(staging, ignore_errors=True)
-    shutil.copytree(source_directory, staging)
-    staging.rename(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with locked(destination.with_name(f".{destination.name}.lock")):
+        if destination.exists():
+            return
+        staging = destination.with_name(f".{destination.name}.partial")
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(source_directory, staging)
+        staging.rename(destination)
 
 
 def build(selected, artifacts, jobs, driver):
@@ -127,7 +135,7 @@ def build(selected, artifacts, jobs, driver):
     execute(shlex.split(os.environ.get("CC", "cc")) + ["-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror",
             str(driver.ROOT / "benchmarks/allocator-check.c"), "-ldl", "-o", str(check)], "check-build.log")
     result["allocator_check"] = str(check)
-    result["sha256"] = {k: hashlib.sha256(Path(v).read_bytes()).hexdigest() for k, v in result.items()
+    result["sha256"] = {k: file_sha256(v) for k, v in result.items()
                         if k in ("redis_server", "redis_benchmark", "rocksdb", "allocator_check")}
     driver.write_json(cache / "artifacts.json", result)
     return result
@@ -140,6 +148,8 @@ def parse_redis(output):
     result = []
     for row in rows:
         values = {key: float(row[key]) for key in ("rps", "avg_latency_ms", "p50_latency_ms", "p95_latency_ms", "p99_latency_ms")}
+        if math.isinf(values["rps"]):
+            raise ValueError("redis-benchmark finished too quickly to measure throughput; increase --app-operations")
         if not all(math.isfinite(v) and v >= 0 for v in values.values()) or values["rps"] <= 0:
             raise ValueError("invalid Redis throughput/latency")
         result.append({"command": row["test"], **values})

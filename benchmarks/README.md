@@ -63,8 +63,10 @@ The runner obtains Rust artifacts from Cargo's JSON build messages and passes
 both library paths explicitly to each worker. Incremental Cargo and CMake
 builds run on every build/run invocation. Configuration-specific caches live
 under `target/bench-build/`; previous reports remain separate. Standard build
-environment variables such as `CC`, `CXX`, and `RUSTFLAGS` are recorded and
-participate in cache selection. Comparison selections and Criterion controls
+environment variables such as `CC`, `CXX`, `RUSTFLAGS`, and `CARGO_BUILD_*`,
+plus Cargo config files, are recorded and participate in cache selection. The
+`nginx` and `architecture` suites build only the two shared libraries, not the
+Criterion harness. Comparison selections and Criterion controls
 come from the CLI, overriding inherited `MIMALLOC_BENCH_*` settings.
 
 ## Results
@@ -124,7 +126,8 @@ or `db_bench` process preloads the selected allocator, the C++ runtime (for both
 allocators), and a small ownership checker. The checker verifies the library
 providing `malloc` and that a libc `malloc` allocation is owned by mimalloc.
 Workers fail if this proof is missing. Redis clients and the Python runner use
-the system allocator. Inherited `LD_PRELOAD` is removed from application workers.
+the system allocator. Inherited `LD_PRELOAD` is removed from every worker and
+recorded in the manifest as `caller_ld_preload_removed`.
 
 Defaults are ten samples per allocator, 100,000 operations, one application
 thread and 256-byte values. Each sample uses a fresh application process; round

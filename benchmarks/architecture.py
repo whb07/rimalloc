@@ -8,6 +8,8 @@ from pathlib import Path
 import shlex
 import statistics
 
+from common import file_sha256, write_json
+
 SCENARIOS = ("segment-occupancy", "cross-thread", "decommit-oscillation", "thread-churn")
 
 
@@ -45,8 +47,8 @@ def validate(rows, scenario, cycles):
     return rows
 
 
-def report(directory):
-    manifest = json.loads((directory / "manifest.json").read_text())
+def report(directory, manifest=None):
+    manifest = manifest or json.loads((directory / "manifest.json").read_text())
     measurements, errors = [], []
     for repeat in range(1, manifest["controls"]["repeats"] + 1):
         for scenario in manifest["scenarios"]:
@@ -80,8 +82,8 @@ def report(directory):
             if complete:
                 summaries.append(row)
     complete = manifest["status"] == "complete" and not errors
-    (directory / "results.json").write_text(json.dumps(
-        {"complete": complete, "summary": summaries, "measurements": measurements, "errors": errors}, indent=2) + "\n")
+    write_json(directory / "results.json",
+               {"complete": complete, "summary": summaries, "measurements": measurements, "errors": errors})
     fields = ["scenario", "phase", "cycle"] + [f"{a}_{m}" for a in ("rust", "c") for m in metrics]
     with (directory / "results.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -109,6 +111,27 @@ def report(directory):
     return complete
 
 
+def build_probe(artifacts, directory, driver):
+    """Compile the probe once per compiler, flags, and source; the cached binary is never rewritten."""
+    include = driver.ROOT / "mimalloc-3.3.2/include"
+    source = driver.ROOT / "benches/architectural_bench.cpp"
+    command = shlex.split(os.environ.get("CXX", "c++")) + ["-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror"]
+    command += shlex.split(os.environ.get("CXXFLAGS", ""))
+    command += ["-pthread", "-I", str(include), str(source), "-ldl"] + shlex.split(os.environ.get("LDFLAGS", ""))
+    inputs = [source, *sorted(include.rglob("*.h"))]
+    key = hashlib.sha256(json.dumps([command, artifacts["configuration"]["tools"]["cxx"]]).encode()
+                         + b"".join(path.read_bytes() for path in inputs)).hexdigest()[:16]
+    executable = Path(artifacts["cache"]) / f"architectural-bench-{key}"
+    if not executable.exists():
+        staging = executable.with_name(f".{executable.name}.{os.getpid()}")
+        try:
+            driver.execute(command + ["-o", str(staging)], directory / "cpp-build.log")
+            staging.rename(executable)
+        finally:
+            staging.unlink(missing_ok=True)
+    return executable, command + ["-o", str(executable)]
+
+
 def run(args, driver):
     controls = {k: getattr(args, k) for k in ("bytes", "block_size", "threads", "cycles", "repeats")}
     if args.bytes // args.block_size < args.threads:
@@ -121,19 +144,12 @@ def run(args, driver):
     driver.write_json(path, manifest)
     print(f"Results: {directory}", flush=True)
     with driver.run_lifecycle(path, manifest, manifest["workers"]):
-        artifacts = driver.build(args.jobs)
-        executable = Path(artifacts["cache"]) / "architectural-bench"
-        command = shlex.split(os.environ.get("CXX", "c++")) + ["-std=c++20", "-O2", "-Wall", "-Wextra", "-Werror"]
-        command += shlex.split(os.environ.get("CXXFLAGS", ""))
-        command += ["-pthread", "-I", str(driver.ROOT / "mimalloc-3.3.2/include"),
-                    str(driver.ROOT / "benches/architectural_bench.cpp"), "-ldl"]
-        command += shlex.split(os.environ.get("LDFLAGS", "")) + ["-o", str(executable)]
-        driver.execute(command, directory / "cpp-build.log")
+        artifacts = driver.build(args.jobs, harness=False)
+        executable, command = build_probe(artifacts, directory, driver)
         artifacts["architecture_executable"] = str(executable)
-        artifacts["sha256"]["architecture_executable"] = hashlib.sha256(executable.read_bytes()).hexdigest()
+        artifacts["sha256"]["architecture_executable"] = file_sha256(executable)
         manifest.update(artifacts=artifacts, cpp_build_command=command, status="running")
-        for name in ("harness.log", "rust.log", "c-configure.log", "c-build.log"):
-            (directory / name).write_bytes((Path(artifacts["cache"]) / name).read_bytes())
+        driver.copy_build_logs(artifacts, directory)
         for repeat in range(1, args.repeats + 1):
             order = driver.ALLOCATORS if repeat % 2 else driver.ALLOCATORS[::-1]
             for scenario in manifest["scenarios"]:
@@ -147,7 +163,7 @@ def run(args, driver):
                     manifest["workers"].append(worker)
                     driver.write_json(path, manifest)
                     print(f"Round {repeat}/{args.repeats}: {scenario} / {allocator}", flush=True)
-                    output = driver.execute(command, directory / relative / "worker.log")
+                    output = driver.execute(command, directory / relative / "worker.log", driver.without_preload())
                     rows = validate([json.loads(line) for line in output.splitlines() if line.startswith('{"phase":')],
                                     scenario, args.cycles)
                     driver.write_json(directory / relative / "measurements.json", rows)

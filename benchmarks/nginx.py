@@ -18,7 +18,7 @@ import sys
 import time
 
 import applications
-from common import write_json
+from common import file_sha256, write_json
 
 WORKLOADS = ("static", "churn", "headers", "proxy", "transfer", "burst-idle")
 ALLOCATORS = ("rust", "mimalloc", "glibc")
@@ -28,6 +28,7 @@ SOURCES = {
 
 }
 WRAPPED = ("malloc", "calloc", "realloc", "free", "posix_memalign")
+HEADER_SIZES = (128, 512, 1024, 4096, 128, 512, 1024, 4096)
 
 
 def build(artifacts, profiles, jobs, driver):
@@ -38,9 +39,10 @@ def build(artifacts, profiles, jobs, driver):
         p.read_bytes() for p in sorted(implementation.iterdir()) if p.suffix == ".c" or p.name == "config")).hexdigest()[:16]
     cache = Path(artifacts["cache"]) / "nginx" / key
     cache.mkdir(parents=True, exist_ok=True)
-    commands = []
+    commands = []; logs = []
     def execute(command, name, cwd=None):
         commands.append({"command": command, "cwd": str(cwd or driver.ROOT)})
+        logs.append(name + ".log")
         driver.execute(command, cache / (name + ".log"), cwd=cwd)
     cc = shlex.split(os.environ.get("CC", "cc"))
     probe = cache / "allocator_probe.o"
@@ -48,22 +50,28 @@ def build(artifacts, profiles, jobs, driver):
     guard = cache / "allocator_guard.so"
     execute(cc + ["-O2", "-shared", "-fPIC", "-Wall", "-Wextra", "-Werror", str(implementation / "allocator_guard.c"), "-ldl", "-o", str(guard)], "guard-build")
     binaries = {}
-    for profile in profiles:
-        for trace in (False, True):
-            label = profile + ("-trace" if trace else "")
-            local = cache / label
-            applications.copy_tree(local_sources["nginx"], local)
-            options = ["--without-http_rewrite_module", "--without-http_gzip_module", "--without-http_fastcgi_module",
-                       "--without-http_uwsgi_module", "--without-http_scgi_module", f"--add-module={implementation}",
-                       "--with-cc=" + os.environ.get("CC", "cc")]
-            cflags = os.environ.get("CFLAGS", "") + (" -DNGX_DEBUG_PALLOC=1" if profile == "debug-palloc" else "")
-            options += [f"--with-cc-opt={cflags}"]
-            ldflags = os.environ.get("LDFLAGS", "")
-            if trace: ldflags += " " + str(probe) + " " + " ".join(f"-Wl,--wrap={n}" for n in WRAPPED)
-            options += [f"--with-ld-opt={ldflags}"]
-            if not (local / "objs/Makefile").exists(): execute(["./configure", *options], label + "-configure", local)
-            execute(["make", "-C", str(local), "-j", str(jobs)], label + "-build")
-            binaries[label] = str(local / "objs/nginx")
+    # Selected profiles need plain and traced builds; the upstream always runs plain production.
+    variants = [(p, trace) for p in profiles for trace in (False, True)]
+    if "production" not in profiles: variants.append(("production", False))
+    for profile, trace in variants:
+        label = profile + ("-trace" if trace else "")
+        local = cache / label
+        applications.copy_tree(local_sources["nginx"], local)
+        options = ["--without-http_rewrite_module", "--without-http_gzip_module", "--without-http_fastcgi_module",
+                   "--without-http_uwsgi_module", "--without-http_scgi_module", f"--add-module={implementation}",
+                   "--with-cc=" + os.environ.get("CC", "cc")]
+        cflags = os.environ.get("CFLAGS", "") + (" -DNGX_DEBUG_PALLOC=1" if profile == "debug-palloc" else "")
+        options += [f"--with-cc-opt={cflags}"]
+        ldflags = os.environ.get("LDFLAGS", "")
+        if trace: ldflags += " " + str(probe) + " " + " ".join(f"-Wl,--wrap={n}" for n in WRAPPED)
+        options += [f"--with-ld-opt={ldflags}"]
+        # Options live in this file and the environment, not the cache key, so compare them directly.
+        marker = local / "bench-configure.json"
+        if not (local / "objs/Makefile").exists() or not marker.exists() or json.loads(marker.read_text()) != options:
+            execute(["./configure", *options], label + "-configure", local)
+            marker.write_text(json.dumps(options))
+        execute(["make", "-C", str(local), "-j", str(jobs)], label + "-build")
+        binaries[label] = str(local / "objs/nginx")
     wrk = cache / "wrk-source"
     applications.copy_tree(local_sources["wrk"], wrk)
     execute(["make", "-C", str(wrk), "-j", str(jobs), "WITH_OPENSSL=/usr", "VER=4.2.0"], "wrk-build")
@@ -71,9 +79,8 @@ def build(artifacts, profiles, jobs, driver):
     paths = {**binaries, "wrk": str(wrk / "wrk"), "guard": str(guard)}
     result = {"binaries": binaries, "wrk": paths["wrk"], "guard": str(guard), "libraries": libraries,
               "sources": {n: dict(zip(("version", "url", "sha256"), spec)) for n, spec in SOURCES.items()},
-              "commands": commands, "cache": str(cache), "openssl": driver.capture(["openssl", "version"])}
-    result["sha256"] = {n: hashlib.sha256(Path(p).read_bytes()).hexdigest() for n, p in
-                        {**paths, **{k: v for k, v in libraries.items() if v}}.items()}
+              "commands": commands, "logs": logs, "cache": str(cache), "openssl": driver.capture(["openssl", "version"])}
+    result["sha256"] = {n: file_sha256(p) for n, p in {**paths, **{k: v for k, v in libraries.items() if v}}.items()}
     driver.write_json(cache / "artifacts.json", result)
     return result
 
@@ -85,16 +92,20 @@ def quote(value):
 def configuration(prefix, port, workers, cpus, data, upstream=None, churn=False, buffering="on"):
     affinity = " ".join(format(1 << cpus[i % len(cpus)], "b") for i in range(workers))
     locations = [f'location = /small {{ alias {quote(data / "small")}; }}']
+    upstreams = ""
     for size in (1024, 4096, 16384, 65536, 262144, 1048576):
         locations.append(f'location = /{size} {{ alias {quote(data / str(size))}; }}')
     if upstream is None:
         locations.append('location = /upload { bench_sink; }')
     else:
+        # Reuse upstream connections so proxy cases measure buffering, not loopback connect/close.
+        upstreams = f"upstream backend {{ server 127.0.0.1:{upstream}; keepalive 64; }}"
+        reuse = 'proxy_http_version 1.1; proxy_set_header Connection "";'
         for size in (1024, 16384, 65536, 262144):
-            locations.append(f'location = /proxy/{size} {{ proxy_pass http://127.0.0.1:{upstream}/{size}; '
+            locations.append(f'location = /proxy/{size} {{ proxy_pass http://backend/{size}; {reuse} '
                              f'proxy_buffering {buffering}; proxy_buffer_size 8k; proxy_buffers 16 16k; '
                              'proxy_busy_buffers_size 32k; proxy_max_temp_file_size 0; }')
-        locations.append(f'location = /upload {{ proxy_pass http://127.0.0.1:{upstream}/upload; proxy_request_buffering off; }}')
+        locations.append(f'location = /upload {{ proxy_pass http://backend/upload; {reuse} proxy_request_buffering off; }}')
     # The upstream keeps all known upload sizes in memory; frontend streams at 64KiB.
     body_buffer = "2m" if upstream is None else "64k"
     user = "user root;" if os.geteuid() == 0 else ""
@@ -113,6 +124,7 @@ http {{
     client_body_buffer_size {body_buffer}; client_max_body_size 16m;
     client_body_temp_path {quote(prefix / 'body-temp')};
     proxy_temp_path {quote(prefix / 'proxy-temp')};
+    {upstreams}
     server {{ listen 127.0.0.1:{port} reuseport; {' '.join(locations)} }}
 }}
 '''
@@ -135,7 +147,7 @@ def cases(workloads):
 def lua_script(case):
     if case["workload"] == "headers":
         setup = '\n'.join(f'wrk.headers["X-Payload-{i}"] = string.rep("x", {size})'
-                          for i, size in enumerate((128, 512, 1024, 4096, 128, 512, 1024, 4096)))
+                          for i, size in enumerate(HEADER_SIZES))
     elif case.get("upload"):
         setup = f'wrk.method="POST"; wrk.body=string.rep("x", {case["size"]}); wrk.headers["Content-Type"]="application/octet-stream"'
     else:
@@ -220,7 +232,8 @@ def stop(process):
         process.send_signal(signal.SIGQUIT)
         try: process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            children = worker_pids(process.pid)
+            try: children = worker_pids(process.pid)
+            except OSError: children = []  # the master exited after the timeout
             process.terminate()
             try: process.wait(timeout=2)
             except subprocess.TimeoutExpired: process.kill(); process.wait()
@@ -232,7 +245,7 @@ def stop(process):
 def http_check(port, case):
     client = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
     try:
-        headers = {f"X-Payload-{i}": "x" * size for i, size in enumerate((128, 512, 1024, 4096, 128, 512, 1024, 4096))} if case["workload"] == "headers" else {}
+        headers = {f"X-Payload-{i}": "x" * size for i, size in enumerate(HEADER_SIZES)} if case["workload"] == "headers" else {}
         body = b"x" * case["size"] if case.get("upload") else None
         client.request("POST" if body else "GET", case["path"], body=body, headers=headers)
         response = client.getresponse(); data = response.read()
@@ -245,16 +258,29 @@ def http_check(port, case):
 
 
 def ready(process, port, case, workers):
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + 15; last = None
     while time.monotonic() < deadline:
         if process.poll() is not None: raise ValueError(f"Nginx exited {process.returncode}")
         try:
             pids = worker_pids(process.pid)
             if len(pids) == workers:
                 http_check(port, case); return pids
-        except (OSError, http.client.HTTPException): pass
+        except (OSError, http.client.HTTPException, ValueError) as error: last = error
         time.sleep(.05)
-    raise ValueError("Nginx readiness timed out")
+    raise ValueError(f"Nginx readiness timed out; last check: {last}")
+
+
+def launch(binary, prefix, conf, environment, cpus, case, workers):
+    """Start Nginx on a probed free port, retrying if another process binds that port first."""
+    for attempt in range(3):
+        port = free_port()
+        process, command = start_nginx(binary, prefix, conf(port), environment, cpus)
+        try:
+            return process, command, port, ready(process, port, case, workers)
+        except ValueError:
+            stop(process)
+            logs = "".join(p.read_text(errors="replace") for p in (prefix / "master.log", prefix / "error.log") if p.exists())
+            if attempt == 2 or "Address already in use" not in logs: raise
 
 
 def wrk_run(config, case, port, seconds, directory, name, monitored):
@@ -316,13 +342,14 @@ def worker(config, directory):
     try:
         upstream_port = None; monitored_upstream = {}
         if case["workload"] == "proxy" or case.get("upload"):
-            upstream_port = free_port(); prefix = directory / "upstream"
-            upstream_process, command = start_nginx(config["artifacts"]["binaries"]["production"], prefix,
-                configuration(prefix, upstream_port, len(config["upstream_cpus"]), config["upstream_cpus"], data),
-                {k: v for k, v in os.environ.items() if k not in ("LD_PRELOAD", "NGINX_BENCH_TRACE", "NGINX_BENCH_ALLOCATOR")}, config["upstream_cpus"])
-            result["commands"].append(command)
+            prefix = directory / "upstream"
             upstream_case = {**case, "path": "/upload" if case.get("upload") else f"/{case['size']}"}
-            upstream_pids = ready(upstream_process, upstream_port, upstream_case, len(config["upstream_cpus"]))
+            upstream_process, command, upstream_port, upstream_pids = launch(
+                config["artifacts"]["binaries"]["production"], prefix,
+                lambda port: configuration(prefix, port, len(config["upstream_cpus"]), config["upstream_cpus"], data),
+                {k: v for k, v in os.environ.items() if k not in ("LD_PRELOAD", "NGINX_BENCH_TRACE", "NGINX_BENCH_ALLOCATOR")},
+                config["upstream_cpus"], upstream_case, len(config["upstream_cpus"]))
+            result["commands"].append(command)
             result["upstream_worker_pids"] = upstream_pids
             monitored_upstream = {"upstream": upstream_pids}
             headroom = wrk_run(config, upstream_case, upstream_port, config["preflight_secs"], directory, "upstream-capacity",
@@ -331,16 +358,15 @@ def worker(config, directory):
         # An instrumented preflight is always independent of throughput timing.
         for diagnostic in (True, False):
             label = "diagnostic" if diagnostic else "timed"
-            prefix = directory / label; port = free_port()
+            prefix = directory / label
             trace = directory / "trace" if diagnostic else None
             env = server_environment(config, trace)
             binary = config["artifacts"]["binaries"][config["profile"] + ("-trace" if diagnostic else "")]
-            conf = configuration(prefix, port, config["workers"], config["server_cpus"], data, upstream_port,
-                                 case["workload"] == "churn", case.get("buffering", "on"))
-            process, command = start_nginx(binary, prefix, conf, env, config["server_cpus"])
+            conf = lambda port: configuration(prefix, port, config["workers"], config["server_cpus"], data, upstream_port,
+                                              case["workload"] == "churn", case.get("buffering", "on"))
+            process, command, port, pids = launch(binary, prefix, conf, env, config["server_cpus"], case, config["workers"])
             result["commands"].append(command)
             try:
-                pids = ready(process, port, case, config["workers"])
                 result[label + "_worker_pids"] = pids
                 monitored = {"server": pids, **monitored_upstream}
                 if diagnostic:
@@ -447,13 +473,14 @@ def read_result(path, config):
     return result
 
 
-def report(directory):
-    manifest = json.loads((directory / "manifest.json").read_text())
+def report(directory, manifest=None):
+    manifest = manifest or json.loads((directory / "manifest.json").read_text())
     measurements = []; errors = []
     for job in manifest["jobs"]:
         try:
             if job.get("exit_status") != 0: raise ValueError("worker did not complete")
-            result = read_result(directory / job["directory"] / "nginx.json", job["config"])
+            config = json.loads((directory / job["directory"] / "config.json").read_text())
+            result = read_result(directory / job["directory"] / "nginx.json", config)
             measurements.append({"repeat": job["repeat"], **result})
         except (OSError, ValueError, KeyError, TypeError) as error:
             errors.append(f"{job['directory']}: {error}")
@@ -539,12 +566,13 @@ def run(args, driver):
     path = directory / "manifest.json"; driver.write_json(path, manifest)
     print(f"Results: {directory}; local CPU sets: {sets}; {manifest['expected_jobs']} independent runs", flush=True)
     with driver.run_lifecycle(path, manifest, manifest["jobs"]):
-        core = driver.build(args.jobs); manifest["core_artifacts"] = core
-        artifacts = build(core, list(dict.fromkeys(("production", *profiles))), args.jobs, driver)
+        core = driver.build(args.jobs, harness=False); manifest["core_artifacts"] = core
+        artifacts = build(core, profiles, args.jobs, driver)
         manifest["artifacts"] = artifacts
-        for name in ("harness.log", "rust.log", "c-configure.log", "c-build.log"):
-            shutil.copy2(Path(core["cache"]) / name, directory / ("core-" + name))
-        for log in Path(artifacts["cache"]).glob("*.log"): shutil.copy2(log, directory / log.name)
+        driver.copy_build_logs(core, directory, "core-")
+        for log in artifacts["logs"]: shutil.copy2(Path(artifacts["cache"]) / log, directory / log)
+        # Workers need only executable paths; full provenance stays once in the manifest.
+        runtime = {key: artifacts[key] for key in ("binaries", "wrk", "guard", "libraries")}
         manifest["status"] = "running"; driver.write_json(path, manifest)
         generator = random.Random(args.order_seed)
         for repeat in range(1, args.repeats + 1):
@@ -552,14 +580,14 @@ def run(args, driver):
             generator.shuffle(jobs)
             for profile, case, allocator in jobs:
                 relative = f"round-{repeat:03}/{profile}/{case['label']}/{allocator}"
-                config = {**controls, "artifacts": artifacts, "profile": profile, "allocator": allocator, "case": case}
+                config = {**controls, "artifacts": runtime, "profile": profile, "allocator": allocator, "case": case}
                 config_path = directory / relative / "config.json"; config_path.parent.mkdir(parents=True)
                 driver.write_json(config_path, config)
                 command = [sys.executable, str(driver.ROOT / "benchmarks/nginx.py"), str(config_path), str(config_path.parent)]
-                job = {"repeat": repeat, "directory": relative, "command": command, "config": config, "started_utc": driver.utc()}
+                job = {"repeat": repeat, "directory": relative, "command": command, "started_utc": driver.utc()}
                 manifest["jobs"].append(job); driver.write_json(path, manifest)
                 print(f"Round {repeat}/{args.repeats}: {profile} / {case['label']} / {allocator}", flush=True)
-                driver.execute(command, config_path.parent / "worker.log", {k: v for k, v in os.environ.items() if k != "LD_PRELOAD"})
+                driver.execute(command, config_path.parent / "worker.log", driver.without_preload())
                 read_result(config_path.parent / "nginx.json", config)
                 job.update(exit_status=0, finished_utc=driver.utc()); driver.write_json(path, manifest)
     if manifest.get("error"): print(manifest["error"], file=sys.stderr)

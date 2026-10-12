@@ -29,12 +29,13 @@ Run through the repository's existing entry point:
 
 `nginx --help` lists the controls. The default compares **only Rust and C
 mimalloc**, runs both production and `NGX_DEBUG_PALLOC=1` profiles, and uses two
-workers, 256 connections, two wrk threads, 10 seconds warmup, 30 seconds timed
-load, three repetitions, and a three-second allocator preflight. Burst/idle
-uses three cycles and 30-second idle phases. All six workloads expand to **18
-cases**, so the default complete sweep is a multi-hour experiment. Use selected
-workloads and short durations for functional validation; one-second samples
-are not performance evidence. Nginx stays separate from `run --full` and from
+workers, 256 connections, two wrk threads, 2 seconds warmup, 5 seconds timed
+load, one repetition, and a one-second allocator preflight. Burst/idle uses two
+cycles and 10-second idle phases. All six workloads expand to **18 cases**; the
+default sweep of both profiles and allocators takes about 14 minutes. For
+tighter confidence, raise `--repeats` and `--duration-secs` (three repeats of
+30-second load take several hours). One-second samples are only functional
+checks, not performance evidence. Nginx stays separate from `run --full` and from
 Criterion/application geomeans.
 
 ## Builds and CPU placement

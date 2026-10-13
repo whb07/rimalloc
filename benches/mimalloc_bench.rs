@@ -812,7 +812,7 @@ fn scenarios() -> Vec<Scenario> {
         Scenario::workload("alloc-testN", alloc_test::run_n),
         Scenario::per_million("larsonN", larson::run_unsized, "alloc-free-pairs"),
         Scenario::per_million("larsonN-sized", larson::run_sized, "alloc-free-pairs"),
-        Scenario::per_million("rptestN", rptest::run, "rptest-cpu-ops"),
+        Scenario::per_million("rptestN", rptest::run, "rptest-worker-ops"),
         Scenario::workload("barnes", barnes::run),
         Scenario::workload("cfrac", cfrac::run),
         Scenario::workload("mleak10", |alloc| unsafe { mleak::run(alloc, 5) }),
@@ -1614,8 +1614,8 @@ mod xmalloc_test {
                 let batch = dequeue_batch(state);
                 if !batch.is_null() {
                     free_batch(state.alloc, batch);
+                    state.counters[thread_arg.id].fetch_add(OBJECTS_PER_BATCH, Ordering::Relaxed);
                 }
-                state.counters[thread_arg.id].fetch_add(OBJECTS_PER_BATCH, Ordering::Relaxed);
             }
         }
         ptr::null_mut()
@@ -1869,7 +1869,9 @@ mod mstress {
                     let data_idx = pick(&mut r) % data_top;
                     let transfer_idx = pick(&mut r) % TRANSFERS;
                     let p = data.add(data_idx).read();
-                    let q = state.transfers[transfer_idx].swap(p, Ordering::Acquire);
+                    // AcqRel: release this thread's item writes to the next owner, acquire the
+                    // previous owner's writes before checking the received items.
+                    let q = state.transfers[transfer_idx].swap(p, Ordering::AcqRel);
                     data.add(data_idx).write(q);
                 }
             }
@@ -2164,7 +2166,9 @@ mod sh8bench {
 
             for _ in 0..iterations {
                 while foreign_frees_left != 0 {
-                    let p = foreign_frees.read_volatile();
+                    // Acquire pairs with the producer's Release store, so the owner word written
+                    // before publication is visible here.
+                    let p = AtomicPtr::from_ptr(foreign_frees).load(Ordering::Acquire);
                     if p.is_null() {
                         break;
                     }
@@ -2174,7 +2178,7 @@ mod sh8bench {
                         "foreign allocation ownership mismatch in sh8benchN"
                     );
                     alloc.free(p);
-                    foreign_frees.write_volatile(ptr::null_mut());
+                    AtomicPtr::from_ptr(foreign_frees).store(ptr::null_mut(), Ordering::Relaxed);
                     foreign_frees = foreign_frees.add(1);
                     foreign_frees_left -= 1;
                     foreign_frees_per_thread -= 1;
@@ -2253,7 +2257,7 @@ mod sh8bench {
                 if !p.is_null() {
                     p.cast::<*mut *mut u8>().write(slot);
                 }
-                slot.write_volatile(p);
+                AtomicPtr::from_ptr(slot).store(p, Ordering::Release);
             }
         }
     }
@@ -2578,6 +2582,8 @@ mod larson {
     struct State {
         alloc: BenchAllocator,
         sized_delete: bool,
+        // Workers start counting only after the timed interval begins.
+        go: AtomicBool,
         stop: AtomicBool,
         blocks: Vec<AtomicPtr<u8>>,
         sizes: Vec<AtomicUsize>,
@@ -2690,6 +2696,9 @@ mod larson {
         unsafe {
             let data = &mut *arg.cast::<ThreadData>();
             let state = &*data.state;
+            while !state.go.load(Ordering::Acquire) {
+                std::thread::yield_now();
+            }
             while !state.stop.load(Ordering::Relaxed) {
                 exercise_heap(data);
             }
@@ -2714,6 +2723,7 @@ mod larson {
             let state = State {
                 alloc,
                 sized_delete,
+                go: AtomicBool::new(false),
                 stop: AtomicBool::new(false),
                 blocks: (0..total_chunks)
                     .map(|_| AtomicPtr::new(ptr::null_mut()))
@@ -2752,6 +2762,7 @@ mod larson {
             }
 
             let start = Instant::now();
+            state.go.store(true, Ordering::Release);
             std::thread::sleep(timed_run(SLEEP_SECS));
             state.stop.store(true, Ordering::Relaxed);
             for thread in threads {
@@ -3153,7 +3164,7 @@ mod rptest {
 
                 std::thread::sleep(Duration::from_millis(10));
                 let foreign = get_cross_thread_memory(state, &arg.foreign);
-                free_foreign(arg.alloc, foreign, false, &mut arg.ticks, &mut arg.mops);
+                free_foreign(arg.alloc, foreign, true, &mut arg.ticks, &mut arg.mops);
             }
 
             std::thread::sleep(Duration::from_secs(1));
@@ -3273,8 +3284,10 @@ mod rptest {
                 mops > 0 && ticks > 0.0,
                 "rptestN produced no timed operations"
             );
-            // Like upstream rptest ("memory ops per CPU second"), time only the workers'
-            // measured regions; wall time would include the main thread's 1 s sleep polls.
+            // Like upstream rptest, sum the workers' measured wall-clock regions; whole-run wall
+            // time would include the main thread's 1 s sleep polls. This is not CPU time: it
+            // includes descheduling, and it keeps time spent blocked on allocator locks, which
+            // per-thread CPU time would hide for lock-based rivals.
             duration_per_million_ops(ticks, mops as f64)
         }
     }

@@ -65,6 +65,7 @@ and the conclusion drawn from them.
 | X17 | Compute a page's bin once when finding its queue | `mi_theap_page_queue_of` indexes with the bin from `mi_page_bin_typed` instead of recomputing `mi_bin` for ordinary pages | **KEEP**: 8 KiB malloc/free 246.6 -> 213.6 instructions/op (C 193.3); held-out neutral | Recorded below |
 | X18 | Make the medium-size generic path one call, like C | Inline the generic body into `_mi_malloc_generic` (the C entry point) instead of wrapping `_mi_malloc_generic_typed` | **KEEP**: 213.6 -> 205.6 instructions/op; with X17, medium sizes 7.5-10.1% faster; `larsonN-sized` +0.24% to +1.02% recorded | Recorded in the X17/X18 section |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
+| H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
 ## E02 — O(1) empty-available local-list transfer
 
@@ -1327,3 +1328,35 @@ in nine quick 1-second rounds (X17 alone -0.08%); `larsonN` +0.17% and -0.64%.
 flagged `sh6benchN` +2.09% (one +11.4% round) and read -1.95% over ten rounds.
 Gates: fmt, clippy, tests, safety stress, release thread stress, behavioral
 parity, differential trace, ASan/TSan, Miri.
+
+## H01 — Native harness publication and timing fixes
+
+Decided 2026-10-13, from an external source review (`NOTES_ALLOCATOR.md`,
+G1-G4), each finding checked against `benches/mimalloc_bench.rs`:
+
+- `mstressN`: the transfer-slot `swap` was `Acquire`, whose store half is
+  Relaxed, so the producer's item writes were not released to the thread that
+  received and verified them. Now `AcqRel` (same `xchg` on x86-64).
+- `sh8benchN`: the main thread published foreign blocks through plain
+  volatile slot writes while workers read them and the owner word inside the
+  block: a data race under the Rust memory model. Slots are now accessed
+  through `AtomicPtr::from_ptr` (Release store, Acquire load; plain `mov` on
+  x86-64).
+- `rptestN`: the summed worker spans are wall-clock, not CPU time, so the
+  metric is renamed `per-1M-rptest-worker-ops`. Per-thread CPU time was not
+  adopted: it would hide time lock-based rivals spend blocked. The drain after
+  each iteration counted its frees without timing them; it is now timed.
+- `larsonN`/`larsonN-sized`: workers started counting as soon as they were
+  created, before the coordinator read its start time. They now wait on a
+  start flag set right after it.
+- `xmalloc-testN`: a releaser counted a batch of 4,096 frees when shutdown
+  made `dequeue_batch` return none; it now counts only dequeued batches.
+
+An A/A screen (same library both sides, 3 rounds) of the six scenarios ran
+clean and shows their noise floor: `rptestN` +1.75%, `larsonN` +1.34%,
+`larsonN-sized` +1.10%, `sh8benchN` +0.94%, `xmalloc-testN` +0.26%,
+`mstressN` -0.24%. Results for these scenarios from before H01 must not be
+mixed with later ones in a scoreboard; re-measure every allocator for them.
+`BENCHMARK_RESULTS.md` also no longer claims that page-map registration
+covers every 64 KiB slice of a `malloc-large` buffer: the span is capped at
+the 4 MiB large-page window.

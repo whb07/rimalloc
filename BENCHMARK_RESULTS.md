@@ -1139,8 +1139,10 @@ suite/rival pairs; the exception is Nginx against tcmalloc.
   on cross-thread workloads (`xmalloc-testN` 74x, `sh8benchN` and
   `cache-thrashN` about 13x slower than Rust). C mimalloc shows the same
   `malloc-large` gap (0.78 vs tcmalloc's 0.24 ms per workload): the benchmark
-  never touches its 5-25 MiB buffers, so it measures large-allocation metadata,
-  where mimalloc registers and clears page-map entries for every 64 KiB slice.
+  never touches its 5-25 MiB buffers, so it measures large-allocation metadata
+  (arena claim, commit, page setup). Page-map registration is not proportional
+  to the buffer size: the registered span is capped at the 4 MiB large-page
+  window, about 64 entries per allocation.
 
 ### Measurement corrections made during this baseline
 

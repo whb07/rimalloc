@@ -163,11 +163,7 @@ impl EncodedPtr<mi_block_t> {
     ) -> Option<BlockPtr> {
         let raw =
             crate::internal::mi_ptr_decode(null_context.as_ptr().cast(), self.word, keys.as_raw());
-        if raw.is_null() {
-            None
-        } else {
-            Some(unsafe { BlockPtr::new_unchecked(raw.cast()) })
-        }
+        BlockPtr::new(raw.cast())
     }
 
     /// Encode a block pointer (or `None` for null) into an encoded word.
@@ -341,11 +337,7 @@ impl AvailableFreeList {
         let head = unsafe { free.0.unwrap_unchecked() };
         let head_raw = head.as_ptr();
         let next_raw = unsafe { mi_block_next(raw_page, head_raw) };
-        let next = if next_raw.is_null() {
-            None
-        } else {
-            Some(unsafe { BlockPtr::new_unchecked(next_raw) })
-        };
+        let next = BlockPtr::new(next_raw);
         (
             unsafe { AllocatedBlock::new_unchecked(head) },
             AvailableFreeList(next),
@@ -355,11 +347,7 @@ impl AvailableFreeList {
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).free`).
     #[inline(always)]
     pub(crate) unsafe fn from_raw(head: *mut mi_block_t) -> Self {
-        if head.is_null() {
-            Self(None)
-        } else {
-            Self(Some(unsafe { BlockPtr::new_unchecked(head) }))
-        }
+        Self(BlockPtr::new(head))
     }
 }
 
@@ -421,11 +409,7 @@ impl LocalFreeList {
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).local_free`).
     #[inline(always)]
     pub(crate) unsafe fn from_raw(head: *mut mi_block_t) -> Self {
-        if head.is_null() {
-            Self(None)
-        } else {
-            Self(Some(unsafe { BlockPtr::new_unchecked(head) }))
-        }
+        Self(BlockPtr::new(head))
     }
 }
 

@@ -187,7 +187,6 @@ impl ItemCount {
 
 #[derive(Clone, Copy)]
 pub(crate) struct CallocRequest {
-    total: RequestedSize,
     layout: LayoutRequest,
 }
 
@@ -201,16 +200,12 @@ impl CallocRequest {
     #[inline]
     pub(crate) fn from_checked_total(total_size: usize) -> Result<Self, LayoutError> {
         let layout = LayoutRequest::zalloc(total_size)?;
-        Ok(Self {
-            total: RequestedSize::new(total_size),
-            layout,
-        })
+        Ok(Self { layout })
     }
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct AllocProduct {
-    total: RequestedSize,
     layout: LayoutRequest,
 }
 
@@ -219,10 +214,7 @@ impl AllocProduct {
     #[inline]
     pub(crate) fn from_checked_total(total_size: usize) -> Result<Self, LayoutError> {
         let layout = LayoutRequest::malloc(total_size)?;
-        Ok(Self {
-            total: RequestedSize::new(total_size),
-            layout,
-        })
+        Ok(Self { layout })
     }
 }
 
@@ -288,27 +280,20 @@ enum ReallocSource {
 pub(crate) struct ReallocRequest {
     source: ReallocSource,
     new_layout: LayoutRequest,
-    zero_new_tail: Zeroed,
 }
 
 impl ReallocRequest {
-    pub(crate) fn from_null(new_layout: LayoutRequest, zero_new_tail: Zeroed) -> Self {
+    pub(crate) fn from_null(new_layout: LayoutRequest) -> Self {
         Self {
             source: ReallocSource::Null,
             new_layout,
-            zero_new_tail,
         }
     }
 
-    pub(crate) fn from_existing(
-        old: OldAllocation,
-        new_layout: LayoutRequest,
-        zero_new_tail: Zeroed,
-    ) -> Self {
+    pub(crate) fn from_existing(old: OldAllocation, new_layout: LayoutRequest) -> Self {
         Self {
             source: ReallocSource::Existing(old),
             new_layout,
-            zero_new_tail,
         }
     }
 
@@ -328,10 +313,6 @@ impl ReallocRequest {
 
     pub(crate) fn new_layout(&self) -> LayoutRequest {
         self.new_layout
-    }
-
-    pub(crate) fn zero_new_tail(&self) -> Zeroed {
-        self.zero_new_tail
     }
 }
 
@@ -403,7 +384,7 @@ impl LayoutRequest {
 
 impl CallocRequest {
     pub(crate) fn total(self) -> RequestedSize {
-        self.total
+        self.layout.requested()
     }
     pub(crate) fn layout(self) -> LayoutRequest {
         self.layout
@@ -412,7 +393,7 @@ impl CallocRequest {
 
 impl AllocProduct {
     pub(crate) fn total(self) -> RequestedSize {
-        self.total
+        self.layout.requested()
     }
     pub(crate) fn layout(self) -> LayoutRequest {
         self.layout

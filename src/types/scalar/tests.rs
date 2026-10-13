@@ -92,25 +92,19 @@ fn block_size_usable_subtracts_padding_domain() {
 }
 
 #[test]
-fn full_block_size_preserves_block_size_domain() {
-    let raw = crate::types::MI_PADDING_SIZE + 128;
-    let block = unsafe { BlockSize::new_unchecked(raw) };
-    assert_eq!(FullBlockSize::from_block_size(block).get(), raw);
-}
-
-#[test]
 fn alignment_offset_preserves_raw_offset_domain() {
     assert_eq!(AlignmentOffset::new(0).get(), 0);
     assert_eq!(AlignmentOffset::new(17).get(), 17);
 }
 
 #[test]
-fn word_count_rounds_byte_size_up_to_words() {
+fn wsize_rounds_byte_size_up_to_words() {
+    use crate::internal::_mi_wsize_from_size;
     let word = core::mem::size_of::<usize>();
-    assert_eq!(WordCount::from_size(0).get(), 0);
-    assert_eq!(WordCount::from_size(1).get(), 1);
-    assert_eq!(WordCount::from_size(word).get(), 1);
-    assert_eq!(WordCount::from_size(word + 1).get(), 2);
+    assert_eq!(_mi_wsize_from_size(0), 0);
+    assert_eq!(_mi_wsize_from_size(1), 1);
+    assert_eq!(_mi_wsize_from_size(word), 1);
+    assert_eq!(_mi_wsize_from_size(word + 1), 2);
 }
 
 #[test]

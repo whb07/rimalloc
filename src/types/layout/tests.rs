@@ -72,14 +72,14 @@ fn calloc_request_checks_total_zeroing_and_overflow() {
 #[test]
 fn realloc_request_constructors_distinguish_null_from_existing() {
     let layout = LayoutRequest::malloc(64).expect("realloc layout");
-    let null = ReallocRequest::from_null(layout, Zeroed::No);
+    let null = ReallocRequest::from_null(layout);
     assert!(null.ptr().is_none());
     assert!(null.old().is_none());
 
     let user = unsafe { UserPtr::new_unchecked(core::ptr::dangling_mut::<u8>().cast()) };
     let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
     let old = unsafe { OldAllocation::from_validated_parts(user, UsableSize::new(128), page) };
-    let existing = ReallocRequest::from_existing(old, layout, Zeroed::No);
+    let existing = ReallocRequest::from_existing(old, layout);
     assert_eq!(existing.ptr().map(|ptr| ptr.as_ptr()), Some(user.as_ptr()));
     assert!(existing.old().is_some());
 }

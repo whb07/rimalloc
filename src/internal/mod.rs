@@ -300,12 +300,12 @@ pub unsafe fn mi_mem_is_zero(p: *const c_void, size: usize) -> bool {
 
 #[inline]
 pub const fn _mi_wsize_from_size(size: usize) -> usize {
-    crate::core_types::WordCount::from_size(size).get()
+    size.div_ceil(size_of::<usize>())
 }
 
 #[inline(always)]
 pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectBin {
-    let idx = crate::core_types::WordCount::from_size(size).get();
+    let idx = size.div_ceil(size_of::<usize>());
     crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
     crate::internal::mi_debug_assert!(u16::try_from(idx).is_ok());
     unsafe { crate::core_types::DirectBin::new_unchecked(idx as u16) }

@@ -187,7 +187,6 @@ pub(crate) unsafe fn heap_area_for_page(page: PagePtr) -> Option<mi_heap_area_t>
     // SAFETY: the caller also proves initialized, stable page counts.
     let (capacity, used) = unsafe { (page.capacity(), page.used()) };
     let committed = block_size.get().checked_mul(capacity.as_usize())?;
-    let full_block_size = crate::core_types::FullBlockSize::from_block_size(block_size);
 
     Some(mi_heap_area_t {
         blocks: page_area.start().as_ptr().cast(),
@@ -195,7 +194,7 @@ pub(crate) unsafe fn heap_area_for_page(page: PagePtr) -> Option<mi_heap_area_t>
         committed,
         used: used.as_usize(),
         block_size: block_size.usable().get(),
-        full_block_size: full_block_size.get(),
+        full_block_size: block_size.get(),
         reserved1: page.as_ptr().cast(),
     })
 }

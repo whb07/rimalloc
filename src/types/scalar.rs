@@ -215,23 +215,6 @@ impl BlockSize {
     }
 }
 
-/// Full block size including allocator metadata and padding. Never zero.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct FullBlockSize(pub(crate) NonZeroUsize);
-
-impl FullBlockSize {
-    #[inline(always)]
-    pub(crate) const fn from_block_size(block_size: BlockSize) -> Self {
-        Self(block_size.0)
-    }
-
-    #[inline(always)]
-    pub(crate) const fn get(self) -> usize {
-        self.0.get()
-    }
-}
-
 /// Alignment requirement (power of two, non-zero).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -294,23 +277,6 @@ impl AlignmentOffset {
     #[inline(always)]
     pub(crate) const fn new(offset: usize) -> Self {
         Self(offset)
-    }
-
-    #[inline(always)]
-    pub(crate) const fn get(self) -> usize {
-        self.0
-    }
-}
-
-/// Count of machine words needed to cover a byte size.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct WordCount(pub(crate) usize);
-
-impl WordCount {
-    #[inline(always)]
-    pub(crate) const fn from_size(size: usize) -> Self {
-        Self(size.div_ceil(core::mem::size_of::<usize>()))
     }
 
     #[inline(always)]

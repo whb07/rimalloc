@@ -787,7 +787,7 @@ pub unsafe fn mi_theap_realloc_aligned_at(
         };
         request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
@@ -838,7 +838,7 @@ pub unsafe fn mi_theap_realloc_aligned(
         };
         request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
@@ -891,7 +891,7 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
         };
         request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment_typed, offset) }
 }
@@ -942,7 +942,7 @@ pub unsafe fn mi_theap_rezalloc_aligned(
         };
         request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
@@ -995,7 +995,7 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
         };
         realloc_request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe {
         mi_theap_recalloc_aligned_at_req(theap, request, realloc_request, alignment_typed, offset)
@@ -1063,7 +1063,7 @@ pub unsafe fn mi_theap_recalloc_aligned(
         };
         realloc_request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_theap_recalloc_aligned_at_req(theap, request, realloc_request, alignment, offset) }
 }
@@ -1189,7 +1189,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
         };
         request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
@@ -1253,7 +1253,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
         };
         request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
@@ -1300,7 +1300,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
         };
         request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
@@ -1352,7 +1352,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
         };
         request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
@@ -1411,7 +1411,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
         };
         realloc_request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe {
         mi_heap_recalloc_aligned_at_typed(heap, request, realloc_request, alignment_typed, offset)
@@ -1488,7 +1488,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
         };
         realloc_request
     } else {
-        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+        crate::core_types::ReallocRequest::from_null(layout)
     };
     unsafe { mi_heap_recalloc_aligned_at_typed(heap, request, realloc_request, alignment, offset) }
 }

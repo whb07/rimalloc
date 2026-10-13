@@ -92,10 +92,8 @@ fn scalar_wrappers_match_raw_layout() {
     assert_layout!(UsableSize, usize);
     assert_layout!(UsableOut, *mut usize);
     assert_layout!(BlockSize, NonZeroUsize);
-    assert_layout!(FullBlockSize, NonZeroUsize);
     assert_layout!(Alignment, NonZeroUsize);
     assert_layout!(AlignmentOffset, usize);
-    assert_layout!(WordCount, usize);
     assert_layout!(PageQueueCount, usize);
     assert_layout!(PageReclaimOnFree, core::ffi::c_long);
     assert_layout!(PageReclaimLimit, core::ffi::c_long);

@@ -35,11 +35,10 @@ pub(crate) use scalar::PageMapIndex;
 pub(crate) use scalar::PageMapIndex;
 pub(crate) use scalar::{
     Alignment, AlignmentOffset, ArenaIndex, BatchLen, Bin, BlockSize, DirectBin, EffectiveSize,
-    Errno, FullBlockSize, GoodSize, HeapSeq, Heartbeat, MaybeAlignment, NumaNode, OsPageSize,
-    PaddedSize, PageCapacity, PageMapPrimaryIndex, PageMapSubIndex, PageQueueCount,
-    PageReclaimLimit, PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire,
-    SliceCount, SliceIndex, StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount,
-    WordCount,
+    Errno, GoodSize, HeapSeq, Heartbeat, MaybeAlignment, NumaNode, OsPageSize, PaddedSize,
+    PageCapacity, PageMapPrimaryIndex, PageMapSubIndex, PageQueueCount, PageReclaimLimit,
+    PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire, SliceCount, SliceIndex,
+    StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount,
 };
 
 pub(crate) use layout::{

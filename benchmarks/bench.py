@@ -47,6 +47,13 @@ C_OPTIONS = {
     "MI_BUILD_OBJECT": "OFF", "MI_BUILD_TESTS": "OFF", "MI_OVERRIDE": "ON",
     "MI_SECURE": "OFF", "MI_SECURE_FULL": "OFF", "MI_GUARDED": "OFF",
 }
+# Fast scenarios that together cover the fast paths, cross-thread frees,
+# abandon/reclaim, arena, and fixed-duration workloads; used by `screen`.
+CANARIES = ("xmalloc-testN", "larsonN", "larsonN-sized", "sh6benchN", "sh8benchN", "glibc-thread",
+            "glibc-simple", "malloc-large", "mstressN", "mleak100", "cache-scratchN")
+# Workloads that already average over a whole timed run; others take the median of
+# several in-process runs in `screen`.
+TIMED = ("xmalloc-testN", "larsonN", "larsonN-sized")
 GATES = {"smoke": "scripts/check-bench-smoke.sh", "release": "scripts/check-bench-full.sh"}
 spec = importlib.util.spec_from_file_location("criterion_summary", ROOT / "scripts/summarize-criterion.py")
 SUMMARY = importlib.util.module_from_spec(spec)
@@ -449,6 +456,96 @@ def compare(args: argparse.Namespace) -> int:
     return 0 if complete else 130 if manifest["status"] == "interrupted" else 1
 
 
+def baseline_library(revision: str, jobs: int) -> Path:
+    """A Rust library built from `revision` with the runner's flags, cached by commit."""
+    commit = capture(["git", "rev-parse", "--verify", revision + "^{commit}"])
+    cache = ROOT / "target/bench-screen" / commit
+    library = cache / "libmechanical_mimalloc.so"
+    if library.is_file():
+        return library
+    cache.mkdir(parents=True, exist_ok=True)
+    worktree = cache / "src"
+    shutil.rmtree(worktree, ignore_errors=True)
+    subprocess.run(["git", "worktree", "add", "--detach", "--force", str(worktree), commit], cwd=ROOT,
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        environment = {**os.environ, "CARGO_TARGET_DIR": str(ROOT / "target/bench-screen/target")}
+        output = execute(["cargo", "rustc", "--locked", "--release", "--features", "interpose", "--lib",
+                          "--jobs", str(jobs), "--message-format=json-render-diagnostics", "--crate-type", "cdylib"],
+                         cache / "build.log", environment, worktree)
+        shutil.copy2(cargo_artifact(output, "mechanical_mimalloc", shared=True), library)
+    finally:
+        subprocess.run(["git", "worktree", "remove", "--force", str(worktree)], cwd=ROOT,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return library
+
+
+def entry_offsets(library: Path) -> dict[str, int]:
+    """Cache-line offsets of the hand-written fast paths; timing is sensitive to them."""
+    symbols = dict(line.split()[::-2] for line in capture(["nm", "-D", "--defined-only", str(library)]).splitlines()
+                   if len(line.split()) == 3)
+    return {name: int(symbols[name], 16) % 64 for name in ("malloc", "free") if name in symbols}
+
+
+def screen_verdict(ratios: list[float], weak: float = 0.005, strong: float = 0.02) -> str:
+    """Direction needs all but one paired round to agree. Calibration against held-out runs
+    found single scenarios move up to ~1.5% from noise, so moves under `strong` are only "likely"."""
+    median = statistics.median(ratios)
+    for word, moved, agree in (("faster", 1 - median, sum(r < 1 for r in ratios)),
+                               ("SLOWER", median - 1, sum(r > 1 for r in ratios))):
+        if moved > weak and agree >= len(ratios) - 1:
+            return word if moved >= strong else "likely " + word.lower()
+    return "~"
+
+
+def screen(args: argparse.Namespace) -> int:
+    artifacts = build(args.jobs)
+    candidate = Path(args.candidate).resolve() if args.candidate else Path(artifacts["rust_library"])
+    baseline = Path(args.baseline).resolve() if Path(args.baseline).is_file() else baseline_library(args.baseline, args.jobs)
+    libraries = {"baseline": baseline, "candidate": candidate}
+    scenarios = args.scenario or list(CANARIES)
+    offsets = {label: entry_offsets(path) for label, path in libraries.items()}
+    print(f"baseline {baseline}\ncandidate {candidate}\nfast-path cache-line offsets: {offsets}", flush=True)
+    if offsets["baseline"] != offsets["candidate"]:
+        print("warning: fast-path layout differs; fast-path-bound scenarios may move from placement alone", flush=True)
+    times: dict[str, dict[str, list[float]]] = {s: {label: [] for label in libraries} for s in scenarios}
+    for round_index in range(args.rounds):
+        for scenario in scenarios:
+            order = list(libraries) if round_index % 2 == 0 else list(libraries)[::-1]
+            for label in order:
+                environment = {k: v for k, v in without_preload().items() if not k.startswith("MIMALLOC_BENCH_")}
+                environment.update(MIMALLOC_RUST_LIB=str(libraries[label]), MIMALLOC_C_LIB=artifacts["c_library"],
+                                   MIMALLOC_BENCH_SKIP_BUILD="1", MIMALLOC_BENCH_SCENARIOS=scenario,
+                                   MIMALLOC_BENCH_ALLOCATORS=ALLOCATORS[0],
+                                   MIMALLOC_BENCH_QUICK_RUNS="1" if scenario in TIMED else str(args.runs + 1),
+                                   MIMALLOC_BENCH_TIMED_SECS=str(args.timed_secs))
+                output = subprocess.run([artifacts["executable"], "--bench", "mimalloc-bench-native"], env=environment,
+                                        cwd=ROOT, check=True, capture_output=True, text=True, timeout=300).stdout
+                lines = [json.loads(line[6:]) for line in output.splitlines() if line.startswith("QUICK {")]
+                if len(lines) != (1 if scenario in TIMED else args.runs + 1):
+                    raise BenchError(f"{scenario}: unexpected QUICK result count {len(lines)}")
+                # The first short run is a cold-start warmup (arena setup, first-touch faults).
+                measured = lines if scenario in TIMED else lines[1:]
+                times[scenario][label].append(statistics.median(line["ns"] for line in measured))
+        print(f"round {round_index + 1}/{args.rounds} done", flush=True)
+    rows, logs = [], []
+    for scenario, values in times.items():
+        ratios = [c / b for b, c in zip(values["baseline"], values["candidate"])]
+        rows.append({"scenario": scenario, "median_ratio": statistics.median(ratios),
+                     "verdict": screen_verdict(ratios), "ratios": ratios})
+        logs.append(math.log(statistics.median(ratios)))
+    print(f"\n{'scenario':16} {'candidate vs baseline':>22}  {'verdict':14} per-round")
+    for row in rows:
+        per_round = " ".join(f"{(r - 1) * 100:+.1f}" for r in row["ratios"])
+        print(f"{row['scenario']:16} {(row['median_ratio'] - 1) * 100:+21.2f}%  {row['verdict']:14} {per_round}")
+    geomean = math.exp(statistics.mean(logs))
+    print(f"\ncanary geomean {(geomean - 1) * 100:+.2f}%  (screening only; confirm wins with a held-out run)")
+    (ROOT / "target/bench-screen").mkdir(parents=True, exist_ok=True)
+    write_json(ROOT / "target/bench-screen/last.json", {"baseline": str(baseline), "candidate": str(candidate),
+                                                          "offsets": offsets, "rows": rows, "geomean": geomean})
+    return 1 if any(row["verdict"] == "SLOWER" for row in rows) else 0
+
+
 def minimum(value: str, lower: int = 1) -> int:
     number = int(value)
     if number < lower:
@@ -489,6 +586,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     build_parser.add_argument("--applications", action="store_true", help="also fetch/build pinned Redis and RocksDB")
     for command in (run, build_parser, architectural):
         command.add_argument("--jobs", type=minimum, default=default_jobs())
+    screen_parser = sub.add_parser("screen", help="~2 min A/B of a candidate Rust library against a baseline on canary scenarios")
+    screen_parser.add_argument("--baseline", default="HEAD", help="git revision (built and cached) or path to a Rust .so")
+    screen_parser.add_argument("--candidate", help="Rust .so to test (default: build the working tree)")
+    screen_parser.add_argument("--scenario", action="append", choices=sorted(NATIVE_SCENARIOS), help="override the canary set")
+    screen_parser.add_argument("--rounds", type=lambda v: minimum(v, 3), default=5)
+    screen_parser.add_argument("--runs", type=minimum, default=3, help="in-process runs per short scenario (median)")
+    screen_parser.add_argument("--timed-secs", type=float, default=1.0, help="run time of xmalloc/larson workloads")
+    screen_parser.add_argument("--jobs", type=minimum, default=default_jobs())
     sub.add_parser("list", help="list native and application scenarios; N uses the harness's host-derived thread count")
     report_parser = sub.add_parser("report", help="regenerate a saved comparison without running benchmarks")
     report_parser.add_argument("directory")
@@ -516,6 +621,8 @@ def main(argv: list[str] | None = None) -> int:
             return architecture.run(args, sys.modules[__name__])
         if args.command == "run":
             return compare(args)
+        if args.command == "screen":
+            return screen(args)
         if args.command == "build":
             artifacts = build(args.jobs)
             if args.applications:

@@ -118,6 +118,17 @@ class EntryPointTests(unittest.TestCase):
             self.assertEqual(len(pairs), 1)
             self.assertEqual(pairs[0]["ratio"], 0.5)
 
+    def test_screen_verdict_needs_agreement_and_size(self):
+        self.assertEqual(bench.screen_verdict([0.97, 0.975, 0.98, 0.97, 1.01]), "faster")
+        self.assertEqual(bench.screen_verdict([0.99, 0.99, 0.992, 0.988, 1.01]), "likely faster")
+        self.assertEqual(bench.screen_verdict([1.03, 1.04, 1.02, 1.05, 0.99]), "SLOWER")
+        self.assertEqual(bench.screen_verdict([0.97, 1.03, 0.97, 1.03, 0.97]), "~")
+        self.assertEqual(bench.screen_verdict([1.002, 0.998, 1.001]), "~")
+
+    def test_screen_rejects_too_few_rounds(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            bench.parse_args(["screen", "--rounds", "2"])
+
     def test_half_native_pair_is_reported(self):
         warning = io.StringIO()
         with contextlib.redirect_stderr(warning):

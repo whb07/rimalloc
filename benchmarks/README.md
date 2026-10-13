@@ -26,6 +26,7 @@ relative output and report paths start at the repository root.
 | `./benchmarks/bench.py architecture` | Run all four C++ architectural probes against Rust/C |
 | `./benchmarks/bench.py list` | List scenarios, metrics, and the core preset |
 | `./benchmarks/bench.py report RUN_DIRECTORY` | Regenerate a saved comparison report |
+| `./benchmarks/bench.py screen` | ~3 min A/B of the working tree's Rust library against `HEAD` |
 | `./benchmarks/bench.py smoke` | Run the existing benchmark smoke gate |
 | `./benchmarks/bench.py release` | Run the existing five-mode release gate |
 
@@ -45,6 +46,27 @@ core comparison takes several minutes; all 21 native cases plus the two
 application workloads can take much longer. More repetitions multiply that time. `--jobs` controls compilation
 only; measurements always run sequentially. `--help` and `run --help` show the
 complete interface.
+
+## Screening a change
+
+`./benchmarks/bench.py screen` is the inner dev loop for allocator changes. It
+builds the working tree's Rust library, builds the baseline from a git revision
+(`--baseline`, default `HEAD`, cached by commit under `target/bench-screen/`) or
+takes a `.so` path, and runs 11 fast canary scenarios in paired, interleaved,
+fresh processes for 5 rounds. Short workloads take the median of 3 in-process
+runs after a discarded warmup; `xmalloc-testN` and the Larson pair run for 1 s
+(`--timed-secs`) instead of 5 s. Only Rust libraries are measured. It also
+prints the `malloc`/`free` cache-line offsets and warns when they differ,
+because fast-path-bound scenarios move from placement alone.
+
+Verdicts: `faster`/`SLOWER` need a median move of at least 2% with all but one
+round agreeing; `likely faster`/`likely slower` cover 0.5-2%. Calibrated
+against held-out runs of known changes, the screen reproduced every effect of
+2% or more (for example `xmalloc-testN` -7.7% vs -8.8% held-out, and the
+`sh6benchN` +3.9% layout regression vs +2.6%), but single scenarios can read
+up to about 1.5% from noise, so treat `likely` verdicts as prompts for a
+targeted rerun. Confirm any change you keep with the full interleaved held-out
+comparison before committing. The exit code is 1 if any scenario reads `SLOWER`.
 
 ## Comparison behavior
 

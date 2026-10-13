@@ -241,6 +241,20 @@ fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// Run time of the fixed-duration workloads (`xmalloc-testN`, `larsonN`). Their
+/// metric is per operation, so `MIMALLOC_BENCH_TIMED_SECS` can shorten the run
+/// for quick screening without changing what is measured per operation.
+fn timed_run(default_secs: u64) -> Duration {
+    env::var("MIMALLOC_BENCH_TIMED_SECS")
+        .ok()
+        .and_then(|value| value.parse::<f64>().ok())
+        .filter(|secs| *secs > 0.0)
+        .map_or_else(
+            || Duration::from_secs(default_secs),
+            Duration::from_secs_f64,
+        )
+}
+
 fn csv_env(name: &str) -> Vec<String> {
     env::var(name)
         .ok()
@@ -1405,7 +1419,7 @@ mod xmalloc_test {
     use super::*;
 
     const OBJECT_SIZE: usize = 64;
-    const RUN_TIME: Duration = Duration::from_secs(5);
+    const RUN_SECS: u64 = 5;
     const OBJECTS_PER_BATCH: usize = 4096;
     const BATCH_COUNT_LIMIT: usize = 100;
     const POSSIBLE_SIZES: [usize; 17] = [
@@ -1611,7 +1625,8 @@ mod xmalloc_test {
                 );
             }
 
-            while begin.elapsed() <= RUN_TIME {
+            let run_time = timed_run(RUN_SECS);
+            while begin.elapsed() <= run_time {
                 std::thread::sleep(Duration::from_millis(1));
             }
 
@@ -2670,7 +2685,7 @@ mod larson {
             }
 
             let start = Instant::now();
-            std::thread::sleep(Duration::from_secs(SLEEP_SECS));
+            std::thread::sleep(timed_run(SLEEP_SECS));
             state.stop.store(true, Ordering::Relaxed);
             for thread in threads {
                 let rc = pthread::pthread_join(thread, ptr::null_mut());
@@ -4702,6 +4717,28 @@ fn bench_native_ports(c: &mut Criterion) {
         !allocators.is_empty(),
         "no allocators selected; check MIMALLOC_BENCH_ALLOCATORS"
     );
+
+    // Quick screening: run each workload directly and print every measurement
+    // instead of Criterion statistics (see `bench.py quick`).
+    if let Some(runs) = env::var("MIMALLOC_BENCH_QUICK_RUNS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+    {
+        for scenario in &scenarios {
+            for &allocator in &allocators {
+                for _ in 0..runs {
+                    let elapsed = unsafe { (scenario.run)(allocator) };
+                    println!(
+                        "QUICK {{\"scenario\":\"{}\",\"allocator\":\"{}\",\"ns\":{}}}",
+                        scenario.name,
+                        allocator.name(),
+                        elapsed.as_nanos()
+                    );
+                }
+            }
+        }
+        return;
+    }
 
     let sample_size = env::var("MIMALLOC_BENCH_SAMPLE_SIZE")
         .ok()

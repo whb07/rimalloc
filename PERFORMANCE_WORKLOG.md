@@ -65,6 +65,7 @@ and the conclusion drawn from them.
 | X17 | Compute a page's bin once when finding its queue | `mi_theap_page_queue_of` indexes with the bin from `mi_page_bin_typed` instead of recomputing `mi_bin` for ordinary pages | **KEEP**: 8 KiB malloc/free 246.6 -> 213.6 instructions/op (C 193.3); held-out neutral | Recorded below |
 | X18 | Make the medium-size generic path one call, like C | Inline the generic body into `_mi_malloc_generic` (the C entry point) instead of wrapping `_mi_malloc_generic_typed` | **KEEP**: 213.6 -> 205.6 instructions/op; with X17, medium sizes 7.5-10.1% faster; `larsonN-sized` +0.24% to +1.02% recorded | Recorded in the X17/X18 section |
 | X19 | C-equivalent fast path for the generic (medium-size) malloc hit case | `malloc_generic_fast`: count, quick-collect the size class's first page, pop; every other case continues with C's remaining steps out of line | **KEEP**: 8 KiB pair 205.6 -> 169.7 instructions (C 193.3); 8-16 KiB requests 3.5-7% faster, at or below C; held-out and Nginx neutral | Recorded below |
+| X20 | Send C++ sized delete straight to the `free` fast path | `_ZdlPvm`/`_ZdaPvm` become aliases of `free` instead of a stub jumping to `mi_free` through the PLT | **KEEP**: sized new[]/delete[] pair 56.34 -> 53.34 instructions (unsized 52.34, C 63.38); `larsonN-sized` -0.82% (4 of 5 rounds) | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1408,3 +1409,31 @@ Results versus HEAD:
 
 Gates: fmt, clippy, tests, safety stress, release thread stress, behavioral
 parity, differential trace, ASan/TSan, Miri.
+
+## X20 — C++ sized delete aliases `free`
+
+Decided 2026-10-13, from the tcmalloc Larson gap. tcmalloc gets 4% faster
+with sized delete (`larsonN` 2.227 -> `larsonN-sized` 2.136 ms per 1M pairs);
+Rust got 0.9% slower (2.383 -> 2.404). Unsized `_ZdlPv`/`_ZdaPv` were already
+aliases of the hand-written `free`, but sized `_ZdlPvm`/`_ZdaPvm` were a stub
+doing `jmp mi_free`, which binds through the PLT because `mi_free` is
+exported. C mimalloc has the same hop (`_ZdaPvm` -> `mi_free@plt`). Release
+sized delete ignores the size in both, so the sized forms are now aliases of
+`free`. GCC and Clang emit sized delete for ordinary `delete` from C++14, so
+this applies to every C++ program, not only Larson.
+
+The removed stub moved `malloc` to cache-line offset 48; the padding before
+it grows by the stub's 16 bytes, restoring offset 0 (`free` 32) with
+byte-identical `malloc` code.
+
+A `new[](64)`/`delete[]` loop through the dlopened operators: sized pair
+56.34 -> 53.34 instructions (unsized 52.34, C sized 63.38); time 2.24 -> 2.22
+ns, since the indirect jump was well predicted. Screen, 5 rounds:
+`larsonN-sized` -0.82% (4 of 5 rounds faster), `larsonN` -0.26% (does not use
+sized delete). Most of tcmalloc's sized-delete advantage remains: it uses the
+size to skip its page-map lookup, which mimalloc cannot, because size does not
+establish a block's page or owner.
+
+Gates: fmt, clippy, tests, release C++ artifacts, C++ operator-new parity,
+public and ABI symbols, release LD_PRELOAD, release thread stress,
+differential trace, behavioral parity.

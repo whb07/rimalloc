@@ -7,6 +7,7 @@ use crate::mimalloc::{
     c_wchar, mi_expand, mi_free, mi_is_in_heap_region, mi_malloc, mi_malloc_aligned, mi_realloc,
     mi_strdup, mi_usable_size,
 };
+use crate::prim::mi_set_errno;
 use crate::types::{EINVAL, ENOMEM, EOVERFLOW};
 use core::ffi::CStr;
 use core::ffi::{c_int, c_void};
@@ -15,33 +16,6 @@ use core::{mem::size_of, ptr};
 unsafe extern "C" {
     fn getenv(name: *const i8) -> *const i8;
 }
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-// Linux/Android errno publication uses the platform thread-local errno slot
-// exactly as the C compatibility layer does.
-fn mi_set_errno(err: c_int) {
-    // SAFETY: this declaration matches the Linux/Android libc ABI.
-    unsafe extern "C" {
-        fn __errno_location() -> *mut c_int;
-    }
-    unsafe { *__errno_location() = err };
-}
-
-#[cfg(target_vendor = "apple")]
-// Apple errno publication uses the platform thread-local errno slot exactly
-// as the C compatibility layer does.
-fn mi_set_errno(err: c_int) {
-    // SAFETY: this declaration matches the Apple libc ABI.
-    unsafe extern "C" {
-        fn __error() -> *mut c_int;
-    }
-    unsafe { *__error() = err };
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
-// Unsupported errno targets intentionally keep the C-compatible helper as a
-// no-op fallback.
-fn mi_set_errno(_err: c_int) {}
 
 #[unsafe(no_mangle)]
 /// # Safety

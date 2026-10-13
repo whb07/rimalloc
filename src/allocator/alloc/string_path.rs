@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use core::ffi::{c_char, c_int, c_long, c_void};
+use core::ffi::{c_char, c_void};
+#[cfg(all(unix, not(target_os = "wasi")))]
+use core::ffi::{c_int, c_long};
 use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -9,6 +11,8 @@ use crate::core_types::{BorrowedHeap, ThreadHeapLocal};
 use crate::internal::{_mi_memcpy, _mi_strlen, _mi_strnlen};
 use crate::mimalloc::mi_free;
 use crate::prim::_mi_theap_default;
+#[cfg(all(unix, not(target_os = "wasi")))]
+use crate::prim::mi_set_errno;
 use crate::types::{ENOMEM, mi_heap_t, mi_theap_t};
 
 use super::{mi_heap_borrowed_theap_local, mi_theap_malloc, mi_zalloc};
@@ -21,29 +25,6 @@ unsafe extern "C" {
     fn pathconf(path: *const c_char, name: c_int) -> c_long;
     fn realpath(fname: *const c_char, resolved_name: *mut c_char) -> *mut c_char;
 }
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn mi_set_errno(err: c_int) {
-    // SAFETY: this declaration matches the Linux/Android libc ABI.
-    unsafe extern "C" {
-        fn __errno_location() -> *mut c_int;
-    }
-    // SAFETY: `__errno_location` returns this thread's writable errno slot.
-    unsafe { *__errno_location() = err };
-}
-
-#[cfg(target_vendor = "apple")]
-fn mi_set_errno(err: c_int) {
-    // SAFETY: this declaration matches the Apple libc ABI.
-    unsafe extern "C" {
-        fn __error() -> *mut c_int;
-    }
-    // SAFETY: `__error` returns this thread's writable errno slot.
-    unsafe { *__error() = err };
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
-fn mi_set_errno(_err: c_int) {}
 
 /// # Safety
 /// The allocator process/TLS lifecycle must permit current-thread

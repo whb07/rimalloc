@@ -29,7 +29,7 @@ pub mod windows;
     all(feature = "std", not(feature = "tls-shim"))
 ))]
 use core::cell::Cell;
-use core::ffi::{c_char, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::allocator::heap::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
@@ -86,6 +86,31 @@ pub const MI_TLS_EXPANSION_SLOT: usize = if MI_INTPTR_SIZE == 4 {
 } else {
     0x1780 / MI_INTPTR_SIZE
 };
+
+// Publishes `err` to the calling thread's errno slot; a no-op on targets
+// without a supported errno accessor.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub(crate) fn mi_set_errno(err: c_int) {
+    // SAFETY: this declaration matches the Linux/Android libc ABI.
+    unsafe extern "C" {
+        fn __errno_location() -> *mut c_int;
+    }
+    // SAFETY: `__errno_location` returns this thread's writable errno slot.
+    unsafe { *__errno_location() = err };
+}
+
+#[cfg(target_vendor = "apple")]
+pub(crate) fn mi_set_errno(err: c_int) {
+    // SAFETY: this declaration matches the Apple libc ABI.
+    unsafe extern "C" {
+        fn __error() -> *mut c_int;
+    }
+    // SAFETY: `__error` returns this thread's writable errno slot.
+    unsafe { *__error() = err };
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
+pub(crate) fn mi_set_errno(_err: c_int) {}
 
 #[cfg(any(
     miri,

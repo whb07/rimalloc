@@ -16,8 +16,8 @@ use crate::internal::mi_theap_is_initialized;
 use crate::mimalloc::{mi_heap_main, mi_subproc_current, mi_subproc_visit_heaps};
 use crate::prim::{_mi_heap_theap_peek, _mi_theap_default};
 use crate::types::{
-    MI_BIN_COUNT, MI_STAT, mi_heap_t, mi_heap_visit_fun, mi_output_fun, mi_page_t, mi_subproc_id_t,
-    mi_subproc_t, mi_theap_t,
+    MI_BIN_COUNT, MI_MAX_ARENAS, MI_STAT, mi_heap_t, mi_heap_visit_fun, mi_output_fun, mi_page_t,
+    mi_subproc_id_t, mi_subproc_t, mi_theap_t,
 };
 
 pub const MI_STAT_VERSION: usize = 5;
@@ -270,8 +270,6 @@ pub unsafe extern "C" fn mi_stats_as_json(
     // SAFETY: the compatibility boundary forwards the caller's stats and buffer contracts.
     unsafe { mi_stats_get_json_from(stats.cast_const(), buf_size, buf) }
 }
-
-const MI_MAX_ARENAS: usize = 160;
 
 #[repr(C)]
 struct MiHeapStatsPrefix {

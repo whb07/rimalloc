@@ -4794,7 +4794,15 @@ fn bench_native_ports(c: &mut Criterion) {
         for scenario in &scenarios {
             for &allocator in &allocators {
                 for _ in 0..runs {
+                    allocator.bench_diagnostics_reset();
                     let elapsed = unsafe { (scenario.run)(allocator) };
+                    write_bench_diagnostics(
+                        diagnostics_path.as_deref(),
+                        &scenario.benchmark_name(),
+                        allocator,
+                        1,
+                        elapsed,
+                    );
                     println!(
                         "QUICK {{\"scenario\":\"{}\",\"allocator\":\"{}\",\"ns\":{}}}",
                         scenario.name,

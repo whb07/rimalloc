@@ -31,7 +31,7 @@ class ScoreboardTests(unittest.TestCase):
 
     def test_native_and_application_suites_win_separately(self):
         directory = native_dir(self.root / "native", [("a", 98, 100, 120), ("b", 101, 100, 110), ("redis", 99, 100, 130)])
-        suites = scoreboard.native_ratios(directory)
+        suites = scoreboard.ratios(scoreboard.native_values(directory))
         self.assertEqual(set(suites), {"native", "applications"})
         self.assertEqual(set(suites["native"]), {"c-mimalloc", "jemalloc"})
         code, out = self.run_board(directory)
@@ -40,7 +40,7 @@ class ScoreboardTests(unittest.TestCase):
 
     def test_tolerance_breach_fails_even_with_winning_geomean(self):
         directory = native_dir(self.root / "native", [("a", 90, 100, 100), ("b", 90, 100, 100), ("c", 104, 100, 100)])
-        rows = {(r[0], r[1]): r for r in scoreboard.score(scoreboard.native_ratios(directory))}
+        rows = {(r[0], r[1]): r for r in scoreboard.score(scoreboard.ratios(scoreboard.native_values(directory)))}
         suite, rival, geomean, worst, ratio, breaches, won = rows[("native", "c-mimalloc")]
         self.assertLess(geomean, 1.0)
         self.assertEqual((worst, breaches, won), ("c", ["c"], False))
@@ -55,9 +55,27 @@ class ScoreboardTests(unittest.TestCase):
         (directory / "results.csv").write_text(
             "profile,case,allocator,requests_per_second\n"
             "production,static,rust,110\nproduction,static,mimalloc,100\nproduction,static,glibc,50\n")
-        ratios = scoreboard.nginx_ratios(directory)["nginx"]
+        ratios = scoreboard.ratios(scoreboard.nginx_values(directory))["nginx"]
         self.assertAlmostEqual(ratios["c-mimalloc"]["production/static"], 100 / 110)
         self.assertAlmostEqual(ratios["glibc"]["production/static"], 50 / 110)
+
+
+    def test_later_directory_overrides_and_mixes_with_older_runs(self):
+        old = native_dir(self.root / "old", [("a", 200, 100, 100)])
+        new = native_dir(self.root / "new", [("a", 90, 100, 100)])
+        mixed = self.root / "mixed"
+        mixed.mkdir()
+        (mixed / "manifest.json").write_text(json.dumps({"schema": 1}))
+        (mixed / "results.csv").write_text("scenario,metric,rust_median_ns,c_median_ns,glibc_median_ns\n"
+                                           "a,per-workload,95,,190\n")
+        values = {}
+        for directory in (old, new, mixed):
+            for key, by_allocator in scoreboard.native_values(directory).items():
+                values.setdefault(key, {}).update(by_allocator)
+        result = scoreboard.ratios(values)["native"]
+        # Rust 95 comes from the last run; C 100 survives from earlier runs.
+        self.assertAlmostEqual(result["c-mimalloc"]["a"], 0.95)
+        self.assertAlmostEqual(result["glibc"]["a"], 0.5)
 
 
 if __name__ == "__main__":

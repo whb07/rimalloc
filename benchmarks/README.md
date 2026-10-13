@@ -95,7 +95,10 @@ comparison before committing. The exit code is 1 if any scenario reads `SLOWER`.
 and reports, per suite (native scenarios, applications, Nginx) and per rival,
 the geomean of Rust time / rival time (rival / Rust throughput for Nginx). A
 suite is won when the geomean is below 1.0 and no scenario exceeds its
-tolerance: 1.03 against C mimalloc, 1.10 against other allocators. The exit code
+tolerance: 1.03 against C mimalloc, 1.10 against other allocators. Pass several
+directories to combine runs: values are merged per scenario and allocator
+(later directories win) before ratios are formed, so re-running only the
+allocators that changed reuses earlier results for the rest. The exit code
 is 0 only when every suite is won. A single breach is a prompt to confirm with
 two interleaved rounds, not a verdict.
 

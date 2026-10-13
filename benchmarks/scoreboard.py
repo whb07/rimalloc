@@ -24,32 +24,40 @@ def rival_name(allocator):
     return "c-mimalloc" if allocator in C_MIMALLOC else allocator
 
 
-def native_ratios(directory):
-    """{suite: {rival: {scenario: rust_time / rival_time}}} from a native run."""
+def native_values(directory):
+    """{(suite, scenario): {allocator: median time}} from a native run directory."""
     out = {}
     with (directory / "results.csv").open() as handle:
         for row in csv.DictReader(handle):
             suite = "applications" if row["scenario"] in applications.SCENARIOS else "native"
-            rust = float(row["rust_median_ns"])
             for column, value in row.items():
-                if column.endswith("_median_ns") and column != "rust_median_ns" and value:
-                    rival = rival_name(column.removesuffix("_median_ns"))
-                    out.setdefault(suite, {}).setdefault(rival, {})[row["scenario"]] = rust / float(value)
+                if column.endswith("_median_ns") and value:
+                    name = column.removesuffix("_median_ns")
+                    allocator = "rust" if name == "rust" else rival_name(name)
+                    out.setdefault((suite, row["scenario"]), {})[allocator] = float(value)
     return out
 
 
-def nginx_ratios(directory):
-    """{suite: {rival: {profile/case: rival_rps / rust_rps}}}: below 1.0 means Rust is faster."""
-    rows = {}
+def nginx_values(directory):
+    """{("nginx", profile/case): {allocator: requests per second}} from an Nginx run directory."""
+    out = {}
     with (directory / "results.csv").open() as handle:
         for row in csv.DictReader(handle):
-            rows.setdefault((row["profile"], row["case"]), {})[row["allocator"]] = float(row["requests_per_second"])
+            allocator = "rust" if row["allocator"] in RUST else rival_name(row["allocator"])
+            out.setdefault(("nginx", f"{row['profile']}/{row['case']}"), {})[allocator] = float(row["requests_per_second"])
+    return out
+
+
+def ratios(values):
+    """{suite: {rival: {scenario: ratio}}}; below 1.0 favours Rust. Nginx compares throughput,
+    so its ratio is rival/Rust; the other suites compare time, Rust/rival."""
     out = {}
-    for (profile, case), values in rows.items():
-        rust = next((v for k, v in values.items() if k in RUST), None)
-        for allocator, rps in values.items():
-            if allocator not in RUST and rust:
-                out.setdefault("nginx", {}).setdefault(rival_name(allocator), {})[f"{profile}/{case}"] = rps / rust
+    for (suite, scenario), by_allocator in values.items():
+        rust = by_allocator.get("rust")
+        for allocator, value in by_allocator.items():
+            if allocator != "rust" and rust:
+                ratio = value / rust if suite == "nginx" else rust / value
+                out.setdefault(suite, {}).setdefault(allocator, {})[scenario] = ratio
     return out
 
 
@@ -68,16 +76,17 @@ def score(suites):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("directories", nargs="+", help="saved native (bench.py run) or nginx result directories")
+    parser.add_argument("directories", nargs="+",
+                        help="saved native (bench.py run) or nginx result directories; later ones override earlier")
     args = parser.parse_args(argv)
-    suites = {}
+    # Later directories override earlier ones per scenario and allocator, so a fresh run of
+    # changed allocators combines with older results for unchanged ones before ratios form.
+    values = {}
     for directory in map(Path, args.directories):
         suite = json.loads((directory / "manifest.json").read_text()).get("suite")
-        ratios = nginx_ratios(directory) if suite == "nginx" else native_ratios(directory)
-        for suite, rivals in ratios.items():
-            for rival, values in rivals.items():
-                suites.setdefault(suite, {}).setdefault(rival, {}).update(values)
-    rows = score(suites)
+        for key, by_allocator in (nginx_values(directory) if suite == "nginx" else native_values(directory)).items():
+            values.setdefault(key, {}).update(by_allocator)
+    rows = score(ratios(values))
     print(f"{'suite':13} {'rival':12} {'Rust/rival':>10}  {'worst scenario':34} {'ratio':>6}  result")
     for suite, rival, geomean, worst, ratio, breaches, won in rows:
         result = "WIN" if won else "breach: " + ", ".join(breaches) if breaches else "LOSS"

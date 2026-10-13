@@ -86,7 +86,7 @@ fn compile_track_shim(defines: &[&str], flags: &[&str]) {
     println!("cargo:rustc-link-lib=static=mechanical_mimalloc_track_shim");
 }
 
-fn compile_cxx_new_shim(target_os: &str, fast_new: bool) {
+fn compile_cxx_new_shim(fast_new: bool) {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let obj = out_dir.join("cxx_new_shim.o");
     let lib = out_dir.join("libmechanical_mimalloc_cxx_new_shim.a");
@@ -110,9 +110,6 @@ fn compile_cxx_new_shim(target_os: &str, fast_new: bool) {
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
     println!("cargo:rustc-link-lib=static:+whole-archive=mechanical_mimalloc_cxx_new_shim");
-    if target_os == "linux" {
-        println!("cargo:rustc-link-lib=dylib=stdc++");
-    }
 }
 
 fn compile_tls_shim() {
@@ -314,7 +311,7 @@ fn main() {
         cxx_overrides && target_os != "windows" && target_supports_cxx_shim(&target_os);
     if cxx_shim_linked {
         println!("cargo:rustc-cfg=mi_cxx_shim_linked");
-        compile_cxx_new_shim(&target_os, default_fast_override);
+        compile_cxx_new_shim(default_fast_override);
     } else if cxx_overrides && target_os != "windows" {
         println!("cargo:warning=skipping C++ new/delete shim on unsupported target_os={target_os}");
     }

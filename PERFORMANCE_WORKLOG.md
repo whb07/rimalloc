@@ -67,6 +67,7 @@ and the conclusion drawn from them.
 | X19 | C-equivalent fast path for the generic (medium-size) malloc hit case | `malloc_generic_fast`: count, quick-collect the size class's first page, pop; every other case continues with C's remaining steps out of line | **KEEP**: 8 KiB pair 205.6 -> 169.7 instructions (C 193.3); 8-16 KiB requests 3.5-7% faster, at or below C; held-out and Nginx neutral | Recorded below |
 | X20 | Send C++ sized delete straight to the `free` fast path | `_ZdlPvm`/`_ZdaPvm` become aliases of `free` instead of a stub jumping to `mi_free` through the PLT | **KEEP**: sized new[]/delete[] pair 56.34 -> 53.34 instructions (unsized 52.34, C 63.38); `larsonN-sized` -0.82% (4 of 5 rounds) | Recorded below |
 | X21 | Stop abandoning full pages while the owner is alive | `page_full_retain` default 0 -> -1 (`allow_page_abandon` false: full pages go to the owner's full queue); reverted | **REJECT**: `larsonN` -2.0%, `larsonN-sized` -2.4%, but `xmalloc-testN` +318% (4x slower) | Recorded below |
+| X22 | Stop loading libstdc++ into every process | The C++ `operator new` shim looks up `std::get_new_handler` and `std::__throw_bad_alloc` with `dlsym` on allocation failure instead of linking `-lstdc++` | **KEEP**: axum json server PSS under load 19.06 -> 17.87 MiB (C mimalloc 17.82); C++ `new` behaviour unchanged | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1462,3 +1463,30 @@ thread. C reserves the full-queue path for heaps that cannot abandon. Reverted.
 The Larson cost of the abandon round trip remains; a fix would have to make
 an owner's free into its own just-abandoned page cheaper, not stop
 abandoning.
+
+## X22 — No libstdc++ dependency
+
+Decided 2026-10-13, from the TechEmpower axum webserver run, where the server
+used 1.3 MiB more PSS under Rust than under C mimalloc. `smaps` showed equal
+allocator arenas (16,544 vs 16,532 kB); the difference was `libstdc++.so`
+(1,265 kB), loaded only because the library had `NEEDED libstdc++.so.6`.
+`build.rs` linked `-lstdc++` for `src/cxx_new_shim.cpp`, whose `operator new`
+slow path calls `std::get_new_handler()` and throws `std::bad_alloc` on
+failure. C mimalloc built as C depends only on libc and aborts instead.
+
+The shim now resolves `_ZSt15get_new_handlerv` and `_ZSt17__throw_bad_allocv`
+with `dlsym(RTLD_DEFAULT, ...)` when an allocation fails (as `mi_new` already
+resolves the handler), and the library no longer links libstdc++ or imports
+any GLIBCXX/CXXABI symbol. A C++ program has libstdc++ loaded, so `new[]`,
+aligned `new`, the new-handler loop (three calls, then `bad_alloc`), and
+`nothrow` behave as before; in a process without a C++ runtime, failure
+aborts (an uncaught `bad_alloc` already ended in `std::terminate`). Hot paths
+are unchanged (8 KiB pair 169.59 instructions; `malloc`/`free` offsets 0/32).
+
+Every non-C++ process saves about 1.2 MiB and one library load: the json
+server under load 19.06 -> 17.87 MiB (C mimalloc 17.82).
+
+Gates: fmt, clippy, tests, safety stress, release thread stress, behavioral
+parity, differential trace, ASan/TSan, Miri, C++ bad_alloc divergence, C++
+operator-new parity, release C++ artifacts, ABI and public symbols, release
+link metadata, LD_PRELOAD, dlopen, artifact consumer, package.

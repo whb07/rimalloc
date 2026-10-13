@@ -61,6 +61,7 @@ and the conclusion drawn from them.
 | X14 | Turn internal GOT-indirect calls into direct calls with `-Wl,-Bsymbolic-functions` | Linker flag on the Linux cdylib; reverted | **NO CHANGE**: internal dynamic lookups 24 -> 0, but calls stay `jmp *GOT` because stable rustc does not emit relaxable GOT relocations | Recorded below |
 | X12 | Collapse the second `mi_page_is_full` (`page/flags.rs`, "no free list and fully extended") onto the C-equivalent | Not started | **DEFERRED**: release callers already use the C-equivalent after X11; the other definition is re-exported through the public `page` module, so changing its meaning needs an API decision | — |
 | X15 | Let hot `__mi_stat_*` counters inline (X05 precedent) | Not started | **NOT JUSTIFIED**: stat helpers are 0.05-0.13% of four profiles (`xmalloc-testN`, `sh6benchN`), below the 0.5% bar | Profiles from the X04-X11 sessions |
+| X16 | Stop re-scanning exhausted small pages during page-queue search | `page_full_retain` default 2 -> 0 (documented divergence from C) | **KEEP**: `larsonN` -5.4%, `larsonN-sized` -5.0%; held-out -0.64%, `rptestN` CI [-3.7%, +3.9%], Nginx neutral, RSS unchanged | Recorded below and in UPSTREAM_DIFF.md |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 
 ## E02 — O(1) empty-available local-list transfer
@@ -1255,3 +1256,36 @@ seven runs on one pinned CPU: `posix_memalign` 8.81 -> 8.72 ns (-1.0%) but
 operation overall. Inlining the Rust aligned path into the wrapper costs more
 than the hops it removes; the existing route through the hand-written
 `mi_malloc_aligned` stub reaches a leaner compiled body. Reverted.
+
+## X16 — page_full_retain default 0 (tcmalloc Larson gap)
+
+Decided 2026-10-13. The rival baseline (B03) showed tcmalloc ahead on
+`larsonN-sized` (1.183) and `larsonN` (1.099). Profiles normalized per
+operation showed Rust's fast paths cheaper than tcmalloc's whole allocator;
+the gap was Rust's slow path (~11% of cycles, absent in tcmalloc). A
+`bench-diagnostics` build (quick mode now writes counters) on `larsonN-sized`
+counted 36.0M page-queue searches for about 683M allocations (1 in 19),
+102.5M free-list collections of which 66.4M found nothing, and 99.5% of
+searches selecting the 2nd-4th candidate. C's search keeps up to
+`page_full_retain` (default 2) exhausted small pages in the queue, so each
+search re-examines them. The translation matches C, which is why Rust is at
+parity with C here.
+
+`MIMALLOC_PAGE_FULL_RETAIN` sweeps (3 runs each): 0 gave `larsonN-sized`
+2.535 -> 2.431 ms and `larsonN` 2.543 -> 2.406 ms; 8 was 17-19% slower;
+`page_max_candidates=1` was neutral. The default lives in two tables in
+`src/allocator/options/storage.rs` (descriptor and `OPTION_VALUES`); changing
+only the descriptor had no effect, which the screen caught (Larson neutral).
+
+Evidence for the default change (Rust-only, interleaved): canary screen
+`larsonN` -4.1%, `larsonN-sized` -3.5%, others neutral; 21-scenario held-out
+`larsonN` -5.37%, `larsonN-sized` -4.99%, geomean over 20 scenarios -0.64%
+after four-round rechecks (`malloc-large` -1.63%, `mleak100` 0.00%, `mleak10`
++0.94% overlapping); `rptestN` +3.5% in two Criterion runs but -9.8% over seven
+quick runs and +1.2% median over 15 (95% bootstrap CI [-3.7%, +3.9%], means
+140.2 vs 140.8 ms); Nginx production 18 cases +0.52% throughput; architecture
+probes max RSS difference 0.25 MiB, identical occupied pages; differential
+traces match. `check-behavioral-parity.py` initially failed on exactly the
+changed default and on default-policy search counts (C 255 page visits vs Rust
+102 for the same 103 searches); it now compares under equal option values and
+requires exact C behavior when Rust is configured with C's default.

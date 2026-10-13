@@ -124,7 +124,7 @@ static OPTION_VALUES: [AtomicIsize; MI_OPTION_COUNT] = [
     MI_OPTION_VALUE!(0),
     MI_OPTION_VALUE!(10000),
     MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(2),
+    MI_OPTION_VALUE!(0),
     MI_OPTION_VALUE!(4),
     MI_OPTION_VALUE!(0),
     MI_OPTION_VALUE!(MI_DEFAULT_PAGEMAP_COMMIT),
@@ -371,7 +371,7 @@ static OPTIONS: LockedOptions = LockedOptions(UnsafeCell::new([
         "abandoned_reclaim_on_free"
     ),
     MI_OPTION!(
-        2,
+        0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_page_full_retain,
         "page_full_retain"

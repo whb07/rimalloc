@@ -5695,6 +5695,23 @@ def run(binary: pathlib.Path) -> str:
     return completed.stdout
 
 
+# Intentional option-default divergences documented in UPSTREAM_DIFF.md:
+# option index -> (C default, Rust default). Everything else must match exactly.
+DOCUMENTED_OPTION_DEFAULTS = {36: (2, 0)}  # page_full_retain
+
+
+def normalize_documented_defaults(c_options: dict, rust_options: dict) -> dict:
+    """Map Rust's documented default back to C's when both sides report their own default."""
+    rust_options = dict(rust_options)
+    for index, (c_default, rust_default) in DOCUMENTED_OPTION_DEFAULTS.items():
+        c_value, rust_value = c_options.get(index), rust_options.get(index)
+        # Fields are (value, value as size, enabled); the enabled flag follows the value.
+        if c_value == (c_default, c_default, int(c_default != 0)) and \
+                rust_value == (rust_default, rust_default, int(rust_default != 0)):
+            rust_options[index] = c_value
+    return rust_options
+
+
 def smoke_outputs_match(c_output: str, rust_output: str) -> bool:
     if c_output == rust_output:
         return True
@@ -5704,6 +5721,11 @@ def smoke_outputs_match(c_output: str, rust_output: str) -> bool:
     variable_smoke_values = {
         "manage_memory_committed_large_delta": {"0", "65536"},
         "page_commit_on_demand_committed_alloc_delta": {"458752", "524288"},
+    }
+    documented_divergences = {
+        f"{key}[{index}]": (str(c_default), str(rust_default))
+        for index, (c_default, rust_default) in DOCUMENTED_OPTION_DEFAULTS.items()
+        for key in ("option_default", "option_default_size")
     }
     c_lines = c_output.splitlines()
     rust_lines = rust_output.splitlines()
@@ -5718,6 +5740,8 @@ def smoke_outputs_match(c_output: str, rust_output: str) -> bool:
         if c_sep and rust_sep and c_key == rust_key and allowed_values is not None:
             if c_value in allowed_values and rust_value in allowed_values:
                 continue
+        if c_sep and rust_sep and c_key == rust_key and documented_divergences.get(c_key) == (c_value, rust_value):
+            continue
         return False
     return True
 
@@ -6315,6 +6339,7 @@ def validate_env_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
         rust_output = run_with_env(rust_bin, env, label)
         c_options, c_flags = parse_env_capture(c_output)
         rust_options, rust_flags = parse_env_capture(rust_output)
+        rust_options = normalize_documented_defaults(c_options, rust_options)
         if c_options != rust_options:
             raise AssertionError(f"{label} option mismatch:\nC={c_output}\nRust={rust_output}")
         if label.startswith("legacy_") and c_flags["deprecated"] != rust_flags["deprecated"]:
@@ -6543,8 +6568,13 @@ def parse_page_policy_capture(output: str) -> dict[str, int]:
 
 
 def validate_page_policy_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
+    # Documented default divergences: C runs with Rust's defaults made explicit unless a case
+    # sets the option, and "c_defaults" requires Rust configured with C's defaults to match C.
+    rust_defaults = {f"mimalloc_{OPTION_NAMES[i]}": str(rust) for i, (_, rust) in DOCUMENTED_OPTION_DEFAULTS.items()}
+    c_defaults = {f"mimalloc_{OPTION_NAMES[i]}": str(c) for i, (c, _) in DOCUMENTED_OPTION_DEFAULTS.items()}
     cases = [
         ("default", {}),
+        ("c_defaults", c_defaults),
         (
             "eager_reclaim",
             {
@@ -6569,7 +6599,8 @@ def validate_page_policy_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) ->
         ),
     ]
     for label, env in cases:
-        c_values = parse_page_policy_capture(run_with_env(c_bin, env, f"{label}_c"))
+        c_env = {**rust_defaults, **env}  # explicit case options still override
+        c_values = parse_page_policy_capture(run_with_env(c_bin, c_env, f"{label}_c"))
         rust_values = parse_page_policy_capture(run_with_env(rust_bin, env, f"{label}_rust"))
         compared = ("initial_searches", "initial_search_count", "searches", "search_count", "reclaim_free")
         if tuple(c_values[key] for key in compared) != tuple(rust_values[key] for key in compared):

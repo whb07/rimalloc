@@ -62,6 +62,7 @@ and the conclusion drawn from them.
 | X12 | Collapse the second `mi_page_is_full` (`page/flags.rs`, "no free list and fully extended") onto the C-equivalent | Not started | **DEFERRED**: release callers already use the C-equivalent after X11; the other definition is re-exported through the public `page` module, so changing its meaning needs an API decision | — |
 | X15 | Let hot `__mi_stat_*` counters inline (X05 precedent) | Not started | **NOT JUSTIFIED**: stat helpers are 0.05-0.13% of four profiles (`xmalloc-testN`, `sh6benchN`), below the 0.5% bar | Profiles from the X04-X11 sessions |
 | X16 | Stop re-scanning exhausted small pages during page-queue search | `page_full_retain` default 2 -> 0 (documented divergence from C) | **KEEP**: `larsonN` -5.4%, `larsonN-sized` -5.0%; held-out -0.64%, `rptestN` CI [-3.7%, +3.9%], Nginx neutral, RSS unchanged | Recorded below and in UPSTREAM_DIFF.md |
+| X17 | Compute a page's bin once when finding its queue | `mi_theap_page_queue_of` indexes with the bin from `mi_page_bin_typed` instead of recomputing `mi_bin` for ordinary pages | **KEEP**: 8 KiB malloc/free 246.6 -> 213.6 instructions/op (C 193.3); held-out neutral | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 
 ## E02 — O(1) empty-available local-list transfer
@@ -1289,3 +1290,39 @@ traces match. `check-behavioral-parity.py` initially failed on exactly the
 changed default and on default-policy search counts (C 255 page visits vs Rust
 102 for the same 103 searches); it now compares under equal option values and
 requires exact C behavior when Rust is configured with C's default.
+
+## X17/X18 — Medium-size generic path versus C
+
+Decided 2026-10-13. An Nginx-shaped microbenchmark (dlopen each library, time
+4M operations pinned to one CPU) showed tcmalloc about 4x faster than both
+mimallocs on 8-16 KiB requests (a structural difference: mimalloc sends sizes
+above 1 KiB through the generic path) and Rust 12-15% slower than C mimalloc
+(16 KiB `posix_memalign` 12.95 vs 11.30 ns; 8 KiB `malloc` 9.08 vs 7.97 ns).
+Callgrind on an 8 KiB malloc/free loop counted 251.5 Rust vs 194.8 C
+instructions per pair (`perf stat`: 246.6 vs 193.3). Each `free` empties the
+page and retires it, so `mi_theap_page_queue_of` runs every time: it cost 60
+instructions because Rust computed the page bin with `mi_page_bin_typed` and
+then, for ordinary pages, recomputed it from the block size; C's
+`mi_theap_page_queue_of` computes `mi_page_bin` once (`mi_bin` 28).
+
+X17 indexes the queue table with the bin already computed: 246.6 -> 213.6
+instructions per pair. Collapsing the redundant normal-queue revalidation in
+`mi_find_page_typed` (`NormalPageQueue::new_unchecked` plus `unwrap_unchecked`)
+changed nothing (246.6), because the compiler had already removed it.
+
+X18 inlines the generic body into the C entry point `_mi_malloc_generic`, which
+had been a 16-instruction wrapper around `_mi_malloc_generic_typed`:
+213.6 -> 205.6 instructions per pair, library +1.4 KB. Time, seven interleaved
+pinned runs, X17+X18 versus HEAD: 8 KiB malloc/free 9.08 -> 8.16 ns (-10.1%),
+16 KiB `posix_memalign` pool 12.94 -> 11.68 ns (-9.7%), pool plus 1 KiB and
+4 KiB 26.11 -> 24.15 ns (-7.5%); the remaining gap to C is +2.3% to +6.8%.
+Fast-path layout unchanged (`malloc` offset 0, `free` 32).
+
+Held-out (X17+X18 versus X16, 20 scenarios; `rptestN` measured separately):
+geomean -0.21%, `mleak10` -3.72%, `malloc-large` -1.42%. `larsonN-sized` read
++1.57% (two rounds), +1.02% over four rounds with disjoint ranges, and +0.24%
+in nine quick 1-second rounds (X17 alone -0.08%); `larsonN` +0.17% and -0.64%.
+`rptestN`, seven quick runs: median -3.0%, mean +0.28%. The canary screen
+flagged `sh6benchN` +2.09% (one +11.4% round) and read -1.95% over ten rounds.
+Gates: fmt, clippy, tests, safety stress, release thread stress, behavioral
+parity, differential trace, ASan/TSan, Miri.

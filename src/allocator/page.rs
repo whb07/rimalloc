@@ -1449,22 +1449,11 @@ pub unsafe fn mi_theap_page_queue_of(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
         )
     };
-    // SAFETY: the caller keeps the page's initialized nonzero block size live and stable for this
-    // original unconditional read and typed materialization after bin classification.
-    let block_size =
-        unsafe { crate::core_types::BlockSize::new_unchecked(mi_page_block_size(page)) };
-    // SAFETY: the caller keeps both classification sources stable. This coherent condition retains
-    // the original full-first short circuit and reads huge metadata only when the page is not full.
-    let pq = if unsafe { mi_page_is_in_full(page) || mi_page_is_huge(page) } {
-        // SAFETY: `mi_page_bin_typed` bounded this special bin, and the caller keeps the complete
-        // initialized queue table live through its exact address projection.
-        unsafe { theap.ptr().page_queue(Bin::new_unchecked(bin as u16)) }
-    } else {
-        // SAFETY: this normal page's stable block size selects its live initialized owning queue in
-        // the caller-proven local heap.
-        unsafe { mi_theap_page_queue_of_typed(theap, block_size) }
-    };
-    let pq = pq.as_ptr();
+    // `mi_page_bin_typed` already selected the full, huge, or size-class bin, as C's
+    // `mi_page_bin` does; index the queue table with it rather than recomputing the bin.
+    // SAFETY: the bin is bounded by `mi_page_bin_typed`, and the caller keeps the complete
+    // initialized queue table live through its exact address projection.
+    let pq = unsafe { theap.ptr().page_queue(Bin::new_unchecked(bin as u16)) }.as_ptr();
     // SAFETY: the caller keeps the page and selected queue classification metadata stable. Keeping
     // every repeated read in this assertion operand preserves its block-size, huge, then full
     // short-circuit order and assertion-only evaluation.

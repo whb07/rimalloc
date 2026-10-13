@@ -8,6 +8,7 @@ import architecture
 import applications
 import nginx
 import rivals
+import webserver
 import contextlib
 import csv
 import hashlib
@@ -316,6 +317,8 @@ def report(directory: Path) -> bool:
     manifest = json.loads((directory / "manifest.json").read_text())
     if manifest.get("suite") == "nginx":
         return nginx.report(directory, manifest)
+    if manifest.get("suite") == "webserver":
+        return webserver.report(directory, manifest)
     if manifest.get("suite") == "architecture":
         return architecture.report(directory, manifest)
     allocators = manifest.get("allocators", list(ALLOCATORS))
@@ -605,6 +608,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     run.add_argument("--output", help="new or empty results directory; relative paths start at the repository root")
     nginx_parser = sub.add_parser("nginx", help="compare Nginx production/debug-palloc HTTP workloads")
     nginx.add_arguments(nginx_parser, minimum, default_jobs())
+    webserver_parser = sub.add_parser(
+        "webserver", help="TechEmpower axum json/plaintext/fortunes per allocator (not in the default suites)")
+    webserver.add_arguments(webserver_parser, minimum, default_jobs())
     architectural = sub.add_parser("architecture", help="compare C++ architectural probes against Rust/C")
     architectural.add_argument("--scenario", action="append", choices=architecture.SCENARIOS)
     architectural.add_argument("--bytes", type=minimum, default=64 * 1024 * 1024, help="requested live payload bytes")
@@ -649,6 +655,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "nginx":
             return nginx.run(args, sys.modules[__name__])
+        if args.command == "webserver":
+            return webserver.run(args, sys.modules[__name__])
         if args.command == "architecture":
             return architecture.run(args, sys.modules[__name__])
         if args.command == "run":

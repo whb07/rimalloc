@@ -25,6 +25,11 @@ remain separate; its allocator preflight runs independently from timing. See
 [the Nginx benchmark guide](../benches/nginx/README.md) for methodology and
 local generator limits. It does not alter the release gate workload sets.
 
+`./benchmarks/bench.py webserver` runs the TechEmpower axum json, plaintext, and
+fortunes tests (fortunes on SQLite) for each `--allocator`, 30 s per test by
+default. It is explicit only and not part of any default suite; see
+[the webserver benchmark guide](../benches/webserver/README.md).
+
 ## Required Evidence
 
 - Use `./benchmarks/bench.py smoke` for fast iteration and for changes that

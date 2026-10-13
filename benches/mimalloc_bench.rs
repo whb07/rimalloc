@@ -745,7 +745,7 @@ fn scenarios() -> Vec<Scenario> {
         Scenario::workload("alloc-testN", alloc_test::run_n),
         Scenario::per_million("larsonN", larson::run_unsized, "alloc-free-pairs"),
         Scenario::per_million("larsonN-sized", larson::run_sized, "alloc-free-pairs"),
-        Scenario::per_million("rptestN", rptest::run, "rptest-ops"),
+        Scenario::per_million("rptestN", rptest::run, "rptest-cpu-ops"),
         Scenario::workload("barnes", barnes::run),
         Scenario::workload("cfrac", cfrac::run),
         Scenario::workload("mleak10", |alloc| unsafe { mleak::run(alloc, 5) }),
@@ -3197,18 +3197,18 @@ mod rptest {
             let num_threads = logical_cpus();
             let mut mops = 0u64;
             let mut ticks = 0.0;
-            let start = Instant::now();
             for _ in 0..2 {
                 let (iter_mops, iter_ticks) = run_iteration(alloc, num_threads);
                 mops += iter_mops;
                 ticks += iter_ticks;
             }
-            if ticks == 0.0 {
-                ticks = 1.0;
-            }
-            assert!(mops > 0, "rptestN produced zero operations");
-            std::hint::black_box(ticks);
-            duration_per_million_ops(start.elapsed().as_secs_f64(), mops as f64)
+            assert!(
+                mops > 0 && ticks > 0.0,
+                "rptestN produced no timed operations"
+            );
+            // Like upstream rptest ("memory ops per CPU second"), time only the workers'
+            // measured regions; wall time would include the main thread's 1 s sleep polls.
+            duration_per_million_ops(ticks, mops as f64)
         }
     }
 }

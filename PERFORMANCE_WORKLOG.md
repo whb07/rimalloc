@@ -56,6 +56,7 @@ and the conclusion drawn from them.
 | X08 | Inline `_mi_arenas_page_unabandon_internal` to drop the witness stack spill | `#[inline]` hint; reverted | **NO EFFECT**: hint not taken, binary identical to X07 | Measured in the X07 session; not retained |
 | X09 | Make the hand-written fast-path layout independent of unrelated code size | `.p2align 6` anchor plus `.fill 0x20` before the `free`/`malloc` asm block in `src/raw/macros.rs` | **KEEP**: X07 alone shifted `malloc`/`free` cache-line offsets and cost `sh6benchN` +2.6%; anchored layout matches the validated one and restores parity | `benchmarks/results/2026-10-12-epyc-4245p/heldout-x07-x09.csv` |
 | X11 | Match C's full-page test after a generic large-block allocation | `_mi_malloc_generic` uses `mi_page_is_full` (`used == reserved`, C `page.c:1035`) instead of "no free list and fully extended" | **KEEP**: Nginx `proxy-262144-on` +2.2%, `proxy-65536-on` +1.6% throughput (disjoint ranges); canary screen neutral | `target/bench-runs/x11-nginx-*` (local) |
+| X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 
 ## E02 — O(1) empty-available local-list transfer
 
@@ -1204,3 +1205,22 @@ requests/s (+2.2%), `proxy-65536-on` 152.4k-153.0k vs 149.9k-151.5k (+1.6%);
 thread the generic path drains `local_free` before allocating, so reaching the
 divergent state needs a queue-search interleaving that unit fixtures do not
 model.
+
+## X10 — rptestN measures worker time
+
+Decided 2026-10-13 (measurement change, applies identically to every
+allocator). `rptest::run` divided wall time by operations, but wall time
+included the main thread's 1-second sleep polls (about 20 s per run), so the
+result mostly measured sleep quantization; the workers' measured `ticks` were
+computed and discarded. Upstream rptest reports memory operations per CPU
+second from those ticks. X10 reports summed worker ticks per million
+operations and renames the metric `per-1M-rptest-cpu-ops`, so old and new
+results cannot be compared by accident.
+
+Five fresh-process runs each: Rust median 145.4 ms per 1M ops (runs 145.4,
+146.5, 133.9, 145.9, 134.1; CV 4.6%), C mimalloc 148.4 ms (136.2, 148.9,
+143.8, 148.8, 148.4; CV 3.8%), Rust/C -2.0% on medians. Both allocators are
+bimodal (about 134 vs 147 ms), consistent with scheduling of 12 workers on six
+SMT cores rather than allocator behaviour. The planned <2% CV bar was not met;
+the user chose to adopt the metric and require at least five runs per
+allocator for rptestN in scoreboards and held-out comparisons.

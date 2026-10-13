@@ -38,7 +38,7 @@ SCENARIOS = dict.fromkeys((
 SCENARIOS.update({
     "glibc-thread": "per-1M-malloc-free-pairs", "xmalloc-testN": "per-1M-frees",
     "larsonN": "per-1M-alloc-free-pairs", "larsonN-sized": "per-1M-alloc-free-pairs",
-    "rptestN": "per-1M-rptest-ops",
+    "rptestN": "per-1M-rptest-cpu-ops",
 })
 NATIVE_SCENARIOS = dict(SCENARIOS)
 SCENARIOS.update(applications.SCENARIOS)

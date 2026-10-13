@@ -27,6 +27,7 @@ relative output and report paths start at the repository root.
 | `./benchmarks/bench.py list` | List scenarios, metrics, and the core preset |
 | `./benchmarks/bench.py report RUN_DIRECTORY` | Regenerate a saved comparison report |
 | `./benchmarks/bench.py screen` | ~3 min A/B of the working tree's Rust library against `HEAD` |
+| `./benchmarks/scoreboard.py RUN_DIR...` | Per-suite Rust/rival geomeans and tolerance breaches from saved runs |
 | `./benchmarks/bench.py smoke` | Run the existing benchmark smoke gate |
 | `./benchmarks/bench.py release` | Run the existing five-mode release gate |
 
@@ -67,6 +68,16 @@ against held-out runs of known changes, the screen reproduced every effect of
 up to about 1.5% from noise, so treat `likely` verdicts as prompts for a
 targeted rerun. Confirm any change you keep with the full interleaved held-out
 comparison before committing. The exit code is 1 if any scenario reads `SLOWER`.
+
+## Scoreboard
+
+`./benchmarks/scoreboard.py` reads saved `run` and `nginx` result directories
+and reports, per suite (native scenarios, applications, Nginx) and per rival,
+the geomean of Rust time / rival time (rival / Rust throughput for Nginx). A
+suite is won when the geomean is below 1.0 and no scenario exceeds its
+tolerance: 1.03 against C mimalloc, 1.10 against other allocators. The exit code
+is 0 only when every suite is won. A single breach is a prompt to confirm with
+two interleaved rounds, not a verdict.
 
 ## Comparison behavior
 

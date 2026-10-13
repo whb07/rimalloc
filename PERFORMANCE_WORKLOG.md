@@ -52,6 +52,9 @@ and the conclusion drawn from them.
 | X04 | Locate the post-B02 xmalloc regression on the 12-CPU host | Bisect `f018285..5772656` with an interleaved harness control; release reabandon MemId re-check made debug-only | **KEEP**: first bad commit `1294a69`; removing the redundant check recovers 6.4% on `xmalloc-testN` | `benchmarks/results/2026-10-12-epyc-4245p/` |
 | X05 | Remove call overhead from the option read on the remote-free collection path | Allow `_mi_option_get_fast` (a four-instruction table load) to inline | **KEEP**: a further -2.9% on `xmalloc-testN`; held-out geomean -0.84%, no scenario regresses beyond +1% | `benchmarks/results/2026-10-12-epyc-4245p/heldout-x04-x05.csv` |
 | X06 | Inline reabandon so its frequent early rejection avoids a call | `#[inline]` on `_mi_arenas_page_try_reabandon_to_mapped_arena`; reverted | **REJECT**: +5.1% slower on `xmalloc-testN` with or without X05 | Measured in the X04/X05 session; not retained |
+| X07 | Drop release page-map lookups that only feed debug assertions in abandon/unabandon | `_mi_ptr_page` (an Acquire page-map load) moved inside `mi_assert_internal!` in `src/allocator/arena/abandoned.rs` | **KEEP**: `xmalloc-testN` -2.1% (1.822 vs 1.861 ms, ranges disjoint), now ~1% faster than C | `benchmarks/results/2026-10-12-epyc-4245p/heldout-x07-x09.csv` |
+| X08 | Inline `_mi_arenas_page_unabandon_internal` to drop the witness stack spill | `#[inline]` hint; reverted | **NO EFFECT**: hint not taken, binary identical to X07 | Measured in the X07 session; not retained |
+| X09 | Make the hand-written fast-path layout independent of unrelated code size | `.p2align 6` anchor plus `.fill 0x20` before the `free`/`malloc` asm block in `src/raw/macros.rs` | **KEEP**: X07 alone shifted `malloc`/`free` cache-line offsets and cost `sh6benchN` +2.6%; anchored layout matches the validated one and restores parity | `benchmarks/results/2026-10-12-epyc-4245p/heldout-x07-x09.csv` |
 
 ## E02 — O(1) empty-available local-list transfer
 
@@ -1145,3 +1148,33 @@ At `984e1fc` Rust matched C on this host (1.845 ms); X04+X05 leaves about
 +0.6% to +1.2%. The rest of the `1294a69` reshuffle and the later
 `5f5910c..41d0e6e` creep (2.000 to 2.038 ms before these fixes) are the next
 candidates. Miri was not rerun for this change.
+
+## X07/X08/X09 — Remaining abandon-path loads and fast-path layout
+
+Decided 2026-10-13 on the same host and protocol as X04/X05.
+
+Rebuilding historical points with X05 applied showed the parent of `1294a69`
+(`d1f39f2`) at 1.817 ms versus 1.861 ms for `c8dd865`, so work remained.
+Aligning every function to 64 bytes (`-C llvm-args=-align-all-functions=6`)
+moved nothing, ruling out general code layout. `_mi_arenas_page_abandon_internal`
+and `_mi_arenas_page_unabandon_internal` performed `_mi_ptr_page` in release
+only to feed `mi_assert_internal!`; the page-map read is an Acquire atomic load
+that the compiler cannot discard. X07 moves both lookups inside the assertions:
+`xmalloc-testN` 1.861 -> 1.822 ms (C 1.842 ms). X08 (`#[inline]` on unabandon)
+was not taken by the compiler and is recorded only.
+
+X07 also shifted the `global_asm!` fast paths: `malloc` moved from cache-line
+offset 0 to 32 and `free` from 32 to 0, because the block start depended on
+preceding code size. `sh6benchN`, which is bound by `malloc`/`delete[]`, ran
++2.6% slower over 8 interleaved rounds although X07's code never executes there
+(profile: no abandon/collect symbols). X09 anchors the block with `.p2align 6`
+and a 0x20 pad so `free` sits at offset 32 and `malloc` at 0 regardless of
+other code: `sh6benchN` returned to +0.03% while `xmalloc-testN` kept -1.71%.
+Layout gate for later work: release `malloc` offset 0, `free` offset 32.
+
+Held-out, 21 native scenarios, X07+X09 versus `c8dd865` (two rounds, four for
+`barnes`): geomean -0.22%, worst +0.67% (`cfrac`, noisy), improvements on
+`xmalloc-testN` -1.67%, `mleak100` -1.46%, `sh8benchN` -1.07%. Gates: fmt,
+clippy (no warnings), 405 tests, `check-safety-stress.sh`,
+`check-release-thread-stress.py`, ASan and TSan (with `--cap-lints=warn` for
+the nightly `unused_unsafe` drift in `src/allocator/init/cpu.rs`).

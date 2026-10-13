@@ -346,8 +346,9 @@ pub(crate) unsafe fn _mi_arenas_page_abandon_internal(
     ));
     // SAFETY: stable live page geometry provides a valid start address in the
     // page-map domain and must resolve back to this exact metadata.
-    let mapped_page = unsafe { crate::internal::_mi_ptr_page(mi_page_start(page_raw).cast()) };
-    crate::internal::mi_assert_internal!(mapped_page == page_raw);
+    crate::internal::mi_assert_internal!(
+        unsafe { crate::internal::_mi_ptr_page(mi_page_start(page_raw).cast()) } == page_raw
+    );
     // SAFETY: OwnedAbandonedPage proves the live atomic owner claim remains set.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page_raw) });
     // SAFETY: the witness and caller contract keep the page's abandoned owner
@@ -522,8 +523,9 @@ pub(crate) unsafe fn _mi_arenas_page_unabandon_internal(
     ));
     // SAFETY: stable page geometry provides a valid start in the page-map
     // domain and must resolve to this exact live metadata pointer.
-    let mapped_page = unsafe { crate::internal::_mi_ptr_page(mi_page_start(page).cast()) };
-    crate::internal::mi_assert_internal!(mapped_page == page);
+    crate::internal::mi_assert_internal!(
+        unsafe { crate::internal::_mi_ptr_page(mi_page_start(page).cast()) } == page
+    );
     // SAFETY: OwnedAbandonedPage proves the live atomic owner claim remains set.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     // SAFETY: the witness and caller contract keep abandoned owner state stable

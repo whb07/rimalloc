@@ -1801,11 +1801,31 @@ unsafe fn mi_page_queue_find_free_ex_active(
 /// and their opaque arguments must remain valid. Synchronous callbacks must not unwind or
 /// incompatibly reenter mutation of the participating heap, queue, page, arena, or backing.
 #[inline]
-#[allow(clippy::absurd_extreme_comparisons)]
 unsafe fn mi_find_free_page_typed(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
     block_size: crate::core_types::BlockSize,
+) -> Option<crate::core_types::AvailablePage> {
+    // SAFETY: forwarded contract; the front probe writes nothing on a miss.
+    if let Some(available) = unsafe { mi_find_free_page_front(theap, queue) } {
+        return Some(available);
+    }
+    // SAFETY: only front-page absence or failed availability refinement reaches this fallback. The
+    // caller-proven current-thread queue epoch covers the complete active search; success
+    // establishes immediate availability before the returned Active capability is consumed once.
+    unsafe { mi_page_queue_find_free_ex_active(theap, queue, block_size, true) }
+        .and_then(|active| active.try_available().ok())
+}
+
+/// C `mi_find_free_page`'s fast case: the queue's first page after a quick local collect.
+///
+/// # Safety
+/// Same contract as `mi_find_free_page_typed`. A miss writes nothing.
+#[inline(always)]
+#[allow(clippy::absurd_extreme_comparisons)]
+unsafe fn mi_find_free_page_front(
+    theap: crate::core_types::ThreadHeapLocal,
+    queue: crate::core_types::NormalPageQueue,
 ) -> Option<crate::core_types::AvailablePage> {
     // SAFETY: the caller keeps the exact live queue and its initialized head stable under
     // exclusive local ownership for this single front-page snapshot.
@@ -1836,11 +1856,7 @@ unsafe fn mi_find_free_page_typed(
             return Some(available);
         }
     }
-    // SAFETY: only front-page absence or failed availability refinement reaches this fallback. The
-    // caller-proven current-thread queue epoch covers the complete active search; success
-    // establishes immediate availability before the returned Active capability is consumed once.
-    unsafe { mi_page_queue_find_free_ex_active(theap, queue, block_size, true) }
-        .and_then(|active| active.try_available().ok())
+    None
 }
 
 /// Allocate one singleton huge page and return its available-list capability.
@@ -2006,6 +2022,52 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
     usable: *mut usize,
 ) -> *mut c_void {
     let flags = crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment);
+    // SAFETY: an initialized heap is live and current-thread owned; the empty and wrong-thread
+    // sentinels fail the check and take the full path below, which initializes the thread.
+    if unsafe { mi_theap_is_initialized(theap) } {
+        let fast = unsafe {
+            malloc_generic_fast(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+                size,
+                flags,
+                usable,
+            )
+        };
+        match fast {
+            GenericFast::Hit(p) => return p,
+            // SAFETY: the fast path accepted this initialized heap and size.
+            GenericFast::Counted => {
+                return unsafe {
+                    malloc_generic_outlined::<true>(
+                        crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+                        crate::core_types::LayoutRequest::from_padded_unchecked(
+                            crate::core_types::PaddedSize::new_unchecked(size),
+                            flags.zeroed(),
+                        ),
+                        flags,
+                        usable,
+                    )
+                };
+            }
+            GenericFast::NotCounted => {}
+        }
+    }
+    // SAFETY: forwards this function's contract unchanged.
+    unsafe { malloc_generic_slow(theap, size, flags, usable) }
+}
+
+/// `_mi_malloc_generic` when the fast path did not apply; out of line so the entry keeps no
+/// frame.
+///
+/// # Safety
+/// Same contract as `_mi_malloc_generic`.
+#[inline(never)]
+unsafe fn malloc_generic_slow(
+    theap: *mut mi_theap_t,
+    size: usize,
+    flags: crate::core_types::MallocGenericFlags,
+    usable: *mut usize,
+) -> *mut c_void {
     // SAFETY: the raw-boundary contract supplies the allocator's padded-size word. Zero is
     // normalized exactly as before; every nonzero word is representable by `PaddedSize`, including
     // a result wrapped by caller arithmetic. Only the padded scalar and zeroing policy are consumed
@@ -2028,7 +2090,7 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };
-        malloc_generic_body(theap, layout, flags, usable)
+        malloc_generic_outlined::<false>(theap, layout, flags, usable)
     }
 }
 
@@ -2096,16 +2158,131 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
     usable: *mut usize,
 ) -> *mut c_void {
     // SAFETY: forwards this function's contract unchanged.
-    unsafe { malloc_generic_body(theap, layout, flags, usable) }
+    unsafe {
+        match malloc_generic_fast(theap, layout.padded().get(), flags, usable) {
+            GenericFast::Hit(p) => p,
+            GenericFast::Counted => malloc_generic_outlined::<true>(theap, layout, flags, usable),
+            GenericFast::NotCounted => {
+                malloc_generic_outlined::<false>(theap, layout, flags, usable)
+            }
+        }
+    }
 }
 
-/// Body of `_mi_malloc_generic_typed`, inlined into the C entry point `_mi_malloc_generic`
-/// so the medium-size path makes one call where C makes one.
+/// Outcome of the generic fast path.
+enum GenericFast {
+    /// Allocated from the size class's first page.
+    Hit(*mut c_void),
+    /// Counted toward maintenance (not due) but the first page had no free block.
+    Counted,
+    /// Not eligible or maintenance due; nothing was written.
+    NotCounted,
+}
+
+/// C `_mi_malloc_generic` for an ordinary size class when maintenance is not due and the
+/// queue's first page has a free block: count the call (first, as C does), quick-collect the
+/// first page, and pop a block. Every other case returns without allocating, so the caller
+/// continues with exactly C's remaining steps.
+///
+/// # Safety
+/// `theap` must satisfy the `malloc_generic_body` contract; `usable` as for it.
+// Unoptimized builds give every inlined temporary its own stack slot, so inlining this would
+// keep its frame live under the generic body; loom's 32 KiB model stacks, which run this crate
+// as the test global allocator, overflow on a fresh-page allocation.
+#[cfg_attr(not(debug_assertions), inline(always))]
+#[cfg_attr(debug_assertions, inline(never))]
+unsafe fn malloc_generic_fast(
+    theap: crate::core_types::ThreadHeapPtr,
+    size: usize,
+    flags: crate::core_types::MallocGenericFlags,
+    usable: *mut usize,
+) -> GenericFast {
+    // Bound the requested size, so a padded size that wrapped still reaches C's overflow error.
+    let req_size = size.wrapping_sub(MI_PADDING_SIZE);
+    if flags.zeroed() != crate::core_types::Zeroed::No
+        || flags.huge_alignment().get() != 0
+        || req_size.wrapping_sub(1) >= MI_LARGE_MAX_OBJ_SIZE - MI_PADDING_SIZE
+    {
+        return GenericFast::NotCounted;
+    }
+    // SAFETY: the contract keeps `theap` live, initialized, and exclusively current-thread
+    // owned; an ordinary size (at most `MI_LARGE_MAX_OBJ_SIZE`) selects a normal queue whose
+    // first page and free lists are locally owned for this allocation.
+    unsafe {
+        let raw_theap = theap.as_ptr();
+        let count = (*raw_theap).generic_count + 1;
+        if count >= crate::allocator::policy::ActivePolicy::generic_maintenance_interval().get() {
+            return GenericFast::NotCounted;
+        }
+        (*raw_theap).generic_count = count;
+        let local_theap = crate::core_types::ThreadHeapLocal::new_unchecked(theap);
+        let block_size = crate::core_types::BlockSize::new_unchecked(size);
+        let queue = crate::core_types::NormalPageQueue::new_unchecked(
+            crate::core_types::PageQueuePtr::new_unchecked(mi_page_queue(raw_theap, block_size)),
+        );
+        let Some(available) = mi_find_free_page_front(local_theap, queue) else {
+            return GenericFast::Counted;
+        };
+        let page = available.page().as_ptr();
+        crate::internal::mi_assert_internal!(mi_page_block_size(page) >= size);
+        crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+            mi_page_slice_start(page).cast(),
+            MI_PAGE_ALIGN
+        ));
+        crate::internal::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
+        crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
+        let p = _mi_page_malloc_zero_typed(
+            local_theap,
+            available,
+            crate::core_types::PaddedSize::new_unchecked(size),
+            crate::core_types::Zeroed::No,
+            ptr::null_mut(),
+        );
+        crate::internal::mi_assert_internal!(!p.is_null());
+        if mi_page_block_size(page) > MI_SMALL_MAX_OBJ_SIZE
+            && crate::internal::mi_page_is_full(page)
+        {
+            malloc_generic_page_to_full(page);
+        }
+        GenericFast::Hit(p)
+    }
+}
+
+/// Move a large-block page that the fast path just filled to the full queue, as C's generic
+/// path does after allocating.
+///
+/// # Safety
+/// `page` must belong to the current thread's heap and have just been allocated from.
+#[cold]
+#[inline(never)]
+unsafe fn malloc_generic_page_to_full(page: *mut mi_page_t) {
+    // SAFETY: forwarded contract; the page's queue is the current thread heap's.
+    unsafe { mi_page_to_full(page, mi_page_queue_of(page)) }
+}
+
+/// The generic path when the fast path did not allocate; `COUNTED` when it already counted the
+/// call and found maintenance not due. Out of line so the entries keep small frames.
+///
+/// # Safety
+/// Same contract as `_mi_malloc_generic_typed`.
+#[inline(never)]
+unsafe fn malloc_generic_outlined<const COUNTED: bool>(
+    theap: crate::core_types::ThreadHeapPtr,
+    layout: crate::core_types::LayoutRequest,
+    flags: crate::core_types::MallocGenericFlags,
+    usable: *mut usize,
+) -> *mut c_void {
+    // SAFETY: forwards this function's contract unchanged.
+    unsafe { malloc_generic_body::<COUNTED>(theap, layout, flags, usable) }
+}
+
+/// Body of the generic path, inlined into `malloc_generic_outlined`. With `COUNTED` the fast
+/// path has already counted the call and found maintenance not due.
 ///
 /// # Safety
 /// Same contract as `_mi_malloc_generic_typed`.
 #[inline(always)]
-unsafe fn malloc_generic_body(
+unsafe fn malloc_generic_body<const COUNTED: bool>(
     theap: crate::core_types::ThreadHeapPtr,
     layout: crate::core_types::LayoutRequest,
     flags: crate::core_types::MallocGenericFlags,
@@ -2126,9 +2303,13 @@ unsafe fn malloc_generic_body(
     let local_theap = unsafe {
         let local_theap = crate::core_types::ThreadHeapLocal::new_unchecked(theap);
         let raw_theap = local_theap.ptr().as_ptr();
-        (*raw_theap).generic_count += 1;
-        if (*raw_theap).generic_count
-            >= crate::allocator::policy::ActivePolicy::generic_maintenance_interval().get()
+        // A fast-path miss already counted this call and found maintenance not due.
+        if !COUNTED {
+            (*raw_theap).generic_count += 1;
+        }
+        if !COUNTED
+            && (*raw_theap).generic_count
+                >= crate::allocator::policy::ActivePolicy::generic_maintenance_interval().get()
         {
             (*raw_theap).generic_collect_count += (*raw_theap).generic_count;
             (*raw_theap).generic_count = 0;
@@ -2204,6 +2385,92 @@ mod tests {
     use super::*;
     use crate::bits::{MI_INTPTR_SIZE, MI_SIZE_BITS, mi_clz};
     use core::mem::MaybeUninit;
+
+    /// Every generic allocation counts once toward C's maintenance interval, whichever entry,
+    /// size class, or page-search outcome it takes; maintenance (and the deferred-free
+    /// heartbeat) runs exactly when the counter wraps.
+    #[test]
+    fn generic_allocations_keep_c_maintenance_cadence() {
+        std::thread::spawn(|| unsafe {
+            // Allocate the bookkeeping first: in test builds the global allocator is this one,
+            // so growing a Vec inside the loop would add generic allocations of its own.
+            let mut live = Vec::with_capacity(1000);
+            let warm = _mi_malloc_generic(ptr::null_mut(), 16, 0, ptr::null_mut());
+            crate::allocator::free::mi_free(warm);
+            let theap = crate::prim::_mi_theap_default();
+            assert!(mi_theap_is_initialized(theap));
+            let interval =
+                crate::allocator::policy::ActivePolicy::generic_maintenance_interval().get();
+            let mut expected = (*theap).generic_count;
+            let mut heartbeat = (*theap).heartbeat;
+            for i in 1..=2500usize {
+                let size = [8192, 16384, 3000, 0, 4096, 1500, 65536][i % 7];
+                let zero = usize::from(i % 11 == 0);
+                let p = if i % 5 == 0 {
+                    let padded = if size == 0 {
+                        crate::core_types::RequestedSize::new(
+                            crate::core_types::RequestedSize::MIN_ZERO_SIZE,
+                        )
+                        .padded_unchecked()
+                    } else {
+                        crate::core_types::PaddedSize::new_unchecked(size)
+                    };
+                    let flags = crate::core_types::MallocGenericFlags::from_raw(zero);
+                    let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
+                        padded,
+                        flags.zeroed(),
+                    );
+                    _mi_malloc_generic_typed(
+                        crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+                        layout,
+                        flags,
+                        ptr::null_mut(),
+                    )
+                } else {
+                    _mi_malloc_generic(theap, size, zero, ptr::null_mut())
+                };
+                assert!(!p.is_null(), "allocation {i} of {size} bytes failed");
+                // Keep a third live so pages fill and later searches miss or take fresh pages.
+                if i % 3 == 0 {
+                    live.push(p);
+                } else {
+                    crate::allocator::free::mi_free(p);
+                }
+                expected += 1;
+                let wrapped = expected >= interval;
+                if wrapped {
+                    expected = 0;
+                }
+                assert_eq!(
+                    (*theap).generic_count,
+                    expected,
+                    "generic count after allocation {i}"
+                );
+                let now = (*theap).heartbeat;
+                assert_eq!(
+                    now != heartbeat,
+                    wrapped,
+                    "heartbeat changed off-cadence at allocation {i}"
+                );
+                heartbeat = now;
+            }
+            for p in live {
+                crate::allocator::free::mi_free(p);
+            }
+            let empty = ptr::addr_of!(crate::allocator::init::_mi_theap_empty).cast_mut();
+            let before = (*empty).generic_count;
+            let p = _mi_malloc_generic(empty, 8192, 0, ptr::null_mut());
+            assert!(!p.is_null());
+            crate::allocator::free::mi_free(p);
+            assert_eq!(
+                (*empty).generic_count,
+                before,
+                "the empty sentinel must not be counted"
+            );
+        })
+        .join()
+        .unwrap();
+    }
 
     const LARGE_WSIZE_MAX_FOR_BIN_TEST: usize = (4 * 1024 * 1024) / MI_INTPTR_SIZE;
 

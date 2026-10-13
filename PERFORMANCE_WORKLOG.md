@@ -64,6 +64,7 @@ and the conclusion drawn from them.
 | X16 | Stop re-scanning exhausted small pages during page-queue search | `page_full_retain` default 2 -> 0 (documented divergence from C) | **KEEP**: `larsonN` -5.4%, `larsonN-sized` -5.0%; held-out -0.64%, `rptestN` CI [-3.7%, +3.9%], Nginx neutral, RSS unchanged | Recorded below and in UPSTREAM_DIFF.md |
 | X17 | Compute a page's bin once when finding its queue | `mi_theap_page_queue_of` indexes with the bin from `mi_page_bin_typed` instead of recomputing `mi_bin` for ordinary pages | **KEEP**: 8 KiB malloc/free 246.6 -> 213.6 instructions/op (C 193.3); held-out neutral | Recorded below |
 | X18 | Make the medium-size generic path one call, like C | Inline the generic body into `_mi_malloc_generic` (the C entry point) instead of wrapping `_mi_malloc_generic_typed` | **KEEP**: 213.6 -> 205.6 instructions/op; with X17, medium sizes 7.5-10.1% faster; `larsonN-sized` +0.24% to +1.02% recorded | Recorded in the X17/X18 section |
+| X19 | C-equivalent fast path for the generic (medium-size) malloc hit case | `malloc_generic_fast`: count, quick-collect the size class's first page, pop; every other case continues with C's remaining steps out of line | **KEEP**: 8 KiB pair 205.6 -> 169.7 instructions (C 193.3); 8-16 KiB requests 3.5-7% faster, at or below C; held-out and Nginx neutral | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1360,3 +1361,50 @@ mixed with later ones in a scoreboard; re-measure every allocator for them.
 `BENCHMARK_RESULTS.md` also no longer claims that page-map registration
 covers every 64 KiB slice of a `malloc-large` buffer: the span is capped at
 the 4 MiB large-page window.
+
+## X19 — Medium-size generic malloc fast path
+
+Decided 2026-10-13. Sizes above 1 KiB skip the hand-written `malloc` fast path
+and run C's whole generic routine (`_mi_malloc_generic`, about 100
+instructions on an 8 KiB malloc/free loop). When maintenance is not due and
+the size class's first page has a free block, C's work reduces to: increment
+`generic_count`, find the queue, quick-collect the first page, reset its
+retire countdown, pop, and the X11 full-page test. `malloc_generic_fast` does
+exactly that, for non-zeroed requests up to `MI_LARGE_MAX_OBJ_SIZE`, and both
+entries (`_mi_malloc_generic`, `_mi_malloc_generic_typed`) try it first. A miss
+after counting continues in `malloc_generic_outlined::<true>`, which skips the
+count and maintenance check; anything else takes the unchanged path. No
+behavioral divergence from C. A regression test drives 2,500 mixed generic
+calls (both entries, zeroed, size 0, page-filling misses) and checks
+`generic_count` and the heartbeat after every call.
+
+Codegen: the hit path saves one register and keeps no frame; misses tail-jump
+out of line; `malloc`/`free` stay at cache-line offsets 0/32; library +760
+bytes. The first version inlined the fast path and two copies of the body
+into the typed entry; in debug builds that frame grew from 2,824 to about
+4,700 bytes and overflowed loom's 32 KiB model stacks (the crate is the test
+global allocator). Both misses now go out of line, and the fast path is
+`inline(never)` under `debug_assertions` only (debug miss path +232 bytes
+over HEAD).
+
+Results versus HEAD:
+
+- 8 KiB malloc/free: 205.6 -> 169.7 instructions per pair (C 193.3).
+- Nginx-shaped microbenchmark (ns/op, pinned): 16 KiB `posix_memalign`
+  11.7 -> 11.3 (C 11.3), 8 KiB malloc/free 8.2 -> 7.6 (C 8.0), pool plus
+  1 KiB and 4 KiB 24.1 -> about 23.0 (C about 22.9). tcmalloc 2.95, 2.22,
+  7.25: per-thread caches remain about 3x cheaper.
+- Canary screen geomean -0.34%. 21-scenario held-out geomean -0.09%;
+  `malloc-large` +1.86% and `mleak10` +1.71% rechecked over four rounds at
+  +0.67% (overlapping ranges) and -1.67%. `rptestN` -0.39% in two rounds; the
+  seven-run recheck was stopped before completing.
+- Nginx, 3 repeats, versus the HEAD rows of the same-settings run 90 minutes
+  earlier (`nginx-3rep`), excluding the bimodal `headers` and
+  `upload-1048576`: production -0.12% (4 of 16 cases faster), debug-palloc
+  +0.26%; peak worker PSS +0.5% / -0.1%. Medium-size allocation is too small
+  a share of Nginx's per-request CPU (3-5 allocations per request) for the
+  saving to show; tcmalloc's ~1% Nginx lead is larger than our whole
+  medium-size allocation cost difference and needs a different explanation.
+
+Gates: fmt, clippy, tests, safety stress, release thread stress, behavioral
+parity, differential trace, ASan/TSan, Miri.

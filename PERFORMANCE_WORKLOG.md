@@ -56,6 +56,8 @@ and the conclusion drawn from them.
 | X08 | Inline `_mi_arenas_page_unabandon_internal` to drop the witness stack spill | `#[inline]` hint; reverted | **NO EFFECT**: hint not taken, binary identical to X07 | Measured in the X07 session; not retained |
 | X09 | Make the hand-written fast-path layout independent of unrelated code size | `.p2align 6` anchor plus `.fill 0x20` before the `free`/`malloc` asm block in `src/raw/macros.rs` | **KEEP**: X07 alone shifted `malloc`/`free` cache-line offsets and cost `sh6benchN` +2.6%; anchored layout matches the validated one and restores parity | `benchmarks/results/2026-10-12-epyc-4245p/heldout-x07-x09.csv` |
 | X11 | Match C's full-page test after a generic large-block allocation | `_mi_malloc_generic` uses `mi_page_is_full` (`used == reserved`, C `page.c:1035`) instead of "no free list and fully extended" | **KEEP**: Nginx `proxy-262144-on` +2.2%, `proxy-65536-on` +1.6% throughput (disjoint ranges); canary screen neutral | `target/bench-runs/x11-nginx-*` (local) |
+| X13 | Reach the aligned allocator from the libc aligned entry points without GOT/PLT hops | Non-exported `posix_memalign`/`memalign`/`valloc`/`pvalloc` bodies called by the libc wrappers; reverted | **REJECT**: hops removed (0 GOT-indirect), but `memalign`+free 6.10 -> 6.95 ns (+13.9%, disjoint over 7 runs; +22 instructions/op); `posix_memalign` -1.0% | Recorded below |
+| X14 | Turn internal GOT-indirect calls into direct calls with `-Wl,-Bsymbolic-functions` | Linker flag on the Linux cdylib; reverted | **NO CHANGE**: internal dynamic lookups 24 -> 0, but calls stay `jmp *GOT` because stable rustc does not emit relaxable GOT relocations | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 
 ## E02 — O(1) empty-available local-list transfer
@@ -1224,3 +1226,29 @@ bimodal (about 134 vs 147 ms), consistent with scheduling of 12 workers on six
 SMT cores rather than allocator behaviour. The planned <2% CV bar was not met;
 the user chose to adopt the metric and require at least five runs per
 allocator for rptestN in scoreboards and held-out comparisons.
+
+## X13/X14 — Indirect calls between the library's own exported functions
+
+Investigated 2026-10-13. Calls written as `crate::mimalloc::f` resolve to the
+`extern "C"` declarations re-exported from `src/ffi/abi.rs`, so they compile to
+GOT-indirect calls that cannot inline (106 such call sites in
+`src/raw/macros.rs` alone). Rust also routes calls to any exported
+(`no_mangle`) function through the GOT unless the call inlines, and ignores
+`#[inline]` on exported functions (a hard error under `-D warnings`).
+
+X14 linked the cdylib with `-Wl,-Bsymbolic-functions`. Internal symbols
+needing dynamic lookup dropped from 24 to 0, but the instructions stayed
+`jmp *GOT(...)`; turning them into direct calls needs relaxable GOT relocations,
+which stable rustc does not emit for x86_64-unknown-linux-gnu. No runtime work
+removed; reverted.
+
+X13 gave the libc aligned entry points non-exported bodies (the C
+internal-alias pattern), which removed every GOT hop on `posix_memalign`,
+`memalign`, and `aligned_alloc`. `rptestN` could not resolve the change
+(bimodal, ranges overlapping over five runs), so a C microbenchmark dlopened
+each library and timed 10 million aligned allocate/free pairs, interleaved over
+seven runs on one pinned CPU: `posix_memalign` 8.81 -> 8.72 ns (-1.0%) but
+`memalign` 6.10 -> 6.95 ns (+13.9%, disjoint), with 22 more instructions per
+operation overall. Inlining the Rust aligned path into the wrapper costs more
+than the hops it removes; the existing route through the hand-written
+`mi_malloc_aligned` stub reaches a leaner compiled body. Reverted.

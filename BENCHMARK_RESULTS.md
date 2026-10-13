@@ -1082,3 +1082,84 @@ the native geomean at about 0.994 (-0.6%) against C, though that projection
 combines two sessions and is not a fresh Rust/C run. Details and gates are in
 `PERFORMANCE_WORKLOG.md` (X04-X06); data is in
 `benchmarks/results/2026-10-12-epyc-4245p/heldout-x04-x05.csv`.
+
+## Rival Allocator Baseline October 13 2026
+
+**Allocator source:** identical across the three runs (`59c9b02`, `641651f`,
+`4b2531a`; only benchmark tooling changed between them), after X04-X11.
+**Stored results:** `benchmarks/results/2026-10-13-epyc-4245p-rivals/`
+(`native/`, `native-jemalloc/`, `nginx/`, and `scoreboard.txt`). Reproduce the
+table with:
+
+```bash
+./benchmarks/scoreboard.py benchmarks/results/2026-10-12-epyc-4245p/nginx \
+  benchmarks/results/2026-10-13-epyc-4245p-rivals/native \
+  benchmarks/results/2026-10-13-epyc-4245p-rivals/native-jemalloc \
+  benchmarks/results/2026-10-13-epyc-4245p-rivals/nginx
+```
+
+Rivals: C mimalloc 3.3.2, glibc 2.39 malloc, jemalloc 5.3.0, and tcmalloc
+(gperftools 2.16 `tcmalloc_minimal`), on the same EPYC 4245P host and default
+controls as the October 12 run (native: 10 samples, 3 s, one repetition;
+applications: 1,000,000 operations; Nginx: one 5-second repetition per case).
+Only allocators whose results changed or were missing were measured: the
+`native` run supplies glibc and tcmalloc; `native-jemalloc` re-measured
+jemalloc after a build fix (and, because the runner always includes them, Rust
+and C); Nginx re-measured Rust, glibc, jemalloc, and tcmalloc and reuses C
+mimalloc from the October 12 run. The scoreboard merges values per scenario and
+allocator (later directories win) before forming ratios.
+
+**Scoreboard** (geomean of Rust/rival time; rival/Rust throughput for Nginx;
+below 1.0 favours Rust; a breach is a scenario above 1.03 versus C mimalloc or
+1.10 versus others):
+
+| Suite | C mimalloc | glibc | jemalloc | tcmalloc |
+|---|---:|---:|---:|---:|
+| Native (21 scenarios) | 0.9974, breach `rptestN` 1.044 | **0.6388** | **0.7980** | 0.5917, breaches `malloc-large` 3.069, `larsonN-sized` 1.183 |
+| Applications (Redis, RocksDB) | **0.9992** | **0.9565** | **0.9663** | **0.9861** |
+| Nginx (36 cases) | 0.9986, 4 breaches | 0.9751, 1 breach | 0.9953, 1 breach | **1.0108 (loss)**, breach `debug-palloc/headers` 1.168 |
+
+Bold marks a win with no breach. Rust's geomean is below 1.0 in 11 of 12
+suite/rival pairs; the exception is Nginx against tcmalloc.
+
+### Where rivals are ahead
+
+- **C mimalloc:** faster on 11 of 21 native scenarios, all but two by 0.5% or
+  less; `rptestN` 1.044 (bimodal scenario, CV about 4% even over five runs)
+  and `mstressN` 1.019. Nginx breaches are single 5-second runs on cases that
+  previously moved several percent between runs (`upload-1048576`,
+  `headers`), and C's Nginx values come from a different session.
+- **glibc:** ahead only on `malloc-large-old` (1.021), `mleak100` (1.016),
+  `mleak10` (1.003); Rust is far ahead elsewhere (`cache-scratchN` 0.151,
+  `sh8benchN` 0.231, `xmalloc-testN` 0.241).
+- **jemalloc:** ahead on `glibc-thread` (1.023) and `larsonN-sized` (1.010).
+- **tcmalloc:** ahead on `malloc-large` (3.069), `larsonN-sized` (1.183),
+  `larsonN` (1.099), `mleak100`/`mleak10` (~1.02), and on 26 of 36 Nginx cases
+  by about 1-3% (geomean 1.0057 excluding its two largest cases). It collapses
+  on cross-thread workloads (`xmalloc-testN` 74x, `sh8benchN` and
+  `cache-thrashN` about 13x slower than Rust). C mimalloc shows the same
+  `malloc-large` gap (0.78 vs tcmalloc's 0.24 ms per workload): the benchmark
+  never touches its 5-25 MiB buffers, so it measures large-allocation metadata,
+  where mimalloc registers and clears page-map entries for every 64 KiB slice.
+
+### Measurement corrections made during this baseline
+
+- The first jemalloc build used `--disable-initial-exec-tls` so the native
+  harness could `dlopen` it. That made every jemalloc TLS access a
+  `__tls_get_addr` call (171 call sites; `glibc-thread` 1.862 vs 1.407 ms) and
+  crashed forked Nginx workers. jemalloc now keeps initial-exec TLS and native
+  rival workers set `GLIBC_TUNABLES=glibc.rtld.optional_static_tls=65536`. The
+  jemalloc columns in `native/` are from the slow build and are superseded by
+  `native-jemalloc/`; with the fair build, Rust's native geomean against
+  jemalloc moved from 0.7406 to 0.7980.
+- Rivals link with `-Bsymbolic-functions`; without it, jemalloc's C++
+  operators freed through glibc when `dlopen`ed `RTLD_LOCAL`.
+
+### Open items
+
+1. Confirm the single-run breaches (`rptestN` vs C; the Nginx cases) with
+   interleaved repeats before treating them as gaps.
+2. Profile tcmalloc's Nginx fast-path advantage and the `larsonN-sized` gap.
+3. `malloc-large`: a mimalloc design trade-off shared with C mimalloc; any
+   change to large-allocation metadata or caching policy needs an explicit
+   decision because it changes memory behaviour.

@@ -27,6 +27,7 @@ and the conclusion drawn from them.
 | B00 | `72fe0f4db7e2a3a6c8caafdb56944102554c7144` | Fresh current-HEAD C 3.3.2 parity baseline before E01 | `target/perf-experiments/E00-current-head-baseline/` | Accepted baseline |
 | B01 | `f6989ea2740e2aacb4026f08f5a290ac67eae010` plus the E02R working-tree diff | Behavioral-parity repairs plus accepted C-equivalent O(1) local-list transfer | `target/perf-experiments/E02R-corrected-local-o1-transfer/` | Accepted locally; commit pending |
 | B02 | `f018285` | Accepted C-equivalent trusted detached-remote scan | `target/perf-experiments/X02-trusted-remote-batch-scan/` | Accepted and committed |
+| B03 | `4b2531a` (allocator source unchanged since `59c9b02`) | Post-X11 baseline against C mimalloc, glibc, jemalloc, tcmalloc | `benchmarks/results/2026-10-13-epyc-4245p-rivals/` | Accepted; scoreboard in BENCHMARK_RESULTS.md |
 
 ## Experiment ledger
 

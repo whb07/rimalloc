@@ -1,0 +1,14 @@
+suite         rival        Rust/rival  worst scenario                      ratio  result
+nginx         c-mimalloc       0.9986  production/download-1048576         1.046  breach: debug-palloc/headers, debug-palloc/proxy-262144-on, production/download-1048576, production/upload-1048576
+nginx         glibc            0.9751  debug-palloc/upload-1048576         1.148  breach: debug-palloc/upload-1048576
+nginx         jemalloc         0.9953  production/upload-1048576           1.127  breach: production/upload-1048576
+nginx         tcmalloc         1.0108  debug-palloc/headers                1.168  breach: debug-palloc/headers
+native        c-mimalloc       0.9974  rptestN                             1.044  breach: rptestN
+native        glibc            0.6388  malloc-large-old                    1.021  WIN
+native        jemalloc         0.7980  glibc-thread                        1.023  WIN
+native        tcmalloc         0.5917  malloc-large                        3.069  breach: larsonN-sized, malloc-large
+applications  c-mimalloc       0.9992  redis                               1.003  WIN
+applications  glibc            0.9565  redis                               0.993  WIN
+applications  jemalloc         0.9663  redis                               1.003  WIN
+applications  tcmalloc         0.9861  redis                               1.037  WIN
+Ratios below 1.0 favour Rust (time for native/applications, inverse throughput for Nginx).

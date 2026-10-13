@@ -2028,7 +2028,7 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };
-        _mi_malloc_generic_typed(theap, layout, flags, usable)
+        malloc_generic_body(theap, layout, flags, usable)
     }
 }
 
@@ -2090,6 +2090,22 @@ pub(crate) unsafe fn _mi_theap_or_default_typed(
 /// nonnull, `usable` must be aligned and writable for one `usize` when accessed and must not
 /// overlap allocator metadata.
 pub(crate) unsafe fn _mi_malloc_generic_typed(
+    theap: crate::core_types::ThreadHeapPtr,
+    layout: crate::core_types::LayoutRequest,
+    flags: crate::core_types::MallocGenericFlags,
+    usable: *mut usize,
+) -> *mut c_void {
+    // SAFETY: forwards this function's contract unchanged.
+    unsafe { malloc_generic_body(theap, layout, flags, usable) }
+}
+
+/// Body of `_mi_malloc_generic_typed`, inlined into the C entry point `_mi_malloc_generic`
+/// so the medium-size path makes one call where C makes one.
+///
+/// # Safety
+/// Same contract as `_mi_malloc_generic_typed`.
+#[inline(always)]
+unsafe fn malloc_generic_body(
     theap: crate::core_types::ThreadHeapPtr,
     layout: crate::core_types::LayoutRequest,
     flags: crate::core_types::MallocGenericFlags,

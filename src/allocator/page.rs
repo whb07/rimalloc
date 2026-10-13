@@ -2186,8 +2186,7 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
         crate::internal::mi_assert_internal!(!p.is_null());
 
         if mi_page_block_size(page) > MI_SMALL_MAX_OBJ_SIZE
-            && !mi_page_immediate_available(page)
-            && !mi_page_is_expandable(page)
+            && crate::internal::mi_page_is_full(page)
         {
             mi_page_to_full(page, mi_page_queue_of(page));
         }

@@ -55,6 +55,7 @@ and the conclusion drawn from them.
 | X07 | Drop release page-map lookups that only feed debug assertions in abandon/unabandon | `_mi_ptr_page` (an Acquire page-map load) moved inside `mi_assert_internal!` in `src/allocator/arena/abandoned.rs` | **KEEP**: `xmalloc-testN` -2.1% (1.822 vs 1.861 ms, ranges disjoint), now ~1% faster than C | `benchmarks/results/2026-10-12-epyc-4245p/heldout-x07-x09.csv` |
 | X08 | Inline `_mi_arenas_page_unabandon_internal` to drop the witness stack spill | `#[inline]` hint; reverted | **NO EFFECT**: hint not taken, binary identical to X07 | Measured in the X07 session; not retained |
 | X09 | Make the hand-written fast-path layout independent of unrelated code size | `.p2align 6` anchor plus `.fill 0x20` before the `free`/`malloc` asm block in `src/raw/macros.rs` | **KEEP**: X07 alone shifted `malloc`/`free` cache-line offsets and cost `sh6benchN` +2.6%; anchored layout matches the validated one and restores parity | `benchmarks/results/2026-10-12-epyc-4245p/heldout-x07-x09.csv` |
+| X11 | Match C's full-page test after a generic large-block allocation | `_mi_malloc_generic` uses `mi_page_is_full` (`used == reserved`, C `page.c:1035`) instead of "no free list and fully extended" | **KEEP**: Nginx `proxy-262144-on` +2.2%, `proxy-65536-on` +1.6% throughput (disjoint ranges); canary screen neutral | `target/bench-runs/x11-nginx-*` (local) |
 
 ## E02 — O(1) empty-available local-list transfer
 
@@ -1178,3 +1179,28 @@ Held-out, 21 native scenarios, X07+X09 versus `c8dd865` (two rounds, four for
 clippy (no warnings), 405 tests, `check-safety-stress.sh`,
 `check-release-thread-stress.py`, ASan and TSan (with `--cap-lints=warn` for
 the nightly `unused_unsafe` drift in `src/allocator/init/cpu.rs`).
+
+## X11 — Full-page test after generic large-block allocation
+
+Decided 2026-10-13. After allocating a block larger than
+`MI_SMALL_MAX_OBJ_SIZE`, C moves the page to the full queue only when
+`used == reserved`. The translation instead tested "free list empty and page
+fully extended", which is also true while freed blocks wait in `local_free`,
+so such pages were moved to the full queue (and back on the next free) early.
+The C-equivalent predicate already existed as `crate::internal::mi_page_is_full`;
+X11 uses it at the end of `_mi_malloc_generic` in `src/allocator/page.rs`.
+
+The new `bench.py screen` canary run was neutral (geomean -0.02%, no verdict
+beyond its ~1.5% noise floor), as expected: the canaries rarely allocate
+blocks above the small-object limit. The target was Nginx large bodies.
+Rust-only Nginx A/B (production profile, proxy and transfer workloads, three
+repeats each, X11 then HEAD): `proxy-262144-on` 61.6k-62.7k vs 59.0k-61.4k
+requests/s (+2.2%), `proxy-65536-on` 152.4k-153.0k vs 149.9k-151.5k (+1.6%);
+`upload-1048576` read -6.2% on the median but its ranges overlapped completely
+(9.2k-10.2k vs 9.0k-10.1k), so it is noise. Gates: clippy (no warnings), tests,
+`check-safety-stress.sh`, `check-release-thread-stress.py`,
+`check-behavioral-parity.py`, ASan and TSan (`--cap-lints=warn`), and
+`check-miri.sh`. A deterministic regression test was not added: in a single
+thread the generic path drains `local_free` before allocating, so reaching the
+divergent state needs a queue-search interleaving that unit fixtures do not
+model.

@@ -1067,3 +1067,18 @@ per-collection cost is effectively a per-free cost. Candidates, in order:
 Two candidates were ruled out: `_mi_page_free_collect` is out-of-line in the C
 library too (14 call sites), and atomic orderings on the remote-free path are
 equal to or weaker than C's.
+
+### Follow-up: xmalloc regression recovered (October 13 2026)
+
+The bisect found `1294a69` ("Consume arena page release capabilities") as the
+first bad commit: it added a redundant release-path MemId decode to every
+reabandon attempt. Making that check debug-only (X04) and letting the
+four-instruction `_mi_option_get_fast` inline (X05) take `xmalloc-testN` from
+2.036 ms to 1.853-1.864 ms, which is +0.6% to +1.2% against C's 1.842 ms instead
+of +10.5%. Across all 21 native scenarios the new library is 0.84% faster
+(geomean) than the measured `0961a24` library, with no scenario slower than 1%;
+`glibc-thread` improved 1.74%. Applied to this run's Rust/C ratios, that puts
+the native geomean at about 0.994 (-0.6%) against C, though that projection
+combines two sessions and is not a fresh Rust/C run. Details and gates are in
+`PERFORMANCE_WORKLOG.md` (X04-X06); data is in
+`benchmarks/results/2026-10-12-epyc-4245p/heldout-x04-x05.csv`.

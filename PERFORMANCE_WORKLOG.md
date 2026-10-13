@@ -49,6 +49,9 @@ and the conclusion drawn from them.
 | X01 | Root-cause the remaining xmalloc gap without changing production source | Thread/size sweeps, normalized counters, profiles, diagnostics, and C source/assembly comparison | Complete: per-block detached-chain validation dominates the low-contention excess | `target/perf-experiments/X01-xmalloc-investigation/` |
 | X02 | Make the ordinary detached-remote scan match C while retaining hardened validation | Trusted bounded release scan; validating debug/secure/diagnostic scan | **KEEP**: +7.15% focused throughput, -6.16% instructions/free, full safety and held-out gates pass | `target/perf-experiments/X02-trusted-remote-batch-scan/` |
 | X03 | Establish the authoritative post-X02 full Rust/C scoreboard | Fresh committed B02 artifact; complete `allt` suite in both orders plus 20-sample outlier reruns | Complete: broad parity, clear xmalloc/glibc-simple wins, stable ~1% glibc-thread gap, rptest/sh8 remain noisy | `target/perf-experiments/X03-b02-full-c-comparison/` |
+| X04 | Locate the post-B02 xmalloc regression on the 12-CPU host | Bisect `f018285..5772656` with an interleaved harness control; release reabandon MemId re-check made debug-only | **KEEP**: first bad commit `1294a69`; removing the redundant check recovers 6.4% on `xmalloc-testN` | `benchmarks/results/2026-10-12-epyc-4245p/` |
+| X05 | Remove call overhead from the option read on the remote-free collection path | Allow `_mi_option_get_fast` (a four-instruction table load) to inline | **KEEP**: a further -2.9% on `xmalloc-testN`; held-out geomean -0.84%, no scenario regresses beyond +1% | `benchmarks/results/2026-10-12-epyc-4245p/heldout-x04-x05.csv` |
+| X06 | Inline reabandon so its frequent early rejection avoids a call | `#[inline]` on `_mi_arenas_page_try_reabandon_to_mapped_arena`; reverted | **REJECT**: +5.1% slower on `xmalloc-testN` with or without X05 | Measured in the X04/X05 session; not retained |
 
 ## E02 — O(1) empty-available local-list transfer
 
@@ -1065,3 +1068,80 @@ throughput at 1+1 for 64-byte uniform remote frees and 0.862x at 1024 bytes,
 despite reaching or beating C under high contention. Future performance work
 should target that remaining low-contention instruction burden without giving
 back the saturated xmalloc win or the general-suite parity established here.
+
+## X04/X05/X06 — Recover the post-B02 xmalloc regression
+
+Investigated and decided: 2026-10-12 to 2026-10-13, AMD EPYC 4245P (12 logical
+CPUs, so `xmalloc-testN` runs 12+12 threads). Every measurement used one
+harness executable from `bench.py`, a fresh process per run, Criterion with 10
+samples, 3 s measurement, and 1 s warmup, and interleaved rotating order.
+Rust/C references come from the October 12 full run (C 1.842 ms).
+
+### Bisect
+
+The October full run showed `xmalloc-testN` at +10.5% against C, versus Rust
+ahead of C at B02 on the 32-CPU host. Rebuilding B02 (`f018285`) on this host
+measured +7.1%, so the gap combined the known low-contention deficit with a
+regression. `git bisect run` used the Aug 10 library as a drift reference on
+every step (1.968-1.988 ms throughout). The history was not monotonic:
+`984e1fc` measured 1.845 ms (equal to C), `d1f39f2` 1.869 ms, and its child
+`1294a69` ("Consume arena page release capabilities") 2.044 ms.
+
+### X04 mechanism and change
+
+`1294a69` made `_mi_arenas_page_try_reabandon_to_mapped_arena` decode the
+page's MemId and compare arena, slice start, and slice count with the
+`arena_memid` argument before its early exits. Its only caller,
+`try_reabandon_mapped`, decodes that argument from the same claimed page
+immediately before the call, and the function's safety contract already
+requires that identity. C has no equivalent check. With 99.98% length-one
+detached chains in xmalloc (X01), the repeated decode runs about once per
+remote free. X04 keeps the comparison as `mi_assert_internal!`, so debug
+builds still check the contract, and removes it from release.
+
+### X05 mechanism and change
+
+The flat profile after X04 showed `_mi_option_get_fast` at 2.9% of
+`xmalloc-testN` time (C's equivalent was 4.1%), called from the collection
+path. It is a four-instruction table load that was `#[inline(never)]` since
+the source-layout commit, with no recorded reason. Allowing it to inline
+removes all three call sites. C cannot do the same: its option getters are
+exported and reached through the PLT.
+
+### Results
+
+| Library | `xmalloc-testN` median | vs C 3.3.2 |
+|---|---:|---:|
+| Before (`9f7d3c4`) | 2.036 ms | +10.5% |
+| X04 | 1.902-1.909 ms | +3.3% to +3.6% |
+| X04 + X05 | 1.853-1.864 ms | +0.6% to +1.2% |
+| X04 + X06 | 2.006 ms | rejected |
+
+The committed release library is byte-identical to the measured X04+X05
+candidate (SHA-256 prefix `228c84000ee66278`).
+
+Held-out, all 21 native scenarios, new versus old Rust library, two
+interleaved rounds each (four for the borderline `sh6benchN`, `mstressN`,
+`mleak100`, and `mleak10`): geomean **-0.84%**, no scenario slower than +1%,
+and improvements beyond 1% on `xmalloc-testN` (-8.77%), `sh6benchN` (-3.53%),
+`glibc-thread` (-1.74%), `larsonN` (-1.08%), and `larsonN-sized` (-1.03%).
+`glibc-thread` was the previously recorded stable ~1% deficit.
+
+### Verification
+
+`cargo fmt`, `cargo clippy --workspace --all-targets --all-features` (no
+warnings), and `cargo test --workspace --all-targets --all-features` (404
+passed) pass. `scripts/check-safety-stress.sh` and
+`scripts/check-release-thread-stress.py` pass. `scripts/check-sanitizers.sh`
+passes for AddressSanitizer and ThreadSanitizer with
+`RUSTFLAGS=--cap-lints=warn`; without it the current nightly fails to build
+because `__cpuid_count` became safe and `src/allocator/init/cpu.rs:22` now
+trips `unused_unsafe`. That pre-existing toolchain drift is unrelated to this
+change.
+
+### Remaining
+
+At `984e1fc` Rust matched C on this host (1.845 ms); X04+X05 leaves about
++0.6% to +1.2%. The rest of the `1294a69` reshuffle and the later
+`5f5910c..41d0e6e` creep (2.000 to 2.038 ms before these fixes) are the next
+candidates. Miri was not rerun for this change.

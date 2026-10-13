@@ -152,7 +152,7 @@ pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char
     unsafe { diagnostics::error_message(err, fmt) };
 }
 
-#[inline(never)]
+#[inline]
 pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
     #[cfg(feature = "bench-diagnostics")]
     crate::allocator::bench_diagnostics::option_read(option);

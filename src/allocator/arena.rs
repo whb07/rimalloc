@@ -2410,18 +2410,17 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
         crate::internal::mi_assert_internal!(!mi_page_all_free(page_raw));
         crate::internal::mi_assert_internal!(!mi_page_is_singleton(page_raw));
 
-        let memid_matches = match crate::core_types::MemId::view((*page_raw).memid) {
-            crate::core_types::MemIdView::Arena(current) => {
-                current.arena().as_ptr() == arena_memid.arena().as_ptr()
-                    && current.range().start_usize() == arena_memid.range().start_usize()
-                    && current.range().count_usize() == arena_memid.range().count_usize()
+        crate::internal::mi_assert_internal!(
+            match crate::core_types::MemId::view((*page_raw).memid) {
+                crate::core_types::MemIdView::Arena(current) => {
+                    current.arena().as_ptr() == arena_memid.arena().as_ptr()
+                        && current.range().start_usize() == arena_memid.range().start_usize()
+                        && current.range().count_usize() == arena_memid.range().count_usize()
+                }
+                _ => false,
             }
-            _ => false,
-        };
-        if !memid_matches
-            || mi_page_is_full_local(page_raw)
-            || mi_page_is_abandoned_mapped(page_raw)
-        {
+        );
+        if mi_page_is_full_local(page_raw) || mi_page_is_abandoned_mapped(page_raw) {
             return Err(page);
         }
 

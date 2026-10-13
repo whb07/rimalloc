@@ -351,10 +351,13 @@ core::arch::global_asm!(".globl _Znam", ".type _Znam,@function", ".set _Znam, _Z
 
 // Keep the fast override entrypoints on the validated cache-line layout. The
 // sized-delete stubs below remove an extra Rust call frame; this pad avoids
-// regressing Redis while preserving the larson win from the stubs.
+// regressing Redis while preserving the larson win from the stubs. Anchor the
+// block to a cache line so unrelated code-size changes cannot shift `free` and
+// `malloc` off that layout (`free` at line offset 32, `malloc` at offset 0).
 #[cfg(all(not(windows), mi_c_malloc_fast))]
 core::arch::global_asm!(
-    ".fill 0x30,1,0x90",
+    ".p2align 6",
+    ".fill 0x20,1,0x90",
     ".globl free",
     ".type free,@function",
     ".p2align 4",

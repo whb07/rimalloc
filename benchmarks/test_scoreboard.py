@@ -77,6 +77,27 @@ class ScoreboardTests(unittest.TestCase):
         self.assertAlmostEqual(result["c-mimalloc"]["a"], 0.95)
         self.assertAlmostEqual(result["glibc"]["a"], 0.5)
 
+    def test_caveats_flag_cross_run_and_single_repeat_values(self):
+        old = native_dir(self.root / "old", [("a", 100, 100, 100), ("b", 100, 100, 100)])
+        new = self.root / "new"
+        new.mkdir()
+        (new / "manifest.json").write_text(json.dumps({"controls": {"repeats": 3}}))
+        (new / "results.csv").write_text("scenario,metric,rust_median_ns,c_median_ns\n"
+                                         "a,per-workload,95,100\nb,per-workload,95,\n")
+        code, out = self.run_board(old, new)
+        line = next(l for l in out.splitlines() if l.startswith("native") and "c-mimalloc" in l)
+        # "a" was re-measured for both in one run; "b" pairs new Rust with old C.
+        self.assertTrue(line.endswith(" 1 cross-run"), line)
+        jemalloc = next(l for l in out.splitlines() if l.startswith("native") and "jemalloc" in l)
+        self.assertTrue(jemalloc.endswith(" 2 cross-run"), jemalloc)
+        nginx = self.root / "nginx"
+        nginx.mkdir()
+        (nginx / "manifest.json").write_text(json.dumps({"suite": "nginx", "controls": {"repeats": 1}}))
+        (nginx / "results.csv").write_text("profile,case,allocator,requests_per_second\n"
+                                           "production,static,rust,110\nproduction,static,tcmalloc,100\n")
+        code, out = self.run_board(nginx)
+        self.assertIn("1 under 3 repeats", out)
+
 
 if __name__ == "__main__":
     unittest.main()

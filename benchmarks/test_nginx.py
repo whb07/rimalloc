@@ -119,7 +119,7 @@ class NginxTests(unittest.TestCase):
             directory = self.root / relative; directory.mkdir()
             result = {"status": "complete", "config": config, "case": cases[0], "idle": [], "quality_flags": [],
                       "allocator_traffic": {"allocations_per_request": 3, "requested_bytes_per_request": 4096},
-                      "runs": [{"requests_per_second": 1000, "p99_us": 100, "peak_worker_rss_bytes": 4096,
+                      "runs": [{"requests_per_second": 1000, "p99_us": 100, "peak_worker_pss_bytes": 4096,
                                 "cpu_seconds_per_request": .00001, "errors": 0}]}
             (directory / "nginx.json").write_text(json.dumps(result))
             (directory / "config.json").write_text(json.dumps(config))

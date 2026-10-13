@@ -193,13 +193,16 @@ def worker_pids(master):
 
 
 def memory_cpu(pids):
-    rss = 0; cpu = 0; minor = 0; major = 0
+    pss = 0; cpu = 0; minor = 0; major = 0
     for pid in pids:
+        # PSS divides each page among the processes mapping it, so summing forked workers does not
+        # count their shared pages more than once (summed RSS did).
+        rollup = Path(f"/proc/{pid}/smaps_rollup").read_text().splitlines()
+        pss += int(next(line for line in rollup if line.startswith("Pss:")).split()[1]) * 1024
         fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
-        rss += int(fields[21]) * os.sysconf("SC_PAGE_SIZE")
         cpu += (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
         minor += int(fields[7]); major += int(fields[9])
-    return {"rss_bytes": rss, "cpu_seconds": cpu, "minor_faults": minor, "major_faults": major}
+    return {"pss_bytes": pss, "cpu_seconds": cpu, "minor_faults": minor, "major_faults": major}
 
 
 def trace_snapshot(directory, pids):
@@ -310,7 +313,7 @@ def wrk_run(config, case, port, seconds, directory, name, monitored):
     result = parse_wrk((directory / (name + ".log")).read_text())
     result["payload_bytes_per_second"] = result["requests_per_second"] * case.get("size", 12)
     result.update(command=command, resources=samples, worker_cpu_seconds=after["cpu_seconds"] - before["cpu_seconds"],
-                  peak_worker_rss_bytes=max((s["server"]["rss_bytes"] for s in samples), default=after["rss_bytes"]),
+                  peak_worker_pss_bytes=max((s["server"]["pss_bytes"] for s in samples), default=after["pss_bytes"]),
                   cpu_seconds_per_request=(after["cpu_seconds"] - before["cpu_seconds"]) / result["requests"])
     return result
 
@@ -461,10 +464,10 @@ def read_result(path, config):
         if len(result["idle"]) != expected or any(not phase for phase in result["idle"]):
             raise ValueError("missing idle checkpoints")
         for phase in result["idle"]:
-            if type(phase[-1]["rss_bytes"]) is not int or phase[-1]["rss_bytes"] < 0:
-                raise ValueError("invalid idle RSS")
+            if type(phase[-1]["pss_bytes"]) is not int or phase[-1]["pss_bytes"] < 0:
+                raise ValueError("invalid idle PSS")
     for run in result["runs"]:
-        for key in ("requests_per_second", "p99_us", "peak_worker_rss_bytes"):
+        for key in ("requests_per_second", "p99_us", "peak_worker_pss_bytes"):
             if type(run[key]) not in (float, int) or not math.isfinite(run[key]) or run[key] <= 0:
                 raise ValueError("invalid Nginx measurement")
         value = run["cpu_seconds_per_request"]
@@ -497,31 +500,31 @@ def report(directory, manifest=None):
                     "requests_per_second": statistics.median(statistics.median(r["requests_per_second"] for r in m["runs"]) for m in selected),
                     "payload_bytes_per_second": statistics.median(statistics.median(r.get("payload_bytes_per_second", r["requests_per_second"] * case.get("size", 12)) for r in m["runs"]) for m in selected),
                     "p99_us": statistics.median(statistics.median(r["p99_us"] for r in m["runs"]) for m in selected),
-                    "peak_worker_rss_bytes": statistics.median(max(r["peak_worker_rss_bytes"] for r in m["runs"]) for m in selected),
+                    "peak_worker_pss_bytes": statistics.median(max(r["peak_worker_pss_bytes"] for r in m["runs"]) for m in selected),
                     "cpu_seconds_per_request": statistics.median(statistics.median(r["cpu_seconds_per_request"] for r in m["runs"]) for m in selected),
                     "allocations_per_request": statistics.median(m["allocator_traffic"]["allocations_per_request"] for m in selected),
                     "requested_bytes_per_request": statistics.median(m["allocator_traffic"]["requested_bytes_per_request"] for m in selected),
-                    "idle_final_rss_bytes": statistics.median(m["idle"][-1][-1]["rss_bytes"] for m in selected) if case["workload"] == "burst-idle" else None,
+                    "idle_final_pss_bytes": statistics.median(m["idle"][-1][-1]["pss_bytes"] for m in selected) if case["workload"] == "burst-idle" else None,
                     "quality_flags": sorted({f for m in selected for f in m["quality_flags"]})})
     write_json(directory / "results.json", {"complete": complete, "summary": rows, "measurements": measurements, "errors": errors})
-    fields = ("profile", "case", "allocator", "requests_per_second", "payload_bytes_per_second", "p99_us", "peak_worker_rss_bytes", "cpu_seconds_per_request",
-              "allocations_per_request", "requested_bytes_per_request", "idle_final_rss_bytes", "quality_flags")
+    fields = ("profile", "case", "allocator", "requests_per_second", "payload_bytes_per_second", "p99_us", "peak_worker_pss_bytes", "cpu_seconds_per_request",
+              "allocations_per_request", "requested_bytes_per_request", "idle_final_pss_bytes", "quality_flags")
     with (directory / "results.csv").open("w", newline="") as out:
         writer = csv.DictWriter(out, fieldnames=fields); writer.writeheader(); writer.writerows(rows)
     lines = [f"# Nginx allocator comparison ({'complete' if complete else 'INCOMPLETE'})", "",
              "Independent run medians; HTTP p99 is wrk's closed-loop latency histogram, not allocator p99. "
-             "Peak RSS sums worker RSS (shared pages can be counted more than once). "
+             "Worker memory is summed PSS (pages shared between workers are divided among them), sampled about once a second. "
              "Allocator traffic comes from a separate instrumented preflight. "
              "CPU time is whole-worker CPU time, not allocator-only cycles. "
              "No rankings are combined between builds; this local load generator does not establish maximum sustainable throughput."]
     for profile in manifest["profiles"]:
-        lines += ["", f"## {profile}", "", "| Case | Allocator | Requests/s | HTTP p99 ms | Peak worker RSS MiB | Allocations/request | Requested bytes/request | Idle final RSS MiB |",
+        lines += ["", f"## {profile}", "", "| Case | Allocator | Requests/s | HTTP p99 ms | Peak worker PSS MiB | Allocations/request | Requested bytes/request | Idle final PSS MiB |",
                   "|---|---|---:|---:|---:|---:|---:|---:|"]
         for row in rows:
             if row["profile"] == profile:
-                idle = f"{row['idle_final_rss_bytes']/2**20:.2f}" if row["idle_final_rss_bytes"] is not None else "—"
+                idle = f"{row['idle_final_pss_bytes']/2**20:.2f}" if row["idle_final_pss_bytes"] is not None else "—"
                 lines.append(f"| {row['case']} | {row['allocator']} | {row['requests_per_second']:.0f} | {row['p99_us']/1000:.3f} | "
-                             f"{row['peak_worker_rss_bytes']/2**20:.2f} | {row['allocations_per_request']:.3f} | {row['requested_bytes_per_request']:.0f} | {idle} |")
+                             f"{row['peak_worker_pss_bytes']/2**20:.2f} | {row['allocations_per_request']:.3f} | {row['requested_bytes_per_request']:.0f} | {idle} |")
     lines += ["", "## Interpretation flags", ""]
     for row in rows:
         for flag in row["quality_flags"]:

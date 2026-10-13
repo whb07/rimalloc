@@ -18,6 +18,9 @@ RUST = {"rust", "mechanical_mimalloc_raw"}
 # Native result columns are `<allocator>_median_ns`; Nginx rows name the allocator.
 C_MIMALLOC = {"c", "mimalloc", "c-mimalloc-3.3.2"}
 TOLERANCE = {"c-mimalloc": 1.03, "other": 1.10}
+# An Nginx repeat is one load run per case, so fewer than this cannot settle a gap of about 1%.
+# Native runs take several Criterion samples per scenario within each repeat.
+MIN_REPEATS = 3
 
 
 def rival_name(allocator):
@@ -74,6 +77,21 @@ def score(suites):
     return rows
 
 
+def caveats(suites, sources, repeats):
+    """{(suite, rival): note} counting scenarios whose Rust and rival values come from different
+    runs (host drift between sessions enters the ratio) or, for Nginx, from runs with too few
+    repeats."""
+    notes = {}
+    for suite, rivals in suites.items():
+        for rival, by_scenario in rivals.items():
+            origin = [sources[(suite, scenario)] for scenario in by_scenario]
+            crossed = sum(o["rust"] != o[rival] for o in origin)
+            thin = sum(min(repeats[o["rust"]], repeats[o[rival]]) < MIN_REPEATS for o in origin) if suite == "nginx" else 0
+            parts = [f"{crossed} cross-run"] * bool(crossed) + [f"{thin} under {MIN_REPEATS} repeats"] * bool(thin)
+            notes[(suite, rival)] = ", ".join(parts)
+    return notes
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directories", nargs="+",
@@ -81,17 +99,23 @@ def main(argv=None):
     args = parser.parse_args(argv)
     # Later directories override earlier ones per scenario and allocator, so a fresh run of
     # changed allocators combines with older results for unchanged ones before ratios form.
-    values = {}
-    for directory in map(Path, args.directories):
-        suite = json.loads((directory / "manifest.json").read_text()).get("suite")
-        for key, by_allocator in (nginx_values(directory) if suite == "nginx" else native_values(directory)).items():
+    values, sources, repeats = {}, {}, []
+    for index, directory in enumerate(map(Path, args.directories)):
+        manifest = json.loads((directory / "manifest.json").read_text())
+        repeats.append(manifest.get("controls", {}).get("repeats", 1))
+        for key, by_allocator in (nginx_values(directory) if manifest.get("suite") == "nginx" else native_values(directory)).items():
             values.setdefault(key, {}).update(by_allocator)
-    rows = score(ratios(values))
-    print(f"{'suite':13} {'rival':12} {'Rust/rival':>10}  {'worst scenario':34} {'ratio':>6}  result")
+            sources.setdefault(key, {}).update(dict.fromkeys(by_allocator, index))
+    suites = ratios(values)
+    notes = caveats(suites, sources, repeats)
+    rows = score(suites)
+    print(f"{'suite':13} {'rival':12} {'Rust/rival':>10}  {'worst scenario':34} {'ratio':>6}  {'result':10} caveats")
     for suite, rival, geomean, worst, ratio, breaches, won in rows:
         result = "WIN" if won else "breach: " + ", ".join(breaches) if breaches else "LOSS"
-        print(f"{suite:13} {rival:12} {geomean:10.4f}  {worst:34} {ratio:6.3f}  {result}")
+        print(f"{suite:13} {rival:12} {geomean:10.4f}  {worst:34} {ratio:6.3f}  {result:10} {notes[(suite, rival)]}")
     print("Ratios below 1.0 favour Rust (time for native/applications, inverse throughput for Nginx).")
+    print("Caveats count scenarios whose Rust and rival values come from different runs, or Nginx cases "
+          f"from runs with fewer than {MIN_REPEATS} repeats; treat a result near 1.0 with such caveats as unsettled.")
     return 0 if all(row[-1] for row in rows) else 1
 
 

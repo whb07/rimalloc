@@ -275,7 +275,9 @@ def rocksdb_sample(config, directory, environment, commands):
 def worker(config, directory):
     directory.mkdir(parents=True, exist_ok=True)
     environment = {k: v for k, v in os.environ.items() if k != "LD_PRELOAD"}
-    environment.update(LD_PRELOAD=f"{config['library']}:libstdc++.so.6:{config['apps']['allocator_check']}",
+    # glibc is the system allocator: nothing to preload, and the check expects libc's malloc.
+    library = [] if config["library"] == "glibc" else [config["library"]]
+    environment.update(LD_PRELOAD=":".join(library + ["libstdc++.so.6", config["apps"]["allocator_check"]]),
                        BENCH_ALLOCATOR_EXPECTED=config["library"])
     result = {"schema": 1, "scenario": config["scenario"], "controls": config, "samples": [], "commands": []}
     try:

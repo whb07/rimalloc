@@ -48,6 +48,23 @@ application workloads can take much longer. More repetitions multiply that time.
 only; measurements always run sequentially. `--help` and `run --help` show the
 complete interface.
 
+## Rival allocators
+
+`run --rival glibc --rival jemalloc --rival tcmalloc` (any subset) and
+`nginx --allocator jemalloc ...` add other allocators to the comparison.
+jemalloc 5.3.0 and gperftools 2.16 (`tcmalloc_minimal`) build from pinned,
+checksummed releases into the build cache (`benchmarks/rivals.py`); glibc is the
+system allocator. Native workers `dlopen` each library `RTLD_LOCAL`, so rivals
+link with `-Bsymbolic-functions` to keep their own internal `malloc`/`free`
+calls (jemalloc's C++ operators, for example) inside the library, as when
+they are the process allocator; jemalloc also disables initial-exec TLS. For
+glibc the malloc family comes from `libc.so.6` and the C++ array operators
+from `libstdc++.so.6`. Application workers preload the rival (nothing for
+glibc) and the ownership check verifies the `malloc` library; the mimalloc
+ownership probe applies only to mimalloc builds. Reports add a median and
+Rust-vs-rival column per rival and a native geomean per rival; the
+architectural probes need mimalloc heap APIs and stay Rust vs C.
+
 ## Screening a change
 
 `./benchmarks/bench.py screen` is the inner dev loop for allocator changes. It

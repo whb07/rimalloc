@@ -63,6 +63,8 @@ struct DylibAllocator {
 enum BenchAllocator {
     Rust(&'static DylibAllocator),
     C(&'static DylibAllocator),
+    /// A rival allocator selected by name (`glibc`, or a library from `MIMALLOC_BENCH_LIB_<NAME>`).
+    Other(&'static str, &'static DylibAllocator),
 }
 
 impl BenchAllocator {
@@ -70,15 +72,16 @@ impl BenchAllocator {
         match self {
             BenchAllocator::Rust(_) => "mechanical_mimalloc_raw",
             BenchAllocator::C(_) => "c-mimalloc-3.3.2",
+            BenchAllocator::Other(name, _) => name,
         }
     }
 
     unsafe fn malloc(self, size: usize) -> *mut u8 {
         unsafe {
             match self {
-                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
-                    (alloc.malloc)(size).cast()
-                }
+                BenchAllocator::Rust(alloc)
+                | BenchAllocator::C(alloc)
+                | BenchAllocator::Other(_, alloc) => (alloc.malloc)(size).cast(),
             }
         }
     }
@@ -86,9 +89,9 @@ impl BenchAllocator {
     unsafe fn calloc(self, count: usize, size: usize) -> *mut u8 {
         unsafe {
             match self {
-                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
-                    (alloc.calloc)(count, size).cast()
-                }
+                BenchAllocator::Rust(alloc)
+                | BenchAllocator::C(alloc)
+                | BenchAllocator::Other(_, alloc) => (alloc.calloc)(count, size).cast(),
             }
         }
     }
@@ -96,9 +99,9 @@ impl BenchAllocator {
     unsafe fn realloc(self, ptr: *mut u8, size: usize) -> *mut u8 {
         unsafe {
             match self {
-                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
-                    (alloc.realloc)(ptr.cast(), size).cast()
-                }
+                BenchAllocator::Rust(alloc)
+                | BenchAllocator::C(alloc)
+                | BenchAllocator::Other(_, alloc) => (alloc.realloc)(ptr.cast(), size).cast(),
             }
         }
     }
@@ -109,7 +112,9 @@ impl BenchAllocator {
                 return;
             }
             match self {
-                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
+                BenchAllocator::Rust(alloc)
+                | BenchAllocator::C(alloc)
+                | BenchAllocator::Other(_, alloc) => {
                     (alloc.free)(ptr.cast());
                 }
             }
@@ -118,7 +123,9 @@ impl BenchAllocator {
 
     fn bench_diagnostics_reset(self) {
         let reset = match self {
-            BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => alloc.bench_diagnostics_reset,
+            BenchAllocator::Rust(alloc)
+            | BenchAllocator::C(alloc)
+            | BenchAllocator::Other(_, alloc) => alloc.bench_diagnostics_reset,
         };
         if let Some(reset) = reset {
             unsafe { reset() };
@@ -127,7 +134,9 @@ impl BenchAllocator {
 
     fn bench_diagnostics_json(self) -> Option<String> {
         let to_json = match self {
-            BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => alloc.bench_diagnostics_json,
+            BenchAllocator::Rust(alloc)
+            | BenchAllocator::C(alloc)
+            | BenchAllocator::Other(_, alloc) => alloc.bench_diagnostics_json,
         }?;
         let mut buf = vec![0 as c_char; 4096];
         let needed = unsafe { to_json(buf.as_mut_ptr(), buf.len()) };
@@ -145,9 +154,9 @@ impl BenchAllocator {
     unsafe fn memalign(self, alignment: usize, size: usize) -> *mut u8 {
         unsafe {
             match self {
-                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
-                    (alloc.memalign)(alignment, size).cast()
-                }
+                BenchAllocator::Rust(alloc)
+                | BenchAllocator::C(alloc)
+                | BenchAllocator::Other(_, alloc) => (alloc.memalign)(alignment, size).cast(),
             }
         }
     }
@@ -155,9 +164,9 @@ impl BenchAllocator {
     unsafe fn new_array(self, size: usize) -> *mut u8 {
         unsafe {
             match self {
-                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
-                    (alloc.new_array)(size).cast()
-                }
+                BenchAllocator::Rust(alloc)
+                | BenchAllocator::C(alloc)
+                | BenchAllocator::Other(_, alloc) => (alloc.new_array)(size).cast(),
             }
         }
     }
@@ -168,7 +177,9 @@ impl BenchAllocator {
                 return;
             }
             match self {
-                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
+                BenchAllocator::Rust(alloc)
+                | BenchAllocator::C(alloc)
+                | BenchAllocator::Other(_, alloc) => {
                     (alloc.delete_array)(ptr.cast());
                 }
             }
@@ -181,7 +192,9 @@ impl BenchAllocator {
                 return;
             }
             match self {
-                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
+                BenchAllocator::Rust(alloc)
+                | BenchAllocator::C(alloc)
+                | BenchAllocator::Other(_, alloc) => {
                     (alloc.delete_array_sized)(ptr.cast(), size);
                 }
             }
@@ -564,21 +577,49 @@ mod dylib {
                 "failed to dlopen allocator library: {}",
                 last_error()
             );
+            from_handles(handle, handle, Some(&expected_library))
+        }
+    }
 
+    /// glibc: the malloc family from libc and the C++ array operators from libstdc++,
+    /// which allocate through libc's malloc in this process.
+    pub fn load_system_allocator() -> DylibAllocator {
+        preload_cxx_runtime();
+        unsafe {
+            let libc = dlopen(c"libc.so.6".as_ptr(), RTLD_NOW | RTLD_LOCAL);
+            let cxx = dlopen(c"libstdc++.so.6".as_ptr(), RTLD_NOW | RTLD_LOCAL);
+            assert!(
+                !libc.is_null() && !cxx.is_null(),
+                "failed to dlopen libc/libstdc++: {}",
+                last_error()
+            );
+            from_handles(libc, cxx, None)
+        }
+    }
+
+    /// Resolve the allocator entry points; `owner`, when given, must define the C++ operators.
+    unsafe fn from_handles(
+        handle: *mut c_void,
+        cxx_handle: *mut c_void,
+        owner: Option<&Path>,
+    ) -> DylibAllocator {
+        unsafe {
             let malloc = symbol(handle, c"malloc");
             let calloc = symbol(handle, c"calloc");
             let realloc = symbol(handle, c"realloc");
             let free = symbol(handle, c"free");
             let memalign = symbol(handle, c"memalign");
-            let new_array = symbol(handle, c"_Znam");
-            let delete_array = symbol(handle, c"_ZdaPv");
-            let delete_array_sized = symbol(handle, c"_ZdaPvm");
-            for (symbol, name) in [
-                (new_array, c"_Znam"),
-                (delete_array, c"_ZdaPv"),
-                (delete_array_sized, c"_ZdaPvm"),
-            ] {
-                assert_symbol_owner(symbol, name, &expected_library);
+            let new_array = symbol(cxx_handle, c"_Znam");
+            let delete_array = symbol(cxx_handle, c"_ZdaPv");
+            let delete_array_sized = symbol(cxx_handle, c"_ZdaPvm");
+            if let Some(expected_library) = owner {
+                for (symbol, name) in [
+                    (new_array, c"_Znam"),
+                    (delete_array, c"_ZdaPv"),
+                    (delete_array_sized, c"_ZdaPvm"),
+                ] {
+                    assert_symbol_owner(symbol, name, expected_library);
+                }
             }
             let bench_diagnostics_reset = optional_symbol(handle, c"mi_bench_diagnostics_reset");
             let bench_diagnostics_json = optional_symbol(handle, c"mi_bench_diagnostics_json");
@@ -634,6 +675,10 @@ mod dylib {
             "native mimalloc-bench Criterion ports currently support shared-library allocator comparison on Linux only"
         )
     }
+
+    pub fn load_system_allocator() -> DylibAllocator {
+        load_allocator(Path::new("libc"))
+    }
 }
 
 fn rust_allocator(root: &Path) -> &'static DylibAllocator {
@@ -668,9 +713,31 @@ fn allocators(root: &Path) -> Vec<BenchAllocator> {
         .map(|name| match name.as_str() {
             "rust" | "mechanical_mimalloc_raw" => BenchAllocator::Rust(rust_allocator(root)),
             "c" | "c-mimalloc" | "c-mimalloc-3.3.2" => BenchAllocator::C(c_allocator(root)),
-            other => panic!("unknown MIMALLOC_BENCH_ALLOCATORS entry `{other}`"),
+            other => BenchAllocator::Other(
+                Box::leak(other.to_owned().into_boxed_str()),
+                other_allocator(other),
+            ),
         })
         .collect()
+}
+
+/// A rival allocator: `glibc`, or the library named by `MIMALLOC_BENCH_LIB_<NAME>`.
+fn other_allocator(name: &str) -> &'static DylibAllocator {
+    let allocator = if name == "glibc" {
+        dylib::load_system_allocator()
+    } else {
+        let variable = format!(
+            "MIMALLOC_BENCH_LIB_{}",
+            name.to_ascii_uppercase().replace('-', "_")
+        );
+        let path = env::var_os(&variable).unwrap_or_else(|| {
+            panic!(
+                "unknown MIMALLOC_BENCH_ALLOCATORS entry `{name}`; set {variable} to its library"
+            )
+        });
+        dylib::load_allocator(Path::new(&path))
+    };
+    Box::leak(Box::new(allocator))
 }
 
 fn bench_diagnostics_path() -> Option<PathBuf> {

@@ -18,10 +18,11 @@ import sys
 import time
 
 import applications
+import rivals
 from common import file_sha256, write_json
 
 WORKLOADS = ("static", "churn", "headers", "proxy", "transfer", "burst-idle")
-ALLOCATORS = ("rust", "mimalloc", "glibc")
+ALLOCATORS = ("rust", "mimalloc", "glibc", "jemalloc", "tcmalloc")
 SOURCES = {
     "nginx": ("1.28.0", "https://nginx.org/download/nginx-1.28.0.tar.gz", "c6b5c6b086c0df9d3ca3ff5e084c1d0ef909e6038279c71c1c3e985f576ff76a"),
     "wrk": ("4.2.0", "https://codeload.github.com/wg/wrk/tar.gz/refs/tags/4.2.0", "e255f696bff6e329f5d19091da6b06164b8d59d62cb9e673625bdcd27fe7bdad"),
@@ -428,7 +429,7 @@ def cpu_set(value):
 
 def add_arguments(parser, positive, default_jobs):
     parser.add_argument("--workload", action="append", choices=WORKLOADS)
-    parser.add_argument("--allocator", action="append", choices=ALLOCATORS, help="default: rust and mimalloc; glibc is optional")
+    parser.add_argument("--allocator", action="append", choices=ALLOCATORS, help="default: rust and mimalloc; glibc, jemalloc, tcmalloc are optional")
     parser.add_argument("--profile", action="append", choices=("production", "debug-palloc"), help="default: both, reported separately")
     parser.add_argument("--workers", type=positive, default=2)
     parser.add_argument("--connections", type=positive, default=256)
@@ -568,6 +569,10 @@ def run(args, driver):
     with driver.run_lifecycle(path, manifest, manifest["jobs"]):
         core = driver.build(args.jobs, harness=False); manifest["core_artifacts"] = core
         artifacts = build(core, profiles, args.jobs, driver)
+        built = [a for a in allocators if a in ("jemalloc", "tcmalloc")]
+        if built:
+            manifest["rival_artifacts"] = rivals.build(built, core, args.jobs, driver)
+            artifacts["libraries"].update(manifest["rival_artifacts"]["libraries"])
         manifest["artifacts"] = artifacts
         driver.copy_build_logs(core, directory, "core-")
         for log in artifacts["logs"]: shutil.copy2(Path(artifacts["cache"]) / log, directory / log)

@@ -22,9 +22,10 @@ class NginxTests(unittest.TestCase):
     def test_defaults_and_allocator_scope(self):
         args = bench.parse_args(["nginx"])
         self.assertIsNone(args.allocator)
-        self.assertEqual(nginx.ALLOCATORS, ("rust", "mimalloc", "glibc"))
+        self.assertEqual(nginx.ALLOCATORS, ("rust", "mimalloc", "glibc", "jemalloc", "tcmalloc"))
+        self.assertEqual(bench.parse_args(["nginx", "--allocator", "jemalloc"]).allocator, ["jemalloc"])
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            bench.parse_args(["nginx", "--allocator", "jemalloc"])
+            bench.parse_args(["nginx", "--allocator", "hoard"])
 
     def test_workloads_cover_proxy_modes_and_transfer_sizes(self):
         cases = nginx.cases(nginx.WORKLOADS)

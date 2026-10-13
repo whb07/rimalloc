@@ -176,6 +176,20 @@ class EntryPointTests(unittest.TestCase):
         self.assertTrue(bench.report(self.root))
         self.assertEqual(before, (self.root / "summary.md").read_bytes())
 
+    def test_report_adds_rival_columns_and_geomeans(self):
+        manifest = self.saved_run((10,))
+        relative = "round-001/glibc-thread/glibc"
+        fixture(self.root / relative, "glibc-thread", "glibc", 40)
+        manifest["workers"].append({"directory": relative, "exit_status": 0})
+        manifest["allocators"] = [*bench.ALLOCATORS, "glibc"]
+        bench.write_json(self.root / "manifest.json", manifest)
+        self.assertTrue(bench.report(self.root))
+        results = json.loads((self.root / "results.json").read_text())
+        self.assertEqual(results["rival_geomeans"], {"glibc": 0.25})
+        row = results["summary"][0]
+        self.assertEqual((row["glibc_median_ns"], row["rust_glibc_ratio"]), (40, 0.25))
+        self.assertIn("Rust vs glibc", (self.root / "summary.md").read_text())
+
     def test_missing_allocator_makes_report_incomplete(self):
         manifest = self.saved_run()
         manifest["workers"].pop()

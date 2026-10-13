@@ -7,6 +7,7 @@ import argparse
 import architecture
 import applications
 import nginx
+import rivals
 import contextlib
 import csv
 import hashlib
@@ -29,6 +30,7 @@ from common import file_sha256, write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOCATORS = ("mechanical_mimalloc_raw", "c-mimalloc-3.3.2")
+SHORT_NAMES = {"mechanical_mimalloc_raw": "rust", "c-mimalloc-3.3.2": "c"}
 QUICK = ("glibc-thread", "malloc-large", "cache-scratch1", "xmalloc-testN")
 SCENARIOS = dict.fromkeys((
     "glibc-simple", "malloc-large", "malloc-large-old", "cache-scratch1",
@@ -263,6 +265,8 @@ def worker_environment(artifacts: dict, args: argparse.Namespace, criterion: Pat
                        scenario: str, allocator: str) -> dict[str, str]:
     environment = {key: value for key, value in without_preload().items()
                    if not key.startswith("MIMALLOC_BENCH_")}
+    environment.update({f"MIMALLOC_BENCH_LIB_{name.upper()}": path
+                        for name, path in artifacts.get("rivals", {}).items() if path != "glibc"})
     environment.update({
         "MIMALLOC_RUST_LIB": artifacts["rust_library"], "MIMALLOC_C_LIB": artifacts["c_library"],
         "MIMALLOC_BENCH_SKIP_BUILD": "1", "MIMALLOC_BENCH_SCENARIOS": scenario,
@@ -311,11 +315,13 @@ def report(directory: Path) -> bool:
         return nginx.report(directory, manifest)
     if manifest.get("suite") == "architecture":
         return architecture.report(directory, manifest)
+    allocators = manifest.get("allocators", list(ALLOCATORS))
+    rival_names = allocators[2:]
     measurements = []
     errors = []
     for scenario in manifest["scenarios"]:
         for repeat in range(1, manifest["controls"]["repeats"] + 1):
-            for allocator in ALLOCATORS:
+            for allocator in allocators:
                 relative = f"round-{repeat:03}/{scenario}/{allocator}"
                 try:
                     worker = next((w for w in manifest["workers"] if w["directory"] == relative), None)
@@ -336,29 +342,41 @@ def report(directory: Path) -> bool:
     rows = []
     for scenario in manifest["scenarios"]:
         values = {allocator: [r for r in measurements if r["scenario"] == scenario and r["allocator"] == allocator]
-                  for allocator in ALLOCATORS}
+                  for allocator in allocators}
         if any(len(v) != manifest["controls"]["repeats"] for v in values.values()):
             continue
-        rust, c = (statistics.median(r["median"] for r in values[a]) for a in ALLOCATORS)
-        rows.append({"scenario": scenario, "metric": SCENARIOS[scenario], "rust_median_ns": rust,
-                     "c_median_ns": c, "rust_c_ratio": rust / c, "difference_pct": (rust / c - 1) * 100,
-                     "noisy": any(r["noisy"] for v in values.values() for r in v)})
+        medians = {a: statistics.median(r["median"] for r in values[a]) for a in allocators}
+        rust, c = medians[ALLOCATORS[0]], medians[ALLOCATORS[1]]
+        row = {"scenario": scenario, "metric": SCENARIOS[scenario], "rust_median_ns": rust,
+               "c_median_ns": c, "rust_c_ratio": rust / c, "difference_pct": (rust / c - 1) * 100,
+               "noisy": any(r["noisy"] for v in values.values() for r in v)}
+        for name in rival_names:
+            row[f"{name}_median_ns"] = medians[name]
+            row[f"rust_{name}_ratio"] = rust / medians[name]
+        rows.append(row)
     complete = not errors and bool(rows) and manifest["status"] == "complete"
     native_rows = [r for r in rows if r["scenario"] in NATIVE_SCENARIOS]
     geomean = math.exp(statistics.mean(math.log(r["rust_c_ratio"]) for r in native_rows)) if complete and native_rows else None
+    rival_geomeans = {name: math.exp(statistics.mean(math.log(r[f"rust_{name}_ratio"]) for r in native_rows))
+                      for name in rival_names} if complete and native_rows else {}
     lines = ["# Isolated Rust and C comparison", "", f"Status: {'complete' if complete else 'INCOMPLETE'}.", "",
              "Each scenario and allocator runs in a fresh process. Negative differences mean less time for Rust.",
              "Medians aggregate repetition medians. Noise describes within-run variation; p95 is a batch statistic,",
              "not individual allocation latency. This exploratory report does not apply release thresholds.", "",
-             "| Scenario | Metric | Rust median | C median | Rust vs C | Noise |",
-             "|---|---|---:|---:|---:|---|"]
+             "| Scenario | Metric | Rust median | C median | Rust vs C | "
+             + "".join(f"{name} median | Rust vs {name} | " for name in rival_names) + "Noise |",
+             "|---|---|---:|---:|---:|" + "---:|---:|" * len(rival_names) + "---|"]
     for row in rows:
+        rival_cells = "".join(f"{SUMMARY.format_time(row[f'{name}_median_ns'])} | "
+                              f"{(row[f'rust_{name}_ratio'] - 1) * 100:+.2f}% | " for name in rival_names)
         lines.append(f"| {row['scenario']} | {row['metric']} | {SUMMARY.format_time(row['rust_median_ns'])} | "
-                     f"{SUMMARY.format_time(row['c_median_ns'])} | {row['difference_pct']:+.2f}% | "
+                     f"{SUMMARY.format_time(row['c_median_ns'])} | {row['difference_pct']:+.2f}% | {rival_cells}"
                      f"{'noisy' if row['noisy'] else 'stable'} |")
     if geomean is not None:
-        lines += ["", f"Native scenario geomean Rust/C: {geomean:.4f} ({(geomean - 1) * 100:+.2f}%).",
-                  "An unweighted scenario geomean does not predict application-wide performance."]
+        lines += ["", f"Native scenario geomean Rust/C: {geomean:.4f} ({(geomean - 1) * 100:+.2f}%)."]
+        lines += [f"Native scenario geomean Rust/{name}: {g:.4f} ({(g - 1) * 100:+.2f}%)."
+                  for name, g in rival_geomeans.items()]
+        lines += ["An unweighted scenario geomean does not predict application-wide performance."]
     if manifest.get("unavailable"):
         lines += ["", "Unavailable on this host: " + ", ".join(manifest["unavailable"])]
     if errors:
@@ -372,11 +390,12 @@ def report(directory: Path) -> bool:
     lines += applications.report_lines(measurements)
     (directory / "summary.md").write_text("\n".join(lines) + "\n")
     fields = ["scenario", "metric", "rust_median_ns", "c_median_ns", "rust_c_ratio", "difference_pct", "noisy"]
+    fields += [f"{prefix}{name}{suffix}" for name in rival_names for prefix, suffix in (("", "_median_ns"), ("rust_", "_ratio"))]
     with (directory / "results.csv").open("w") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
-    write_json(directory / "results.json", {"complete": complete, "geomean": geomean,
+    write_json(directory / "results.json", {"complete": complete, "geomean": geomean, "rival_geomeans": rival_geomeans,
                                             "summary": rows, "measurements": measurements, "errors": errors})
     print("\n".join(lines), flush=True)
     print(f"\nReport: {directory / 'summary.md'}", flush=True)
@@ -390,16 +409,22 @@ def compare(args: argparse.Namespace) -> int:
     controls = {name: getattr(args, name) for name in ("samples", "measurement_secs", "warmup_secs", "repeats",
                                                        "app_operations", "app_threads", "app_value_size", "app_timeout")}
     selected = list(SCENARIOS) if args.full else args.scenario or list(QUICK)
-    manifest = run_manifest(scenarios=selected, controls=controls, process_layout="isolated-scenario-allocator",
-                            workers=[])
+    allocators = list(ALLOCATORS) + list(dict.fromkeys(args.rival or []))
+    manifest = run_manifest(scenarios=selected, controls=controls, allocators=allocators,
+                            process_layout="isolated-scenario-allocator", workers=[])
     path = directory / "manifest.json"
     write_json(path, manifest)
     print(f"Results: {directory}\nScenarios: {', '.join(selected)}\nControls: {controls}", flush=True)
     print("Measurement seconds are a target, not a cap on fixed-duration workloads.", flush=True)
     with run_lifecycle(path, manifest, manifest["workers"]):
         artifacts = build(args.jobs)
+        if args.rival:
+            manifest["rival_artifacts"] = rivals.build(allocators[2:], artifacts, args.jobs, sys.modules[__name__])
+            artifacts["rivals"] = manifest["rival_artifacts"]["libraries"]
         manifest["artifacts"] = artifacts
         copy_build_logs(artifacts, directory)
+        libraries = {ALLOCATORS[0]: artifacts["rust_library"], ALLOCATORS[1]: artifacts["c_library"],
+                     **artifacts.get("rivals", {})}
         app_selected = [s for s in selected if s in applications.SCENARIOS]
         if app_selected:
             manifest["application_artifacts"] = applications.build(app_selected, artifacts, args.jobs, sys.modules[__name__])
@@ -409,8 +434,8 @@ def compare(args: argparse.Namespace) -> int:
                 shutil.copy2(log, directory / ("application-" + log.name))
         listing = execute([artifacts["executable"], "--bench", "--list"], directory / "list.log",
                           worker_environment(artifacts, args, directory / "listing", ",".join(NATIVE_SCENARIOS),
-                                             ",".join(ALLOCATORS)))
-        unavailable = [s for s in selected if s in NATIVE_SCENARIOS and not all(full_id(s, a) + ": benchmark" in listing for a in ALLOCATORS)]
+                                             ",".join(allocators)))
+        unavailable = [s for s in selected if s in NATIVE_SCENARIOS and not all(full_id(s, a) + ": benchmark" in listing for a in allocators)]
         if unavailable and (not args.full or set(unavailable) - {"cache-scratchN", "cache-thrashN"}):
             raise BenchError("scenarios unavailable on this host: " + ", ".join(unavailable))
         manifest["unavailable"] = unavailable
@@ -418,7 +443,9 @@ def compare(args: argparse.Namespace) -> int:
         manifest["status"] = "running"
         write_json(path, manifest)
         for repeat in range(1, args.repeats + 1):
-            order = ALLOCATORS if repeat % 2 else ALLOCATORS[::-1]
+            # Rotate the start allocator each round (alternates Rust/C when there are two).
+            shift = (repeat - 1) % len(allocators)
+            order = allocators[shift:] + allocators[:shift]
             for scenario in manifest["scenarios"]:
                 for allocator in order:
                     relative = f"round-{repeat:03}/{scenario}/{allocator}"
@@ -429,7 +456,7 @@ def compare(args: argparse.Namespace) -> int:
                         config = {"scenario": scenario, "samples": args.samples,
                                   "operations": args.app_operations, "threads": args.app_threads,
                                   "value_size": args.app_value_size, "timeout": args.app_timeout,
-                                  "library": artifacts["rust_library" if allocator == ALLOCATORS[0] else "c_library"],
+                                  "library": libraries[allocator],
                                   "apps": manifest["application_artifacts"]}
                         config_path = directory / relative / "config.json"
                         config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -562,6 +589,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     selection = run.add_mutually_exclusive_group()
     selection.add_argument("--full", action="store_true", help="all native scenarios plus Redis and RocksDB (downloads and builds them)")
     selection.add_argument("--scenario", action="append", choices=sorted(SCENARIOS), help="select a case; repeat for more")
+    run.add_argument("--rival", action="append", choices=rivals.NAMES,
+                     help="also measure this allocator (builds pinned jemalloc/tcmalloc); repeat for more")
     run.add_argument("--samples", type=lambda v: minimum(v, 10), default=10)
     run.add_argument("--measurement-secs", type=minimum, default=3)
     run.add_argument("--warmup-secs", type=minimum, default=1)

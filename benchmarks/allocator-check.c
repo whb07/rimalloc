@@ -17,14 +17,18 @@ __attribute__((constructor)) static void check_allocator(void) {
   bool (*owned)(const void*) = (bool (*)(const void*))dlsym(RTLD_DEFAULT, "mi_check_owned");
   void* (*allocate)(size_t) = (void* (*)(size_t))malloc_symbol;
   void (*release)(void*) = (void (*)(void*))dlsym(RTLD_DEFAULT, "free");
-  if (!expected || !marker || !allocate || !release || !owned ||
-      !dladdr(malloc_symbol, &info) || !realpath(expected, wanted) ||
-      !realpath(info.dli_fname, actual) || strcmp(wanted, actual)) {
+  // "glibc" expects malloc from libc itself; other names are the preloaded library's path.
+  bool system = expected && strcmp(expected, "glibc") == 0;
+  if (!expected || !marker || !allocate || !release || !dladdr(malloc_symbol, &info) ||
+      !realpath(info.dli_fname, actual) ||
+      (system ? strstr(actual, "/libc.so") == NULL
+              : !realpath(expected, wanted) || strcmp(wanted, actual) != 0)) {
     fputs("benchmark allocator check: wrong malloc library\n", stderr);
     _exit(121);
   }
+  // Ownership is only provable for mimalloc builds; other allocators pass on the owner check.
   void* p = allocate(64);
-  if (!p || !owned(p)) {
+  if (!p || (owned && !owned(p))) {
     fputs("benchmark allocator check: malloc block not owned\n", stderr);
     _exit(121);
   }

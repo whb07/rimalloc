@@ -15,11 +15,14 @@ SOURCES = {
 }
 # The harness dlopens each library with RTLD_LOCAL, so a rival's own calls to malloc/free
 # (jemalloc's C++ operators, for example) would bind to glibc's; -Bsymbolic-functions binds
-# them to the library itself, as when it is the process allocator. jemalloc must not use
-# initial-exec TLS to be dlopened; tcmalloc_minimal omits the profiler and libunwind.
+# them to the library itself, as when it is the process allocator. jemalloc keeps its default
+# initial-exec TLS: --disable-initial-exec-tls made every TLS access a __tls_get_addr call
+# (about 24% slower on glibc-thread) and crashed forked Nginx workers. Native workers instead
+# reserve static TLS for it (STATIC_TLS_TUNABLE). tcmalloc_minimal omits the profiler and libunwind.
 SYMBOLIC = "LDFLAGS=-Wl,-Bsymbolic-functions"
+STATIC_TLS_TUNABLE = "glibc.rtld.optional_static_tls=65536"
 BUILDS = {
-    "jemalloc": ("jemalloc", ["--disable-initial-exec-tls", SYMBOLIC], "build_lib_shared", "lib/libjemalloc.so.2"),
+    "jemalloc": ("jemalloc", [SYMBOLIC], "build_lib_shared", "lib/libjemalloc.so.2"),
     "tcmalloc": ("gperftools", ["--enable-minimal", "--disable-static", SYMBOLIC], "libtcmalloc_minimal.la",
                  ".libs/libtcmalloc_minimal.so"),
 }

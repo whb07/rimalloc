@@ -176,6 +176,18 @@ class EntryPointTests(unittest.TestCase):
         self.assertTrue(bench.report(self.root))
         self.assertEqual(before, (self.root / "summary.md").read_bytes())
 
+    def test_rival_workers_get_static_tls_room(self):
+        artifacts = {"rust_library": "rust.so", "c_library": "c.so",
+                     "rivals": {"jemalloc": "/lib/libjemalloc.so.2", "glibc": "glibc"}}
+        args = bench.parse_args(["run"])
+        listing = bench.worker_environment(artifacts, args, self.root, "glibc-thread", "mechanical_mimalloc_raw,jemalloc")
+        self.assertEqual(listing["GLIBC_TUNABLES"], bench.rivals.STATIC_TLS_TUNABLE)
+        self.assertEqual(listing["MIMALLOC_BENCH_LIB_JEMALLOC"], "/lib/libjemalloc.so.2")
+        self.assertNotIn("MIMALLOC_BENCH_LIB_GLIBC", listing)
+        with patch.dict(os.environ, {}, clear=True):
+            rust = bench.worker_environment(artifacts, args, self.root, "glibc-thread", "mechanical_mimalloc_raw")
+        self.assertNotIn("GLIBC_TUNABLES", rust)
+
     def test_report_adds_rival_columns_and_geomeans(self):
         manifest = self.saved_run((10,))
         relative = "round-001/glibc-thread/glibc"

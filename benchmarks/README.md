@@ -57,7 +57,10 @@ checksummed releases into the build cache (`benchmarks/rivals.py`); glibc is the
 system allocator. Native workers `dlopen` each library `RTLD_LOCAL`, so rivals
 link with `-Bsymbolic-functions` to keep their own internal `malloc`/`free`
 calls (jemalloc's C++ operators, for example) inside the library, as when
-they are the process allocator; jemalloc also disables initial-exec TLS. For
+they are the process allocator. jemalloc keeps its initial-exec TLS (disabling
+it routes every TLS access through `__tls_get_addr`, about 24% slower, and
+crashed forked Nginx workers); rival native workers set
+`GLIBC_TUNABLES=glibc.rtld.optional_static_tls=65536` so it can be `dlopen`ed. For
 glibc the malloc family comes from `libc.so.6` and the C++ array operators
 from `libstdc++.so.6`. Application workers preload the rival (nothing for
 glibc) and the ownership check verifies the `malloc` library; the mimalloc

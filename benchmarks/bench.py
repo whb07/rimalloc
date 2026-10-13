@@ -267,6 +267,9 @@ def worker_environment(artifacts: dict, args: argparse.Namespace, criterion: Pat
                    if not key.startswith("MIMALLOC_BENCH_")}
     environment.update({f"MIMALLOC_BENCH_LIB_{name.upper()}": path
                         for name, path in artifacts.get("rivals", {}).items() if path != "glibc"})
+    if set(allocator.split(",")) & set(artifacts.get("rivals", {})):
+        # Rivals with initial-exec TLS (jemalloc) need static TLS room to be dlopened.
+        environment["GLIBC_TUNABLES"] = rivals.STATIC_TLS_TUNABLE
     environment.update({
         "MIMALLOC_RUST_LIB": artifacts["rust_library"], "MIMALLOC_C_LIB": artifacts["c_library"],
         "MIMALLOC_BENCH_SKIP_BUILD": "1", "MIMALLOC_BENCH_SCENARIOS": scenario,

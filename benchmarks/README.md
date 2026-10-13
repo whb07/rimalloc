@@ -125,7 +125,7 @@ Both are integrated into `run`, `list`, `report`, and `run --full`:
 
 ```bash
 ./benchmarks/bench.py run --scenario redis --scenario rocksdb
-./benchmarks/bench.py run --scenario redis --scenario rocksdb --repeats 3 --app-operations 1000000
+./benchmarks/bench.py run --scenario redis --scenario rocksdb --repeats 3
 ./benchmarks/bench.py build --applications --jobs 4
 ```
 
@@ -151,8 +151,11 @@ Workers fail if this proof is missing. Redis clients and the Python runner use
 the system allocator. Inherited `LD_PRELOAD` is removed from every worker and
 recorded in the manifest as `caller_ld_preload_removed`.
 
-Defaults are ten samples per allocator, 100,000 operations, one application
-thread and 256-byte values. Each sample uses a fresh application process; round
+Defaults are ten samples per allocator, 1,000,000 operations, one application
+thread and 256-byte values. `redis-benchmark` reports throughput from a
+millisecond clock, so at 100,000 requests both allocators produced identical
+rates; 1,000,000 gives about 0.2% resolution (CV 0.6-1.9%) and the two
+applications together still take under a minute per allocator. Each sample uses a fresh application process; round
 order alternates Rust/C as for native scenarios. Controls:
 
 - `--app-operations`: Redis requests **per command**, RocksDB writes **per thread**.

@@ -566,7 +566,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     run.add_argument("--measurement-secs", type=minimum, default=3)
     run.add_argument("--warmup-secs", type=minimum, default=1)
     run.add_argument("--repeats", type=minimum, default=1)
-    run.add_argument("--app-operations", type=minimum, default=100000, help="Redis requests per command / RocksDB writes per thread")
+    run.add_argument("--app-operations", type=minimum, default=1000000, help="Redis requests per command / RocksDB writes per thread")
     run.add_argument("--app-threads", type=minimum, default=1, help="Redis client / RocksDB worker threads")
     run.add_argument("--app-value-size", type=minimum, default=256, help="application value bytes")
     run.add_argument("--app-timeout", type=minimum, default=120, help="timeout in seconds per application command")

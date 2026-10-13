@@ -30,7 +30,6 @@ use crate::prim::{mi_os_mem_config_t, mi_process_info_t};
 use crate::types::{mi_msecs_t, mi_theap_t};
 
 pub const MI_UNIX_PRIM_C: () = ();
-pub const _DEFAULT_SOURCE: () = ();
 pub const MAC_OS_X_VERSION_10_7: c_int = 1070;
 pub const MI_HAS_SYSCALL_H: bool = cfg!(any(target_os = "linux", target_os = "freebsd"));
 pub const MI_UNIX_LARGE_PAGE_SIZE: usize = 2 * MI_MiB;

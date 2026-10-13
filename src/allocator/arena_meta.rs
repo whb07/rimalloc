@@ -37,7 +37,6 @@ pub const MI_META_BLOCK_SIZE: usize = 1 << (16 - MI_BFIELD_BITS_SHIFT);
 pub const MI_META_BLOCK_ALIGN: usize = MI_META_BLOCK_SIZE;
 pub const MI_META_BLOCKS_PER_PAGE: usize = MI_META_PAGE_SIZE / MI_META_BLOCK_SIZE;
 pub const MI_META_MAX_SIZE: usize = MI_BCHUNK_SIZE * MI_META_BLOCK_SIZE;
-pub const _Atomic: () = ();
 
 #[repr(C)]
 pub struct mi_meta_page_s {

@@ -53,20 +53,6 @@ core::arch::global_asm!(".hidden subproc_main");
 const MI_MAX_ARENAS: usize = 160;
 pub const MI_TLD_INVALID: *mut mi_tld_t = core::ptr::dangling_mut::<mi_tld_t>();
 
-#[allow(non_snake_case)]
-pub const fn MI_STAT_COUNT_NULL() -> mi_stat_count_t {
-    mi_stat_count_t {
-        total: 0,
-        peak: 0,
-        current: 0,
-    }
-}
-
-#[allow(non_snake_case)]
-pub const fn MI_STAT_COUNT<T: Copy>(_stat: T) -> mi_stat_count_t {
-    MI_STAT_COUNT_NULL()
-}
-
 pub const fn mi_memid_none() -> mi_memid_t {
     crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw()
 }
@@ -488,8 +474,6 @@ static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
 pub(crate) static mut _mi_cpu_stosb_max: usize = 0;
 
 pub(crate) static mut _mi_process_is_initialized: bool = false;
-
-pub(crate) static mut _mi_cpu_has_popcnt: bool = false;
 
 #[repr(C)]
 struct MiSubprocPrefix {

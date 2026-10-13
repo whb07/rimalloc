@@ -73,7 +73,7 @@ pub(crate) use crate::platform::os::{
 #[cfg(windows)]
 pub(crate) use crate::platform::os::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint};
 pub(crate) use crate::platform::{_mi_allocator_done, _mi_allocator_init};
-use crate::types::{mi_block_t, mi_heap_t, mi_output_fun, mi_page_queue_t, mi_page_t, mi_theap_t};
+use crate::types::{mi_block_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_theap_t};
 #[cfg(test)]
 pub use block_link::mi_block_set_nextx;
 pub use block_link::{
@@ -97,9 +97,6 @@ pub(crate) use page_metadata::{
     mi_page_block_size_typed, mi_page_committed_typed, mi_page_usable_block_size,
 };
 
-pub const MI_INTERNAL_H: () = ();
-pub const _Atomic: () = ();
-
 pub const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
 pub const MI_SECURE: usize = if cfg!(feature = "secure") { 4 } else { 0 };
 pub const MI_TRACK_ASAN: usize = crate::allocator::tracking::MI_TRACK_ASAN;
@@ -110,34 +107,10 @@ pub const MI_PAGE_META_IS_SEPARATED: usize = if MI_PAGE_MAP_FLAT != 0 { 0 } else
 pub const MI_BIG_ENDIAN: usize = if cfg!(target_endian = "big") { 1 } else { 0 };
 pub const __wasi__: usize = if cfg!(target_os = "wasi") { 1 } else { 0 };
 
-pub const mi_decl_cache_align: usize = 64;
-pub const mi_decl_forceinline: () = ();
-pub const mi_decl_thread: () = ();
-pub const mi_decl_weak: () = ();
-pub const mi_decl_cold: () = ();
-pub const mi_decl_noinline: () = ();
-pub const mi_decl_noreturn: () = ();
-pub const mi_decl_hidden: () = ();
-pub const mi_decl_externc: () = ();
-pub const mi_decl_maybe_unused: () = ();
-pub const MI_INIT4: usize = 4;
-pub const MI_INIT8: usize = 8;
-pub const MI_INIT16: usize = 16;
-pub const MI_INIT32: usize = 32;
-pub const MI_INIT64: usize = 64;
-pub const MI_INIT128: usize = 128;
-pub const MI_INIT256: usize = 256;
-pub const MI_INIT74: usize = 74;
-pub const MI_INIT5: usize = 5;
-pub const MI_INIT6: usize = 6;
-
 pub const MI_PAGE_MAP_SUB_SHIFT: usize = 13;
 pub const MI_PAGE_MAP_SUB_COUNT: usize = 1usize << MI_PAGE_MAP_SUB_SHIFT;
 pub const MI_PAGE_MAP_SHIFT: usize = MI_MAX_VABITS - MI_PAGE_MAP_SUB_SHIFT - MI_ARENA_SLICE_SHIFT;
 pub const MI_PAGE_MAP_COUNT: usize = 1usize << MI_PAGE_MAP_SHIFT;
-
-pub const MI_BLOCK_TAG_ALIGNED: usize = 0;
-pub const MI_BLOCK_TAG_GUARDED: usize = !MI_BLOCK_TAG_ALIGNED;
 
 pub type mi_submap_t = *mut *mut mi_page_t;
 
@@ -242,31 +215,6 @@ pub unsafe fn _mi_memzero_var<T>(x: *mut T) {
     unsafe {
         ptr::write_bytes(x, 0, 1);
     }
-}
-
-unsafe extern "C" {
-    pub fn _mi_fputs(
-        out: Option<mi_output_fun>,
-        arg: *mut c_void,
-        prefix: *const c_char,
-        message: *const c_char,
-    );
-    pub fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, fmt: *const c_char, ...);
-    pub fn _mi_raw_message(fmt: *const c_char, ...);
-    pub fn _mi_message(fmt: *const c_char, ...);
-    pub fn _mi_options_init();
-    pub fn _mi_options_post_init();
-
-    pub fn _mi_is_redirected() -> bool;
-    pub fn _mi_is_main_thread() -> bool;
-    pub fn _mi_thread_seq_id() -> usize;
-
-    pub fn _mi_malloc_generic(
-        theap: *mut mi_theap_t,
-        size: usize,
-        zero_huge_alignment: usize,
-        usable: *mut usize,
-    ) -> *mut c_void;
 }
 
 #[inline]
@@ -665,30 +613,6 @@ pub(crate) const fn mi_committed_bytes_of_slices(
     bcount: usize,
 ) -> crate::core_types::CommittedBytes {
     crate::core_types::CommittedBytes::new(mi_size_of_slices(bcount))
-}
-
-#[inline]
-pub const fn _mi_random_shuffle(mut x: usize) -> usize {
-    if x == 0 {
-        x = 17;
-    }
-    #[cfg(target_pointer_width = "64")]
-    {
-        x ^= x >> 30;
-        x = x.wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        x ^= x >> 27;
-        x = x.wrapping_mul(0x94d0_49bb_1331_11eb);
-        x ^= x >> 31;
-    }
-    #[cfg(target_pointer_width = "32")]
-    {
-        x ^= x >> 16;
-        x = x.wrapping_mul(0x7feb_352d);
-        x ^= x >> 15;
-        x = x.wrapping_mul(0x846c_a68b);
-        x ^= x >> 16;
-    }
-    x
 }
 
 #[inline]

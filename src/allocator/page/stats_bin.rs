@@ -40,16 +40,6 @@ pub(crate) unsafe fn mi_page_bin_typed(page: *const mi_page_t) -> crate::core_ty
     unsafe { crate::core_types::Bin::new_unchecked(bin as u16) }
 }
 
-/// # Safety
-/// `page` must satisfy `mi_page_bin_typed`; this raw compatibility projection
-/// returns only the classified bin index and does not extend the page lifetime.
-#[inline]
-pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
-    // SAFETY: the raw caller provides the live stable page classification required by the typed
-    // projection, whose bounded result is returned unchanged.
-    unsafe { mi_page_bin_typed(page).as_usize() }
-}
-
 #[inline]
 pub(crate) unsafe fn _mi_page_stats_bin_typed(
     page: *const mi_page_t,

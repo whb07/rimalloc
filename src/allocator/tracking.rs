@@ -4,9 +4,6 @@ use core::ffi::c_void;
 
 use crate::core_types::TrackMode;
 
-#[allow(dead_code)]
-pub const MI_TRACK_H: () = ();
-
 pub(crate) const MI_TRACK_MODE: TrackMode = TrackMode::CURRENT;
 pub const MI_TRACK_VALGRIND: usize = MI_TRACK_MODE.valgrind_flag();
 pub const MI_TRACK_ASAN: usize = MI_TRACK_MODE.asan_flag();

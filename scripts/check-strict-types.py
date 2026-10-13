@@ -57,7 +57,6 @@ def is_test_source(path: pathlib.Path) -> bool:
     return (
         path.name == "tests.rs"
         or path.name.endswith("_tests.rs")
-        or "page_batch_tests" in path.parts
         or path.name == "concurrency_models.rs"
     )
 

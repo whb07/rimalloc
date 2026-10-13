@@ -14,15 +14,9 @@ use core::ffi::{c_char, c_int, c_void};
 
 pub type mi_nothrow_t = *mut c_void;
 
-pub const MI_OSX_IS_INTERPOSED: usize = 0;
 #[cfg(target_os = "macos")]
 pub const MI_OSX_ZONE: usize = 0;
-pub const MI_FORWARD: () = ();
-pub const MI_FORWARD1: () = ();
-pub const MI_FORWARD02: () = ();
-pub const MI_FORWARD3: () = ();
 
-mod header_forwarding;
 mod linux_libc;
 
 pub use linux_libc::{
@@ -554,11 +548,6 @@ pub struct mi_interpose_s {
 }
 
 unsafe impl Sync for mi_interpose_s {}
-
-pub use header_forwarding::{
-    MI_INTERPOSE_DECLS, mi_aligned_alloc_forward, mi_forward1, mi_forward02, mi_forward3,
-    mi_interpose_fun, mi_malloc_good_size_forward, mi_malloc_size_forward, mi_vfree_forward,
-};
 
 #[cfg(all(target_os = "macos", mi_osx_interpose))]
 macro_rules! MI_INTERPOSE_FUN {
@@ -1290,107 +1279,6 @@ pub unsafe extern "C" fn mi_cxx_new_array_32_aligned_nothrow(
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
-pub unsafe fn mi_operator_new_array_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
-    crate::internal::MI_UNUSED(&tag);
-    unsafe { crate::mimalloc::mi_new_nothrow(n) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_delete_sized(p: *mut c_void, n: usize) {
-    unsafe { crate::mimalloc::mi_free_size(p, n) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_delete_array_sized(p: *mut c_void, n: usize) {
-    unsafe { crate::mimalloc::mi_free_size(p, n) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_delete_array_aligned(p: *mut c_void, al: usize) {
-    unsafe { crate::mimalloc::mi_free_aligned(p, al) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_delete_sized_aligned(p: *mut c_void, n: usize, al: usize) {
-    unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_delete_array_sized_aligned(p: *mut c_void, n: usize, al: usize) {
-    unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_delete_aligned_nothrow(p: *mut c_void, al: usize, tag: mi_nothrow_t) {
-    crate::internal::MI_UNUSED(&tag);
-    unsafe { crate::mimalloc::mi_free_aligned(p, al) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_delete_array_aligned_nothrow(
-    p: *mut c_void,
-    al: usize,
-    tag: mi_nothrow_t,
-) {
-    crate::internal::MI_UNUSED(&tag);
-    unsafe { crate::mimalloc::mi_free_aligned(p, al) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_new_aligned(n: usize, al: usize) -> *mut c_void {
-    unsafe { crate::mimalloc::mi_new_aligned(n, al) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_new_array_aligned(n: usize, al: usize) -> *mut c_void {
-    unsafe { crate::mimalloc::mi_new_aligned(n, al) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_new_aligned_nothrow(
-    n: usize,
-    al: usize,
-    tag: mi_nothrow_t,
-) -> *mut c_void {
-    crate::internal::MI_UNUSED(&tag);
-    unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_operator_new_array_aligned_nothrow(
-    n: usize,
-    al: usize,
-    tag: mi_nothrow_t,
-) -> *mut c_void {
-    crate::internal::MI_UNUSED(&tag);
-    unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 pub unsafe fn mi_unix_malloc(size: usize) -> *mut c_void {
     unsafe {
@@ -1862,13 +1750,6 @@ pub unsafe extern "C" fn mi_unix_reallocarray_export(
     size: usize,
 ) -> *mut c_void {
     unsafe { mi_unix_reallocarray(p, count, size) }
-}
-
-/// # Safety
-/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[inline]
-pub unsafe fn mi_unix_reallocarr(ptrp: *mut *mut c_void, count: usize, size: usize) -> c_int {
-    unsafe { crate::mimalloc::mi_reallocarr(ptrp, count, size) }
 }
 
 #[cfg(all(target_os = "linux", not(mi_sanitizer_runtime), not(miri)))]

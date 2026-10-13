@@ -15,14 +15,7 @@ use crate::types::mi_block_t;
 #[cfg(test)]
 use core::ptr;
 
-use super::{flags, mi_page_used_count};
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
-    unsafe { flags::mi_page_is_full(page) }
-}
+use super::mi_page_used_count;
 
 /// # Safety
 /// `page` must point to valid page metadata.

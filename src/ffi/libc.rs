@@ -10,21 +10,12 @@ use core::ffi::{c_char, c_int, c_void};
 use core::fmt;
 use core::ptr;
 
-use crate::bits::MI_SIZE_BITS;
-
 #[cfg(unix)]
 unsafe extern "C" {
     fn vsnprintf(buf: *mut c_char, bufsize: usize, fmt: *const c_char, args: *mut c_void) -> c_int;
 }
 
 pub const MI_NEXTC: &str = "c = *in; if (c==0) break; in++;";
-pub const mi_mask_even_bits32: u32 = 0x5555_5555;
-pub const mi_mask_even_nibbles32: u32 = 0x0F0F_0F0F;
-pub const mi_mask_even_bits64: u64 = 0x5555_5555_5555_5555;
-pub const mi_mask_even_nibbles64: u64 = 0x0F0F_0F0F_0F0F_0F0F;
-#[cfg(target_pointer_width = "32")]
-const MI_MASK_EVEN_PAIRS32: u32 = 0x3333_3333;
-const MI_MASK_EVEN_PAIRS64: u64 = 0x3333_3333_3333_3333;
 
 #[inline]
 fn as_bytes_ptr(p: *const c_char) -> *const u8 {
@@ -69,32 +60,6 @@ pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char,
         i += 1;
     }
     0
-}
-
-/// # Safety
-///
-/// `s` and `t`, when non-null, must point to readable nul-terminated C strings.
-#[inline(never)]
-#[allow(clippy::many_single_char_names)]
-pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) -> bool {
-    if s.is_null() && t.is_null() {
-        return true;
-    }
-    if s.is_null() || t.is_null() {
-        return false;
-    }
-    let mut i = 0usize;
-    loop {
-        let a = unsafe { *as_bytes_ptr(s).add(i) };
-        let b = unsafe { *as_bytes_ptr(t).add(i) };
-        if a != b {
-            return false;
-        }
-        if a == 0 {
-            return true;
-        }
-        i += 1;
-    }
 }
 
 /// # Safety
@@ -222,179 +187,6 @@ pub(crate) unsafe extern "C" fn _mi_getenv(
         return false;
     }
     unsafe { crate::prim::_mi_prim_getenv(name, result, result_size) }
-}
-
-#[inline]
-fn mi_outc(c: c_char, out: &mut *mut c_char, end: *mut c_char) {
-    let p = *out;
-    if (p as usize) >= (end as usize) {
-        return;
-    }
-    unsafe {
-        *p = c;
-    }
-    *out = unsafe { p.add(1) };
-}
-
-#[inline(never)]
-unsafe fn mi_out_num(
-    mut x: u128,
-    base: usize,
-    prefix: c_char,
-    out: &mut *mut c_char,
-    end: *mut c_char,
-) {
-    if x == 0 || base == 0 || base > 16 {
-        if prefix != 0 {
-            mi_outc(prefix, out, end);
-        }
-        mi_outc(b'0' as c_char, out, end);
-        return;
-    }
-
-    let start = *out;
-    while x > 0 {
-        let digit = (x % base as u128) as u8;
-        let c = if digit <= 9 {
-            b'0' + digit
-        } else {
-            b'A' + digit - 10
-        };
-        mi_outc(c as c_char, out, end);
-        x /= base as u128;
-    }
-    if prefix != 0 {
-        mi_outc(prefix, out, end);
-    }
-    let len = unsafe { (*out).offset_from(start) as usize };
-    for i in 0..(len / 2) {
-        unsafe {
-            let c = *start.add(len - i - 1);
-            *start.add(len - i - 1) = *start.add(i);
-            *start.add(i) = c;
-        }
-    }
-}
-
-#[inline]
-#[cfg(target_pointer_width = "32")]
-fn mi_byte_sum32(mut x: u32) -> usize {
-    x += x << 8;
-    x += x << 16;
-    (x >> 24) as usize
-}
-
-#[inline]
-fn mi_byte_sum64(mut x: u64) -> usize {
-    x += x << 8;
-    x += x << 16;
-    x += x << 32;
-    (x >> 56) as usize
-}
-
-#[inline]
-fn mi_ctz_generic32(x: u32) -> usize {
-    const DEBRUIJN: [u8; 32] = [
-        0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16, 7,
-        26, 12, 18, 6, 11, 5, 10, 9,
-    ];
-    if x == 0 {
-        32
-    } else {
-        DEBRUIJN[((x & x.wrapping_neg()).wrapping_mul(0x077C_B531)) as usize >> 27] as usize
-    }
-}
-
-#[inline]
-fn mi_clz_generic32(mut x: u32) -> usize {
-    const DEBRUIJN: [u8; 32] = [
-        31, 22, 30, 21, 18, 10, 29, 2, 20, 17, 15, 13, 9, 6, 28, 1, 23, 19, 11, 3, 16, 14, 7, 24,
-        12, 4, 8, 25, 5, 26, 27, 0,
-    ];
-    if x == 0 {
-        return 32;
-    }
-    x |= x >> 1;
-    x |= x >> 2;
-    x |= x >> 4;
-    x |= x >> 8;
-    x |= x >> 16;
-    DEBRUIJN[(x.wrapping_mul(0x07C4_ACDD)) as usize >> 27] as usize
-}
-
-#[inline]
-#[cfg(target_pointer_width = "32")]
-fn mi_popcount_generic32(mut x: u32) -> usize {
-    x = x - ((x >> 1) & mi_mask_even_bits32);
-    x = (x & MI_MASK_EVEN_PAIRS32) + ((x >> 2) & MI_MASK_EVEN_PAIRS32);
-    x = (x + (x >> 4)) & mi_mask_even_nibbles32;
-    mi_byte_sum32(x)
-}
-
-#[inline]
-fn mi_popcount_generic64(mut x: u64) -> usize {
-    x = x - ((x >> 1) & mi_mask_even_bits64);
-    x = (x & MI_MASK_EVEN_PAIRS64) + ((x >> 2) & MI_MASK_EVEN_PAIRS64);
-    x = (x + (x >> 4)) & mi_mask_even_nibbles64;
-    mi_byte_sum64(x)
-}
-
-#[inline]
-pub extern "C" fn _mi_ctz_generic(x: usize) -> usize {
-    if x == 0 {
-        return MI_SIZE_BITS;
-    }
-    #[cfg(target_pointer_width = "32")]
-    {
-        mi_ctz_generic32(x as u32)
-    }
-    #[cfg(target_pointer_width = "64")]
-    {
-        let lo = x as u32;
-        if lo != 0 {
-            mi_ctz_generic32(lo)
-        } else {
-            32 + mi_ctz_generic32((x >> 32) as u32)
-        }
-    }
-}
-
-#[inline]
-pub extern "C" fn _mi_clz_generic(x: usize) -> usize {
-    if x == 0 {
-        return MI_SIZE_BITS;
-    }
-    #[cfg(target_pointer_width = "32")]
-    {
-        mi_clz_generic32(x as u32)
-    }
-    #[cfg(target_pointer_width = "64")]
-    {
-        let hi = (x >> 32) as u32;
-        if hi != 0 {
-            mi_clz_generic32(hi)
-        } else {
-            32 + mi_clz_generic32(x as u32)
-        }
-    }
-}
-
-#[inline(never)]
-pub(crate) extern "C" fn _mi_popcount_generic(x: usize) -> usize {
-    if x <= 1 {
-        return x;
-    }
-    if !x == 0 {
-        return MI_SIZE_BITS;
-    }
-    #[cfg(target_pointer_width = "32")]
-    {
-        mi_popcount_generic32(x as u32)
-    }
-    #[cfg(target_pointer_width = "64")]
-    {
-        mi_popcount_generic64(x as u64)
-    }
 }
 
 pub(crate) fn mi_vsnprintf_args(buf: &mut [c_char], args: fmt::Arguments<'_>) -> i32 {

@@ -3,7 +3,7 @@
 use core::ffi::c_void;
 use core::ptr;
 
-use crate::types::{mi_page_flags_t, mi_page_t, mi_theap_t};
+use crate::types::{mi_page_t, mi_theap_t};
 
 use super::{MI_LARGE_MAX_OBJ_SIZE, counts::mi_page_capacity_count};
 
@@ -30,20 +30,6 @@ pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {
 /// # Safety
 /// `page` must point to mutable page metadata owned by this allocator.
 #[inline]
-pub unsafe fn mi_page_flags_set(page: *mut mi_page_t, set: bool, newflag: mi_page_flags_t) -> bool {
-    unsafe {
-        let Some(flag) = crate::core_types::PageFlags::new(newflag) else {
-            crate::internal::mi_assert_internal!(false);
-            return false;
-        };
-        let page = crate::core_types::PagePtr::new_unchecked(page);
-        mi_page_flags_set_typed(page, set, flag)
-    }
-}
-
-/// # Safety
-/// `page` must point to mutable page metadata owned by this allocator.
-#[inline]
 unsafe fn mi_page_flags_set_typed(
     page: crate::core_types::PagePtr,
     set: bool,
@@ -63,16 +49,6 @@ pub unsafe fn mi_page_is_in_full(page: *const mi_page_t) -> bool {
     unsafe {
         crate::core_types::PageFlags::from_low_bits(crate::internal::mi_page_flags(page))
             .contains(crate::core_types::PageFlags::IN_FULL_QUEUE)
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
-    unsafe {
-        !crate::internal::mi_page_immediate_available(page)
-            && !crate::internal::mi_page_is_expandable(page)
     }
 }
 

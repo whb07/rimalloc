@@ -347,5 +347,4 @@ unsafe fn detach_local_free_batch(
 }
 
 #[cfg(test)]
-#[path = "../page_batch_tests/tests.rs"]
 mod tests;

@@ -56,8 +56,6 @@ pub use zeroed::{
     mi_calloc, mi_heap_calloc, mi_heap_zalloc, mi_theap_calloc, mi_theap_zalloc, mi_zalloc,
 };
 
-pub const _DEFAULT_SOURCE: () = ();
-
 /// # Safety
 /// `local_theap` must be the live current-thread heap that owns `available`; its
 /// local queues, free list, direct cache, and statistics must be exclusively

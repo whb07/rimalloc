@@ -73,24 +73,11 @@ pub(super) fn mi_detect_cpu_features() {
         if mi_cpuid(&mut cpu_info, 7, 1) {
             fsrs = (cpu_info[1] & (1 << 11)) != 0;
         }
-        if mi_cpuid(&mut cpu_info, 1, 0) {
-            // SAFETY: process initialization holds the one-time init witness;
-            // this feature flag is published before allocator readers proceed.
-            unsafe { super::_mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0 };
-        }
         if fsrs || (amd && fsrm) {
             // SAFETY: process initialization holds the one-time init witness;
             // this threshold is published before allocator readers proceed.
             unsafe { super::_mi_cpu_stosb_max = 127 };
         }
-    }
-
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: `mi_process_init_inner` calls this under its one-time process-init
-    // witness, before allocator readers proceed, so this AArch64 baseline
-    // feature publication has unique write access and is frozen afterward.
-    unsafe {
-        super::_mi_cpu_has_popcnt = true;
     }
 }
 

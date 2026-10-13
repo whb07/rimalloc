@@ -10,8 +10,6 @@ macro_rules! MI_ZU {
     };
 }
 
-pub const MI_BITS_H: () = ();
-
 #[cfg(target_pointer_width = "64")]
 pub const MI_INTPTR_SHIFT: usize = 3;
 #[cfg(target_pointer_width = "32")]
@@ -34,43 +32,6 @@ pub const MI_SIZE_BITS: usize = usize::BITS as usize;
 pub const MI_KiB: usize = MI_ZU!(1024);
 pub const MI_MiB: usize = MI_KiB * MI_KiB;
 pub const MI_GiB: usize = MI_MiB * MI_KiB;
-
-#[cfg(target_arch = "aarch64")]
-pub const MI_ARCH_ARM64: usize = 1;
-#[cfg(not(target_arch = "aarch64"))]
-pub const MI_ARCH_ARM64: usize = 0;
-
-#[cfg(target_arch = "x86_64")]
-pub const MI_ARCH_X64: usize = 1;
-#[cfg(not(target_arch = "x86_64"))]
-pub const MI_ARCH_X64: usize = 0;
-
-#[cfg(target_arch = "x86")]
-pub const MI_ARCH_X86: usize = 1;
-#[cfg(not(target_arch = "x86"))]
-pub const MI_ARCH_X86: usize = 0;
-
-#[cfg(target_arch = "arm")]
-pub const MI_ARCH_ARM32: usize = 1;
-#[cfg(not(target_arch = "arm"))]
-pub const MI_ARCH_ARM32: usize = 0;
-
-#[cfg(target_arch = "riscv64")]
-pub const MI_ARCH_RISCV: usize = 1;
-#[cfg(target_arch = "riscv32")]
-pub const MI_ARCH_RISCV: usize = 1;
-#[cfg(not(any(target_arch = "riscv64", target_arch = "riscv32")))]
-pub const MI_ARCH_RISCV: usize = 0;
-
-#[cfg(target_arch = "riscv32")]
-pub const MI_ARCH_RISCV32: usize = 1;
-#[cfg(not(target_arch = "riscv32"))]
-pub const MI_ARCH_RISCV32: usize = 0;
-
-#[cfg(target_arch = "riscv64")]
-pub const MI_ARCH_RISCV64: usize = 1;
-#[cfg(not(target_arch = "riscv64"))]
-pub const MI_ARCH_RISCV64: usize = 0;
 
 #[cfg(target_arch = "x86_64")]
 pub const __BMI2__: usize = 1;
@@ -98,43 +59,6 @@ pub const MI_MAX_VABITS: usize = 48;
 pub const MI_PAGE_MAP_FLAT: usize = 1;
 #[cfg(not(target_pointer_width = "32"))]
 pub const MI_PAGE_MAP_FLAT: usize = 0;
-
-#[cfg(target_arch = "x86_64")]
-pub const MI_HAS_FAST_POPCOUNT: usize = 1;
-#[cfg(not(target_arch = "x86_64"))]
-pub const MI_HAS_FAST_POPCOUNT: usize = 0;
-
-#[cfg(any(
-    target_arch = "x86_64",
-    target_arch = "x86",
-    target_arch = "aarch64",
-    target_arch = "arm"
-))]
-pub const MI_HAS_FAST_BITSCAN: usize = 1;
-#[cfg(not(any(
-    target_arch = "x86_64",
-    target_arch = "x86",
-    target_arch = "aarch64",
-    target_arch = "arm"
-)))]
-pub const MI_HAS_FAST_BITSCAN: usize = 0;
-
-pub type mi_ssize_t = isize;
-
-#[inline]
-pub(crate) fn _mi_popcount_generic(x: usize) -> usize {
-    x.count_ones() as usize
-}
-
-#[inline]
-pub(crate) fn _mi_ctz_generic(x: usize) -> usize {
-    x.trailing_zeros() as usize
-}
-
-#[inline]
-pub(crate) fn _mi_clz_generic(x: usize) -> usize {
-    x.leading_zeros() as usize
-}
 
 #[inline]
 pub fn mi_popcount(x: usize) -> usize {

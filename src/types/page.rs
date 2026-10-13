@@ -19,6 +19,7 @@ impl PageFlags {
     pub(crate) const IN_FULL_QUEUE: Self = Self(MI_PAGE_IN_FULL_QUEUE);
     pub(crate) const HAS_INTERIOR_POINTERS: Self = Self(MI_PAGE_HAS_INTERIOR_POINTERS);
 
+    #[cfg(test)]
     #[inline(always)]
     pub(crate) const fn new(bits: usize) -> Option<Self> {
         if (bits & !MI_PAGE_FLAG_MASK) == 0 {

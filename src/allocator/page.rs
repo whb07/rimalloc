@@ -65,10 +65,10 @@ pub use flags::{
     mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full, mi_page_set_in_full,
     mi_page_set_theap, mi_page_theap,
 };
+#[allow(unused_imports)]
+pub use lifecycle::_mi_page_free_collect;
 #[cfg(test)]
 pub(crate) use lifecycle::collect_page_free_lists_local;
-#[allow(unused_imports)]
-pub use lifecycle::{_mi_page_free_collect, mi_page_is_full};
 pub(crate) use lifecycle::{
     _mi_page_free_collect_partly_typed, collect_page_free_lists_abandoned,
     collect_remote_for_owned_abandoned_page, mi_page_decrement_retire_expire,
@@ -84,9 +84,9 @@ use queues::{
     mi_page_queue_push_typed, mi_theap_contains_queue, mi_theap_direct_cache_start,
     mi_theap_queue_index,
 };
-pub(crate) use stats_bin::mi_page_bin_typed;
 #[allow(unused_imports)]
-pub use stats_bin::{_mi_page_stats_bin, mi_page_bin};
+pub use stats_bin::_mi_page_stats_bin;
+pub(crate) use stats_bin::mi_page_bin_typed;
 pub use validation::_mi_page_is_valid;
 pub(crate) use validation::mi_page_is_valid_init;
 
@@ -94,7 +94,6 @@ pub const MI_OS_PAGE_SIZE: usize = 4096;
 pub const MI_SMALL_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
 pub const MI_MEDIUM_PAGE_SIZE: usize = 8 * MI_SMALL_PAGE_SIZE;
 pub const MI_LARGE_PAGE_SIZE: usize = MI_SIZE_SIZE * MI_MEDIUM_PAGE_SIZE;
-pub const MI_IN_PAGE_C: () = ();
 pub const MI_MAX_SLICE_SHIFT: usize = 6;
 pub const MI_MIN_SLICES: usize = 2;
 pub const MI_PAGE_OSPAGE_BLOCK_ALIGN2: usize = 4 * MI_KiB;
@@ -105,7 +104,6 @@ pub const MI_MEDIUM_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {
     MI_MEDIUM_PAGE_SIZE / 8
 };
 pub const MI_LARGE_MAX_OBJ_SIZE: usize = MI_LARGE_MAX_OBJ_WSIZE * size_of::<usize>();
-pub const MI_MAX_RETIRE_SIZE: usize = MI_LARGE_MAX_OBJ_SIZE;
 pub const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 
 const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;

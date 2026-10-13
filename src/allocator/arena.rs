@@ -78,8 +78,6 @@ pub const MI_META_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_BLOCK_START_MAX_OFFSET: usize = 8 * MI_INTPTR_BITS;
 // Retains upstream diagnostic/color constants and traversal markers used by
 // compatibility paths outside the routine Rust test target.
-#[allow(dead_code, non_upper_case_globals)]
-pub const mi_forall_arenas_end: () = ();
 
 const MI_MAX_ARENAS: usize = 160;
 const MI_ARENA_BIN_COUNT: usize = MI_BIN_COUNT;

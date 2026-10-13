@@ -39,7 +39,7 @@ use crate::allocator::init::{
     _mi_theap_cached_expansion_slot, _mi_theap_cached_key, _mi_theap_cached_slot,
     _mi_theap_default_expansion_slot, _mi_theap_default_key, _mi_theap_default_slot,
 };
-use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
+use crate::bits::MI_INTPTR_SIZE;
 use crate::core_types::{PagePtr, ThreadHeapPtr};
 #[cfg(target_os = "emscripten")]
 pub(crate) use crate::types::mi_msecs_t;
@@ -47,13 +47,6 @@ pub(crate) use crate::types::mi_process_info_t;
 use crate::types::{
     MI_THREADID_ABANDONED_MAPPED, mi_heap_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
 };
-
-pub const MIMALLOC_PRIM_H: () = ();
-pub const MI_USE_SBRK: usize = if cfg!(target_os = "wasi") { 1 } else { 0 };
-pub const mi_attr_constructor: () = ();
-pub const mi_attr_destructor: () = ();
-pub const MI_PRIM_HAS_PROCESS_ATTACH: usize = 0;
-pub const MI_PRIM_HAS_ALLOCATOR_INIT: usize = 0;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -69,8 +62,6 @@ pub struct mi_os_mem_config_t {
     pub has_transparent_huge_pages: bool,
 }
 
-pub const MI_HAS_TLS_SLOT: bool = cfg!(any(windows, target_os = "macos", target_arch = "x86_64"));
-
 pub const MI_TLS_MODEL_THREAD_LOCAL: bool = cfg!(not(any(
     windows,
     target_os = "macos",
@@ -84,12 +75,6 @@ pub const MI_TLS_MODEL_FIXED_SLOT: bool = cfg!(all(
 pub const MI_TLS_MODEL_DYNAMIC_WIN32: bool = cfg!(windows);
 pub const MI_TLS_MODEL_DYNAMIC_PTHREADS: bool =
     cfg!(any(target_os = "openbsd", target_os = "android"));
-pub const MI_USE_BUILTIN_THREAD_POINTER: bool = cfg!(all(
-    not(target_os = "macos"),
-    not(target_env = "musl"),
-    not(target_os = "cygwin"),
-    any(target_arch = "aarch64", target_arch = "x86_64")
-));
 
 pub const MI_TLS_MODEL_FIXED_SLOT_DEFAULT: usize = 108;
 pub const MI_TLS_MODEL_FIXED_SLOT_CACHED: usize = 109;
@@ -101,14 +86,6 @@ pub const MI_TLS_EXPANSION_SLOT: usize = if MI_INTPTR_SIZE == 4 {
 } else {
     0x1780 / MI_INTPTR_SIZE
 };
-
-pub const MI_PRIM_HUGE_PAGE_SIZE: usize = MI_GiB;
-pub const MI_PRIM_OSX_IMPL_SOURCE: &str = "../unix/prim.c";
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct mi_init_done_t;
-
-pub static mi_init_done: mi_init_done_t = mi_init_done_t;
 
 #[cfg(any(
     miri,

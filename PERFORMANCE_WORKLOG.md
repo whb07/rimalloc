@@ -66,6 +66,7 @@ and the conclusion drawn from them.
 | X18 | Make the medium-size generic path one call, like C | Inline the generic body into `_mi_malloc_generic` (the C entry point) instead of wrapping `_mi_malloc_generic_typed` | **KEEP**: 213.6 -> 205.6 instructions/op; with X17, medium sizes 7.5-10.1% faster; `larsonN-sized` +0.24% to +1.02% recorded | Recorded in the X17/X18 section |
 | X19 | C-equivalent fast path for the generic (medium-size) malloc hit case | `malloc_generic_fast`: count, quick-collect the size class's first page, pop; every other case continues with C's remaining steps out of line | **KEEP**: 8 KiB pair 205.6 -> 169.7 instructions (C 193.3); 8-16 KiB requests 3.5-7% faster, at or below C; held-out and Nginx neutral | Recorded below |
 | X20 | Send C++ sized delete straight to the `free` fast path | `_ZdlPvm`/`_ZdaPvm` become aliases of `free` instead of a stub jumping to `mi_free` through the PLT | **KEEP**: sized new[]/delete[] pair 56.34 -> 53.34 instructions (unsized 52.34, C 63.38); `larsonN-sized` -0.82% (4 of 5 rounds) | Recorded below |
+| X21 | Stop abandoning full pages while the owner is alive | `page_full_retain` default 0 -> -1 (`allow_page_abandon` false: full pages go to the owner's full queue); reverted | **REJECT**: `larsonN` -2.0%, `larsonN-sized` -2.4%, but `xmalloc-testN` +318% (4x slower) | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1437,3 +1438,27 @@ establish a block's page or owner.
 Gates: fmt, clippy, tests, release C++ artifacts, C++ operator-new parity,
 public and ABI symbols, release LD_PRELOAD, release thread stress,
 differential trace, behavioral parity.
+
+## X21 — Keep full pages in the owner's full queue (rejected)
+
+Decided 2026-10-13, from the tcmalloc Larson gap after X20. Per allocation on
+`larsonN`, Rust executes fewer instructions than tcmalloc (196.7 vs 203.6;
+C 213.3) but runs at lower IPC (1.30 vs 1.38): 3x the branch misses (0.132
+vs 0.044) and about 20% more L1 data misses (6.01 vs 4.88). A branch-miss
+profile put 17.5% of Rust's misses in `_mi_page_abandon_internal`; abandon,
+reclaim, and unown together took about 6% of cycles. Like C 3.3.2,
+`mi_page_to_full` abandons a page that fills up whenever
+`page_full_retain >= 0` (C: "the usual case in order to allow for sharing of
+memory between theaps"), and Larson's owner then frees into it, claims it
+back, and reclaims it.
+
+`MIMALLOC_PAGE_FULL_RETAIN=-1` disables that (the search behaves as with 0;
+only abandonment changes): `larsonN` Rust 2.434 -> 2.396 ms, C 2.634 -> 2.381
+(three runs each). As a built-in default, the canary screen gave `larsonN`
+-1.98% and `larsonN-sized` -2.44%, but `xmalloc-testN` +318.55% (+311% to
++378% in every round): producers' full pages stay in their full queues while
+consumers free into them remotely, instead of being reclaimed by the freeing
+thread. C reserves the full-queue path for heaps that cannot abandon. Reverted.
+The Larson cost of the abandon round trip remains; a fix would have to make
+an owner's free into its own just-abandoned page cheaper, not stop
+abandoning.

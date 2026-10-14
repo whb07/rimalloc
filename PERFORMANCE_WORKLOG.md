@@ -69,6 +69,7 @@ and the conclusion drawn from them.
 | X21 | Stop abandoning full pages while the owner is alive | `page_full_retain` default 0 -> -1 (`allow_page_abandon` false: full pages go to the owner's full queue); reverted | **REJECT**: `larsonN` -2.0%, `larsonN-sized` -2.4%, but `xmalloc-testN` +318% (4x slower) | Recorded below |
 | X22 | Stop loading libstdc++ into every process | The C++ `operator new` shim looks up `std::get_new_handler` and `std::__throw_bad_alloc` with `dlsym` on allocation failure instead of linking `-lstdc++` | **KEEP**: axum json server PSS under load 19.06 -> 17.87 MiB (C mimalloc 17.82); C++ `new` behaviour unchanged | Recorded below |
 | X23 | Reuse a block freed by its owner next (LIFO), as jemalloc does, keeping C's maintenance cadence with a per-free countdown | Owner frees push onto `page.free`; a 64-free theap countdown parks the page's free list on `local_free` when maintenance is due; reverted, never on master | **REJECT**: LIFO alone cut plaintext L1 misses 72 -> 47 per request and won the native screen (geomean -1.33%), but the countdown costs about 2 cycles per free: `glibc-thread` +8%, `glibc-simple` +6%, `larsonN` +1.6% versus HEAD | Recorded below |
+| X24 | Make the page abandon/reclaim round trip cheaper without changing C behavior | Skip `mi_page_set_in_full`'s atomic RMW when the owner-only flag already matches; read the arena purge guard before its CAS; reverted, never on master | **REJECT**: no gain outside noise. No-op skip vs HEAD: `rptestN` -1.2%, `larsonN-sized` -0.6%, `larsonN` +0.1%; guard read on top: `rptestN` +0.5%, `larsonN` +0.9% | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1540,3 +1541,39 @@ Counting only frees that empty a page would cost nothing on the fast path,
 but a size class whose page also holds long-lived objects then never reaches
 maintenance (0 callbacks with 64 live blocks of the same size), a larger
 divergence from C than the one approved. Not pursued.
+
+## X24 — Cheaper abandon/reclaim round trip, C-equivalent (rejected)
+
+Decided 2026-10-14. At X16's `page_full_retain=0`, Rust and C run `rptestN`
+within about 1% of each other, so the remaining cost of abandoning full pages
+and reclaiming them on free is shared with C. The profile (`perf record`,
+Criterion steady state, `MIMALLOC_PAGE_FULL_RETAIN=0`) put the round trip at
+about 5 to 8% of cycles on `rptestN` and `larsonN`. Within it, nearly all
+samples land on locked instructions on the page's first cache line:
+`_mi_page_abandon_internal` 68% on the `lock btr` that clears the in-full flag
+and 21% on the owner-clearing CAS; `_mi_theap_page_reclaim` 56-64% on the
+owner-setting CAS and 19-43% on a `lock btr` that clears an in-full flag an
+abandoned page never has; `_mi_arenas_collect` 99% on the global purge-guard
+CAS. C executes the same atomics.
+
+Two implementation-only changes were tried. (1) `mi_page_set_in_full` returns
+early when the flag already has the requested value; only the owner writes it,
+so a relaxed read is exact and the RMW was a no-op. (2) The atomic guard reads
+the word before its CAS, which is the same as C's CAS failing at the load.
+Interleaved Criterion runs (6 rounds, median):
+
+| Scenario | (1) vs HEAD | (1)+(2) vs (1) |
+|---|---|---|
+| `rptestN` | -1.20% | +0.47% |
+| `larsonN` | +0.12% | +0.89% |
+| `larsonN-sized` | -0.58% | not run |
+
+The (1) build ran `rptestN` at 115.9 ms in the second comparison, against
+116.0 ms for HEAD in the first, so its gain is within run-to-run noise. A
+locked instruction waits for earlier stores to drain, and those stores miss:
+page headers that other threads free into, and the neighbouring pages' queue
+links. Removing one lock moves the wait to the next. The cost is the cache
+traffic of handing pages between threads, which only `page_full_retain` (X16)
+or a different design (tcmalloc's batched central free lists) avoids. Both
+changes reverted without merging; merging abandon's two atomics into one CAS
+was not tried for the same reason.

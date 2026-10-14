@@ -68,6 +68,7 @@ and the conclusion drawn from them.
 | X20 | Send C++ sized delete straight to the `free` fast path | `_ZdlPvm`/`_ZdaPvm` become aliases of `free` instead of a stub jumping to `mi_free` through the PLT | **KEEP**: sized new[]/delete[] pair 56.34 -> 53.34 instructions (unsized 52.34, C 63.38); `larsonN-sized` -0.82% (4 of 5 rounds) | Recorded below |
 | X21 | Stop abandoning full pages while the owner is alive | `page_full_retain` default 0 -> -1 (`allow_page_abandon` false: full pages go to the owner's full queue); reverted | **REJECT**: `larsonN` -2.0%, `larsonN-sized` -2.4%, but `xmalloc-testN` +318% (4x slower) | Recorded below |
 | X22 | Stop loading libstdc++ into every process | The C++ `operator new` shim looks up `std::get_new_handler` and `std::__throw_bad_alloc` with `dlsym` on allocation failure instead of linking `-lstdc++` | **KEEP**: axum json server PSS under load 19.06 -> 17.87 MiB (C mimalloc 17.82); C++ `new` behaviour unchanged | Recorded below |
+| X23 | Reuse a block freed by its owner next (LIFO), as jemalloc does, keeping C's maintenance cadence with a per-free countdown | Owner frees push onto `page.free`; a 64-free theap countdown parks the page's free list on `local_free` when maintenance is due; reverted, never on master | **REJECT**: LIFO alone cut plaintext L1 misses 72 -> 47 per request and won the native screen (geomean -1.33%), but the countdown costs about 2 cycles per free: `glibc-thread` +8%, `glibc-simple` +6%, `larsonN` +1.6% versus HEAD | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1490,3 +1491,52 @@ Gates: fmt, clippy, tests, safety stress, release thread stress, behavioral
 parity, differential trace, ASan/TSan, Miri, C++ bad_alloc divergence, C++
 operator-new parity, release C++ artifacts, ABI and public symbols, release
 link metadata, LD_PRELOAD, dlopen, artifact consumer, package.
+
+## X23 — LIFO reuse of owner frees with a free-path heartbeat (rejected)
+
+Decided 2026-10-14, from the TechEmpower axum plaintext run, where jemalloc
+led Rust by about 2.6% (3 interleaved runs). Both allocators took about 5.3%
+of server CPU; the difference was in application code touching new blocks:
+72 L1 data misses per request for Rust against 47 for jemalloc. As in C, an
+owner's `free` pushes onto `local_free`, which is reused only once the page's
+`free` list runs dry, so a size class cycles through a whole extension chunk
+(up to 4 KiB) before reusing a hot block.
+
+Prototype: the asm `free` fast path pushes onto `page.free` (and clears
+`free_is_zero`, without which `calloc` returned dirty memory). Plaintext L1
+misses fell to 47 per request, and the 21-scenario canary screen gave
+geomean -1.33%: `glibc-thread` -9.0%, `larsonN` -3.8%, `larsonN-sized`
+-3.5%, `rptestN` -3.9%, `sh6benchN` -3.9%, `sh8benchN` +1.2%. Server PSS
+was unchanged. But C keeps `local_free` separate so the free list runs dry and
+allocation regularly reaches the generic path, which runs deferred-free
+callbacks, retired-page collection and periodic collection. Over 20M
+malloc/free pairs of one size, C and HEAD fired the deferred-free callback
+1,047 times and the prototype 0 times.
+
+Candidate (owner-approved divergence): the asm and Rust free paths count owner
+frees down from 64 in a theap field placed in existing padding; at zero,
+`_mi_page_free_heartbeat` counts one generic tick and, when maintenance is
+due, parks the page's free list on `local_free`, so the next allocation from
+the page runs the maintenance on the generic path as in C. Frees that empty a
+page must count too: a size class that allocates and frees one object at a
+time never reached the counter otherwise. That gave 343 callbacks over the
+same 20M pairs, and the gates passed (behavioral parity needed one reuse-order
+allowance).
+
+The counter update costs about 2 cycles per free, more than its four
+instructions suggest. On `glibc-simple`, cycles rose from 3,393M (LIFO alone)
+to 3,589-3,679M (+2.1% instructions, +5 to 8% cycles). A thread-local counter
+(no dependent `page->theap` load) recovered about 1%; aligning `free` to fit
+in two cache lines changed nothing. Quick runs (ms) for HEAD, LIFO alone, and
+the candidate: `glibc-thread` 1.42 / 1.29 / 1.53, `larsonN` 2.45 / 2.36 /
+2.49, `glibc-simple` 625 / 624-633 / 662-681. The held-out run, stopped after
+13 of 21 scenarios, had `glibc-simple` +5.7%, `malloc-large` +6.2%,
+`sh6benchN` +15.3%, `sh8benchN` +6.6% versus HEAD. The webserver gain was also
+layout-sensitive: two LIFO-only builds 16 bytes apart measured +2.4% and
+-4.5% on plaintext with identical instruction counts and L1 misses. Reverted
+without merging.
+
+Counting only frees that empty a page would cost nothing on the fast path,
+but a size class whose page also holds long-lived objects then never reaches
+maintenance (0 callbacks with 64 live blocks of the same size), a larger
+divergence from C than the one approved. Not pursued.

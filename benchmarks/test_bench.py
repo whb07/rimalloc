@@ -109,6 +109,47 @@ class EntryPointTests(unittest.TestCase):
             with patch.dict(os.environ, {"CFLAGS": "-march=native"}):
                 self.assertNotEqual(bench.build(2)["cache"], first["cache"])
 
+    def test_bolt_build_links_relocations_and_uses_the_optimized_library(self):
+        rust_flags = []
+
+        def execute(command, log, environment=None):
+            log.parent.mkdir(parents=True, exist_ok=True)
+            log.write_text("build log")
+            if command[0] == "cargo":
+                shared = command[1] == "rustc"
+                if shared:
+                    rust_flags.append(environment.get("RUSTFLAGS"))
+                artifact = Path(environment["CARGO_TARGET_DIR"]) / ("allocator.so" if shared else "mimalloc_bench")
+                artifact.parent.mkdir(parents=True, exist_ok=True)
+                artifact.write_bytes(b"artifact")
+                return json.dumps({"reason": "compiler-artifact", "target": {
+                    "name": "mechanical_mimalloc" if shared else "mimalloc_bench",
+                }, "filenames": [str(artifact)], "executable": None if shared else str(artifact)})
+            if command[:2] == ["cmake", "--build"]:
+                directory = Path(command[2])
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / "libmimalloc.so").write_bytes(b"C artifact")
+            return ""
+
+        def optimize(library, output, log):
+            output.write_bytes(b"bolted " + library.read_bytes())
+            return {"profiled_functions": 1, "stale_functions": 0, "log": str(log)}
+
+        profile = self.root / "profile.fdata"
+        profile.write_text("profile")
+        with patch.object(bench, "ROOT", self.root), patch.object(bench, "execute", execute), \
+             patch.object(bench, "capture", return_value="host: x86_64-unknown-linux-gnu"), \
+             patch.object(bench.shutil, "which", side_effect=lambda name: "/tools/" + name), \
+             patch.object(bench.bolt, "PROFILE", profile), patch.object(bench.bolt, "version", return_value="18"), \
+             patch.object(bench.bolt, "optimize", side_effect=optimize), patch.dict(os.environ, {}, clear=True):
+            plain = bench.build(2, harness=False)
+            with patch.dict(os.environ, {"MIMALLOC_BENCH_BOLT": "1"}):
+                bolted = bench.build(2, harness=False)
+        self.assertEqual(rust_flags, [None, bench.bolt.LINK_FLAGS])
+        self.assertNotEqual(plain["cache"], bolted["cache"])
+        self.assertEqual(Path(bolted["rust_library"]).read_bytes(), b"bolted artifact")
+        self.assertEqual(bolted["bolt"]["stale_functions"], 0)
+
     def test_current_and_historical_allocator_labels(self):
         for label in (bench.ALLOCATORS[0], "rust"):
             pairs = bench.SUMMARY.native_pairs([

@@ -125,6 +125,20 @@ plus Cargo config files, are recorded and participate in cache selection. The
 Criterion harness. Comparison selections and Criterion controls
 come from the CLI, overriding inherited `MIMALLOC_BENCH_*` settings.
 
+## BOLT layout (opt-in)
+
+`MIMALLOC_BENCH_BOLT=1` applies BOLT post-link layout to the Rust library in
+every command that builds it (`run`, `screen`, `build`, `nginx`,
+`webserver`). The library is linked with `--emit-relocs`, then `llvm-bolt`
+(found on `PATH` or under `/usr/lib/llvm-*/bin`; Ubuntu package `bolt-18`)
+applies the checked-in branch profile `benchmarks/bolt-profile.fdata`. The
+LLVM BOLT version, profile hash and options select a separate build cache, and
+`artifacts.json` records how many functions the profile covered and how many
+were stale. Re-record the profile after allocator changes with
+`python3 benchmarks/bolt.py profile` (needs `perf` with branch records,
+`perf2bolt` and `merge-fdata`); it trains on 11 native scenarios and leaves the
+other 10 out (`PERFORMANCE_WORKLOG.md` X27). The C library is not BOLTed.
+
 ## Results
 
 Each comparison creates a unique directory under `target/bench-runs/`, or uses

@@ -72,6 +72,7 @@ and the conclusion drawn from them.
 | X24 | Make the page abandon/reclaim round trip cheaper without changing C behavior | Skip `mi_page_set_in_full`'s atomic RMW when the owner-only flag already matches; read the arena purge guard before its CAS; reverted, never on master | **REJECT**: no gain outside noise. No-op skip vs HEAD: `rptestN` -1.2%, `larsonN-sized` -0.6%, `larsonN` +0.1%; guard read on top: `rptestN` +0.5%, `larsonN` +0.9% | Recorded below |
 | X25 | Batch remote frees per destination page (snmalloc-style) so one CAS publishes many blocks | Per-thread 16-slot table keyed by page; a batch publishes at 64 blocks or 32 KiB, on eviction, at the maintenance tick, in `mi_collect` and at thread exit; prototype only, never on master | **REJECT**: quick screen vs HEAD `larsonN` +4%, `larsonN-sized` +5%, `xmalloc-testN` +4%, `sh8benchN` about -1%, `mstressN` flat. The CAS that costs is the first one to a page, which batching keeps | Recorded below |
 | X26 | Reuse a block freed by its owner next (LIFO), dropping C's maintenance cadence for threads that churn without a page filling or emptying | Owner frees push onto `page.free` (asm and Rust paths) and clear `free_is_zero`; no counter on the free path; owner-approved divergence in `UPSTREAM_DIFF.md` | **ADOPT**: final screen geomean -1.08% (`glibc-thread` -8.5%, `larsonN` -5.1%, `larsonN-sized` -4.1%, `rptestN` -3.0%; `sh8benchN` +1.4%); held-out -0.79%; plaintext +1.1%; Nginx +0.6% | Recorded below |
+| X27 | Profile-guided optimization (PGO) of the Rust library, and BOLT post-link layout | PGO: instrumented cdylib trained on 11 of 21 native scenarios, rebuilt with `-Cprofile-use`. BOLT 18: opt-in `MIMALLOC_BENCH_BOLT=1` in `bench.py`, `--emit-relocs` link, checked-in LBR profile of the same 11 scenarios (`benchmarks/bolt.py`, `bolt-profile.fdata`) | PGO **REJECT**: screen geomean +0.15%. BOLT **ADOPT (opt-in)**: 21-scenario held-out geomean -0.87% (trained -0.94%, held out -0.79%); `malloc-large` -10.1%, `xmalloc-testN` -3.2%; worst `cfrac` +0.44% | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1686,3 +1687,113 @@ Final build (no check), 21-scenario screen, 5 rounds against HEAD: geomean
 safety and release thread stress, behavioral parity (one allowance,
 `theap_wrong_thread_malloc_aligned_status`), differential traces, ASan, TSan
 and Miri.
+
+## X27 — PGO and BOLT (rejected)
+
+Decided 2026-10-14. Code-layout effects of +/-2 to 5% had shown up repeatedly
+(X23's plaintext builds 16 bytes apart, the `.fill` alignment of the asm fast
+paths), so profile-guided compilation and post-link layout looked like a cheap
+way to make layout deliberate.
+
+PGO: `llvm-profdata` from the toolchain's `llvm-tools` (LLVM 21.1.3, matching
+rustc 1.92). The instrumented cdylib (`-Cprofile-generate`) also needs
+`-Clink-arg=-lc`, because the profiler runtime calls `atexit`, which glibc
+provides in `libc_nonshared.a`. To separate real gains from overfitting it was
+trained on 11 scenarios (`alloc-test1`, `barnes`, `cache-scratchN`,
+`cache-thrash1`, `cfrac`, `glibc-thread`, `larsonN`, `malloc-large`,
+`mleak10`, `mstressN`, `sh6benchN`, one quick run each) and the other 10 held
+out. The `-Cprofile-use` build grew `.text` by 34 KiB (profile-guided
+inlining) and kept `malloc` at cache-line offset 0 and `free` at 32. The
+21-scenario screen against master (X26), 5 rounds, gave geomean +0.15%: no
+scenario faster than -0.63% (`glibc-simple`), and training scenarios among the
+slower ones (`sh6benchN` +1.73%, `cache-scratchN` +1.08%). The hot code is the
+hand-written asm fast path, which PGO does not touch, and the Rust slow paths
+are a small share of cycles.
+
+BOLT reorders code to cut instruction-cache and iTLB misses. On master:
+`glibc-simple` 0.002 L1 i-cache misses per 1000 instructions, `larsonN` 0.12,
+`sh8benchN` 0.060, `xmalloc-testN` 0.069, and iTLB misses below 0.001 per 1000
+instructions. `rptestN` has 3.5 per 1000, but 59% of them are in libc
+(`pthread_enable_asynccancel`, `memset`) and 23% in the allocator, after its
+threads sleep and wake. That predicted little, so BOLT was tried anyway at the
+owner's request.
+
+BOLT setup: `bolt-18` (Ubuntu, LLVM 18.1.3); the cdylib relinked with
+`-Clink-arg=-Wl,--emit-relocs`; `perf record -j any,u` (AMD LBRv2) on the same
+11 training scenarios, converted with `perf2bolt` and merged; `llvm-bolt
+-reorder-blocks=ext-tsp -reorder-functions=cdsort -split-functions
+-split-all-cold`. It reordered 87 functions (72.5% of those with profile),
+split 25 KiB of hot code from 27 KiB cold, and cut taken branches in profiled
+code by 83%. It also moved `free` from cache-line offset 32 to 0; a second
+build with `-skip-funcs=free,_ZdlPvmSt11align_val_t,malloc,calloc` kept the asm
+fast paths at their original addresses.
+
+Screen against master, 5 rounds: geomean -0.52%; `sh6benchN` -3.57%,
+`xmalloc-testN` -3.26%, `malloc-large` -2.06% (noisy), `mleak100` -1.54%,
+`rptestN` -1.52% (noisy), `glibc-thread` +0.67%, `cache-scratchN` +0.83%,
+others within +/-0.85%. The 10 held-out scenarios averaged -0.66% and the 11
+training scenarios -0.38%, so the gain is not overfitting. Interleaved
+Criterion runs (3 rounds) of the 6 scenarios that moved, against master:
+
+| Scenario | BOLT | BOLT, asm fast paths kept |
+|---|---|---|
+| `xmalloc-testN` | -2.96% | -1.98% |
+| `rptestN` | -2.02% | +0.33% |
+| `mleak100` | -0.87% | -0.79% |
+| `cache-scratchN` | -0.60% | -0.58% |
+| `glibc-thread` | -0.27% | -0.08% |
+| `sh6benchN` | +0.07% | -0.17% |
+
+The screen's `sh6benchN` and `glibc-thread` moves were noise; the rest hold,
+and these 6 were chosen because they moved, so the suite-wide gain looked
+smaller, roughly 0.3 to 0.5% (the full held-out below measured -0.87%). Most of it comes from reordering the Rust slow paths;
+`rptestN` gains only when `free` also moves to offset 0. Adopting BOLT would
+need a relocation-preserving link, a stored profile regenerated as the code
+changes, and `llvm-bolt` in the benchmark and release builds.
+
+Since `rptestN` gained only when BOLT also moved `free`, master was rebuilt
+with `free` at offset 0 and `malloc` at 0 (the 0x20 pad moved after `free`),
+without BOLT. Screen, 5 rounds: geomean +0.19%; `sh6benchN` -2.05%,
+`sh8benchN` -1.97%, `larsonN` +1.31%, `malloc-large` +1.23%, `alloc-testN`
++0.96%, `rptestN` +3.32% (noisy). Interleaved, 4 rounds: `rptestN` +1.10%,
+`xmalloc-testN` -0.51%, `sh6benchN` -0.75%. That is layout reshuffling, not
+`rptestN`'s BOLT gain; reverted, and the X09 layout (`malloc` 0, `free` 32)
+stays.
+
+Adopted by owner decision as an opt-in benchmark build. `bench.build()` reads
+`MIMALLOC_BENCH_BOLT=1`: it links the Rust library with
+`-Clink-arg=-Wl,--emit-relocs`, runs `llvm-bolt` with the checked-in profile
+`benchmarks/bolt-profile.fdata` (122 functions profiled, 0 stale at
+recording), records the BOLT version, profile hash and options in the build
+cache key, and reports profiled and stale function counts in
+`artifacts.json`. `python3 benchmarks/bolt.py profile` re-records the profile
+from the 11 training scenarios. The default build is unchanged (same cache key).
+The first integrated build left `malloc` at cache-line offset 24 and `free` at
+28: BOLT pads a function to its 64-byte alignment only when that costs at most
+32 bytes. `-align-functions-max-bytes=63` now always pads, which put `malloc`,
+`free` and `calloc` at offset 0, the layout measured above. The C library and
+the release artifacts are not BOLTed.
+
+Held-out of that build against master (3 interleaved Criterion rounds per
+scenario, all 21; training scenarios marked T):
+
+| Scenario | BOLT vs master |
+|---|---|
+| `malloc-large` T | -10.09% (ranges disjoint: 682-695 us vs 759-772 us) |
+| `xmalloc-testN` | -3.23% |
+| `mleak100` | -1.36% |
+| `rptestN` | -1.16% |
+| `malloc-large-old` | -1.06% |
+| `sh8benchN` | -0.96% |
+| `mleak10` T | -0.69% |
+| `larsonN-sized` | -0.33% |
+| `cfrac` T | +0.44% |
+| `mstressN` T | +0.31% |
+| `glibc-thread` T, `larsonN` T | +0.28% |
+| other 9 | -0.14% to +0.24% |
+| geomean (21) | -0.87% (training -0.94%, held out -0.79%) |
+
+`malloc-large` spends about 45% of its time in Rust arena bitmap searches,
+which BOLT lays out from the profile; without it the other 20 average about
+-0.4%. No scenario is worse than +0.44%, and the held-out scenarios gain as
+much as the training ones, so the layout is not fitted to the training set.

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import architecture
 import applications
+import bolt
 import nginx
 import rivals
 import webserver
@@ -217,6 +218,10 @@ def build(jobs: int, harness: bool = True) -> dict:
     config = {"tools": versions, "tool_paths": {name: shutil.which(command[0]) for name, command in tools.items()},
               "flags": flags, "cargo_config": cargo_config_files(), "harness_features": ["bench"],
               "rust_library_features": ["interpose"], "c_options": C_OPTIONS}
+    use_bolt = os.environ.get("MIMALLOC_BENCH_BOLT") == "1"
+    if use_bolt:
+        config["bolt"] = {"llvm_bolt": bolt.version(), "profile_sha256": file_sha256(bolt.PROFILE),
+                          "options": bolt.OPTIONS}
     key = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:16]
     cache = ROOT / "target/bench-build" / key
     cache.mkdir(parents=True, exist_ok=True)
@@ -231,10 +236,16 @@ def build(jobs: int, harness: bool = True) -> dict:
         artifacts["executable"] = str(cargo_artifact(output, "mimalloc_bench"))
         artifacts["logs"].insert(0, "harness.log")
     environment["CARGO_TARGET_DIR"] = str(cache / "rust-interpose")
+    if use_bolt:
+        environment["RUSTFLAGS"] = (environment.get("RUSTFLAGS", "") + " " + bolt.LINK_FLAGS).strip()
     output = execute(["cargo", "rustc", "--locked", "--release", "--features", "interpose",
                       "--lib", "--jobs", str(jobs), "--message-format=json-render-diagnostics",
                       "--crate-type", "cdylib"], cache / "rust.log", environment)
     rust_library = cargo_artifact(output, "mechanical_mimalloc", shared=True)
+    if use_bolt:
+        optimized = cache / "libmechanical_mimalloc.bolt.so"
+        artifacts["bolt"] = bolt.optimize(rust_library, optimized, cache / "bolt.log")
+        rust_library = optimized
     c_dir = cache / "c-release"
     execute(["cmake", "-S", str(ROOT / "mimalloc-3.3.2"), "-B", str(c_dir)] +
             [f"-D{name}={value}" for name, value in C_OPTIONS.items()], cache / "c-configure.log")

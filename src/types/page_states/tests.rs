@@ -64,12 +64,13 @@ fn active_available_and_pop_free_block_update_page_state() {
 }
 
 #[test]
-fn local_push_free_block_updates_local_list_and_used_count() {
+fn owner_push_free_block_updates_free_list_zero_flag_and_used_count() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
     unsafe {
         let raw = page.as_mut_ptr();
-        ptr::addr_of_mut!((*raw).local_free).write(ptr::null_mut());
+        ptr::addr_of_mut!((*raw).free).write(ptr::null_mut());
+        ptr::addr_of_mut!((*raw).free_is_zero).write(true);
         ptr::addr_of_mut!((*raw).used).write(1);
         #[cfg(any(
             feature = "secure",
@@ -85,7 +86,8 @@ fn local_push_free_block_updates_local_list_and_used_count() {
 
         assert_eq!(used.get(), 0);
         assert_eq!((*raw).used, 0);
-        assert_eq!((*raw).local_free, block_ptr.as_ptr());
+        assert_eq!((*raw).free, block_ptr.as_ptr());
+        assert!(!(*raw).free_is_zero);
         assert!(crate::internal::mi_block_next(raw, block_ptr.as_ptr()).is_null());
     }
 }

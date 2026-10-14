@@ -71,6 +71,7 @@ and the conclusion drawn from them.
 | X23 | Reuse a block freed by its owner next (LIFO), as jemalloc does, keeping C's maintenance cadence with a per-free countdown | Owner frees push onto `page.free`; a 64-free theap countdown parks the page's free list on `local_free` when maintenance is due; reverted, never on master | **REJECT**: LIFO alone cut plaintext L1 misses 72 -> 47 per request and won the native screen (geomean -1.33%), but the countdown costs about 2 cycles per free: `glibc-thread` +8%, `glibc-simple` +6%, `larsonN` +1.6% versus HEAD | Recorded below |
 | X24 | Make the page abandon/reclaim round trip cheaper without changing C behavior | Skip `mi_page_set_in_full`'s atomic RMW when the owner-only flag already matches; read the arena purge guard before its CAS; reverted, never on master | **REJECT**: no gain outside noise. No-op skip vs HEAD: `rptestN` -1.2%, `larsonN-sized` -0.6%, `larsonN` +0.1%; guard read on top: `rptestN` +0.5%, `larsonN` +0.9% | Recorded below |
 | X25 | Batch remote frees per destination page (snmalloc-style) so one CAS publishes many blocks | Per-thread 16-slot table keyed by page; a batch publishes at 64 blocks or 32 KiB, on eviction, at the maintenance tick, in `mi_collect` and at thread exit; prototype only, never on master | **REJECT**: quick screen vs HEAD `larsonN` +4%, `larsonN-sized` +5%, `xmalloc-testN` +4%, `sh8benchN` about -1%, `mstressN` flat. The CAS that costs is the first one to a page, which batching keeps | Recorded below |
+| X26 | Reuse a block freed by its owner next (LIFO), dropping C's maintenance cadence for threads that churn without a page filling or emptying | Owner frees push onto `page.free` (asm and Rust paths) and clear `free_is_zero`; no counter on the free path; owner-approved divergence in `UPSTREAM_DIFF.md` | **ADOPT**: final screen geomean -1.08% (`glibc-thread` -8.5%, `larsonN` -5.1%, `larsonN-sized` -4.1%, `rptestN` -3.0%; `sh8benchN` +1.4%); held-out -0.79%; plaintext +1.1%; Nginx +0.6% | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1621,3 +1622,67 @@ the owner (about 30% of `delete` on `larsonN`, with the page-map load another
 30%). jemalloc and tcmalloc avoid it by freeing into a thread cache found
 from the page map, without touching slab metadata. Reverted; the prototype
 diff is kept outside the repository.
+
+## X26 — LIFO reuse of owner frees without the maintenance counter (adopted)
+
+Decided 2026-10-14 by the owner, who allowed departing from C where it pays.
+X23 showed that reusing a block freed by its owner next (pushing onto
+`page.free` instead of C's `local_free`) wins on the native suite and matches
+jemalloc's L1 misses on TechEmpower plaintext, and was rejected only for the
+per-free countdown that kept C's maintenance cadence. X26 drops the countdown
+and accepts the consequence: a thread whose size classes churn without a page
+filling or emptying no longer reaches the generic path, so it runs no
+deferred-free callbacks, keeps at most one retired page per size class longer,
+leaves pending purges to the next page free, abandon or collection by any
+thread, and collects remote frees into its pages when a page runs dry
+(`UPSTREAM_DIFF.md`).
+
+A first version kept C's cadence while a deferred-free callback was
+registered: owner frees went back to `local_free`, with the `free` fast path
+testing the callback slot (moved to its own cache line, since it shared one
+with the purge guard). It gave exactly C's 1,047 callbacks over 20M
+malloc/free pairs of one size. But those two instructions cost about 2.5% on
+`sh8benchN`, a tight malloc/free loop (296 ms against 287.5-288.1 ms without
+the check, HEAD 285-286 ms; 3.5% more instructions than HEAD, 2.4% from the
+check), and the owner chose to drop it.
+
+Measurements of the version with the check (held-out: 3 interleaved
+Criterion rounds per scenario against HEAD; the check only adds cost):
+
+| Scenario | Held-out |
+|---|---|
+| `glibc-thread` | -8.94% |
+| `larsonN-sized` | -3.12% |
+| `sh6benchN` | -1.86% |
+| `larsonN` | -1.48% |
+| `rptestN` | -1.25% |
+| `alloc-testN` | -1.19% |
+| `mstressN` | -1.08% |
+| `alloc-test1` | -0.91% |
+| `malloc-large` | +2.93% |
+| `sh8benchN` | +1.58% |
+| other 11 | -0.53% to +0.48% |
+| geomean (21) | -0.79% |
+
+`malloc-large` (5-25 MiB blocks in single-block pages, which LIFO cannot
+affect) is bimodal per process in both builds (HEAD 725 or 736-741 us,
+candidate 733 or 750 us over 6 runs each); the residue is layout. TechEmpower
+plaintext in 6 interleaved rounds with fresh servers: candidate won every
+round, median 3.966M against 3.923M requests/s (+1.1%); the separate-session
+`bench.py webserver` runs had shown -4.4%, json -0.7%, fortunes +0.6%. Nginx
+production (3 repeats, separate sessions, HEAD built from a master worktree):
++0.6% throughput geomean over 18 cases, the 8 proxy cases +0.6% to +2.8%,
+`headers` +8.3% with peak worker PSS 78.5 against 74.4 MiB,
+`upload-1048576` -3.2%; other PSS within 1 MiB. The first HEAD Nginx run
+stopped when its PSS sampler read `/proc` for an exited worker (no crash in
+the kernel log or Nginx error logs) and was rerun.
+
+Final build (no check), 21-scenario screen, 5 rounds against HEAD: geomean
+-1.08%; `glibc-thread` -8.47%, `larsonN` -5.12%, `larsonN-sized` -4.05%,
+`rptestN` -2.95%, `sh6benchN` -1.74%, `mstressN` -0.94%, `alloc-test1`
+-0.84%, `sh8benchN` +1.41%, `malloc-large` +0.39%, the rest within +/-0.7%.
+`sh8benchN` keeps a small cost from the extra stores on the free path
+(`free_is_zero`). Gates passed: fmt, clippy, all-features tests,
+safety and release thread stress, behavioral parity (one allowance,
+`theap_wrong_thread_malloc_aligned_status`), differential traces, ASan, TSan
+and Miri.

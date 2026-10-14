@@ -352,6 +352,23 @@ impl AvailableFreeList {
         )
     }
 
+    /// Push a block freed by the page's owner onto the available list, returning
+    /// the new list head, so the next allocation reuses it. This is the local
+    /// free fast path (C pushes onto `local_free`; see `UPSTREAM_DIFF.md`).
+    ///
+    /// # Safety
+    /// `page` must be a valid `LocalPage` whose `free` field matches `self`,
+    /// and the caller must subsequently store the returned head back into
+    /// `(*page).free`, clear `(*page).free_is_zero`, and decrement `(*page).used`.
+    #[inline(always)]
+    pub(crate) unsafe fn push(self, page: &LocalPage, block: FreeBlock) -> Self {
+        let raw_page = page.page().as_ptr();
+        let block_raw = block.as_ptr().as_ptr();
+        let prev_raw = self.as_raw();
+        unsafe { mi_block_set_next(raw_page, block_raw, prev_raw) };
+        Self(Some(unsafe { BlockPtr::new_unchecked(block_raw) }))
+    }
+
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).free`).
     #[inline(always)]
     pub(crate) unsafe fn from_raw(head: *mut mi_block_t) -> Self {
@@ -363,8 +380,8 @@ impl AvailableFreeList {
     }
 }
 
-/// The local free list of a page. This is `page.local_free`: the LIFO stack
-/// that freed blocks from the owning thread are pushed onto.
+/// The local free list of a page. This is `page.local_free`: remote frees
+/// collected from `xthread_free` (owner frees go to `free`; see `UPSTREAM_DIFF.md`).
 #[repr(transparent)]
 #[derive(Debug)]
 #[must_use = "local free-list ownership must be stored or consumed"]
@@ -400,22 +417,6 @@ impl LocalFreeList {
     #[inline(always)]
     pub(crate) fn as_raw(&self) -> *mut mi_block_t {
         self.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut())
-    }
-
-    /// Push a freed block onto the page's local free list, returning the new
-    /// list head. This is the local free fast path.
-    ///
-    /// # Safety
-    /// `page` must be a valid `LocalPage` whose `local_free` field matches
-    /// `self`, and the caller must subsequently store the returned head back
-    /// into `(*page).local_free` and decrement `(*page).used`.
-    #[inline(always)]
-    pub(crate) unsafe fn push(self, page: &LocalPage, block: FreeBlock) -> Self {
-        let raw_page = page.page().as_ptr();
-        let block_raw = block.as_ptr().as_ptr();
-        let prev_raw = self.as_raw();
-        unsafe { mi_block_set_next(raw_page, block_raw, prev_raw) };
-        Self(Some(unsafe { BlockPtr::new_unchecked(block_raw) }))
     }
 
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).local_free`).

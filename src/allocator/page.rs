@@ -2498,6 +2498,36 @@ mod tests {
         ((b << 1) + ((wsize >> (b - 1)) & 0x01) as u8) + 3
     }
 
+    /// An owner free is reused by the next allocation of its size (LIFO, `UPSTREAM_DIFF.md`), and
+    /// `calloc` still zeroes it although its page's free list was fresh before.
+    #[test]
+    fn owner_frees_are_reused_first_and_calloc_still_zeroes() {
+        std::thread::spawn(|| {
+            // SAFETY: every block is allocated and freed once on this thread and written only
+            // while allocated.
+            unsafe {
+                let live: [*mut c_void; 8] =
+                    core::array::from_fn(|_| crate::allocator::alloc::mi_malloc(48));
+                let reused = live[3];
+                ptr::write_bytes(reused.cast::<u8>(), 0xAB, 48);
+                crate::allocator::free::mi_free(reused);
+                let p = crate::allocator::alloc::mi_calloc(1, 48);
+                assert_eq!(p, reused);
+                assert!((0..48).all(|i| *p.cast::<u8>().add(i) == 0));
+                crate::allocator::free::mi_free(p);
+                assert_eq!(crate::allocator::alloc::mi_malloc(48), reused);
+                crate::allocator::free::mi_free(reused);
+                for (i, block) in live.into_iter().enumerate() {
+                    if i != 3 {
+                        crate::allocator::free::mi_free(block);
+                    }
+                }
+            }
+        })
+        .join()
+        .unwrap();
+    }
+
     #[test]
     fn bin_classification_characterization_retains_huge_bounds() {
         let mut last_bin = 0usize;

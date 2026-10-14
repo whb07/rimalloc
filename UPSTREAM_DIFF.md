@@ -45,3 +45,35 @@ Compatibility: only the default changes. `MIMALLOC_PAGE_FULL_RETAIN=2` restores
 C's behavior, and `scripts/check-behavioral-parity.py` checks Rust against C
 under equal option values (`DOCUMENTED_OPTION_DEFAULTS` gives C Rust's default
 for comparison and adds a `c_defaults` case running both with C's value).
+
+### Owner frees are reused first (C: after the page's free list runs dry)
+
+Adopted 2026-10-14 by owner decision (`PERFORMANCE_WORKLOG.md` X26). C pushes
+a block freed by its page's owner onto `local_free`, which is reused only once
+the page's `free` list is empty; Rust pushes it onto `free`, so the next
+allocation of that size reuses the still-cached block, as jemalloc and
+tcmalloc do. `free_is_zero` is cleared on that push so `calloc` keeps zeroing.
+
+C relies on `free` running dry to send allocation through the generic path,
+which runs the periodic maintenance. With LIFO reuse, a thread whose size
+classes churn without a page filling or emptying never reaches that path. For
+such a thread: deferred-free callbacks (`mi_register_deferred_free`) are not
+called (C: 1,047 calls over 20M malloc/free pairs of one size with 64 live
+blocks; Rust: none), at most one retired page per size class waits to be freed,
+pending arena purges wait for the next page free, abandon or collection by any
+thread, and remote frees into its pages are collected when a page runs dry.
+Callbacks still run whenever allocation reaches the generic path. Keeping C's
+cadence while a callback is registered was measured and declined: the check on
+every `free` cost about 2.5% on `sh8benchN`.
+
+Evidence on the EPYC 4245P host: 21-scenario native held-out geomean -0.79%
+(`glibc-thread` -8.9%, `larsonN-sized` -3.1%, `sh6benchN` -1.9%, `larsonN`
+-1.5%, `rptestN` -1.3%), measured with the callback check, which only adds
+cost. TechEmpower plaintext +1.1% over 6 interleaved rounds; Nginx (18 cases)
++0.6% throughput geomean.
+
+Compatibility: allocation order for a size class differs from C after owner
+frees. `scripts/check-behavioral-parity.py` allows one case,
+`theap_wrong_thread_malloc_aligned_status`: a debug-build wrong-thread
+allocation is caught only on the generic path, which C reaches and Rust, with a
+free block available, does not.

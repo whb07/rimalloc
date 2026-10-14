@@ -445,7 +445,7 @@ fn free_block_local(page: LocalPage, block: BlockForFree, mode: LocalFreeMode);
 fn free_block_remote(page: ForeignPage, block: BlockForFree);
 fn try_reclaim_abandoned(page: OwnedAbandonedPage, target: ThreadHeapPtr) -> ReclaimResult;
 
-The current mi_free_block_local mutates local_free, decrements used, retires all-free pages, or unfulls pages when needed.  It must only accept LocalPage. The current remote free path pushes onto xthread_free with a CAS loop and handles abandoned-page collection when ownership changes.  It must only accept ForeignPage or AbandonedPage.
+The current mi_free_block_local pushes onto free (C: local_free; see UPSTREAM_DIFF.md), decrements used, retires all-free pages, or unfulls pages when needed.  It must only accept LocalPage. The current remote free path pushes onto xthread_free with a CAS loop and handles abandoned-page collection when ownership changes.  It must only accept ForeignPage or AbandonedPage.
 
 7. Page lifecycle state machine
 

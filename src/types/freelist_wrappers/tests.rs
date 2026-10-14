@@ -73,7 +73,7 @@ fn available_pop_consumes_available_page_witness() {
 }
 
 #[test]
-fn local_push_requires_free_block_witness() {
+fn owner_push_requires_free_block_witness() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
     unsafe {
@@ -85,13 +85,13 @@ fn local_push_requires_free_block_witness() {
             feature = "track-asan"
         ))]
         ptr::addr_of_mut!((*raw_page).keys).write([0x1234_5678, 0x8765_4321]);
-        ptr::addr_of_mut!((*raw_page).local_free).write(ptr::null_mut());
+        ptr::addr_of_mut!((*raw_page).free).write(ptr::null_mut());
 
         let page_ptr = PagePtr::new_unchecked(raw_page);
         let local_page = LocalPage::new_unchecked(page_ptr);
         let block_ptr = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
         let free = FreeBlock::new_unchecked(block_ptr);
-        let list = LocalFreeList::from_raw(ptr::null_mut()).push(&local_page, free);
+        let list = AvailableFreeList::from_raw(ptr::null_mut()).push(&local_page, free);
 
         assert_eq!(list.as_raw(), block_ptr.as_ptr());
         assert!(mi_block_next(raw_page, block_ptr.as_ptr()).is_null());

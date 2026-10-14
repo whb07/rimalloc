@@ -5721,6 +5721,11 @@ def smoke_outputs_match(c_output: str, rust_output: str) -> bool:
     variable_smoke_values = {
         "manage_memory_committed_large_delta": {"0", "65536"},
         "page_commit_on_demand_committed_alloc_delta": {"458752", "524288"},
+        # Debug builds catch wrong-thread use only on the generic path. The aligned
+        # fast path skips it when the size class has a free block, which after an
+        # owner free it now has (LIFO reuse, UPSTREAM_DIFF.md); C's block waits on
+        # `local_free`, so C reaches the generic path and aborts.
+        "theap_wrong_thread_malloc_aligned_status": {"0", "134"},
     }
     documented_divergences = {
         f"{key}[{index}]": (str(c_default), str(rust_default))

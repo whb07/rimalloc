@@ -70,6 +70,7 @@ and the conclusion drawn from them.
 | X22 | Stop loading libstdc++ into every process | The C++ `operator new` shim looks up `std::get_new_handler` and `std::__throw_bad_alloc` with `dlsym` on allocation failure instead of linking `-lstdc++` | **KEEP**: axum json server PSS under load 19.06 -> 17.87 MiB (C mimalloc 17.82); C++ `new` behaviour unchanged | Recorded below |
 | X23 | Reuse a block freed by its owner next (LIFO), as jemalloc does, keeping C's maintenance cadence with a per-free countdown | Owner frees push onto `page.free`; a 64-free theap countdown parks the page's free list on `local_free` when maintenance is due; reverted, never on master | **REJECT**: LIFO alone cut plaintext L1 misses 72 -> 47 per request and won the native screen (geomean -1.33%), but the countdown costs about 2 cycles per free: `glibc-thread` +8%, `glibc-simple` +6%, `larsonN` +1.6% versus HEAD | Recorded below |
 | X24 | Make the page abandon/reclaim round trip cheaper without changing C behavior | Skip `mi_page_set_in_full`'s atomic RMW when the owner-only flag already matches; read the arena purge guard before its CAS; reverted, never on master | **REJECT**: no gain outside noise. No-op skip vs HEAD: `rptestN` -1.2%, `larsonN-sized` -0.6%, `larsonN` +0.1%; guard read on top: `rptestN` +0.5%, `larsonN` +0.9% | Recorded below |
+| X25 | Batch remote frees per destination page (snmalloc-style) so one CAS publishes many blocks | Per-thread 16-slot table keyed by page; a batch publishes at 64 blocks or 32 KiB, on eviction, at the maintenance tick, in `mi_collect` and at thread exit; prototype only, never on master | **REJECT**: quick screen vs HEAD `larsonN` +4%, `larsonN-sized` +5%, `xmalloc-testN` +4%, `sh8benchN` about -1%, `mstressN` flat. The CAS that costs is the first one to a page, which batching keeps | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1577,3 +1578,46 @@ traffic of handing pages between threads, which only `page_full_retain` (X16)
 or a different design (tcmalloc's batched central free lists) avoids. Both
 changes reverted without merging; merging abandon's two atomics into one CAS
 was not tried for the same reason.
+
+## X25 — Batched remote frees per page (rejected)
+
+Decided 2026-10-14. X24 traced the abandon/reclaim cost to cache-line traffic
+on page headers, and on `rptestN` 74% of `delete`'s cycles (3.7% of the run)
+sit on the remote-free CAS onto the page's `xthread_free`. The idea, from
+snmalloc: a freeing thread collects blocks bound for another thread's page in
+a local chain and publishes the chain with one CAS.
+
+Prototype: a 16-slot direct-mapped table in the TLD, keyed by page address.
+A remote free links the block into its page's slot; the slot publishes (tail
+linked to the current list, one `try_push`, then the usual abandoned-page
+claim and collect) at 64 blocks or 32 KiB, when another page evicts it, at the
+generic maintenance tick, in theap collection and at thread exit. Blocks
+larger than 8 KiB and uninitialized threads publish directly. The asm `free`
+sent remote frees to the Rust generic path, which now batches.
+
+Batch hit rates (quick runs, counted in the library):
+
+| Scenario | Hits | Blocks per publish |
+|---|---|---|
+| `xmalloc-testN` | 98.4% | 63.0 |
+| `sh8benchN` | 98.4% | 61.2 |
+| `larsonN` | 70.9% | 3.44 |
+| `mstressN` | 38.3% | 1.62 |
+| `rptestN` | 15.4% | 1.18 |
+
+Quick screen (3 interleaved runs each) vs HEAD: `larsonN` +4%,
+`larsonN-sized` +5%, `xmalloc-testN` +4%, `sh8benchN` about -1%, `mstressN`
+flat, `rptestN` too noisy to call. On `larsonN` the publish CAS still took
+about 2% of cycles (63% of `mi_free_block_mt`), the same as the per-block CAS
+on HEAD, despite 3.4 times fewer CASes. The expensive CAS is the first one to
+a page, which must fetch the header line from the owner; consecutive remote
+frees to the same page already find that line in the local cache, so the
+hardware was batching them. Batching removes only the cheap CASes and adds a
+TLS lookup and slot update to every remote free. `xmalloc-testN`, at 63 blocks
+per publish, still ran 4% slower with 5% more instructions.
+
+What remains is the read of the page header that every `free` makes to find
+the owner (about 30% of `delete` on `larsonN`, with the page-map load another
+30%). jemalloc and tcmalloc avoid it by freeing into a thread cache found
+from the page map, without touching slab metadata. Reverted; the prototype
+diff is kept outside the repository.

@@ -121,3 +121,25 @@ Redis and other single-threaded programs now use the configured
 `page_full_retain`. Evidence: native screen +0.27% geomean (all within
 +/-1.4%), Nginx throughput +0.5% to +1.0% at equal PSS.
 
+### Full pages stay with their owner while only one thread uses the allocator (C: always abandoned)
+
+Adopted 2026-10-15 by owner decision (`PERFORMANCE_WORKLOG.md` X31). C
+abandons a page as soon as it moves to the full queue, so that other threads
+freeing into it can reclaim it; when the owner frees into it instead, the owner
+reclaims it, which costs a thread-free CAS, an owner CAS, list collection and a
+queue push for every page that fills and empties again. Until a thread other
+than the main thread initializes its allocator state, no other thread exists to
+reclaim anything, so Rust moves such pages to the owner's full queue without
+abandoning them (as C does for heaps that cannot abandon), and the owner's next
+free returns the page with a queue move. The first non-main thread sets a
+process-wide flag for good; afterwards pages are abandoned as in C, and the
+generic path's periodic maintenance abandons the pages kept before (C asserts
+that only non-abandoning heaps have full-queue pages; that assertion is dropped).
+
+Evidence: Redis SET (single-threaded server) +4.6% interleaved against master,
+1.747M against tcmalloc's 1.754M requests/s in the application suite (Redis
+-2.6% and RocksDB -4.7% time against tcmalloc, -4.9% and -0.4% against C);
+native screen +0.15% (no scenario outside noise), Nginx +0.2% to +1.4% at equal
+memory. Multi-threaded processes behave as before (X21's `xmalloc-testN`
+regression came from never abandoning in a multi-threaded process).
+

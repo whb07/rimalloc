@@ -885,6 +885,44 @@ fn deferred_free_callback_guard_registers_and_restores() {
     assert_eq!(restored.1, restore.snapshot.1);
 }
 
+/// While only one thread uses the allocator, a page that fills goes to its owner's full queue
+/// instead of being abandoned; once another thread has initialized, maintenance abandons it.
+#[test]
+fn full_pages_stay_with_a_lone_thread_until_another_thread_runs() {
+    if !enter_isolated_callback_test("full_pages_stay_with_a_lone_thread_until_another_thread_runs")
+    {
+        return;
+    }
+    // The library constructor initialized the process main thread and libtest runs this body on
+    // another thread, which counts as a second one; nothing else in this isolated child
+    // allocates, so treat this thread as alone.
+    crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(false, Ordering::Relaxed);
+    // SAFETY: every block is allocated and freed once; page metadata is only read while its
+    // blocks are live, and maintenance runs on the owning thread.
+    unsafe {
+        let blocks: Vec<*mut c_void> = (0..512)
+            .map(|_| crate::allocator::alloc::mi_malloc(1024))
+            .collect();
+        let page = crate::internal::_mi_ptr_page(blocks[0]);
+        assert!(crate::allocator::page::mi_page_is_in_full(page));
+        assert!(!crate::allocator::page::mi_page_is_abandoned(page));
+
+        std::thread::spawn(|| {
+            crate::allocator::free::mi_free(crate::allocator::alloc::mi_malloc(8));
+        })
+        .join()
+        .unwrap();
+        crate::allocator::page::mi_theap_abandon_kept_full_pages(
+            crate::platform::_mi_theap_default(),
+        );
+        assert!(crate::allocator::page::mi_page_is_abandoned(page));
+
+        for block in blocks {
+            crate::allocator::free::mi_free(block);
+        }
+    }
+}
+
 #[test]
 fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
     if !enter_isolated_callback_test(

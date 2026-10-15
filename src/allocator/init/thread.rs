@@ -427,6 +427,7 @@ fn tld_alloc_non_main_typed(main_subproc: SubprocPtr) -> Option<TldPtr> {
         main_subproc
             .thread_count_cell()
             .fetch_add(1, Ordering::Relaxed);
+        crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(true, Ordering::Relaxed);
         Some(tld)
     }
 }

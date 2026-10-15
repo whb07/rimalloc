@@ -76,6 +76,7 @@ and the conclusion drawn from them.
 | X28 | Per-thread cache of freed singleton pages (blocks above 512 KiB) to skip the arena's slice bookkeeping | Freed main-heap singleton pages kept registered and committed in the freeing theap (8 slots, 256 MiB, purge-delay expiry); reuse within 25% slack; never on master | **REJECT**: steady-state `malloc-large` -29%, but the screen's short runs +145% (first-touch THP faults: cached pages push the arena onto untouched slices), `xmalloc-testN` +6.6%, `sh6benchN` +4.0%; releasing the cache on a miss removes the faults and the gain | Recorded below |
 | X29 | Request transparent huge pages only once the heap is large | Arenas reserved without `MADV_HUGEPAGE`; armed once at 32 MiB of arena pages, then all arenas are advised and their resident memory collapsed (`allocator/arena/thp.rs`) | **ADOPT** (owner decision): axum PSS -67/-67/-63% (json/plaintext/fortunes), Nginx worker PSS -22 to -31%, throughput equal or better; native screen +0.71% geomean, all from `malloc-large-old` +12% in short runs (steady state unchanged); other 20 within +/-1.3% | Recorded below |
 | X30 | Run the main thread heap's one-time initialization (upstream bug) | `theap_main` starts with an empty memid so `theap_main_init` runs (C and the translation started it static, skipping options and cookie) | **ADOPT** (owner decision): native screen +0.27% (noise), Nginx +0.5 to +1.0% at equal PSS; regression test added | Recorded below |
+| X31 | Keep full pages with their owner while the process has one allocating thread | `MI_PROCESS_MULTI_THREADED` set by the first non-main TLD; until then `mi_page_to_full` uses the full queue instead of abandoning; maintenance abandons kept pages once set | **ADOPT** (owner decision): Redis SET +4.6% interleaved (1.747M vs tcmalloc 1.754M); native screen +0.15%, Nginx +0.2 to +1.4% | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1969,3 +1970,45 @@ screen's noise). Nginx (3 interleaved rounds per case, master library vs fix):
 `upload-65536` +1.0%, PSS equal. Redis SET with the fix: 1.395-1.397M at the
 default `page_full_retain` 0, 1.466-1.481M with abandonment disabled (-1),
 which X31 follows up.
+
+## X31 — Full pages stay with a lone thread (adopted)
+
+Decided 2026-10-15; the owner approved the divergence. With X30 applied, Redis SET under
+`redis-benchmark -t set -d 256 -r 1000000 -c 50 -P 16` still spent 12.6% of
+server cycles in `_mi_theap_page_reclaim`: 2.45M small pages moved to the full
+queue and were abandoned (C's `mi_page_to_full`), and 2.45M owner frees into
+them reclaimed them, for 3.2M SETs. Disabling abandonment
+(`MIMALLOC_PAGE_FULL_RETAIN=-1`, effective on the main thread only after X30)
+raised SET from 1.395-1.397M to 1.466-1.481M requests/s; tcmalloc did
+1.51-1.53M in the same setup. Disabling it outright is X21's rejected change
+(`xmalloc-testN` +318%: consumers' frees into producers' full pages were never
+collected).
+
+A process has no thread that could reclaim an abandoned page until a second
+thread uses the allocator. `MI_PROCESS_MULTI_THREADED` (in `allocator/page.rs`)
+is set when a non-main TLD is allocated and never cleared; until then
+`mi_page_to_full` moves pages to the full queue as for non-abandoning heaps,
+and `mi_free_generic_local` returns them with `_mi_page_unfull_internal`. Once
+set, `mi_theap_abandon_kept_full_pages` (run with the other maintenance on the
+generic path) abandons the theap's full-queue pages, which in a multi-threaded
+process abandoning theap otherwise stays empty. C's assertion in
+`_mi_page_unfull_internal` that only non-abandoning theaps have full pages
+became a comment; with it the debug tests and the behavioral-parity binary
+aborted. A test run in an isolated child process (where the library
+constructor initializes the process main thread and libtest's body thread
+counts as a second thread, so the test resets the flag first) checks that a
+full page stays owned with one thread and is abandoned after another thread
+allocates; it fails without the change. Gates passed.
+
+Measurements (our library only; C, glibc, jemalloc and tcmalloc results are
+reused): interleaved Redis SET A/B against master 1.404-1.413M ->
+1.461-1.481M (+4.6%, every round). Application suite (`bench.py run
+--allocator rust`, 3 repeats) against the stored suite of the same day: Redis
+SET 1.741-1.753M (tcmalloc 1.751-1.762M, C 1.642-1.653M, Rust before 1.688-1.705M),
+GET 2.245-2.255M (tcmalloc 2.090-2.105M); Redis 508.3 ns per request against
+515.5 (Rust before), 522.0 (tcmalloc), 534.5 (C); RocksDB 1.250 us per write
+against 1.259, 1.312 and 1.255. Native screen against master: geomean +0.15%,
+every scenario within the screen's noise (`sh6benchN` +1.48%, `rptestN`
+-1.51%, `malloc-large` -1.27%). Nginx (3 interleaved rounds, master library vs
+candidate): `download-4096` +0.4%, `proxy-16384-on` +0.2%, `headers` +0.2%,
+`upload-65536` +1.4%, PSS within 0.5 MiB.

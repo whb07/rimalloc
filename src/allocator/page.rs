@@ -129,7 +129,8 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_expensive!(_mi_page_is_valid(page));
         crate::internal::mi_assert_internal!(mi_page_is_in_full(page));
-        crate::internal::mi_assert_internal!(!(*mi_page_theap(page)).allow_page_abandon);
+        // C asserts the theap cannot abandon; here a full page may also have been kept while the
+        // process had one thread (`MI_PROCESS_MULTI_THREADED`).
         let theap = mi_page_theap(page);
         let theap_ptr = ThreadHeapPtr::new_unchecked(theap);
         let pqfull = theap_ptr.page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
@@ -160,6 +161,41 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
 /// publication remains permitted. If abandonment is enabled, stored arena callbacks and arguments
 /// reached synchronously must remain valid, must not incompatibly reenter these page/heap queues,
 /// and must not unwind.
+/// Set once a thread other than the main thread initializes its allocator state (Rust-only;
+/// `UPSTREAM_DIFF.md`). Until then no other thread can reclaim an abandoned page, so full pages
+/// stay in their owner's full queue, where the owner's next free returns them without atomics.
+pub(crate) static MI_PROCESS_MULTI_THREADED: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
+
+/// Abandon the full pages a theap kept while the process had one thread, as C would have when they
+/// filled, once another thread exists to reclaim them.
+///
+/// # Safety
+/// `theap` must be the live current-thread theap, with exclusive access to its queues.
+pub(crate) unsafe fn mi_theap_abandon_kept_full_pages(theap: *mut mi_theap_t) {
+    // SAFETY: the caller owns the live theap and its queues; each iteration abandons (or frees)
+    // the first full-queue page, removing it from the queue.
+    unsafe {
+        if !(*theap).allow_page_abandon
+            || !MI_PROCESS_MULTI_THREADED.load(core::sync::atomic::Ordering::Relaxed)
+        {
+            return;
+        }
+        let full_queue =
+            ThreadHeapPtr::new_unchecked(theap).page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
+        loop {
+            let first = (*full_queue.as_ptr()).first;
+            if first.is_null() {
+                break;
+            }
+            let full = crate::allocator::raw_bridge::assume_full_page(
+                crate::core_types::PagePtr::new_unchecked(first),
+            );
+            let _ = _mi_page_abandon_internal(full.into_abandon_candidate(), full_queue);
+        }
+    }
+}
+
 #[inline]
 unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     // SAFETY: the caller keeps this live active page and exact source queue stable. Preserve the
@@ -175,7 +211,8 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     let theap = unsafe { mi_page_theap(page) };
     // SAFETY: the captured owner remains live and its local abandonment policy is stable under the
     // caller's exclusive heap mutation epoch.
-    let allow_page_abandon = unsafe { (*theap).allow_page_abandon };
+    let allow_page_abandon = unsafe { (*theap).allow_page_abandon }
+        && MI_PROCESS_MULTI_THREADED.load(core::sync::atomic::Ordering::Relaxed);
     if allow_page_abandon {
         // SAFETY: the active page remains linked in the exact source queue with stable owner,
         // geometry, backing, and remote-free state. Consume Active through the complete abandon or
@@ -2313,6 +2350,7 @@ unsafe fn malloc_generic_body<const COUNTED: bool>(
             (*raw_theap).generic_count = 0;
             _mi_deferred_free(raw_theap, false);
             _mi_theap_collect_retired(raw_theap, false);
+            mi_theap_abandon_kept_full_pages(raw_theap);
 
             let generic_collect = crate::allocator::policy::ActivePolicy::generic_collect_limit();
             if generic_collect.reached_by((*raw_theap).generic_collect_count) {

@@ -73,6 +73,7 @@ and the conclusion drawn from them.
 | X25 | Batch remote frees per destination page (snmalloc-style) so one CAS publishes many blocks | Per-thread 16-slot table keyed by page; a batch publishes at 64 blocks or 32 KiB, on eviction, at the maintenance tick, in `mi_collect` and at thread exit; prototype only, never on master | **REJECT**: quick screen vs HEAD `larsonN` +4%, `larsonN-sized` +5%, `xmalloc-testN` +4%, `sh8benchN` about -1%, `mstressN` flat. The CAS that costs is the first one to a page, which batching keeps | Recorded below |
 | X26 | Reuse a block freed by its owner next (LIFO), dropping C's maintenance cadence for threads that churn without a page filling or emptying | Owner frees push onto `page.free` (asm and Rust paths) and clear `free_is_zero`; no counter on the free path; owner-approved divergence in `UPSTREAM_DIFF.md` | **ADOPT**: final screen geomean -1.08% (`glibc-thread` -8.5%, `larsonN` -5.1%, `larsonN-sized` -4.1%, `rptestN` -3.0%; `sh8benchN` +1.4%); held-out -0.79%; plaintext +1.1%; Nginx +0.6% | Recorded below |
 | X27 | Profile-guided optimization (PGO) of the Rust library, and BOLT post-link layout | PGO: instrumented cdylib trained on 11 of 21 native scenarios, rebuilt with `-Cprofile-use`. BOLT 18: opt-in `MIMALLOC_BENCH_BOLT=1` in `bench.py`, `--emit-relocs` link, checked-in LBR profile of the same 11 scenarios (`benchmarks/bolt.py`, `bolt-profile.fdata`) | PGO **REJECT**: screen geomean +0.15%. BOLT **ADOPT (opt-in)**: 21-scenario held-out geomean -0.87% (trained -0.94%, held out -0.79%); `malloc-large` -10.1%, `xmalloc-testN` -3.2%; worst `cfrac` +0.44% | Recorded below |
+| X28 | Per-thread cache of freed singleton pages (blocks above 512 KiB) to skip the arena's slice bookkeeping | Freed main-heap singleton pages kept registered and committed in the freeing theap (8 slots, 256 MiB, purge-delay expiry); reuse within 25% slack; never on master | **REJECT**: steady-state `malloc-large` -29%, but the screen's short runs +145% (first-touch THP faults: cached pages push the arena onto untouched slices), `xmalloc-testN` +6.6%, `sh6benchN` +4.0%; releasing the cache on a miss removes the faults and the gain | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1797,3 +1798,62 @@ scenario, all 21; training scenarios marked T):
 which BOLT lays out from the profile; without it the other 20 average about
 -0.4%. No scenario is worse than +0.44%, and the held-out scenarios gain as
 much as the training ones, so the layout is not fitted to the training set.
+
+## X28 — Cache of freed singleton pages (rejected)
+
+Decided 2026-10-15. On the rivals scoreboard `malloc-large` is the widest gap,
+3.07 times tcmalloc's time. Blocks above `MI_LARGE_MAX_OBJ_SIZE` (512 KiB) get
+a singleton page carved from 64 KiB arena slices, and every allocate/free pair
+of a 5 to 25 MiB block updates 80 to 400 slices: bitmap search and clear, the
+committed and free bitmaps, purge scheduling with a clock read, page-map
+registration, and (as in C, page.c:1036) abandoning the page as soon as it is
+full and reclaiming it on free. The profile on master: bitmap operations about
+63% of cycles, purge handling about 12%. The Nginx 1 MiB cases, which looked
+related on the scoreboard, were not: measured on the server CPUs they ran at
+jemalloc's throughput with 1 to 2 page faults per request, bound by kernel
+networking.
+
+Prototype: a freed main-heap singleton page reaching `try_free_abandoned` was
+kept, registered and committed, in the freeing thread's theap (new
+`CachedSingletonPage` capability and `AbandonedDisposition::Cached`), with
+statistics as for a free; a singleton allocation took the smallest cached page
+with at most 1/4 more slices than needed, reset its metadata as
+`mi_arenas_page_alloc_fresh` does (including separate page metadata, which all
+singleton pages use) and initialized it normally. Entries expired after the
+arena purge delay (1000 ms by default), and theap collection, `mi_collect` and
+thread exit released the cache. All gates passed.
+
+Steady-state Criterion `malloc-large` (master 729 us), by slack, slots and
+byte cap:
+
+| Slack | Slots | Cap | Time |
+|---|---|---|---|
+| 1/4 | 4 | 64 MiB | 652 us |
+| 1/2 | 4 | 64 MiB | 563 us |
+| 1/1 | 4 | 64 MiB | 461 us |
+| 1/2 | 8 | 128 MiB | 445 us |
+| 1/4 | 8 | 128 MiB | 543 us |
+| 1/4 | 8 | 256 MiB | 528 us |
+| 1/8 | 8 | 256 MiB | 648 us |
+
+With 1/4, 8 slots and 256 MiB, 46% of allocations hit (4 slots). The
+21-scenario screen (short runs, first run discarded) then gave `malloc-large`
++144.7% in every round, `xmalloc-testN` +6.6% (every round), `sh6benchN`
++4.0%, others within +/-2.5%, geomean +4.90%. In one process, master's
+`malloc-large` runs took 12.6 ms cold then 0.75 to 0.81 ms; the cache's took
+11.0 ms then 3.2, 1.7, 1.0, 1.6, 0.9, 1.0 and 0.7 ms, with 66 more page faults
+and 48% more kernel cycles over 8 runs. Holding up to 8 freed pages makes the
+arena satisfy misses from slices nobody has touched, and the first write to a
+block (the free-list link written by `free`) faults in a 2 MiB transparent
+huge page that the kernel zeroes. In a real program the same holding shows up
+as resident memory. Releasing the whole cache on a miss, so the arena reuses
+those resident slices, removed most of the extra faults (29 remained) but also
+the gain: steady state 763 us against 743 us. Nginx production (one sample per
+case before the harness's PSS sampler lost an exited worker again; no crash in
+the kernel or Nginx logs) moved within +/-1% except `upload-1048576` +18.7%,
+a case that varied +/-13% between sessions before.
+
+The arena's bitmap already reuses the most recently freed, still-resident
+slices, so a cache beside it competes with that reuse; closing the gap would
+take cheaper arena operations rather than a cache in front of them. Reverted;
+the prototype diff is kept outside the repository.

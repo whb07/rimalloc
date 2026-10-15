@@ -1152,7 +1152,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
 /// allocation whose page-map registration, page and block metadata, and backing
 /// remain initialized and stable with no concurrent free, realloc, or teardown
 /// until this call returns or frees it. The Copy witness does not extend those
-/// lifetimes. `zero_new_tail` must agree with `layout`. Each nonnull usable-size
+/// lifetimes. Each nonnull usable-size
 /// output must be valid, aligned, and uniquely writable for one `usize` when
 /// accessed, and must not overlap allocator metadata. The outputs may alias
 /// each other or lie within the live old allocation's user storage because every
@@ -1169,7 +1169,6 @@ unsafe fn mi_theap_realloc_validated_core(
     theap: ThreadHeapLocal,
     old: Option<crate::core_types::OldAllocation>,
     layout: crate::core_types::LayoutRequest,
-    zero_new_tail: crate::core_types::Zeroed,
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
@@ -1221,7 +1220,7 @@ unsafe fn mi_theap_realloc_validated_core(
         let preserve =
             old.map(|old| crate::core_types::PreserveBytes::new(old.usable(), new_requested));
         let preserved = preserve.map_or(0, |preserve| preserve.get());
-        if zero_new_tail == crate::core_types::Zeroed::Yes && newsize > preserved {
+        if layout.zeroed() == crate::core_types::Zeroed::Yes && newsize > preserved {
             let start = if preserved >= size_of::<isize>() {
                 preserved - size_of::<isize>()
             } else {
@@ -1305,14 +1304,9 @@ unsafe fn mi_realloc_request_from_ptr(
     let old = unsafe { mi_realloc_old_from_ptr(p, usable_pre)? };
     match old {
         Some(old) => Some(crate::core_types::ReallocRequest::from_existing(
-            old,
-            layout,
-            layout.zeroed(),
+            old, layout,
         )),
-        None => Some(crate::core_types::ReallocRequest::from_null(
-            layout,
-            layout.zeroed(),
-        )),
+        None => Some(crate::core_types::ReallocRequest::from_null(layout)),
     }
 }
 
@@ -1322,8 +1316,7 @@ unsafe fn mi_realloc_request_from_ptr(
 /// readable and stable, without concurrent free, realloc, or teardown, for as
 /// long as the returned request is used; the request does not extend this
 /// lifetime. `None` reports failed pointer validation after writing zero to a
-/// nonnull `usable_pre`; success leaves it untouched. The validated `layout`
-/// supplies the request's matching zero-new-tail policy. If nonnull,
+/// nonnull `usable_pre`; success leaves it untouched. If nonnull,
 /// `usable_pre` must be aligned and uniquely writable for one `usize` when
 /// accessed and must not overlap allocator metadata. It may point within the
 /// user allocation if that storage is still live at the access. Diagnostic
@@ -1348,9 +1341,7 @@ pub(crate) unsafe fn mi_realloc_request_from_user(
         return None;
     };
     Some(crate::core_types::ReallocRequest::from_existing(
-        old,
-        layout,
-        layout.zeroed(),
+        old, layout,
     ))
 }
 
@@ -1402,7 +1393,6 @@ pub unsafe extern "C" fn mi_theap_realloc(
                 ThreadHeapLocal::new_unchecked(theap),
                 old,
                 layout,
-                layout.zeroed(),
                 ptr::null_mut(),
                 ptr::null_mut(),
             )
@@ -1421,7 +1411,6 @@ pub unsafe extern "C" fn mi_theap_realloc(
             ThreadHeapLocal::new_unchecked(theap),
             old,
             layout,
-            layout.zeroed(),
             ptr::null_mut(),
             ptr::null_mut(),
         )
@@ -1433,7 +1422,7 @@ pub unsafe extern "C" fn mi_theap_realloc(
 /// state; protocol atomic remote-free publication is permitted. If `req` contains an old
 /// allocation, it and its page and block metadata must remain live and stable, without concurrent
 /// free or realloc, until this call returns or consumes it; the request does not extend those
-/// lifetimes. The request's zero-new-tail policy must agree with its new layout. Allocation failure
+/// lifetimes. Allocation failure
 /// leaves the old allocation live, in-place success returns it, and moved success returns a new
 /// allocation with the preserved prefix and tail state required by the request policy after
 /// freeing the old.
@@ -1442,14 +1431,12 @@ unsafe fn mi_theap_realloc_typed(
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
     // SAFETY: the caller keeps the current-thread heap locally exclusive and any old allocation
-    // metadata stable through the core disposition; the typed request carries its validated layout
-    // and matching zero-new-tail policy.
+    // metadata stable through the core disposition; the typed request carries its validated layout.
     unsafe {
         mi_theap_realloc_validated_core(
             theap,
             req.old(),
             req.new_layout(),
-            req.zero_new_tail(),
             ptr::null_mut(),
             ptr::null_mut(),
         )
@@ -1462,8 +1449,7 @@ unsafe fn mi_theap_realloc_typed(
 /// mutation and no concurrent teardown or non-protocol mutation. Protocol atomic remote-free
 /// publication is permitted. If `req` contains an old allocation, it and its page and block
 /// metadata must remain live and stable, without concurrent free or realloc, until this call
-/// returns or consumes it; the request does not extend those lifetimes. Its zero-new-tail policy
-/// must agree with its new layout. Heap-localization or allocation failure leaves the old
+/// returns or consumes it; the request does not extend those lifetimes. Heap-localization or allocation failure leaves the old
 /// allocation live; in-place success returns it; moved success returns a new allocation with the
 /// preserved prefix and tail state required by the request policy after freeing the old.
 pub(crate) unsafe fn mi_theap_realloc_req(
@@ -1513,7 +1499,6 @@ pub(crate) unsafe fn mi_theap_realloc_layout(
             ThreadHeapLocal::new_unchecked(theap),
             old,
             layout,
-            layout.zeroed(),
             ptr::null_mut(),
             ptr::null_mut(),
         )
@@ -1526,8 +1511,7 @@ pub(crate) unsafe fn mi_theap_realloc_layout(
 /// mutation and no concurrent teardown or non-protocol mutation. Protocol atomic remote-free
 /// publication is permitted. If `req` contains an old allocation, it and its page and block
 /// metadata must remain live and stable, without concurrent free or realloc, until this call
-/// returns or consumes it; the request does not extend those lifetimes. Its zero-new-tail policy
-/// must agree with its new layout. Each nonnull `usable_pre` and `usable_post` must be aligned and
+/// returns or consumes it; the request does not extend those lifetimes. Each nonnull `usable_pre` and `usable_post` must be aligned and
 /// writable for one `usize` when accessed and must not overlap allocator metadata. They may
 /// mutually alias or point within live old user storage at the access. Heap-localization failure
 /// leaves the old allocation and both outputs untouched. Allocation failure leaves the old
@@ -1546,14 +1530,13 @@ unsafe fn mi_theap_realloc_request_raw(
         return ptr::null_mut();
     };
     // SAFETY: localization establishes the live current-thread heap witness and exclusive local
-    // mutation. The request's old allocation remains stable through disposition, its layout and
-    // tail policy agree, and both optional outputs are valid at access before any moved free.
+    // mutation. The request's old allocation remains stable through disposition, its layout is
+    // validated, and both optional outputs are valid at access before any moved free.
     unsafe {
         mi_theap_realloc_validated_core(
             ThreadHeapLocal::new_unchecked(theap),
             req.old(),
             req.new_layout(),
-            req.zero_new_tail(),
             usable_pre,
             usable_post,
         )

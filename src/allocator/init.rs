@@ -28,9 +28,9 @@ use crate::core_types::{BorrowedSubproc, HeapPtr, SubprocPtr};
 use crate::internal::memid::mi_memid_t;
 use crate::internal::{_mi_allocator_done, _mi_allocator_init};
 use crate::types::{
-    MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_heap_visit_fun,
-    mi_page_queue_t, mi_page_t, mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
-    mi_thread_local_t, mi_threadid_t, mi_tld_t,
+    MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_MAX_ARENAS, MI_PAGES_DIRECT, mi_heap_t,
+    mi_heap_visit_fun, mi_page_queue_t, mi_page_t, mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t,
+    mi_theap_t, mi_thread_local_t, mi_threadid_t, mi_tld_t,
 };
 #[cfg(any(
     miri,
@@ -50,7 +50,6 @@ core::arch::global_asm!(".hidden _mi_cpu_stosb_max");
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden subproc_main");
 
-const MI_MAX_ARENAS: usize = 160;
 pub const MI_TLD_INVALID: *mut mi_tld_t = core::ptr::dangling_mut::<mi_tld_t>();
 
 pub const fn mi_memid_none() -> mi_memid_t {

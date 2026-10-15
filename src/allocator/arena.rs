@@ -60,29 +60,26 @@ use crate::os::{
     _mi_os_alloc_aligned, _mi_os_alloc_aligned_at_offset, _mi_os_alloc_huge_os_pages,
     _mi_os_minimal_purge_size, _mi_os_numa_node_count,
 };
-use crate::prim::_mi_page_associated_theap_peek;
+use crate::prim::{_mi_page_associated_theap_peek, mi_set_errno};
 use crate::types::{
-    MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
-    MI_PAGE_MAX_START_BLOCK_ALIGN2, MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE,
-    MI_SMALL_SIZE_MAX, mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t,
-    mi_heap_area_t, mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_local_t,
-    mi_tld_t,
+    ENOMEM, MI_ARENA_MAX_SIZE, MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES,
+    MI_MAX_ARENAS, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN, MI_PAGE_MAX_START_BLOCK_ALIGN2,
+    MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, mi_arena_id_t,
+    mi_arena_t, mi_block_visit_fun, mi_commit_fun_t, mi_heap_area_t, mi_heap_t, mi_msecs_t,
+    mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_local_t, mi_tld_t,
 };
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
 pub const MI_ARENA_SLICE_ALIGN: usize = MI_ARENA_SLICE_SIZE;
 pub const MI_ARENA_BCHUNK_BITS: usize = 64 * size_of::<usize>();
 pub const MI_ARENA_MIN_SIZE: usize = MI_ARENA_BCHUNK_BITS * MI_ARENA_SLICE_SIZE;
-const MI_ARENA_MAX_CHUNK_OBJ_SIZE: usize = MI_ARENA_BCHUNK_BITS * MI_ARENA_SLICE_SIZE;
+const MI_ARENA_MAX_CHUNK_OBJ_SIZE: usize = MI_ARENA_MIN_SIZE;
 pub const MI_META_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_BLOCK_START_MAX_OFFSET: usize = 8 * MI_INTPTR_BITS;
 // Retains upstream diagnostic/color constants and traversal markers used by
 // compatibility paths outside the routine Rust test target.
 
-const MI_MAX_ARENAS: usize = 160;
 const MI_ARENA_BIN_COUNT: usize = MI_BIN_COUNT;
-const MI_ARENA_MIN_OBJ_SIZE: usize = MI_ARENA_SLICE_SIZE;
-const MI_ARENA_MAX_SIZE: usize = MI_BITMAP_MAX_BIT_COUNT * MI_ARENA_SLICE_SIZE;
 const _: () = assert!(mi_slice_count_of_size(MI_SMALL_PAGE_SIZE) > 0);
 const _: () = assert!(mi_slice_count_of_size(MI_SMALL_PAGE_SIZE) <= u32::MAX as usize);
 const MI_SMALL_PAGE_SLICE_COUNT: crate::core_types::SliceCount = {
@@ -113,7 +110,6 @@ const MI_LARGE_PAGE_SLICE_COUNT: crate::core_types::SliceCount = {
         None => unreachable!(),
     }
 };
-const ENOMEM: c_int = 12;
 
 mod abandoned;
 mod debug;
@@ -192,29 +188,6 @@ unsafe fn mi_arenas_get_count_typed(subproc: SubprocPtr) -> usize {
             .get()
     }
 }
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn mi_set_errno(err: c_int) {
-    // SAFETY: this declaration matches the Linux/Android libc ABI.
-    unsafe extern "C" {
-        fn __errno_location() -> *mut c_int;
-    }
-    // SAFETY: `__errno_location` returns this thread's writable errno slot.
-    unsafe { *__errno_location() = err };
-}
-
-#[cfg(target_vendor = "apple")]
-fn mi_set_errno(err: c_int) {
-    // SAFETY: this declaration matches the Apple libc ABI.
-    unsafe extern "C" {
-        fn __error() -> *mut c_int;
-    }
-    // SAFETY: `__error` returns this thread's writable errno slot.
-    unsafe { *__error() = err };
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
-fn mi_set_errno(_err: c_int) {}
 
 fn mi_arena_max_object_size() -> usize {
     let max_size = _mi_align_up(

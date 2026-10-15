@@ -30,7 +30,9 @@ use crate::prim::{
     _mi_prim_free, _mi_prim_mem_init, _mi_prim_numa_node, _mi_prim_numa_node_count,
     _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse, _mi_theap_default,
 };
-use crate::types::{mi_arena_t, mi_commit_fun_t, mi_heap_t, mi_page_t, mi_subproc_t};
+use crate::types::{
+    MI_MAX_ARENAS, mi_arena_t, mi_commit_fun_t, mi_heap_t, mi_page_t, mi_subproc_t,
+};
 
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_4_GIB: usize = 4 * MI_MiB;
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_32_GIB: usize = 32 * MI_MiB;
@@ -45,8 +47,6 @@ pub const MI_HINT_BASE: usize = 2usize << 40;
 pub const MI_HINT_AREA: usize = 4usize << 40;
 pub const MI_HINT_MAX: usize = 30usize << 40;
 pub const MI_HUGE_OS_PAGE_SIZE: usize = MI_GiB;
-
-const MI_MAX_ARENAS: usize = 160;
 
 static ALIGNED_BASE: AtomicUsize = AtomicUsize::new(0);
 static MI_HUGE_START: AtomicUsize = AtomicUsize::new(0);

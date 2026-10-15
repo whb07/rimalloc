@@ -32,6 +32,8 @@ from common import file_sha256, write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOCATORS = ("mechanical_mimalloc_raw", "c-mimalloc-3.3.2")
+# `run --allocator` names, as in the nginx and webserver suites; rivals keep their own labels.
+ALLOCATOR_NAMES = {"rust": ALLOCATORS[0], "mimalloc": ALLOCATORS[1], **{name: name for name in rivals.NAMES}}
 SHORT_NAMES = {"mechanical_mimalloc_raw": "rust", "c-mimalloc-3.3.2": "c"}
 QUICK = ("glibc-thread", "malloc-large", "cache-scratch1", "xmalloc-testN")
 SCENARIOS = dict.fromkeys((
@@ -333,7 +335,9 @@ def report(directory: Path) -> bool:
     if manifest.get("suite") == "architecture":
         return architecture.report(directory, manifest)
     allocators = manifest.get("allocators", list(ALLOCATORS))
-    rival_names = allocators[2:]
+    rust_label, c_label = ALLOCATORS
+    has_rust, has_c = rust_label in allocators, c_label in allocators
+    rival_names = [a for a in allocators if a not in ALLOCATORS]
     measurements = []
     errors = []
     for scenario in manifest["scenarios"]:
@@ -363,32 +367,45 @@ def report(directory: Path) -> bool:
         if any(len(v) != manifest["controls"]["repeats"] for v in values.values()):
             continue
         medians = {a: statistics.median(r["median"] for r in values[a]) for a in allocators}
-        rust, c = medians[ALLOCATORS[0]], medians[ALLOCATORS[1]]
-        row = {"scenario": scenario, "metric": SCENARIOS[scenario], "rust_median_ns": rust,
-               "c_median_ns": c, "rust_c_ratio": rust / c, "difference_pct": (rust / c - 1) * 100,
-               "noisy": any(r["noisy"] for v in values.values() for r in v)}
+        row = {"scenario": scenario, "metric": SCENARIOS[scenario]}
+        if has_rust:
+            row["rust_median_ns"] = medians[rust_label]
+        if has_c:
+            row["c_median_ns"] = medians[c_label]
+        if has_rust and has_c:
+            row["rust_c_ratio"] = medians[rust_label] / medians[c_label]
+            row["difference_pct"] = (row["rust_c_ratio"] - 1) * 100
+        row["noisy"] = any(r["noisy"] for v in values.values() for r in v)
         for name in rival_names:
             row[f"{name}_median_ns"] = medians[name]
-            row[f"rust_{name}_ratio"] = rust / medians[name]
+            if has_rust:
+                row[f"rust_{name}_ratio"] = medians[rust_label] / medians[name]
         rows.append(row)
     complete = not errors and bool(rows) and manifest["status"] == "complete"
     native_rows = [r for r in rows if r["scenario"] in NATIVE_SCENARIOS]
-    geomean = math.exp(statistics.mean(math.log(r["rust_c_ratio"]) for r in native_rows)) if complete and native_rows else None
+    ratios = complete and native_rows and has_rust
+    geomean = (math.exp(statistics.mean(math.log(r["rust_c_ratio"]) for r in native_rows))
+               if ratios and has_c else None)
     rival_geomeans = {name: math.exp(statistics.mean(math.log(r[f"rust_{name}_ratio"]) for r in native_rows))
-                      for name in rival_names} if complete and native_rows else {}
-    lines = ["# Isolated Rust and C comparison", "", f"Status: {'complete' if complete else 'INCOMPLETE'}.", "",
+                      for name in rival_names} if ratios else {}
+    # Columns in the default layout: Rust, C, Rust vs C, then each rival and Rust vs it.
+    columns = [("Rust median", "rust_median_ns", "time")] * has_rust + [("C median", "c_median_ns", "time")] * has_c
+    columns += [("Rust vs C", "difference_pct", "pct")] * (has_rust and has_c)
+    for name in rival_names:
+        columns += [(f"{name} median", f"{name}_median_ns", "time")]
+        columns += [(f"Rust vs {name}", f"rust_{name}_ratio", "ratio")] * has_rust
+    title = "Rust and C" if allocators[:2] == list(ALLOCATORS) else "allocator"
+    lines = [f"# Isolated {title} comparison", "", f"Status: {'complete' if complete else 'INCOMPLETE'}.", "",
              "Each scenario and allocator runs in a fresh process. Negative differences mean less time for Rust.",
              "Medians aggregate repetition medians. Noise describes within-run variation; p95 is a batch statistic,",
              "not individual allocation latency. This exploratory report does not apply release thresholds.", "",
-             "| Scenario | Metric | Rust median | C median | Rust vs C | "
-             + "".join(f"{name} median | Rust vs {name} | " for name in rival_names) + "Noise |",
-             "|---|---|---:|---:|---:|" + "---:|---:|" * len(rival_names) + "---|"]
+             "| Scenario | Metric | " + "".join(f"{heading} | " for heading, _, _ in columns) + "Noise |",
+             "|---|---|" + "---:|" * len(columns) + "---|"]
     for row in rows:
-        rival_cells = "".join(f"{SUMMARY.format_time(row[f'{name}_median_ns'])} | "
-                              f"{(row[f'rust_{name}_ratio'] - 1) * 100:+.2f}% | " for name in rival_names)
-        lines.append(f"| {row['scenario']} | {row['metric']} | {SUMMARY.format_time(row['rust_median_ns'])} | "
-                     f"{SUMMARY.format_time(row['c_median_ns'])} | {row['difference_pct']:+.2f}% | {rival_cells}"
-                     f"{'noisy' if row['noisy'] else 'stable'} |")
+        cells = "".join(f"{SUMMARY.format_time(row[key])} | " if kind == "time"
+                        else f"{row[key]:+.2f}% | " if kind == "pct"
+                        else f"{(row[key] - 1) * 100:+.2f}% | " for _, key, kind in columns)
+        lines.append(f"| {row['scenario']} | {row['metric']} | {cells}{'noisy' if row['noisy'] else 'stable'} |")
     if geomean is not None:
         lines += ["", f"Native scenario geomean Rust/C: {geomean:.4f} ({(geomean - 1) * 100:+.2f}%)."]
         lines += [f"Native scenario geomean Rust/{name}: {g:.4f} ({(g - 1) * 100:+.2f}%)."
@@ -406,8 +423,10 @@ def report(directory: Path) -> bool:
                      f"{'noisy' if result['noisy'] else 'stable'} |")
     lines += applications.report_lines(measurements)
     (directory / "summary.md").write_text("\n".join(lines) + "\n")
-    fields = ["scenario", "metric", "rust_median_ns", "c_median_ns", "rust_c_ratio", "difference_pct", "noisy"]
-    fields += [f"{prefix}{name}{suffix}" for name in rival_names for prefix, suffix in (("", "_median_ns"), ("rust_", "_ratio"))]
+    fields = ["scenario", "metric"] + ["rust_median_ns"] * has_rust + ["c_median_ns"] * has_c
+    fields += ["rust_c_ratio", "difference_pct"] * (has_rust and has_c) + ["noisy"]
+    for name in rival_names:
+        fields += [f"{name}_median_ns"] + [f"rust_{name}_ratio"] * has_rust
     with (directory / "results.csv").open("w") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
@@ -426,7 +445,11 @@ def compare(args: argparse.Namespace) -> int:
     controls = {name: getattr(args, name) for name in ("samples", "measurement_secs", "warmup_secs", "repeats",
                                                        "app_operations", "app_threads", "app_value_size", "app_timeout")}
     selected = list(SCENARIOS) if args.full else args.scenario or list(QUICK)
-    allocators = list(ALLOCATORS) + list(dict.fromkeys(args.rival or []))
+    if args.allocator:
+        allocators = [ALLOCATOR_NAMES[name] for name in dict.fromkeys(args.allocator)]
+    else:
+        allocators = list(ALLOCATORS) + list(dict.fromkeys(args.rival or []))
+    rival_names = [a for a in allocators if a in rivals.NAMES]
     manifest = run_manifest(scenarios=selected, controls=controls, allocators=allocators,
                             process_layout="isolated-scenario-allocator", workers=[])
     path = directory / "manifest.json"
@@ -435,8 +458,8 @@ def compare(args: argparse.Namespace) -> int:
     print("Measurement seconds are a target, not a cap on fixed-duration workloads.", flush=True)
     with run_lifecycle(path, manifest, manifest["workers"]):
         artifacts = build(args.jobs)
-        if args.rival:
-            manifest["rival_artifacts"] = rivals.build(allocators[2:], artifacts, args.jobs, sys.modules[__name__])
+        if rival_names:
+            manifest["rival_artifacts"] = rivals.build(rival_names, artifacts, args.jobs, sys.modules[__name__])
             artifacts["rivals"] = manifest["rival_artifacts"]["libraries"]
         manifest["artifacts"] = artifacts
         copy_build_logs(artifacts, directory)
@@ -606,8 +629,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     selection = run.add_mutually_exclusive_group()
     selection.add_argument("--full", action="store_true", help="all native scenarios plus Redis and RocksDB (downloads and builds them)")
     selection.add_argument("--scenario", action="append", choices=sorted(SCENARIOS), help="select a case; repeat for more")
-    run.add_argument("--rival", action="append", choices=rivals.NAMES,
-                     help="also measure this allocator (builds pinned jemalloc/tcmalloc); repeat for more")
+    allocator_selection = run.add_mutually_exclusive_group()
+    allocator_selection.add_argument("--rival", action="append", choices=rivals.NAMES,
+                                     help="also measure this allocator (builds pinned jemalloc/tcmalloc); repeat for more")
+    allocator_selection.add_argument("--allocator", action="append", choices=list(ALLOCATOR_NAMES),
+                                     help="measure only these allocators (default: rust and mimalloc); repeat for more")
     run.add_argument("--samples", type=lambda v: minimum(v, 10), default=10)
     run.add_argument("--measurement-secs", type=minimum, default=3)
     run.add_argument("--warmup-secs", type=minimum, default=1)

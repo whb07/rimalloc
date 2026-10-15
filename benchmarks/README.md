@@ -68,6 +68,15 @@ ownership probe applies only to mimalloc builds. Reports add a median and
 Rust-vs-rival column per rival and a native geomean per rival; the
 architectural probes need mimalloc heap APIs and stay Rust vs C.
 
+`run --allocator NAME` (repeatable; `rust`, `mimalloc`, `glibc`, `jemalloc`,
+`tcmalloc`, as for `nginx` and `webserver`) measures only the named allocators
+instead of Rust and C plus any `--rival`, for example
+`run --scenario redis --scenario rocksdb --allocator rust` after a change to the
+Rust library alone. The report then has a column per measured allocator, Rust
+ratios only when Rust ran, and the Rust/C geomean only when both ran;
+`scoreboard.py` combines such a run with earlier result directories for the
+allocators it left out.
+
 ## Screening a change
 
 `./benchmarks/bench.py screen` is the inner dev loop for allocator changes. It

@@ -57,7 +57,8 @@ class EntryPointTests(unittest.TestCase):
         self.assertEqual((args.command, args.samples, args.measurement_secs, args.warmup_secs, args.repeats),
                          ("run", 10, 3, 1, 1))
         for arguments in (["--samples", "9"], ["--scenario", "typo"], ["--jobs", "0"],
-                          ["--full", "--scenario", "malloc-large"], ["--repeats", "0"]):
+                          ["--full", "--scenario", "malloc-large"], ["--repeats", "0"], ["--allocator", "c"],
+                          ["--allocator", "rust", "--rival", "glibc"]):
             with self.subTest(arguments=arguments), self.assertRaises(SystemExit):
                 bench.parse_args(arguments)
 
@@ -242,6 +243,39 @@ class EntryPointTests(unittest.TestCase):
         row = results["summary"][0]
         self.assertEqual((row["glibc_median_ns"], row["rust_glibc_ratio"]), (40, 0.25))
         self.assertIn("Rust vs glibc", (self.root / "summary.md").read_text())
+
+    def test_allocator_selection_runs_only_the_named_allocators(self):
+        args = bench.parse_args(["run", "--allocator", "rust", "--allocator", "tcmalloc", "--allocator", "rust"])
+        self.assertEqual([bench.ALLOCATOR_NAMES[n] for n in dict.fromkeys(args.allocator)],
+                         [bench.ALLOCATORS[0], "tcmalloc"])
+
+    def test_report_handles_allocator_subsets(self):
+        scenario = "glibc-thread"
+        for allocators, values in (([bench.ALLOCATORS[0]], {bench.ALLOCATORS[0]: 10}),
+                                   ([bench.ALLOCATORS[0], "tcmalloc"], {bench.ALLOCATORS[0]: 10, "tcmalloc": 40}),
+                                   ([bench.ALLOCATORS[1]], {bench.ALLOCATORS[1]: 20})):
+            with self.subTest(allocators=allocators):
+                root = self.root / "-".join(allocators)
+                manifest = {"status": "complete", "scenarios": [scenario], "allocators": allocators,
+                            "controls": {"samples": 10, "repeats": 1}, "workers": []}
+                for allocator in allocators:
+                    relative = f"round-001/{scenario}/{allocator}"
+                    fixture(root / relative, scenario, allocator, values[allocator])
+                    manifest["workers"].append({"directory": relative, "exit_status": 0})
+                bench.write_json(root / "manifest.json", manifest)
+                self.assertTrue(bench.report(root))
+                results = json.loads((root / "results.json").read_text())
+                row = results["summary"][0]
+                self.assertIsNone(results["geomean"])
+                self.assertEqual("rust_median_ns" in row, bench.ALLOCATORS[0] in allocators)
+                self.assertEqual("c_median_ns" in row, bench.ALLOCATORS[1] in allocators)
+                self.assertNotIn("rust_c_ratio", row)
+                if "tcmalloc" in allocators:
+                    self.assertEqual(row["rust_tcmalloc_ratio"], 0.25)
+                    self.assertEqual(results["rival_geomeans"], {"tcmalloc": 0.25})
+                header = (root / "results.csv").read_text().splitlines()[0].split(",")
+                self.assertEqual(header[:2], ["scenario", "metric"])
+                self.assertNotIn("c_median_ns" if bench.ALLOCATORS[1] not in allocators else "rust_median_ns", header)
 
     def test_missing_allocator_makes_report_incomplete(self):
         manifest = self.saved_run()

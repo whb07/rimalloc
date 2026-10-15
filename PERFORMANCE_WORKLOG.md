@@ -75,6 +75,7 @@ and the conclusion drawn from them.
 | X27 | Profile-guided optimization (PGO) of the Rust library, and BOLT post-link layout | PGO: instrumented cdylib trained on 11 of 21 native scenarios, rebuilt with `-Cprofile-use`. BOLT 18: opt-in `MIMALLOC_BENCH_BOLT=1` in `bench.py`, `--emit-relocs` link, checked-in LBR profile of the same 11 scenarios (`benchmarks/bolt.py`, `bolt-profile.fdata`) | PGO **REJECT**: screen geomean +0.15%. BOLT **ADOPT (opt-in)**: 21-scenario held-out geomean -0.87% (trained -0.94%, held out -0.79%); `malloc-large` -10.1%, `xmalloc-testN` -3.2%; worst `cfrac` +0.44% | Recorded below |
 | X28 | Per-thread cache of freed singleton pages (blocks above 512 KiB) to skip the arena's slice bookkeeping | Freed main-heap singleton pages kept registered and committed in the freeing theap (8 slots, 256 MiB, purge-delay expiry); reuse within 25% slack; never on master | **REJECT**: steady-state `malloc-large` -29%, but the screen's short runs +145% (first-touch THP faults: cached pages push the arena onto untouched slices), `xmalloc-testN` +6.6%, `sh6benchN` +4.0%; releasing the cache on a miss removes the faults and the gain | Recorded below |
 | X29 | Request transparent huge pages only once the heap is large | Arenas reserved without `MADV_HUGEPAGE`; armed once at 32 MiB of arena pages, then all arenas are advised and their resident memory collapsed (`allocator/arena/thp.rs`) | **ADOPT** (owner decision): axum PSS -67/-67/-63% (json/plaintext/fortunes), Nginx worker PSS -22 to -31%, throughput equal or better; native screen +0.71% geomean, all from `malloc-large-old` +12% in short runs (steady state unchanged); other 20 within +/-1.3% | Recorded below |
+| X30 | Run the main thread heap's one-time initialization (upstream bug) | `theap_main` starts with an empty memid so `theap_main_init` runs (C and the translation started it static, skipping options and cookie) | **ADOPT** (owner decision): native screen +0.27% (noise), Nginx +0.5 to +1.0% at equal PSS; regression test added | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1939,3 +1940,32 @@ one 146k `headers` run (16 MiB) against about 124k for every other run.
 Final screen (21 scenarios): geomean +0.71%; `malloc-large-old` +12.03%,
 `rptestN` +1.23%, `sh6benchN` +0.97%, `alloc-test1` +0.83%, `larsonN-sized`
 -1.23%, `alloc-testN` -0.76%, the rest within +/-0.65%. Gates passed.
+
+## X30 — The main thread's heap was never initialized (fixed)
+
+Decided 2026-10-15. Profiling Redis SET (where tcmalloc leads by about 3% in
+the application suite and 9% in a direct `redis-benchmark -t set -P 16` run:
+1.51-1.53M against 1.38-1.40M requests/s) showed the allocator at 20.8% of
+server cycles against tcmalloc's 4.1%, 12.6% in `_mi_theap_page_reclaim`.
+Counters in the library gave 2.45M owner reclaims for 3.2M SETs, all of small
+pages moved to the full queue and abandoned. `MIMALLOC_PAGE_FULL_RETAIN=-1`
+(which should disable abandonment) changed nothing, and a diagnostic print
+showed the Redis main thread's theap with `page_full_retain` 2 and abandonment
+enabled under any setting: the values of the `theap_main` static. Both C 3.3.2
+and the translation declare it with a static memid, while
+`mi_theap_main_init` initializes it only while the memid is not static, so the
+options, the cookie and the guarded settings are never applied to the main
+thread (its random state is reseeded by `_mi_random_reinit_if_weak` at process
+start). X16's `page_full_retain` default of 0 therefore never reached main
+threads; its evidence came from multi-threaded scenarios.
+
+The fix starts `theap_main` with an empty memid. A test checks that after
+process initialization the main theap's memid is static, its cookie nonzero and
+its `page_full_retain` the option's value; it fails without the fix. Gates
+passed. Screen against master: geomean +0.27%, every scenario within +/-1.4%
+(`sh6benchN` +1.41%, `rptestN` +1.08%, `glibc-thread` +0.91%, all within the
+screen's noise). Nginx (3 interleaved rounds per case, master library vs fix):
+`download-4096` +0.6%, `proxy-16384-on` +0.8%, `headers` +0.5%,
+`upload-65536` +1.0%, PSS equal. Redis SET with the fix: 1.395-1.397M at the
+default `page_full_retain` 0, 1.466-1.481M with abandonment disabled (-1),
+which X31 follows up.

@@ -447,7 +447,9 @@ static mut theap_main: mi_theap_t = mi_theap_t {
     guarded_sample_count: 1,
     pages_free_direct: MI_SMALL_PAGES_EMPTY(),
     pages: MI_PAGE_QUEUES_EMPTY(),
-    memid: mi_memid_static(),
+    // Starts non-static so `thread::theap_main_init` runs once and marks it static. C 3.3.2
+    // initializes it with `MI_MEMID_STATIC`, which skips that initialization (`UPSTREAM_DIFF.md`).
+    memid: mi_memid_none(),
     stats: MI_STATS_NULL(),
 };
 
@@ -947,6 +949,24 @@ mod tests {
     fn auto_process_init_initializes_large_page_config() {
         unsafe { super::_mi_auto_process_init() };
         assert!(unsafe { crate::os::_mi_os_canuse_large_page(1 << 30, 2 << 20) });
+    }
+
+    /// The main theap's one-time initialization runs: options apply to it and its cookie is drawn
+    /// from its random state (C 3.3.2 skips both).
+    #[test]
+    fn main_theap_initialization_applies_options_and_cookie() {
+        unsafe { super::_mi_auto_process_init() };
+        // SAFETY: process initialization has completed; these reads observe settled fields.
+        unsafe {
+            let theap = core::ptr::addr_of!(super::theap_main);
+            assert!(super::mi_memid_is_static((*theap).memid));
+            assert_ne!((*theap).cookie, 0);
+            let retain = crate::allocator::options::mi_option_get(
+                crate::allocator::options::mi_option_t::mi_option_page_full_retain,
+            )
+            .clamp(-1, 32);
+            assert_eq!((*theap).page_full_retain, retain);
+        }
     }
 
     #[cfg(target_os = "linux")]

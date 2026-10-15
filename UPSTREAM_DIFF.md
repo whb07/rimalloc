@@ -104,3 +104,20 @@ full 5000 times) 11 to 13% in short runs while its steady state is unchanged.
 
 Compatibility: an arena reserved by another thread at the moment the request is
 armed may miss it and run without huge pages.
+
+### The main thread's heap is initialized (C 3.3.2: never)
+
+Fixed 2026-10-15 by owner decision (`PERFORMANCE_WORKLOG.md` X30). C declares
+the main thread's statically allocated theap with `MI_MEMID_STATIC`, and
+`mi_theap_main_init` runs its one-time initialization only while the memid is
+not static, so it never runs. The main thread then ignores the options read by
+`_mi_theap_options_init` (it keeps `page_full_retain` 2 and abandonment
+enabled whatever `MIMALLOC_PAGE_FULL_RETAIN` says, and therefore never received
+this crate's default of 0) and its theap cookie stays 0; its random state is
+still reseeded by process initialization. Rust starts the static with an empty
+memid, so the initialization runs once and marks it static. This changes the
+main thread's behavior only where options or the cookie matter: Nginx workers,
+Redis and other single-threaded programs now use the configured
+`page_full_retain`. Evidence: native screen +0.27% geomean (all within
++/-1.4%), Nginx throughput +0.5% to +1.0% at equal PSS.
+

@@ -2011,4 +2011,8 @@ against 1.259, 1.312 and 1.255. Native screen against master: geomean +0.15%,
 every scenario within the screen's noise (`sh6benchN` +1.48%, `rptestN`
 -1.51%, `malloc-large` -1.27%). Nginx (3 interleaved rounds, master library vs
 candidate): `download-4096` +0.4%, `proxy-16384-on` +0.2%, `headers` +0.2%,
-`upload-65536` +1.4%, PSS within 0.5 MiB.
+`upload-65536` +1.4%, PSS within 0.5 MiB. The axum server (3 interleaved
+rounds, X29 library against master with X30 and X31; its tokio workers switch
+X31 off at start) was unchanged: json +0.3%, plaintext +1.5% (+2.9, +1.5,
++1.2), fortunes -0.1%, PSS 6.0/6.1/7.6 MiB against 6.0/5.9/7.6 with no huge
+pages in either.

@@ -77,3 +77,30 @@ frees. `scripts/check-behavioral-parity.py` allows one case,
 `theap_wrong_thread_malloc_aligned_status`: a debug-build wrong-thread
 allocation is caught only on the generic path, which C reaches and Rust, with a
 free block available, does not.
+
+### Transparent huge pages are requested only for large heaps (C: for every arena)
+
+Adopted 2026-10-15 by owner decision (`PERFORMANCE_WORKLOG.md` X29). C
+asks for transparent huge pages (`MADV_HUGEPAGE`) on every arena it reserves
+when `allow_thp` is enabled (the default). On a host in `madvise` THP mode every
+2 MiB region the process touches then becomes resident, and because arenas
+start each thread's search in a different chunk, a small multi-threaded
+process holds several mostly empty huge pages. Rust reserves arenas without the
+request and makes it, once, the first time the arenas have handed out 32 MiB
+of pages: then every arena and every later reservation asks for huge pages, and
+what the arenas already hold is collapsed into them (`MADV_COLLAPSE`, Linux 6.1
+and later; best effort, `errno` unchanged). `allow_thp=0` still disables huge
+pages entirely.
+
+Evidence on the EPYC 4245P host (THP `madvise`): the TechEmpower axum server
+drops from 17.9 to 5.9 MiB PSS (json), 17.8 to 5.8 (plaintext) and 20.7 to 7.7
+(fortunes), below jemalloc (10.9 to 11.1 MiB), with throughput +0.1%, +3.5% and
++0.1%; Nginx worker PSS drops 20.2 to 14.9 MiB (`download-4096`), 24.4 to 16.8
+(`proxy-16384-on`) and 32.4 to 25.1 (`headers`) at equal throughput. Large
+heaps keep C's huge-page coverage (`larsonN` 76 of 82 MiB) and speed; a process
+whose heap stays below 32 MiB uses base pages, as glibc, jemalloc and tcmalloc
+do by default, which costs `malloc-large-old` (a single 2 MiB buffer written in
+full 5000 times) 11 to 13% in short runs while its steady state is unchanged.
+
+Compatibility: an arena reserved by another thread at the moment the request is
+armed may miss it and run without huge pages.

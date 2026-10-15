@@ -74,6 +74,7 @@ and the conclusion drawn from them.
 | X26 | Reuse a block freed by its owner next (LIFO), dropping C's maintenance cadence for threads that churn without a page filling or emptying | Owner frees push onto `page.free` (asm and Rust paths) and clear `free_is_zero`; no counter on the free path; owner-approved divergence in `UPSTREAM_DIFF.md` | **ADOPT**: final screen geomean -1.08% (`glibc-thread` -8.5%, `larsonN` -5.1%, `larsonN-sized` -4.1%, `rptestN` -3.0%; `sh8benchN` +1.4%); held-out -0.79%; plaintext +1.1%; Nginx +0.6% | Recorded below |
 | X27 | Profile-guided optimization (PGO) of the Rust library, and BOLT post-link layout | PGO: instrumented cdylib trained on 11 of 21 native scenarios, rebuilt with `-Cprofile-use`. BOLT 18: opt-in `MIMALLOC_BENCH_BOLT=1` in `bench.py`, `--emit-relocs` link, checked-in LBR profile of the same 11 scenarios (`benchmarks/bolt.py`, `bolt-profile.fdata`) | PGO **REJECT**: screen geomean +0.15%. BOLT **ADOPT (opt-in)**: 21-scenario held-out geomean -0.87% (trained -0.94%, held out -0.79%); `malloc-large` -10.1%, `xmalloc-testN` -3.2%; worst `cfrac` +0.44% | Recorded below |
 | X28 | Per-thread cache of freed singleton pages (blocks above 512 KiB) to skip the arena's slice bookkeeping | Freed main-heap singleton pages kept registered and committed in the freeing theap (8 slots, 256 MiB, purge-delay expiry); reuse within 25% slack; never on master | **REJECT**: steady-state `malloc-large` -29%, but the screen's short runs +145% (first-touch THP faults: cached pages push the arena onto untouched slices), `xmalloc-testN` +6.6%, `sh6benchN` +4.0%; releasing the cache on a miss removes the faults and the gain | Recorded below |
+| X29 | Request transparent huge pages only once the heap is large | Arenas reserved without `MADV_HUGEPAGE`; armed once at 32 MiB of arena pages, then all arenas are advised and their resident memory collapsed (`allocator/arena/thp.rs`) | **ADOPT** (owner decision): axum PSS -67/-67/-63% (json/plaintext/fortunes), Nginx worker PSS -22 to -31%, throughput equal or better; native screen +0.71% geomean, all from `malloc-large-old` +12% in short runs (steady state unchanged); other 20 within +/-1.3% | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -1857,3 +1858,84 @@ The arena's bitmap already reuses the most recently freed, still-resident
 slices, so a cache beside it competes with that reuse; closing the gap would
 take cheaper arena operations rather than a cache in front of them. Reverted;
 the prototype diff is kept outside the repository.
+
+## X29 — Transparent huge pages only for large heaps (adopted)
+
+Decided 2026-10-15; the owner approved the divergence. With the speed
+scoreboard won after X26 (native geomean 0.987 of C mimalloc, 0.586 of
+tcmalloc; Nginx at parity once session drift is removed, the `headers` lead of
+tcmalloc measuring 124,606 against 124,356 requests/s interleaved), memory is
+where Rust and C mimalloc lose. On the axum server under load, Rust holds 19.9
+MiB resident of which 16.0 MiB are anonymous huge pages, C the same, jemalloc
+13.1 MiB and glibc about 7.5 MiB with none; with `MIMALLOC_ALLOW_THP=0` Rust
+holds 7.9 MiB at -0.9% throughput. The host runs THP in `madvise` mode, C and
+Rust advise every arena, and arenas start each thread's search in a different
+32 MiB chunk, so a small multi-threaded server touches eight huge pages for
+about 4 MiB of live data.
+
+Turning huge pages off costs big heaps (screen against master: geomean +1.28%;
+`malloc-large-old` +11.9%, `larsonN` +4.8%, `larsonN-sized` +4.6%, `barnes`
++4.2%, `mstressN` +4.1%, `sh6benchN` -4.3%). Peak resident memory of the
+scenarios, including about 10 MiB of harness: `mstressN` 384 MiB, `sh6benchN`
+218, `larsonN` 83, `rptestN` 80, `barnes` 44, `malloc-large-old` 12,
+`glibc-simple` 11.
+
+Policy: arenas are reserved without `MADV_HUGEPAGE`. A global count of arena
+page bytes (added when a fresh arena page is allocated, removed when an arena
+page is freed, no longer kept once armed) arms the request at 32 MiB: every
+registered arena is advised, later reservations are advised by the OS layer,
+and `MADV_COLLAPSE` turns what the arenas already hold into huge pages. Both
+calls restore `errno`: the collapse fails with `EINVAL` on memory the
+application gave the allocator, which the behavioral-parity gate caught as
+`errno` 22 where C leaves 0.
+
+Steps (screens against master, 5 rounds):
+
+| Variant | Result |
+|---|---|
+| THP off | +1.28% (21) |
+| 32 MiB threshold | +0.94% (21); `malloc-large-old` +12.3%, `larsonN` +2.1% |
+| + arm at a page of 2 MiB or more, collapse | +0.38% (21); `sh8benchN` +3.5%, `malloc-large` +2.0% while the count was kept after arming |
+| count stopped once armed, no collapse | +0.17% (9); held-out (21, 3 interleaved rounds) +0.17%, `sh6benchN` +3.68% |
+| same, with collapse | +0.01% (9); held-out (9) within +/-0.8%, `malloc-large` +1.69% |
+| page trigger removed (final) | +0.71% (21); `malloc-large-old` +12.03%, others within +/-1.3% |
+
+Without the collapse, memory touched before arming stays on base pages:
+`larsonN` held 42 MiB of huge pages against 76 MiB on master and `sh6benchN`
+174 against 210; with it, 76 and 182 MiB.
+
+The page trigger (arming at a page of 2 MiB or more) was dropped for Nginx. As
+first written it also fired on the 4 MiB pages of the large size classes
+(84 to 512 KiB blocks); restricted to blocks of 2 MiB or more it still armed
+Nginx, which allocates a 3.5 MiB block when its heap holds about 6 MiB of
+pages, and the collapse then filled sparse 2 MiB regions: worker PSS rose from
+20.2 to 23.4 MiB (`download-4096`) and from 24.4 to 27.4 MiB
+(`proxy-16384-on`), with 12 to 14 MiB of huge pages against master's 8 to 10.
+Without the page trigger, `malloc-large-old` (one 2 MiB buffer written in full
+5000 times; heap about 2 MiB) never arms: +11 to 13% in the screen's short
+runs, but steady-state Criterion is unchanged (75.4 ms against 73.3 to 75.7 ms
+on master), so the loss is faulting fresh buffers in 4 KiB pages. 16, 32 and
+64 MiB thresholds gave the same Nginx and axum memory (neither reaches 16 MiB)
+and screened alike on the 9 THP-sensitive scenarios (16 MiB +1.39%, 32 MiB
++1.19%, both from `malloc-large-old`); 32 MiB leaves more room for mid-size
+processes.
+
+Final policy, axum server (3 interleaved rounds, PSS under load; measured with
+the policy before the collapse and page-trigger changes, which do not affect a
+process that never arms; the final build measured 5.8, 6.1 and 7.8 MiB PSS
+with no huge pages):
+
+| Scenario | Requests/s | PSS master | PSS policy |
+|---|---|---|---|
+| json | +0.1% | 17.9 MiB | 5.9 MiB |
+| plaintext | +3.5% (every round) | 17.8 MiB | 5.8 MiB |
+| fortunes | +0.1% | 20.7 MiB | 7.7 MiB |
+
+Nginx (single 5-second runs, master then 16/32/64 MiB in sequence): worker PSS
+20.2 -> 14.9 MiB (`download-4096`), 24.4 -> 16.8 MiB (`proxy-16384-on`),
+32.3-32.4 -> 25.0-25.3 MiB (`headers`, two runs), requests/s within 1.5% except
+one 146k `headers` run (16 MiB) against about 124k for every other run.
+
+Final screen (21 scenarios): geomean +0.71%; `malloc-large-old` +12.03%,
+`rptestN` +1.23%, `sh6benchN` +0.97%, `alloc-test1` +0.83%, `larsonN-sized`
+-1.23%, `alloc-testN` -0.76%, the rest within +/-0.65%. Gates passed.

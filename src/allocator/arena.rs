@@ -125,6 +125,7 @@ mod os_abandoned;
 mod os_memory;
 mod prefix;
 mod purge;
+mod thp;
 
 pub(crate) use abandoned::{_mi_arenas_page_abandon_internal, _mi_arenas_page_unabandon_internal};
 use abandoned::{
@@ -158,6 +159,7 @@ use prefix::{
     mi_subproc_arena_cell,
 };
 pub(crate) use purge::{_mi_arenas_collect, _mi_arenas_free};
+pub(crate) use thp::mi_arena_thp_armed;
 
 /// # Safety
 /// `subproc` must remain live and initialized with valid aligned arena-count
@@ -1555,6 +1557,13 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
             // SAFETY: the ensured bitmap belongs to this live heap and exact
             // arena; the pending allocation owns its clear range start bit.
             if unsafe { pending.install_heap_page_bit(arena_pages, range.start()) } {
+                // SAFETY: the live TLD names the subprocess whose arena served the page.
+                unsafe {
+                    thp::mi_arena_thp_pages_added(
+                        SubprocPtr::new_unchecked((*tld).subproc),
+                        alloc_size,
+                    )
+                };
                 Some(pending)
             } else {
                 drop(pending);
@@ -2253,6 +2262,9 @@ pub(crate) unsafe fn _mi_arenas_page_free_internal<S>(
     // SAFETY: the page is still registered and the caller owns this terminal
     // transition; unregister it before clearing arena publication or backing.
     unsafe { _mi_page_map_unregister(page) };
+    if arena_membership.is_some() {
+        thp::mi_arena_thp_pages_removed(unsafe { mi_page_full_size(page_ptr) }.get());
+    }
     if let Some(membership) = arena_membership {
         let arena = membership.arena().as_ptr();
         let range = membership.range();

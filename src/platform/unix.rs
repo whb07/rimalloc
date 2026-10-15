@@ -124,6 +124,7 @@ pub const ENOSYS: c_int = 38;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub const MADV_HUGEPAGE: c_int = 14;
+pub const MADV_COLLAPSE: c_int = 25;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub const MAP_HUGETLB: c_int = 0x40000;
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -473,6 +474,27 @@ pub(crate) unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_
     }
 }
 
+/// Ask for transparent huge pages on an existing mapping, as an allocation does once
+/// `allocator::arena::thp` has armed them (Rust-only; `UPSTREAM_DIFF.md`).
+///
+/// # Safety
+/// `addr` and `size` must describe memory mapped by this allocator.
+pub(crate) unsafe fn _mi_prim_thp_enable(addr: *mut c_void, size: usize) {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if mi_option_is_enabled(mi_option_t::mi_option_allow_thp) {
+        // Best effort, invisible to the caller: a range that cannot take huge pages (memory the
+        // application handed to the allocator, or a kernel before 6.1 for the collapse) leaves
+        // `errno` as it was.
+        let saved_errno = mi_last_errno();
+        let _ = unsafe { unix_madvise(addr, size, MADV_HUGEPAGE) };
+        // Also turn what is already resident into huge pages.
+        let _ = unsafe { unix_madvise(addr, size, MADV_COLLAPSE) };
+        unsafe { *__errno_location() = saved_errno };
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    let _ = (addr, size);
+}
+
 #[inline]
 unsafe fn unix_madvise(addr: *mut c_void, size: usize, advice: c_int) -> c_int {
     let res = unsafe { madvise(addr, size, advice) };
@@ -617,6 +639,7 @@ unsafe fn unix_mmap(
     if !p.is_null()
         && allow_large
         && mi_option_is_enabled(mi_option_t::mi_option_allow_thp)
+        && crate::allocator::arena::mi_arena_thp_armed()
         && unsafe { _mi_os_canuse_large_page(size, try_alignment) }
     {
         let _ = unsafe { unix_madvise(p, size, MADV_HUGEPAGE) };

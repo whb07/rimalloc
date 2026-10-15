@@ -2049,7 +2049,19 @@ links nor the atomic is the cost, so the full-page structure was left as it
 is. Avoiding the metadata miss means not touching the page on free, as
 tcmalloc's thread caches do.
 
-IBS also showed `strcasecmp` at 9.4% of Redis's cycles under Rust (0.4% under
-tcmalloc) with the same callers (`processCommand`, the command-table lookup) and
-few executed ops, which points at a cache miss just before those calls rather
-than at the function; not investigated further.
+IBS cycle sampling also put 9.4% of Redis's cycles in `strcasecmp` under Rust
+(0.4% under tcmalloc). That is attribution, not a miss. Sampling by executed op
+(`ibs_op/cnt_ctl=1/`) gives `strcasecmp` 1.11% of ops under Rust and 1.14%
+under tcmalloc, and its loads have no measurable latency under either. In cycle
+mode IBS tags the next op dispatched after its counter expires, so cycles spent
+stalled behind an older miss land on whatever dispatches once the stall clears:
+under tcmalloc the same window lands on `dictSdsKeyCaseCompare` (7.9% of
+cycles), the command-table compare that calls `strcasecmp`, and on `siphash`
+(17.4% of cycles for 6.3% of ops). Load latency summed over op samples is equal
+(1,150 cycles per 1,000 ops under Rust, 1,144 under tcmalloc), as is the
+allocator's share of executed ops (15.5% against 15.0%); the allocator's own
+loads take 190 of those cycles against 32 (3.5 L3 hits per 1,000 ops against
+0.5, about 3 per SET), and Redis's own loads 561 against 664. There is no
+separate `strcasecmp` lever: its samples are stall cycles from older misses,
+Redis's own (the window gets 7.9% under tcmalloc too) plus the allocator's
+page-metadata misses above.

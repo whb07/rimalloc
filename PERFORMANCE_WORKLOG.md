@@ -77,6 +77,7 @@ and the conclusion drawn from them.
 | X29 | Request transparent huge pages only once the heap is large | Arenas reserved without `MADV_HUGEPAGE`; armed once at 32 MiB of arena pages, then all arenas are advised and their resident memory collapsed (`allocator/arena/thp.rs`) | **ADOPT** (owner decision): axum PSS -67/-67/-63% (json/plaintext/fortunes), Nginx worker PSS -22 to -31%, throughput equal or better; native screen +0.71% geomean, all from `malloc-large-old` +12% in short runs (steady state unchanged); other 20 within +/-1.3% | Recorded below |
 | X30 | Run the main thread heap's one-time initialization (upstream bug) | `theap_main` starts with an empty memid so `theap_main_init` runs (C and the translation started it static, skipping options and cookie) | **ADOPT** (owner decision): native screen +0.27% (noise), Nginx +0.5 to +1.0% at equal PSS; regression test added | Recorded below |
 | X31 | Keep full pages with their owner while the process has one allocating thread | `MI_PROCESS_MULTI_THREADED` set by the first non-main TLD; until then `mi_page_to_full` uses the full queue instead of abandoning; maintenance abandons kept pages once set | **ADOPT** (owner decision): Redis SET +4.6% interleaved (1.747M vs tcmalloc 1.754M); native screen +0.15%, Nginx +0.2 to +1.4% | Recorded below |
+| X32 | Track full pages without the full-queue links (prototype) | Measurement-only builds: full pages counted but not linked; unfull at front or end of the normal queue; separately, a plain store for the in-full flag while single-threaded | **REJECT**: Redis SET -8% (front), +0.8% (end), +0.8% (plain flag); the unfull cost is misses on cold page metadata, not queue links or the atomic | Recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -2016,3 +2017,39 @@ rounds, X29 library against master with X30 and X31; its tokio workers switch
 X31 off at start) was unchanged: json +0.3%, plaintext +1.5% (+2.9, +1.5,
 +1.2), fortunes -0.1%, PSS 6.0/6.1/7.6 MiB against 6.0/5.9/7.6 with no huge
 pages in either.
+
+## X32 — Full pages without queue links (rejected)
+
+Decided 2026-10-15. After X31, Redis SET (`redis-benchmark -t set -d 256 -r
+1000000 -c 50 -P 16`) matched tcmalloc's throughput while the allocator took
+16.2% of server cycles against tcmalloc's 4.8% and jemalloc's 7.2%; Redis's own
+code took 56% of cycles under Rust against 76% under tcmalloc, so the
+allocator's placement makes the application cheaper while the allocator itself
+costs more. `_mi_page_unfull_internal` alone took 10.6%: with about one
+full/unfull transition per SET, each unfull relinks the page out of the full
+queue and onto the end of its normal queue, touching neighbouring page headers.
+Raising `page_full_retain` (keeping full pages in the normal queue) was worse:
+1.47-1.48M requests/s at 0, 1.44-1.46M at 2, 1.43M at 8, 1.32-1.34M at 32.
+
+Prototype (never on master): full pages counted in the full queue but not
+linked, so moving to and from it touches no neighbours; whole-heap traversals
+would have used the arenas' per-heap page bitmaps. Redis SET interleaved
+against master (3 rounds): unfulled page pushed to the front of its queue
+-8% (1.34-1.36M against 1.47-1.49M; the one free block is refilled at once and
+the page cycles every SET), pushed to the end as in C +0.8% (1.461-1.483M
+against 1.443-1.475M). A second variant kept the links but cleared the in-full
+flag with a relaxed load and store instead of `lock btr` while the process is
+single-threaded: +0.8% (rounds +1.8, -0.6, +0.6). IBS load sampling (`perf mem`)
+showed the cost: the unfull path's loads of the page's `capacity` and
+`block_size` hit only in L3. Redis frees old values spread over thousands of
+pages whose metadata (in the arena's separate page-metadata array) does not
+stay in L1/L2 next to the data, so each free into an old page misses on its
+metadata, and the unfull accounting is where that miss lands. Neither the queue
+links nor the atomic is the cost, so the full-page structure was left as it
+is. Avoiding the metadata miss means not touching the page on free, as
+tcmalloc's thread caches do.
+
+IBS also showed `strcasecmp` at 9.4% of Redis's cycles under Rust (0.4% under
+tcmalloc) with the same callers (`processCommand`, the command-table lookup) and
+few executed ops, which points at a cache miss just before those calls rather
+than at the function; not investigated further.

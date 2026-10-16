@@ -59,6 +59,9 @@ All notable changes to this repository should be recorded here.
   target instead of the host's.
 - Leave `errno` unchanged in allocator OS memory calls, which `free` reaches.
 - Preserve requested alignment for small allocations in the safe heap API.
+- Stop exporting libc and C++ allocator names on Apple targets. Without
+  `interpose`, a binary's own `free` leaked libSystem buffers and its `realloc`
+  of them returned NULL.
 - Pass the dynamic-library crate type to Cargo so macOS builds use the correct
   LTO mode.
 

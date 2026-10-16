@@ -332,11 +332,14 @@ fn main() {
     let interpose = feature_enabled("INTERPOSE");
     let std = feature_enabled("STD");
     let macos_interpose = target_os == "macos" && interpose;
-    // Unix C and Itanium C++ allocator names exported from Rust. The macOS shim
-    // calls the libmalloc/libc++ originals and overrides through its zone and
-    // interpose tuples instead, so that image must not define these names.
-    let export_libc_aliases = !macos_interpose && (!c_abi || interpose);
-    let export_cxx_aliases = !macos_interpose && (!c_abi || cxx_overrides);
+    // Unix C and Itanium C++ allocator names exported from Rust. Mach-O
+    // two-level namespaces bind such definitions only to the defining image's
+    // own calls, so on Apple targets they would mix two allocators: free() of a
+    // libSystem buffer would leak and realloc() would fail. Apple targets
+    // override through the `interpose` malloc zone instead.
+    let apple = required_env("CARGO_CFG_TARGET_VENDOR") == "apple";
+    let export_libc_aliases = !apple && (!c_abi || interpose);
+    let export_cxx_aliases = !apple && (!c_abi || cxx_overrides);
     let default_fast_override = target_os == "linux"
         && profile == "release"
         && target_arch == "x86_64"

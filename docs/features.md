@@ -24,7 +24,11 @@ unless the `std` feature is enabled.
 
 On macOS, `interpose` builds use the SDK malloc-zone shim and libc++
 allocation semantics instead of the Linux C++/TLS shims. See
-[macOS DYLD interposition](ffi-linking.md#macos-dyld-interposition).
+[macOS DYLD interposition](ffi-linking.md#macos-dyld-interposition). Apple
+targets never export libc or C++ allocator names from Rust: Mach-O two-level
+namespaces would bind them only to the defining image's own calls, so a
+program would free and reallocate libSystem buffers with the wrong allocator.
+Without `interpose`, use `MiMalloc` or the `mi_*` API directly.
 
 When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
 builds, Valgrind mode takes precedence.

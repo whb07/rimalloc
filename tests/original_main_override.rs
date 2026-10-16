@@ -1,3 +1,6 @@
+// Apple targets override C malloc only through the `interpose` malloc zone.
+#![cfg(any(not(target_vendor = "apple"), feature = "interpose"))]
+
 #[path = "original_testhelper.rs"]
 mod original_testhelper;
 

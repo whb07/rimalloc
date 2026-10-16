@@ -923,7 +923,9 @@ fn full_pages_stay_with_a_lone_thread_until_another_thread_runs() {
     }
     // The library constructor initialized the process main thread and libtest runs this body on
     // another thread, which counts as a second one; nothing else in this isolated child
-    // allocates, so treat this thread as alone.
+    // allocates, so treat this thread as alone. Initialize this thread first: initialization marks
+    // the process multi-threaded.
+    crate::allocator::init::mi_thread_init();
     crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(false, Ordering::Relaxed);
     // SAFETY: every block is allocated and freed once; page metadata is only read while its
     // blocks are live, and maintenance runs on the owning thread.

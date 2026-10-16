@@ -4,6 +4,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd_repo_root
 
 run cargo test --quiet --features std --test allocation_boundary_cases
+# Debug and hardening padding can hide tiny Rust-layout alignment regressions.
+run cargo test --quiet --release --no-default-features --features std --test mimalloc_global_alloc --test allocation_boundary_cases
 run cargo test --quiet --features std --test aligned_exports
 run cargo test --quiet --features std --test oversize_allocations
 run cargo test --quiet --features std --test property_alloc_sequences

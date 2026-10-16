@@ -10,6 +10,10 @@
 //!
 //! - an `rlib` with a deliberately small Rust-facing surface.
 //!
+//! Enable the `std` feature when using this crate in a Rust application that
+//! links `std`. On Linux, the default non-test build provides its own panic
+//! handler, which cannot be linked together with the handler supplied by `std`.
+//!
 //! Build the dynamic C ABI/interposition artifact explicitly:
 //!
 //! ```text
@@ -25,8 +29,8 @@
 //!
 //! # Features
 //!
-//! - `std`: opt in to `std` for tooling, tests, and benchmarks. Linux builds
-//!   without this feature use `no_std`.
+//! - `std`: enables integration with Rust applications that link `std`, as well
+//!   as tooling, tests, and benchmarks. Linux builds without it use `no_std`.
 //! - `bench`: enables Criterion benchmarks and implies `std`.
 //! - `compare`: enables comparison-oriented benchmark/test code.
 //! - `bench-diagnostics`: enables benchmark-only hotspot counters.
@@ -285,9 +289,10 @@ pub use safe::{
 ///
 /// # Alignment
 ///
-/// Layouts with alignment up to mimalloc's default maximum alignment use the
-/// normal allocation path. Over-aligned layouts use mimalloc's aligned
-/// allocation and reallocation paths.
+/// The normal allocation path is used only when the alignment is no greater
+/// than both mimalloc's default maximum alignment and the requested size.
+/// Other layouts use mimalloc's aligned allocation paths. Reallocation applies
+/// the same check to the new size so shrinking preserves the original alignment.
 ///
 /// # Allocation failure
 ///
@@ -340,7 +345,9 @@ pub struct MiMalloc;
 unsafe impl core::alloc::GlobalAlloc for MiMalloc {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         unsafe {
-            if layout.align() <= types::MI_MAX_ALIGN_SIZE {
+            // A valid Rust layout can have a size smaller than its alignment.
+            // The unaligned allocator may use word-sized blocks for tiny sizes.
+            if layout.align() <= types::MI_MAX_ALIGN_SIZE && layout.align() <= layout.size() {
                 allocator::alloc::mi_malloc(layout.size()).cast()
             } else {
                 allocator::aligned::mi_malloc_aligned(layout.size(), layout.align()).cast()
@@ -350,7 +357,7 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
 
     unsafe fn alloc_zeroed(&self, layout: core::alloc::Layout) -> *mut u8 {
         unsafe {
-            if layout.align() <= types::MI_MAX_ALIGN_SIZE {
+            if layout.align() <= types::MI_MAX_ALIGN_SIZE && layout.align() <= layout.size() {
                 allocator::alloc::mi_zalloc(layout.size()).cast()
             } else {
                 allocator::aligned::mi_zalloc_aligned(layout.size(), layout.align()).cast()
@@ -369,7 +376,7 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         new_size: usize,
     ) -> *mut u8 {
         unsafe {
-            if layout.align() <= types::MI_MAX_ALIGN_SIZE {
+            if layout.align() <= types::MI_MAX_ALIGN_SIZE && layout.align() <= new_size {
                 allocator::alloc::mi_realloc(ptr.cast(), new_size).cast()
             } else {
                 allocator::aligned::mi_realloc_aligned(ptr.cast(), new_size, layout.align()).cast()

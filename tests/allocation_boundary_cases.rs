@@ -1,8 +1,10 @@
+use core::alloc::Layout;
 use core::ffi::c_void;
 use core::ptr;
 use std::os::raw::c_long;
 
 use mechanical_mimalloc::raw::mimalloc::*;
+use mechanical_mimalloc::{Allocation, Heap};
 
 struct ShowErrorsGuard(c_long);
 
@@ -157,5 +159,57 @@ fn realloc_null_allocates_and_existing_realloc_preserves_prefix() {
             assert_eq!(*q.add(i), i as u8);
         }
         mi_free(q.cast());
+    }
+}
+
+#[test]
+fn tiny_safe_allocations_preserve_requested_alignment() {
+    let heap = Heap::new().expect("heap");
+    for alignment in [2, 4, 8, 16] {
+        for size in 1..alignment {
+            let layout = Layout::from_size_align(size, alignment).expect("layout");
+            // Keep distinct blocks live instead of repeatedly reusing one address.
+            let allocations: [_; 32] = core::array::from_fn(|_| {
+                (
+                    Allocation::new(layout).expect("owned allocation"),
+                    heap.allocate(layout).expect("heap allocation"),
+                    heap.allocate_zeroed(layout).expect("zeroed heap allocation"),
+                )
+            });
+            for (owned, allocation, zeroed) in &allocations {
+                assert_eq!(owned.as_ptr() as usize % alignment, 0);
+                assert_eq!(allocation.as_ptr() as usize % alignment, 0);
+                assert_eq!(zeroed.as_ptr() as usize % alignment, 0);
+                assert!(zeroed.as_bytes().iter().all(|&byte| byte == 0));
+            }
+        }
+    }
+}
+
+#[test]
+fn tiny_heap_resizes_preserve_alignment_and_initialized_contents() {
+    let heap = Heap::new().expect("heap");
+    for alignment in [8, 16] {
+        for size in 1..alignment {
+            let large = Layout::from_size_align(64, alignment).expect("large layout");
+            let small = Layout::from_size_align(size, alignment).expect("small layout");
+            let allocations: [_; 32] = core::array::from_fn(|_| {
+                let mut allocation = heap.allocate_zeroed(large).expect("allocation");
+                allocation.as_mut_bytes().fill(0xA5);
+                allocation
+            });
+            let resized = allocations.map(|allocation| allocation.resize(small).expect("shrink"));
+            for allocation in &resized {
+                assert_eq!(allocation.as_ptr() as usize % alignment, 0);
+                assert_eq!(allocation.layout(), small);
+                assert!(allocation.as_bytes().iter().all(|&byte| byte == 0xA5));
+            }
+            for allocation in resized {
+                let grown = allocation.resize(large).expect("grow");
+                assert_eq!(grown.as_ptr() as usize % alignment, 0);
+                assert!(grown.as_bytes()[..size].iter().all(|&byte| byte == 0xA5));
+                assert!(grown.as_bytes()[size..].iter().all(|&byte| byte == 0));
+            }
+        }
     }
 }

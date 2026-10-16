@@ -215,6 +215,9 @@ struct SamePageBlocks {
     page: PagePtr,
     selected: [Option<BlockPtr>; MAX_PAGE_BLOCKS],
     selected_len: usize,
+    // A private heap keeps the page out of other threads' reach; deleting it
+    // early hands the page to the main heap, which may extend its capacity.
+    heap: *mut crate::types::mi_heap_t,
 }
 
 impl SamePageBlocks {
@@ -252,6 +255,7 @@ impl SamePageBlocks {
                 page: PagePtr::new_unchecked(selected_page),
                 selected,
                 selected_len,
+                heap: core::ptr::null_mut(),
             }
         }
     }
@@ -285,6 +289,7 @@ impl SamePageBlocks {
                 page: PagePtr::new_unchecked(page),
                 selected: [None; MAX_PAGE_BLOCKS],
                 selected_len: 1,
+                heap,
             };
             fixture.all[0] = first;
             fixture.selected[0] = Some(BlockPtr::new_unchecked(first));
@@ -293,7 +298,6 @@ impl SamePageBlocks {
                 let capacity = fixture.page.capacity().as_usize();
                 assert!(capacity <= MAX_PAGE_BLOCKS);
                 if fixture.selected_len == capacity {
-                    crate::mimalloc::mi_heap_delete(heap);
                     return fixture;
                 }
                 let block = crate::allocator::alloc::mi_heap_malloc(heap, 16).cast::<mi_block_t>();
@@ -321,6 +325,9 @@ impl Drop for SamePageBlocks {
         unsafe {
             for &block in &self.all[..self.all_len] {
                 crate::mimalloc::mi_free(block.cast());
+            }
+            if !self.heap.is_null() {
+                crate::mimalloc::mi_heap_delete(self.heap);
             }
         }
     }

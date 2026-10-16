@@ -6,7 +6,10 @@
 
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 use core::ffi::c_int;
-#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
+#[cfg(not(any(
+    all(target_os = "linux", not(debug_assertions)),
+    all(target_vendor = "apple", not(miri))
+)))]
 use core::hint::spin_loop;
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 use core::ptr;
@@ -53,11 +56,26 @@ pub struct pthread_mutex_t {
     __data: [usize; 5],
 }
 
+/// Lock word of the portable lock: an `os_unfair_lock` on Apple targets, the
+/// lock libmalloc uses, whose waiters lend their priority to the owner instead
+/// of spinning under Darwin's QoS scheduling; a spinlock flag elsewhere.
+#[cfg(all(target_vendor = "apple", not(miri)))]
+type LockWord = core::sync::atomic::AtomicU32;
+#[cfg(not(all(target_vendor = "apple", not(miri))))]
+type LockWord = AtomicUsize;
+
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
 #[repr(C)]
 #[derive(Debug)]
 pub struct pthread_mutex_t {
-    mutex: AtomicUsize,
+    mutex: LockWord,
+}
+
+#[cfg(all(target_vendor = "apple", not(miri)))]
+unsafe extern "C" {
+    fn os_unfair_lock_lock(lock: *mut u32);
+    fn os_unfair_lock_trylock(lock: *mut u32) -> bool;
+    fn os_unfair_lock_unlock(lock: *mut u32);
 }
 
 impl mi_lock_s {
@@ -96,7 +114,7 @@ impl Default for pthread_mutex_t {
 impl pthread_mutex_t {
     pub const fn new() -> Self {
         Self {
-            mutex: AtomicUsize::new(0),
+            mutex: LockWord::new(0),
         }
     }
 }
@@ -233,7 +251,7 @@ pub unsafe extern "C" fn mi_atomic_maxi64_relaxed(p: *mut i64, x: i64) {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
+unsafe fn mi_lock_try_acquire_raw(lock: *mut mi_lock_t) -> bool {
     unsafe { pthread_mutex_trylock(ptr::addr_of_mut!((*lock).mutex)) == 0 }
 }
 
@@ -241,13 +259,18 @@ pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
-    let expected = 0;
+unsafe fn mi_lock_try_acquire_raw(lock: *mut mi_lock_t) -> bool {
+    #[cfg(all(target_vendor = "apple", not(miri)))]
+    // SAFETY: the caller supplies a valid lock, whose word is an `os_unfair_lock`.
+    unsafe {
+        os_unfair_lock_trylock((*lock).mutex.mutex.as_ptr())
+    }
+    #[cfg(not(all(target_vendor = "apple", not(miri))))]
     unsafe {
         (*lock)
             .mutex
             .mutex
-            .compare_exchange(expected, 1, Ordering::AcqRel, Ordering::Acquire)
+            .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
     }
 }
@@ -256,7 +279,7 @@ pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
+unsafe fn mi_lock_acquire_raw(lock: *mut mi_lock_t) {
     let err = unsafe { pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex)) };
     if err != 0 {
         crate::allocator::options::_mi_error_message_fmt(
@@ -270,8 +293,14 @@ pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to a valid allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
-pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
-    while unsafe { !mi_lock_try_acquire(lock) } {
+unsafe fn mi_lock_acquire_raw(lock: *mut mi_lock_t) {
+    #[cfg(all(target_vendor = "apple", not(miri)))]
+    // SAFETY: the caller supplies a valid lock, whose word is an `os_unfair_lock`.
+    unsafe {
+        os_unfair_lock_lock((*lock).mutex.mutex.as_ptr());
+    }
+    #[cfg(not(all(target_vendor = "apple", not(miri))))]
+    while unsafe { !mi_lock_try_acquire_raw(lock) } {
         spin_loop();
     }
 }
@@ -280,7 +309,7 @@ pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to a valid acquired allocator lock object.
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
+unsafe fn mi_lock_release_raw(lock: *mut mi_lock_t) {
     unsafe { pthread_mutex_unlock(ptr::addr_of_mut!((*lock).mutex)) };
 }
 
@@ -288,8 +317,102 @@ pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
 ///
 /// `lock` must point to a valid acquired allocator lock object.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
+unsafe fn mi_lock_release_raw(lock: *mut mi_lock_t) {
+    #[cfg(all(target_vendor = "apple", not(miri)))]
+    // SAFETY: the caller acquired this `os_unfair_lock` on the current thread.
+    unsafe {
+        os_unfair_lock_unlock((*lock).mutex.mutex.as_ptr());
+    }
+    #[cfg(not(all(target_vendor = "apple", not(miri))))]
+    unsafe {
+        (*lock).mutex.mutex.store(0, Ordering::Release);
+    }
+}
+
+// Fork gate. Every held allocator lock holds an entry in `FORK_GATE`. Before
+// `fork`, `_mi_fork_prepare` waits until no thread holds an allocator lock and
+// closes the gate, so the child never inherits a lock owned by a thread that
+// does not exist there. The gate closes only at zero, so a thread already
+// holding a lock can always take nested ones. The forking thread may still
+// take locks while the gate is closed: fork handlers run on it and allocate.
+static FORK_GATE: AtomicUsize = AtomicUsize::new(0);
+static FORK_OWNER: AtomicUsize = AtomicUsize::new(0);
+const FORK_GATE_CLOSED: usize = 1 << (usize::BITS - 1);
+
+#[inline]
+fn fork_gate_try_enter() -> bool {
+    let mut state = FORK_GATE.load(Ordering::Relaxed);
+    loop {
+        if state & FORK_GATE_CLOSED != 0 && FORK_OWNER.load(Ordering::Relaxed) != _mi_thread_id() {
+            return false;
+        }
+        match FORK_GATE.compare_exchange_weak(
+            state,
+            state + 1,
+            Ordering::Acquire,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return true,
+            Err(current) => state = current,
+        }
+    }
+}
+
+#[inline]
+fn fork_gate_exit() {
+    FORK_GATE.fetch_sub(1, Ordering::Release);
+}
+
+/// `pthread_atfork` prepare handler: waits until no thread holds an allocator
+/// lock, then keeps other threads from taking one until the fork completes.
+pub(crate) extern "C" fn _mi_fork_prepare() {
+    FORK_OWNER.store(_mi_thread_id(), Ordering::Relaxed);
+    while FORK_GATE
+        .compare_exchange_weak(0, FORK_GATE_CLOSED, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
+        // SAFETY: yielding has no preconditions.
+        unsafe { crate::prim::_mi_prim_thread_yield() };
+    }
+}
+
+/// `pthread_atfork` parent and child handler: reopens the gate.
+pub(crate) extern "C" fn _mi_fork_reopen() {
+    FORK_OWNER.store(0, Ordering::Relaxed);
+    FORK_GATE.store(0, Ordering::Release);
+}
+
+/// # Safety
+///
+/// `lock` must point to a valid allocator lock object.
+pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
+    if !fork_gate_try_enter() {
+        return false;
+    }
+    let acquired = unsafe { mi_lock_try_acquire_raw(lock) };
+    if !acquired {
+        fork_gate_exit();
+    }
+    acquired
+}
+
+/// # Safety
+///
+/// `lock` must point to a valid allocator lock object.
+pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
+    while !fork_gate_try_enter() {
+        // SAFETY: yielding has no preconditions.
+        unsafe { crate::prim::_mi_prim_thread_yield() };
+    }
+    unsafe { mi_lock_acquire_raw(lock) };
+}
+
+/// # Safety
+///
+/// `lock` must point to a valid lock acquired by the current thread.
 pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
-    unsafe { (*lock).mutex.mutex.store(0, Ordering::Release) };
+    unsafe { mi_lock_release_raw(lock) };
+    fork_gate_exit();
 }
 
 /// # Safety
@@ -307,7 +430,9 @@ pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
 /// `lock` must point to writable allocator lock storage.
 #[cfg(not(all(target_os = "linux", not(debug_assertions))))]
 pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
-    unsafe { mi_lock_release(lock) };
+    // Store the unlocked state directly: unlocking an `os_unfair_lock` that is
+    // not held aborts.
+    unsafe { (*lock).mutex = pthread_mutex_t::new() };
 }
 
 /// # Safety

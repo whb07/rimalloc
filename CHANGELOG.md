@@ -62,6 +62,10 @@ All notable changes to this repository should be recorded here.
 - Stop exporting libc and C++ allocator names on Apple targets. Without
   `interpose`, a binary's own `free` leaked libSystem buffers and its `realloc`
   of them returned NULL.
+- Use `os_unfair_lock` for allocator locks on Apple targets instead of a busy
+  spin, so a waiting thread lends its priority to the owner.
+- Quiesce allocator locks around `fork` through `pthread_atfork`, so a child
+  forked while other threads held an allocator lock no longer blocks on it.
 - Pass the dynamic-library crate type to Cargo so macOS builds use the correct
   LTO mode.
 

@@ -1362,5 +1362,23 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_yield() {
     let _ = unsafe { sleep(0) };
 }
 
+/// Registers process-wide `fork` handlers. Failure only leaves `fork` without
+/// the allocator's lock quiescence, so it is ignored.
+pub(crate) fn _mi_prim_register_fork_handlers(
+    prepare: extern "C" fn(),
+    parent: extern "C" fn(),
+    child: extern "C" fn(),
+) {
+    unsafe extern "C" {
+        fn pthread_atfork(
+            prepare: Option<extern "C" fn()>,
+            parent: Option<extern "C" fn()>,
+            child: Option<extern "C" fn()>,
+        ) -> c_int;
+    }
+    // SAFETY: the handlers are plain functions that live for the whole process.
+    let _ = unsafe { pthread_atfork(Some(prepare), Some(parent), Some(child)) };
+}
+
 #[cfg(all(test, target_os = "macos", not(miri)))]
 mod tests;

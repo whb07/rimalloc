@@ -895,6 +895,23 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
         unsafe { _mi_fputs(None, ptr::null_mut(), ptr::null(), msg) };
     }
     unsafe { crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random)) };
+    // Registered after initialization: registration may allocate.
+    #[cfg(all(
+        not(miri),
+        not(windows),
+        not(target_os = "emscripten"),
+        not(target_os = "wasi")
+    ))]
+    {
+        static FORK_HANDLERS_REGISTERED: AtomicBool = AtomicBool::new(false);
+        if !FORK_HANDLERS_REGISTERED.swap(true, Ordering::AcqRel) {
+            crate::prim::_mi_prim_register_fork_handlers(
+                crate::atomic::_mi_fork_prepare,
+                crate::atomic::_mi_fork_reopen,
+                crate::atomic::_mi_fork_reopen,
+            );
+        }
+    }
 }
 
 #[unsafe(no_mangle)]

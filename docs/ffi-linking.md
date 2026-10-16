@@ -129,11 +129,12 @@ a block, and freed blocks are not detected. `aligned_alloc` is interposed when
 the deployment target is macOS 10.15 or newer; otherwise libmalloc's
 implementation reaches the zone through its `memalign` callback.
 
-The zone's `force_lock`/`force_unlock` hooks are no-ops, as in upstream
-mimalloc on every platform: a fork while another thread holds an allocator lock
-in a slow path can leave the child blocked on that lock. After forking a
-multithreaded process, the child should only call async-signal-safe functions
-before `exec`.
+Allocator locks are quiesced around `fork` by `pthread_atfork` handlers that
+process initialization registers on every Unix target: the prepare handler
+waits until no thread holds an allocator lock and holds new acquisitions until
+the fork completes, so a forked child can allocate even when other threads were
+in allocator slow paths. The zone's `force_lock` and `force_unlock` hooks
+therefore stay no-ops.
 
 Native C and C++ consumers exercise constructor allocations, size/alignment,
 size classes, zeroing, overflow and errno, zone callbacks and promotion, foreign

@@ -401,6 +401,29 @@ fn heap_errors_and_owned_heap_allocation_paths_work() {
 }
 
 #[test]
+fn heap_allocations_honor_alignment_above_size() {
+    let heap = Heap::new().expect("heap");
+    for size in [1usize, 7, 8, 9, 15] {
+        for align in [16usize, 32] {
+            let layout = Layout::from_size_align(size, align).expect("layout");
+            // Consecutive blocks of one size class cover every offset it produces.
+            for _ in 0..32 {
+                let allocation = heap.allocate(layout).expect("allocation");
+                assert_eq!(allocation.as_ptr() as usize % align, 0, "{size}/{align}");
+                let zeroed = heap.allocate_zeroed(layout).expect("zeroed");
+                assert_eq!(zeroed.as_ptr() as usize % align, 0, "{size}/{align}");
+                let shrunk = heap
+                    .allocate(Layout::from_size_align(128, align).expect("layout"))
+                    .expect("allocation")
+                    .resize(layout)
+                    .expect("resize");
+                assert_eq!(shrunk.as_ptr() as usize % align, 0, "{size}/{align}");
+            }
+        }
+    }
+}
+
+#[test]
 fn heap_zeroed_allocation_and_resize_preserve_ownership() {
     let heap = Heap::new().expect("heap");
     let zeroed = heap

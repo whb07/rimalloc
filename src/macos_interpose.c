@@ -1,11 +1,17 @@
 // Darwin's malloc zone ABI is owned by the SDK. Keep its layout and callback
-// signatures in C; all allocation and ownership decisions remain in Rust.
+// signatures in C; allocation and pointer ownership are implemented in Rust.
+#include <Availability.h>
 #include <errno.h>
 #include <malloc/malloc.h>
 #include <mach/mach.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "mimalloc.h"
+
+// Defined in src/platform/macos.rs; each classifies `p` with one page-map lookup.
+bool _mi_macos_free(void* p);
+size_t _mi_macos_size(const void* p);
 
 // libmalloc protects the zone's VM pages when changing its name. Isolate the
 // table so those protection changes cannot cover other allocator globals.
@@ -21,35 +27,56 @@ static void* allocation_result(void* p) {
   return p;
 }
 
+// Darwin malloc returns 16-byte aligned blocks. On 64-bit targets every
+// mimalloc size class of at least 16 bytes is a multiple of 16, so raising
+// smaller requests to 16 keeps the plain allocation fast path aligned.
+_Static_assert(sizeof(void*) == 8, "the 16-byte request floor assumes 64-bit size classes");
+static size_t darwin_request(size_t size) {
+  return size < 16 ? 16 : size;
+}
+
 static void* mac_malloc(size_t size) {
-  return allocation_result(mi_malloc_aligned(size, 16));
+  return allocation_result(mi_malloc(darwin_request(size)));
 }
 
 static void* mac_calloc(size_t count, size_t size) {
-  return allocation_result(mi_calloc_aligned(count, size, 16));
+  size_t total;
+  if (__builtin_mul_overflow(count, size, &total)) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  return allocation_result(mi_zalloc(darwin_request(total)));
 }
 
 // dyld does not interpose references originating in this image. These calls
 // reach libmalloc, so allocations made before takeover or by another zone keep
 // their original owner. Do not export malloc/free aliases from this image.
-static void mac_free(void* p) {
-  if (p == NULL) return;
+static void free_foreign(void* p) {
   int saved_errno = errno;
-  if (mi_check_owned(p)) mi_free(p);
-  else free(p);
+  free(p);
   errno = saved_errno;
+}
+
+// The allocator's own OS calls leave errno unchanged, so only the libmalloc
+// path needs to preserve it.
+static void mac_free(void* p) {
+  if (p != NULL && !_mi_macos_free(p)) free_foreign(p);
 }
 
 static void* mac_realloc(void* p, size_t size) {
   if (p == NULL) return mac_malloc(size);
-  if (!mi_check_owned(p)) return realloc(p, size);
-  return allocation_result(mi_realloc_aligned(p, size == 0 ? 1 : size, 16));
+  if (!mi_is_in_heap_region(p)) return realloc(p, size);
+  return allocation_result(mi_realloc(p, darwin_request(size)));
 }
 
 static void* mac_reallocf(void* p, size_t size) {
-  if (p != NULL && !mi_check_owned(p)) return reallocf(p, size);
-  void* q = mac_realloc(p, size);
-  if (q == NULL) mac_free(p);
+  if (p == NULL) return mac_malloc(size);
+  if (!mi_is_in_heap_region(p)) return reallocf(p, size);
+  void* q = mi_realloc(p, darwin_request(size));
+  if (q == NULL) {
+    mi_free(p);
+    errno = ENOMEM;
+  }
   return q;
 }
 
@@ -72,18 +99,28 @@ static void* mac_aligned_alloc(size_t alignment, size_t size) {
   return allocation_result(mi_malloc_aligned(size, alignment));
 }
 
-static char* mac_strdup(const char* s) { return allocation_result(mi_strdup(s)); }
+static char* copy_string(const char* s, size_t len) {
+  char* p = mac_malloc(len + 1);
+  if (p != NULL) {
+    memcpy(p, s, len);
+    p[len] = '\0';
+  }
+  return p;
+}
+
+static char* mac_strdup(const char* s) { return copy_string(s, strlen(s)); }
 static char* mac_strndup(const char* s, size_t size) {
-  return allocation_result(mi_strndup(s, size));
+  return copy_string(s, strnlen(s, size));
 }
 
 static size_t mac_size(const void* p) {
   if (p == NULL) return 0;
-  return mi_check_owned(p) ? mi_usable_size(p) : malloc_size(p);
+  size_t size = _mi_macos_size(p);
+  return size != 0 ? size : malloc_size(p);
 }
 
 static size_t mac_good_size(size_t size) {
-  return mi_good_size(size < 16 ? 16 : size);
+  return mi_good_size(darwin_request(size));
 }
 
 static malloc_zone_t* mac_default_zone(void) {
@@ -91,12 +128,12 @@ static malloc_zone_t* mac_default_zone(void) {
 }
 
 static malloc_zone_t* mac_zone_from_ptr(const void* p) {
-  return mi_check_owned(p) ? &mi_zone : malloc_zone_from_ptr(p);
+  return _mi_macos_size(p) != 0 ? &mi_zone : malloc_zone_from_ptr(p);
 }
 
 static size_t zone_size(malloc_zone_t* zone, const void* p) {
   (void)zone;
-  return mi_check_owned(p) ? mi_usable_size(p) : 0;
+  return _mi_macos_size(p);
 }
 
 static void* zone_malloc(malloc_zone_t* zone, size_t size) {
@@ -222,9 +259,34 @@ static union mac_zone_storage mi_zone_storage = { .zone = {
   .claimed_address = zone_claimed_address,
 } };
 
-__attribute__((constructor)) static void mac_register_zone(void) {
+static malloc_zone_t* first_zone(void) {
+  vm_address_t* zones = NULL;
+  unsigned count = 0;
+  if (malloc_get_all_zones(mach_task_self(), NULL, &zones, &count) != KERN_SUCCESS || count == 0) {
+    return NULL;
+  }
+  return (malloc_zone_t*)zones[0];
+}
+
+// libmalloc sends malloc(), typed allocations, and the default zone to the
+// first registered zone. Making this zone the first one also covers programs
+// that link the allocator statically, where dyld ignores __interpose tuples.
+__attribute__((constructor(101))) static void mac_register_zone(void) {
   mi_process_init();
+  malloc_zone_t* purgeable = malloc_default_purgeable_zone();
   malloc_zone_register(&mi_zone);
+  // Unregistering a zone moves the last registered zone, this one, into its
+  // slot. Re-register the system zone, then the purgeable zone, so the
+  // purgeable zone stays behind the system zone as libmalloc expects.
+  malloc_zone_t* system = first_zone();
+  if (system != NULL && system != &mi_zone) {
+    malloc_zone_unregister(system);
+    malloc_zone_register(system);
+    if (purgeable != NULL) {
+      malloc_zone_unregister(purgeable);
+      malloc_zone_register(purgeable);
+    }
+  }
 }
 
 #define INTERPOSE(original, replacement_fn) \
@@ -239,7 +301,11 @@ static const struct { const void* replacement; const void* original; } interpose
   INTERPOSE(free, mac_free),
   INTERPOSE(valloc, mac_valloc),
   INTERPOSE(posix_memalign, mac_posix_memalign),
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101500
+  // Older deployment targets cannot reference aligned_alloc; libmalloc's
+  // implementation still reaches this zone through its memalign callback.
   INTERPOSE(aligned_alloc, mac_aligned_alloc),
+#endif
   INTERPOSE(strdup, mac_strdup),
   INTERPOSE(strndup, mac_strndup),
   INTERPOSE(malloc_size, mac_size),

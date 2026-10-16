@@ -64,7 +64,7 @@ fn compile_track_shim(defines: &[&str], flags: &[&str]) {
     let obj = out_dir.join("track_shim.o");
     let lib = out_dir.join("libmechanical_mimalloc_track_shim.a");
 
-    let mut cc = Command::new(tool_from_env("CC", "cc"));
+    let mut cc = target_compiler("CC", "cc");
     cc.arg("-c")
         .arg("src/track_shim.c")
         .arg("-o")
@@ -91,7 +91,7 @@ fn compile_cxx_new_shim(fast_new: bool) {
     let obj = out_dir.join("cxx_new_shim.o");
     let lib = out_dir.join("libmechanical_mimalloc_cxx_new_shim.a");
 
-    let mut cxx = Command::new(tool_from_env("CXX", "c++"));
+    let mut cxx = target_compiler("CXX", "c++");
     cxx.arg("-std=c++17");
     if fast_new {
         cxx.arg("-DMI_CXX_USE_FAST_NEW=1");
@@ -112,12 +112,47 @@ fn compile_cxx_new_shim(fast_new: bool) {
     println!("cargo:rustc-link-lib=static:+whole-archive=mechanical_mimalloc_cxx_new_shim");
 }
 
+/// A C or C++ compiler command for Cargo's target. On macOS `cc` otherwise
+/// builds for the host architecture and running OS version, so pass the target
+/// architecture and rustc's deployment target to match the Rust objects.
+fn target_compiler(tool_env: &str, default: &str) -> Command {
+    let mut compiler = Command::new(tool_from_env(tool_env, default));
+    if required_env("CARGO_CFG_TARGET_OS") != "macos" {
+        return compiler;
+    }
+    let target = required_env("TARGET");
+    let mut rustc = Command::new(tool_from_env("RUSTC", "rustc"));
+    rustc.args(["--print", "deployment-target", "--target", &target]);
+    let output = rustc
+        .output()
+        .unwrap_or_else(|err| panic!("failed to query the {target} deployment target: {err}"));
+    assert!(
+        output.status.success(),
+        "rustc could not report the {target} deployment target"
+    );
+    let printed = String::from_utf8_lossy(&output.stdout);
+    let version = printed
+        .trim()
+        .strip_prefix("MACOSX_DEPLOYMENT_TARGET=")
+        .unwrap_or_else(|| panic!("unexpected rustc deployment target output: {printed}"));
+    let arch = match required_env("CARGO_CFG_TARGET_ARCH").as_str() {
+        "aarch64" => "arm64".to_owned(),
+        arch => arch.to_owned(),
+    };
+    compiler
+        .args(["-arch", &arch])
+        .arg(format!("-mmacosx-version-min={version}"));
+    compiler
+}
+
 fn compile_macos_interpose() {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let obj = out_dir.join("macos_interpose.o");
     let lib = out_dir.join("libmechanical_mimalloc_macos_interpose.a");
-    let mut cc = Command::new(tool_from_env("CC", "cc"));
-    cc.args(["-std=c11", "-O3", "-fPIC", "-Wall", "-Wextra", "-Werror"])
+    let mut cc = target_compiler("CC", "cc");
+    // Warnings are not fatal here: a newer SDK must not break downstream builds.
+    // scripts/check-macos-interpose.py compiles this file with -Werror.
+    cc.args(["-std=c11", "-O3", "-fPIC", "-Wall", "-Wextra"])
         .args([
             "-I",
             "mimalloc-3.3.2/include",
@@ -140,7 +175,7 @@ fn compile_tls_shim() {
     let recurse_obj = out_dir.join("tls_recurse_shim.o");
     let lib = out_dir.join("libmechanical_mimalloc_tls_shim.a");
 
-    let mut tls_cc = Command::new(tool_from_env("CC", "cc"));
+    let mut tls_cc = target_compiler("CC", "cc");
     tls_cc
         .arg("-c")
         .arg("src/tls_shim.c")
@@ -150,7 +185,7 @@ fn compile_tls_shim() {
         .arg("-fPIC");
     run_tool("TLS shim compiler", "CC", &mut tls_cc);
 
-    let mut recurse_cc = Command::new(tool_from_env("CC", "cc"));
+    let mut recurse_cc = target_compiler("CC", "cc");
     recurse_cc
         .arg("-c")
         .arg("src/tls_recurse_shim.c")
@@ -296,7 +331,12 @@ fn main() {
     let tls_shim = feature_enabled("TLS_SHIM") || feature_enabled("INTERPOSE");
     let interpose = feature_enabled("INTERPOSE");
     let std = feature_enabled("STD");
-    let macos_interpose = target_os == "macos" && profile == "release" && interpose;
+    let macos_interpose = target_os == "macos" && interpose;
+    // Unix C and Itanium C++ allocator names exported from Rust. The macOS shim
+    // calls the libmalloc/libc++ originals and overrides through its zone and
+    // interpose tuples instead, so that image must not define these names.
+    let export_libc_aliases = !macos_interpose && (!c_abi || interpose);
+    let export_cxx_aliases = !macos_interpose && (!c_abi || cxx_overrides);
     let default_fast_override = target_os == "linux"
         && profile == "release"
         && target_arch == "x86_64"
@@ -325,9 +365,12 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CC");
     println!("cargo:rerun-if-env-changed=CXX");
     println!("cargo:rerun-if-env-changed=AR");
+    println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
     println!("cargo:rustc-check-cfg=cfg(mi_c_malloc_fast)");
     println!("cargo:rustc-check-cfg=cfg(mi_cxx_shim_linked)");
     println!("cargo:rustc-check-cfg=cfg(mi_osx_interpose)");
+    println!("cargo:rustc-check-cfg=cfg(mi_export_libc_aliases)");
+    println!("cargo:rustc-check-cfg=cfg(mi_export_cxx_aliases)");
     println!("cargo:rustc-check-cfg=cfg(mi_internal_c_probe)");
     println!("cargo:rustc-check-cfg=cfg(mi_sanitizer_runtime)");
 
@@ -358,6 +401,12 @@ fn main() {
     if macos_interpose {
         println!("cargo:rustc-cfg=mi_osx_interpose");
         compile_macos_interpose();
+    }
+    if export_libc_aliases {
+        println!("cargo:rustc-cfg=mi_export_libc_aliases");
+    }
+    if export_cxx_aliases {
+        println!("cargo:rustc-cfg=mi_export_cxx_aliases");
     }
 
     let valgrind = env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_some();

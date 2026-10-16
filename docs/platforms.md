@@ -51,12 +51,22 @@ The current workflow labels those jobs as:
 
 The Rust allocator is validated locally on `aarch64-apple-darwin` with Rust
 1.92.0, Darwin 25.4.0, and 16 KiB OS pages. The macOS ARM64 CI job runs default
-and all-feature debug tests, release Rust tests, Clippy, C header layout parity,
+and all-feature debug tests, release Rust tests with and without `interpose`,
+Clippy, C header layout parity,
 and native AddressSanitizer and ThreadSanitizer checks. Native regression tests
 cover process initialization, thread identity, OS page size and physical memory
 discovery, Darwin constants and `timeval` layout, peak RSS units, and kernel reusable-page
 state across decommit/reuse. Release tests cover small allocations whose
-alignment exceeds their size, including zeroed allocation and reallocation.
+alignment exceeds their size, including zeroed allocation and reallocation,
+through both `MiMalloc` and the safe heap API.
+
+As in upstream mimalloc, the default and cached thread heaps live in Darwin TSD
+slots 108 and 109 and the thread id is read from slot 0, on arm64 and x86_64.
+Unlike a Rust thread local, these slots exist before a thread's first
+allocation, so the allocation path never calls back into `malloc` through
+dyld's lazy thread-local setup. The x86_64 build is tested under Rosetta 2,
+which does not emulate reusable-page accounting; that kernel check is skipped
+when the process is translated.
 
 To reproduce the native sanitizer checks:
 
@@ -65,8 +75,9 @@ SANITIZER=address SANITIZER_TARGET=aarch64-apple-darwin scripts/check-sanitizers
 SANITIZER=thread SANITIZER_TARGET=aarch64-apple-darwin scripts/check-sanitizers.sh
 ```
 
-Source-built release dylibs also support native ARM64 DYLD interposition, with
-C and C++ consumer validation in `scripts/check-macos-interpose.py`. See
+Source-built dylibs also support DYLD interposition, and statically linked
+`interpose` programs are overridden through the default malloc zone, with C and
+C++ consumer validation in `scripts/check-macos-interpose.py`. See
 [macOS DYLD interposition](ffi-linking.md#macos-dyld-interposition) for the build
 command, tested behavior, and zone introspection limitations. This does not
 promote macOS into the Linux release-asset packaging pipeline.

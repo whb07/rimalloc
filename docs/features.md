@@ -22,7 +22,7 @@ unless the `std` feature is enabled.
 - `interpose`: aggregate C ABI/interposition artifact mode; implies `c-abi`,
   `cxx-overrides`, and `tls-shim`.
 
-On macOS, release `interpose` builds use the SDK malloc-zone shim and libc++
+On macOS, `interpose` builds use the SDK malloc-zone shim and libc++
 allocation semantics instead of the Linux C++/TLS shims. See
 [macOS DYLD interposition](ffi-linking.md#macos-dyld-interposition).
 

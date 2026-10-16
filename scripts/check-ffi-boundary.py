@@ -38,6 +38,7 @@ EXPORT_FILE_CLASSIFICATION = {
     "src/allocator/page.rs": "c-abi-internal-classified",
     "src/allocator/page_map.rs": "c-abi-internal-classified",
     "src/allocator/page_map/lookup.rs": "c-abi-internal-classified",
+    "src/platform/macos.rs": "runtime-boundary",
     "src/platform/mod.rs": "runtime-boundary",
     "src/platform/unix.rs": "runtime-boundary",
     "src/allocator/stats.rs": "c-abi",

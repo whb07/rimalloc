@@ -660,13 +660,14 @@ pub(crate) fn option_read_counts_for_tests() -> (u64, u64, u64, u64, u64) {
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use std::cell::Cell;
+    use core::sync::atomic::{AtomicUsize, Ordering};
 
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    thread_local! {
-        static ENABLED: Cell<bool> = const { Cell::new(false) };
-    }
+    // The thread whose allocations are counted. A Rust thread local would be
+    // read before a new thread's heap exists; on macOS its first access
+    // allocates, re-entering the allocator.
+    static ENABLED_THREAD: AtomicUsize = AtomicUsize::new(0);
 
     pub(crate) struct Guard {
         _lock: std::sync::MutexGuard<'static, ()>,
@@ -674,19 +675,19 @@ pub(crate) mod test_support {
 
     impl Drop for Guard {
         fn drop(&mut self) {
-            ENABLED.set(false);
+            ENABLED_THREAD.store(0, Ordering::Relaxed);
         }
     }
 
     pub(super) fn enabled() -> bool {
-        ENABLED.get()
+        ENABLED_THREAD.load(Ordering::Relaxed) == crate::prim::_mi_prim_thread_id()
     }
 
     pub(crate) fn lock() -> Guard {
         let lock = LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        ENABLED.set(true);
+        ENABLED_THREAD.store(crate::prim::_mi_prim_thread_id(), Ordering::Relaxed);
         Guard { _lock: lock }
     }
 }

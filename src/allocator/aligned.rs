@@ -70,6 +70,16 @@ unsafe fn mi_padding_shrink_call(
     unsafe { _mi_padding_shrink(page, block, min_size) };
 }
 
+/// Whether plain `malloc` of `size` bytes is aligned to `alignment`.
+///
+/// Size classes of at least `MI_MAX_ALIGN_SIZE` bytes are aligned to it, but
+/// the smallest class is only word aligned, so an alignment above `size` needs
+/// the aligned allocation path.
+#[inline(always)]
+pub(crate) const fn mi_malloc_satisfies_alignment(size: usize, alignment: usize) -> bool {
+    alignment <= MI_MAX_ALIGN_SIZE && alignment <= size
+}
+
 #[inline]
 fn mi_malloc_is_naturally_aligned(
     size: crate::core_types::RequestedSize,

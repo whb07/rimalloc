@@ -111,27 +111,46 @@ correct LTO mode. `DYLD_FORCE_FLAT_NAMESPACE` is not needed. macOS may block or
 strip loader injection for protected programs and hardened applications without
 the relevant entitlements; use a program that permits dynamic-library injection.
 
-The release `interpose` build registers an SDK-defined malloc zone and interposes
-malloc-family functions. Ownership checks route system/custom-zone pointers back
-to libmalloc. Zone creation, registration, enumeration, and system fork hooks
-remain available. libc++ supplies `operator new`/`delete`, exceptions, and
-`new_handler` behavior through the interposed C allocation functions.
+The `interpose` build registers an SDK-defined malloc zone, promotes it to
+libmalloc's default zone, and interposes malloc-family functions. The default
+zone serves `malloc()`, typed allocation, and default-zone calls from every
+image, so programs that link the crate statically are overridden as well; dyld
+applies `__interpose` tuples only to dylibs loaded at launch, where they skip
+libmalloc's dispatch. Load the dylib at launch (`DYLD_INSERT_LIBRARIES` or a
+link-time dependency), not with `dlopen`, because promotion reorders the zone
+list. Ownership checks route system and custom-zone pointers back to libmalloc.
+libc++ supplies `operator new`/`delete`, exceptions, and `new_handler` behavior
+through the interposed C allocation functions.
+
+Blocks are 16-byte aligned and sized by the plain size classes, as with
+libmalloc. `malloc_size` and `malloc_zone_from_ptr` recognize block starts;
+pages that hold over-aligned or guarded allocations also accept pointers inside
+a block, and freed blocks are not detected. `aligned_alloc` is interposed when
+the deployment target is macOS 10.15 or newer; otherwise libmalloc's
+implementation reaches the zone through its `memalign` callback.
+
+The zone's `force_lock`/`force_unlock` hooks are no-ops, as in upstream
+mimalloc on every platform: a fork while another thread holds an allocator lock
+in a slow path can leave the child blocked on that lock. After forking a
+multithreaded process, the child should only call async-signal-safe functions
+before `exec`.
 
 Native C and C++ consumers exercise constructor allocations, size/alignment,
-zeroing, overflow and errno, zone callbacks, foreign allocations, typed malloc,
-dlopen libraries, cross-thread frees, and a single-threaded fork:
+size classes, zeroing, overflow and errno, zone callbacks and promotion, foreign
+allocations, typed malloc, dlopen libraries, cross-thread frees, a
+single-threaded fork, and statistics at exit:
 
 ```sh
 scripts/check-macos-interpose.py
 ```
 
 The script checks normal release and `secure,guarded` release builds without
-linking the consumers against mimalloc. Remote zone heap enumeration is not
+linking the consumers against mimalloc, and compiles the shim with `-Werror` at
+the arm64 and x86_64 deployment targets. Remote zone heap enumeration is not
 implemented (`KERN_NOT_SUPPORTED`), and zone introspection statistics return
-zeros; use the mimalloc stats APIs for allocator statistics. Debug `interpose`
-builds retain the existing Rust test configuration and are not injection artifacts.
-The release-asset packaging pipeline is still scoped to Linux; this macOS path
-is built and validated directly from source.
+zeros; use the mimalloc stats APIs for allocator statistics. The release-asset
+packaging pipeline is still scoped to Linux; this macOS path is built and
+validated directly from source.
 
 ## LD_PRELOAD Interposition
 

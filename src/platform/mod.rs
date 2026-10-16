@@ -12,6 +12,8 @@ pub(crate) mod os;
 
 #[cfg(target_os = "emscripten")]
 pub mod emscripten;
+#[cfg(mi_osx_interpose)]
+mod macos;
 #[cfg(all(not(windows), not(target_os = "emscripten"), not(target_os = "wasi")))]
 pub mod unix;
 #[cfg(target_os = "wasi")]
@@ -120,18 +122,74 @@ thread_local! {
     static TLS_THEAP_CACHED: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-#[inline]
-fn mi_prim_apple_tls_slot(slot: usize) -> *mut c_void {
-    let tcb: *mut *mut c_void;
+/// Reads slot `SLOT` of Darwin's per-thread TSD array, as upstream does on
+/// macOS. Unlike a Rust thread local, the array exists before a thread's first
+/// allocation, so reading it never calls back into `malloc`.
+#[cfg(all(
+    not(miri),
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+#[inline(always)]
+fn mi_prim_darwin_tsd_get<const SLOT: usize>() -> *mut c_void {
+    let value: *mut c_void;
+    #[cfg(target_arch = "aarch64")]
+    // SAFETY: TPIDRRO_EL0, with the low CPU-number bits cleared, holds the
+    // current thread's TSD array, and every Darwin slot index is in bounds.
     unsafe {
         core::arch::asm!(
-            "mrs {tcb}, tpidrro_el0",
-            "bic {tcb}, {tcb}, #7",
-            tcb = out(reg) tcb,
+            "mrs {value}, tpidrro_el0",
+            "bic {value}, {value}, #7",
+            "ldr {value}, [{value}, #{offset}]",
+            value = out(reg) value,
+            offset = const SLOT * size_of::<usize>(),
             options(nostack, preserves_flags, readonly),
         );
-        *tcb.add(slot)
+    }
+    #[cfg(target_arch = "x86_64")]
+    // SAFETY: the GS segment base is the current thread's TSD array.
+    unsafe {
+        core::arch::asm!(
+            "mov {value}, qword ptr gs:[{offset}]",
+            value = out(reg) value,
+            offset = const SLOT * size_of::<usize>(),
+            options(nostack, preserves_flags, readonly),
+        );
+    }
+    value
+}
+
+/// Writes slot `SLOT` of the current thread's Darwin TSD array.
+#[cfg(all(
+    not(miri),
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+#[inline(always)]
+fn mi_prim_darwin_tsd_set<const SLOT: usize>(value: *mut c_void) {
+    #[cfg(target_arch = "aarch64")]
+    // SAFETY: as in `mi_prim_darwin_tsd_get`; slots 108 and 109 are reserved
+    // for the retired Objective-C collector and are otherwise unused.
+    unsafe {
+        core::arch::asm!(
+            "mrs {tsd}, tpidrro_el0",
+            "bic {tsd}, {tsd}, #7",
+            "str {value}, [{tsd}, #{offset}]",
+            tsd = out(reg) _,
+            value = in(reg) value,
+            offset = const SLOT * size_of::<usize>(),
+            options(nostack, preserves_flags),
+        );
+    }
+    #[cfg(target_arch = "x86_64")]
+    // SAFETY: as in `mi_prim_darwin_tsd_get`.
+    unsafe {
+        core::arch::asm!(
+            "mov qword ptr gs:[{offset}], {value}",
+            value = in(reg) value,
+            offset = const SLOT * size_of::<usize>(),
+            options(nostack, preserves_flags),
+        );
     }
 }
 
@@ -297,12 +355,32 @@ unsafe fn mi_linux_x64_theap_cached_set(theap: Option<ThreadHeapPtr>) {
 
 #[inline]
 pub fn mi_prim_tls_slot(slot: usize) -> *mut c_void {
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(all(
+        not(miri),
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
     {
-        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-        if slot == 0 {
-            return mi_prim_apple_tls_slot(slot);
+        match slot {
+            0 => mi_prim_darwin_tsd_get::<0>(),
+            MI_TLS_MODEL_FIXED_SLOT_DEFAULT => {
+                mi_prim_darwin_tsd_get::<MI_TLS_MODEL_FIXED_SLOT_DEFAULT>()
+            }
+            MI_TLS_MODEL_FIXED_SLOT_CACHED => {
+                mi_prim_darwin_tsd_get::<MI_TLS_MODEL_FIXED_SLOT_CACHED>()
+            }
+            _ => ptr::null_mut(),
         }
+    }
+    #[cfg(all(
+        not(target_os = "linux"),
+        not(all(
+            not(miri),
+            target_os = "macos",
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ))
+    ))]
+    {
         if MI_TLS_MODEL_FIXED_SLOT {
             match slot {
                 MI_TLS_MODEL_FIXED_SLOT_DEFAULT => TLS_SLOT_DEFAULT.with(Cell::get),
@@ -322,7 +400,28 @@ pub fn mi_prim_tls_slot(slot: usize) -> *mut c_void {
 
 #[inline]
 pub fn mi_prim_tls_slot_set(slot: usize, value: *mut c_void) {
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(all(
+        not(miri),
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
+    match slot {
+        MI_TLS_MODEL_FIXED_SLOT_DEFAULT => {
+            mi_prim_darwin_tsd_set::<MI_TLS_MODEL_FIXED_SLOT_DEFAULT>(value);
+        }
+        MI_TLS_MODEL_FIXED_SLOT_CACHED => {
+            mi_prim_darwin_tsd_set::<MI_TLS_MODEL_FIXED_SLOT_CACHED>(value);
+        }
+        _ => {}
+    }
+    #[cfg(all(
+        not(target_os = "linux"),
+        not(all(
+            not(miri),
+            target_os = "macos",
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ))
+    ))]
     {
         if MI_TLS_MODEL_FIXED_SLOT {
             match slot {
@@ -362,14 +461,22 @@ pub fn __mi_prim_thread_id() -> mi_threadid_t {
         }
         tid
     }
-    #[cfg(all(not(miri), target_os = "macos", target_arch = "aarch64"))]
+    #[cfg(all(
+        not(miri),
+        target_os = "macos",
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    ))]
     {
-        mi_prim_tls_slot(0) as mi_threadid_t
+        // Slot 0 holds the thread's `pthread_t`.
+        mi_prim_darwin_tsd_get::<0>() as mi_threadid_t
     }
     #[cfg(not(any(
         miri,
         all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")),
-        all(target_os = "macos", target_arch = "aarch64")
+        all(
+            target_os = "macos",
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        )
     )))]
     {
         crate::allocator::init::fallback_thread_id()
@@ -733,7 +840,34 @@ pub unsafe extern "C" fn mi_process_detach() {
     all(mi_sanitizer_runtime, target_vendor = "apple"),
     sanitize(address = "off")
 )]
-pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern "C" fn() = mi_process_attach;
+pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern "C" fn() = {
+    #[cfg(target_vendor = "apple")]
+    {
+        mi_process_attach_darwin
+    }
+    #[cfg(not(target_vendor = "apple"))]
+    {
+        mi_process_attach
+    }
+};
+
+/// Mach-O has no terminator section that runs at exit, so register process
+/// teardown with `atexit`, as clang does for `__attribute__((destructor))`.
+#[cfg(all(target_vendor = "apple", not(miri)))]
+unsafe extern "C" fn mi_process_attach_darwin() {
+    unsafe extern "C" {
+        fn atexit(function: extern "C" fn()) -> c_int;
+    }
+    extern "C" fn detach() {
+        // SAFETY: libc runs `atexit` handlers once, during process exit.
+        unsafe { mi_process_detach() }
+    }
+    // SAFETY: the loader runs this constructor once, before `main`.
+    unsafe {
+        mi_process_attach();
+        atexit(detach);
+    }
+}
 
 #[cfg(all(target_family = "unix", not(target_vendor = "apple"), not(miri)))]
 #[used]
@@ -803,7 +937,10 @@ mod tests {
         not(miri),
         any(
             all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")),
-            all(target_os = "macos", target_arch = "aarch64")
+            all(
+                target_os = "macos",
+                any(target_arch = "aarch64", target_arch = "x86_64")
+            )
         )
     ))]
     #[test]
@@ -857,6 +994,15 @@ mod tests {
             super::_mi_tls_theap_default_set(None);
             super::_mi_tls_theap_cached_set(None);
         }
+    }
+
+    #[cfg(all(target_vendor = "apple", not(miri)))]
+    #[test]
+    fn darwin_process_constructor_registers_teardown() {
+        assert_eq!(
+            super::_MI_PROCESS_ATTACH_CTOR as usize,
+            super::mi_process_attach_darwin as *const () as usize
+        );
     }
 
     #[cfg(all(target_family = "unix", not(target_vendor = "apple"), not(miri)))]

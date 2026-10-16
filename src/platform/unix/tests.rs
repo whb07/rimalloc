@@ -73,6 +73,23 @@ fn page_is_reusable(p: *mut c_void) -> bool {
     disposition & 0x800 != 0 // VM_PAGE_QUERY_PAGE_REUSABLE from mach/vm_statistics.h
 }
 
+/// Rosetta accepts the reusable-page advice without changing page accounting.
+fn is_translated() -> bool {
+    let mut translated: c_int = 0;
+    let mut size = size_of::<c_int>();
+    // SAFETY: the name is NUL-terminated and the output buffer holds `size` bytes.
+    let rc = unsafe {
+        libc::sysctlbyname(
+            c"sysctl.proc_translated".as_ptr(),
+            (&raw mut translated).cast(),
+            &mut size,
+            ptr::null_mut(),
+            0,
+        )
+    };
+    rc == 0 && translated == 1
+}
+
 #[test]
 fn darwin_decommit_marks_pages_reusable_and_reuse_clears_it() {
     // SAFETY: the test owns the complete mapping and releases it exactly once.
@@ -108,7 +125,9 @@ fn darwin_decommit_marks_pages_reusable_and_reuse_clears_it() {
         p.cast::<u8>().write_bytes(0x5a, size);
         assert_eq!(p.cast::<u8>().add(size - 1).read(), 0x5a);
         assert_eq!(_mi_prim_free(p, size), 0);
-        assert!(reusable, "decommitted pages must be reclaimable by Darwin");
-        assert!(reused, "reuse must restore normal page accounting");
+        if !is_translated() {
+            assert!(reusable, "decommitted pages must be reclaimable by Darwin");
+            assert!(reused, "reuse must restore normal page accounting");
+        }
     }
 }

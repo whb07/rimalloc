@@ -798,7 +798,10 @@ impl<'heap> RawHeapAllocation<'heap> {
         }
 
         let ptr = unsafe {
-            if layout.align() <= crate::types::MI_MAX_ALIGN_SIZE {
+            if crate::allocator::aligned::mi_malloc_satisfies_alignment(
+                layout.size(),
+                layout.align(),
+            ) {
                 if zeroed {
                     crate::allocator::alloc::mi_heap_zalloc(heap.as_ptr(), layout.size())
                 } else {
@@ -877,7 +880,10 @@ impl<'heap> RawHeapAllocation<'heap> {
             }
 
             let ptr = unsafe {
-                if old_layout.align() <= crate::types::MI_MAX_ALIGN_SIZE {
+                if crate::allocator::aligned::mi_malloc_satisfies_alignment(
+                    new_size,
+                    old_layout.align(),
+                ) {
                     crate::allocator::alloc::mi_heap_realloc(
                         old.heap.as_ptr(),
                         old.ptr.as_ptr().cast::<c_void>(),

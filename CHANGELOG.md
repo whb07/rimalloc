@@ -37,10 +37,28 @@ All notable changes to this repository should be recorded here.
 
 ### Fixed
 
-- Enable native macOS ARM64 release DYLD interposition with an SDK-defined
-  malloc zone, ownership-aware system allocator fallback, correct errno and
-  alignment behavior, and libc++ new/delete semantics. Add C/C++ injection
-  tests for ordinary and secure/guarded builds.
+- Enable native macOS DYLD interposition with an SDK-defined malloc zone,
+  ownership-aware system allocator fallback, correct errno and alignment
+  behavior, and libc++ new/delete semantics. Add C/C++ injection tests for
+  ordinary and secure/guarded builds.
+- Promote the macOS zone to libmalloc's default zone so statically linked
+  `interpose` programs, in every build profile, are overridden too; dyld
+  ignores `__interpose` tuples outside dylibs loaded at launch.
+- Serve interposed macOS `malloc`, `calloc`, `realloc`, `strdup`, and `strndup`
+  from 16-byte aligned plain size classes. The aligned-allocation fallback
+  doubled 1-15 byte blocks and grew power-of-two blocks above 4 KiB by 25%, and
+  the string copies could be 8-byte aligned.
+- Report `malloc_size` and zone ownership only for allocation starts, and free
+  owned pointers with a single page-map lookup.
+- Keep the macOS default and cached thread heaps and the thread id in Darwin TSD
+  slots, as upstream does, instead of Rust thread locals whose first access
+  allocates through libmalloc.
+- Run process teardown at exit on Apple targets through `atexit`, so
+  `MIMALLOC_SHOW_STATS` and `destroy_on_exit` work there.
+- Build C shims for Cargo's macOS target architecture and rustc's deployment
+  target instead of the host's.
+- Leave `errno` unchanged in allocator OS memory calls, which `free` reaches.
+- Preserve requested alignment for small allocations in the safe heap API.
 - Pass the dynamic-library crate type to Cargo so macOS builds use the correct
   LTO mode.
 

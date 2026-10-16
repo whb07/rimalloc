@@ -116,13 +116,8 @@ pub const O_RDONLY: c_int = 0;
 pub const O_CLOEXEC: c_int = 0x80000;
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 pub const O_CLOEXEC: c_int = 0;
-#[cfg(target_os = "macos")]
-pub const EAGAIN: c_int = 35;
-#[cfg(not(target_os = "macos"))]
-pub const EAGAIN: c_int = 11;
+pub use crate::types::{EAGAIN, EINVAL, ENOMEM};
 pub const EINTR: c_int = 4;
-pub const ENOMEM: c_int = 12;
-pub const EINVAL: c_int = 22;
 #[cfg(target_os = "macos")]
 pub const ENOSYS: c_int = 78;
 #[cfg(not(target_os = "macos"))]
@@ -345,6 +340,20 @@ fn mi_last_errno() -> c_int {
     }
 }
 
+/// Runs a libc memory call that returns 0 or -1 with `errno`, and returns its
+/// error code while leaving the caller's `errno` unchanged: `free` reaches
+/// these calls and must not modify `errno`.
+#[inline]
+fn os_status(call: impl FnOnce() -> c_int) -> c_int {
+    let saved = mi_last_errno();
+    if call() == 0 {
+        return 0;
+    }
+    let err = mi_last_errno();
+    super::mi_set_errno(saved);
+    err
+}
+
 /// # Safety
 ///
 /// `fpath` must point to a valid NUL-terminated path string.
@@ -397,8 +406,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) ->
     if size == 0 {
         return 0;
     }
-    let err = unsafe { munmap(addr, size) == -1 };
-    if err { mi_last_errno() } else { 0 }
+    os_status(|| unsafe { munmap(addr, size) })
 }
 
 #[inline]
@@ -499,12 +507,10 @@ pub(crate) unsafe fn _mi_prim_thp_enable(addr: *mut c_void, size: usize) {
     if mi_option_is_enabled(mi_option_t::mi_option_allow_thp) {
         // Best effort, invisible to the caller: a range that cannot take huge pages (memory the
         // application handed to the allocator, or a kernel before 6.1 for the collapse) leaves
-        // `errno` as it was.
-        let saved_errno = mi_last_errno();
+        // `errno` as it was, because `unix_madvise` restores it.
         let _ = unsafe { unix_madvise(addr, size, MADV_HUGEPAGE) };
         // Also turn what is already resident into huge pages.
         let _ = unsafe { unix_madvise(addr, size, MADV_COLLAPSE) };
-        unsafe { *__errno_location() = saved_errno };
     }
     #[cfg(not(any(target_os = "linux", target_os = "android")))]
     let _ = (addr, size);
@@ -512,8 +518,7 @@ pub(crate) unsafe fn _mi_prim_thp_enable(addr: *mut c_void, size: usize) {
 
 #[inline]
 unsafe fn unix_madvise(addr: *mut c_void, size: usize, advice: c_int) -> c_int {
-    let res = unsafe { madvise(addr, size, advice) };
-    if res == 0 { 0 } else { mi_last_errno() }
+    os_status(|| unsafe { madvise(addr, size, advice) })
 }
 
 #[inline]
@@ -726,11 +731,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_commit(
         if !is_zero.is_null() {
             *is_zero = false;
         }
-        let err = if mprotect(start, size, PROT_READ | PROT_WRITE) == 0 {
-            0
-        } else {
-            mi_last_errno()
-        };
+        let err = os_status(|| mprotect(start, size, PROT_READ | PROT_WRITE));
         if err != 0 {
             unix_mprotect_hint(err);
         }
@@ -784,7 +785,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_decommit(
                 *needs_recommit = false;
             } else {
                 *needs_recommit = true;
-                let _ = mprotect(start, size, PROT_NONE);
+                let _ = os_status(|| mprotect(start, size, PROT_NONE));
             }
         }
         err
@@ -830,11 +831,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_protect(
     } else {
         PROT_READ | PROT_WRITE
     };
-    let err = if unsafe { mprotect(start, size, prot) } == 0 {
-        0
-    } else {
-        mi_last_errno()
-    };
+    let err = os_status(|| unsafe { mprotect(start, size, prot) });
     unsafe { unix_mprotect_hint(err) };
     err
 }

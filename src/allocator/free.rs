@@ -1072,14 +1072,23 @@ unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
         return false;
     }
 
+    // SAFETY: the caller supplies a live allocator pointer, so the page map publishes its page.
+    let Some(page_ptr) = crate::core_types::PagePtr::new(unsafe { _mi_ptr_page(p) }) else {
+        return false;
+    };
+    // SAFETY: forwarded from this function's contract for the page just looked up.
+    unsafe { mi_free_fast_page(p, page_ptr) }
+}
+
+#[inline(always)]
+/// # Safety
+/// Same contract as `mi_free_fast_try` in its enabled configuration, with `page_ptr` the registered
+/// page that contains `p`.
+unsafe fn mi_free_fast_page(p: *mut c_void, page_ptr: crate::core_types::PagePtr) -> bool {
     // SAFETY: the caller supplies one live block-start allocation and stable page-map/backing/owner
     // epoch. The release configuration excludes guarded, padded, and diagnostic pointer adjustment;
     // local mutation is exclusive and foreign publication uses the page's atomic protocol.
     unsafe {
-        let page = _mi_ptr_page(p);
-        let Some(page_ptr) = crate::core_types::PagePtr::new(page) else {
-            return false;
-        };
         let current = crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id());
         let block = crate::core_types::BlockForFree::from_block_start_unchecked(
             crate::core_types::BlockPtr::new_unchecked(p.cast()),
@@ -1189,6 +1198,66 @@ pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *
     if unsafe { mi_free_fast_try(p, usable) } {
         return;
     }
+    // SAFETY: forwarded from this function's contract.
+    unsafe { mi_route_free_validated(p, msg, usable) };
+}
+
+/// Frees `p` when it lies in a page registered with this allocator and reports whether it did.
+///
+/// Unregistered pointers are left untouched, so callers that receive pointers from other
+/// allocators (the macOS malloc zone) classify and free with one page-map lookup.
+///
+/// # Safety
+/// `p` may be null or arbitrary. A pointer in a registered page must satisfy `mi_route_free`.
+#[cfg(mi_osx_interpose)]
+pub(crate) unsafe fn mi_free_if_owned(p: *mut c_void) -> bool {
+    // SAFETY: the registered lookup accepts arbitrary addresses.
+    let Some(registered) = (unsafe { _mi_safe_ptr_page_registered(p) }) else {
+        return false;
+    };
+    // SAFETY: a registered page holds only this allocator's blocks, so the caller's contract makes
+    // `p` a live allocation of that page.
+    unsafe {
+        if !(mi_free_fast_path_enabled(ptr::null_mut()) && mi_free_fast_page(p, registered.page()))
+        {
+            mi_route_free_validated(p, c"free".as_ptr(), ptr::null_mut());
+        }
+    }
+    true
+}
+
+/// Returns the usable size of the allocation that starts at `p`, or 0 when `p` is not one.
+///
+/// Pages that hold over-aligned allocations accept any pointer inside a block, as
+/// `mi_usable_size` does. Blocks are not checked against the free lists.
+///
+/// # Safety
+/// `p` may be null or arbitrary; registered pages must not be released concurrently.
+#[cfg(mi_osx_interpose)]
+pub(crate) unsafe fn mi_allocation_size(p: *const c_void) -> usize {
+    // SAFETY: the registered lookup accepts arbitrary addresses, and a registered page's
+    // initialized geometry stays readable while the caller keeps it live.
+    unsafe {
+        let Some(registered) = _mi_safe_ptr_page_registered(p) else {
+            return 0;
+        };
+        let page = registered.page();
+        if !page.area().is_some_and(|area| area.contains(p)) {
+            return 0;
+        }
+        let user = crate::core_types::UserPtr::new_unchecked(p.cast_mut());
+        if !mi_page_has_interior_pointers(page.as_ptr())
+            && mi_page_ptr_unalign_typed(page, user).as_ptr().cast_const() != p.cast()
+        {
+            return 0;
+        }
+        mi_page_usable_aligned_size_of_typed(page.as_ptr(), p).get()
+    }
+}
+
+/// # Safety
+/// Same contract as `mi_route_free` for a nonnull `p`.
+unsafe fn mi_route_free_validated(p: *mut c_void, msg: *const c_char, usable: *mut usize) {
     // SAFETY: the caller supplies the live pointer, page-map/backing stability, diagnostic text, and
     // callback validity required to classify `p` without racing free/realloc or teardown.
     let lookup = unsafe { mi_validate_pointer(p, msg) };

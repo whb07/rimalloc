@@ -101,6 +101,8 @@ jobs:
           cargo test --workspace --all-targets --all-features
       - name: Optimized allocator tests
         run: cargo test --release --features std --lib --tests
+      - name: Optimized tests with the promoted malloc zone
+        run: cargo test --release --features std,interpose --lib --tests
       - name: DYLD interposition with native C and C++ consumers
         run: scripts/check-macos-interpose.py
       - name: C header layout parity

@@ -11,14 +11,17 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "mimalloc.h"
 
 typedef bool (*owned_fn)(const void*);
 static owned_fn owned;
+static long (*option_get)(mi_option_t);
 static void* early;
 
 __attribute__((constructor)) static void before_main(void) {
   owned = (owned_fn)dlsym(RTLD_DEFAULT, "mi_check_owned");
-  assert(owned != NULL);
+  option_get = (long (*)(mi_option_t))dlsym(RTLD_DEFAULT, "mi_option_get");
+  assert(owned != NULL && option_get != NULL);
   early = malloc(7);
   assert(early != NULL && owned(early));
   memset(early, 0x5a, 7);
@@ -29,6 +32,12 @@ static void check(void* p, size_t size, size_t alignment) {
   assert((uintptr_t)p % alignment == 0);
   assert(malloc_size(p) >= size);
   assert(malloc_zone_from_ptr(p) == malloc_default_zone());
+}
+
+// Darwin malloc blocks are 16-byte aligned and no larger than their size class.
+static void check_malloc(void* p, size_t size) {
+  check(p, size, 16);
+  assert(malloc_size(p) <= malloc_good_size(size));
 }
 
 static void* worker(void* p) {
@@ -50,20 +59,27 @@ int main(int argc, char** argv) {
   assert(argc == 2);
   assert(((unsigned char*)early)[6] == 0x5a);
   free(early);
-  const size_t sizes[] = {0, 1, 7, 8, 15, 16, 17, 4095, 16384, 1048576};
+  const size_t sizes[] = {0, 1, 7, 8, 15, 16, 17, 1500, 4095, 8192, 16384, 65536, 1048576};
   for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
     size_t n = sizes[i];
     void* ps[32];
     for (size_t j = 0; j < 32; ++j) {
       ps[j] = malloc(n);
-      check(ps[j], n, 16);
+      check_malloc(ps[j], n);
       memset(ps[j], 0xa5, n);
     }
     for (size_t j = 0; j < 32; ++j) free(ps[j]);
     unsigned char* p = calloc(n, 3);
-    check(p, n * 3, 16);
+    check_malloc(p, n * 3);
     for (size_t j = 0; j < n * 3; ++j) assert(p[j] == 0);
     free(p);
+  }
+  // Only block starts belong to the zone, as with libmalloc. Guarded blocks
+  // place the object inside the block, so sampled pages accept interior pointers.
+  if (option_get(mi_option_guarded_sample_rate) == 0) {
+    unsigned char* block = malloc(64);
+    assert(malloc_size(block + 16) == 0 && malloc_zone_from_ptr(block + 16) == NULL);
+    free(block);
   }
   volatile size_t enormous = SIZE_MAX;
   errno = 0;
@@ -100,12 +116,13 @@ int main(int argc, char** argv) {
   errno = EDOM;
   free(p);
   assert(errno == EDOM);
-  p = strdup("allocator");
-  assert(owned(p) && strcmp(p, "allocator") == 0);
-  free(p);
-  p = strndup("allocator", 5);
-  assert(owned(p) && strcmp(p, "alloc") == 0);
-  free(p);
+  char* strings[32];
+  for (size_t i = 0; i < 32; ++i) {
+    strings[i] = i % 2 ? strdup("abc") : strndup("allocator", 5);
+    check_malloc(strings[i], i % 2 ? 4 : 6);
+    assert(strcmp(strings[i], i % 2 ? "abc" : "alloc") == 0);
+  }
+  for (size_t i = 0; i < 32; ++i) free(strings[i]);
 
   malloc_zone_t* zone = malloc_default_zone();
   assert(strcmp(malloc_get_zone_name(zone), "mechanical_mimalloc") == 0);
@@ -140,9 +157,9 @@ int main(int argc, char** argv) {
   vm_address_t* zones = NULL;
   unsigned count = 0;
   assert(malloc_get_all_zones(mach_task_self(), NULL, &zones, &count) == KERN_SUCCESS);
-  bool found = false;
-  for (unsigned i = 0; i < count; ++i) if (zones[i] == (vm_address_t)zone) found = true;
-  assert(found);
+  // The zone is promoted to libmalloc's default, which serves malloc() for
+  // images that dyld does not interpose.
+  assert(count > 0 && zones[0] == (vm_address_t)zone);
 
   // A real system zone must remain usable, including crossing the free/realloc
   // interposition boundary with pointers owned by libmalloc.

@@ -42,7 +42,7 @@ consumer needs explicit mimalloc `mi_*` symbols without replacing the process
 allocator. The underlying build command is:
 
 ```sh
-cargo rustc --release --features c-abi --lib -- --crate-type cdylib
+cargo rustc --release --features c-abi --lib --crate-type cdylib
 ```
 
 Consumers should include headers from `target/release-artifacts/include/` and
@@ -97,13 +97,49 @@ scripts/check-release-artifact-consumer.py
 That script builds and runs C consumers against both `c-abi-static-preview` and
 `interpose-static-preview` from a copied release payload outside the repository.
 
+## macOS DYLD Interposition
+
+Build a release dylib from the repository, then inject it into a native program:
+
+```sh
+cargo rustc --features interpose --lib --release --crate-type cdylib
+DYLD_INSERT_LIBRARIES="$PWD/target/release/libmechanical_mimalloc.dylib" ./program
+```
+
+Pass `--crate-type` to Cargo, before any `--` separator, so Cargo selects the
+correct LTO mode. `DYLD_FORCE_FLAT_NAMESPACE` is not needed. macOS may block or
+strip loader injection for protected programs and hardened applications without
+the relevant entitlements; use a program that permits dynamic-library injection.
+
+The release `interpose` build registers an SDK-defined malloc zone and interposes
+malloc-family functions. Ownership checks route system/custom-zone pointers back
+to libmalloc. Zone creation, registration, enumeration, and system fork hooks
+remain available. libc++ supplies `operator new`/`delete`, exceptions, and
+`new_handler` behavior through the interposed C allocation functions.
+
+Native C and C++ consumers exercise constructor allocations, size/alignment,
+zeroing, overflow and errno, zone callbacks, foreign allocations, typed malloc,
+dlopen libraries, cross-thread frees, and a single-threaded fork:
+
+```sh
+scripts/check-macos-interpose.py
+```
+
+The script checks normal release and `secure,guarded` release builds without
+linking the consumers against mimalloc. Remote zone heap enumeration is not
+implemented (`KERN_NOT_SUPPORTED`), and zone introspection statistics return
+zeros; use the mimalloc stats APIs for allocator statistics. Debug `interpose`
+builds retain the existing Rust test configuration and are not injection artifacts.
+The release-asset packaging pipeline is still scoped to Linux; this macOS path
+is built and validated directly from source.
+
 ## LD_PRELOAD Interposition
 
 Use the release payload's `interpose-cdylib` artifact when the process allocator
 must be replaced through ELF interposition. The underlying build command is:
 
 ```sh
-cargo rustc --features interpose --lib --release -- --crate-type cdylib
+cargo rustc --features interpose --lib --release --crate-type cdylib
 ```
 
 Run the target program with the staged interpose cdylib in `LD_PRELOAD`:

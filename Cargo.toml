@@ -63,7 +63,7 @@ bench-diagnostics = ["std"]
 # These are raw Tier R compatibility helpers, not the default safe Rust API.
 c-header-macros = []
 # Enable build-script setup for C ABI artifacts. Cargo crate types are selected
-# by the build command; use `cargo rustc --features interpose --lib -- --crate-type cdylib`
+# by the build command; use `cargo rustc --features interpose --lib --crate-type cdylib`
 # for the malloc-interposing shared library.
 c-abi = []
 # Compile and link the C++ operator new/delete override shim.

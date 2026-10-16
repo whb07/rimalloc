@@ -4,7 +4,7 @@ Default Cargo library builds produce an `rlib` with an explicit Rust `raw`
 facade. The dynamic C ABI/interposition artifact is opt-in:
 
 ```sh
-cargo rustc --features interpose --lib --release -- --crate-type cdylib
+cargo rustc --features interpose --lib --release --crate-type cdylib
 ```
 
 The raw Rust facade lives under `mechanical_mimalloc::raw` and mirrors the C

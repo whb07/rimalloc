@@ -18,7 +18,7 @@ The default library build produces:
 The dynamic C ABI/interposition artifact is opt-in:
 
 ```sh
-cargo rustc --features interpose --lib --release -- --crate-type cdylib
+cargo rustc --features interpose --lib --release --crate-type cdylib
 ```
 
 ## Choose a Path
@@ -67,7 +67,7 @@ Use the opt-in C ABI artifact when you need mimalloc-compatible dynamic symbols
 or `LD_PRELOAD`/malloc-family interposition:
 
 ```sh
-cargo rustc --features interpose --lib --release -- --crate-type cdylib
+cargo rustc --features interpose --lib --release --crate-type cdylib
 ```
 
 Production C ABI libraries, C headers, link metadata, checksums, and ABI

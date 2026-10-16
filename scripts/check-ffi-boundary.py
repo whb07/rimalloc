@@ -39,7 +39,6 @@ EXPORT_FILE_CLASSIFICATION = {
     "src/allocator/page_map.rs": "c-abi-internal-classified",
     "src/allocator/page_map/lookup.rs": "c-abi-internal-classified",
     "src/platform/mod.rs": "runtime-boundary",
-    "src/platform/macos.rs": "malloc-cxx-override",
     "src/platform/unix.rs": "runtime-boundary",
     "src/allocator/stats.rs": "c-abi",
     "src/allocator/thread_heap.rs": "c-abi-internal-classified",

@@ -371,7 +371,7 @@ The Tier C surface is exported by the opt-in `cdylib` artifact built with the
 explicit interposition feature set:
 
 ```sh
-cargo rustc --features interpose --lib --release -- --crate-type cdylib
+cargo rustc --features interpose --lib --release --crate-type cdylib
 ```
 
 The authoritative local checks are:

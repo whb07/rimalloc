@@ -54,8 +54,7 @@ The Rust allocator is validated locally on `aarch64-apple-darwin` with Rust
 and all-feature debug tests, release Rust tests, Clippy, C header layout parity,
 and native AddressSanitizer and ThreadSanitizer checks. Native regression tests
 cover process initialization, thread identity, OS page size and physical memory
-discovery,
-Darwin constants and `timeval` layout, peak RSS units, and kernel reusable-page
+discovery, Darwin constants and `timeval` layout, peak RSS units, and kernel reusable-page
 state across decommit/reuse. Release tests cover small allocations whose
 alignment exceeds their size, including zeroed allocation and reallocation.
 
@@ -66,12 +65,13 @@ SANITIZER=address SANITIZER_TARGET=aarch64-apple-darwin scripts/check-sanitizers
 SANITIZER=thread SANITIZER_TARGET=aarch64-apple-darwin scripts/check-sanitizers.sh
 ```
 
-This validates Rust integration, including `#[global_allocator]`, rather than
-promoting macOS C interposition artifacts to release support. The translated
-malloc-zone/DYLD interposition path remains unvalidated and unsupported. On this
-Rust 1.92.0/Apple linker setup, the release `cargo rustc --features interpose
---lib --release -- --crate-type cdylib` command fails because the linker rejects
-`-plugin-opt` LTO arguments. The Linux-only shared-library comparison benchmark skips on macOS; portable
+Source-built release dylibs also support native ARM64 DYLD interposition, with
+C and C++ consumer validation in `scripts/check-macos-interpose.py`. See
+[macOS DYLD interposition](ffi-linking.md#macos-dyld-interposition) for the build
+command, tested behavior, and zone introspection limitations. This does not
+promote macOS into the Linux release-asset packaging pipeline.
+
+The Linux-only shared-library comparison benchmark skips on macOS; portable
 benchmark smoke tests run, but comparative macOS performance has not been
 established. Current RSS still uses allocator committed bytes as an estimate;
 peak RSS is queried from the OS. Valgrind tracking falls back to no-op shims

@@ -112,6 +112,28 @@ fn compile_cxx_new_shim(fast_new: bool) {
     println!("cargo:rustc-link-lib=static:+whole-archive=mechanical_mimalloc_cxx_new_shim");
 }
 
+fn compile_macos_interpose() {
+    let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
+    let obj = out_dir.join("macos_interpose.o");
+    let lib = out_dir.join("libmechanical_mimalloc_macos_interpose.a");
+    let mut cc = Command::new(tool_from_env("CC", "cc"));
+    cc.args(["-std=c11", "-O3", "-fPIC", "-Wall", "-Wextra", "-Werror"])
+        .args([
+            "-I",
+            "mimalloc-3.3.2/include",
+            "-c",
+            "src/macos_interpose.c",
+            "-o",
+        ])
+        .arg(&obj);
+    run_tool("macOS interposition compiler", "CC", &mut cc);
+    let mut ar = Command::new(tool_from_env("AR", "ar"));
+    ar.arg("crs").arg(&lib).arg(&obj);
+    run_tool("macOS interposition archiver", "AR", &mut ar);
+    println!("cargo:rustc-link-search=native={}", out_dir.display());
+    println!("cargo:rustc-link-lib=static:+whole-archive=mechanical_mimalloc_macos_interpose");
+}
+
 fn compile_tls_shim() {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let tls_obj = out_dir.join("tls_shim.o");
@@ -274,6 +296,7 @@ fn main() {
     let tls_shim = feature_enabled("TLS_SHIM") || feature_enabled("INTERPOSE");
     let interpose = feature_enabled("INTERPOSE");
     let std = feature_enabled("STD");
+    let macos_interpose = target_os == "macos" && profile == "release" && interpose;
     let default_fast_override = target_os == "linux"
         && profile == "release"
         && target_arch == "x86_64"
@@ -284,6 +307,7 @@ fn main() {
         && env::var_os("CARGO_FEATURE_TRACK_ASAN").is_none();
 
     println!("cargo:rerun-if-changed=src/track_shim.c");
+    println!("cargo:rerun-if-changed=src/macos_interpose.c");
     println!("cargo:rerun-if-changed=src/cxx_new_shim.cpp");
     println!("cargo:rerun-if-changed=src/tls_shim.c");
     println!("cargo:rerun-if-changed=src/tls_recurse_shim.c");
@@ -307,12 +331,14 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(mi_internal_c_probe)");
     println!("cargo:rustc-check-cfg=cfg(mi_sanitizer_runtime)");
 
-    let cxx_shim_linked =
-        cxx_overrides && target_os != "windows" && target_supports_cxx_shim(&target_os);
+    let cxx_shim_linked = cxx_overrides
+        && !macos_interpose
+        && target_os != "windows"
+        && target_supports_cxx_shim(&target_os);
     if cxx_shim_linked {
         println!("cargo:rustc-cfg=mi_cxx_shim_linked");
         compile_cxx_new_shim(default_fast_override);
-    } else if cxx_overrides && target_os != "windows" {
+    } else if cxx_overrides && !macos_interpose && target_os != "windows" {
         println!("cargo:warning=skipping C++ new/delete shim on unsupported target_os={target_os}");
     }
     if target_os == "linux" {
@@ -329,8 +355,9 @@ fn main() {
             println!("cargo:warning=skipping TLS shim on unsupported target_os={target_os}");
         }
     }
-    if target_os == "macos" && profile == "release" && interpose {
+    if macos_interpose {
         println!("cargo:rustc-cfg=mi_osx_interpose");
+        compile_macos_interpose();
     }
 
     let valgrind = env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_some();

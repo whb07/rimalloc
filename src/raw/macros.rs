@@ -1,4 +1,8 @@
 //! Mechanical translation of `src/alloc-override.c`.
+//!
+//! macOS release interposition lives in `macos_interpose.c`. Its calls to the
+//! original libmalloc/libc++ symbols must not resolve to aliases in this image,
+//! so `mi_osx_interpose` disables the Unix and C++ export aliases below.
 
 // Retains upstream override/interposition shims for platforms and C++ ABI
 // variants that are selected by target linker/runtime behavior.
@@ -541,96 +545,6 @@ core::arch::global_asm!(
     stosb_max = sym crate::allocator::init::_mi_cpu_stosb_max,
 );
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct mi_interpose_s {
-    pub replacement: *const c_void,
-    pub target: *const c_void,
-}
-
-unsafe impl Sync for mi_interpose_s {}
-
-#[cfg(all(target_os = "macos", mi_osx_interpose))]
-macro_rules! MI_INTERPOSE_FUN {
-    ($oldfun:path, $newfun:path) => {
-        crate::alloc_override::mi_interpose_s {
-            replacement: ($newfun as *const ()) as *const core::ffi::c_void,
-            target: ($oldfun as *const ()) as *const core::ffi::c_void,
-        }
-    };
-}
-
-unsafe extern "C" {
-    pub fn vfree(p: *mut c_void);
-    pub fn malloc_size(p: *const c_void) -> usize;
-    pub fn malloc_good_size(size: usize) -> usize;
-}
-
-#[cfg(all(target_os = "macos", mi_osx_interpose))]
-unsafe extern "C" {
-    fn strndup(s: *const c_char, n: usize) -> *mut c_char;
-    fn aligned_alloc(alignment: usize, size: usize) -> *mut c_void;
-    fn malloc(size: usize) -> *mut c_void;
-    fn calloc(count: usize, size: usize) -> *mut c_void;
-    fn realloc(p: *mut c_void, newsize: usize) -> *mut c_void;
-    fn strdup(s: *const c_char) -> *mut c_char;
-    fn realpath(fname: *const c_char, resolved_name: *mut c_char) -> *mut c_char;
-    fn posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> i32;
-    fn reallocf(p: *mut c_void, newsize: usize) -> *mut c_void;
-    fn valloc(size: usize) -> *mut c_void;
-    fn free(p: *mut c_void);
-    fn _ZdlPv(p: *mut c_void);
-    fn _ZdaPv(p: *mut c_void);
-    fn _ZdlPvm(p: *mut c_void, n: usize);
-    fn _ZdaPvm(p: *mut c_void, n: usize);
-    fn _Znwm(n: usize) -> *mut c_void;
-    fn _Znam(n: usize) -> *mut c_void;
-    fn _ZnwmRKSt9nothrow_t(n: usize, tag: mi_nothrow_t) -> *mut c_void;
-    fn _ZnamRKSt9nothrow_t(n: usize, tag: mi_nothrow_t) -> *mut c_void;
-}
-
-#[cfg(all(target_os = "macos", mi_osx_interpose))]
-#[used]
-#[unsafe(link_section = "__DATA,__interpose")]
-pub static _mi_interposes: [mi_interpose_s; 12] = [
-    MI_INTERPOSE_FUN!(malloc, crate::mimalloc::mi_malloc),
-    MI_INTERPOSE_FUN!(calloc, crate::mimalloc::mi_calloc),
-    MI_INTERPOSE_FUN!(realloc, crate::mimalloc::mi_realloc),
-    MI_INTERPOSE_FUN!(strdup, crate::mimalloc::mi_strdup),
-    MI_INTERPOSE_FUN!(realpath, crate::mimalloc::mi_realpath),
-    MI_INTERPOSE_FUN!(posix_memalign, crate::mimalloc::mi_posix_memalign),
-    MI_INTERPOSE_FUN!(reallocf, crate::mimalloc::mi_reallocf),
-    MI_INTERPOSE_FUN!(valloc, crate::mimalloc::mi_valloc),
-    MI_INTERPOSE_FUN!(malloc_size, crate::alloc_override::mi_malloc_size_checked),
-    MI_INTERPOSE_FUN!(malloc_good_size, crate::mimalloc::mi_malloc_good_size),
-    MI_INTERPOSE_FUN!(free, crate::mimalloc::mi_cfree),
-    MI_INTERPOSE_FUN!(vfree, crate::mimalloc::mi_cfree),
-];
-
-#[cfg(all(target_os = "macos", mi_osx_interpose))]
-pub static _mi_interposes_10_7: [mi_interpose_s; 1] =
-    [MI_INTERPOSE_FUN!(strndup, crate::mimalloc::mi_strndup)];
-
-#[cfg(all(target_os = "macos", mi_osx_interpose))]
-pub static _mi_interposes_10_15: [mi_interpose_s; 1] = [MI_INTERPOSE_FUN!(
-    aligned_alloc,
-    crate::mimalloc::mi_aligned_alloc
-)];
-
-#[cfg(all(target_os = "macos", mi_osx_interpose))]
-#[used]
-#[unsafe(link_section = "__DATA,__interpose")]
-pub static _mi_cxx_interposes: [mi_interpose_s; 8] = [
-    MI_INTERPOSE_FUN!(_ZdlPv, crate::mimalloc::mi_free),
-    MI_INTERPOSE_FUN!(_ZdaPv, crate::mimalloc::mi_free),
-    MI_INTERPOSE_FUN!(_ZdlPvm, crate::mimalloc::mi_free_size),
-    MI_INTERPOSE_FUN!(_ZdaPvm, crate::mimalloc::mi_free_size),
-    MI_INTERPOSE_FUN!(_Znwm, crate::mimalloc::mi_new),
-    MI_INTERPOSE_FUN!(_Znam, crate::mimalloc::mi_new),
-    MI_INTERPOSE_FUN!(_ZnwmRKSt9nothrow_t, crate::mimalloc::mi_new_nothrow),
-    MI_INTERPOSE_FUN!(_ZnamRKSt9nothrow_t, crate::mimalloc::mi_new_nothrow),
-];
-
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
@@ -847,7 +761,10 @@ pub unsafe extern "C" fn _aligned_recalloc(
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdlPv")
 )]
 pub unsafe extern "C" fn mi_cxx_delete(p: *mut c_void) {
@@ -858,7 +775,10 @@ pub unsafe extern "C" fn mi_cxx_delete(p: *mut c_void) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdaPv")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_array(p: *mut c_void) {
@@ -869,7 +789,10 @@ pub unsafe extern "C" fn mi_cxx_delete_array(p: *mut c_void) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdlPvm")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_sized(p: *mut c_void, n: usize) {
@@ -880,7 +803,10 @@ pub unsafe extern "C" fn mi_cxx_delete_sized(p: *mut c_void, n: usize) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdaPvm")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_array_sized(p: *mut c_void, n: usize) {
@@ -891,7 +817,10 @@ pub unsafe extern "C" fn mi_cxx_delete_array_sized(p: *mut c_void, n: usize) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdlPvSt11align_val_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_aligned(p: *mut c_void, al: usize) {
@@ -902,7 +831,10 @@ pub unsafe extern "C" fn mi_cxx_delete_aligned(p: *mut c_void, al: usize) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdaPvSt11align_val_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_array_aligned(p: *mut c_void, al: usize) {
@@ -913,7 +845,10 @@ pub unsafe extern "C" fn mi_cxx_delete_array_aligned(p: *mut c_void, al: usize) 
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdlPvmSt11align_val_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_sized_aligned(p: *mut c_void, n: usize, al: usize) {
@@ -924,7 +859,10 @@ pub unsafe extern "C" fn mi_cxx_delete_sized_aligned(p: *mut c_void, n: usize, a
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdaPvmSt11align_val_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_array_sized_aligned(p: *mut c_void, n: usize, al: usize) {
@@ -935,7 +873,10 @@ pub unsafe extern "C" fn mi_cxx_delete_array_sized_aligned(p: *mut c_void, n: us
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdlPvRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_nothrow(p: *mut c_void, tag: mi_nothrow_t) {
@@ -947,7 +888,10 @@ pub unsafe extern "C" fn mi_cxx_delete_nothrow(p: *mut c_void, tag: mi_nothrow_t
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdaPvRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_array_nothrow(p: *mut c_void, tag: mi_nothrow_t) {
@@ -959,7 +903,10 @@ pub unsafe extern "C" fn mi_cxx_delete_array_nothrow(p: *mut c_void, tag: mi_not
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdlPvSt11align_val_tRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_aligned_nothrow(
@@ -975,7 +922,10 @@ pub unsafe extern "C" fn mi_cxx_delete_aligned_nothrow(
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "cxx-overrides"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZdaPvSt11align_val_tRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_array_aligned_nothrow(
@@ -998,7 +948,10 @@ pub unsafe extern "C" fn mi_cxx_delete_array_aligned_nothrow(
         not(windows),
         not(mi_c_malloc_fast),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_Znwm")
 )]
@@ -1017,7 +970,10 @@ pub unsafe extern "C" fn mi_cxx_new_64(n: usize) -> *mut c_void {
         not(windows),
         not(mi_c_malloc_fast),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_Znam")
 )]
@@ -1035,7 +991,10 @@ pub unsafe extern "C" fn mi_cxx_new_array_64(n: usize) -> *mut c_void {
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnwmRKSt9nothrow_t")
 )]
@@ -1054,7 +1013,10 @@ pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnamRKSt9nothrow_t")
 )]
@@ -1073,7 +1035,10 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_nothrow(n: usize, tag: mi_nothrow_t
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnwmSt11align_val_t")
 )]
@@ -1091,7 +1056,10 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned(n: usize, al: usize) -> *mut c_vo
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnamSt11align_val_t")
 )]
@@ -1109,7 +1077,10 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_aligned(n: usize, al: usize) -> *mu
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnwmSt11align_val_tRKSt9nothrow_t")
 )]
@@ -1132,7 +1103,10 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned_nothrow(
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnamSt11align_val_tRKSt9nothrow_t")
 )]
@@ -1152,7 +1126,10 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_aligned_nothrow(
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_Znwj")
 )]
@@ -1167,7 +1144,10 @@ pub unsafe extern "C" fn mi_cxx_new_32(n: usize) -> *mut c_void {
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_Znaj")
 )]
@@ -1182,7 +1162,10 @@ pub unsafe extern "C" fn mi_cxx_new_array_32(n: usize) -> *mut c_void {
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnwjRKSt9nothrow_t")
 )]
@@ -1198,7 +1181,10 @@ pub unsafe extern "C" fn mi_cxx_new_32_nothrow(n: usize, tag: mi_nothrow_t) -> *
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnajRKSt9nothrow_t")
 )]
@@ -1214,7 +1200,10 @@ pub unsafe extern "C" fn mi_cxx_new_array_32_nothrow(n: usize, tag: mi_nothrow_t
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnwjSt11align_val_t")
 )]
@@ -1229,7 +1218,10 @@ pub unsafe extern "C" fn mi_cxx_new_32_aligned(n: usize, al: usize) -> *mut c_vo
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnajSt11align_val_t")
 )]
@@ -1244,7 +1236,10 @@ pub unsafe extern "C" fn mi_cxx_new_array_32_aligned(n: usize, al: usize) -> *mu
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnwjSt11align_val_tRKSt9nothrow_t")
 )]
@@ -1264,7 +1259,10 @@ pub unsafe extern "C" fn mi_cxx_new_32_aligned_nothrow(
     all(
         not(windows),
         not(mi_cxx_shim_linked),
-        any(not(feature = "c-abi"), feature = "cxx-overrides")
+        all(
+            not(mi_osx_interpose),
+            any(not(feature = "c-abi"), feature = "cxx-overrides")
+        )
     ),
     unsafe(export_name = "_ZnajSt11align_val_tRKSt9nothrow_t")
 )]
@@ -1308,7 +1306,10 @@ pub unsafe fn mi_unix_malloc(size: usize) -> *mut c_void {
 ))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "malloc")
 )]
 pub unsafe extern "C" fn mi_unix_malloc_export(size: usize) -> *mut c_void {
@@ -1346,7 +1347,10 @@ pub unsafe fn mi_unix_calloc(count: usize, size: usize) -> *mut c_void {
 ))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "calloc")
 )]
 pub unsafe extern "C" fn mi_unix_calloc_export(count: usize, size: usize) -> *mut c_void {
@@ -1393,7 +1397,10 @@ pub unsafe fn mi_unix_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "realloc")
 )]
 pub unsafe extern "C" fn mi_unix_realloc_export(p: *mut c_void, newsize: usize) -> *mut c_void {
@@ -1439,7 +1446,10 @@ pub unsafe fn mi_unix_free(p: *mut c_void) {
 ))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "free")
 )]
 pub unsafe extern "C" fn mi_unix_free_export(p: *mut c_void) {
@@ -1457,7 +1467,10 @@ pub unsafe fn mi_unix_strdup(s: *const c_char) -> *mut c_char {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "strdup")
 )]
 pub unsafe extern "C" fn mi_unix_strdup_export(s: *const c_char) -> *mut c_char {
@@ -1475,7 +1488,10 @@ pub unsafe fn mi_unix_strndup(s: *const c_char, n: usize) -> *mut c_char {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "strndup")
 )]
 pub unsafe extern "C" fn mi_unix_strndup_export(s: *const c_char, n: usize) -> *mut c_char {
@@ -1501,7 +1517,10 @@ pub unsafe fn mi_unix_reallocf(p: *mut c_void, newsize: usize) -> *mut c_void {
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "reallocf")
 )]
 pub unsafe extern "C" fn mi_unix_reallocf_export(p: *mut c_void, newsize: usize) -> *mut c_void {
@@ -1527,7 +1546,10 @@ pub unsafe fn mi_unix_malloc_size(p: *const c_void) -> usize {
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "malloc_size")
 )]
 pub unsafe extern "C" fn mi_unix_malloc_size_export(p: *const c_void) -> usize {
@@ -1553,7 +1575,10 @@ pub unsafe fn mi_unix_malloc_good_size(size: usize) -> usize {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "malloc_good_size")
 )]
 pub unsafe extern "C" fn mi_unix_malloc_good_size_export(size: usize) -> usize {
@@ -1565,7 +1590,10 @@ pub unsafe extern "C" fn mi_unix_malloc_good_size_export(size: usize) -> usize {
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "malloc_usable_size")
 )]
 pub unsafe extern "C" fn mi_unix_malloc_usable_size_export(p: *const c_void) -> usize {
@@ -1583,7 +1611,10 @@ pub unsafe fn mi_unix_valloc(size: usize) -> *mut c_void {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "valloc")
 )]
 pub unsafe extern "C" fn mi_unix_valloc_export(size: usize) -> *mut c_void {
@@ -1601,7 +1632,10 @@ pub unsafe fn mi_unix_vfree(p: *mut c_void) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "vfree")
 )]
 pub unsafe extern "C" fn mi_unix_vfree_export(p: *mut c_void) {
@@ -1619,7 +1653,10 @@ pub unsafe fn mi_unix_posix_memalign(p: *mut *mut c_void, alignment: usize, size
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "posix_memalign")
 )]
 pub unsafe extern "C" fn mi_unix_posix_memalign_export(
@@ -1641,7 +1678,10 @@ pub unsafe fn mi_unix_aligned_alloc(alignment: usize, size: usize) -> *mut c_voi
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "aligned_alloc")
 )]
 pub unsafe extern "C" fn mi_unix_aligned_alloc_export(
@@ -1662,7 +1702,10 @@ pub unsafe fn mi_unix_cfree(p: *mut c_void) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "cfree")
 )]
 pub unsafe extern "C" fn mi_unix_cfree_export(p: *mut c_void) {
@@ -1680,7 +1723,10 @@ pub unsafe fn mi_unix_pvalloc(size: usize) -> *mut c_void {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "pvalloc")
 )]
 pub unsafe extern "C" fn mi_unix_pvalloc_export(size: usize) -> *mut c_void {
@@ -1698,7 +1744,10 @@ pub unsafe fn mi_unix_memalign(alignment: usize, size: usize) -> *mut c_void {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "memalign")
 )]
 pub unsafe extern "C" fn mi_unix_memalign_export(alignment: usize, size: usize) -> *mut c_void {
@@ -1716,7 +1765,10 @@ pub unsafe fn mi_unix_aligned_malloc(size: usize, alignment: usize) -> *mut c_vo
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "_aligned_malloc")
 )]
 pub unsafe extern "C" fn mi_unix_aligned_malloc_export(
@@ -1742,7 +1794,10 @@ pub unsafe fn mi_unix_reallocarray(p: *mut c_void, count: usize, size: usize) ->
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "reallocarray")
 )]
 pub unsafe extern "C" fn mi_unix_reallocarray_export(
@@ -1848,7 +1903,10 @@ pub unsafe extern "C" fn mi_wasi_libc_memalign_export(
 ))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "__libc_malloc")
 )]
 pub unsafe extern "C" fn mi_linux_libc_malloc_export(size: usize) -> *mut c_void {
@@ -1865,7 +1923,10 @@ pub unsafe extern "C" fn mi_linux_libc_malloc_export(size: usize) -> *mut c_void
 ))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "__libc_calloc")
 )]
 pub unsafe extern "C" fn mi_linux_libc_calloc_export(count: usize, size: usize) -> *mut c_void {
@@ -1877,7 +1938,10 @@ pub unsafe extern "C" fn mi_linux_libc_calloc_export(count: usize, size: usize) 
 #[cfg(all(target_os = "linux", not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "__libc_realloc")
 )]
 pub unsafe extern "C" fn mi_linux_libc_realloc_export(p: *mut c_void, size: usize) -> *mut c_void {
@@ -1894,7 +1958,10 @@ pub unsafe extern "C" fn mi_linux_libc_realloc_export(p: *mut c_void, size: usiz
 ))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "__libc_free")
 )]
 pub unsafe extern "C" fn mi_linux_libc_free_export(p: *mut c_void) {
@@ -1906,7 +1973,10 @@ pub unsafe extern "C" fn mi_linux_libc_free_export(p: *mut c_void) {
 #[cfg(all(target_os = "linux", not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(mi_sanitizer_runtime, sanitize(address = "off"))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "__libc_cfree")
 )]
 pub unsafe extern "C" fn mi_linux_libc_cfree_export(p: *mut c_void) {
@@ -1917,7 +1987,10 @@ pub unsafe extern "C" fn mi_linux_libc_cfree_export(p: *mut c_void) {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "linux", not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "__libc_valloc")
 )]
 pub unsafe extern "C" fn mi_linux_libc_valloc_export(size: usize) -> *mut c_void {
@@ -1928,7 +2001,10 @@ pub unsafe extern "C" fn mi_linux_libc_valloc_export(size: usize) -> *mut c_void
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "linux", not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "__libc_pvalloc")
 )]
 pub unsafe extern "C" fn mi_linux_libc_pvalloc_export(size: usize) -> *mut c_void {
@@ -1939,7 +2015,10 @@ pub unsafe extern "C" fn mi_linux_libc_pvalloc_export(size: usize) -> *mut c_voi
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "linux", not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "__libc_memalign")
 )]
 pub unsafe extern "C" fn mi_linux_libc_memalign_export(
@@ -1953,7 +2032,10 @@ pub unsafe extern "C" fn mi_linux_libc_memalign_export(
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "linux", not(mi_sanitizer_runtime), not(miri)))]
 #[cfg_attr(
-    any(not(feature = "c-abi"), feature = "interpose"),
+    all(
+        not(mi_osx_interpose),
+        any(not(feature = "c-abi"), feature = "interpose")
+    ),
     unsafe(export_name = "__posix_memalign")
 )]
 pub unsafe extern "C" fn mi_linux_posix_memalign_export(

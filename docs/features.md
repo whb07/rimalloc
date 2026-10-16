@@ -22,6 +22,10 @@ unless the `std` feature is enabled.
 - `interpose`: aggregate C ABI/interposition artifact mode; implies `c-abi`,
   `cxx-overrides`, and `tls-shim`.
 
+On macOS, release `interpose` builds use the SDK malloc-zone shim and libc++
+allocation semantics instead of the Linux C++/TLS shims. See
+[macOS DYLD interposition](ffi-linking.md#macos-dyld-interposition).
+
 When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
 builds, Valgrind mode takes precedence.
 
@@ -44,7 +48,7 @@ cargo check --features "std c-header-macros"
 cargo check --features "std c-abi"
 cargo check --examples --features std
 cargo doc --no-deps --no-default-features
-cargo rustc --features interpose --lib --release -- --crate-type cdylib
+cargo rustc --features interpose --lib --release --crate-type cdylib
 cargo check --benches --features bench
 cargo check --benches --features "bench compare"
 cargo hack check --feature-powerset --exclude-features bench,compare,default,interpose --no-dev-deps

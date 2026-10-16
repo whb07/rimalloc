@@ -37,6 +37,13 @@ All notable changes to this repository should be recorded here.
 
 ### Fixed
 
+- Enable native macOS ARM64 release DYLD interposition with an SDK-defined
+  malloc zone, ownership-aware system allocator fallback, correct errno and
+  alignment behavior, and libc++ new/delete semantics. Add C/C++ injection
+  tests for ordinary and secure/guarded builds.
+- Pass the dynamic-library crate type to Cargo so macOS builds use the correct
+  LTO mode.
+
 - Initialize the allocator through a Mach-O constructor on macOS, avoiding
   bootstrap allocator exhaustion before the first explicit allocation call.
 - Use Darwin memory-query and errno constants, the native `timeval` field

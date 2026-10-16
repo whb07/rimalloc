@@ -623,6 +623,11 @@ fn global_options_mutations_are_process_global_and_restored() {
 
 #[test]
 fn stats_and_process_info_are_typed_and_nonprinting() {
+    // Process totals are sampled across heaps; concurrent heap teardown in other
+    // tests can move counters between the snapshots being aggregated.
+    if !enter_isolated_callback_test("stats_and_process_info_are_typed_and_nonprinting") {
+        return;
+    }
     assert!(matches!(StatsError::Unavailable, StatsError::Unavailable));
     assert!(matches!(
         StatsError::HeapUnavailable,

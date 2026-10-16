@@ -21,7 +21,7 @@ run cargo check --benches --features bench
 run cargo check --benches --features "bench compare"
 run cargo test --quiet --features std
 run cargo check --features "track-valgrind track-asan"
-run cargo rustc --features interpose --lib --release -- --crate-type cdylib
+run cargo rustc --features interpose --lib --release --crate-type cdylib
 
 if ! command -v cargo-hack >/dev/null 2>&1; then
   echo "cargo-hack is required for feature powerset validation" >&2

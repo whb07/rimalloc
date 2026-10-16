@@ -12,10 +12,6 @@ pub(crate) mod os;
 
 #[cfg(target_os = "emscripten")]
 pub mod emscripten;
-#[cfg(target_os = "macos")]
-pub mod macos;
-#[cfg(all(target_os = "macos", mi_osx_interpose))]
-pub use macos as osx;
 #[cfg(all(not(windows), not(target_os = "emscripten"), not(target_os = "wasi")))]
 pub mod unix;
 #[cfg(target_os = "wasi")]

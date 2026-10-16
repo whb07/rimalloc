@@ -14,7 +14,7 @@ pub(crate) mod os;
 pub mod emscripten;
 #[cfg(target_os = "macos")]
 pub mod macos;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 pub use macos as osx;
 #[cfg(all(not(windows), not(target_os = "emscripten"), not(target_os = "wasi")))]
 pub mod unix;
@@ -725,9 +725,18 @@ pub unsafe extern "C" fn mi_process_detach() {
     unsafe { crate::internal::_mi_auto_process_done() }
 }
 
-#[cfg(all(target_family = "unix", not(target_vendor = "apple"), not(miri)))]
+#[cfg(all(target_family = "unix", not(miri)))]
 #[used]
-#[unsafe(link_section = ".init_array")]
+#[cfg_attr(
+    target_vendor = "apple",
+    unsafe(link_section = "__DATA,__mod_init_func,mod_init_funcs")
+)]
+#[cfg_attr(not(target_vendor = "apple"), unsafe(link_section = ".init_array"))]
+// This loader section must contain only function pointers, without ASan global redzones.
+#[cfg_attr(
+    all(mi_sanitizer_runtime, target_vendor = "apple"),
+    sanitize(address = "off")
+)]
 pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern "C" fn() = mi_process_attach;
 
 #[cfg(all(target_family = "unix", not(target_vendor = "apple"), not(miri)))]
@@ -788,14 +797,21 @@ pub(crate) unsafe extern "C" fn _mi_allocator_done() {}
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(target_os = "macos", not(miri)))]
+    #[test]
+    fn darwin_process_constructor_initializes_allocator() {
+        assert!(!crate::internal::_mi_preloading());
+    }
+
     #[cfg(all(
         not(miri),
-        target_os = "linux",
-        target_arch = "x86_64",
-        not(target_env = "musl")
+        any(
+            all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")),
+            all(target_os = "macos", target_arch = "aarch64")
+        )
     ))]
     #[test]
-    fn linux_x86_64_prim_thread_id_uses_thread_pointer() {
+    fn native_prim_thread_id_uses_thread_pointer() {
         let tid = super::__mi_prim_thread_id();
         assert_eq!(tid, super::_mi_prim_thread_id());
         assert_eq!(tid, crate::allocator::init::_mi_thread_id());

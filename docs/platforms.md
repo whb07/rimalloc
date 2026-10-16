@@ -44,8 +44,38 @@ not by themselves promote those platforms to maintained targets.
 The current workflow labels those jobs as:
 
 - `Linux aarch64 smoke validation`
-- `macOS smoke validation`
+- `macOS ARM64 allocator validation`
 - `Windows smoke validation`
+
+## macOS ARM64 Rust Validation
+
+The Rust allocator is validated locally on `aarch64-apple-darwin` with Rust
+1.92.0, Darwin 25.4.0, and 16 KiB OS pages. The macOS ARM64 CI job runs default
+and all-feature debug tests, release Rust tests, Clippy, C header layout parity,
+and native AddressSanitizer and ThreadSanitizer checks. Native regression tests
+cover process initialization, thread identity, OS page size and physical memory
+discovery,
+Darwin constants and `timeval` layout, peak RSS units, and kernel reusable-page
+state across decommit/reuse. Release tests cover small allocations whose
+alignment exceeds their size, including zeroed allocation and reallocation.
+
+To reproduce the native sanitizer checks:
+
+```sh
+SANITIZER=address SANITIZER_TARGET=aarch64-apple-darwin scripts/check-sanitizers.sh
+SANITIZER=thread SANITIZER_TARGET=aarch64-apple-darwin scripts/check-sanitizers.sh
+```
+
+This validates Rust integration, including `#[global_allocator]`, rather than
+promoting macOS C interposition artifacts to release support. The translated
+malloc-zone/DYLD interposition path remains unvalidated and unsupported. On this
+Rust 1.92.0/Apple linker setup, the release `cargo rustc --features interpose
+--lib --release -- --crate-type cdylib` command fails because the linker rejects
+`-plugin-opt` LTO arguments. The Linux-only shared-library comparison benchmark skips on macOS; portable
+benchmark smoke tests run, but comparative macOS performance has not been
+established. Current RSS still uses allocator committed bytes as an estimate;
+peak RSS is queried from the OS. Valgrind tracking falls back to no-op shims
+when Valgrind headers are absent, so an all-features pass is not Valgrind evidence.
 
 ## Unsupported Target Reports
 

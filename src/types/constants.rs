@@ -58,10 +58,16 @@ pub const MI_MAX_ARENAS: usize = 160;
 pub const MI_ARENA_MAX_SIZE: usize =
     crate::bitmap::MI_BITMAP_MAX_BIT_COUNT * crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_ARENA_BIN_COUNT: usize = MI_BIN_COUNT;
+#[cfg(target_os = "macos")]
+pub const EAGAIN: c_int = 35;
+#[cfg(not(target_os = "macos"))]
 pub const EAGAIN: c_int = 11;
 pub const ENOMEM: c_int = 12;
 pub const EFAULT: c_int = 14;
 pub const EINVAL: c_int = 22;
+#[cfg(target_os = "macos")]
+pub const EOVERFLOW: c_int = 84;
+#[cfg(not(target_os = "macos"))]
 pub const EOVERFLOW: c_int = 75;
 pub const MI_DEBUG_UNINIT: u8 = 0xD0;
 pub const MI_DEBUG_FREED: u8 = 0xDF;

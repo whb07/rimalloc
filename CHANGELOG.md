@@ -35,6 +35,17 @@ All notable changes to this repository should be recorded here.
   directly, and callers that initialize uninitialized allocation bytes through
   raw pointers should use unsafe `Allocation::assume_initialized`.
 
+### Fixed
+
+- Initialize the allocator through a Mach-O constructor on macOS, avoiding
+  bootstrap allocator exhaustion before the first explicit allocation call.
+- Use Darwin memory-query and errno constants, the native `timeval` field
+  width, byte units for peak RSS, and reusable-page decommit/reuse advice.
+- Preserve requested Rust `Layout` alignment for small allocations and
+  reallocations in release builds without debug padding.
+- Exclude Linux THP accounting on other platforms and skip the Linux-only
+  shared-library comparison benchmark on macOS.
+
 ### Safety
 
 - Document the safe API boundary, raw caller obligations, FFI unwind boundary,

@@ -28,7 +28,9 @@ use criterion::{
     BenchmarkId, Criterion, SamplingMode, Throughput, criterion_group, criterion_main,
 };
 use std::env;
-use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
+#[cfg(target_os = "linux")]
+use std::ffi::CString;
+use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -4784,6 +4786,10 @@ mod mleak {
 }
 
 fn bench_native_ports(c: &mut Criterion) {
+    if !cfg!(target_os = "linux") {
+        eprintln!("Skipping shared-library allocator comparison: this benchmark requires Linux.");
+        return;
+    }
     let root = workspace_root();
     let scenarios = scenarios();
     let allocators = allocators(&root);

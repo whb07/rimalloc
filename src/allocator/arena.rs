@@ -121,6 +121,7 @@ mod os_abandoned;
 mod os_memory;
 mod prefix;
 mod purge;
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod thp;
 
 pub(crate) use abandoned::{_mi_arenas_page_abandon_internal, _mi_arenas_page_unabandon_internal};
@@ -155,6 +156,7 @@ use prefix::{
     mi_subproc_arena_cell,
 };
 pub(crate) use purge::{_mi_arenas_collect, _mi_arenas_free};
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub(crate) use thp::mi_arena_thp_armed;
 
 /// # Safety
@@ -1531,6 +1533,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
             // arena; the pending allocation owns its clear range start bit.
             if unsafe { pending.install_heap_page_bit(arena_pages, range.start()) } {
                 // SAFETY: the live TLD names the subprocess whose arena served the page.
+                #[cfg(any(target_os = "linux", target_os = "android"))]
                 unsafe {
                     thp::mi_arena_thp_pages_added(
                         SubprocPtr::new_unchecked((*tld).subproc),
@@ -2235,6 +2238,7 @@ pub(crate) unsafe fn _mi_arenas_page_free_internal<S>(
     // SAFETY: the page is still registered and the caller owns this terminal
     // transition; unregister it before clearing arena publication or backing.
     unsafe { _mi_page_map_unregister(page) };
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     if arena_membership.is_some() {
         thp::mi_arena_thp_pages_removed(unsafe { mi_page_full_size(page_ptr) }.get());
     }

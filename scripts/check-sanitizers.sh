@@ -5,6 +5,7 @@ cd_repo_root
 
 toolchain="${SANITIZER_TOOLCHAIN:-nightly}"
 sanitizer="${SANITIZER:-address}"
+target="${SANITIZER_TARGET:-x86_64-unknown-linux-gnu}"
 
 case "$sanitizer" in
   address)
@@ -39,5 +40,5 @@ run env RUSTFLAGS="${rustflags# }" cargo +"${toolchain}" test \
   -Zbuild-std \
   -Zpanic-abort-tests \
   --target-dir "target/sanitizer-${sanitizer}" \
-  --target x86_64-unknown-linux-gnu \
+  --target "$target" \
   "${test_args[@]}"

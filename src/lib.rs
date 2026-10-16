@@ -340,7 +340,7 @@ pub struct MiMalloc;
 unsafe impl core::alloc::GlobalAlloc for MiMalloc {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         unsafe {
-            if layout.align() <= types::MI_MAX_ALIGN_SIZE {
+            if layout.align() <= types::MI_MAX_ALIGN_SIZE && layout.align() <= layout.size() {
                 allocator::alloc::mi_malloc(layout.size()).cast()
             } else {
                 allocator::aligned::mi_malloc_aligned(layout.size(), layout.align()).cast()
@@ -350,7 +350,7 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
 
     unsafe fn alloc_zeroed(&self, layout: core::alloc::Layout) -> *mut u8 {
         unsafe {
-            if layout.align() <= types::MI_MAX_ALIGN_SIZE {
+            if layout.align() <= types::MI_MAX_ALIGN_SIZE && layout.align() <= layout.size() {
                 allocator::alloc::mi_zalloc(layout.size()).cast()
             } else {
                 allocator::aligned::mi_zalloc_aligned(layout.size(), layout.align()).cast()
@@ -369,7 +369,7 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         new_size: usize,
     ) -> *mut u8 {
         unsafe {
-            if layout.align() <= types::MI_MAX_ALIGN_SIZE {
+            if layout.align() <= types::MI_MAX_ALIGN_SIZE && layout.align() <= new_size {
                 allocator::alloc::mi_realloc(ptr.cast(), new_size).cast()
             } else {
                 allocator::aligned::mi_realloc_aligned(ptr.cast(), new_size, layout.align()).cast()

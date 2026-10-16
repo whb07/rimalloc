@@ -3,10 +3,12 @@ use super::*;
 #[test]
 fn requested_size_padding_checks_overflow() {
     assert!(RequestedSize::new(16).checked_padded().is_ok());
-    assert_eq!(
-        RequestedSize::new(usize::MAX).checked_padded(),
-        Err(AllocSizeError::Overflow)
-    );
+    let largest = RequestedSize::new(usize::MAX).checked_padded();
+    if crate::types::MI_PADDING_SIZE == 0 {
+        assert_eq!(largest.unwrap().get(), usize::MAX);
+    } else {
+        assert_eq!(largest, Err(AllocSizeError::Overflow));
+    }
 }
 
 #[test]

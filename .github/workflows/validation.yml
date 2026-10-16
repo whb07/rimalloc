@@ -82,15 +82,39 @@ jobs:
         run: scripts/check-layout.sh
 
   macos:
-    name: macOS smoke validation
-    runs-on: macos-latest
+    name: macOS ARM64 allocator validation
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.92.0
-      - name: macOS allocator and override tests
+        with:
+          components: rustfmt, clippy
+      - name: Verify native ARM64 host
+        run: test "$(uname -m)" = arm64
+      - name: Formatting and lints
         run: |
-          cargo test --quiet --features std
-          cargo test --quiet --features std --test original_main_override
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --all-features
+      - name: Default and all-feature tests
+        run: |
+          cargo test --no-default-features
+          cargo test --workspace --all-targets --all-features
+      - name: Optimized allocator tests
+        run: cargo test --release --features std --lib --tests
+      - name: C header layout parity
+        run: scripts/check-layout.sh
+      - name: Install nightly for native sanitizers
+        run: rustup toolchain install nightly --component rust-src
+      - name: Native AddressSanitizer
+        env:
+          SANITIZER: address
+          SANITIZER_TARGET: aarch64-apple-darwin
+        run: scripts/check-sanitizers.sh
+      - name: Native ThreadSanitizer
+        env:
+          SANITIZER: thread
+          SANITIZER_TARGET: aarch64-apple-darwin
+        run: scripts/check-sanitizers.sh
 
   windows:
     name: Windows smoke validation

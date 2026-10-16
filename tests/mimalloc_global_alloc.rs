@@ -67,3 +67,39 @@ fn realloc_case(old_size: usize, new_size: usize, alignment: usize) {
     let new_layout = Layout::from_size_align(new_size, alignment).expect("new layout");
     unsafe { MiMalloc.dealloc(new_ptr, new_layout) };
 }
+
+#[test]
+fn tiny_allocations_preserve_alignment_without_debug_padding() {
+    for size in [1, 7, 8, 9, 15] {
+        for alignment in [8, 16, 32] {
+            let layout = Layout::from_size_align(size, alignment).expect("layout");
+            for zeroed in [false, true] {
+                let pointers: [_; 32] = core::array::from_fn(|_| unsafe {
+                    if zeroed {
+                        MiMalloc.alloc_zeroed(layout)
+                    } else {
+                        MiMalloc.alloc(layout)
+                    }
+                });
+                for p in pointers {
+                    assert!(!p.is_null());
+                    assert_eq!(
+                        p as usize % alignment,
+                        0,
+                        "size={size}, align={alignment}, zeroed={zeroed}"
+                    );
+                    if zeroed {
+                        assert!(
+                            unsafe { core::slice::from_raw_parts(p, size) }
+                                .iter()
+                                .all(|&b| b == 0)
+                        );
+                    }
+                    unsafe { MiMalloc.dealloc(p, layout) };
+                }
+            }
+            realloc_case(128, size, alignment);
+            realloc_case(size, size + 1, alignment);
+        }
+    }
+}

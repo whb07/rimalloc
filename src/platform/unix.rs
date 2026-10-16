@@ -116,15 +116,25 @@ pub const O_RDONLY: c_int = 0;
 pub const O_CLOEXEC: c_int = 0x80000;
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 pub const O_CLOEXEC: c_int = 0;
+#[cfg(target_os = "macos")]
+pub const EAGAIN: c_int = 35;
+#[cfg(not(target_os = "macos"))]
 pub const EAGAIN: c_int = 11;
 pub const EINTR: c_int = 4;
 pub const ENOMEM: c_int = 12;
 pub const EINVAL: c_int = 22;
+#[cfg(target_os = "macos")]
+pub const ENOSYS: c_int = 78;
+#[cfg(not(target_os = "macos"))]
 pub const ENOSYS: c_int = 38;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub const MADV_HUGEPAGE: c_int = 14;
 pub const MADV_COLLAPSE: c_int = 25;
+#[cfg(target_os = "macos")]
+const MADV_FREE_REUSABLE: c_int = 7;
+#[cfg(target_os = "macos")]
+const MADV_FREE_REUSE: c_int = 8;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub const MAP_HUGETLB: c_int = 0x40000;
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -147,7 +157,9 @@ const _SC_PAGESIZE: c_int = 30;
 const _SC_PHYS_PAGES: c_int = 85;
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
 const _SC_PAGESIZE: c_int = 29;
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(target_os = "macos")]
+const _SC_PHYS_PAGES: c_int = 200;
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "macos")))]
 const _SC_PHYS_PAGES: c_int = 121;
 
 const MAP_FAILED: *mut c_void = usize::MAX as *mut c_void;
@@ -156,6 +168,9 @@ const MAP_FAILED: *mut c_void = usize::MAX as *mut c_void;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_timeval {
     pub tv_sec: c_long,
+    #[cfg(target_os = "macos")]
+    pub tv_usec: c_int,
+    #[cfg(not(target_os = "macos"))]
     pub tv_usec: c_long,
 }
 
@@ -729,9 +744,15 @@ pub(crate) unsafe extern "C" fn _mi_prim_commit(
 /// allocator.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) -> c_int {
-    let _ = start;
-    let _ = size;
-    0
+    #[cfg(target_os = "macos")]
+    {
+        unsafe { unix_madvise(start, size, MADV_FREE_REUSE) }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (start, size);
+        0
+    }
 }
 
 /// # Safety
@@ -746,6 +767,17 @@ pub(crate) unsafe extern "C" fn _mi_prim_decommit(
     needs_recommit: *mut bool,
 ) -> c_int {
     unsafe {
+        #[cfg(target_os = "macos")]
+        let err = {
+            // Darwin accounts these pages as reusable immediately, unlike MADV_DONTNEED.
+            let err = unix_madvise(start, size, MADV_FREE_REUSABLE);
+            if err == 0 {
+                0
+            } else {
+                unix_madvise(start, size, MADV_DONTNEED)
+            }
+        };
+        #[cfg(not(target_os = "macos"))]
         let err = unix_madvise(start, size, MADV_DONTNEED);
         if !needs_recommit.is_null() {
             if MI_DEBUG == 0 {
@@ -1068,7 +1100,14 @@ pub(crate) unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_inf
         (*pinfo).utime = timeval_secs(&usage.ru_utime);
         (*pinfo).stime = timeval_secs(&usage.ru_stime);
         (*pinfo).page_faults = usage.ru_majflt as usize;
-        (*pinfo).peak_rss = (usage.ru_maxrss as usize).saturating_mul(1024);
+        #[cfg(target_os = "macos")]
+        {
+            (*pinfo).peak_rss = usage.ru_maxrss as usize;
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            (*pinfo).peak_rss = (usage.ru_maxrss as usize).saturating_mul(1024);
+        }
     }
 }
 
@@ -1325,3 +1364,6 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
 pub(crate) unsafe extern "C" fn _mi_prim_thread_yield() {
     let _ = unsafe { sleep(0) };
 }
+
+#[cfg(all(test, target_os = "macos", not(miri)))]
+mod tests;

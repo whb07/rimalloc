@@ -123,13 +123,6 @@ pub(super) unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool {
     )
 }
 
-pub(super) fn mi_memid_is_os(memid: mi_memid_t) -> bool {
-    matches!(
-        crate::core_types::MemId::view(memid),
-        crate::core_types::MemIdView::Os(_)
-    )
-}
-
 pub(super) unsafe fn mi_page_full_size(page: PagePtr) -> crate::core_types::ReservedBytes {
     let page_raw = page.as_ptr();
     let memid = unsafe { (*page_raw).memid };

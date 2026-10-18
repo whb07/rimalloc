@@ -1,15 +1,13 @@
 use core::ffi::c_void;
 use core::ptr;
 
-use crate::allocator::page::_mi_theap_or_default_typed;
-use crate::core_types::{BorrowedHeap, ThreadHeapLocal};
-use crate::prim::{_mi_theap_default, MI_THEAP_INITASNULL};
+use crate::core_types::BorrowedHeap;
+use crate::prim::_mi_theap_default;
 use crate::types::{mi_heap_t, mi_theap_t};
 
 use super::{
-    _mi_theap_malloc_zero, _mi_theap_malloc_zero_typed, malloc_layout_or_report,
-    mi_heap_borrowed_theap_local, mi_heap_malloc_typed, mi_theap_malloc_small_zero,
-    mi_theap_malloc_small_zero_typed,
+    mi_heap_borrowed_theap_local, mi_heap_malloc_typed, mi_theap_malloc_small_zero_typed,
+    mi_theap_malloc_zero_fast,
 };
 
 /// # Safety
@@ -20,14 +18,7 @@ pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
     // SAFETY: the caller-provided bound and allocator lifecycle keep the default
     // heap's local queues, direct cache, free lists, and stats exclusively owned
     // while the small allocation runs.
-    unsafe {
-        mi_theap_malloc_small_zero(
-            _mi_theap_default(),
-            crate::core_types::RequestedSize::new(size),
-            crate::core_types::Zeroed::No,
-            ptr::null_mut(),
-        )
-    }
+    unsafe { mi_theap_malloc_zero_fast(_mi_theap_default(), size, false, ptr::null_mut()) }
 }
 
 /// # Safety
@@ -39,14 +30,7 @@ pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
 pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     // SAFETY: the caller-provided bound and heap contract keep the selected
     // current-thread allocation state exclusively owned through dispatch.
-    unsafe {
-        mi_theap_malloc_small_zero(
-            theap,
-            crate::core_types::RequestedSize::new(size),
-            crate::core_types::Zeroed::No,
-            ptr::null_mut(),
-        )
-    }
+    unsafe { mi_theap_malloc_zero_fast(theap, size, false, ptr::null_mut()) }
 }
 
 /// # Safety
@@ -105,30 +89,8 @@ pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize)
 /// released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
-    if theap.is_null() && MI_THEAP_INITASNULL {
-        // SAFETY: the raw-boundary contract permits the configured lazy-null
-        // resolver state through this terminal unaligned allocation dispatch.
-        return unsafe { _mi_theap_malloc_zero(theap, size, false, ptr::null_mut()) };
-    }
-    let Some(layout) = malloc_layout_or_report(size, false) else {
-        return ptr::null_mut();
-    };
-    // SAFETY: the raw-boundary contract limits `theap` to resolver-accepted
-    // states, keeps any nonnull metadata readable through its probe, and permits
-    // current-thread initialization and default-heap lookup.
-    let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
-        return ptr::null_mut();
-    };
-    // SAFETY: successful resolution supplies an initialized nonnull
-    // current-thread heap. The caller keeps local state exclusive and callbacks
-    // valid and non-unwinding through this terminal allocation dispatch.
-    unsafe {
-        _mi_theap_malloc_zero_typed(
-            ThreadHeapLocal::new_unchecked(theap),
-            layout,
-            ptr::null_mut(),
-        )
-    }
+    // SAFETY: the raw-boundary contract is the unaligned allocation dispatch's contract.
+    unsafe { mi_theap_malloc_zero_fast(theap, size, false, ptr::null_mut()) }
 }
 
 /// Allocate `size` bytes from the current thread's default heap.
@@ -179,14 +141,7 @@ pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
     // SAFETY: the caller-provided bound and allocator lifecycle keep the default
     // heap's local queues, direct cache, free lists, and stats exclusively owned
     // while the zeroing small allocation runs.
-    unsafe {
-        mi_theap_malloc_small_zero(
-            _mi_theap_default(),
-            crate::core_types::RequestedSize::new(size),
-            crate::core_types::Zeroed::Yes,
-            ptr::null_mut(),
-        )
-    }
+    unsafe { mi_theap_malloc_zero_fast(_mi_theap_default(), size, true, ptr::null_mut()) }
 }
 
 /// # Safety
@@ -196,36 +151,9 @@ pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
 /// nonnull result is allocator-owned and may be released with `mi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
-    if theap.is_null() && MI_THEAP_INITASNULL {
-        // SAFETY: the raw-boundary contract permits the configured lazy-null
-        // resolver state through this terminal bounded zeroing dispatch.
-        return unsafe {
-            mi_theap_malloc_small_zero(
-                theap,
-                crate::core_types::RequestedSize::new(size),
-                crate::core_types::Zeroed::Yes,
-                ptr::null_mut(),
-            )
-        };
-    }
-    let size = crate::core_types::RequestedSize::new(size);
-    // SAFETY: the raw-boundary contract limits `theap` to resolver-accepted
-    // states, keeps any nonnull metadata readable through its probe, and permits
-    // current-thread initialization and default-heap lookup.
-    let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
-        return ptr::null_mut();
-    };
-    // SAFETY: successful resolution supplies an initialized nonnull
-    // current-thread heap. The caller keeps local state exclusive and callbacks
-    // valid and non-unwinding through this terminal bounded zeroing dispatch.
-    unsafe {
-        mi_theap_malloc_small_zero_typed(
-            ThreadHeapLocal::new_unchecked(theap),
-            size,
-            crate::core_types::Zeroed::Yes,
-            ptr::null_mut(),
-        )
-    }
+    // SAFETY: the caller-provided bound and heap contract keep the selected
+    // current-thread allocation state exclusively owned through dispatch.
+    unsafe { mi_theap_malloc_zero_fast(theap, size, true, ptr::null_mut()) }
 }
 
 /// # Safety

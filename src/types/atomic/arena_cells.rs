@@ -8,7 +8,7 @@
 use core::ffi::c_void;
 use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
-use super::AtomicUsizeField;
+use super::{AtomicPtrField, AtomicUsizeField};
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -48,15 +48,19 @@ impl AtomicArenaPage {
         Self(cell)
     }
 
+    #[inline(always)]
+    fn field(self) -> AtomicPtrField<c_void> {
+        AtomicPtrField::from_raw(self.0.cast_mut().cast::<*mut c_void>())
+    }
+
     pub(crate) unsafe fn load_acquire(self) -> *mut crate::types::mi_arena_pages_t {
-        let atomic = unsafe { &*self.0 };
-        atomic
-            .load(Ordering::Acquire)
-            .cast::<crate::types::mi_arena_pages_t>()
+        unsafe { self.field().load(Ordering::Acquire) }.cast::<crate::types::mi_arena_pages_t>()
     }
 
     pub(crate) unsafe fn store_release(self, value: *mut crate::types::mi_arena_pages_t) {
-        let atomic = unsafe { &*self.0 };
-        atomic.store(value.cast::<c_void>(), Ordering::Release);
+        unsafe {
+            self.field()
+                .store(value.cast::<c_void>(), Ordering::Release)
+        };
     }
 }

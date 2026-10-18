@@ -2,6 +2,7 @@
 
 use core::{mem::size_of, ptr};
 
+use crate::allocator::init::MI_STATS_NULL;
 use crate::allocator::page::_mi_bin_size;
 use crate::internal::_mi_memzero;
 use crate::internal::atomic::{
@@ -55,25 +56,14 @@ pub unsafe fn mi_stats_init(stats: *mut mi_stats_t) {
 }
 
 pub(super) fn stats_get_bin_size(bin: usize) -> usize {
-    let Some(typed_bin) = u16::try_from(bin).ok().and_then(StatsBin::new) else {
-        return 0;
-    };
-    mi_stats_get_bin_size_from_raw(bin, typed_bin).get()
+    u16::try_from(bin)
+        .ok()
+        .and_then(StatsBin::new)
+        .map_or(0, mi_stats_get_bin_size_typed)
 }
 
-fn mi_stats_get_bin_size_from_raw(bin: usize, typed_bin: StatsBin) -> StatBinSize {
-    crate::internal::mi_debug_assert!(bin == typed_bin.as_usize());
-    StatBinSize(_mi_bin_size(bin))
-}
-
-pub(super) fn mi_stats_get_bin_size_typed(bin: StatsBin) -> StatBinSize {
-    StatBinSize(_mi_bin_size(stats_bin_as_bin(bin).as_usize()))
-}
-
-pub(super) fn initialized_stats() -> mi_stats_t {
-    let mut stats = mi_stats_t::default();
-    unsafe { mi_stats_init(&mut stats) };
-    stats
+pub(super) fn mi_stats_get_bin_size_typed(bin: StatsBin) -> usize {
+    _mi_bin_size(stats_bin_as_bin(bin).as_usize())
 }
 
 /// # Safety
@@ -252,22 +242,6 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase_mt(
 }
 
 /// # Safety
-/// - Pointer validity: `stat` non-null, aligned, writable count storage.
-/// - Lifetime: live.
-/// - Aliasing: exclusive.
-/// - Initialization: initialized `current`/`total`.
-/// - Ownership: caller retains.
-/// - Threading: exclusive, no concurrent access.
-/// - Unwind: must not unwind.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase(
-    stat: *mut mi_stat_count_t,
-    amount: usize,
-) {
-    unsafe { mi_stat_adjust(&mut *stat, amount as i64) };
-}
-
-/// # Safety
 /// - Pointer validity: `stat` non-null, aligned, atomic-compatible count
 ///   storage for `current`/`total`.
 /// - Lifetime: live.
@@ -376,28 +350,15 @@ unsafe fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_st
 ///   concurrently only via atomic stats protocol.
 /// - Unwind: must not unwind.
 #[inline(never)]
-unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
+pub(super) unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {
         return;
     }
-    unsafe { mi_stats_add_nonnull(stats, src) };
-}
-
-/// # Safety
-/// - Pointer validity: `stats` and `src` must be non-null, aligned for
-///   `mi_stats_t`, valid for all counter and header fields; `stats` writable.
-/// - Lifetime: both remain live for the call.
-/// - Aliasing: pointers must be distinct; destination is writable, source is
-///   read-only via `addr_of!`.
-/// - Initialization: both `mi_stats_t` are initialized (size/version set).
-/// - Ownership: caller retains.
-/// - Threading: each counter must be either exclusively stable or use atomic
-///   protocol for concurrent access.
-/// - Unwind: must not unwind.
-#[inline(never)]
-unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
-    macro_rules! MI_STAT_COUNT {
-        ($field:ident) => {
+    macro_rules! add_stat_fields {
+        ($($kind:ident $field:ident,)*) => {
+            $(add_stat_fields!(@ $kind $field);)*
+        };
+        (@ count $field:ident) => {
             unsafe {
                 mi_stat_count_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -405,9 +366,7 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
                 )
             }
         };
-    }
-    macro_rules! MI_STAT_COUNTER {
-        ($field:ident) => {
+        (@ counter $field:ident) => {
             unsafe {
                 mi_stat_counter_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -416,43 +375,7 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
             }
         };
     }
-
-    MI_STAT_COUNT!(pages);
-    MI_STAT_COUNT!(reserved);
-    MI_STAT_COUNT!(committed);
-    MI_STAT_COUNTER!(reset);
-    MI_STAT_COUNTER!(purged);
-    MI_STAT_COUNT!(page_committed);
-    MI_STAT_COUNT!(pages_abandoned);
-    MI_STAT_COUNT!(threads);
-    MI_STAT_COUNT!(malloc_normal);
-    MI_STAT_COUNT!(malloc_huge);
-    MI_STAT_COUNT!(malloc_requested);
-    MI_STAT_COUNTER!(mmap_calls);
-    MI_STAT_COUNTER!(commit_calls);
-    MI_STAT_COUNTER!(reset_calls);
-    MI_STAT_COUNTER!(purge_calls);
-    MI_STAT_COUNTER!(arena_count);
-    MI_STAT_COUNTER!(malloc_normal_count);
-    MI_STAT_COUNTER!(malloc_huge_count);
-    MI_STAT_COUNTER!(malloc_guarded_count);
-    MI_STAT_COUNTER!(arena_rollback_count);
-    MI_STAT_COUNTER!(arena_purges);
-    MI_STAT_COUNTER!(pages_extended);
-    MI_STAT_COUNTER!(pages_retire);
-    MI_STAT_COUNTER!(page_searches);
-    MI_STAT_COUNTER!(page_searches_count);
-    MI_STAT_COUNT!(segments);
-    MI_STAT_COUNT!(segments_abandoned);
-    MI_STAT_COUNT!(segments_cache);
-    MI_STAT_COUNT!(_segments_reserved);
-    MI_STAT_COUNT!(heaps);
-    MI_STAT_COUNT!(theaps);
-    MI_STAT_COUNTER!(pages_reclaim_on_alloc);
-    MI_STAT_COUNTER!(pages_reclaim_on_free);
-    MI_STAT_COUNTER!(pages_reabandon_full);
-    MI_STAT_COUNTER!(pages_unabandon_busy_wait);
-    MI_STAT_COUNTER!(heaps_delete_wait);
+    mi_stat_fields!(add_stat_fields);
 
     if MI_STAT > 1 {
         let stats_malloc_bins =
@@ -481,19 +404,6 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
             )
         };
     }
-}
-
-/// # Safety
-/// - Pointer validity: `to` and `from` must be valid aligned `mi_stats_t`
-///   storage; `to` writable.
-/// - Lifetime: both live for call.
-/// - Aliasing: distinct pointers; destination writable via `addr_of_mut!`.
-/// - Initialization: initialized headers; counters atomic-compatible.
-/// - Ownership: caller retains.
-/// - Threading: counters either exclusive or atomic protocol.
-/// - Unwind: must not unwind.
-pub(super) unsafe fn mi_stats_add_into(to: *mut mi_stats_t, from: *const mi_stats_t) {
-    unsafe { mi_stats_add(to, from) };
 }
 
 /// # Safety
@@ -537,58 +447,23 @@ pub(super) unsafe fn mi_stats_copy(
 /// - Unwind: must not unwind.
 pub(super) unsafe fn mi_stats_snapshot_atomic(stats_from: *const mi_stats_t) -> mi_stats_t {
     let (from_size, from_version) = unsafe { ((*stats_from).size, (*stats_from).version) };
-    let mut snapshot = initialized_stats();
+    let mut snapshot = MI_STATS_NULL();
     snapshot.size = from_size;
     snapshot.version = from_version;
-    macro_rules! MI_STAT_COUNT {
-        ($field:ident) => {
+    macro_rules! snapshot_stat_fields {
+        ($($kind:ident $field:ident,)*) => {
+            $(snapshot_stat_fields!(@ $kind $field);)*
+        };
+        (@ count $field:ident) => {
             snapshot.$field =
                 unsafe { mi_stat_count_snapshot(ptr::addr_of!((*stats_from).$field)) };
         };
-    }
-    macro_rules! MI_STAT_COUNTER {
-        ($field:ident) => {
+        (@ counter $field:ident) => {
             snapshot.$field =
                 unsafe { mi_stat_counter_snapshot(ptr::addr_of!((*stats_from).$field)) };
         };
     }
-
-    MI_STAT_COUNT!(pages);
-    MI_STAT_COUNT!(reserved);
-    MI_STAT_COUNT!(committed);
-    MI_STAT_COUNTER!(reset);
-    MI_STAT_COUNTER!(purged);
-    MI_STAT_COUNT!(page_committed);
-    MI_STAT_COUNT!(pages_abandoned);
-    MI_STAT_COUNT!(threads);
-    MI_STAT_COUNT!(malloc_normal);
-    MI_STAT_COUNT!(malloc_huge);
-    MI_STAT_COUNT!(malloc_requested);
-    MI_STAT_COUNTER!(mmap_calls);
-    MI_STAT_COUNTER!(commit_calls);
-    MI_STAT_COUNTER!(reset_calls);
-    MI_STAT_COUNTER!(purge_calls);
-    MI_STAT_COUNTER!(arena_count);
-    MI_STAT_COUNTER!(malloc_normal_count);
-    MI_STAT_COUNTER!(malloc_huge_count);
-    MI_STAT_COUNTER!(malloc_guarded_count);
-    MI_STAT_COUNTER!(arena_rollback_count);
-    MI_STAT_COUNTER!(arena_purges);
-    MI_STAT_COUNTER!(pages_extended);
-    MI_STAT_COUNTER!(pages_retire);
-    MI_STAT_COUNTER!(page_searches);
-    MI_STAT_COUNTER!(page_searches_count);
-    MI_STAT_COUNT!(segments);
-    MI_STAT_COUNT!(segments_abandoned);
-    MI_STAT_COUNT!(segments_cache);
-    MI_STAT_COUNT!(_segments_reserved);
-    MI_STAT_COUNT!(heaps);
-    MI_STAT_COUNT!(theaps);
-    MI_STAT_COUNTER!(pages_reclaim_on_alloc);
-    MI_STAT_COUNTER!(pages_reclaim_on_free);
-    MI_STAT_COUNTER!(pages_reabandon_full);
-    MI_STAT_COUNTER!(pages_unabandon_busy_wait);
-    MI_STAT_COUNTER!(heaps_delete_wait);
+    mi_stat_fields!(snapshot_stat_fields);
 
     for i in 0..snapshot._stat_reserved.len() {
         snapshot._stat_reserved[i] = unsafe {
@@ -681,6 +556,44 @@ unsafe fn mi_stat_counter_snapshot(src: *const mi_stat_counter_t) -> mi_stat_cou
     }
 }
 
+/// # Safety
+/// - Pointer validity: `to` must be non-null, aligned for `mi_stats_t`,
+///   valid for all counters; `from` must be non-null, aligned, writable.
+/// - Lifetime: both remain live for the call.
+/// - Aliasing: `to` and `from` must not alias; `to` is atomic-compatible,
+///   `from` is exclusively owned for zeroing.
+/// - Initialization: both `mi_stats_t` are initialized with valid headers.
+/// - Ownership: caller retains both; `from` is reset to zero on return.
+/// - Threading: `to` counters may be concurrently updated only via atomic
+///   protocol; `from` must have no concurrent access.
+/// - Unwind: must not unwind.
+#[inline(never)]
+pub(crate) unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi_stats_t) {
+    crate::internal::mi_assert_internal!(!to.is_null() && !from.is_null());
+    if core::ptr::eq(to, from) {
+        return;
+    }
+    unsafe {
+        mi_stats_add(to, from);
+    }
+    unsafe {
+        _mi_memzero(from.cast(), size_of::<mi_stats_t>());
+    }
+}
+
+#[inline(always)]
+pub(super) fn stats_bin_iter() -> impl Iterator<Item = StatsBin> {
+    (0..=MI_BIN_HUGE).map(|index| {
+        crate::internal::mi_debug_assert!(u16::try_from(index).is_ok());
+        unsafe { StatsBin::new_unchecked(index as u16) }
+    })
+}
+
+#[inline(always)]
+fn stats_bin_as_bin(bin: StatsBin) -> Bin {
+    unsafe { Bin::new_unchecked(bin.get()) }
+}
+
 #[cfg(test)]
 mod tests {
     use core::{cell::UnsafeCell, ptr};
@@ -688,7 +601,7 @@ mod tests {
 
     use super::{
         __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt, __mi_stat_decrease_mt,
-        __mi_stat_increase_mt, initialized_stats, mi_stat_count_t, mi_stats_copy,
+        __mi_stat_increase_mt, MI_STATS_NULL, mi_stat_count_t, mi_stats_copy,
         mi_stats_snapshot_atomic,
     };
 
@@ -745,7 +658,7 @@ mod tests {
 
     #[test]
     fn atomic_snapshot_covers_reserved_and_all_bin_families() {
-        let source = UnsafeCell::new(initialized_stats());
+        let source = UnsafeCell::new(MI_STATS_NULL());
         let source_raw = source.get();
         // SAFETY: this is the fixture's only raw pointer and all initialization completes before
         // the atomic snapshot starts; no overlapping reference is created.
@@ -768,7 +681,7 @@ mod tests {
                 peak: 47,
             };
         }
-        let mut snapshot = initialized_stats();
+        let mut snapshot = MI_STATS_NULL();
 
         // SAFETY: both values are live and aligned; the destination is exclusive and the source
         // has no concurrent access while the snapshot helper performs its atomic field loads.
@@ -783,11 +696,11 @@ mod tests {
 
     #[test]
     fn atomic_snapshot_preserves_source_header_version() {
-        let source = UnsafeCell::new(initialized_stats());
+        let source = UnsafeCell::new(MI_STATS_NULL());
         let source_raw = source.get();
         // SAFETY: this is the fixture's only raw pointer and initialization precedes the snapshot.
         unsafe { (*source_raw).version = super::MI_STAT_VERSION.wrapping_add(1) };
-        let mut snapshot = initialized_stats();
+        let mut snapshot = MI_STATS_NULL();
 
         // SAFETY: both values are live and aligned; the destination is exclusive and the source
         // has no concurrent access while its header and fields are sampled.
@@ -800,7 +713,7 @@ mod tests {
 
     #[test]
     fn atomic_snapshot_accepts_legacy_zero_header_for_rendering() {
-        let source = UnsafeCell::new(initialized_stats());
+        let source = UnsafeCell::new(MI_STATS_NULL());
         let source_raw = source.get();
         // SAFETY: this is the fixture's only raw pointer and initialization precedes the snapshot.
         unsafe {
@@ -816,56 +729,4 @@ mod tests {
         assert_eq!(snapshot.version, 0);
         assert_eq!(snapshot.malloc_normal.total, 7);
     }
-}
-
-/// # Safety
-/// - Pointer validity: `to` must be non-null, aligned for `mi_stats_t`,
-///   valid for all counters; `from` must be non-null, aligned, writable.
-/// - Lifetime: both remain live for the call.
-/// - Aliasing: `to` and `from` must not alias; `to` is atomic-compatible,
-///   `from` is exclusively owned for zeroing.
-/// - Initialization: both `mi_stats_t` are initialized with valid headers.
-/// - Ownership: caller retains both; `from` is reset to zero on return.
-/// - Threading: `to` counters may be concurrently updated only via atomic
-///   protocol; `from` must have no concurrent access.
-/// - Unwind: must not unwind.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi_stats_t) {
-    if to.is_null() || from.is_null() || core::ptr::eq(to, from) {
-        return;
-    }
-    unsafe {
-        mi_stats_add_nonnull(to, from);
-    }
-    unsafe {
-        _mi_memzero(from.cast(), size_of::<mi_stats_t>());
-    }
-}
-
-#[derive(Clone, Copy)]
-pub(super) struct StatBinSize(usize);
-
-impl StatBinSize {
-    #[inline(always)]
-    pub(super) fn as_bytes(self) -> i64 {
-        self.0 as i64
-    }
-
-    #[inline(always)]
-    pub(super) fn get(self) -> usize {
-        self.0
-    }
-}
-
-#[inline(always)]
-pub(super) fn stats_bin_iter() -> impl Iterator<Item = StatsBin> {
-    (0..=MI_BIN_HUGE).map(|index| {
-        crate::internal::mi_debug_assert!(u16::try_from(index).is_ok());
-        unsafe { StatsBin::new_unchecked(index as u16) }
-    })
-}
-
-#[inline(always)]
-fn stats_bin_as_bin(bin: StatsBin) -> Bin {
-    unsafe { Bin::new_unchecked(bin.get()) }
 }

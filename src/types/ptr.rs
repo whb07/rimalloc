@@ -598,11 +598,13 @@ impl HeapPtr {
     /// # Safety
     /// The heap pointer must refer to heap metadata whose lock field is valid.
     #[inline(always)]
-    pub(crate) unsafe fn arena_pages_lock(self) -> *mut mi_lock_t {
+    pub(crate) unsafe fn arena_pages_lock(self) -> MiLockPtr {
         let raw = self.as_ptr();
-        // SAFETY: the caller keeps the heap allocation live and in bounds;
-        // projecting its aligned initialized arena-pages lock creates no reference.
-        unsafe { ptr::addr_of_mut!((*raw).arena_pages_lock) }
+        // SAFETY: the caller keeps the heap allocation live and in bounds; its
+        // aligned embedded arena-pages lock therefore has a non-null field address.
+        MiLockPtr::from_nonnull(unsafe {
+            NonNull::new_unchecked(ptr::addr_of_mut!((*raw).arena_pages_lock))
+        })
     }
 
     /// # Safety

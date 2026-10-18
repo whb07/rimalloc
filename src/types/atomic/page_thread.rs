@@ -28,15 +28,6 @@ impl AtomicPageThreadId {
         PageThreadId::new(unsafe { self.0.load(Ordering::Relaxed) })
     }
 
-    /// Compatibility shim for callers not yet migrated to the `load` name.
-    ///
-    /// # Safety
-    /// `self.0` must point to a valid page's `xthread_id` field.
-    #[inline(always)]
-    pub(crate) unsafe fn load_relaxed(self) -> PageThreadId {
-        unsafe { self.load() }
-    }
-
     /// Set or clear the given flag bits in the page's `xthread_id` field using a
     /// relaxed `fetch_or` / `fetch_and`. Returns the previous `PageThreadId`.
     ///

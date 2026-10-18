@@ -702,7 +702,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_theap_get_or_init(
     if theap.is_null() {
         theap = unsafe { mi_heap_init_theap(heap) };
         if theap.is_null() {
-            return ptr::addr_of!(_mi_theap_empty_wrong).cast_mut();
+            return ptr::addr_of_mut!(_mi_theap_empty_wrong);
         }
     }
     unsafe { _mi_theap_cached_set(theap) };

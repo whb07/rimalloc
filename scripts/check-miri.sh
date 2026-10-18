@@ -48,6 +48,7 @@ if (($# > 0)); then
   filters=("$@")
 else
   filters=(
+    allocator::alloc::tests::
     types::arena::
     types::atomic::
     types::callbacks::
@@ -62,7 +63,6 @@ else
     types::page_states::
     types::ptr::
     types::scalar::
-    types::track::
     types::validation::
   )
 fi

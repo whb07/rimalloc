@@ -8,14 +8,9 @@ use crate::types::{MI_LARGE_MAX_OBJ_WSIZE, mi_theap_t};
 const MI_ALIGN4W: bool = cfg!(target_pointer_width = "32");
 const MI_ALIGN2W: bool = cfg!(target_pointer_width = "64");
 
-fn align_up(size: usize, alignment: usize) -> usize {
-    crate::internal::mi_debug_assert!(alignment.is_power_of_two());
-    (size + alignment - 1) & !(alignment - 1)
-}
-
 #[inline(always)]
 pub(crate) fn mi_bin_impl(size: usize) -> usize {
-    let mut wsize = size.div_ceil(size_of::<usize>());
+    let mut wsize = crate::internal::_mi_wsize_from_size(size);
     if MI_ALIGN4W {
         if wsize <= 4 {
             return if wsize <= 1 { 1 } else { (wsize + 1) & !1 };
@@ -41,11 +36,6 @@ pub(crate) fn mi_bin_impl(size: usize) -> usize {
     let bin = ((b << 2) + ((wsize >> (b - 2)) & 0x03)) - 3;
     crate::internal::mi_debug_assert!(bin > 0 && bin < MI_BIN_HUGE);
     bin
-}
-
-#[inline(never)]
-pub extern "C" fn mi_bin(size: usize) -> usize {
-    mi_bin_impl(size)
 }
 
 #[inline(never)]
@@ -109,7 +99,10 @@ pub(crate) fn mi_good_size_typed(
         let Ok(padded) = size.checked_padded() else {
             return crate::core_types::GoodSize::new(sz);
         };
-        crate::core_types::GoodSize::new(align_up(padded.get(), crate::internal::MI_OS_PAGE_SIZE))
+        crate::core_types::GoodSize::new(crate::internal::_mi_align_up(
+            padded.get(),
+            crate::internal::MI_OS_PAGE_SIZE,
+        ))
     } else {
         crate::core_types::GoodSize::new(sz)
     }

@@ -78,7 +78,7 @@ impl SliceRange {
         }
 
         Ok(Self {
-            start: SliceIndex(start_u32 as usize),
+            start: SliceIndex::new(start_u32 as usize),
             count: unsafe { SliceCount::new_unchecked(nz_count.get()) },
         })
     }
@@ -88,7 +88,7 @@ impl SliceRange {
         let count = NonZeroU32::new(count).ok_or(SliceError::Overflow)?;
 
         Ok(Self {
-            start: SliceIndex(start as usize),
+            start: SliceIndex::new(start as usize),
             count: unsafe { SliceCount::new_unchecked(count.get()) },
         })
     }
@@ -117,7 +117,7 @@ impl SliceRange {
 
     #[inline(always)]
     pub(crate) fn start_usize(self) -> usize {
-        self.start.0
+        self.start.get()
     }
 
     pub(crate) fn count(self) -> SliceCount {
@@ -131,14 +131,14 @@ impl SliceRange {
 
     #[inline(always)]
     pub(crate) fn count_usize(self) -> usize {
-        self.count.0.get() as usize
+        self.count.get() as usize
     }
 
     pub(crate) fn end(self) -> SliceIndex {
         self.checked_add_offset(self.count_usize())
             .unwrap_or_else(|_| {
                 crate::internal::mi_assert_internal!(false);
-                SliceIndex(0)
+                SliceIndex::new(0)
             })
     }
 
@@ -153,7 +153,7 @@ impl SliceRange {
             .checked_add(offset)
             .ok_or(SliceError::Overflow)?;
         let index_u32: u32 = index.try_into().map_err(|_| SliceError::Overflow)?;
-        Ok(SliceIndex(index_u32 as usize))
+        Ok(SliceIndex::new(index_u32 as usize))
     }
 }
 

@@ -1179,15 +1179,13 @@ pub(crate) enum GuardedDecision {
     UseNormal,
 }
 
-Tracking feature types:
+Tracking feature selection:
 
-pub(crate) enum TrackMode {
-    Disabled,
-    Valgrind,
-    Asan,
-}
+pub const MI_TRACK_VALGRIND: usize; // allocator/tracking.rs
+pub const MI_TRACK_ASAN: usize;
+pub const MI_TRACK_ENABLED: usize;
 
-The mode should be const/cfg resolved; it must not add runtime branching to hot paths beyond what already exists.
+The mode is cfg resolved, with Valgrind taking precedence when both features are enabled; it must not add runtime branching to hot paths beyond what already exists.
 
 17. “Illegal states impossible” API restrictions
 

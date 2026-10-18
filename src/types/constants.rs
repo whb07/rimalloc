@@ -11,14 +11,12 @@ use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize};
 use crate::allocator::stats::mi_stats_t;
 use crate::atomic::mi_lock_t;
 pub use crate::atomic::mi_lock_t as mi_lock_t_pub;
+use crate::internal::MI_DEBUG;
 
 pub const MI_TYPES_H: () = ();
 pub const MI_MAX_ALIGN_SIZE: usize = 16;
-pub const MI_ARENA_SLICE_SHIFT: usize = crate::bits::MI_SIZE_SHIFT + 13;
-pub const MI_BCHUNK_BITS_SHIFT: usize = crate::bits::MI_SIZE_SHIFT + 6;
 
 pub const MI_SECURE: usize = crate::internal::MI_SECURE;
-const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
 pub const MI_STAT: usize = if MI_DEBUG > 0 || cfg!(feature = "bench-diagnostics") {
     2
 } else {
@@ -97,7 +95,6 @@ pub const MI_LARGE_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {
 pub const MI_LARGE_MAX_OBJ_WSIZE: usize = MI_LARGE_MAX_OBJ_SIZE / core::mem::size_of::<usize>();
 
 pub type mi_arena_id_t = *mut c_void;
-pub use crate::internal::memid::mi_memkind_t;
 pub type mi_memkind_e = crate::internal::memid::mi_memkind_t;
 pub type mi_threadid_t = usize;
 pub type mi_msecs_t = i64;
@@ -111,22 +108,6 @@ pub type mi_thread_free_t = usize;
 pub type mi_bitmap_t = crate::bitmap::mi_bitmap_t;
 pub type mi_bbitmap_t = crate::bitmap::mi_bbitmap_t;
 pub type mi_encoded_t = usize;
-
-#[inline]
-pub const fn mi_memkind_needs_no_free(memkind: mi_memkind_t) -> bool {
-    matches!(
-        memkind,
-        mi_memkind_t::MI_MEM_NONE | mi_memkind_t::MI_MEM_EXTERNAL | mi_memkind_t::MI_MEM_STATIC
-    )
-}
-
-#[inline]
-pub const fn mi_memkind_is_os(memkind: mi_memkind_t) -> bool {
-    matches!(
-        memkind,
-        mi_memkind_t::MI_MEM_OS | mi_memkind_t::MI_MEM_OS_HUGE | mi_memkind_t::MI_MEM_OS_REMAP
-    )
-}
 
 pub const MI_PADDING_SIZE: usize = if MI_PADDING != 0 {
     core::mem::size_of::<mi_padding_t>()

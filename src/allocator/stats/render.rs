@@ -32,48 +32,6 @@ struct buffered_s {
 
 type buffered_t = buffered_s;
 
-#[derive(Clone, Copy)]
-struct StatCountValue(i64);
-
-impl StatCountValue {
-    #[inline(always)]
-    fn get(self) -> i64 {
-        self.0
-    }
-}
-
-#[derive(Clone, Copy)]
-struct StatCountSnapshot {
-    total: StatCountValue,
-    peak: StatCountValue,
-    current: StatCountValue,
-}
-
-impl StatCountSnapshot {
-    #[inline(always)]
-    fn from_stat(stat: &mi_stat_count_t) -> Self {
-        Self {
-            total: StatCountValue(stat.total),
-            peak: StatCountValue(stat.peak),
-            current: StatCountValue(stat.current),
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct StatCounterSnapshot {
-    total: StatCountValue,
-}
-
-impl StatCounterSnapshot {
-    #[inline(always)]
-    fn from_stat(stat: &mi_stat_counter_t) -> Self {
-        Self {
-            total: StatCountValue(stat.total),
-        }
-    }
-}
-
 fn c_char_buffer_str(buf: &[c_char]) -> &str {
     // SAFETY: fixed formatting buffers are written only from ASCII format fragments and
     // always NUL-terminated by `mi_vsnprintf_args`; `buf.as_ptr()` is valid for the
@@ -169,27 +127,26 @@ fn mi_stat_print_ex(
     arg: *mut c_void,
     notok: Option<&str>,
 ) {
-    let stat = StatCountSnapshot::from_stat(stat);
     _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
     if unit != 0 {
         if unit > 0 {
-            mi_print_amount(stat.peak.get(), unit, out, arg);
-            mi_print_amount(stat.total.get(), unit, out, arg);
-            mi_print_amount(stat.current.get(), unit, out, arg);
+            mi_print_amount(stat.peak, unit, out, arg);
+            mi_print_amount(stat.total, unit, out, arg);
+            mi_print_amount(stat.current, unit, out, arg);
             mi_print_amount(unit, 1, out, arg);
-            mi_print_count(stat.total.get(), unit, out, arg);
+            mi_print_count(stat.total, unit, out, arg);
         } else {
-            mi_print_amount(stat.peak.get(), -1, out, arg);
-            mi_print_amount(stat.total.get(), -1, out, arg);
-            mi_print_amount(stat.current.get(), -1, out, arg);
+            mi_print_amount(stat.peak, -1, out, arg);
+            mi_print_amount(stat.total, -1, out, arg);
+            mi_print_amount(stat.current, -1, out, arg);
             if unit == -1 {
                 _mi_fprintf(out, arg, format_args!("{:>24}", ""));
             } else {
                 mi_print_amount(-unit, 1, out, arg);
-                mi_print_count(stat.total.get() / -unit, 0, out, arg);
+                mi_print_count(stat.total / -unit, 0, out, arg);
             }
         }
-        if stat.current.get() != 0 {
+        if stat.current != 0 {
             _mi_fprintf(
                 out,
                 arg,
@@ -199,9 +156,9 @@ fn mi_stat_print_ex(
             _mi_fprintf(out, arg, format_args!("  ok\n"));
         }
     } else {
-        mi_print_amount(stat.peak.get(), 0, out, arg);
-        mi_print_amount(stat.total.get(), 0, out, arg);
-        mi_print_amount(stat.current.get(), 0, out, arg);
+        mi_print_amount(stat.peak, 0, out, arg);
+        mi_print_amount(stat.total, 0, out, arg);
+        mi_print_amount(stat.current, 0, out, arg);
         _mi_fprintf(out, arg, format_args!("\n"));
     }
 }
@@ -223,10 +180,9 @@ fn mi_stat_total_print(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) {
-    let stat = StatCountSnapshot::from_stat(stat);
     _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
     _mi_fprintf(out, arg, format_args!("{:>12}", " "));
-    mi_print_amount(stat.total.get(), unit, out, arg);
+    mi_print_amount(stat.total, unit, out, arg);
     _mi_fprintf(out, arg, format_args!("\n"));
 }
 
@@ -236,9 +192,8 @@ fn mi_stat_counter_print(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) {
-    let stat = StatCounterSnapshot::from_stat(stat);
     _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
-    mi_print_amount(stat.total.get(), 0, out, arg);
+    mi_print_amount(stat.total, 0, out, arg);
     _mi_fprintf(out, arg, format_args!("\n"));
 }
 
@@ -248,9 +203,8 @@ fn mi_stat_counter_print_size(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) {
-    let stat = StatCounterSnapshot::from_stat(stat);
     _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
-    mi_print_amount(stat.total.get(), 1, out, arg);
+    mi_print_amount(stat.total, 1, out, arg);
     _mi_fprintf(out, arg, format_args!("\n"));
 }
 
@@ -291,14 +245,14 @@ fn mi_stats_print_bins(
     let mut found = false;
     for bin in stats_bin_iter().take(max.as_usize() + 1) {
         let stat = &bins[bin.as_usize()];
-        if StatCountSnapshot::from_stat(stat).total.get() > 0 {
+        if stat.total > 0 {
             found = true;
             let unit = mi_stats_get_bin_size_typed(bin);
-            let pagekind = if unit.get() <= MI_SMALL_MAX_OBJ_SIZE {
+            let pagekind = if unit <= MI_SMALL_MAX_OBJ_SIZE {
                 "S"
-            } else if unit.get() <= MI_MEDIUM_MAX_OBJ_SIZE {
+            } else if unit <= MI_MEDIUM_MAX_OBJ_SIZE {
                 "M"
-            } else if unit.get() <= MI_LARGE_MAX_OBJ_SIZE {
+            } else if unit <= MI_LARGE_MAX_OBJ_SIZE {
                 "L"
             } else {
                 "H"
@@ -308,7 +262,7 @@ fn mi_stats_print_bins(
                 &mut label,
                 format_args!("bin{pagekind:>2}  {:>3}", bin.as_usize()),
             );
-            mi_stat_print(stat, c_char_buffer_str(&label), unit.as_bytes(), out, arg);
+            mi_stat_print(stat, c_char_buffer_str(&label), unit as i64, out, arg);
         }
     }
     if found {
@@ -613,13 +567,12 @@ fn mi_json_buf_print_count_bin(
     bin: StatsBin,
     add_comma: bool,
 ) {
-    let stat = StatCountSnapshot::from_stat(stat);
     let binsize = mi_stats_get_bin_size_typed(bin);
-    let pagesize = if binsize.get() <= MI_SMALL_MAX_OBJ_SIZE {
+    let pagesize = if binsize <= MI_SMALL_MAX_OBJ_SIZE {
         MI_SMALL_PAGE_SIZE
-    } else if binsize.get() <= MI_MEDIUM_MAX_OBJ_SIZE {
+    } else if binsize <= MI_MEDIUM_MAX_OBJ_SIZE {
         MI_MEDIUM_PAGE_SIZE
-    } else if binsize.get() <= MI_LARGE_MAX_OBJ_SIZE {
+    } else if binsize <= MI_LARGE_MAX_OBJ_SIZE {
         MI_LARGE_PAGE_SIZE
     } else {
         0
@@ -629,10 +582,10 @@ fn mi_json_buf_print_count_bin(
         &mut buf,
         format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"block_size\": {}, \"page_size\": {pagesize} }}{}\n",
-            stat.total.get(),
-            stat.peak.get(),
-            stat.current.get(),
-            binsize.get(),
+            stat.total,
+            stat.peak,
+            stat.current,
+            binsize,
             if add_comma { "," } else { "" }
         ),
     );
@@ -646,7 +599,6 @@ fn mi_json_buf_print_count_cbin(
     bin: mi_chunkbin_t,
     add_comma: bool,
 ) {
-    let stat = StatCountSnapshot::from_stat(stat);
     let cbin = match bin {
         mi_chunkbin_e::MI_CBIN_SMALL => "S",
         mi_chunkbin_e::MI_CBIN_MEDIUM => "M",
@@ -660,9 +612,9 @@ fn mi_json_buf_print_count_cbin(
         &mut buf,
         format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"bin\": \"{cbin}\" }}{}\n",
-            stat.total.get(),
-            stat.peak.get(),
-            stat.current.get(),
+            stat.total,
+            stat.peak,
+            stat.current,
             if add_comma { "," } else { "" }
         ),
     );
@@ -675,15 +627,14 @@ fn mi_json_buf_print_count(
     stat: &mi_stat_count_t,
     add_comma: bool,
 ) {
-    let stat = StatCountSnapshot::from_stat(stat);
     let mut buf = [0 as c_char; 128];
     libc::mi_vsnprintf_args(
         &mut buf,
         format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {} }}{}\n",
-            stat.total.get(),
-            stat.peak.get(),
-            stat.current.get(),
+            stat.total,
+            stat.peak,
+            stat.current,
             if add_comma { "," } else { "" }
         ),
     );
@@ -717,60 +668,22 @@ fn mi_json_buf_print_size(hbuf: &mut mi_json_buf_t, name: &str, val: usize, add_
 }
 
 fn mi_json_buf_print_counter_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi_stat_counter_t) {
-    mi_json_buf_print_value(hbuf, name, StatCounterSnapshot::from_stat(stat).total.get());
+    mi_json_buf_print_value(hbuf, name, stat.total);
 }
 
 fn append_stats_json(hbuf: &mut mi_json_buf_t, stats: &mi_stats_t) {
-    macro_rules! MI_STAT_COUNT {
-        ($field:ident) => {
+    macro_rules! print_stat_fields {
+        ($($kind:ident $field:ident,)*) => {
+            $(print_stat_fields!(@ $kind $field);)*
+        };
+        (@ count $field:ident) => {
             mi_json_buf_print_count_value(hbuf, stringify!($field), &stats.$field)
         };
+        (@ counter $field:ident) => {
+            mi_json_buf_print_counter_value(hbuf, stringify!($field), &stats.$field)
+        };
     }
-
-    MI_STAT_COUNT!(pages);
-    MI_STAT_COUNT!(reserved);
-    MI_STAT_COUNT!(committed);
-    mi_json_buf_print_counter_value(hbuf, "reset", &stats.reset);
-    mi_json_buf_print_counter_value(hbuf, "purged", &stats.purged);
-    MI_STAT_COUNT!(page_committed);
-    MI_STAT_COUNT!(pages_abandoned);
-    MI_STAT_COUNT!(threads);
-    MI_STAT_COUNT!(malloc_normal);
-    MI_STAT_COUNT!(malloc_huge);
-    MI_STAT_COUNT!(malloc_requested);
-    mi_json_buf_print_counter_value(hbuf, "mmap_calls", &stats.mmap_calls);
-    mi_json_buf_print_counter_value(hbuf, "commit_calls", &stats.commit_calls);
-    mi_json_buf_print_counter_value(hbuf, "reset_calls", &stats.reset_calls);
-    mi_json_buf_print_counter_value(hbuf, "purge_calls", &stats.purge_calls);
-    mi_json_buf_print_counter_value(hbuf, "arena_count", &stats.arena_count);
-    mi_json_buf_print_counter_value(hbuf, "malloc_normal_count", &stats.malloc_normal_count);
-    mi_json_buf_print_counter_value(hbuf, "malloc_huge_count", &stats.malloc_huge_count);
-    mi_json_buf_print_counter_value(hbuf, "malloc_guarded_count", &stats.malloc_guarded_count);
-    mi_json_buf_print_counter_value(hbuf, "arena_rollback_count", &stats.arena_rollback_count);
-    mi_json_buf_print_counter_value(hbuf, "arena_purges", &stats.arena_purges);
-    mi_json_buf_print_counter_value(hbuf, "pages_extended", &stats.pages_extended);
-    mi_json_buf_print_counter_value(hbuf, "pages_retire", &stats.pages_retire);
-    mi_json_buf_print_counter_value(hbuf, "page_searches", &stats.page_searches);
-    mi_json_buf_print_counter_value(hbuf, "page_searches_count", &stats.page_searches_count);
-    MI_STAT_COUNT!(segments);
-    MI_STAT_COUNT!(segments_abandoned);
-    MI_STAT_COUNT!(segments_cache);
-    MI_STAT_COUNT!(_segments_reserved);
-    MI_STAT_COUNT!(heaps);
-    MI_STAT_COUNT!(theaps);
-    mi_json_buf_print_counter_value(
-        hbuf,
-        "pages_reclaim_on_alloc",
-        &stats.pages_reclaim_on_alloc,
-    );
-    mi_json_buf_print_counter_value(hbuf, "pages_reclaim_on_free", &stats.pages_reclaim_on_free);
-    mi_json_buf_print_counter_value(hbuf, "pages_reabandon_full", &stats.pages_reabandon_full);
-    mi_json_buf_print_counter_value(
-        hbuf,
-        "pages_unabandon_busy_wait",
-        &stats.pages_unabandon_busy_wait,
-    );
-    mi_json_buf_print_counter_value(hbuf, "heaps_delete_wait", &stats.heaps_delete_wait);
+    mi_stat_fields!(print_stat_fields);
 }
 
 /// # Safety

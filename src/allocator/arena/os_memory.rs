@@ -487,7 +487,8 @@ unsafe fn mi_manage_os_memory_ex2(
         return false;
     };
 
-    let mut total_slice_count = (size / MI_ARENA_SLICE_SIZE / MI_BCHUNK_BITS) * MI_BCHUNK_BITS;
+    let mut total_slice_count =
+        crate::internal::_mi_align_down(size / MI_ARENA_SLICE_SIZE, MI_BCHUNK_BITS);
     let total_size = mi_size_of_slices(total_slice_count);
     if total_size < MI_ARENA_MIN_SIZE {
         crate::allocator::options::_mi_warning_message_fmt(format_args!(

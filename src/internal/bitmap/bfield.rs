@@ -121,11 +121,10 @@ pub(super) fn mi_bfield_atomic_set_mask(
 ) -> bool {
     crate::internal::mi_debug_assert!(mask != 0);
     let mut old = b.load(Ordering::Relaxed);
-    while b
-        .compare_exchange_weak(old, old | mask, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
+    while let Err(actual) =
+        b.compare_exchange_weak(old, old | mask, Ordering::AcqRel, Ordering::Acquire)
     {
-        old = b.load(Ordering::Relaxed);
+        old = actual;
     }
     if let Some(already_set) = already_set {
         *already_set = mi_bfield_popcount(old & mask);
@@ -141,11 +140,10 @@ pub(super) fn mi_bfield_atomic_clear_mask(
 ) -> bool {
     crate::internal::mi_debug_assert!(mask != 0);
     let mut old = b.load(Ordering::Relaxed);
-    while b
-        .compare_exchange_weak(old, old & !mask, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
+    while let Err(actual) =
+        b.compare_exchange_weak(old, old & !mask, Ordering::AcqRel, Ordering::Acquire)
     {
-        old = b.load(Ordering::Relaxed);
+        old = actual;
     }
     if let Some(all_clear) = all_clear {
         *all_clear = (old & !mask) == 0;

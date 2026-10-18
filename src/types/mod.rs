@@ -15,7 +15,6 @@ pub(crate) mod page_queues;
 pub(crate) mod page_states;
 pub(crate) mod ptr;
 pub(crate) mod scalar;
-pub(crate) mod track;
 pub(crate) mod validation;
 pub(crate) mod validation_extra;
 
@@ -79,8 +78,6 @@ pub(crate) use freelist_wrappers::{
 };
 
 pub(crate) use free_actions::LocalFreeMode;
-
-pub(crate) use track::TrackMode;
 
 #[cfg(feature = "guarded")]
 pub(crate) use crate::internal::guarded::{

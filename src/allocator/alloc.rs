@@ -5,7 +5,7 @@ use core::mem::size_of;
 use core::ptr;
 
 use crate::allocator::free::_mi_usable_size_typed;
-use crate::allocator::init::_mi_theap_empty_wrong;
+use crate::allocator::init::{_mi_theap_empty, _mi_theap_empty_wrong};
 use crate::allocator::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::allocator::page::{
     _mi_malloc_generic_typed, _mi_theap_or_default_typed, MI_MAX_ALLOC_SIZE, mi_bin_from_usable,
@@ -33,6 +33,8 @@ use crate::types::{
 mod cxx_new;
 mod public_malloc;
 mod string_path;
+#[cfg(test)]
+mod tests;
 mod zeroed;
 #[allow(unused_imports)]
 pub use cxx_new::{
@@ -279,8 +281,11 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
 
 /// # Safety
 /// `theap` must be a live current-thread heap whose TLD, page queues, and small
-/// page metadata remain initialized for this allocation. The caller must hold
-/// exclusive current-thread mutation rights over its direct-page cache, local
+/// page metadata remain initialized for this allocation, or the empty or
+/// wrong-thread sentinel: their direct pages are all empty and their zero guarded
+/// sample rate is never written (debug builds assert this), so they miss into
+/// `_mi_malloc_generic`, which initializes the thread or returns null. The caller
+/// must hold exclusive current-thread mutation rights over its direct-page cache, local
 /// page queues and free lists, guarded-sampling state, and local statistics;
 /// protocol atomic remote-free publication is permitted. `size` must not exceed
 /// `MI_SMALL_SIZE_MAX`. The page map, backing metadata, guarded configuration,
@@ -352,19 +357,15 @@ unsafe fn mi_theap_malloc_small_zero_typed(
         unsafe { _mi_page_malloc_zero_typed(local_theap, available, padded, zeroed, usable) }
     } else {
         // SAFETY: `padded` was derived from the normalized logical request and
-        // includes exactly the allocator padding size. The caller keeps the
-        // heap's queues, backing state, stats, and synchronous allocator
-        // callbacks valid and locally exclusive; layout and flags carry the
-        // same zeroing policy and no huge alignment.
+        // includes exactly the allocator padding size; the flag word carries the
+        // zeroing policy and no huge alignment. The caller keeps the heap (or
+        // sentinel), its queues, backing state, stats, and synchronous allocator
+        // callbacks valid and locally exclusive.
         unsafe {
-            let layout = crate::core_types::LayoutRequest::from_padded_unchecked(padded, zeroed);
-            _mi_malloc_generic_typed(
-                local_theap.ptr(),
-                layout,
-                crate::core_types::MallocGenericFlags::new(
-                    zeroed,
-                    crate::core_types::MaybeHugeAlignment::none(),
-                ),
+            crate::allocator::page::_mi_malloc_generic(
+                theap,
+                padded.get(),
+                usize::from(zero),
                 usable,
             )
         }
@@ -496,104 +497,43 @@ fn malloc_layout_or_report(size: usize, zero: bool) -> Option<crate::core_types:
     }
 }
 
+/// `_mi_theap_malloc_zero` with C's small fast path inline: a small request on a nonnull
+/// `theap` pops straight from the direct pages, and an uninitialized sentinel misses into the
+/// generic path, which initializes the thread. Everything else takes the out-of-line call.
+///
 /// # Safety
-/// `theap` must be null, a supported allocator static empty/default sentinel, or
-/// the current thread's live initialized heap. Any nonnull input metadata must
-/// remain live and readable through its resolver probe. For a live heap, its
-/// TLD, queues, and page metadata must remain live without teardown, and the
-/// caller must have exclusive mutation rights over its direct-page cache, local
-/// page queues and free lists, and local statistics; protocol atomic remote-free
-/// publication is permitted. Except for the configured null lazy-heap path,
-/// `size` must not exceed `MI_SMALL_SIZE_MAX`; that null path validates an
-/// oversized request before generic dispatch. The process/TLS lifecycle, page map, backing
-/// metadata, guarded configuration, and allocator configuration must remain
-/// stable. Initialization, heap collection, deferred-free, arena
-/// allocation/commit/purge/release, guarded protection, tracking, and diagnostic
-/// callbacks plus their opaque arguments must remain valid for synchronous
-/// invocation, must not incompatibly reenter this thread's local allocation
-/// state, and must not unwind. If nonnull, `usable` must be aligned and uniquely
-/// writable for one `usize` for the duration of the call and must not overlap
-/// allocator metadata.
-unsafe fn mi_theap_malloc_small_zero(
+/// Same contract as `_mi_theap_malloc_zero`.
+#[inline(always)]
+unsafe fn mi_theap_malloc_zero_fast(
     theap: *mut mi_theap_t,
-    size: crate::core_types::RequestedSize,
-    zeroed: crate::core_types::Zeroed,
+    size: usize,
+    zero: bool,
     usable: *mut usize,
 ) -> *mut c_void {
-    if MI_THEAP_INITASNULL && !theap.is_null() {
-        // SAFETY: the nonnull input is a supported static empty/default
-        // sentinel or a live current-thread heap; its readable metadata and the
-        // process/TLS lifecycle permit resolving the initialized typed witness.
-        let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
-            return ptr::null_mut();
-        };
-        // SAFETY: resolution proves `theap` is initialized and nonnull; the
-        // caller keeps its local allocation state exclusive and `usable`
-        // writable through this terminal bounded-small allocation.
-        unsafe {
+    if size <= MI_SMALL_SIZE_MAX
+        && let Some(theap_ptr) = ThreadHeapPtr::new(theap)
+    {
+        // The only uninitialized heaps allowed here are the sentinels, which the small path
+        // reads but never writes.
+        crate::internal::mi_debug_assert!(
+            // SAFETY: the contract keeps a nonnull `theap` readable for the probe.
+            unsafe { mi_theap_is_initialized(theap) }
+                || ptr::eq(theap, ptr::addr_of_mut!(_mi_theap_empty))
+                || ptr::eq(theap, ptr::addr_of_mut!(_mi_theap_empty_wrong))
+        );
+        // SAFETY: a nonnull `theap` under this contract is a live current-thread heap or a
+        // sentinel, which `mi_theap_malloc_small_zero_typed` accepts; the request is bounded.
+        return unsafe {
             mi_theap_malloc_small_zero_typed(
-                ThreadHeapLocal::new_unchecked(theap),
-                size,
-                zeroed,
+                ThreadHeapLocal::new_unchecked(theap_ptr),
+                crate::core_types::RequestedSize::new(size),
+                crate::core_types::Zeroed::from_bool(zero),
                 usable,
             )
-        }
-    } else if MI_THEAP_INITASNULL {
-        let layout = match zeroed {
-            crate::core_types::Zeroed::No => crate::core_types::LayoutRequest::malloc(size.get()),
-            crate::core_types::Zeroed::Yes => crate::core_types::LayoutRequest::zalloc(size.get()),
         };
-        let Ok(layout) = layout else {
-            _mi_error_message_fmt(
-                Errno::EOVERFLOW,
-                format_args!("allocation request is too large ({} bytes)\n", size.get()),
-            );
-            return ptr::null_mut();
-        };
-        // SAFETY: this branch accepts the configured null lazy sentinel; the
-        // allocator lifecycle permits resolving it to this thread's initialized
-        // default heap before any heap metadata is used.
-        let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
-            return ptr::null_mut();
-        };
-        // SAFETY: successful lazy resolution proves the pointer is initialized
-        // and nonnull; the caller's lifecycle and local-exclusivity contract
-        // permits carrying the non-owning typed witness through dispatch.
-        let theap = unsafe { ThreadHeapLocal::new_unchecked(theap) };
-        if size.get() <= MI_SMALL_SIZE_MAX {
-            // SAFETY: `theap` is the live current-thread witness resolved above;
-            // the bounded request and optional output satisfy typed dispatch.
-            unsafe { mi_theap_malloc_small_zero_typed(theap, size, zeroed, usable) }
-        } else {
-            let flags = crate::core_types::MallocGenericFlags::new(
-                zeroed,
-                crate::core_types::MaybeHugeAlignment::new(0),
-            );
-            // SAFETY: the validated layout and flags retain the same zeroing
-            // policy and select no huge alignment; the resolved current-thread
-            // heap remains locally exclusive and `usable` remains writable.
-            unsafe { mi_theap_malloc_generic(theap, layout, flags, usable) }
-        }
-    } else {
-        // SAFETY: the input is resolver-accepted null, a supported static
-        // empty/default sentinel, or a live initialized current-thread heap;
-        // its readable metadata and process/TLS lifecycle remain stable through
-        // resolution.
-        let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
-            return ptr::null_mut();
-        };
-        // SAFETY: resolution proves `theap` is initialized and nonnull; the
-        // caller keeps its local allocation state exclusive and `usable`
-        // writable through this terminal bounded-small allocation.
-        unsafe {
-            mi_theap_malloc_small_zero_typed(
-                ThreadHeapLocal::new_unchecked(theap),
-                size,
-                zeroed,
-                usable,
-            )
-        }
     }
+    // SAFETY: forwarded from this function's contract.
+    unsafe { _mi_theap_malloc_zero(theap, size, zero, usable) }
 }
 
 /// # Safety
@@ -604,7 +544,7 @@ unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapL
     // SAFETY: the caller keeps the heap and association live and current-thread
     // owned while the raw thread heap is resolved and classified.
     let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
-    if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
+    if ptr::eq(theap, ptr::addr_of_mut!(_mi_theap_empty_wrong)) {
         return None;
     }
     let theap = ThreadHeapPtr::new(theap)?;
@@ -851,14 +791,7 @@ pub unsafe extern "C" fn mi_umalloc_small(size: usize, usable: *mut usize) -> *m
     // SAFETY: the caller-provided bound/output contract and allocator lifecycle
     // keep the default heap's local allocation state exclusively owned and the
     // optional result slot writable through the small allocation.
-    unsafe {
-        mi_theap_malloc_small_zero(
-            _mi_theap_default(),
-            crate::core_types::RequestedSize::new(size),
-            crate::core_types::Zeroed::No,
-            usable,
-        )
-    }
+    unsafe { mi_theap_malloc_zero_fast(_mi_theap_default(), size, false, usable) }
 }
 
 /// # Safety
@@ -869,14 +802,7 @@ pub unsafe extern "C" fn mi_uzalloc_small(size: usize, usable: *mut usize) -> *m
     // SAFETY: the caller-provided bound/output contract and allocator lifecycle
     // keep the default heap's local allocation state exclusively owned and the
     // optional result slot writable through the zeroing small allocation.
-    unsafe {
-        mi_theap_malloc_small_zero(
-            _mi_theap_default(),
-            crate::core_types::RequestedSize::new(size),
-            crate::core_types::Zeroed::Yes,
-            usable,
-        )
-    }
+    unsafe { mi_theap_malloc_zero_fast(_mi_theap_default(), size, true, usable) }
 }
 
 /// # Safety

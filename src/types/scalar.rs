@@ -41,7 +41,7 @@ impl Errno {
 /// User-requested allocation size (may be zero).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct RequestedSize(pub(crate) usize);
+pub(crate) struct RequestedSize(usize);
 
 impl RequestedSize {
     pub(crate) const MIN_ZERO_SIZE: usize = core::mem::size_of::<usize>();
@@ -93,7 +93,7 @@ impl RequestedSize {
 /// Effective size after mimalloc zero-size normalization (never zero in Rust paths).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct EffectiveSize(pub(crate) NonZeroUsize);
+pub(crate) struct EffectiveSize(NonZeroUsize);
 
 impl EffectiveSize {
     /// # Safety
@@ -111,7 +111,7 @@ impl EffectiveSize {
 /// Padded request (requested + MI_PADDING_SIZE). Never zero.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct PaddedSize(pub(crate) NonZeroUsize);
+pub(crate) struct PaddedSize(NonZeroUsize);
 
 impl PaddedSize {
     /// # Safety
@@ -129,7 +129,7 @@ impl PaddedSize {
 /// Usable size visible to the user (excludes padding).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct UsableSize(pub(crate) usize);
+pub(crate) struct UsableSize(usize);
 
 impl UsableSize {
     #[inline(always)]
@@ -173,7 +173,7 @@ impl UsableOut {
 /// Raw page block size (includes padding). Never zero.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct BlockSize(pub(crate) NonZeroUsize);
+pub(crate) struct BlockSize(NonZeroUsize);
 
 impl BlockSize {
     #[inline(always)]
@@ -218,7 +218,7 @@ impl BlockSize {
 /// Alignment requirement (power of two, non-zero).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct Alignment(pub(crate) NonZeroUsize);
+pub(crate) struct Alignment(NonZeroUsize);
 
 impl Alignment {
     /// Safely creates an `Alignment`, verifying it is a non-zero power of two.
@@ -245,7 +245,7 @@ impl Alignment {
 /// Optional alignment (0 means “default / no explicit alignment”).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct MaybeAlignment(pub(crate) usize);
+pub(crate) struct MaybeAlignment(usize);
 
 impl MaybeAlignment {
     #[inline(always)]
@@ -271,7 +271,7 @@ impl MaybeAlignment {
 /// Offset used by aligned-at allocation APIs.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct AlignmentOffset(pub(crate) usize);
+pub(crate) struct AlignmentOffset(usize);
 
 impl AlignmentOffset {
     #[inline(always)]
@@ -288,7 +288,7 @@ impl AlignmentOffset {
 /// Number of pages linked in a page queue.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct PageQueueCount(pub(crate) usize);
+pub(crate) struct PageQueueCount(usize);
 
 impl PageQueueCount {
     #[inline(always)]
@@ -374,7 +374,7 @@ impl PageReclaimLimit {
 /// Number of used blocks in a page.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct UsedBlockCount(pub(crate) u16);
+pub(crate) struct UsedBlockCount(u16);
 
 impl UsedBlockCount {
     #[inline(always)]
@@ -434,7 +434,7 @@ impl BatchLen {
 /// Number of reserved blocks in a page.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct ReservedBlockCount(pub(crate) u16);
+pub(crate) struct ReservedBlockCount(u16);
 
 impl ReservedBlockCount {
     #[inline(always)]
@@ -456,7 +456,7 @@ impl ReservedBlockCount {
 /// Number of committed/available blocks in a page.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct PageCapacity(pub(crate) u16);
+pub(crate) struct PageCapacity(u16);
 
 impl PageCapacity {
     #[inline(always)]
@@ -504,7 +504,7 @@ impl PageCapacity {
 /// Page retirement countdown. Zero means the page is not pending retirement.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct RetireExpire(pub(crate) u8);
+pub(crate) struct RetireExpire(u8);
 
 impl RetireExpire {
     #[inline(always)]
@@ -537,7 +537,7 @@ impl RetireExpire {
 /// NUMA node affinity. Negative values mean any NUMA node.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct NumaNode(pub(crate) i32);
+pub(crate) struct NumaNode(i32);
 
 impl NumaNode {
     #[inline(always)]
@@ -578,7 +578,7 @@ impl NumaNode {
 /// Per-thread sequence number used for arena cycling and diagnostics.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct ThreadSeq(pub(crate) usize);
+pub(crate) struct ThreadSeq(usize);
 
 impl ThreadSeq {
     #[inline(always)]
@@ -595,7 +595,7 @@ impl ThreadSeq {
 /// Per-heap sequence number used for arena cycling and diagnostics.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct HeapSeq(pub(crate) usize);
+pub(crate) struct HeapSeq(usize);
 
 impl HeapSeq {
     #[inline(always)]
@@ -612,7 +612,7 @@ impl HeapSeq {
 /// Per-subprocess sequence number used for diagnostics.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct SubprocSeq(pub(crate) usize);
+pub(crate) struct SubprocSeq(usize);
 
 impl SubprocSeq {
     #[inline(always)]
@@ -629,7 +629,7 @@ impl SubprocSeq {
 /// Count of arenas registered with a subprocess.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct ArenaCount(pub(crate) usize);
+pub(crate) struct ArenaCount(usize);
 
 impl ArenaCount {
     #[inline(always)]
@@ -646,7 +646,7 @@ impl ArenaCount {
 /// Thread-heap heartbeat used by deferred free callbacks.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct Heartbeat(pub(crate) u64);
+pub(crate) struct Heartbeat(u64);
 
 impl Heartbeat {
     #[inline(always)]
@@ -668,7 +668,7 @@ impl Heartbeat {
 /// OS page size. Always nonzero after OS memory configuration initialization.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct OsPageSize(pub(crate) NonZeroUsize);
+pub(crate) struct OsPageSize(NonZeroUsize);
 
 impl OsPageSize {
     /// # Safety
@@ -687,7 +687,7 @@ impl OsPageSize {
 /// Top-level page-map index. Must be within `MI_PAGE_MAP_COUNT`.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct PageMapIndex(pub(crate) usize);
+pub(crate) struct PageMapIndex(usize);
 
 impl PageMapIndex {
     #[inline(always)]
@@ -717,7 +717,7 @@ impl PageMapIndex {
 #[cfg(target_pointer_width = "32")]
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct PageMapFlatIndex(pub(crate) usize);
+pub(crate) struct PageMapFlatIndex(usize);
 
 #[cfg(target_pointer_width = "32")]
 impl PageMapFlatIndex {
@@ -748,7 +748,7 @@ pub(crate) type PageMapPrimaryIndex = PageMapIndex;
 /// Submap index. Must be within `MI_PAGE_MAP_SUB_COUNT`.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct PageMapSubIndex(pub(crate) usize);
+pub(crate) struct PageMapSubIndex(usize);
 
 impl PageMapSubIndex {
     #[inline(always)]
@@ -776,7 +776,7 @@ impl PageMapSubIndex {
 /// Bin index (0 … MI_BIN_COUNT-1).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct Bin(pub(crate) u16);
+pub(crate) struct Bin(u16);
 
 impl Bin {
     #[inline(always)]
@@ -802,7 +802,7 @@ impl Bin {
 /// Stats bin index (0 … MI_BIN_HUGE).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct StatsBin(pub(crate) u16);
+pub(crate) struct StatsBin(u16);
 
 impl StatsBin {
     #[inline(always)]
@@ -832,7 +832,7 @@ impl StatsBin {
 /// Direct bin index (0 … MI_PAGES_DIRECT-1).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct DirectBin(pub(crate) u16);
+pub(crate) struct DirectBin(u16);
 
 impl DirectBin {
     /// # Safety
@@ -854,7 +854,7 @@ impl DirectBin {
 /// Slice index inside an arena.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct SliceIndex(pub(crate) usize);
+pub(crate) struct SliceIndex(usize);
 
 impl SliceIndex {
     #[inline(always)]
@@ -874,7 +874,7 @@ impl SliceIndex {
 /// Slice count (non-zero for real arenas).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct SliceCount(pub(crate) NonZeroU32);
+pub(crate) struct SliceCount(NonZeroU32);
 
 impl SliceCount {
     /// Construct from a `usize` count. Returns `None` if zero or too large for `u32`.
@@ -905,7 +905,7 @@ impl SliceCount {
 /// Arena index (0 … MI_MAX_ARENAS-1).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct ArenaIndex(pub(crate) u16);
+pub(crate) struct ArenaIndex(u16);
 
 impl ArenaIndex {
     #[inline(always)]
@@ -935,7 +935,7 @@ impl ArenaIndex {
 /// Good size returned by mi_good_size.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct GoodSize(pub(crate) usize);
+pub(crate) struct GoodSize(usize);
 
 impl GoodSize {
     #[inline(always)]

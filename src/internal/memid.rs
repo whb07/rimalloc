@@ -8,7 +8,6 @@
 #![allow(non_camel_case_types)]
 
 use core::ffi::c_void;
-use core::ptr;
 
 use crate::types::mi_arena_t;
 
@@ -86,27 +85,9 @@ pub fn mi_memid_is_os(memid: mi_memid_t) -> bool {
     )
 }
 
-#[inline]
-pub fn mi_memid_needs_no_free(memid: mi_memid_t) -> bool {
-    matches!(
-        crate::core_types::MemId::view(memid),
-        crate::core_types::MemIdView::None
-            | crate::core_types::MemIdView::External(_)
-            | crate::core_types::MemIdView::Static
-    )
-}
-
-#[inline]
-pub fn mi_memid_arena(memid: mi_memid_t) -> *mut mi_arena_t {
-    match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::Arena(a) => a.arena().as_ptr(),
-        _ => ptr::null_mut(),
-    }
-}
-
 /// Returns the inert memid sentinel.
 #[inline]
-pub fn _mi_memid_none() -> mi_memid_t {
+pub const fn _mi_memid_none() -> mi_memid_t {
     crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw()
 }
 

@@ -1,6 +1,5 @@
 use core::ptr::{self, NonNull};
 
-use crate::internal::atomic::{mi_lock_acquire, mi_lock_release};
 use crate::types::{
     HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainSubproc, MemoryOrder, MiLockGuard,
     MiLockPtr, SubprocPtr, ThreadSeq, TldPtr, mi_subproc_t,
@@ -26,7 +25,7 @@ pub(super) enum AssignCurrentThreadResult {
 
 /// A registry-validated subproc whose heap list lock is held.
 pub(super) struct LockedSubprocHeaps {
-    lock: MiLockPtr,
+    _lock: MiLockGuard<'static>,
     subproc: SubprocPtr,
 }
 
@@ -145,16 +144,8 @@ unsafe fn lock_heaps_from(
     let lock = unsafe { subproc.heaps_lock() };
     // SAFETY: destruction must acquire this same lock before freeing the
     // subproc's heaps and metadata, so the token keeps it live until Drop.
-    unsafe { mi_lock_acquire(lock.as_ptr()) };
-    Some(LockedSubprocHeaps { lock, subproc })
-}
-
-impl Drop for LockedSubprocHeaps {
-    fn drop(&mut self) {
-        // SAFETY: construction acquired this exact lock once. The destruction
-        // protocol cannot free the subproc metadata until this release.
-        unsafe { mi_lock_release(self.lock.as_ptr()) };
-    }
+    let _lock = unsafe { MiLockGuard::acquire(lock) };
+    Some(LockedSubprocHeaps { _lock, subproc })
 }
 
 impl LockedSubprocHeaps {
@@ -477,7 +468,7 @@ mod tests {
         let locked = unsafe { lock_heaps_from(ptr::addr_of_mut!(head), target_ptr.as_ptr()) }
             .expect("linked target must hand off its heap-list lock");
         // SAFETY: the test node's lock is initialized and currently held.
-        assert!(!unsafe { mi_lock_try_acquire(locked.lock.as_ptr()) });
+        assert!(!unsafe { mi_lock_try_acquire(target_ptr.heaps_lock().as_ptr()) });
         drop(locked);
         // SAFETY: dropping the handoff token released the initialized lock.
         assert!(unsafe { mi_lock_try_acquire(target_ptr.heaps_lock().as_ptr()) });

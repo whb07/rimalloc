@@ -14,9 +14,7 @@ use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::allocator::arena::MI_ARENA_BCHUNK_BITS;
-use crate::allocator::stats::{
-    MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_MEDIUM, MI_CBIN_NONE, MI_CBIN_SMALL,
-};
+use crate::allocator::stats::{MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_NONE, MI_CBIN_SMALL};
 use crate::bits::{MI_SIZE_BITS, MI_SIZE_SHIFT, MI_SIZE_SIZE, mi_ctz, mi_popcount};
 use crate::core_types::{
     ArenaPtr, SliceCount, SliceIndex, SliceRange, ThreadLocalClaimCallback, ThreadSeq,
@@ -849,7 +847,7 @@ pub unsafe fn mi_bitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usiz
             }
             return 0;
         }
-        let bit_count = bit_count.div_ceil(MI_BCHUNK_BITS) * MI_BCHUNK_BITS;
+        let bit_count = crate::internal::_mi_align_up(bit_count, MI_BCHUNK_BITS);
         crate::internal::mi_debug_assert!(bit_count <= MI_BITMAP_MAX_BIT_COUNT);
         let chunk_count = bit_count / MI_BCHUNK_BITS;
         if !pchunk_count.is_null() {
@@ -1414,7 +1412,7 @@ pub unsafe fn mi_bbitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usi
             }
             return 0;
         }
-        let bit_count = bit_count.div_ceil(MI_BCHUNK_BITS) * MI_BCHUNK_BITS;
+        let bit_count = crate::internal::_mi_align_up(bit_count, MI_BCHUNK_BITS);
         crate::internal::mi_debug_assert!(bit_count <= MI_BITMAP_MAX_BIT_COUNT);
         let chunk_count = bit_count / MI_BCHUNK_BITS;
         if !pchunk_count.is_null() {
@@ -1606,7 +1604,11 @@ pub unsafe fn mi_bbitmap_is_clearN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: us
     unsafe { mi_bbitmap_is_xsetN(MI_BIT_CLEAR, bbitmap, idx, n) }
 }
 
-type mi_bchunk_try_find_and_clear_fun_t = fn(&mut mi_bchunk_t, usize, &mut usize) -> bool;
+#[inline]
+fn mi_bchunk_try_find_and_clear_1(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
+    crate::internal::mi_debug_assert!(n == 1);
+    mi_bchunk_try_find_and_clear(chunk, pidx)
+}
 
 #[inline]
 fn mi_bchunk_try_find_and_clear_8(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
@@ -1614,14 +1616,19 @@ fn mi_bchunk_try_find_and_clear_8(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
     mi_bchunk_try_find_and_clear8(chunk, pidx)
 }
 
+// Generic over `on_find` so each wrapper gets a direct, inlinable chunk search
+// (upstream relies on the C compiler inlining the function pointer).
 #[inline]
-unsafe fn mi_bbitmap_try_find_and_clear_generic(
+unsafe fn mi_bbitmap_try_find_and_clear_generic<F>(
     bbitmap: *mut mi_bbitmap_t,
     tseq: usize,
     n: usize,
     pidx: *mut usize,
-    on_find: mi_bchunk_try_find_and_clear_fun_t,
-) -> bool {
+    on_find: F,
+) -> bool
+where
+    F: Fn(&mut mi_bchunk_t, usize, &mut usize) -> bool,
+{
     unsafe {
         let chunk_count = mi_bbitmap_chunk_count(bbitmap);
         let cmap_max_count = mi_bbitmap_chunk_count(bbitmap).div_ceil(MI_BFIELD_BITS);
@@ -1708,86 +1715,13 @@ pub unsafe fn mi_bbitmap_try_find_and_clear(
     pidx: *mut usize,
 ) -> bool {
     unsafe {
-        let chunk_count = mi_bbitmap_chunk_count(bbitmap);
-        let cmap_max_count = chunk_count.div_ceil(MI_BFIELD_BITS);
-        let chunk_acc = (*bbitmap).chunk_max_accessed.load(Ordering::Relaxed);
-        let cmap_acc = chunk_acc / MI_BFIELD_BITS;
-        let cmap_acc_bits = 1 + (chunk_acc % MI_BFIELD_BITS);
-        let cmap_mask = mi_bfield_mask(cmap_max_count, 0);
-        let cmap_cycle = cmap_acc + 1;
-        let cmap_start = (tseq as u32 as usize) % cmap_cycle;
-        let cmap_cycle_mask = mi_bfield_mask(cmap_cycle - cmap_start, cmap_start);
-        let mut cmap_count = mi_bfield_popcount(cmap_mask);
-        let mut cmap_bits = cmap_mask & cmap_cycle_mask;
-
-        while cmap_count > 0 {
-            cmap_count -= 1;
-            if cmap_bits == 0 {
-                cmap_bits = cmap_mask & !cmap_cycle_mask;
-            }
-            let mut cmap_idx = 0usize;
-            let found = mi_bfield_find_least_bit(cmap_bits, &mut cmap_idx);
-            cmap_bits = mi_bfield_clear_least_bit(cmap_bits);
-            crate::internal::mi_debug_assert!(found);
-
-            let cmap_entry = (*bbitmap).chunkmap.bfields[cmap_idx].load(Ordering::Relaxed);
-            let cmap_entry_cycle = if cmap_idx != cmap_acc {
-                MI_BFIELD_BITS
-            } else {
-                cmap_acc_bits
-            };
-            if cmap_entry == 0 {
-                continue;
-            }
-
-            let cmap_small_raw = (*bbitmap).chunkmap_bins[MI_CBIN_SMALL as usize].bfields[cmap_idx]
-                .load(Ordering::Relaxed);
-            let cmap_small = cmap_small_raw & cmap_entry;
-            let mut cmap_none = cmap_entry;
-            cmap_none &= !cmap_small_raw;
-            let mut ibin = MI_CBIN_MEDIUM;
-            while (ibin as i32) < (MI_CBIN_NONE as i32) {
-                let cmap_bin = (*bbitmap).chunkmap_bins[ibin as usize].bfields[cmap_idx]
-                    .load(Ordering::Relaxed);
-                cmap_none &= !cmap_bin;
-                ibin = mi_chunkbin_inc(ibin);
-            }
-
-            for (ibin, cmap_bin) in [(MI_CBIN_SMALL, cmap_small), (MI_CBIN_NONE, cmap_none)] {
-                let entry_start = (tseq as u32 as usize) % cmap_entry_cycle;
-                let entry_cycle_mask = mi_bfield_mask(cmap_entry_cycle - entry_start, entry_start);
-                let mut entry_count = mi_bfield_popcount(cmap_bin);
-                let mut entry_bits = cmap_bin & entry_cycle_mask;
-
-                while entry_count > 0 {
-                    entry_count -= 1;
-                    if entry_bits == 0 {
-                        entry_bits = cmap_bin & !entry_cycle_mask;
-                    }
-                    let mut eidx = 0usize;
-                    let found = mi_bfield_find_least_bit(entry_bits, &mut eidx);
-                    entry_bits = mi_bfield_clear_least_bit(entry_bits);
-                    crate::internal::mi_debug_assert!(found);
-
-                    let chunk_idx = (cmap_idx * MI_BFIELD_BITS) + eidx;
-                    if chunk_idx >= chunk_count {
-                        continue;
-                    }
-                    let chunk = &mut (*bbitmap).chunks[chunk_idx];
-                    let mut cidx = 0usize;
-                    if mi_bchunk_try_find_and_clear(chunk, &mut cidx) {
-                        if cidx == 0 && ibin == MI_CBIN_NONE {
-                            mi_bbitmap_set_chunk_bin(&mut *bbitmap, chunk_idx, MI_CBIN_SMALL);
-                        }
-                        *pidx = (chunk_idx * MI_BCHUNK_BITS) + cidx;
-                        crate::internal::mi_debug_assert!(*pidx < mi_bbitmap_max_bits(bbitmap));
-                        return true;
-                    }
-                    mi_bbitmap_chunkmap_try_clear(&mut *bbitmap, chunk_idx);
-                }
-            }
-        }
-        false
+        mi_bbitmap_try_find_and_clear_generic(
+            bbitmap,
+            tseq,
+            1,
+            pidx,
+            mi_bchunk_try_find_and_clear_1,
+        )
     }
 }
 

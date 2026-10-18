@@ -300,8 +300,18 @@ unsafe fn mi_lock_acquire_raw(lock: *mut mi_lock_t) {
         os_unfair_lock_lock((*lock).mutex.mutex.as_ptr());
     }
     #[cfg(not(all(target_vendor = "apple", not(miri))))]
-    while unsafe { !mi_lock_try_acquire_raw(lock) } {
-        spin_loop();
+    {
+        // SAFETY: the caller supplies a valid lock object.
+        let word = unsafe { &(*lock).mutex.mutex };
+        // Test-and-test-and-set: waiters spin on a shared read, not on the exchange.
+        while word
+            .compare_exchange_weak(0, 1, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            while word.load(Ordering::Relaxed) != 0 {
+                spin_loop();
+            }
+        }
     }
 }
 

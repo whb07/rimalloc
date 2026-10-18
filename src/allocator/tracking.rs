@@ -2,20 +2,15 @@
 
 use core::ffi::c_void;
 
-use crate::core_types::TrackMode;
-
-pub(crate) const MI_TRACK_MODE: TrackMode = TrackMode::CURRENT;
-pub const MI_TRACK_VALGRIND: usize = MI_TRACK_MODE.valgrind_flag();
-pub const MI_TRACK_ASAN: usize = MI_TRACK_MODE.asan_flag();
+// Valgrind takes precedence when both tracking features are enabled.
+pub const MI_TRACK_VALGRIND: usize = cfg!(feature = "track-valgrind") as usize;
+pub const MI_TRACK_ASAN: usize =
+    cfg!(all(feature = "track-asan", not(feature = "track-valgrind"))) as usize;
 pub const MI_TRACK_ETW: usize = 0;
 
-pub const MI_TRACK_ENABLED: usize = MI_TRACK_MODE.enabled_flag();
-
-#[allow(dead_code)]
-pub const MI_TRACK_HEAP_DESTROY: usize = MI_TRACK_MODE.heap_destroy_flag();
-
-#[allow(dead_code)]
-pub const MI_TRACK_TOOL: &str = MI_TRACK_MODE.tool_name();
+pub const MI_TRACK_ENABLED: usize = MI_TRACK_VALGRIND | MI_TRACK_ASAN;
+// At most one tracking tool is active (checked by the all-features build).
+const _: () = assert!(MI_TRACK_VALGRIND + MI_TRACK_ASAN <= 1);
 
 #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
 unsafe extern "C" {

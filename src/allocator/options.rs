@@ -7,24 +7,13 @@ mod diagnostics;
 mod storage;
 
 use core::ffi::{c_char, c_int, c_long, c_void};
-use core::fmt;
 
-use crate::core_types::Errno;
 use crate::types::{MI_MALLOC_VERSION, mi_error_fun, mi_output_fun};
 
 pub(crate) use diagnostics::{
     _mi_error_message_fmt, _mi_fprintf, _mi_fputs, _mi_raw_message, _mi_verbose_message,
     _mi_warning_message_fmt, registered_error_callback, restore_error_callback,
 };
-
-#[inline(never)]
-pub(crate) fn _mi_message(args: fmt::Arguments<'_>) {
-    diagnostics::message_impl(args);
-}
-
-pub(crate) fn mi_error_default(err: Errno) {
-    diagnostics::mi_error_default(err);
-}
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -159,19 +148,25 @@ pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
     storage::option_get_fast(option)
 }
 
+/// Returns the compile-time default value of `option`.
+#[inline]
+pub(crate) const fn option_default(option: mi_option_t) -> c_long {
+    storage::option_default(option)
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
-    storage::option_get(option, diagnostics::_mi_warning_message_fmt)
+    storage::option_get(option)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get_clamp(option: mi_option_t, min: c_long, max: c_long) -> c_long {
-    storage::option_get_clamp(option, min, max, diagnostics::_mi_warning_message_fmt)
+    storage::option_get_clamp(option, min, max)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get_size(option: mi_option_t) -> usize {
-    storage::option_get_size(option, diagnostics::_mi_warning_message_fmt)
+    storage::option_get_size(option)
 }
 
 #[unsafe(no_mangle)]
@@ -186,7 +181,7 @@ pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_is_enabled(option: mi_option_t) -> bool {
-    storage::option_is_enabled(option, diagnostics::_mi_warning_message_fmt)
+    storage::option_is_enabled(option)
 }
 
 #[unsafe(no_mangle)]

@@ -7,8 +7,8 @@ use crate::prim::{_mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{mi_heap_t, mi_theap_t};
 
 use super::{
-    _mi_theap_malloc_zero, _mi_theap_malloc_zero_typed, calloc_request_or_report,
-    malloc_layout_or_report, mi_heap_borrowed_theap_local,
+    _mi_theap_malloc_zero_typed, calloc_request_or_report, malloc_layout_or_report,
+    mi_heap_borrowed_theap_local, mi_theap_malloc_zero_fast,
 };
 
 /// # Safety
@@ -19,29 +19,11 @@ use super::{
 /// synchronously must remain valid, must not unwind, and must not incompatibly
 /// reenter heap mutation. A nonnull result is allocator-owned and may be
 /// released with `mi_free`.
-// SAFETY: this exported entry preserves the raw thread-heap and scalar-size ABI
-// while validating layout before typed zeroing allocation dispatch.
+// SAFETY: this exported entry preserves the raw thread-heap and scalar-size ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
-    if theap.is_null() && MI_THEAP_INITASNULL {
-        // SAFETY: the null lazy sentinel is supported in this configuration;
-        // allocator lifecycle and callbacks satisfy the raw zeroing dispatch.
-        return unsafe { _mi_theap_malloc_zero(theap, size, true, ptr::null_mut()) };
-    }
-    let Some(layout) = malloc_layout_or_report(size, true) else {
-        return ptr::null_mut();
-    };
-    // SAFETY: the caller keeps any nonnull current-thread heap live and locally
-    // exclusive while default/sentinel resolution creates the local witness.
-    let theap = unsafe {
-        let Some(theap) = _mi_theap_or_default_typed(theap) else {
-            return ptr::null_mut();
-        };
-        ThreadHeapLocal::new_unchecked(theap)
-    };
-    // SAFETY: the resolved heap stays live and locally exclusive, and `layout`
-    // is the validated zeroing layout for this exact request.
-    unsafe { mi_theap_zalloc_typed(theap, layout) }
+    // SAFETY: the raw-boundary contract is the unaligned zeroing dispatch's contract.
+    unsafe { mi_theap_malloc_zero_fast(theap, size, true, ptr::null_mut()) }
 }
 
 /// # Safety
@@ -68,7 +50,7 @@ pub(super) unsafe fn mi_theap_zalloc_typed(
 pub extern "C" fn mi_zalloc(size: usize) -> *mut c_void {
     // SAFETY: allocator lifecycle supplies the current default/lazy heap and
     // exclusive local allocation epoch for this validated raw-size dispatch.
-    unsafe { _mi_theap_malloc_zero(_mi_theap_default(), size, true, ptr::null_mut()) }
+    unsafe { mi_theap_malloc_zero_fast(_mi_theap_default(), size, true, ptr::null_mut()) }
 }
 
 /// # Safety
@@ -151,17 +133,16 @@ pub unsafe extern "C" fn mi_theap_calloc(
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
     if let Some(req) = calloc_request_or_report(count, size) {
-        // SAFETY: allocator lifecycle keeps the default TLS slot stable and
-        // permits initialization after the checked product succeeds.
-        let theap = unsafe {
-            let Some(theap) = _mi_theap_or_default_typed(_mi_theap_default()) else {
-                return core::ptr::null_mut();
-            };
-            ThreadHeapLocal::new_unchecked(theap)
-        };
-        // SAFETY: the resolved default heap stays live and locally exclusive,
-        // and `req` carries the checked-product zeroing layout.
-        unsafe { mi_theap_zalloc_typed(theap, req.layout()) }
+        // SAFETY: allocator lifecycle supplies the current default/lazy heap and
+        // exclusive local allocation epoch; the checked product is the request.
+        unsafe {
+            mi_theap_malloc_zero_fast(
+                _mi_theap_default(),
+                req.layout().requested().get(),
+                true,
+                ptr::null_mut(),
+            )
+        }
     } else {
         core::ptr::null_mut()
     }

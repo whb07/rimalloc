@@ -246,8 +246,8 @@ unsafe fn mi_heap_ensure_arena_pages(
     let mut arena_pages = unsafe { mi_heap_arena_pages(heap, arena) };
     if arena_pages.is_null() {
         // SAFETY: the caller keeps this heap's initialized arena-pages lock live;
-        // acquiring it serializes table allocation and publication.
-        unsafe { mi_lock_acquire(heap.ptr().arena_pages_lock()) };
+        // holding it serializes table allocation and publication.
+        let _lock = unsafe { MiLockGuard::acquire(heap.ptr().arena_pages_lock()) };
         // SAFETY: under the live heap lock, recheck the matching atomic table
         // cell after acquiring prior publication.
         arena_pages = unsafe { mi_heap_arena_pages(heap, arena) };
@@ -266,9 +266,6 @@ unsafe fn mi_heap_ensure_arena_pages(
                 let Ok(range) = crate::types::SliceRange::new(0, slice_count.get() as usize, arena)
                 else {
                     crate::internal::mi_assert_internal!(false);
-                    // SAFETY: this function acquired the live heap lock above;
-                    // release it before returning from impossible range failure.
-                    unsafe { mi_lock_release(heap.ptr().arena_pages_lock()) };
                     return ptr::null_mut();
                 };
                 let (alloc_size, bitmap_base) = mi_arena_pages_size(slice_count);
@@ -283,9 +280,6 @@ unsafe fn mi_heap_ensure_arena_pages(
             // the fully initialized table exactly as the existing protocol.
             unsafe { mi_heap_arena_page_cell(heap, arena_idx).store_release(arena_pages.cast()) };
         }
-        // SAFETY: this control path acquired the same live heap lock and has
-        // completed any table publication before releasing it.
-        unsafe { mi_lock_release(heap.ptr().arena_pages_lock()) };
     }
     // SAFETY: the live heap identity remains stable; main heaps must always use
     // their non-null embedded table after locked initialization.

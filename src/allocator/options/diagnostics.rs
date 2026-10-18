@@ -73,11 +73,11 @@ static error_count: AtomicUsize = AtomicUsize::new(0);
 static warning_count: AtomicUsize = AtomicUsize::new(0);
 
 fn option_get(option: mi_option_t) -> c_long {
-    storage::option_get(option, _mi_warning_message_fmt)
+    storage::option_get(option)
 }
 
 fn option_is_enabled(option: mi_option_t) -> bool {
-    storage::option_is_enabled(option, _mi_warning_message_fmt)
+    storage::option_is_enabled(option)
 }
 
 struct LockedErrorHandler(UnsafeCell<ErrorCallback>);
@@ -383,12 +383,8 @@ fn mi_vfprintf(
     unsafe { _mi_fputs(out, arg, prefix, text.as_c_ptr()) };
 }
 
-fn mi_vfprintf_thread(
-    out: Option<mi_output_fun>,
-    arg: *mut c_void,
-    prefix: *const c_char,
-    args: fmt::Arguments<'_>,
-) {
+/// Calls `f` with `prefix`, extended by the thread id when not on the main thread.
+fn with_thread_prefix(prefix: *const c_char, f: impl FnOnce(*const c_char)) {
     if !prefix.is_null() {
         let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
         if prefix_len <= 32 && !_mi_is_main_thread() {
@@ -397,11 +393,20 @@ fn mi_vfprintf_thread(
                 unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
             tprefix.write_bytes(prefix_bytes);
             let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
-            mi_vfprintf(out, arg, tprefix.as_c_ptr(), args);
+            f(tprefix.as_c_ptr());
             return;
         }
     }
-    mi_vfprintf(out, arg, prefix, args);
+    f(prefix);
+}
+
+fn mi_vfprintf_thread(
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+    prefix: *const c_char,
+    args: fmt::Arguments<'_>,
+) {
+    with_thread_prefix(prefix, |prefix| mi_vfprintf(out, arg, prefix, args));
 }
 
 fn mi_vfputs_thread(
@@ -413,37 +418,14 @@ fn mi_vfputs_thread(
     if message.is_null() {
         return;
     }
-    if !prefix.is_null() {
-        let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
-        if prefix_len <= 32 && !_mi_is_main_thread() {
-            let mut tprefix = StackMessage::new();
-            let prefix_bytes =
-                unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
-            tprefix.write_bytes(prefix_bytes);
-            let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
-            unsafe { _mi_fputs(out, arg, tprefix.as_c_ptr(), message) };
-            return;
-        }
-    }
-    unsafe { _mi_fputs(out, arg, prefix, message) };
+    with_thread_prefix(prefix, |prefix| unsafe {
+        _mi_fputs(out, arg, prefix, message)
+    });
 }
 
 #[inline(never)]
 pub(crate) fn _mi_raw_message(args: fmt::Arguments<'_>) {
     mi_vfprintf(None, ptr::null_mut(), ptr::null(), args);
-}
-
-#[inline(always)]
-pub(super) fn message_impl(args: fmt::Arguments<'_>) {
-    mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
-}
-
-#[inline(never)]
-pub(crate) fn _mi_trace_message(args: fmt::Arguments<'_>) {
-    if option_get(mi_option_t::mi_option_verbose) <= 1 {
-        return;
-    }
-    mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
 }
 
 #[inline(never)]
@@ -454,30 +436,30 @@ pub(crate) fn _mi_verbose_message(args: fmt::Arguments<'_>) {
     mi_vfprintf(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
 }
 
+/// Error/warning throttle: always show when verbose, otherwise only when
+/// `show_errors` is enabled and `count` has not exceeded `max_count`.
+fn mi_should_show(max_count: &AtomicIsize, count: &AtomicUsize) -> bool {
+    if option_is_enabled(mi_option_t::mi_option_verbose) {
+        return true;
+    }
+    if !option_is_enabled(mi_option_t::mi_option_show_errors) {
+        return false;
+    }
+    let max_count = max_count.load(Ordering::Acquire);
+    let count = count.fetch_add(1, Ordering::AcqRel);
+    !(max_count >= 0 && (count as isize) > max_count)
+}
+
 fn mi_show_error_message(args: fmt::Arguments<'_>) {
-    if !option_is_enabled(mi_option_t::mi_option_verbose) {
-        if !option_is_enabled(mi_option_t::mi_option_show_errors) {
-            return;
-        }
-        let max_errors = mi_max_error_count.load(Ordering::Acquire);
-        let count = error_count.fetch_add(1, Ordering::AcqRel);
-        if max_errors >= 0 && (count as isize) > max_errors {
-            return;
-        }
+    if !mi_should_show(&mi_max_error_count, &error_count) {
+        return;
     }
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: error: ".as_ptr(), args);
 }
 
 fn mi_show_error_message_raw(message: *const c_char) {
-    if !option_is_enabled(mi_option_t::mi_option_verbose) {
-        if !option_is_enabled(mi_option_t::mi_option_show_errors) {
-            return;
-        }
-        let max_errors = mi_max_error_count.load(Ordering::Acquire);
-        let count = error_count.fetch_add(1, Ordering::AcqRel);
-        if max_errors >= 0 && (count as isize) > max_errors {
-            return;
-        }
+    if !mi_should_show(&mi_max_error_count, &error_count) {
+        return;
     }
     mi_vfputs_thread(
         None,
@@ -489,30 +471,16 @@ fn mi_show_error_message_raw(message: *const c_char) {
 
 #[inline(never)]
 pub(crate) fn _mi_warning_message_fmt(args: fmt::Arguments<'_>) {
-    if !option_is_enabled(mi_option_t::mi_option_verbose) {
-        if !option_is_enabled(mi_option_t::mi_option_show_errors) {
-            return;
-        }
-        let max_warnings = mi_max_warning_count.load(Ordering::Acquire);
-        let count = warning_count.fetch_add(1, Ordering::AcqRel);
-        if max_warnings >= 0 && (count as isize) > max_warnings {
-            return;
-        }
+    if !mi_should_show(&mi_max_warning_count, &warning_count) {
+        return;
     }
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: warning: ".as_ptr(), args);
 }
 
 #[inline(never)]
 pub(super) unsafe fn warning_message(fmt: *const c_char) {
-    if !option_is_enabled(mi_option_t::mi_option_verbose) {
-        if !option_is_enabled(mi_option_t::mi_option_show_errors) {
-            return;
-        }
-        let max_warnings = mi_max_warning_count.load(Ordering::Acquire);
-        let count = warning_count.fetch_add(1, Ordering::AcqRel);
-        if max_warnings >= 0 && (count as isize) > max_warnings {
-            return;
-        }
+    if !mi_should_show(&mi_max_warning_count, &warning_count) {
+        return;
     }
     mi_vfputs_thread(None, ptr::null_mut(), c"mimalloc: warning: ".as_ptr(), fmt);
 }

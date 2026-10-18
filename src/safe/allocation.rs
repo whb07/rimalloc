@@ -6,6 +6,7 @@ use core::ptr::NonNull;
 
 use crate::MiMalloc;
 
+use super::error::try_layout;
 use super::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError};
 
 /// Owned byte allocation backed by [`MiMalloc`].
@@ -193,9 +194,7 @@ impl Allocation {
     /// Does not panic.
     #[inline]
     pub fn with_size_align(size: usize, align: usize) -> Result<Self, TryAllocError> {
-        let layout = Layout::from_size_align(size, align)
-            .map_err(|_| TryAllocError::Layout(LayoutError { size, align }))?;
-        Self::new(layout).map_err(TryAllocError::Alloc)
+        Self::new(try_layout(size, align)?).map_err(TryAllocError::Alloc)
     }
 
     /// Builds a layout from `size` and `align`, then allocates a zeroed byte
@@ -215,9 +214,7 @@ impl Allocation {
         size: usize,
         align: usize,
     ) -> Result<InitializedAllocation, TryAllocError> {
-        let layout = Layout::from_size_align(size, align)
-            .map_err(|_| TryAllocError::Layout(LayoutError { size, align }))?;
-        Self::zeroed(layout).map_err(TryAllocError::Alloc)
+        InitializedAllocation::zeroed_with_size_align(size, align)
     }
 
     /// Returns the layout used to allocate this block.
@@ -443,18 +440,10 @@ impl RawAllocation {
         }
 
         if old_size == 0 {
-            return match Self::allocate(new_layout, false) {
-                Ok(allocation) => {
-                    if zero_grown_tail {
-                        allocation.zero_tail(0);
-                    }
-                    Ok(allocation)
-                }
-                Err(err) => Err(ResizeError {
-                    allocation: ManuallyDrop::into_inner(old),
-                    kind: ResizeErrorKind::Alloc(err),
-                }),
-            };
+            return Self::allocate(new_layout, zero_grown_tail).map_err(|err| ResizeError {
+                allocation: ManuallyDrop::into_inner(old),
+                kind: ResizeErrorKind::Alloc(err),
+            });
         }
 
         if old_layout.align() == new_layout.align() {
@@ -602,9 +591,7 @@ impl InitializedAllocation {
     /// Does not panic.
     #[inline]
     pub fn zeroed_with_size_align(size: usize, align: usize) -> Result<Self, TryAllocError> {
-        let layout = Layout::from_size_align(size, align)
-            .map_err(|_| TryAllocError::Layout(LayoutError { size, align }))?;
-        Self::zeroed(layout).map_err(TryAllocError::Alloc)
+        Self::zeroed(try_layout(size, align)?).map_err(TryAllocError::Alloc)
     }
 
     /// Returns the layout used to allocate this block.

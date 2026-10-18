@@ -32,8 +32,6 @@ use crate::bits::{MI_KiB, MI_SIZE_BITS};
 #[cfg(target_pointer_width = "32")]
 use crate::core_types::PageMapPrimaryIndex;
 use crate::core_types::{Errno, PageMapLocation, PagePtr, RegisteredPageRange, SliceCount};
-#[cfg(target_pointer_width = "32")]
-use crate::internal::_mi_memzero;
 #[cfg(not(target_pointer_width = "32"))]
 use crate::internal::memid::_mi_memid_create_os;
 use crate::internal::memid::{
@@ -44,8 +42,10 @@ use crate::internal::{
     _mi_align_up, _mi_os_free, _mi_os_has_overcommit, _mi_page_map_at, MI_PAGE_MAP_COUNT,
     MI_PAGE_MAP_SUB_SHIFT, mi_submap_t,
 };
+#[cfg(target_pointer_width = "32")]
+use crate::internal::{_mi_divide_up, _mi_memzero};
 use crate::internal::{
-    _mi_divide_up, _mi_is_aligned, _mi_memzero_aligned, _mi_os_commit, _mi_os_free_ex,
+    _mi_is_aligned, _mi_memzero_aligned, _mi_os_commit, _mi_os_free_ex,
     _mi_os_virtual_address_bits, MI_ARENA_SLICE_SHIFT, MI_PAGE_MAP_SUB_COUNT, mi_page_slice_start,
     mi_slice_count_of_size,
 };
@@ -553,31 +553,6 @@ unsafe fn mi_page_map_unregister_range_typed(registered: RegisteredPageRange) {
 }
 
 /// # Safety
-///
-/// `start..start + size` must describe a page-map range previously registered
-/// or otherwise safe to clear during allocator teardown.
-#[cfg(target_pointer_width = "32")]
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
-    let slice_count = _mi_divide_up(size, MI_ARENA_SLICE_SIZE);
-    let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
-        crate::internal::mi_assert_internal!(size == 0);
-        return;
-    };
-    let location = PageMapLocation::from_ptr(start.cast_const());
-    let index = location.index();
-    if !unsafe { mi_page_map_ensure_committed(index, slice_count) } {
-        return;
-    }
-    unsafe {
-        _mi_memzero(
-            _mi_page_map.add(index.get()).cast::<c_void>(),
-            slice_count.get() as usize,
-        )
-    };
-}
-
-/// # Safety
 /// The process-global page map must be initialized and remain live. `idx` must
 /// be below the active runtime page-map count. Concurrent unsafe destruction
 /// must be excluded while the returned slot snapshot is used.
@@ -1020,28 +995,6 @@ unsafe fn mi_page_map_unregister_range_typed(registered: RegisteredPageRange) {
             registered.slice_count(),
         )
     };
-}
-
-/// # Safety
-///
-/// `start..start + size` must describe a page-map range previously registered
-/// or otherwise safe to clear during allocator teardown.
-#[cfg(not(target_pointer_width = "32"))]
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
-    if unsafe { _mi_page_map }.is_null() {
-        return;
-    }
-    let slice_count = _mi_divide_up(size, MI_ARENA_SLICE_SIZE);
-    let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
-        crate::internal::mi_assert_internal!(size == 0);
-        return;
-    };
-    let Some(location) = PageMapLocation::from_ptr(start.cast_const()) else {
-        crate::internal::mi_assert_internal!(false);
-        return;
-    };
-    unsafe { mi_page_map_clear_range(location.index(), location.sub_index(), slice_count) };
 }
 
 #[cfg(all(test, not(target_pointer_width = "32")))]

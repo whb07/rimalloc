@@ -80,17 +80,14 @@ impl OptionKey {
     /// Does not panic.
     #[inline]
     pub fn from_raw(raw: i32) -> Result<Self, OptionError> {
-        match raw {
-            0 => Ok(Self::ShowErrors),
-            1 => Ok(Self::ShowStats),
-            19 => Ok(Self::MaxErrors),
-            20 => Ok(Self::MaxWarnings),
-            raw if (0..crate::allocator::options::mi_option_t::_mi_option_last.as_i32())
+        match Self::ALL.into_iter().find(|key| key.as_raw() == raw) {
+            Some(key) => Ok(key),
+            None if (0..crate::allocator::options::mi_option_t::_mi_option_last.as_i32())
                 .contains(&raw) =>
             {
                 Err(OptionError::Unsupported)
             }
-            _ => Err(OptionError::InvalidKey),
+            None => Err(OptionError::InvalidKey),
         }
     }
 
@@ -118,18 +115,7 @@ impl OptionKey {
 
     #[inline]
     pub(super) const fn default_value(self) -> c_long {
-        match self {
-            Self::ShowErrors => {
-                if cfg!(debug_assertions) {
-                    1
-                } else {
-                    0
-                }
-            }
-            Self::ShowStats => 0,
-            Self::MaxErrors => 32,
-            Self::MaxWarnings => 32,
-        }
+        crate::allocator::options::option_default(self.raw_option())
     }
 }
 

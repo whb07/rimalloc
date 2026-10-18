@@ -2,8 +2,6 @@
 
 use core::cell::UnsafeCell;
 use core::ffi::{CStr, c_char, c_long};
-use core::fmt;
-use core::mem::size_of;
 use core::ptr;
 use core::ptr::{NonNull, addr_of_mut};
 use core::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
@@ -18,9 +16,8 @@ use crate::internal::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
 use crate::types::{MiLockGuard, MiLockPtr};
 use crate::types::{mi_option_desc_t, mi_option_init_t};
 
+use super::diagnostics::_mi_warning_message_fmt;
 use super::{MI_OPTION_COUNT, mi_option_t};
-
-type WarningSink = for<'a> fn(fmt::Arguments<'a>);
 
 const MI_DEFAULT_SHOW_ERRORS: c_long = if cfg!(debug_assertions) { 1 } else { 0 };
 const MI_DEFAULT_VERBOSE: c_long = 0;
@@ -73,69 +70,15 @@ macro_rules! MI_OPTION_LEGACY {
     };
 }
 
-macro_rules! mi_stringifyx {
-    ($str:tt) => {
-        stringify!($str)
-    };
-}
-
-const _MI_STRINGIFYX_SENTINEL: &str = mi_stringifyx!(MI_MALLOC_VERSION);
-
-macro_rules! MI_OPTION_VALUE {
-    ($value:expr) => {
-        AtomicIsize::new($value as isize)
-    };
-}
-
-static OPTION_VALUES: [AtomicIsize; MI_OPTION_COUNT] = [
-    MI_OPTION_VALUE!(MI_DEFAULT_SHOW_ERRORS),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(MI_DEFAULT_VERBOSE),
-    MI_OPTION_VALUE!(1),
-    MI_OPTION_VALUE!(MI_DEFAULT_ARENA_EAGER_COMMIT),
-    MI_OPTION_VALUE!(1),
-    MI_OPTION_VALUE!(MI_DEFAULT_ALLOW_LARGE_OS_PAGES),
-    MI_OPTION_VALUE!(MI_DEFAULT_RESERVE_HUGE_OS_PAGES),
-    MI_OPTION_VALUE!(-1),
-    MI_OPTION_VALUE!(MI_DEFAULT_RESERVE_OS_MEMORY),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(1),
-    MI_OPTION_VALUE!(1000),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(100),
-    MI_OPTION_VALUE!(32),
-    MI_OPTION_VALUE!(32),
-    MI_OPTION_VALUE!(10),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(MI_DEFAULT_ARENA_RESERVE),
-    MI_OPTION_VALUE!(1),
-    MI_OPTION_VALUE!(1),
-    MI_OPTION_VALUE!(MI_DEFAULT_DISALLOW_ARENA_ALLOC),
-    MI_OPTION_VALUE!(400),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(MI_GiB as c_long),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(MI_DEFAULT_GUARDED_SAMPLE_RATE),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(10000),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(4),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(MI_DEFAULT_PAGEMAP_COMMIT),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(MI_DEFAULT_PAGE_MAX_RECLAIM),
-    MI_OPTION_VALUE!(MI_DEFAULT_PAGE_CROSS_THREAD_MAX_RECLAIM),
-    MI_OPTION_VALUE!(MI_DEFAULT_ALLOW_THP),
-    MI_OPTION_VALUE!(0),
-    MI_OPTION_VALUE!(MI_DEFAULT_ARENA_MAX_OBJECT_SIZE),
-    MI_OPTION_VALUE!(0),
-];
+static OPTION_VALUES: [AtomicIsize; MI_OPTION_COUNT] = {
+    let mut values = [const { AtomicIsize::new(0) }; MI_OPTION_COUNT];
+    let mut i = 0;
+    while i < MI_OPTION_COUNT {
+        values[i] = AtomicIsize::new(OPTION_DEFAULTS[i].value as isize);
+        i += 1;
+    }
+    values
+};
 
 static OPTION_INITS: [AtomicU8; MI_OPTION_COUNT] =
     [const { AtomicU8::new(mi_option_init_t::MI_OPTION_UNINIT as u8) }; MI_OPTION_COUNT];
@@ -146,7 +89,10 @@ struct LockedOptions(UnsafeCell<[mi_option_desc_t; MI_OPTION_COUNT]>);
 unsafe impl Sync for LockedOptions {}
 
 static mut options_lock: mi_lock_t = mi_lock_s::new();
-static OPTIONS: LockedOptions = LockedOptions(UnsafeCell::new([
+static OPTIONS: LockedOptions = LockedOptions(UnsafeCell::new(OPTION_DEFAULTS));
+
+/// Compile-time option defaults, indexed by `mi_option_t`.
+const OPTION_DEFAULTS: [mi_option_desc_t; MI_OPTION_COUNT] = [
     MI_OPTION!(
         MI_DEFAULT_SHOW_ERRORS,
         mi_option_init_t::MI_OPTION_UNINIT,
@@ -436,7 +382,7 @@ static OPTIONS: LockedOptions = LockedOptions(UnsafeCell::new([
         mi_option_arena_is_numa_local,
         "arena_is_numa_local"
     ),
-]));
+];
 
 #[inline]
 fn with_options_table<R>(f: impl FnOnce(&mut [mi_option_desc_t; MI_OPTION_COUNT]) -> R) -> R {
@@ -480,28 +426,6 @@ fn option_has_size_in_kib(option: mi_option_t) -> bool {
             | mi_option_t::mi_option_minimal_purge_size
             | mi_option_t::mi_option_arena_max_object_size
     )
-}
-
-#[inline]
-fn c_long_bounds() -> (i128, i128) {
-    if size_of::<c_long>() == size_of::<i64>() {
-        (i64::MIN as i128, i64::MAX as i128)
-    } else {
-        (i32::MIN as i128, i32::MAX as i128)
-    }
-}
-
-#[inline]
-fn clamp_c_long(x: i128) -> c_long {
-    let (min, max) = c_long_bounds();
-    let y = if x < min {
-        min
-    } else if x > max {
-        max
-    } else {
-        x
-    };
-    y as c_long
 }
 
 fn build_mimalloc_env_name(buf: &mut [u8; 65], suffix: &[u8]) -> bool {
@@ -637,13 +561,13 @@ fn parse_option_value(raw: &str, size_in_kib: bool) -> Option<c_long> {
     }
 
     if rest.is_empty() {
-        Some(clamp_c_long(value))
+        Some(value.clamp(c_long::MIN as i128, c_long::MAX as i128) as c_long)
     } else {
         None
     }
 }
 
-fn mi_option_init(desc: &mut mi_option_desc_t, warn: WarningSink) {
+fn mi_option_init(desc: &mut mi_option_desc_t) {
     let name = unsafe { CStr::from_ptr(desc.name) };
     let name_str = name.to_str().unwrap_or("");
     let mut value_buf = [0 as c_char; 65];
@@ -654,7 +578,7 @@ fn mi_option_init(desc: &mut mi_option_desc_t, warn: WarningSink) {
         let legacy_str = legacy.to_str().unwrap_or("");
         found = get_env_value_stack(legacy.to_bytes(), &mut value_buf);
         if found.is_some() {
-            warn(format_args!(
+            _mi_warning_message_fmt(format_args!(
                 "environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
                 legacy_str, name_str
             ));
@@ -665,7 +589,7 @@ fn mi_option_init(desc: &mut mi_option_desc_t, warn: WarningSink) {
         for legacy in option_extra_legacy_names(desc.option) {
             found = get_env_value_stack(legacy.as_bytes(), &mut value_buf);
             if found.is_some() {
-                warn(format_args!(
+                _mi_warning_message_fmt(format_args!(
                     "environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
                     legacy, name_str
                 ));
@@ -682,13 +606,13 @@ fn mi_option_init(desc: &mut mi_option_desc_t, warn: WarningSink) {
             desc.init = mi_option_init_t::MI_OPTION_DEFAULTED;
             if desc.option == mi_option_t::mi_option_verbose && desc.value == 0 {
                 desc.value = 1;
-                warn(format_args!(
+                _mi_warning_message_fmt(format_args!(
                     "environment option mimalloc_{} has an invalid value.\n",
                     name_str
                 ));
                 desc.value = 0;
             } else {
-                warn(format_args!(
+                _mi_warning_message_fmt(format_args!(
                     "environment option mimalloc_{} has an invalid value.\n",
                     name_str
                 ));
@@ -708,7 +632,7 @@ pub(super) fn option_get_fast(option: mi_option_t) -> c_long {
     option_value_load(idx)
 }
 
-pub(super) fn option_get(option: mi_option_t, warn: WarningSink) -> c_long {
+pub(super) fn option_get(option: mi_option_t) -> c_long {
     let idx = option.as_usize();
     crate::internal::mi_assert!(idx < MI_OPTION_COUNT);
     if idx >= MI_OPTION_COUNT {
@@ -727,7 +651,7 @@ pub(super) fn option_get(option: mi_option_t, warn: WarningSink) -> c_long {
         });
 
         if let Some(mut desc) = desc {
-            mi_option_init(&mut desc, warn);
+            mi_option_init(&mut desc);
             if desc.init == mi_option_init_t::MI_OPTION_INITIALIZED {
                 option_set(option, desc.value);
             }
@@ -737,13 +661,8 @@ pub(super) fn option_get(option: mi_option_t, warn: WarningSink) -> c_long {
     option_value_load(idx)
 }
 
-pub(super) fn option_get_clamp(
-    option: mi_option_t,
-    min: c_long,
-    max: c_long,
-    warn: WarningSink,
-) -> c_long {
-    let x = option_get(option, warn);
+pub(super) fn option_get_clamp(option: mi_option_t, min: c_long, max: c_long) -> c_long {
+    let x = option_get(option);
     if x < min {
         min
     } else if x > max {
@@ -753,8 +672,8 @@ pub(super) fn option_get_clamp(
     }
 }
 
-pub(super) fn option_get_size(option: mi_option_t, warn: WarningSink) -> usize {
-    let x = option_get(option, warn);
+pub(super) fn option_get_size(option: mi_option_t) -> usize {
+    let x = option_get(option);
     let mut size = if x < 0 { 0 } else { x as usize };
     if option_has_size_in_kib(option) {
         match size.checked_mul(MI_KiB) {
@@ -815,8 +734,8 @@ pub(super) fn option_set_default(option: mi_option_t, value: c_long) {
     });
 }
 
-pub(super) fn option_is_enabled(option: mi_option_t, warn: WarningSink) -> bool {
-    option_get(option, warn) != 0
+pub(super) fn option_is_enabled(option: mi_option_t) -> bool {
+    option_get(option) != 0
 }
 
 pub(super) fn option_set_enabled(option: mi_option_t, enable: bool) {
@@ -833,6 +752,10 @@ pub(super) fn option_enable(option: mi_option_t) {
 
 pub(super) fn option_disable(option: mi_option_t) {
     option_set_enabled(option, false);
+}
+
+pub(super) const fn option_default(option: mi_option_t) -> c_long {
+    OPTION_DEFAULTS[option.as_usize()].value
 }
 
 pub(super) fn option_count() -> usize {

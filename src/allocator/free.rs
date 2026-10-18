@@ -728,7 +728,6 @@ pub(crate) unsafe fn mi_block_check_unguard(
 
 #[allow(clippy::absurd_extreme_comparisons)]
 // The fast-malloc assembly reaches this through the generic free shims below.
-#[cfg_attr(not(mi_c_malloc_fast), allow(dead_code))]
 /// # Safety
 /// `page` must identify live registered page metadata and `user` must identify a live user pointer
 /// within one block of that page. Page start/block-size/interior/guard metadata and backing must
@@ -841,7 +840,6 @@ unsafe fn mi_pointer_location(
 #[cold]
 #[inline(never)]
 // `raw::macros` names this function as an assembly operand in fast-malloc builds.
-#[cfg_attr(not(mi_c_malloc_fast), allow(dead_code))]
 pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
     crate::internal::mi_assert_internal!(!p.is_null() && !page.is_null());
     // SAFETY: the assembly caller supplies nonnull page/user addresses for the same live allocation;
@@ -887,7 +885,6 @@ pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *
 #[cold]
 #[inline(never)]
 // `raw::macros` names this function as an assembly operand in fast-malloc builds.
-#[cfg_attr(not(mi_c_malloc_fast), allow(dead_code))]
 pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
     crate::internal::mi_assert_internal!(!p.is_null() && !page.is_null());
     // SAFETY: the assembly caller supplies nonnull page/user addresses for the same live allocation;
@@ -1077,14 +1074,15 @@ unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
         return false;
     };
     // SAFETY: forwarded from this function's contract for the page just looked up.
-    unsafe { mi_free_fast_page(p, page_ptr) }
+    unsafe { mi_free_fast_page(p, page_ptr) };
+    true
 }
 
 #[inline(always)]
 /// # Safety
 /// Same contract as `mi_free_fast_try` in its enabled configuration, with `page_ptr` the registered
 /// page that contains `p`.
-unsafe fn mi_free_fast_page(p: *mut c_void, page_ptr: crate::core_types::PagePtr) -> bool {
+unsafe fn mi_free_fast_page(p: *mut c_void, page_ptr: crate::core_types::PagePtr) {
     // SAFETY: the caller supplies one live block-start allocation and stable page-map/backing/owner
     // epoch. The release configuration excludes guarded, padded, and diagnostic pointer adjustment;
     // local mutation is exclusive and foreign publication uses the page's atomic protocol.
@@ -1101,13 +1099,20 @@ unsafe fn mi_free_fast_page(p: *mut c_void, page_ptr: crate::core_types::PagePtr
                     block,
                     crate::core_types::LocalFreeMode::TrackOnly,
                 );
-                true
             }
             crate::core_types::FreeRouteSnapshot::ForeignPlain(foreign_page) => {
                 mi_free_block_mt(foreign_page, block);
-                true
             }
-            _ => false,
+            // As C `mi_free`: flagged pages take the generic paths with the page in hand. This
+            // configuration has no guard, padding, or pointer checks to add to that validation.
+            crate::core_types::FreeRouteSnapshot::LocalSlow(_) => {
+                mi_free_generic_local(page_ptr.as_ptr(), p);
+            }
+            crate::core_types::FreeRouteSnapshot::ForeignSlow(_)
+            | crate::core_types::FreeRouteSnapshot::Abandoned(_)
+            | crate::core_types::FreeRouteSnapshot::AbandonedMapped(_) => {
+                mi_free_generic_mt(page_ptr.as_ptr(), p);
+            }
         }
     }
 }
@@ -1218,8 +1223,9 @@ pub(crate) unsafe fn mi_free_if_owned(p: *mut c_void) -> bool {
     // SAFETY: a registered page holds only this allocator's blocks, so the caller's contract makes
     // `p` a live allocation of that page.
     unsafe {
-        if !(mi_free_fast_path_enabled(ptr::null_mut()) && mi_free_fast_page(p, registered.page()))
-        {
+        if mi_free_fast_path_enabled(ptr::null_mut()) {
+            mi_free_fast_page(p, registered.page());
+        } else {
             mi_route_free_validated(p, c"free".as_ptr(), ptr::null_mut());
         }
     }
@@ -1784,6 +1790,55 @@ mod tests {
                 validated.page().snapshot_free_route(current),
                 FreeRouteSnapshot::Abandoned(_)
             ));
+        }
+    }
+
+    #[test]
+    fn free_routes_flagged_pages_through_generic_free() {
+        use crate::allocator::page::mi_page_is_in_full;
+        use crate::mimalloc::{mi_malloc, mi_malloc_aligned};
+        unsafe {
+            // Interior pointers: an over-aligned small allocation lands inside its block.
+            let mut aligned = std::vec::Vec::new();
+            let interior = loop {
+                let p = mi_malloc_aligned(40, 128);
+                assert!(!p.is_null());
+                let page = _mi_ptr_page(p);
+                if mi_page_has_interior_pointers(page) {
+                    break p;
+                }
+                aligned.push(p);
+                assert!(aligned.len() < 64, "no interior-pointer page produced");
+            };
+            let page = _mi_ptr_page(interior);
+            let used = (*page).used;
+            mi_free(interior);
+            assert_eq!((*page).used, used - 1);
+            for p in aligned {
+                mi_free(p);
+            }
+
+            // A filled page goes to the full queue, or is abandoned once other threads exist.
+            let blocks: std::vec::Vec<_> = (0..512).map(|_| mi_malloc(1024)).collect();
+            let page = _mi_ptr_page(blocks[0]);
+            if mi_page_is_in_full(page) {
+                let used = (*page).used;
+                mi_free(blocks[0]);
+                assert_eq!((*page).used, used - 1);
+                assert!(!mi_page_is_in_full(page));
+            } else {
+                assert!(crate::allocator::page::mi_page_is_abandoned(page));
+                mi_free(blocks[0]);
+            }
+            for p in blocks.into_iter().skip(1) {
+                mi_free(p);
+            }
+
+            // Abandoned: the owner thread exits before the free.
+            let p = std::thread::spawn(|| mi_malloc(64) as usize)
+                .join()
+                .unwrap() as *mut c_void;
+            mi_free(p);
         }
     }
 

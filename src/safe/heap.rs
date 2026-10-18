@@ -8,7 +8,7 @@ use core::ptr::NonNull;
 
 use super::{
     AllocError, LayoutError, ResizeError, ResizeErrorKind, StatsError, StatsSnapshot,
-    TryAllocError, allocation::dangling_for,
+    TryAllocError, allocation::dangling_for, error::try_layout,
 };
 
 type NotSendSync = PhantomData<*mut ()>;
@@ -346,13 +346,8 @@ impl<'heap> HeapRef<'heap> {
     /// Does not panic.
     #[inline]
     pub fn allocate_bytes(self, len: usize) -> Result<HeapAllocation<'heap>, TryAllocError> {
-        let layout = Layout::from_size_align(len, 1).map_err(|_| {
-            TryAllocError::Layout(LayoutError {
-                size: len,
-                align: 1,
-            })
-        })?;
-        self.allocate(layout).map_err(TryAllocError::Alloc)
+        self.allocate(try_layout(len, 1)?)
+            .map_err(TryAllocError::Alloc)
     }
 
     /// Allocates a zero-initialized byte block from this borrowed heap.
@@ -388,13 +383,8 @@ impl<'heap> HeapRef<'heap> {
         self,
         len: usize,
     ) -> Result<InitializedHeapAllocation<'heap>, TryAllocError> {
-        let layout = Layout::from_size_align(len, 1).map_err(|_| {
-            TryAllocError::Layout(LayoutError {
-                size: len,
-                align: 1,
-            })
-        })?;
-        self.allocate_zeroed(layout).map_err(TryAllocError::Alloc)
+        self.allocate_zeroed(try_layout(len, 1)?)
+            .map_err(TryAllocError::Alloc)
     }
 
     /// Captures a statistics snapshot for this heap.
@@ -918,7 +908,8 @@ impl<'heap> RawHeapAllocation<'heap> {
             return Ok(allocation);
         }
 
-        let new_allocation = match Self::allocate_in(old.heap, new_layout, false) {
+        let zero_all = zero_grown_tail && old_size == 0;
+        let new_allocation = match Self::allocate_in(old.heap, new_layout, zero_all) {
             Ok(allocation) => allocation,
             Err(err) => {
                 return Err(ResizeError {
@@ -937,7 +928,7 @@ impl<'heap> RawHeapAllocation<'heap> {
                 crate::ffi::mimalloc::mi_free(old.ptr.as_ptr().cast::<c_void>());
             }
         }
-        if zero_grown_tail && new_size > old_size {
+        if zero_grown_tail && !zero_all && new_size > old_size {
             new_allocation.zero_tail(old_size);
         }
         Ok(new_allocation)

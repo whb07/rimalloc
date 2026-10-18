@@ -290,7 +290,7 @@ struct MiArenaCommitPrefix {
 
 /// # Safety
 /// The process OS configuration must not be concurrently rewritten by `_mi_os_init`.
-#[inline(never)]
+#[inline]
 pub(crate) unsafe extern "C" fn _mi_os_has_overcommit() -> bool {
     // SAFETY: the caller excludes configuration mutation while this initialized
     // boolean field is read through the raw static address.
@@ -299,7 +299,7 @@ pub(crate) unsafe extern "C" fn _mi_os_has_overcommit() -> bool {
 
 /// # Safety
 /// The process OS configuration must not be concurrently rewritten by `_mi_os_init`.
-#[inline(never)]
+#[inline]
 pub(crate) unsafe extern "C" fn _mi_os_has_virtual_reserve() -> bool {
     // SAFETY: the caller excludes configuration mutation while this initialized
     // boolean field is read through the raw static address.
@@ -573,82 +573,6 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_before(
 }
 
 /// # Safety
-/// `addr`, when non-null, must designate the live guard page associated with
-/// `memid`. For arena memory, the arena prefix and stored callback/argument must
-/// remain live and stable, tolerate concurrent arena commit operations, and be
-/// valid for a synchronous commit request. The managed-arena lifecycle must keep
-/// the range and argument valid for any later use retained by the callback, and
-/// the callback must not unwind. Without a callback, the page-covering range
-/// must be suitable for the active primitive commit operation.
-#[inline(never)]
-#[allow(clippy::absurd_extreme_comparisons)]
-pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
-    addr: *mut c_void,
-    memid: mi_memid_t,
-) -> bool {
-    if addr.is_null() {
-        return true;
-    }
-    if MI_SECURE > 0 && !memid.is_pinned {
-        let arena = match crate::core_types::MemId::view(memid) {
-            crate::core_types::MemIdView::Arena(a) => a.arena().as_ptr(),
-            _ => core::ptr::null_mut(),
-        };
-        if !arena.is_null() {
-            // SAFETY: the decoded arena MemId and caller contract keep the live
-            // prefix and its callback field readable for this operation.
-            let commit_fun = unsafe { (*arena.cast::<MiArenaCommitPrefix>()).commit_fun };
-            if let Some(commit_fun) = commit_fun {
-                // SAFETY: the caller keeps the guard range and stored opaque
-                // argument valid for this synchronous commit callback and for
-                // any later retained use under the managed-arena lifecycle;
-                // the callback does not unwind.
-                return unsafe {
-                    commit_fun(
-                        true,
-                        addr,
-                        _mi_os_secure_guard_page_size(),
-                        core::ptr::null_mut(),
-                        (*arena.cast::<MiArenaCommitPrefix>()).commit_fun_arg,
-                    )
-                };
-            }
-        }
-        // SAFETY: without a managed callback, the caller keeps this live guard
-        // range suitable for primitive commitment and accounting.
-        return unsafe { _mi_os_commit(addr, _mi_os_secure_guard_page_size()) }.success();
-    }
-    true
-}
-
-/// # Safety
-/// `addr` must be at least one secure guard page past the live guard range, and
-/// `memid` must describe that allocation. OS page configuration must remain
-/// initialized and stable. For arena memory, the arena prefix and stored
-/// callback/argument must remain live and stable, tolerate concurrent arena
-/// commits, and be valid for the synchronous commit request. The managed-arena
-/// lifecycle must cover any later retained use, and the callback must not unwind.
-/// Without a callback, the page-covering guard range must remain suitable for
-/// primitive commitment and accounting.
-#[inline(never)]
-pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_before(
-    addr: *mut c_void,
-    memid: mi_memid_t,
-) -> bool {
-    // SAFETY: the caller keeps the preceding guard range and OS page size valid;
-    // the downstream callback or primitive commit path meets the propagated
-    // arena-lifecycle, concurrency, accounting, retention, and unwind contract.
-    unsafe {
-        _mi_os_secure_guard_page_reset_at(
-            addr.cast::<u8>()
-                .sub(_mi_os_secure_guard_page_size())
-                .cast::<c_void>(),
-            memid,
-        )
-    }
-}
-
-/// # Safety
 /// A nonempty `addr..addr+size` must remain a live caller-controlled range
 /// suitable for the active primitive commit operation. OS configuration and
 /// current subprocess statistics must remain live and initialized, and
@@ -894,18 +818,6 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
         unsafe { _mi_os_reset(p, size) };
     }
     false
-}
-
-/// # Safety
-/// `p..p+size` must designate a live reserved virtual-memory range that the
-/// caller exclusively controls for purge and keeps valid for the call. The OS
-/// memory configuration must be initialized.
-#[inline(never)]
-pub unsafe extern "C" fn _mi_os_purge(p: *mut c_void, size: usize) -> bool {
-    // SAFETY: the caller keeps this exclusively controlled range live for the
-    // purge; the committed-byte accounting matches its full size, and this
-    // wrapper supplies no callback or opaque argument.
-    unsafe { _mi_os_purge_ex(p, size, true, size, None, core::ptr::null_mut()) }
 }
 
 /// Apply or remove primitive protection on the contained whole-page range.
@@ -1332,7 +1244,7 @@ unsafe fn mi_os_alloc_aligned_memid(
         }
     }
 
-    if !p.is_null() && (p as usize & (alignment.get() - 1)) == 0 {
+    if !p.is_null() && crate::internal::_mi_is_aligned(p, alignment.get()) {
         os_base = p;
     } else {
         if !p.is_null() {

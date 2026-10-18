@@ -13,8 +13,8 @@ use crate::internal::atomic::{mi_lock_done, mi_lock_init};
 use crate::internal::memid::mi_memid_t;
 use crate::internal::{_mi_meta_free, _mi_meta_zalloc};
 use crate::types::{
-    BorrowedSubproc, HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainHeap, MainSubproc,
-    MiLockGuard, SubprocPtr, TldPtr,
+    BorrowedSubproc, HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainSubproc, MiLockGuard,
+    SubprocPtr, TldPtr,
 };
 use crate::types::{mi_heap_t, mi_heap_visit_fun, mi_subproc_id_t, mi_subproc_t, mi_theap_t};
 
@@ -219,25 +219,6 @@ pub(super) fn main_id() -> mi_subproc_id_t {
 
 pub(super) fn current_id() -> mi_subproc_id_t {
     to_id(Some(current_typed().ptr()))
-}
-
-pub(super) unsafe fn ensure_heap_main(subproc: *mut mi_subproc_t) -> *mut mi_heap_t {
-    let subproc = unsafe { BorrowedSubproc::new(SubprocPtr::new_unchecked(subproc)) };
-    unsafe { ensure_heap_main_typed(subproc).ptr().as_ptr() }
-}
-
-unsafe fn ensure_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
-    let heap = unsafe { heap_main_typed(subproc) };
-    if let Some(heap) = heap {
-        return unsafe { MainHeap::new_unchecked(heap) };
-    }
-    mi_heap_main_init();
-    let heap = unsafe { heap_main_typed(subproc) };
-    crate::internal::mi_assert_internal!(heap.is_some());
-    let Some(heap) = heap else {
-        return unsafe { MainHeap::new_unchecked(HeapPtr::new_unchecked(super::mi_heap_main())) };
-    };
-    unsafe { MainHeap::new_unchecked(heap) }
 }
 
 /// Returns the current subprocess main heap, attempting the existing lazy

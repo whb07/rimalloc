@@ -10,15 +10,14 @@ use core::ptr;
 
 use crate::allocator::arena::{
     _mi_arenas_collect, _mi_arenas_page_abandon_internal, _mi_arenas_page_alloc,
-    _mi_arenas_page_free_typed, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
+    _mi_arenas_page_free_typed, MI_ARENA_SLICE_ALIGN,
 };
 use crate::allocator::init::{_mi_page_empty, _mi_theap_empty_wrong};
 use crate::allocator::options::_mi_error_message_fmt;
-use crate::allocator::stats::MI_BIN_HUGE;
 use crate::allocator::tracking::{
     MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
 };
-use crate::bits::{MI_KiB, MI_SIZE_SIZE};
+use crate::bits::MI_KiB;
 use crate::core_types::{Bin, Errno, PageKeys, PagePtr, PageQueuePtr, ThreadHeapPtr};
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up, _mi_is_heap_main, _mi_os_commit,
@@ -91,9 +90,9 @@ pub use validation::_mi_page_is_valid;
 pub(crate) use validation::mi_page_is_valid_init;
 
 pub const MI_OS_PAGE_SIZE: usize = 4096;
-pub const MI_SMALL_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
-pub const MI_MEDIUM_PAGE_SIZE: usize = 8 * MI_SMALL_PAGE_SIZE;
-pub const MI_LARGE_PAGE_SIZE: usize = MI_SIZE_SIZE * MI_MEDIUM_PAGE_SIZE;
+pub use crate::types::{
+    MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_PAGE_SIZE, MI_SMALL_PAGE_SIZE,
+};
 pub const MI_MAX_SLICE_SHIFT: usize = 6;
 pub const MI_MIN_SLICES: usize = 2;
 pub const MI_PAGE_OSPAGE_BLOCK_ALIGN2: usize = 4 * MI_KiB;
@@ -103,7 +102,6 @@ pub const MI_MEDIUM_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {
 } else {
     MI_MEDIUM_PAGE_SIZE / 8
 };
-pub const MI_LARGE_MAX_OBJ_SIZE: usize = MI_LARGE_MAX_OBJ_WSIZE * size_of::<usize>();
 pub const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 
 const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
@@ -1431,27 +1429,6 @@ pub(crate) unsafe fn mi_page_queue_is_valid_typed(
     true
 }
 
-/// Select the queue for an ordinary page block size in a local thread heap.
-///
-/// # Safety
-/// `theap` must identify a live initialized thread heap under current-thread
-/// ownership or exclusive initialization/reclaim/teardown access. Its complete
-/// fixed queue table and the queue selected by `block_size` must remain live,
-/// initialized, and stable through the projection. Concurrent local queue-table
-/// mutation or heap teardown is excluded; protocol atomic remote-free
-/// publication is permitted.
-#[inline]
-pub(crate) unsafe fn mi_theap_page_queue_of_typed(
-    theap: crate::core_types::ThreadHeapLocal,
-    block_size: crate::core_types::BlockSize,
-) -> crate::core_types::PageQueuePtr {
-    let bin = mi_bin_from_block_size(block_size);
-    crate::internal::mi_assert_internal!(bin.as_usize() <= MI_BIN_HUGE);
-    // SAFETY: the typed bin is within the ordinary/huge portion of the fixed queue table, and the
-    // caller keeps that initialized table live and stable for the address projection.
-    unsafe { theap.ptr().page_queue(bin) }
-}
-
 /// Select the owning heap queue implied by one page's classification.
 ///
 /// # Safety
@@ -2149,7 +2126,7 @@ pub(crate) unsafe fn _mi_theap_or_default_typed(
     // SAFETY: the input contract limits `theap` to null, static allocator sentinels, or live
     // readable allocator metadata, so the initialization probe may read its heap pointer field.
     if !unsafe { mi_theap_is_initialized(theap) } {
-        if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
+        if ptr::eq(theap, ptr::addr_of_mut!(_mi_theap_empty_wrong)) {
             return None;
         }
         crate::allocator::init::mi_thread_init();
@@ -2419,6 +2396,7 @@ unsafe fn malloc_generic_body<const COUNTED: bool>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::allocator::stats::MI_BIN_HUGE;
     use crate::bits::{MI_INTPTR_SIZE, MI_SIZE_BITS, mi_clz};
     use core::mem::MaybeUninit;
 
@@ -2493,7 +2471,7 @@ mod tests {
             for p in live {
                 crate::allocator::free::mi_free(p);
             }
-            let empty = ptr::addr_of!(crate::allocator::init::_mi_theap_empty).cast_mut();
+            let empty = ptr::addr_of_mut!(crate::allocator::init::_mi_theap_empty);
             let before = (*empty).generic_count;
             let p = _mi_malloc_generic(empty, 8192, 0, ptr::null_mut());
             assert!(!p.is_null());
@@ -2572,7 +2550,7 @@ mod tests {
         let mut transitions = 0usize;
         for wsize in 1..=((4 * 1024 * 1024) / 8 + 1024) {
             let size = wsize * MI_INTPTR_SIZE;
-            let bin = bins::mi_bin(size);
+            let bin = bins::_mi_bin(size);
             let alt_bin = upstream_bin4(size);
             assert!(alt_bin <= MI_BIN_HUGE as u8);
             if bin != last_bin {

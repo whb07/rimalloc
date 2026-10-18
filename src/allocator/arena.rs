@@ -41,7 +41,7 @@ use crate::core_types::{
     InteriorUserPtr, MiLockGuard, OsMemPtr, OwnedHeap, PagePtr, ReservedBytes, SliceCount,
     SliceIndex, SubprocPtr, ThreadLocalClaimCallback,
 };
-use crate::internal::memid::mi_memid_t;
+use crate::internal::memid::{mi_memid_is_os, mi_memid_t};
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt,
     __mi_stat_counter_increase, __mi_stat_counter_increase_mt, __mi_stat_decrease,
@@ -136,8 +136,8 @@ use geometry::{
 pub(crate) use heap_pages::{_mi_heap_destroy_pages, _mi_heap_move_pages};
 pub(crate) use ids::{_mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable};
 use ids::{
-    mi_arena_id_from_arena_typed, mi_arena_is_suitable, mi_memid_create_arena, mi_memid_is_os,
-    mi_page_full_size, mi_page_memid_is_arena,
+    mi_arena_id_from_arena_typed, mi_arena_is_suitable, mi_memid_create_arena, mi_page_full_size,
+    mi_page_memid_is_arena,
 };
 use metadata::mi_arenas_unsafe_destroy;
 use os_memory::{

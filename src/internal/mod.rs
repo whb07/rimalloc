@@ -208,15 +208,6 @@ pub const fn MI_UNUSED<T>(_x: &T) {}
 #[inline]
 pub const fn MI_UNUSED_RELEASE<T>(_x: &T) {}
 
-/// # Safety
-/// `x` must be valid for writes of one `T`.
-#[inline]
-pub unsafe fn _mi_memzero_var<T>(x: *mut T) {
-    unsafe {
-        ptr::write_bytes(x, 0, 1);
-    }
-}
-
 #[inline]
 pub const fn _mi_is_power_of_two(x: usize) -> bool {
     (x & x.wrapping_sub(1)) == 0
@@ -305,7 +296,7 @@ pub const fn _mi_wsize_from_size(size: usize) -> usize {
 
 #[inline(always)]
 pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectBin {
-    let idx = size.div_ceil(size_of::<usize>());
+    let idx = _mi_wsize_from_size(size);
     crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
     crate::internal::mi_debug_assert!(u16::try_from(idx).is_ok());
     unsafe { crate::core_types::DirectBin::new_unchecked(idx as u16) }
@@ -562,6 +553,9 @@ pub(crate) unsafe fn mi_theap_malloc_use_guarded(
             );
             let decision = config.decide(size);
             if let Some(next_sample_count) = decision.next_sample_count() {
+                // The shared sentinels reach this check on the small path; they must never
+                // need an update.
+                crate::internal::mi_debug_assert!(mi_theap_is_initialized(theap));
                 (*theap).guarded_sample_count = next_sample_count.get();
             }
             match decision {

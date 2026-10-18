@@ -59,7 +59,7 @@ core::arch::global_asm!(".hidden subproc_main");
 pub const MI_TLD_INVALID: *mut mi_tld_t = core::ptr::dangling_mut::<mi_tld_t>();
 
 pub const fn mi_memid_none() -> mi_memid_t {
-    crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw()
+    crate::internal::memid::_mi_memid_none()
 }
 
 pub const fn mi_memid_static() -> mi_memid_t {
@@ -93,51 +93,23 @@ pub const fn MI_STATS_NULL() -> mi_stats_t {
     };
     const ZERO_COUNTER: crate::allocator::stats::mi_stat_counter_t =
         crate::allocator::stats::mi_stat_counter_t { total: 0 };
-    mi_stats_t {
-        size: size_of::<mi_stats_t>(),
-        version: crate::allocator::stats::MI_STAT_VERSION,
-        pages: ZERO_COUNT,
-        reserved: ZERO_COUNT,
-        committed: ZERO_COUNT,
-        reset: ZERO_COUNTER,
-        purged: ZERO_COUNTER,
-        page_committed: ZERO_COUNT,
-        pages_abandoned: ZERO_COUNT,
-        threads: ZERO_COUNT,
-        malloc_normal: ZERO_COUNT,
-        malloc_huge: ZERO_COUNT,
-        malloc_requested: ZERO_COUNT,
-        mmap_calls: ZERO_COUNTER,
-        commit_calls: ZERO_COUNTER,
-        reset_calls: ZERO_COUNTER,
-        purge_calls: ZERO_COUNTER,
-        arena_count: ZERO_COUNTER,
-        malloc_normal_count: ZERO_COUNTER,
-        malloc_huge_count: ZERO_COUNTER,
-        malloc_guarded_count: ZERO_COUNTER,
-        arena_rollback_count: ZERO_COUNTER,
-        arena_purges: ZERO_COUNTER,
-        pages_extended: ZERO_COUNTER,
-        pages_retire: ZERO_COUNTER,
-        page_searches: ZERO_COUNTER,
-        page_searches_count: ZERO_COUNTER,
-        segments: ZERO_COUNT,
-        segments_abandoned: ZERO_COUNT,
-        segments_cache: ZERO_COUNT,
-        _segments_reserved: ZERO_COUNT,
-        heaps: ZERO_COUNT,
-        theaps: ZERO_COUNT,
-        pages_reclaim_on_alloc: ZERO_COUNTER,
-        pages_reclaim_on_free: ZERO_COUNTER,
-        pages_reabandon_full: ZERO_COUNTER,
-        pages_unabandon_busy_wait: ZERO_COUNTER,
-        heaps_delete_wait: ZERO_COUNTER,
-        _stat_reserved: [ZERO_COUNT; 4],
-        _stat_counter_reserved: [ZERO_COUNTER; 4],
-        malloc_bins: [ZERO_COUNT; MI_BIN_HUGE + 1],
-        page_bins: [ZERO_COUNT; MI_BIN_HUGE + 1],
-        chunk_bins: [ZERO_COUNT; 6],
+    macro_rules! stats_null {
+        ($($kind:ident $field:ident,)*) => {
+            mi_stats_t {
+                size: size_of::<mi_stats_t>(),
+                version: crate::allocator::stats::MI_STAT_VERSION,
+                $($field: stats_null!(@ $kind),)*
+                _stat_reserved: [ZERO_COUNT; 4],
+                _stat_counter_reserved: [ZERO_COUNTER; 4],
+                malloc_bins: [ZERO_COUNT; MI_BIN_HUGE + 1],
+                page_bins: [ZERO_COUNT; MI_BIN_HUGE + 1],
+                chunk_bins: [ZERO_COUNT; 6],
+            }
+        };
+        (@ count) => { ZERO_COUNT };
+        (@ counter) => { ZERO_COUNTER };
     }
+    crate::allocator::stats::mi_stat_fields!(stats_null)
 }
 
 static mut subprocs_lock: mi_lock_t = mi_lock_t::new();
@@ -349,7 +321,7 @@ const MI_RANDOM_CTX_EMPTY: mi_random_ctx_t = mi_random_ctx_t {
 };
 
 #[unsafe(no_mangle)]
-pub(crate) static _mi_theap_empty: mi_theap_t = mi_theap_t {
+pub(crate) static mut _mi_theap_empty: mi_theap_t = mi_theap_t {
     tld: ptr::addr_of!(tld_empty).cast_mut(),
     heap: ptr::null_mut(),
     refcount: 1,
@@ -383,7 +355,7 @@ pub(crate) static _mi_theap_empty: mi_theap_t = mi_theap_t {
     stats: MI_STATS_NULL(),
 };
 
-pub(crate) static _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
+pub(crate) static mut _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
     tld: ptr::addr_of!(tld_empty).cast_mut(),
     heap: ptr::null_mut(),
     refcount: 1,
@@ -767,13 +739,6 @@ pub extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
 /// lifetime of a current-thread subprocess association.
 pub extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
     subproc::current_id()
-}
-
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
-    subproc: *mut mi_subproc_t,
-) -> *mut mi_heap_t {
-    unsafe { subproc::ensure_heap_main(subproc) }
 }
 
 // SAFETY: this is the crate's unique definition of the C ABI symbol.

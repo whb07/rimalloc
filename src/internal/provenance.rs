@@ -123,12 +123,6 @@ pub(crate) fn remember_address<T>(addr: usize, ptr: *const T) {
 
 #[cfg(not(miri))]
 #[inline(always)]
-pub(crate) fn resolve_address<T>(_addr: usize) -> Option<*mut T> {
-    None
-}
-
-#[cfg(not(miri))]
-#[inline(always)]
 pub(crate) fn remember_encoded<T>(
     word: usize,
     null_context: *const c_void,
@@ -136,30 +130,4 @@ pub(crate) fn remember_encoded<T>(
     ptr: *const T,
 ) {
     let _ = (word, null_context, keys, ptr);
-}
-
-#[cfg(not(miri))]
-#[inline(always)]
-pub(crate) fn resolve_encoded<T>(
-    _word: usize,
-    _null_context: *const c_void,
-    _keys: &[usize; 2],
-) -> Option<*mut T> {
-    None
-}
-
-#[cfg(not(miri))]
-#[inline(always)]
-pub(crate) fn missing_address<T>(_addr: usize) -> *mut T {
-    core::ptr::null_mut()
-}
-
-#[cfg(not(miri))]
-#[inline(always)]
-pub(crate) fn missing_encoded<T>(
-    _word: usize,
-    _null_context: *const c_void,
-    _keys: &[usize; 2],
-) -> *mut T {
-    core::ptr::null_mut()
 }

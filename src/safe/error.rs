@@ -100,6 +100,13 @@ impl LayoutError {
     }
 }
 
+/// Builds a [`Layout`], reporting a rejected `size`/`align` as [`TryAllocError::Layout`].
+#[inline]
+pub(super) fn try_layout(size: usize, align: usize) -> Result<Layout, TryAllocError> {
+    Layout::from_size_align(size, align)
+        .map_err(|_| TryAllocError::Layout(LayoutError { size, align }))
+}
+
 impl fmt::Display for LayoutError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

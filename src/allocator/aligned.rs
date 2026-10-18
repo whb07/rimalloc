@@ -11,7 +11,6 @@ use crate::allocator::alloc::{
     _mi_theap_malloc_guarded, _mi_theap_malloc_zero, _mi_theap_malloc_zero_ex,
     calloc_request_or_report,
 };
-use crate::allocator::arena::MI_ARENA_SLICE_SIZE;
 #[cfg(not(mi_c_malloc_fast))]
 use crate::allocator::free::_mi_padding_shrink;
 use crate::allocator::options::_mi_error_message_fmt;
@@ -19,18 +18,16 @@ use crate::allocator::page::{
     MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size_typed,
 };
 use crate::allocator::tracking::mi_track_align;
-use crate::bits::MI_KiB;
 use crate::core_types::{BorrowedHeap, Errno};
 use crate::internal::{
     _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy, _mi_memzero, _mi_ptr_page, MI_GUARDED,
     mi_likely, mi_page_set_has_interior_pointers, mi_page_usable_block_size, mi_unlikely,
 };
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
-use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_theap_t};
-
-const MI_MAX_ALIGN_SIZE: usize = 16;
-const MI_PAGE_MAX_START_BLOCK_ALIGN2: usize = 4 * MI_KiB;
-const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = MI_ARENA_SLICE_SIZE;
+use crate::types::{
+    MI_MAX_ALIGN_SIZE, MI_PAGE_MAX_OVERALLOC_ALIGN, MI_PAGE_MAX_START_BLOCK_ALIGN2,
+    MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_theap_t,
+};
 
 mod thread_heap;
 

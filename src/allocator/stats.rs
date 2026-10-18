@@ -72,6 +72,58 @@ const MI_CHUNKBINS: [mi_chunkbin_t; MI_CHUNKBIN_COUNT] = [
     mi_chunkbin_e::MI_CBIN_HUGE,
     mi_chunkbin_e::MI_CBIN_NONE,
 ];
+
+/// Upstream `MI_STAT_FIELDS()` X-macro: invokes `$callback!` once with every scalar statistic of
+/// `mi_stats_t` in declaration order, each tagged `count` (`mi_stat_count_t`) or `counter`
+/// (`mi_stat_counter_t`).
+macro_rules! mi_stat_fields {
+    ($callback:ident) => {
+        $callback! {
+            count pages,
+            count reserved,
+            count committed,
+            counter reset,
+            counter purged,
+            count page_committed,
+            count pages_abandoned,
+            count threads,
+            count malloc_normal,
+            count malloc_huge,
+            count malloc_requested,
+
+            counter mmap_calls,
+            counter commit_calls,
+            counter reset_calls,
+            counter purge_calls,
+            counter arena_count,
+            counter malloc_normal_count,
+            counter malloc_huge_count,
+            counter malloc_guarded_count,
+
+            counter arena_rollback_count,
+            counter arena_purges,
+            counter pages_extended,
+            counter pages_retire,
+            counter page_searches,
+            counter page_searches_count,
+
+            count segments,
+            count segments_abandoned,
+            count segments_cache,
+            count _segments_reserved,
+
+            count heaps,
+            count theaps,
+            counter pages_reclaim_on_alloc,
+            counter pages_reclaim_on_free,
+            counter pages_reabandon_full,
+            counter pages_unabandon_busy_wait,
+            counter heaps_delete_wait,
+        }
+    };
+}
+pub(crate) use mi_stat_fields;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct mi_stats_t {
@@ -128,6 +180,24 @@ pub struct mi_stats_t {
 }
 pub type mi_stats_s = mi_stats_t;
 
+// The hand-written `mi_stats_t` must declare exactly the `mi_stat_fields!` list, contiguously and
+// in the same order (the field set and kinds are also checked by the `MI_STATS_NULL` literal).
+macro_rules! assert_stat_fields_layout {
+    ($($kind:ident $field:ident,)*) => {
+        const _: () = {
+            let mut offset = core::mem::offset_of!(mi_stats_t, version) + size_of::<usize>();
+            $(
+                assert!(core::mem::offset_of!(mi_stats_t, $field) == offset);
+                offset += assert_stat_fields_layout!(@ $kind);
+            )*
+            assert!(offset == core::mem::offset_of!(mi_stats_t, _stat_reserved));
+        };
+    };
+    (@ count) => { size_of::<mi_stat_count_t>() };
+    (@ counter) => { size_of::<mi_stat_counter_t>() };
+}
+mi_stat_fields!(assert_stat_fields_layout);
+
 impl Default for mi_stats_t {
     fn default() -> Self {
         // SAFETY: `mi_stats_t` is plain old data; all-zero bytes are valid for every field.
@@ -139,12 +209,13 @@ mod counters;
 mod process;
 mod render;
 
+use crate::allocator::init::MI_STATS_NULL;
 pub(crate) use counters::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt,
     __mi_stat_counter_increase, __mi_stat_counter_increase_mt, __mi_stat_decrease,
     __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt, _mi_stats_merge_into,
 };
-use counters::{initialized_stats, mi_stats_add_into, mi_stats_copy};
+use counters::{mi_stats_add, mi_stats_copy};
 pub use counters::{mi_stats_header_init, mi_stats_init};
 pub(crate) use process::{_mi_clock_end, _mi_clock_now, _mi_clock_start, _mi_stats_init};
 use render::_mi_stats_print;
@@ -218,7 +289,7 @@ pub unsafe extern "C" fn mi_subproc_stats_get_json(
     buf_size: usize,
     buf: *mut c_char,
 ) -> *mut c_char {
-    let mut stats = initialized_stats();
+    let mut stats = MI_STATS_NULL();
     // SAFETY: the compatibility boundary validates the live subproc before rendering its snapshot.
     unsafe {
         if !mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
@@ -239,7 +310,7 @@ pub unsafe extern "C" fn mi_heap_stats_get_json(
     buf_size: usize,
     buf: *mut c_char,
 ) -> *mut c_char {
-    let mut stats = initialized_stats();
+    let mut stats = MI_STATS_NULL();
     // SAFETY: the caller keeps the heap live and any current-local source exclusive while its live
     // counters are atomically copied into the stack snapshot; null retains main-heap semantics.
     if !unsafe { mi_heap_stats_get(heap, ptr::addr_of_mut!(stats)) } {
@@ -444,18 +515,8 @@ pub unsafe extern "C" fn mi_stats_reset() {
 /// are permitted only through the atomic stats protocol.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_merge() {
-    // SAFETY: the contract keeps the default thread heap live for this initialization query.
-    if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
-        return;
-    }
-    // SAFETY: the initialized runtime keeps the main heap live through the merge/reset epoch.
-    let heap = unsafe { HeapPtr::new_unchecked(mi_heap_main()) };
-    // SAFETY: current-thread stats may be destructively merged into the live
-    // main heap before its source counters are reset.
-    let _ = unsafe { mi_heap_get_stats_borrowed(BorrowedHeap::new_unchecked(heap)) };
-    // SAFETY: the contract excludes main-heap updates and teardown while the live heap source is
-    // destructively merged into its live atomic subprocess destination.
-    unsafe { mi_heap_stats_merge_to_subproc(heap.as_ptr()) };
+    // SAFETY: merging is identical to `mi_stats_reset` and forwards the same caller contract.
+    unsafe { mi_stats_reset() };
 }
 
 /// # Safety
@@ -554,7 +615,7 @@ unsafe extern "C" fn mi_heap_aggregate_visitor(heap: *mut mi_heap_t, arg: *mut c
     let heap_stats = unsafe { mi_heap_get_stats_borrowed(heap) };
     // SAFETY: the live heap stats source remains readable and distinct from the unique
     // traversal accumulator while their initialized counters are combined.
-    unsafe { mi_stats_add_into(stats, heap_stats) };
+    unsafe { mi_stats_add(stats, heap_stats) };
     true
 }
 
@@ -705,7 +766,7 @@ pub unsafe extern "C" fn mi_subproc_stats_print_out(
     if subproc.is_null() {
         return;
     }
-    let mut stats = initialized_stats();
+    let mut stats = MI_STATS_NULL();
     unsafe {
         if mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
             _mi_stats_print(

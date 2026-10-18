@@ -694,7 +694,7 @@ impl PagePtr {
         self,
         current: crate::core_types::ThreadId,
     ) -> FreeRouteSnapshot {
-        let tid = unsafe { self.thread_id_cell().load_relaxed() };
+        let tid = unsafe { self.thread_id_cell().load() };
         match tid.classify_free_path(current) {
             crate::core_types::FreePathKind::LocalFast => {
                 // SAFETY: the owner bits classify this page as local to `current`.

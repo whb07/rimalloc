@@ -554,6 +554,17 @@ def entry_offsets(library: Path) -> dict[str, int]:
     return {name: int(symbols[name], 16) % 64 for name in ("malloc", "free") if name in symbols}
 
 
+def remote_collect_offset(library: Path) -> int | None:
+    """Cache-line offset of the cross-thread free collector, or None without local symbols.
+    Moving it alone between offsets 32 and 0 changed xmalloc-testN by ~1.5%."""
+    for line in capture(["nm", "--defined-only", str(library)]).splitlines():
+        fields = line.split()
+        # Rust mangling: the length-prefixed name followed by a varying hash suffix.
+        if len(fields) == 3 and "25collect_after_remote_free17h" in fields[2]:
+            return int(fields[0], 16) % 64
+    return None
+
+
 def screen_verdict(ratios: list[float], weak: float = 0.005, strong: float = 0.02) -> str:
     """Direction needs all but one paired round to agree. Calibration against held-out runs
     found single scenarios move up to ~1.5% from noise, so moves under `strong` are only "likely"."""
@@ -575,6 +586,10 @@ def screen(args: argparse.Namespace) -> int:
     print(f"baseline {baseline}\ncandidate {candidate}\nfast-path cache-line offsets: {offsets}", flush=True)
     if offsets["baseline"] != offsets["candidate"]:
         print("warning: fast-path layout differs; fast-path-bound scenarios may move from placement alone", flush=True)
+    collect = {label: remote_collect_offset(path) for label, path in libraries.items()}
+    if None not in collect.values() and collect["baseline"] != collect["candidate"]:
+        print(f"note: collect_after_remote_free cache-line offset differs {collect}; cross-thread free "
+              "scenarios such as xmalloc-testN may move 1-1.5% from placement alone", flush=True)
     times: dict[str, dict[str, list[float]]] = {s: {label: [] for label in libraries} for s in scenarios}
     for round_index in range(args.rounds):
         for scenario in scenarios:

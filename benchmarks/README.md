@@ -87,7 +87,10 @@ fresh processes for 5 rounds. Short workloads take the median of 3 in-process
 runs after a discarded warmup; `xmalloc-testN` and the Larson pair run for 1 s
 (`--timed-secs`) instead of 5 s. Only Rust libraries are measured. It also
 prints the `malloc`/`free` cache-line offsets and warns when they differ,
-because fast-path-bound scenarios move from placement alone.
+because fast-path-bound scenarios move from placement alone. A separate note
+reports when `collect_after_remote_free` changes cache-line offset: moving
+only that function from offset 32 to 0 slowed `xmalloc-testN` by about 1.5%,
+so cross-thread free scenarios can move from it with no code change.
 
 Verdicts: `faster`/`SLOWER` need a median move of at least 2% with all but one
 round agreeing; `likely faster`/`likely slower` cover 0.5-2%. Calibrated

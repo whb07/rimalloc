@@ -167,6 +167,17 @@ class EntryPointTests(unittest.TestCase):
         self.assertEqual(bench.screen_verdict([0.97, 1.03, 0.97, 1.03, 0.97]), "~")
         self.assertEqual(bench.screen_verdict([1.002, 0.998, 1.001]), "~")
 
+    def test_remote_collect_offset_matches_mangled_symbol(self):
+        listing = ("0000000000012c80 T mi_malloc\n"
+                   "000000000001e3c0 t _ZN19mechanical_mimalloc9allocator4free9abandoned"
+                   "25collect_after_remote_free17h5495e9882d1c6d28E\n")
+        with patch.object(bench, "capture", return_value=listing):
+            self.assertEqual(bench.remote_collect_offset(Path("lib.so")), 0)
+        with patch.object(bench, "capture", return_value=listing.replace("1e3c0", "1e260")):
+            self.assertEqual(bench.remote_collect_offset(Path("lib.so")), 32)
+        with patch.object(bench, "capture", return_value="0000000000012c80 T mi_malloc\n"):
+            self.assertIsNone(bench.remote_collect_offset(Path("lib.so")))
+
     def test_screen_rejects_too_few_rounds(self):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             bench.parse_args(["screen", "--rounds", "2"])

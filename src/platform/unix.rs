@@ -546,7 +546,9 @@ unsafe fn unix_mmap_prim_aligned(
         let hint = unsafe { _mi_os_get_aligned_hint(try_alignment, size) };
         if !hint.is_null() {
             let p = unsafe { unix_mmap_prim(hint, size, protect_flags, flags, fd) };
-            if !p.is_null() && crate::internal::_mi_is_aligned(p, try_alignment) {
+            // Preserve ownership even if the OS ignored the alignment hint;
+            // the outer aligned allocator releases it before over-reserving.
+            if !p.is_null() {
                 return p;
             }
         }

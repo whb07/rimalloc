@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare Linux memory-management syscall classes for C and Rust mimalloc."""
+"""Check Linux mapping ownership and syscall parity against C mimalloc."""
 
 from __future__ import annotations
 
@@ -90,7 +90,9 @@ def rust_staticlib() -> pathlib.Path:
     return libs[0]
 
 
-def compile_binary(cc: str, output: pathlib.Path, objects: list[pathlib.Path]) -> None:
+def compile_binary(
+    cc: str, output: pathlib.Path, objects: list[pathlib.Path], *, wrap_memory: bool = False
+) -> None:
     subprocess.run(
         [
             cc,
@@ -100,6 +102,7 @@ def compile_binary(cc: str, output: pathlib.Path, objects: list[pathlib.Path]) -
             "-I",
             str(ROOT / "mimalloc-3.3.2/src"),
             *[str(obj) for obj in objects],
+            *(["-Wl,--wrap=mmap", "-Wl,--wrap=munmap"] if wrap_memory else []),
             "-pthread",
             "-ldl",
             "-lm",
@@ -213,8 +216,24 @@ def main() -> int:
 
     c_bin = BUILD_DIR / "unix-syscall-c"
     rust_bin = BUILD_DIR / "unix-syscall-rust"
-    compile_binary(cc, c_bin, [probe, c_mimalloc_object(cc)])
-    compile_binary(cc, rust_bin, [probe, rust_staticlib()])
+    c_object = c_mimalloc_object(cc)
+    rust_library = rust_staticlib()
+    compile_binary(cc, c_bin, [probe, c_object])
+    compile_binary(cc, rust_bin, [probe, rust_library])
+
+    mapping_probe = ROOT / "tests/unix/hinted_mapping.c"
+    mapping_failures = []
+    for label, library in (("C", c_object), ("Rust", rust_library)):
+        binary = BUILD_DIR / f"hinted-mapping-{label.lower()}"
+        compile_binary(cc, binary, [mapping_probe, library], wrap_memory=True)
+        for outcome in ("success", "failure"):
+            print(f"{label} hinted mapping ({outcome}):", flush=True)
+            result = subprocess.run([str(binary), outcome], cwd=ROOT, check=False)
+            if result.returncode != 0:
+                mapping_failures.append(f"{label} retry {outcome}")
+    if mapping_failures:
+        raise AssertionError("mapping ownership failed: " + ", ".join(mapping_failures))
+    print("ok: C and Rust hinted mappings balance on retry success and failure")
 
     c_events = run_strace(c_bin)
     rust_events = run_strace(rust_bin)

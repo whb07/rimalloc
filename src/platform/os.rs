@@ -1489,6 +1489,7 @@ pub(crate) unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_
 
 /// # Safety
 /// `memid` must point to writable memory-id storage.
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_alloc_aligned(
     size: usize,

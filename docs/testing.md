@@ -126,11 +126,15 @@ scripts/check-secure-mode-parity.py
 scripts/check-guarded-mode-parity.py
 scripts/check-asan-tracking-parity.py
 scripts/check-valgrind-tracking-parity.py
+scripts/check-unix-syscall-parity.py
 ```
 
 These checks compare null behavior, usable-size behavior, alignment, realloc
 preservation, heap APIs, options, stats, feature modes, C++ overrides, and
 platform-specific behavior where the current supported matrix claims parity.
+The Linux syscall check also forces a successful misaligned hinted mapping and
+both success and failure of the next mapping attempt. An external page ledger
+checks that normal teardown releases every mapped page in both Rust and C.
 `scripts/check-no-unwind-artifact.py` builds the release `c-abi` cdylib,
 compiles a C consumer that exercises allocation, overflow/error, callback, and
 OOM/null paths, checks the artifact's aborting no-std personality boundary, and

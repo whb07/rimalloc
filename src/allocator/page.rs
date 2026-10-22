@@ -159,11 +159,18 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
 /// publication remains permitted. If abandonment is enabled, stored arena callbacks and arguments
 /// reached synchronously must remain valid, must not incompatibly reenter these page/heap queues,
 /// and must not unwind.
-/// Set once a thread other than the main thread initializes its allocator state (Rust-only;
-/// `UPSTREAM_DIFF.md`). Until then no other thread can reclaim an abandoned page, so full pages
-/// stay in their owner's full queue, where the owner's next free returns them without atomics.
+/// Set once a non-main thread initializes allocator state or a remote free proves another
+/// participant exists (Rust-only; `UPSTREAM_DIFF.md`). Until then full pages stay in their owner's
+/// full queue, where the owner's next free returns them without atomics.
 pub(crate) static MI_PROCESS_MULTI_THREADED: core::sync::atomic::AtomicBool =
     core::sync::atomic::AtomicBool::new(false);
+
+#[inline]
+pub(crate) fn mi_process_mark_multi_threaded() {
+    if !MI_PROCESS_MULTI_THREADED.load(core::sync::atomic::Ordering::Relaxed) {
+        MI_PROCESS_MULTI_THREADED.store(true, core::sync::atomic::Ordering::Relaxed);
+    }
+}
 
 /// Abandon the full pages a theap kept while the process had one thread, as C would have when they
 /// filled, once another thread exists to reclaim them.

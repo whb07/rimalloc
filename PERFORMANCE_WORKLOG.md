@@ -2692,3 +2692,118 @@ host is claimed as runtime-validated.
 `X40/manifest.json` records source/probe/binary hashes and toolchains. Failing
 and passing probes, all raw sanitizer and gate logs, the diagnostic C source,
 and the assembly comparison remain under `target/perf-experiments/X40/`.
+
+## X41 — Fresh baseline before the retention follow-ups
+
+Completed 2026-10-22. Baseline `a3d20edd` was committed and pushed before this
+round. Release interpose Rust and bundled C 3.3.2 were rebuilt with the same
+benchmark driver and frozen with the native executable. The six paired rounds
+ran all 21 workloads in fresh processes, alternating allocator order and
+shuffling scenario order. Affinity used the eight physical cores (logical CPUs
+0,2,4,6,8,10,12,14) of this Linux x86_64 EPYC 7763 VM. Builds and tests were
+paused during measurement. THP was in `madvise` mode.
+
+Short workloads used one warmup and three samples per process. The longer
+`cfrac`/`rptestN` workloads used one invocation per independent process; the
+three timed workloads used two seconds. Ratios below are medians of the six
+paired normalized-time ratios. Negative is less time for Rust. These are
+exploratory workload results, not application-wide throughput guarantees.
+
+| Workload | Rust / C time difference | Paired verdict |
+|---|---:|---|
+| `glibc-simple` | -2.16% | faster |
+| `malloc-large` | -5.52% | faster |
+| `malloc-large-old` | +0.05% | ~ |
+| `cache-scratch1` | +0.01% | ~ |
+| `cache-thrash1` | +0.02% | ~ |
+| `cache-scratchN` | +0.05% | ~ |
+| `cache-thrashN` | +0.02% | ~ |
+| `mstressN` | -3.67% | faster |
+| `sh6benchN` | -0.96% | likely faster |
+| `sh8benchN` | +3.73% | SLOWER |
+| `alloc-test1` | -0.55% | ~ |
+| `alloc-testN` | -0.84% | likely faster |
+| `barnes` | -0.05% | ~ |
+| `cfrac` | +0.48% | ~ |
+| `mleak10` | +1.52% | ~ |
+| `mleak100` | +1.36% | ~ |
+| `glibc-thread` | -2.24% | faster |
+| `xmalloc-testN` | +3.16% | SLOWER |
+| `larsonN` | -5.01% | ~ |
+| `larsonN-sized` | -12.94% | faster |
+| `rptestN` | +6.48% | SLOWER |
+
+The unweighted geometric-mean time ratio was 0.99112
+(-0.89%). `sh8benchN`, `xmalloc-testN`, and `rptestN` supply the clearest
+remaining deficits; `larsonN` changes direction in the last two pairs, so its
+median alone is not sufficient evidence of a win. Hardware performance events
+are unavailable on this host (`perf_event_paranoid=4`); this round makes no
+hardware-counter claims.
+
+`target/perf-experiments/X41/rust-vs-c-v2/` preserves commands, library and
+executable hashes, every raw timing, process CPU/fault/RSS/context-switch
+resources, host controls, paired ratios, and bootstrap intervals. An earlier
+incomplete run was retained separately after reducing redundant repetitions
+of the long workloads; it is excluded from these results.
+
+## X42 — Free-only consumers participate in retained-page maintenance
+
+Implementation and retention verified 2026-10-22; throughput assessment is
+running on the follow-up branch. X31 treated non-main allocator TLD creation
+as evidence of multiple participants. A consumer that only freed allocations
+could leave that flag false indefinitely, so each producer burst added another
+set of full pages to the producer's retained queue.
+
+The fix marks participation in two existing slow paths: publication into an
+owned page through `mi_free_block_mt`, and collection of a nonempty remote
+list by its local owner. The second path covers normal native assembly frees,
+including publication racing the owner's transition to a full page. Neither
+path initializes the consumer's allocator state or mutates a foreign owner's
+queues. The flag remains a relaxed, one-way policy signal. Local allocation
+and free assembly is unchanged; both frozen libraries have `mi_free` at
+`0x125e0` (162 bytes) and `mi_malloc` at `0x12bc0` (81 bytes).
+
+A new isolated Rust regression failed at the missing participation assertion
+on the old source and passes with the fix. A system-allocated pthread/dlopen
+fixture independently failed against the frozen old Rust library in both
+full-page and normal native remote-free cases; bundled C passed both. The
+candidate passes both with the portable C ABI and native interpose artifact.
+The normal case checks recognition before any full-page remote free can mask
+an omitted native path. The release-thread stress driver now runs these cases,
+and both Linux x86_64 and aarch64 CI jobs invoke it.
+
+The memory comparison reused the X35 producer/consumer protocol with twelve
+64 MiB, 64-byte-object bursts, 300 ms idle per burst, three fresh processes per
+library/history, alternating library order, full payload verification, external
+100 ms memory sampling, and quiescent owner-queue reads. All 27 processes
+completed; requested live bytes were zero at every idle checkpoint. Median
+whole-process RSS for the free-only history:
+
+| Library | First idle, MiB | Twelfth idle, MiB | Full pages at twelfth idle | After owner collect, MiB |
+|---|---:|---:|---:|---:|
+| Old Rust | 80.195 | 784.281 | 12,300 | 15.469 |
+| Candidate Rust | 80.160 | 108.164 | 0 | 14.227 |
+| Bundled C | 80.133 | 108.137 | 0 | 14.199 |
+
+Old Rust added 1,025 retained full pages per burst in every repeat. The
+candidate's second burst drained the old queue in every repeat, and later
+idle RSS stayed at or below 108.200 MiB in this experiment. The initialized
+consumer controls remained approximately 108.1–108.2 MiB at the twelfth idle
+for all libraries. The first idle still retains the initial burst: later
+owner maintenance or explicit owner collection is required. This experiment
+establishes the observed twelve-burst behavior, not a general memory cap.
+
+Validation passed: `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, the isolated regression,
+and `scripts/check-release-thread-stress.py`. The all-target test command
+passed with `MIMALLOC_BENCH_SCENARIOS=cache-scratch1`, running all unit,
+integration, example, and other benchmark targets while selecting one native
+benchmark smoke case. The earlier unrestricted invocation passed its unit and
+integration tests and was interrupted in the expensive debug native benchmark;
+the complete 21-workload performance comparison is run separately in release
+mode. Initial test-fixture compilation errors were corrected before the
+recorded pre-fix failure and post-fix pass.
+
+Frozen libraries, native layout, pre-fix failures, passing checks, all phase
+records, samples, and repeat summaries are under
+`target/perf-experiments/X42/`. Throughput and final decision follow below.

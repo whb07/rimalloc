@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run sustained release-thread stress against the c-abi artifact."""
+"""Run release thread stress and free-only c-abi/interpose regressions."""
 
 from __future__ import annotations
 
@@ -403,8 +403,8 @@ def cc() -> str:
     return compiler
 
 
-def build_c_abi_cdylib() -> pathlib.Path:
-    target_dir = BUILD_DIR / "rust-target"
+def build_cdylib(features: str) -> pathlib.Path:
+    target_dir = BUILD_DIR / f"rust-target-{features}"
     env = dict(os.environ)
     env["CARGO_TARGET_DIR"] = str(target_dir)
     run(
@@ -412,7 +412,7 @@ def build_c_abi_cdylib() -> pathlib.Path:
             "cargo",
             "rustc",
             "--features",
-            "c-abi",
+            features,
             "--lib",
             "--release",
             "--",
@@ -429,7 +429,7 @@ def build_c_abi_cdylib() -> pathlib.Path:
         reverse=True,
     )
     if not candidates:
-        raise SystemExit("no release c-abi cdylib artifact found")
+        raise SystemExit(f"no release {features} cdylib artifact found")
     return candidates[0]
 
 
@@ -475,10 +475,19 @@ def main() -> int:
     shutil.rmtree(BUILD_DIR, ignore_errors=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
-    cdylib = build_c_abi_cdylib()
+    cdylib = build_cdylib("c-abi")
     probe = compile_probe(cc(), cdylib)
     run_probe(probe, cdylib)
-    print("ok: release c-abi thread stress passed")
+    free_only = BUILD_DIR / "free-only"
+    run([
+        cc(), "-std=c11", "-O2", "-DNDEBUG", "-DMI_DEBUG=0",
+        "-I", str(ROOT / "mimalloc-3.3.2/include"),
+        str(ROOT / "tests/unix/free_only.c"), "-pthread", "-ldl", "-o", str(free_only),
+    ])
+    for library in [cdylib, build_cdylib("interpose")]:
+        run([str(free_only), str(library)])
+        run([str(free_only), str(library), "normal"])
+    print("ok: release thread stress and c-abi/interpose free-only regressions passed")
     return 0
 
 

@@ -644,6 +644,7 @@ pub(crate) unsafe fn mi_free_block_mt(
             .discard();
         }
     } else {
+        crate::allocator::page::mi_process_mark_multi_threaded();
         published.leave_published();
     }
 }

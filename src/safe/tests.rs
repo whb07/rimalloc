@@ -954,6 +954,59 @@ fn full_pages_stay_with_a_lone_thread_until_another_thread_runs() {
 }
 
 #[test]
+fn free_only_consumer_enables_owner_maintenance() {
+    if !enter_isolated_callback_test("free_only_consumer_enables_owner_maintenance") {
+        return;
+    }
+    crate::allocator::init::mi_thread_init();
+    crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(false, Ordering::Relaxed);
+    // The isolated owner keeps its heap alive. Each pointer is sent to
+    // exactly one consumer for its only free; the owner never accesses it again.
+    let blocks: Vec<usize> = (0..512)
+        .map(|_| crate::allocator::alloc::mi_malloc(1024) as usize)
+        .collect();
+    assert!(blocks.iter().all(|&p| p != 0));
+    // SAFETY: this is the current thread's initialized heap, and only its owner
+    // reads or mutates the queue. The consumer only publishes remote frees.
+    let full_queue = unsafe {
+        let theap = crate::platform::_mi_theap_default();
+        ptr::addr_of!((*theap).pages[crate::types::MI_BIN_FULL])
+    };
+    assert!(!unsafe { (*full_queue).first }.is_null());
+    let recognized = std::thread::spawn(move || {
+        // Interposed std thread startup can initialize this worker. Remove that
+        // state, then isolate the uninitialized free path under the lone-owner
+        // policy, as the separate native probe does with system-allocated TLS.
+        crate::allocator::init::mi_thread_done();
+        crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(false, Ordering::Relaxed);
+        // SAFETY: this query only inspects the executing thread's TLS.
+        assert!(!unsafe { crate::platform::_mi_thread_is_initialized() });
+        for block in blocks {
+            // SAFETY: the producer transferred this live allocation;
+            // remote frees are supported and this is its only free.
+            unsafe { crate::allocator::free::mi_free(block as *mut c_void) };
+        }
+        // A free-only consumer must not need to create allocator thread state.
+        assert!(!unsafe { crate::platform::_mi_thread_is_initialized() });
+        crate::allocator::page::MI_PROCESS_MULTI_THREADED.load(Ordering::Relaxed)
+    })
+    .join()
+    .unwrap();
+    assert!(recognized);
+    // These sizes enter generic allocation even with LIFO reuse. Let ordinary
+    // owner maintenance process the old full queue without an explicit collect.
+    for _ in 0..2000 {
+        // SAFETY: each allocation is freed exactly once by its owning thread.
+        unsafe {
+            let p = crate::allocator::alloc::mi_malloc(2048);
+            assert!(!p.is_null());
+            crate::allocator::free::mi_free(p);
+        }
+    }
+    assert!(unsafe { (*full_queue).first }.is_null());
+}
+
+#[test]
 fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
     if !enter_isolated_callback_test(
         "nested_deferred_free_callback_guards_restore_lifo_previous_callbacks",

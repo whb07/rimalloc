@@ -65,6 +65,8 @@ jobs:
         env:
           MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS: "1"
         run: scripts/check-release-cxx-artifacts.py
+      - name: Release thread stress and free-only consumers
+        run: scripts/check-release-thread-stress.py
       - name: Build-tool diagnostics
         run: scripts/check-build-tools.sh
       - name: Package smoke
@@ -80,6 +82,8 @@ jobs:
         run: cargo test --quiet --features std
       - name: Layout matrix
         run: scripts/check-layout.sh
+      - name: Release thread stress and free-only consumers
+        run: scripts/check-release-thread-stress.py
 
   macos:
     name: macOS ARM64 allocator validation

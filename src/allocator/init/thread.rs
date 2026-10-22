@@ -602,8 +602,11 @@ pub(super) fn init_default() -> *mut mi_theap_t {
 unsafe fn theaps_done(tld: TldPtr) {
     let empty = crate::platform::__mi_theap_empty();
     // SAFETY: `empty` is the allocator's live uninitialized sentinel, and this
-    // current-thread teardown exclusively owns all three TLS publications.
+    // current-thread teardown exclusively owns these TLS publications. Clear
+    // the destructor association before releasing metadata: publishing the
+    // empty sentinel alone leaves the old pthread/FLS value registered.
     unsafe {
+        crate::platform::_mi_prim_thread_associate_default_theap(ptr::null_mut());
         _mi_theap_default_set(empty);
         _mi_theap_cached_set(empty);
         mi_theap_main_tls_set(None);

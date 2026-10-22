@@ -17,6 +17,7 @@ case "$sanitizer" in
       --test oversize_allocations
       --test fuzz_alloc_sequences
       --test thread_stats_regression
+      --test thread_lifecycle
       --test mimalloc_global_alloc
       --test mimalloc_global_allocator_std
     )
@@ -27,6 +28,7 @@ case "$sanitizer" in
       --features std
       --test original_test_stress
       --test thread_stats_regression
+      --test thread_lifecycle
       --test fuzz_alloc_sequences
     )
     ;;

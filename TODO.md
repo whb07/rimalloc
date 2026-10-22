@@ -71,34 +71,20 @@ not be duplicated here.
 
 ## 1. Resolve or close the thread-lifecycle TSan finding
 
-Problem: `PERFORMANCE_WORKLOG.md` records a TSan race between
-`_mi_theap_create` and `_mi_thread_done`, but the repository does not identify a
-maintained minimized reproducer and exact invocation for that report.
+**Done — X40, 2026-10-22.** The sustained release probe reproduced the
+`_mi_theap_create` / `_mi_thread_done` race in three Rust and three C 3.3.2 runs.
+Explicit teardown retained a freed heap pointer in the pthread destructor key;
+this is an inherited lifetime defect. Teardown now clears that association
+before metadata release, without adding a lock or strengthening atomics.
 
-- [ ] Record the exact current-HEAD TSan command, toolchain, probe source,
-  allocator features, expected stacks, and relevant environment in
-  `PERFORMANCE_WORKLOG.md`.
-- [ ] Run that configuration at least three times. If the original artifact or
-  probe cannot be recovered, construct the smallest maintained
-  create/allocate/free/exit probe that exercises the reported boundary.
-- [ ] If the report reproduces, compare each access and synchronization edge
-  with C mimalloc 3.3.2 and classify it as a translation defect, inherited
-  defect, or sanitizer false positive.
-- [ ] For a defect, add a regression test before making the smallest change
-  that establishes the missing happens-before relationship. Do not add a
-  global lock or strengthen unrelated atomics.
-- [ ] For a false positive, retain the minimized reproducer and use only an
-  exact-boundary suppression. If the report does not reproduce, close the stale
-  finding with the commands and results; do not retain an open-ended audit.
-
-Verify: ten clean TSan runs of a reproducing fixed/suppressed probe, or ten
-clean runs of the recovered original configuration when closing it as stale;
-release thread stress; the six Loom models; behavioral parity; relevant ASan
-and Valgrind checks; the common Rust gate; and allocation/free assembly if
-synchronization changes.
-
-Done when the repository contains a maintained reproducer plus a tested fix or
-narrow suppression, or repeatable current evidence closes the stale report.
+`tests/thread_lifecycle.rs` and the direct Unix pthread-key unit test retain
+regression coverage. Both failed before the repair. The sustained and minimized
+Rust release TSan probes each passed ten runs afterward. Release thread stress,
+all six Loom models, behavioral parity, ASan, Valgrind, and the common Rust gate
+pass; native allocation/free disassembly is unchanged. X40 in
+`PERFORMANCE_WORKLOG.md` records exact commands, toolchains, stacks, the C
+comparison, failed setup attempts, and raw evidence locations. No suppression
+was needed.
 
 ---
 

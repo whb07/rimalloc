@@ -21,6 +21,7 @@ use crate::bits::MI_GiB;
 use crate::bits::MI_MiB;
 use crate::internal::{
     _mi_preloading, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen, _mi_toupper, MI_DEBUG,
+    MI_SECURE,
 };
 use crate::os::{
     _mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_has_overcommit,
@@ -783,7 +784,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_decommit(
         #[cfg(not(target_os = "macos"))]
         let err = unix_madvise(start, size, MADV_DONTNEED);
         if !needs_recommit.is_null() {
-            if MI_DEBUG == 0 {
+            if MI_DEBUG == 0 && MI_SECURE <= 2 {
                 *needs_recommit = false;
             } else {
                 *needs_recommit = true;
@@ -1385,3 +1386,40 @@ pub(crate) fn _mi_prim_register_fork_handlers(
 
 #[cfg(all(test, target_os = "macos", not(miri)))]
 mod tests;
+
+#[cfg(all(test, not(miri)))]
+mod thread_lifecycle_tests {
+    use super::{_mi_heap_default_key, c_void, pthread_key_t};
+    use crate::allocator::init::{mi_thread_done, mi_thread_init};
+
+    unsafe extern "C" {
+        fn pthread_getspecific(key: pthread_key_t) -> *mut c_void;
+    }
+
+    #[test]
+    fn explicit_thread_done_clears_destructor_before_metadata_reuse() {
+        let cleared = std::thread::spawn(|| {
+            let mut cleared = true;
+            for _ in 0..3 {
+                mi_thread_init();
+                // SAFETY: initialization has registered the process-lifetime
+                // key; getspecific only reads this worker's associated value.
+                assert!(!unsafe { pthread_getspecific(_mi_heap_default_key) }.is_null());
+                mi_thread_done();
+                // SAFETY: the key remains registered after thread teardown.
+                // Inspect only the pointer value, never freed heap metadata.
+                cleared &= unsafe { pthread_getspecific(_mi_heap_default_key) }.is_null();
+            }
+            // Restore a live association even when testing the broken version,
+            // so its stale destructor cannot run while reporting the failure.
+            mi_thread_init();
+            cleared
+        })
+        .join()
+        .unwrap();
+        assert!(
+            cleared,
+            "explicit teardown retained a freed thread heap in the pthread key"
+        );
+    }
+}

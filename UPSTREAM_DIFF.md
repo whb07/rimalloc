@@ -143,3 +143,18 @@ native screen +0.15% (no scenario outside noise), Nginx +0.2% to +1.4% at equal
 memory. Multi-threaded processes behave as before (X21's `xmalloc-testN`
 regression came from never abandoning in a multi-threaded process).
 
+### Explicit thread teardown clears the destructor association
+
+Fixed 2026-10-22 (`PERFORMANCE_WORKLOG.md` X40). Both C 3.3.2 and the prior Rust
+translation reset the default heap to the empty sentinel during `mi_thread_done`
+but leave the pthread destructor's old heap pointer registered. The metadata can
+then be reused by another thread before the exiting thread's destructor reads
+it. Rust now clears the primitive destructor association before releasing any
+thread-heap metadata. Later initialization registers the new live heap normally.
+
+The sustained release TSan probe reproduced this boundary in three runs of each
+library; the fixed Rust probe passed ten runs. A diagnostic copy of C with the
+same association clear also passed. A deterministic pthread-key regression and
+a maintained concurrent lifecycle test cover the defect. No lock or atomic
+ordering changed, and normalized native allocation/free assembly is unchanged.
+

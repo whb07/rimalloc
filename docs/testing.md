@@ -85,6 +85,22 @@ ThreadSanitizer is available through:
 SANITIZER=thread scripts/check-sanitizers.sh
 ```
 
+The sanitizer suites include `tests/thread_lifecycle.rs`, which mixes explicit
+teardown with automatic thread-exit teardown while other workers reuse metadata.
+The Unix unit test `explicit_thread_done_clears_destructor_before_metadata_reuse`
+also checks the pthread destructor association directly. For the optimized
+lifecycle configuration used in X40:
+
+```sh
+RUSTFLAGS='--cfg mi_sanitizer_runtime -Zsanitizer=thread -Zunstable-options -Cpanic=immediate-abort -C lto=off -C linker-plugin-lto=no -C embed-bitcode=no' \
+  cargo +nightly test -Zbuild-std -Zpanic-abort-tests --release \
+  --target-dir target/sanitizer-thread-release --target x86_64-unknown-linux-gnu \
+  --features std --test thread_lifecycle
+```
+
+X40 records the exact toolchain and its temporary `-Aunused-unsafe` compatibility
+flag, the reproducing C-ABI stress configuration, and the before/after runs.
+
 The script uses a nightly toolchain, `-Zbuild-std`, aborting test panic
 strategy, and the `std` feature. It sets `mi_sanitizer_runtime` so sanitizer
 builds can disable libc allocator interposition exports that conflict with the
@@ -108,7 +124,8 @@ scripts/check-valgrind-tracking-parity.py
 
 This check builds C and Rust probes and compares the tracked reports. It
 requires `valgrind` on the host. The normal Rust test suite does not imply
-Valgrind evidence.
+Valgrind evidence. Its Rust archive is built in a dedicated target directory
+so a shared-target artifact with inactive tracking cannot satisfy the check.
 Maintainers can also run the manual GitHub Actions hardening workflow for
 Valgrind tracking evidence.
 
@@ -135,6 +152,12 @@ platform-specific behavior where the current supported matrix claims parity.
 The Linux syscall check also forces a successful misaligned hinted mapping and
 both success and failure of the next mapping attempt. An external page ledger
 checks that normal teardown releases every mapped page in both Rust and C.
+The same check builds optimized release and secure-level-4 release probes for
+decommit protection, `needs_recommit`, and recommit/reuse. It checks Linux
+mapping permissions and isolated child access to an owned primitive mapping,
+then exercises allocation/collection/reuse on an initialized worker. These
+C-linked release probes disable LTO so their static archives contain native
+objects usable by the system C linker.
 `scripts/check-no-unwind-artifact.py` builds the release `c-abi` cdylib,
 compiles a C consumer that exercises allocation, overflow/error, callback, and
 OOM/null paths, checks the artifact's aborting no-std personality boundary, and

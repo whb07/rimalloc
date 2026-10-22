@@ -60,17 +60,24 @@ MMAP_RE = re.compile(r"mmap\([^,]+,\s*[^,]+,\s*(?P<prot>[^,]+),")
 MADVISE_RE = re.compile(r"madvise\([^,]+,\s*[^,]+,\s*(?P<advice>[^)]+)\)")
 
 
-def rust_staticlib() -> pathlib.Path:
+def rust_staticlib(*, release: bool = False, secure: bool = False) -> pathlib.Path:
     env = os.environ.copy()
     rustflags = env.get("RUSTFLAGS", "")
     env["RUSTFLAGS"] = f"{rustflags} --cfg mi_internal_c_probe".strip()
-    target_dir = BUILD_DIR / "rust-target"
+    if release:
+        # The external C linker needs native archive members, as in the release
+        # behavioral-parity probe; fat-LTO archives can contain LLVM bitcode.
+        env["RUSTFLAGS"] += " -C lto=off -C linker-plugin-lto=no -C embed-bitcode=no"
+    suffix = ("-release" if release else "") + ("-secure" if secure else "")
+    target_dir = BUILD_DIR / f"rust-target{suffix}"
     subprocess.run(
         [
             "cargo",
             "rustc",
             "--target-dir",
             str(target_dir),
+            *(["--release"] if release else []),
+            *(["--features", "secure"] if secure else []),
             "--lib",
             "--",
             "--crate-type",
@@ -81,7 +88,7 @@ def rust_staticlib() -> pathlib.Path:
         check=True,
     )
     libs = sorted(
-        (target_dir / "debug/deps").glob("libmechanical_mimalloc-*.a"),
+        (target_dir / ("release" if release else "debug") / "deps").glob("libmechanical_mimalloc-*.a"),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
@@ -114,13 +121,16 @@ def compile_binary(
     )
 
 
-def c_mimalloc_object(cc: str) -> pathlib.Path:
-    obj = BUILD_DIR / "mimalloc-static.o"
+def c_mimalloc_object(cc: str, *, release: bool = False, secure: bool = False) -> pathlib.Path:
+    suffix = ("-release" if release else "") + ("-secure" if secure else "")
+    obj = BUILD_DIR / f"mimalloc-static{suffix}.o"
     subprocess.run(
         [
             cc,
             "-std=c11",
             "-DMI_MALLOC_OVERRIDE=0",
+            *(["-O2", "-DNDEBUG", "-DMI_DEBUG=0"] if release else []),
+            *(["-DMI_SECURE=4"] if secure else []),
             "-I",
             str(ROOT / "mimalloc-3.3.2/include"),
             "-I",
@@ -248,6 +258,22 @@ def main() -> int:
         return 1
 
     print(f"ok: {len(c_events)} normalized Unix memory syscall classes match")
+    decommit_probe = ROOT / "tests/unix/decommit.c"
+    decommit_failures = []
+    for secure in (False, True):
+        mode = "release-secure" if secure else "release"
+        c_library = c_mimalloc_object(cc, release=True, secure=secure)
+        rust_library = rust_staticlib(release=True, secure=secure)
+        for label, library in (("C", c_library), ("Rust", rust_library)):
+            binary = BUILD_DIR / f"decommit-{mode}-{label.lower()}"
+            compile_binary(cc, binary, [decommit_probe, library])
+            print(f"{label} decommit ({mode}):", flush=True)
+            result = subprocess.run([str(binary), str(int(secure))], cwd=ROOT, check=False)
+            if result.returncode != 0:
+                decommit_failures.append(f"{label} {mode}")
+    if decommit_failures:
+        raise AssertionError("decommit protection failed: " + ", ".join(decommit_failures))
+    print("ok: release and secure-release decommit protections and recommit match")
     return 0
 
 

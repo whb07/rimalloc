@@ -91,8 +91,9 @@ def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[st
 
 
 def rust_staticlib_valgrind() -> pathlib.Path:
-    run(["cargo", "rustc", "--features", "track-valgrind", "--lib", "--", "--crate-type", "staticlib"])
-    deps = ROOT / "target/debug/deps"
+    target_dir = BUILD_DIR / "rust-target"
+    run(["cargo", "rustc", "--target-dir", str(target_dir), "--features", "track-valgrind", "--lib", "--crate-type", "staticlib"])
+    deps = target_dir / "debug/deps"
     libs = sorted(
         [*deps.glob("libmechanical_mimalloc-*.a"), *deps.glob("libmechanical_mimalloc.a")],
         key=lambda path: path.stat().st_mtime,

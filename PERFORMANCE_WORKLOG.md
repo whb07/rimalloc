@@ -78,6 +78,14 @@ and the conclusion drawn from them.
 | X30 | Run the main thread heap's one-time initialization (upstream bug) | `theap_main` starts with an empty memid so `theap_main_init` runs (C and the translation started it static, skipping options and cookie) | **ADOPT** (owner decision): native screen +0.27% (noise), Nginx +0.5 to +1.0% at equal PSS; regression test added | Recorded below |
 | X31 | Keep full pages with their owner while the process has one allocating thread | `MI_PROCESS_MULTI_THREADED` set by the first non-main TLD; until then `mi_page_to_full` uses the full queue instead of abandoning; maintenance abandons kept pages once set | **ADOPT** (owner decision): Redis SET +4.6% interleaved (1.747M vs tcmalloc 1.754M); native screen +0.15%, Nginx +0.2 to +1.4% | Recorded below |
 | X32 | Track full pages without the full-queue links (prototype) | Measurement-only builds: full pages counted but not linked; unfull at front or end of the normal queue; separately, a plain store for the in-full flag while single-threaded | **REJECT**: Redis SET -8% (front), +0.8% (end), +0.8% (plain flag); the unfull cost is misses on cold page metadata, not queue links or the atomic | Recorded below |
+| X33 | Identify the event releasing post-burst resident memory | Four live-owner/collection/exit arms with external OS sampling; measurement only | **NO POLICY CHANGE**: shared-arena purging releases about 64 MiB in both Rust and C; idle time alone does not. A smaller THP-related residual is separately observed | `target/perf-experiments/X33/`; recorded below |
+| X34 | Measure the residency and resume cost of collecting at a burst boundary | Immediate owner collection versus retention, with 10 ms through 10 s pauses; frozen X33 libraries | **NO POLICY CHANGE**: collection saves about 64 MiB; short-pause Rust refill costs about 2 ms more. After the purge deadline, passive refill executes pending discard calls; early collection moves them before the pause | `target/perf-experiments/X34/`; recorded below |
+| X35 | Test X31 with a main-thread producer and free-only consumer | Three initialization histories, external sampling, and four repeated handoffs | **RETENTION REGRESSION OBSERVED**: Rust free-only RSS grows about 64 MiB per handoff; owner collection recovers it. Consumer initialization before the burst avoids the growth | `target/perf-experiments/X35/`; recorded below |
+| X36 | Test X26 maintenance progress during active small-object reuse | Same cold burst followed by idle, anchored hot-loop reuse, or generic-path activity | **RETENTION COST OBSERVED**: Rust hot-loop RSS remains 72 MiB with no heartbeat progress; C and Rust generic activity release the cold burst after about 1.1 s | `target/perf-experiments/X36/`; recorded below |
+| X37 | Separate survivor placement from THP burst history | Page-aware packed/scattered survivors, empty and never-large controls, THP on/off | **OBSERVED**: scattered survivors add about 32/28 MiB for 64 B/8 KiB objects in both libraries; Rust's post-burst small-heap floor also depends strongly on THP | `target/perf-experiments/X37/`; recorded below |
+| X38 | Compare grace periods under irregular repeated bursts | Passive, immediate, 100 ms and 1 s owner collection, including arrivals near timer deadlines | **NO POLICY CHANGE**: 100 ms grace reduces mean Rust RSS from 102 to 33 MiB at similar measured CPU cost in this mix; near-deadline arrivals expose collection stalls | `target/perf-experiments/X38/`; recorded below |
+| X39 | Check secure-release decommit protection against C | Owned primitive mapping, isolated access probe, recommit and allocation reuse | **FIXED**: secure level 4 now protects decommitted memory and requests recommit, matching C | `target/perf-experiments/X39/`; recorded below |
+| X40 | Resolve the historical thread-lifecycle TSan report | Reproducing release C-ABI stress, minimized lifecycle test, direct pthread-key regression | **FIXED inherited defect**: explicit teardown now clears the destructor association before metadata release; ten clean runs of each repaired Rust probe | `target/perf-experiments/X40/`; recorded below |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -2065,3 +2073,622 @@ loads take 190 of those cycles against 32 (3.5 L3 hits per 1,000 ops against
 separate `strcasecmp` lever: its samples are stall cycles from older misses,
 Redis's own (the window gets 7.9% under tcmalloc too) plus the allocator's
 page-metadata misses above.
+
+## X33 — Burst/idle retention observation
+
+Completed 2026-10-22. **NO CHANGE to allocator policy.** This is the first
+four-arm observation proposed in `REPORT.md`, using `08cf8a0d` plus the verified
+hinted-mapping ownership fix. Frozen artifacts, source snapshots, the working
+tree patch, commands, host state, phase events, and every OS sample are under
+`target/perf-experiments/X33/`. SHA-256 prefixes: Rust `93b4d72fdb42`, C
+`be00068c7a1c`, probe `617f18c1f7d7`; full hashes are in each manifest.
+
+The host was an Azure Linux x86_64 VM with an EPYC 7763, 16 logical CPUs and
+62 GiB RAM, no swap, and no observed memory pressure. Worker CPU 2 and sampler
+CPU 4 are on different physical cores. This qualifies the observed residency
+contrast, not small throughput differences or native M5 behavior. The native
+release interpose libraries were loaded through explicit `mi_*` calls; Rust's
+assembly allocation/free entries were verified. Harness storage used the
+system allocator. Both owner and helper initialized before every baseline.
+The defaults remained purge delay 1,000 ms, arena multiplier 1, THP 1, and
+`page_full_retain` Rust 0 / C 2; the allocating owner was a worker thread.
+
+Each fresh process allocated and wrote every byte of 64 MiB in 64-byte blocks,
+verified and freed all blocks, then stayed idle for 10 seconds. At that point
+it did nothing, collected on the owner, collected on the initialized helper,
+or exited the owner while keeping the process alive. Another 10 seconds of
+observation preceded an equal reburst/free and a final 10-second idle window.
+The exit arm used a replacement owner. External `smaps_rollup` sampling targeted
+100 ms (observed median 101.3 ms, maximum 120.9 ms). Five repetitions per
+allocator/arm alternated allocator and action order: 40 primary processes.
+
+Absolute process RSS at 20 seconds, median of five processes:
+
+| Action at 10 seconds | Rust RSS MiB | C RSS MiB |
+|---|---:|---:|
+| Idle owner | 80.195 | 80.125 |
+| Owner `mi_collect(true)` | 16.074 | 15.996 |
+| Helper `mi_collect(true)` | 16.125 | 16.062 |
+| Owner exit | 16.199 | 16.133 |
+
+Preburst RSS was about 12.3 MiB for Rust and 16.0 MiB for C. Baseline-relative
+idle excess was 67.891 / 64.078 MiB, respectively. Ten preceding Rust A/A
+processes had exactly the same 20-second RSS excess and 98 reburst minor
+faults each. The empty harness had zero anonymous-memory drift, 64 KiB RSS
+drift, and 2 KiB PSS drift. All primary passive t90 endpoints were censored at
+10 seconds; each collection/exit arm crossed the assisted t90 threshold by
+roughly the first 100 ms sample, sustained for three periodic samples.
+
+Separate syscall traces reproduced owner and helper collection for both
+libraries. Each intervention made 17 successful `MADV_DONTNEED` calls:
+64.125 MiB on the owner and 64.0625 MiB on the helper. The calling thread IDs
+matched the intended owner/helper. The passive windows had no memory-management
+syscalls, and every traced memory syscall parsed successfully. The 64 KiB
+owner/helper difference is consistent with the sole retired page. The dominant
+retention gate in this workload is scheduled shared-arena purging awaiting
+execution; the recorded deadline does not schedule an independent worker.
+
+Rust's lower preburst baseline had no anonymous huge pages, while C's already
+had 4 MiB. Both had 68 MiB at the first burst peak. In four Rust owner-collect/
+owner-exit runs, post-intervention idle RSS rose by 1.875 MiB together with
+another 2 MiB anonymous huge page and no additional faults. This produced
+Rust 20-second ranges of 16.039–17.902 MiB for owner collection and
+16.168–18.078 MiB for exit. It is consistent with background THP promotion
+after X29's one-way arming. A separately labelled, single-process-per-allocator
+`MIMALLOC_ALLOW_THP=0` diagnostic left only 0.199 MiB above baseline after
+owner collection in both libraries, with zero huge pages throughout.
+
+That THP-off diagnostic recorded reburst times of 41.43 ms Rust / 40.55 ms C
+and 16,417 minor faults each, versus default-policy owner-collection medians
+14.82 / 14.07 ms and 114 / 113 faults. It is a mechanism control, not a policy
+decision. A/A paired reburst timing differences ranged from -19.3% to +11.9%,
+so these runs cannot establish the native-suite throughput budget.
+
+Correctness checks: strict-warning C++ build; 71 benchmark Python tests completed
+(63 passed, 8 optional integrations skipped), followed by all 9 real-library architectural
+checks passing, including every retention action and the empty control. Full
+payload verification and phase/ownership checks passed in every measured run.
+No Rust production code changed in X33. `analysis.json`, `summary.csv`, both
+absolute and baseline-relative retention figures, and reproducible analysis/
+diagnostic scripts accompany the raw results. The next supported question is
+the cost of existing purge policy or an explicit idle-boundary collection;
+hot-loop owners, free-only consumers, sparse survivors, and other size classes
+remain separate measurements.
+
+## X34 — Collection at the idle boundary
+
+Completed 2026-10-22. **NO CHANGE to allocator policy.** The question was whether
+the existing owner `mi_collect(true)` call is useful immediately after a burst,
+and how its cost changes with time until reuse. The experiment source, frozen
+executables, commands, raw observations, analysis, and exported figures are in
+`target/perf-experiments/X34/`. It reuses X33's exact Rust/C libraries (SHA-256
+prefixes `93b4d72fdb42` / `be00068c7a1c`); the new probe is `44931d3884f2`.
+No Rust source changed. The experiment files are local artifacts, and this
+entry is the only tracked-file change made for X34.
+
+The Linux EPYC VM and CPU placement match X33: worker CPU 2, observer CPU 4,
+different physical cores, THP enabled, no observed memory pressure or major
+faults. Default purge delay remained 1,000 ms and arena multiplier 1. Each
+fresh process used one initialized allocating worker, with the main thread
+waiting for it. It filled and verified every byte of 64 MiB in 64-byte blocks,
+freed everything, optionally collected on that same worker, waited until a
+fixed deadline measured from free completion, then allocated/touched the same
+amount again and verified it. Collection consumes part of the quiet interval;
+it does not move the scheduled resume deadline. Allocation timings include
+payload writes, and the first 1 MiB is also timed separately. Collection time
+is measured directly around the API call, without controller dispatch.
+
+Seven fresh processes per allocator/policy/pause, with rotated policy/library
+order and reversed pause order, produced 112 primary observations. The pauses
+were 10, 100, 1,000, and 10,000 ms. Telemetry is buffered until all timed work
+finishes. The probe records RSS/PSS/anonymous/huge-page checkpoints outside the
+timed API calls; an external observer also samples every 20 ms. RSS averages
+start after the collection/checkpoint, so they do not pretend to resolve the
+sub-millisecond purge transition. Median checkpoint cost immediately before
+resume was 0.354 ms, and median actual resume lateness was 0.452 ms. Both costs
+are recorded separately. The additional timing control below removes them.
+
+Median full refill-and-touch time, milliseconds (seven processes per cell):
+
+| Pause | Rust retain | Rust collect | C retain | C collect |
+|---|---:|---:|---:|---:|
+| 10 ms | 9.070 | 11.075 | 9.076 | 11.491 |
+| 100 ms | 9.050 | 10.855 | 9.155 | 11.044 |
+| 1 s | 11.735 | 10.461 | 11.928 | 10.946 |
+| 10 s | 12.225 | 10.030 | 12.401 | 9.902 |
+
+Collection itself took a pooled median 0.344 ms Rust / 0.345 ms C. Including
+that work, paired Rust collection-plus-refill **CPU-time** differences were
++2.43, +2.19, -0.49, and -1.32 ms for the four pauses, respectively. The C
+differences were +2.39, +1.94, -0.34, and -2.05 ms. These are exploratory VM
+measurements, not a native-suite throughput decision or a tail-latency bound.
+
+Passive process RSS stayed around 80.1 MiB Rust / 80.0 MiB C. Immediate
+collection reduced it to about 16.0 / 15.9 MiB. At 10 seconds it had risen to
+17.9 / 17.8 MiB. The mean RSS saving after collection was about 64.1 MiB for
+the three shorter pauses and 63 MiB for the ten-second pause. Preburst RSS
+was 12.3 MiB Rust / 16.0 MiB C; these absolute comparisons avoid turning the
+baseline difference into an apparent Rust retention regression.
+
+The mechanism is visible in 12 separate syscall traces (both libraries,
+both policies, pauses 10 ms / 1 s / 10 s). No `madvise` ran during the quiet
+interval. Short passive reuse issued no discard calls during refill. Once
+the one-second deadline had expired, passive Rust issued 17 `MADV_DONTNEED`
+calls totaling 64.0625 MiB **during the first 1 MiB of refill**; C issued 49
+calls totaling 63.9375 MiB in that same phase. With immediate collection,
+both libraries instead issued 17 calls totaling 64.125 MiB before waiting
+and none during refill. All those discard calls succeeded, with no unparsed
+trace lines. The initial Rust burst's existing best-effort whole-arena
+`MADV_COLLAPSE` returned `EINVAL` in all six Rust traces; those responses are
+preserved separately from the successful discard operations. Both libraries
+had 68 MiB of anonymous huge pages at the initial peak.
+
+Short-pause Rust refill had a median 15 minor faults with retention versus
+561 with collection; its first 1 MiB went from about 0.14–0.15 ms to
+0.66–0.67 ms. At one second, passive Rust already incurred about 560 faults
+and C 1,039; collection incurred 561 in both. At ten seconds, all 14 collected
+processes gained exactly 1.875 MiB RSS and 2 MiB anonymous huge pages during
+idle, with no discard calls there in the diagnostic traces. Refill then
+incurred only 81 minor faults. Background huge-page promotion therefore
+contributes to the long-pause result; the apparent timing crossover is not
+a portable universal break-even threshold.
+
+Controls and limits:
+
+- Thirty Rust A/A processes (five pairs at each of 10 ms, 1 s, and 10 s)
+  demonstrated timing noise: paired refill differences ranged from -10.2%
+  to +38.0%. No outliers were removed. Medians and IQRs are exported alongside
+  every raw process result; small allocator speed rankings are unsupported.
+- Fifty-six additional processes removed all RSS checkpoints and external
+  sampling (seven per library/policy at 10 ms and 1 s). Rust retain/collect
+  refill medians were 9.10/11.64 ms at 10 ms and 11.36/10.55 ms at 1 s;
+  C was 10.10/10.80 and 12.12/10.59 ms. Fault counts reproduced the primary
+  pattern. This checks that observation overhead did not create that pattern.
+- Eight separately labelled THP-off diagnostic processes used one observation
+  per library/policy at 10 ms and 1 s. At 1 s, Rust retain/collect refills were
+  44.35/35.98 ms and C 42.03/36.93 ms, with roughly 16,400 faults. Collection
+  itself cost 7.84/5.96 ms. These single observations reinforce dependence on
+  VM backing policy; they are not evidence for disabling THP.
+- Only fully freed 64-byte objects, a 64 MiB burst, and one allocating owner
+  were tested. Arrival times were fixed, with no memory pressure. Sparse
+  survivors, concurrent owners, unpredictable arrivals, and helper/grace-period
+  policies remain unmeasured.
+
+The supported application choice is to preserve resident memory for brief
+reuse and consider explicit owner collection at a known long idle boundary.
+It returns memory sooner and moves due purge syscalls out of the next burst.
+An unconditional call after every burst would impose these refault costs
+even when reuse follows quickly. These results do not justify changing
+the allocator's global delay or adding work to its allocation/free fast paths.
+
+Validation: strict-warning C++ compilation; eight payload-verified smoke
+processes; rejection checks for incomplete, reordered, invalid-counter, and
+early-resume observations; 71 benchmark Python tests (63 passed, 8 optional
+integrations skipped). All 206 primary/control processes and 12 traces
+completed. Frozen input hashes matched, and replay from raw events/samples
+exactly reproduced every saved measurement. Rust checks were not rerun because
+no Rust code changed. `validation.json`, `analysis.json`, `summary.csv`, and
+`idle-boundary.png`/`.svg` accompany the data and reproducible scripts.
+
+## X35 — Free-only consumers and X31
+
+Completed 2026-10-22; measurement only. Unlike X33/X34, the allocating owner
+is the process main thread, and no allocating helper is introduced before
+the designated initialization point. The consumer either only frees,
+initializes after the burst but before freeing, or initializes before the
+burst. It stays alive and inactive after freeing. System-allocator harness
+storage and external OS sampling preserve these histories. The exact X33
+Rust/C libraries and CPU placement were reused.
+
+The primary matrix used 64 MiB in fully verified 64-byte blocks, three fresh
+processes per history/library (18 processes), and a ten-second passive window.
+Then the consumer initialized if necessary and forced collection, followed
+by forced collection on the owner. Read-only owner queue/heap fields were
+recorded at quiescent checkpoints; no heap visitor or collection ran during
+the passive window. Median process RSS in MiB:
+
+| Library / consumer history | Passive | Consumer collected | Owner collected |
+|---|---:|---:|---:|
+| Rust / free-only | 80.191 | 80.191 | 16.066 |
+| Rust / init after burst | 80.160 | 80.160 | 16.035 |
+| Rust / init before burst | 80.184 | 16.121 | 16.059 |
+| C / free-only | 80.125 | 16.250 | 16.062 |
+| C / init after burst | 80.125 | 16.188 | 16.000 |
+| C / init before burst | 80.125 | 16.188 | 16.000 |
+
+Rust's first two histories retained 1,025 full-queue pages after the burst
+and after remote frees; initializing the consumer afterward did not flush
+them. The before-burst history and every C history had zero pages in the
+owner's full queue. Effective main-heap `page_full_retain` was Rust 0 / C 2.
+A separate six-process control set Rust's option to 2 before library loading,
+verified the effective value, and reproduced the retention contrast (1,023
+full pages in the first two Rust histories). The C main-initialization
+difference therefore does not explain this bulk effect.
+
+A second matrix used four consecutive owner-allocate/consumer-free handoffs,
+with one-second pauses and no intermediate collection, again three processes
+per history/library. Every post-handoff logical live-byte count was zero.
+Median post-free RSS for Rust's free-only history grew **80.195, 144.203,
+208.211, 272.219 MiB**, with full-queue counts **1,025, 2,050, 3,075, 4,100**.
+C's corresponding RSS remained 80.094–80.098 MiB. Final owner collection
+reduced Rust to 15.906 MiB. Initializing the consumer after the first burst
+allowed subsequent owner activity to flush the old full queue; its Rust RSS
+sequence was 80.195, 108.195, 78.453, 80.195 MiB. Initialization before the
+first burst stayed near 80.16 MiB throughout.
+
+Four separate syscall traces corroborated ownership attribution. Rust's
+free-only consumer collection issued no discard calls; owner collection then
+issued 17 successful `MADV_DONTNEED` calls for 64.125 MiB. With consumer
+initialization before the burst, consumer collection discarded 64.0625 MiB,
+and owner collection discarded the remaining 64 KiB. C consumer collection
+discarded the bulk in both traced histories. All discard calls succeeded and
+all trace lines parsed.
+
+This is recoverable owner-local retention caused by X31's progress condition:
+a remote free does not itself initialize a non-main allocator TLD, while full
+pages retained by the main owner require owner-side processing. Four cycles
+demonstrate repeated growth, not an unlimited-duration bound. Explicit
+collection is an effective workaround in this workload. Revising when X31
+recognizes a second allocator participant merits a separate candidate and
+native performance validation; no production policy was changed here.
+
+Validation: strict-warning C++ builds; 12 small-payload smoke processes; full
+payload verification and phase/live-byte checks in all 42 primary/control
+processes; matched frozen hashes; four separate traces. Raw data, both probe
+sources, commands, effective heap fields, and `analysis.json` are saved under
+`target/perf-experiments/X35/`. These observations do not establish a throughput
+regression or the frequency of genuinely free-only consumers in applications.
+
+## X36 — X26 hot-loop maintenance progress
+
+Completed 2026-10-22; no policy change. A worker initializes before the
+baseline, excluding X31's single-main-thread state. It keeps a 64-byte anchor
+live, warms that size class, then allocates, touches, verifies and frees a
+separate 64 MiB cold burst in 8 KiB objects. The ten-second observation is
+either idle, repeated allocation/free of one 64-byte object beside the
+anchor, or allocation/verification/free of 2,048-object batches that reach
+generic paths. All arms have the same preallocated system-allocator harness
+storage. The hot page never becomes empty. The existing owner heartbeat and
+generic counters are read at quiescent checkpoints; no callback, counter
+instrumentation, or heap visitor was added to the allocator.
+
+Three interleaved fresh processes per library/arm (18 primary runs) used the
+unchanged X33 libraries and the same CPU placement. Median results:
+
+| Library / activity | RSS after 10 s, MiB | Heartbeat advance | Allocation/free pairs | Sustained RSS t90 |
+|---|---:|---:|---:|---:|
+| Rust / idle | 72.270 | 0 | 0 | >10 s |
+| Rust / hot loop | 72.203 | 0 | 1,746,987,008 | >10 s |
+| Rust / generic batches | 9.910 | 2,426 | 265,691,136 | 1.071 s |
+| C / idle | 72.137 | 0 | 0 | >10 s |
+| C / hot loop | 9.855 | 25,640 | 1,468,465,152 | 1.091 s |
+| C / generic batches | 9.855 | 2,582 | 267,063,296 | 1.089 s |
+
+All three repeats in every idle/Rust-hot cell were censored at ten seconds;
+all repeats in the other cells reached t90, sustained for three periodic
+100 ms samples. Forced owner collection afterward reduced Rust hot-loop RSS
+from 72.203 to 8.203 MiB. The roughly 1.9 MiB variability in already-drained
+cells is consistent with the THP effects observed in X33/X34. RSS here includes
+smaller pointer storage than those 64-byte-burst experiments, so absolute
+totals should not be directly compared across probes.
+
+Four separate two-second syscall traces confirmed that Rust's hot activity
+issued no discard calls before the final forced collection, whereas C's hot
+activity and both generic-batch arms issued successful discard calls during
+activity. The existing code's heartbeat changes corroborate execution of
+maintenance; Rust hot-loop reuse made no such progress despite substantial
+allocator activity. This is the accepted X26 LIFO cadence tradeoff, distinct
+from the shared completely-idle purge limitation. Lowering a positive purge
+delay or changing a generic-path counter cannot cause progress in a path
+that never enters generic allocation.
+
+The mixed-work arms establish progress, not comparable throughput scores:
+generic batches perform different work and have a transient 128 KiB live
+set. No new heartbeat on the free fast path is proposed; X23's rejected cost
+still applies. Validation included strict C++ compilation, six small smoke
+processes, full cold/batch payload checks and anchor verification, phase/live
+checks in all primary runs, frozen hashes, and separately parsed syscall
+traces. Raw samples, counters, `summary.csv`, and reproducible analysis are
+under `target/perf-experiments/X36/`.
+
+## X37 — Sparse survivors and THP history
+
+Completed 2026-10-22; no policy change. A worker uses a private logical heap
+and the unchanged X33 libraries. A 64 MiB burst is fully touched and verified.
+Both packed and scattered cases retain exactly 512 objects; the packed case
+takes the first 512 blocks from visitor page order, and the scattered case
+takes one block from each of 512 distinct allocation pages. Two visitor passes
+before any frees establish real page membership and apply identical
+preconditioning. After freeing the other objects, the owner forces heap
+collection. The visitor is not called during passive observation; a final
+visit afterward verifies live counts and occupied-page counts.
+
+Controls free every object, or allocate only the same 512 survivors without
+ever having a large heap. System-allocator pointer storage and the page-group
+scratch space are reserved before the baseline in every case. The primary
+matrix has three processes per library, size (64 B / 8 KiB), and case
+(empty / packed / scattered / never-large): 48 processes, with two seconds
+of observation after collection. A further 48 THP-off controls use the same
+cases and three repetitions, with 100 ms observation; twelve additional
+64-byte packed/never-large runs observe ten seconds. Each published cell
+therefore has three independent process repetitions.
+
+Median process RSS immediately after forced collection, MiB:
+
+| Object size / library | Empty burst | Packed | Scattered | Never large |
+|---|---:|---:|---:|---:|
+| 64 B / Rust | 18.098 | 18.156 | 50.145 | 12.668 |
+| 64 B / C | 18.012 | 18.039 | 50.012 | 16.125 |
+| 8 KiB / Rust | 10.324 | 14.324 | 42.316 | 8.668 |
+| 8 KiB / C | 10.164 | 14.195 | 42.195 | 14.184 |
+
+For 64-byte objects the survivor payload is just 32 KiB: packed survivors
+occupy one allocator page and scattered survivors occupy 512. Their paired
+RSS difference is about 31.95 MiB in both libraries. For 8 KiB objects the
+survivor payload is 4 MiB: packed survivors occupy 64 pages and scattered
+survivors occupy 512; the paired RSS difference is about 28 MiB. With THP
+disabled these differences remain about 31.94–31.98 and 27.98–28.02 MiB,
+respectively. Thus the dominant scattered-survivor cost is occupied allocator
+pages, not the purge deadline or THP. A more aggressive idle collection
+cannot release these live pages under the current design.
+
+Six separate 64-byte syscall traces verified that collection discarded
+64.0625 MiB in the packed cases versus 32.125 MiB in the scattered cases,
+for both libraries; the never-large cases had no discardable payload pages
+at that checkpoint. All discard calls succeeded. Releasing the final
+survivors subsequently removed the placement-dependent difference.
+
+There is a separate history effect. Paired Rust packed-minus-never-large
+RSS immediately after collection was 5.52 MiB at 64 B and 5.62 MiB at 8 KiB.
+The ten-second 64-byte control showed a paired 7.09 MiB difference after
+background huge-page promotion. With THP disabled, the corresponding
+immediate differences were only 0.15 and 0.11 MiB. C also has history effects:
+its 64-byte difference was about 1.94 MiB immediately and 3.57 MiB at ten
+seconds, whereas its 8 KiB never-large case already had nearly the same RSS
+as its previously-large packed case. This is consistent with X29 preserving
+a low footprint for never-armed Rust heaps and losing that advantage after
+arming; it is not evidence of an absolute Rust/C post-burst RSS regression.
+
+Private-heap metadata contributes to the remaining baseline: deleting the
+empty logical heap after the final cleanup releases roughly another 2 MiB
+in the default-policy burst cases. The empty control and THP-off comparison
+keep that contribution distinct from survivor placement. The observed
+post-sleep RSS-only warmup is also small relative to the reported MiB-scale
+contrasts. No de-arming mechanism or live-object relocation is proposed here.
+
+Validation: strict-warning C++ build; 16 short full-payload smoke processes;
+108 primary/control processes with payload, live-count, actual page-membership,
+phase and idle-duration checks; frozen hash verification; six parsed syscall
+traces. Raw results, `summary.csv`, paired contrasts, effective heap fields,
+and probe/analysis sources are under `target/perf-experiments/X37/`.
+
+## X38 — Irregular bursts and collection grace periods
+
+Completed 2026-10-22; application-policy simulation only. The initialized
+worker and frozen X33 libraries perform a warm-up burst followed by 32
+measured 64 MiB bursts in 64-byte objects, verifying every byte before each
+free. Each next arrival is scheduled relative to completion of the previous
+free. A seeded shuffle uses twelve 10 ms gaps, six 100 ms, four 100.25 ms,
+four 500 ms, three 1,000.25 ms, two 1,500 ms, and one 5,000 ms gap. Every
+library/policy pair sees the same sequence within a repetition. Policies
+retain passively, collect immediately, or collect after 100 ms / 1 s of
+continued idleness. A timer that wakes after an arrival cancels collection;
+collection already in progress is allowed to finish and its delay is charged
+to that arrival.
+
+The latency proxy is completion of the first synthetic 1 MiB allocation-and-
+touch request, measured from its scheduled arrival. It includes wakeup delay,
+any overlapping collection, and allocation/page-fault work. It is not an
+application request/SLO measurement. All round telemetry is buffered until
+the entire sequence finishes. External RSS sampling has a median interval
+of 21.06 ms and median read cost 0.593 ms; average RSS is an integrated
+process-wide estimate over both bursts and gaps, not a precise measurement
+of each individual 10 ms pause. Allocator CPU includes collection, full
+refill/touch, and freeing; correctness verification is excluded from that
+CPU metric but included in the process residency interval.
+
+Five independent processes per library/policy give 40 primary processes and
+160 measured arrivals per cell. RSS and CPU columns are medians of process
+metrics; latency percentiles pool the 160 arrivals and are descriptive.
+
+| Library / policy | Mean RSS MiB | Allocator CPU ms/burst | First-request p50 ms | First-request p95 ms | Collections / 32 bursts |
+|---|---:|---:|---:|---:|---:|
+| Rust / passive | 101.93 | 14.462 | 0.263 | 2.172 | 0 |
+| Rust / immediate | 21.35 | 16.129 | 0.725 | 0.973 | 32 |
+| Rust / 100 ms grace | 33.27 | 14.497 | 0.286 | 1.205 | 14 |
+| Rust / 1 s grace | 73.12 | 14.314 | 0.260 | 1.690 | 6 |
+| C / passive | 101.85 | 14.581 | 0.272 | 2.010 | 0 |
+| C / immediate | 20.93 | 15.960 | 0.717 | 0.830 | 32 |
+| C / 100 ms grace | 32.97 | 14.593 | 0.275 | 1.138 | 14 |
+| C / 1 s grace | 72.51 | 13.935 | 0.258 | 1.621 | 6 |
+
+Immediate collection trades a higher median and CPU cost for low residency
+and a lower observed tail in this mix. The 100 ms grace gives a substantial
+memory reduction with similar measured allocator CPU, but aggregate
+percentiles hide a boundary cost. For Rust arrivals at 100.25 ms, passive
+median completion was 0.260 ms versus 1.180 ms under 100 ms grace; the
+conditional empirical p95 was 0.294 versus 2.599 ms (20 arrivals per policy).
+All twenty such grace-period arrivals overlapped collection. All fifteen
+arrivals at 1,000.25 ms likewise overlapped the 1 s collection. Maximum
+collection overruns past scheduled arrival were 1.156 ms / 1.492 ms for
+Rust's 100 ms / 1 s policies, and 0.696 ms / 1.282 ms for C. These are
+observations, not upper bounds.
+
+Ten additional Rust processes disabled RSS sampling entirely. The initial
+one-per-policy control reproduced all four near-100 ms and three near-1 s
+collection overlaps. One 1 s-grace CPU result was high (17.53 ms/burst), so
+three further interleaved passive/grace pairs were run. Their CPU results
+were 14.10–14.38 ms/burst passive and 13.68–14.26 ms/burst with 1 s grace,
+and all timer-overlap cases reproduced. The original high result remains
+in the data. These controls support the mechanisms while reinforcing the
+existing warning against small VM timing rankings or a native performance
+KEEP decision.
+
+The result supports choosing a grace period against an application's actual
+arrival distribution and latency requirements. It does not establish 100 ms
+as a universal default. The prior single-burst recommendation remains bounded:
+known long idle intervals are useful places to collect, while a timer on the
+request-owning thread can overlap an unexpected arrival. This experiment has
+no survivors, no competing owners, and no memory pressure; it does not remove
+the ownership and page-pinning limitations demonstrated in X35–X37.
+
+Validation: strict C++ build; eight scaled smoke processes with 33 verified
+bursts each; invalid phase/time/policy/gap records rejected; all 50 primary/
+control processes completed (1,600 measured bursts, plus warm-ups). Frozen
+hashes and identical per-repeat gap sequences matched; raw replay exactly
+reproduced every saved metric. `analysis.json`, `summary.csv`, by-gap latency
+results, `validation.json`, and `grace-periods.png`/`.svg` are under
+`target/perf-experiments/X38/`. No allocator policy or fast path changed.
+
+## X39 — Secure-release decommit protection
+
+**Result: confirmed translation defect, repaired.** Rust's Unix decommit branch
+tested only `MI_DEBUG == 0`; C also requires `MI_SECURE <= 2` before leaving
+decommitted memory accessible. A release build with Rust's `secure` feature
+(`MI_SECURE=4`) therefore discarded the contents but left the mapping writable
+and returned `needs_recommit=false`.
+
+The maintained `tests/unix/decommit.c` fixture allocates and touches an owned
+four-page primitive mapping, decommits it, checks the complete mapping's Linux
+permissions, and tests access in an isolated child. It then recommits, verifies
+zero contents and writable protection, and frees the mapping. This is an owned
+primitive protection test, not a use-after-free application probe. An initialized
+worker also verifies three allocation/free/collection/reuse cycles of 128
+32 KiB blocks, including all payload bytes.
+
+| Release mode | Library/state | `needs_recommit` | Decommitted permissions | Child write |
+|---|---|---:|---|---|
+| default | C and Rust, before/after | false | `rw-p` | succeeds |
+| secure 4 | C | true | `---p` | SIGSEGV |
+| secure 4 | Rust before | false | `rw-p` | succeeds — regression fails |
+| secure 4 | Rust after | true | `---p` | SIGSEGV — regression passes |
+
+The production repair adds the missing secure-level condition. It adds no unsafe
+site and does not alter the ordinary release branch. The existing Linux syscall
+driver now runs this fixture against optimized default and secure-release C and
+Rust builds. C-linked Rust release archives disable LTO to supply native objects;
+the first link failure with fat-LTO objects is retained with the experiment.
+
+Validation: the new fixture fails against the frozen old Rust secure archive
+and passes against the repaired one; recommit, zeroing, and worker reuse pass
+in all four final combinations. Existing hinted-mapping ownership checks and
+all 11 normalized Unix syscall classes still pass. Secure/debug hardening parity,
+strict C compilation (`-Wall -Wextra -Werror`), `cargo fmt --all`, workspace /
+all-target / all-feature Clippy, and the corresponding complete Rust tests pass.
+The syscall driver was rerun successfully after the subsequent X40 repair.
+
+Pre-fix and post-fix executables, source snapshots, SHA-256 hashes, failing and
+passing outputs, and Rust gate logs are under `target/perf-experiments/X39/`.
+
+## X40 — Explicit teardown leaves a stale destructor pointer
+
+**Result: reproduced, classified as inherited from C 3.3.2, and repaired.** The
+original E02R binaries and exact invocation could not be recovered. The current
+maintained sustained probe from `scripts/check-release-thread-stress.py`, built
+with TSan, reproduces the named `_mi_theap_create` / `_mi_thread_done` boundary
+in all three runs of both current Rust and vendored C. This closes the finding
+with a defect and regression evidence, not as a stale non-reproduction.
+
+### Mechanism and repair
+
+`mi_thread_done` publishes the empty default heap and releases thread-heap
+metadata. In both implementations the default setter updates the primitive
+destructor association only for an initialized heap, so the pthread key still
+contains the freed heap address. At actual thread exit, `mi_pthread_done` passes
+that address to `_mi_thread_done`. Another thread can already be initializing
+new metadata at the same address.
+
+Rust reports the new owner's writes to `tld` and `heap` in
+`_mi_theap_init_typed` against the exiting thread's `ThreadHeapPtr::state` reads
+through `mi_pthread_done` and `done_typed`. C reports the initialization memcpy
+against `_mi_thread_done`'s atomic heap read. List locks and metadata allocation
+synchronization do not protect a destructor using a pointer after ownership
+ended. An atomic heap read does not make this lifetime violation safe.
+
+The repair clears the primitive destructor association at the start of
+`theaps_done`, before releasing any metadata. Later initialization registers its
+new live heap. No new lock, atomic ordering, unsafe block, or allocator policy
+is introduced. A diagnostic copy of C with the same one-line association clear
+also passes three sustained TSan runs; vendored C is unchanged.
+
+The deterministic Unix unit regression checks the pthread key after each of
+three explicit teardown/reinitialization cycles. It fails before the repair and
+passes afterward, inspecting only pointer values. The maintained
+`tests/thread_lifecycle.rs` runs eight workers through 256 init/allocate/touch/
+free/done cycles each, mixing explicit teardown at exit with reinitialization
+followed by automatic teardown. It also fails under release TSan before the
+repair. Both sanitizer suites now include it.
+
+The first minimized probe reinitialized **every** worker before exit and passed
+ten debug and ten release runs. That variant overwrote the stale association
+and missed the defect. Those passes are retained but are not the closure
+evidence; the mixed-exit regression and sustained probe are.
+
+### Reproduction configuration
+
+Evidence is Linux x86_64 GNU, source `08cf8a0d` plus the recorded working-tree
+repairs, rustc nightly `1.101.0-nightly (5d8fec066 2026-10-16)`, LLVM 23.1.4,
+Clang 23.1.2, and the host/environment in `X40/manifest.json`. No TSan
+suppression or `TSAN_OPTIONS` override was used. Current nightly makes the
+repository's CPUID unsafe block unnecessary; `-Aunused-unsafe` allows that
+unrelated lint in these sanitizer builds. The initial unmodified command's
+compile failure is retained. Ordinary Rust verification uses pinned 1.92.0.
+
+The optimized minimized test command is:
+
+```sh
+RUSTFLAGS='-Aunused-unsafe --cfg mi_sanitizer_runtime -Zsanitizer=thread -Zunstable-options -Cpanic=immediate-abort -C lto=off -C linker-plugin-lto=no -C embed-bitcode=no' \
+  cargo +nightly test -Zbuild-std -Zpanic-abort-tests --release \
+  --target-dir target/sanitizer-thread-release --target x86_64-unknown-linux-gnu \
+  --features std --test thread_lifecycle
+```
+
+The sustained C-ABI Rust archive uses:
+
+```sh
+RUSTFLAGS='-Aunused-unsafe --cfg mi_sanitizer_runtime -Zsanitizer=thread -Zunstable-options -Cpanic=immediate-abort -C lto=off -C linker-plugin-lto=no -C embed-bitcode=no -C debuginfo=2' \
+  cargo +nightly rustc -Zbuild-std=core,alloc --release --features c-abi --lib \
+  --target-dir target/perf-experiments/X40/tsan-c-abi \
+  --target x86_64-unknown-linux-gnu --crate-type staticlib
+```
+
+`X40/sustained.c` is the unchanged `PROBE` from the maintained release-thread
+stress script. It is linked with that archive using
+`clang -fsanitize=thread -O2 -g -std=c11 -DNDEBUG -DMI_DEBUG=0`, the vendored
+include directory, and `-pthread -ldl -lm`. The C comparison links the same
+probe with `mimalloc-3.3.2/src/static.c` and the same flags, adding its source
+include directory. Do **not** define `MI_MALLOC_OVERRIDE=0`: C checks whether
+the macro is defined, and that still overrides the sanitizer's allocator.
+The first three C startup crashes from that configuration are retained and
+excluded from the three completed reproductions. Rust's
+`mi_sanitizer_runtime` cfg disables conflicting allocator interposition.
+
+### Results and verification
+
+| Probe | Before | After |
+|---|---|---|
+| Sustained Rust release C ABI | 3/3 fail, two race reports each | 10/10 clean |
+| Sustained C 3.3.2 | 3/3 fail, one race report each | Diagnostic association-clear copy: 3/3 clean |
+| Minimized mixed-exit Rust, release TSan | fails with race reports | 10/10 clean |
+| Direct pthread-key regression | fails | passes |
+
+After the repair, `cargo fmt --all`, workspace / all-target / all-feature
+Clippy and tests pass. The latter includes all six Loom models. Release C-ABI
+thread stress, complete behavioral parity, maintained debug TSan and ASan
+suites, and the X39 Unix syscall/protection matrix pass. Valgrind thread stress
+reports zero errors and zero leaks. The tracking-parity driver initially used
+a shared-target archive whose tracking shims were inactive; a fresh isolated
+archive passes all five C/Rust application classifications. The driver now
+uses a dedicated target directory and itself passes. The raw Valgrind outputs
+are retained; matching application classifications is distinct from the zero-
+error result of the thread-stress run.
+
+A fresh ordinary `interpose` artifact retains the same native malloc/free
+symbol addresses and sizes (81/162 bytes) as the frozen X33 artifact, and
+normalized disassembly matches for both. This is a cold lifecycle/protection
+repair, not a measured throughput improvement. No platform beyond this Linux
+host is claimed as runtime-validated.
+
+`X40/manifest.json` records source/probe/binary hashes and toolchains. Failing
+and passing probes, all raw sanitizer and gate logs, the diagnostic C source,
+and the assembly comparison remain under `target/perf-experiments/X40/`.

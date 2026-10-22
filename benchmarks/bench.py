@@ -9,6 +9,7 @@ import applications
 import bolt
 import nginx
 import rivals
+import retention
 import webserver
 import contextlib
 import csv
@@ -334,6 +335,8 @@ def report(directory: Path) -> bool:
         return webserver.report(directory, manifest)
     if manifest.get("suite") == "architecture":
         return architecture.report(directory, manifest)
+    if manifest.get("suite") == "retention":
+        return retention.report(directory, manifest)
     allocators = manifest.get("allocators", list(ALLOCATORS))
     rust_label, c_label = ALLOCATORS
     has_rust, has_c = rust_label in allocators, c_label in allocators
@@ -671,6 +674,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     architectural.add_argument("--cycles", type=minimum, default=8)
     architectural.add_argument("--repeats", type=minimum, default=3)
     architectural.add_argument("--output", help="new or empty results directory")
+    retention_parser = sub.add_parser("retention", help="X33 burst/idle/reburst with external OS memory sampling")
+    retention.add_arguments(retention_parser, minimum, default_jobs())
     build_parser = sub.add_parser("build", help="incrementally build the native comparison artifacts")
     build_parser.add_argument("--nginx", action="store_true", help="also fetch/build Nginx production/debug-palloc and wrk")
     build_parser.add_argument("--applications", action="store_true", help="also fetch/build pinned Redis and RocksDB")
@@ -711,6 +716,8 @@ def main(argv: list[str] | None = None) -> int:
             return webserver.run(args, sys.modules[__name__])
         if args.command == "architecture":
             return architecture.run(args, sys.modules[__name__])
+        if args.command == "retention":
+            return retention.run(args, sys.modules[__name__])
         if args.command == "run":
             return compare(args)
         if args.command == "screen":

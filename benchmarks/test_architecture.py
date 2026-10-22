@@ -11,6 +11,7 @@ import unittest
 
 import architecture
 import bench
+import retention
 
 
 def rows_for(scenario, cycles=2):
@@ -128,6 +129,20 @@ class ArchitecturalIntegrationTests(unittest.TestCase):
                     rows = self.measure(os.environ[variable], "segment-occupancy", block)
                     self.assertEqual(rows[1]["live_bytes"], 4 * 1024 * 1024)
                     self.assertEqual(rows[-2]["occupied_pages"], 0)
+
+    def test_retention_ownership_and_phase_handoffs(self):
+        for variable in ("ARCHITECTURE_TEST_RUST_LIB", "ARCHITECTURE_TEST_C_LIB"):
+            for action in retention.ACTIONS:
+                with self.subTest(library=variable, action=action):
+                    directory = Path(self.temporary.name) / variable / action
+                    command = [str(self.executable), "--library", os.environ[variable],
+                               "--scenario", "burst-idle", "--action", action,
+                               "--bytes", "4194304", "--block-size", "64", "--threads", "1", "--idle-ms", "100"]
+                    observation = retention.observe(command, directory, os.environ.copy(), 100, 10)
+                    result = retention.summarize(observation, 0 if action == "empty" else 4194304, 100)
+                    self.assertEqual([e["phase"] for e in observation["events"]], list(retention.PHASES))
+                    self.assertGreater(result["refill_ms"], 0)
+                    self.assertEqual(observation["events"][-1]["live_bytes"], 0)
 
     def test_invalid_cli_and_missing_library_fail(self):
         for args in (("--cycles", "0"), ("--library", "/nonexistent", "--scenario", "cross-thread")):

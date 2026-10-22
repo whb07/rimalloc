@@ -22,7 +22,9 @@
 using Clock = std::chrono::steady_clock;
 struct Config {
   std::string library, scenario;
+  std::string action = "idle";
   size_t bytes = 64 * 1024 * 1024, block = 4096, threads = 4, cycles = 8;
+  size_t idle_ms = 10000;
 };
 static size_t os_page;
 
@@ -246,6 +248,115 @@ static void churn(Api& api, const Config& c) {
   }
 }
 
+// X33: all four arms have the same initialized owner/helper history. The
+// controller samples /proc externally and acknowledges each phase on stdin.
+static void burst_idle(Api& api, const Config& c) {
+  const auto thread_init = api.symbol<decltype(&mi_thread_init)>("mi_thread_init");
+  std::vector<void*> pool(c.bytes / c.block, nullptr);
+  const bool empty = c.action == "empty";
+  const size_t count = empty ? 0 : pool.size();
+  enum class Command { fill, free, collect, stop };
+  struct Worker {
+    std::barrier<> sync{2};
+    Command command = Command::fill;
+    double work_ns = 0;
+  } owner, helper;
+  auto work = [&](Worker& worker) {
+    thread_init();
+    worker.sync.arrive_and_wait();
+    for (;;) {
+      worker.sync.arrive_and_wait();
+      if (worker.command == Command::free) {
+        for (size_t i = 0; i < count; ++i) {
+          const auto* data = static_cast<const unsigned char*>(pool[i]);
+          for (size_t j = 0; j < c.block; ++j)
+            if (data[j] != 0xa5) throw std::runtime_error("burst payload corrupted");
+        }
+      }
+      auto start = Clock::now();
+      switch (worker.command) {
+        case Command::fill:
+          for (size_t i = 0; i < count; ++i) {
+            if (pool[i]) throw std::runtime_error("burst block still live");
+            pool[i] = api.alloc(c.block);
+            if (!pool[i]) throw std::runtime_error("burst allocation failed");
+            std::memset(pool[i], 0xa5, c.block);
+          }
+          break;
+        case Command::free: release(api, pool); break;
+        case Command::collect: api.collect(true); break;
+        case Command::stop: api.thread_done(); break;
+      }
+      worker.work_ns = elapsed(start);
+      const bool stop = worker.command == Command::stop;
+      worker.sync.arrive_and_wait();
+      if (stop) return;
+    }
+  };
+  std::thread helper_thread(work, std::ref(helper));
+  helper.sync.arrive_and_wait();
+  std::thread owner_thread(work, std::ref(owner));
+  owner.sync.arrive_and_wait();
+  auto dispatch = [](Worker& worker, Command command) {
+    worker.command = command;
+    worker.sync.arrive_and_wait();
+    worker.sync.arrive_and_wait();
+    return worker.work_ns;
+  };
+  auto event = [&](const char* phase, size_t live, double ns = 0, double work_ns = 0) {
+    timespec ts{};
+    if (clock_gettime(CLOCK_MONOTONIC, &ts)) std::abort();
+    rusage usage{};
+    if (getrusage(RUSAGE_SELF, &usage)) std::abort();
+    std::cout << "{\"phase\":\"" << phase << "\",\"monotonic_ns\":"
+              << static_cast<unsigned long long>(ts.tv_sec) * 1000000000ULL + ts.tv_nsec
+              << ",\"live_bytes\":" << live << ",\"blocks\":" << count
+              << ",\"elapsed_ns\":" << ns << ",\"work_ns\":" << work_ns
+              << ",\"minor_faults\":" << usage.ru_minflt
+              << ",\"major_faults\":" << usage.ru_majflt
+              << ",\"purge_delay_ms\":" << api.option_get(mi_option_purge_delay)
+              << ",\"arena_purge_mult\":" << api.option_get(mi_option_arena_purge_mult)
+              << ",\"page_full_retain\":" << api.option_get(mi_option_page_full_retain)
+              << ",\"allow_thp\":" << api.option_get(mi_option_allow_thp) << "}" << std::endl;
+    if (std::cin.get() != '\n') std::abort();
+  };
+  const auto idle = std::chrono::milliseconds(c.idle_ms);
+  event("ready", 0);  // Warm the output path before measuring the baseline.
+  event("baseline", 0);
+  auto start = Clock::now();
+  auto work_ns = dispatch(owner, Command::fill);
+  event("filled", count * c.block, elapsed(start), work_ns);
+  start = Clock::now(); work_ns = dispatch(owner, Command::free);
+  auto freed = Clock::now();
+  event("freed", 0, elapsed(start), work_ns);
+  std::this_thread::sleep_until(freed + idle);
+  event("before-intervention", 0);
+  start = Clock::now(); work_ns = 0;
+  if (c.action == "owner-collect") work_ns = dispatch(owner, Command::collect);
+  else if (c.action == "other-collect") work_ns = dispatch(helper, Command::collect);
+  else if (c.action == "owner-exit") {
+    work_ns = dispatch(owner, Command::stop);
+    owner_thread.join();
+  }
+  event("intervened", 0, elapsed(start), work_ns);
+  std::this_thread::sleep_until(freed + idle * 2);
+  event("settled", 0);
+  start = Clock::now();
+  if (c.action == "owner-exit") {
+    owner_thread = std::thread(work, std::ref(owner));
+    owner.sync.arrive_and_wait();
+  }
+  work_ns = dispatch(owner, Command::fill);
+  event("refilled", count * c.block, elapsed(start), work_ns);
+  start = Clock::now(); work_ns = dispatch(owner, Command::free);
+  freed = Clock::now();
+  event("refreed", 0, elapsed(start), work_ns);
+  std::this_thread::sleep_until(freed + idle);
+  event("final", 0);
+  dispatch(owner, Command::stop); owner_thread.join();
+  dispatch(helper, Command::stop); helper_thread.join();
+}
+
 static size_t positive(const char* value) {
   if (!*value || *value == '-') throw std::runtime_error("expected a positive integer");
   size_t used = 0;
@@ -266,23 +377,29 @@ int main(int argc, char** argv) {
       else if (option == "--block-size") c.block = positive(argv[i + 1]);
       else if (option == "--threads") c.threads = positive(argv[i + 1]);
       else if (option == "--cycles") c.cycles = positive(argv[i + 1]);
+      else if (option == "--action") c.action = argv[i + 1];
+      else if (option == "--idle-ms") c.idle_ms = positive(argv[i + 1]);
       else throw std::runtime_error("unknown option: " + option);
     }
     if (c.library.empty() || c.bytes / c.block < c.threads ||
         c.threads >= static_cast<size_t>(std::numeric_limits<std::ptrdiff_t>::max()))
       throw std::runtime_error("provide --library and at least one block per thread");
     if (c.scenario != "segment-occupancy" && c.scenario != "cross-thread" &&
-        c.scenario != "decommit-oscillation" && c.scenario != "thread-churn")
+        c.scenario != "decommit-oscillation" && c.scenario != "thread-churn" &&
+        c.scenario != "burst-idle")
       throw std::runtime_error("unknown scenario");
+    if (c.action != "idle" && c.action != "owner-collect" && c.action != "other-collect" &&
+        c.action != "owner-exit" && c.action != "empty") throw std::runtime_error("unknown action");
     const long page = sysconf(_SC_PAGESIZE);
     if (page <= 0) throw std::runtime_error("cannot determine OS page size");
     os_page = static_cast<size_t>(page);
     Api api(c.library);
+    std::cout.precision(17);
+    if (c.scenario == "burst-idle") { burst_idle(api, c); return 0; }
     if (c.scenario == "decommit-oscillation") {
       api.option_set(mi_option_purge_delay, 0);
       api.option_set(mi_option_arena_purge_mult, 1);
     }
-    std::cout.precision(17);
     std::cout << "{\"phase\":\"baseline\",\"cycle\":0,\"elapsed_ns\":0,\"operations\":0,\"live_bytes\":0,\"rss_bytes\":"
               << snapshot().rss << ",\"rss_delta_bytes\":0,\"minor_faults\":0,\"major_faults\":0,\"occupied_pages\":-1,\"purge_delay_ms\":"
               << api.option_get(mi_option_purge_delay) << "}\n";

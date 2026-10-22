@@ -1,6 +1,6 @@
 # Architectural allocator probes
 
-`architectural_bench.cpp` implements four Linux C++20 probes. The same binary
+`architectural_bench.cpp` implements Linux C++20 probes. The same binary
 loads either allocator library directly; harness containers and thread support
 use the system allocator. No preload is needed. Run from the repository root:
 
@@ -93,3 +93,36 @@ ARCHITECTURE_TEST_C_LIB=/absolute/path/libmimalloc.so \
 
 The real-library checks are skipped when these paths are absent. A completed
 architecture run records usable library paths in its `manifest.json`.
+
+## X33 retention observation
+
+`bench.py retention` drives the same C++ probe through a burst, 10 seconds of
+passive idle, one intervention, another 10 seconds of observation, and an equal
+reburst/free followed by 10 seconds of idle. The four actions are `idle`,
+`owner-collect`, `other-collect`, and `owner-exit`. Both the owner and helper
+initialize before the baseline in every action; owner exit keeps the process
+alive and uses a replacement owner for the reburst. `empty` keeps the pointer
+bookkeeping and threads but omits payload allocation, as a harness control.
+Every payload byte is written and verified. No heap visitor or collection runs
+inside passive windows. The probe waits for sampler acknowledgments at phase
+boundaries, outside the recorded allocation/free work times.
+
+Choose worker and sampler CPUs on different physical cores, then run A/A before
+the Rust/C matrix. Each label and action runs in a fresh process. For example:
+
+```sh
+./benchmarks/bench.py retention --worker-cpu 2 --sampler-cpu 4 --aa --action idle \
+  --output target/perf-experiments/X33/aa
+./benchmarks/bench.py retention --worker-cpu 2 --sampler-cpu 4 \
+  --artifacts target/perf-experiments/X33/aa/manifest.json \
+  --output target/perf-experiments/X33/matrix
+```
+
+Defaults are five repetitions, 64 MiB of 64-byte blocks, and 100 ms external
+sampling. `--idle-ms` and `--sample-ms` allow short correctness runs. The runner
+records RSS, PSS, anonymous/huge/lazy-free bytes from `smaps_rollup`, faults,
+phase times, sampler CPU cost, host pressure, options, artifact hashes, and raw
+samples. It freezes library/probe copies before measurement. `--aa` uses the
+same Rust artifact under both labels. Allocation/free times exclude payload
+verification; refill total time includes replacement-thread startup in the
+owner-exit arm. Results are observations, without performance acceptance gates.

@@ -86,6 +86,14 @@ and the conclusion drawn from them.
 | X38 | Compare grace periods under irregular repeated bursts | Passive, immediate, 100 ms and 1 s owner collection, including arrivals near timer deadlines | **NO POLICY CHANGE**: 100 ms grace reduces mean Rust RSS from 102 to 33 MiB at similar measured CPU cost in this mix; near-deadline arrivals expose collection stalls | `target/perf-experiments/X38/`; recorded below |
 | X39 | Check secure-release decommit protection against C | Owned primitive mapping, isolated access probe, recommit and allocation reuse | **FIXED**: secure level 4 now protects decommitted memory and requests recommit, matching C | `target/perf-experiments/X39/`; recorded below |
 | X40 | Resolve the historical thread-lifecycle TSan report | Reproducing release C-ABI stress, minimized lifecycle test, direct pthread-key regression | **FIXED inherited defect**: explicit teardown now clears the destructor association before metadata release; ten clean runs of each repaired Rust probe | `target/perf-experiments/X40/`; recorded below |
+| X41 | Establish a fresh baseline for the authorized follow-ups | Six balanced full-suite Rust/C rounds before the Rust-only scope change | Complete: frozen inputs and remaining gaps recorded below | `target/perf-experiments/X41/` |
+| X42 | Recognize consumers that free without allocating | Mark participation on owned remote publication and owner collection | **KEEP**: twelve-burst RSS 784→108 MiB; final combined gate in X48 | `target/perf-experiments/X42/` |
+| X43 | Measure idle grace with real producer arrivals | Queue-driven owner, external sampling, overlap timestamps | **KEEP application recipe**: 100 ms grace reduces mean RSS 102→33 MiB in this workload; overlapping arrivals remain a latency cost | `target/perf-experiments/X43/` |
+| X44 | Avoid sparse survivor pinning by separating lifetimes | Same live cache and temporary payload in one versus two private heaps | **KEEP application guidance**: RSS 50→18 MiB, occupied cache pages 512→1 | `target/perf-experiments/X44/` |
+| X45 | Provide maintenance during uninterrupted hot reuse | Non-forced owner collection between batches | **KEEP application recipe**: 1 s checkpoint reduces final RSS 72→8 MiB at −0.18% measured loop rate | `target/perf-experiments/X45/` |
+| X46 | Localize THP advice to dense backing | Every-allocation and first-use prototypes | **REJECT both**: repeated collapse costs up to 22×; first-use full-suite time +5.12%, sh6 +88.20%, rptest +52.21% | `target/perf-experiments/X46/` |
+| X47 | Skip reclaim/reabandon without a main-heap association | Exact null-destination gate after collection and final-free handling | **KEEP**: futile calls removed; final xmalloc time −14.83% in X48 | `target/perf-experiments/X47/` |
+| X48 | Qualify the final retained changes together | Six paired full-suite Rust old/new rounds, application controls, retention repeats, local verification | **KEEP retained scope**: full-suite time −1.45%, local checks pass; Redis inconclusive; cross-target limitations recorded below | `target/perf-experiments/X48/` |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -2748,8 +2756,7 @@ of the long workloads; it is excluded from these results.
 
 ## X42 — Free-only consumers participate in retained-page maintenance
 
-Implementation and retention verified 2026-10-22; throughput assessment is
-running on the follow-up branch. X31 treated non-main allocator TLD creation
+Kept on the follow-up branch, 2026-10-22. X31 treated non-main allocator TLD creation
 as evidence of multiple participants. A consumer that only freed allocations
 could leave that flag false indefinitely, so each producer burst added another
 set of full pages to the producer's retained queue.
@@ -2806,4 +2813,442 @@ recorded pre-fix failure and post-fix pass.
 
 Frozen libraries, native layout, pre-fix failures, passing checks, all phase
 records, samples, and repeat summaries are under
-`target/perf-experiments/X42/`. Throughput and final decision follow below.
+`target/perf-experiments/X42/`.
+
+The first placement was screened against frozen pre-fix Rust in six balanced
+pairs across all 21 native workloads, with three-second timed workloads and
+one invocation per process. Its geometric mean time ratio was +1.07%.
+Warm focused repeats resolved the short, cold `malloc-large` difference
+(+0.33% across eight pairs), but Larson and rptest had positive, noisy medians.
+The owner-side marker was therefore moved before remote-list validation,
+where a uniquely detached nonempty list already proves remote activity. This
+reduced collection-routine growth from 78 to 48 bytes without changing the
+native malloc/free entrypoints. Invalid lists still follow the existing error
+path; the policy flag can conservatively become true before that error.
+
+Six further balanced old-Rust/new-Rust pairs used the final placement,
+five-second timed workloads, and one warmup plus three measured invocations
+for the short cases. Median candidate time differences:
+
+| Workload | Final placement versus pre-fix Rust |
+|---|---:|
+| Larson | −1.75% |
+| rptest | −0.04% |
+| xmalloc | +1.64% |
+| glibc-simple | +0.13% |
+| sh8 | −0.92% |
+
+The five-case geometric mean was −0.20%. Threaded results remain variable:
+Larson pairs ranged from −11.4% to +13.4%, and sh8 from −5.2% to +11.0%.
+Five of six xmalloc pairs were slower, so the +1.64% median is retained as a
+possible cost, not dismissed as a demonstrated zero-cost change. The clear
+retention/progress benefit justifies keeping this small policy correction;
+these measurements do not establish a general throughput improvement.
+
+A held-out Redis 6.2.7 check of the first placement used six balanced pairs,
+3.2 million SET/GET operations, 256-byte values, 50 connections, pipeline 16,
+disjoint server/client physical cores, and an allocator-ownership check.
+Median throughput ratios were +1.33% SET and +0.35% GET, with mixed pair
+signs. This did not reveal a repeatable application regression and is not
+claimed as an application speedup. The final placement also passed both
+native free-only cases and a fresh twelve-burst old/new Rust confirmation.
+Final aggregate Rust and sanitizer checks are recorded with the completed
+follow-up results below.
+
+## X43 — Owner idle collection with an actual producer queue
+
+Kept as an opt-in application pattern, 2026-10-22. A system-allocated producer
+thread enqueues work after the previous job completes; an allocator-owning
+worker waits on a condition variable. This replaces X38's single-thread
+arrival simulation with actual enqueue/wakeup and collection overlap. Four
+fixed-seed orders contain 32 gaps each: twelve 10 ms, six 100 ms, four
+100.25 ms, four 500 ms, three 1,000.25 ms, two 1.5 s, and one 5 s.
+Every job allocates, touches, verifies, and frees 64 MiB of 64-byte objects.
+The producer cannot tell the owner a future arrival time. A timeout collects
+once, then waits for the next job, including jobs arriving during collection.
+
+All sixteen fresh processes used only final-placement Rust from X42. Policy
+order rotates by repeat; owner, producer, and external sampler use separate
+physical cores 2, 4, and 6. Sampling is every 20 ms. Mean RSS is integrated
+over the sequence and includes the system-allocated pointer array and harness.
+CPU covers refill, free, and collection, excluding payload verification.
+The latency measure ends after the first 1 MiB of each refill; it is not a
+complete application-request latency or an HTTP benchmark.
+
+| Policy | Mean RSS, MiB | Allocator CPU, ms/burst | First 1 MiB median, ms | First 1 MiB p95, ms | Collections per 32 jobs |
+|---|---:|---:|---:|---:|---:|
+| Passive | 101.866 | 14.909 | 0.227 | 2.077 | 0 |
+| Immediate forced collection | 21.264 | 16.458 | 0.756 | 0.938 | 32 |
+| 100 ms idle grace | 33.003 | 15.070 | 0.249 | 1.202 | 14.5 |
+| 1 s idle grace | 72.565 | 14.382 | 0.224 | 1.520 | 6 |
+
+RSS, CPU, and call counts are medians of the four process results; response
+quantiles pool 128 bursts per policy. In this sequence the 100 ms grace reduced
+mean RSS by 67.6%, with an observed 1.1% higher median CPU cost. Immediate
+collection reduced residency further but raised median CPU by 10.4% and
+increased the median first-refill response. These are workload-specific
+tradeoffs, not universal timeout recommendations or statistically established
+small CPU improvements. There were 18 collection/arrival overlaps with the
+100 ms grace and 12 with the 1 s grace across all repeats. Maximum measured
+collection overruns past actual enqueue were 0.759 ms and 0.944 ms.
+
+`examples/worker_maintenance.rs` demonstrates owner-side idle collection
+using the existing raw API, with a single collection per idle interval.
+Applications should choose their grace from their own idle gaps, memory
+budget, and response-time requirements. No real application arrival trace
+was supplied, and the existing small-footprint web-server benchmark does not
+justify imposing this policy on every request. Source, frozen library/hashes,
+actual arrival timestamps, samples, payload checks, and summaries are under
+`target/perf-experiments/X43/worker-primary/`.
+
+A two-seed control repeated passive and 100 ms grace without the sampler.
+Median CPU was 14.921 / 15.030 ms per burst, versus 14.997 / 15.047 ms for
+the same two sampled seeds. Arrival overlaps remained present (ten across
+the two grace runs). This supports the qualitative tradeoff without treating
+the roughly one-percent CPU difference as a precise universal cost. Control
+records are under `target/perf-experiments/X43/worker-no-sampling/`.
+
+## X44 — Separate temporary allocations from sparse cache survivors
+
+Kept as application guidance using existing heap ownership, 2026-10-22.
+Six balanced pairs used only final X42 Rust. Both policies made exactly
+1,048,576 allocations of 64 bytes: 512 cache entries, each interleaved with
+2,047 temporary objects. The mixed policy allocated both classes in one
+private heap; the separate policy used two private heaps through the same
+allocation API. All payload bytes were verified. Temporary objects were then
+freed, both relevant heaps force-collected, and the 32 KiB of cache payload
+left live for three seconds. A visitor counted occupied pages only after the
+observation window. Refill used the same temporary heap and traffic.
+
+| Policy | Settled process RSS, MiB | Pages holding 512 cache objects | Initial fill, ms | Refill, ms | Refill minor faults |
+|---|---:|---:|---:|---:|---:|
+| Mixed lifetimes | 50.070 | 512 | 34.237 | 17.719 | 4,951 |
+| Separate heaps | 18.135 | 1 | 34.283 | 13.012 | 552 |
+
+Values are medians of six fresh processes per policy. The RSS reduction was
+31.936 MiB despite the additional heap's metadata; initial fill time was
+similar. The exact one-page versus 512-page occupancy and identical live
+payload identify sparse lifetime mixing as the retained-capacity cause.
+Refill also improved here, but that result depends on page layout, reuse, and
+THP history and is not promised for every heap split. All cache bytes survived
+refill verification; final live payload was zero after freeing objects and
+deleting the heaps. Deleting a heap with live objects was not used as a
+substitute for freeing those objects.
+
+The README now demonstrates separate safe `Heap` lifetimes. This is an
+allocation-classification decision for an application that knows which data
+outlives a request, rather than a new allocator heuristic that tries to infer
+object lifetime. Frozen artifacts, raw phases, samples, and strict-compiled
+probe source are under `target/perf-experiments/X44/lifetimes-primary/`.
+
+## X45 — Maintenance between hot allocation batches
+
+Kept as an explicit application checkpoint, 2026-10-22. Eight balanced
+four-policy rounds used final X42 Rust only. An initialized worker retains a
+64-byte anchor, allocates/touches/verifies/frees a 64 MiB cold burst of 8 KiB
+objects, then runs a three-second 64-byte allocate/write/free loop. Time is
+checked between batches of 2,048 pairs. Policies are passive, non-forced
+collection every 100 ms or 1 s, and forced collection every 100 ms. The
+external sampler runs every 100 ms on a separate physical core. Payload
+verification, anchor preservation, and zero final live bytes passed in all
+32 processes.
+
+| Policy | Final active RSS, MiB | Million pairs/s | Collections | Median RSS t90, s | Maximum single collection, ms |
+|---|---:|---:|---:|---:|---:|
+| Passive | 72.191 | 167.922 | 0 | Not reached in 3 s | 0 |
+| Non-forced, 100 ms | 8.148 | 167.497 | 29 | 1.069 | 0.661 |
+| Non-forced, 1 s | 8.254 | 167.621 | 2 | 1.069 | 1.360 |
+| Forced, 100 ms | 8.174 | 171.248 | 29 | 0.161 | 0.673 |
+
+RSS, rate, calls, and t90 are medians of eight processes. The pause column is
+the maximum across all processes. t90 is relative to the pre-burst baseline
+and requires three consecutive periodic samples; its precision is limited by
+the sampling cadence. Both non-forced policies reached t90 in all repeats;
+calling ten times as often did not bypass the pending arena-purge deadline.
+The 1 s policy's median rate was 0.18% below passive, versus 0.25% for 100 ms.
+The forced policy's higher measured rate is not treated as a general speedup.
+Median excess RSS integrals over the three seconds were 203.45, 76.76, 76.78,
+and 18.55 MiB-seconds respectively.
+
+The worker example now includes non-forced maintenance between completed
+batches as well as one forced collection after sustained idleness. These
+hooks provide progress when the X26 hot free-list cycle never reaches generic
+allocation. They do not add work to every allocator free. The previously
+rejected X23 per-free countdown remains rejected; repeating its known fast
+path cost would not improve this result. Normal collection of pending arena
+purges is not a promise to drain every possible remote-owner retention state.
+The source, frozen inputs, samples, resource counts, and summaries are under
+`target/perf-experiments/X45/batches-primary/`.
+
+## X46 — Localize THP advice without repeatedly collapsing reused backing
+
+The first density prototype was rejected. It retained the 32 MiB activation
+threshold, but advised/collapsed only fully allocated, aligned 2 MiB regions,
+using the existing free-slice bitmap. Fresh arenas cleared the primitive's
+broad huge-page advice before touching metadata. Three Rust-only paired memory
+repeats saved about 1.6–1.8 MiB after empty/packed/large-to-small histories,
+while a fresh small-process control stayed approximately 12.7 MiB. Dense
+64 MiB bursts retained 66–68 MiB of huge-page coverage versus 68–70 MiB.
+
+However, advising on every subsequent arena allocation repeated collapse on
+recycled ranges. Two complete balanced native rounds found `malloc-large`
+21.46–22.29 times slower and sh8 1.55–1.95 times slower. The four-round screen
+was stopped after those two complete rounds; the interruption and partial
+next round are retained, and only complete pairs are summarized. A separate
+syscall trace of one `malloc-large` invocation found one `MADV_HUGEPAGE` and
+one `MADV_COLLAPSE` in the baseline, versus 15,239 of each in this prototype.
+That cost decisively outweighed the RSS reduction.
+
+The revised candidate uses first-use information already produced by the
+arena's dirty-slice bitmap. It captures that fact before recommit can report
+zero-filled memory for reused backing. After activation, only wholly fresh
+claimed ranges reconsider their overlapping dense regions. Dirty bits do not
+reset, so recycled backing cannot repeatedly trigger these requests. The
+initial activation still scans existing registered arenas. No persistent
+per-region tracking structure, arena field, option, or public API was added.
+The new density/fresh-range policy is limited to Linux/Android x86_64; other
+architectures retain whole-arena advice because their native huge-page
+configuration and performance were not validated here.
+
+An experimental executable intercepts `madvise`, warms twenty rotating 16 MiB
+slots, then repeats the same allocation/free traffic with purging disabled.
+It verifies payload endpoints and requires no further huge-page requests once
+backing is reused. Baseline: 1/1 warm advice/collapse calls and 0/0 reused calls.
+Rejected prototype: 4,097/4,097 warm and 4,096/4,096 reused calls (test fails).
+First-use candidate: 169/169 warm and 0/0 reused calls (test passes). The regression also passed against the combined candidate. Its prototype-only
+source and release-driver hook were removed when the policy was rejected.
+
+Four balanced native pairs screened the first-use candidate against X42 Rust,
+with one warmup plus three short-workload measurements and three-second timed
+workloads. Median time differences were Larson −1.82%, Larson-sized −1.70%,
+mstress −4.34%, sh8 +0.93%, and `malloc-large` +0.47%; five-case geometric mean
+−1.31%. These noisy focused results support a full-suite gate, not a standalone
+KEEP. The first two cold `malloc-large` pairs were 15.404/15.402 ms and
+15.557/15.780 ms (baseline/candidate), so the removed regression was not merely
+hidden by discarding warmup. Process peak RSS in those pairs fell from about
+254.37 to 238.40 MiB.
+
+Two paired first-use memory repeats found empty RSS 18.207→16.631 MiB,
+packed-survivor RSS 19.043→16.703 MiB, and post-burst four-small-worker RSS
+18.154→17.264 MiB. The last case varied by roughly one huge page; its two-run
+median is not a precise universal saving. Fresh-small RSS was 12.709/12.727 MiB.
+The complete native gate then rejected this candidate. In three complete
+fresh-process, single-invocation rounds across all 21 workloads, the combined
+candidate had a +5.12% geometric mean time ratio, sh6 +88.20%, rptest +52.21%,
+mstress +8.21%, and sh8 +6.10%. Every sh6 pair was 83.4–98.0% slower and every
+rptest pair 47.6–58.5% slower. The remaining planned rounds were stopped;
+partial fourth-round records are preserved separately. These large effects
+exceed both the requested budget and the observed noise.
+
+Removing THP localization while retaining the participation and remote-work
+fixes brought two balanced recovery pairs to sh6 +2.56% and rptest +0.34%
+versus the original Rust build. The small post-burst RSS saving does not
+justify the broader workload regressions. Both THP implementations, the new
+primitive, and the prototype-only regression plumbing were reverted. The
+existing X29 policy is retained. X48 reruns the full gate on the remaining
+changes; it does not treat the favorable five-case screen as acceptance.
+
+All variants, patches, frozen inputs, failed/passing regression results, traces,
+and raw measurements are under `target/perf-experiments/X46/`.
+
+## X47 — Skip heap-local work when a main-heap association is absent
+
+Fresh profiling used only Rust. Hardware performance counters were unavailable
+on this host, so Callgrind 3.22.0 recorded instruction counts for the native
+xmalloc and rptest workloads using the frozen X42 build. Instrumentation
+changes timing and scheduling; these counts are not cycle costs or evidence
+about native CAS contention. In xmalloc, `collect_after_remote_free` accounted
+for 46.78% of recorded instructions and mapped reabandon for 8.71%. The latter
+was called 1,459,499 times. In rptest, byte filling accounted for 86.33% of
+recorded instructions, including required calloc zeroing and the benchmark's
+explicit payload fills; those writes cannot be dropped as allocator overhead.
+
+The candidate targets the exact null case of `_mi_page_associated_theap_peek`:
+`page.heap` is null (main heap), and the executing thread has no main-heap TLS
+association. After collecting the published remote batch and handling final
+page destruction, that case goes directly to the existing ownership-release
+routine. It cannot reclaim or map-reabandon into an absent local heap. Other
+heap associations follow the existing path. In particular, a general
+"uninitialized default heap" test was not substituted: the non-null main-heap
+lookup path can initialize a main association and has different semantics.
+
+The option read, remote-list validation, all-free destruction, atomic orders,
+captured release-CAS expectation, and nested collect/retry/terminal transitions
+are preserved. This is narrower than the previously rejected X06 general
+inlining attempt and removes more futile work than E04's rejected
+reclaim-only gate. The collector's generated body shrank from 1,990 to 1,483
+bytes; ownership release is now separately outlined at 506 bytes. Their
+combined 1,989 bytes are essentially unchanged from the original 1,990; the
+benefit is skipped work, rather than a claimed reduction in total code size.
+
+A new isolated Rust test exits an allocating producer, transfers 4,096 live
+64-byte objects to a consumer with no allocator thread state, checks each
+abandoned page and complete payload, frees every object once, and verifies
+that the consumer still has no main-heap association. It passes, as do the
+native full/normal free-only tests and the THP reuse regression.
+
+Four balanced pairs against the first-use THP build gave median time changes:
+xmalloc −15.56% (all pairs between −13.8% and −16.6%), Larson −1.14%,
+Larson-sized +0.82%, rptest −9.63%, and glibc-thread +1.14%. The five-case
+geometric mean was −5.11%. Larson and rptest remain variable, so the full-suite
+and held-out application results in X48 decide acceptance. Native malloc/free
+bodies remain 81/162 bytes with their 64-byte alignment offsets unchanged.
+Source snapshots, profiles, annotations, regression output, and native pairs
+are under `target/perf-experiments/X47/`. The first combined-candidate profile
+in X48 reduced mapped-reabandon calls from 1,459,499 per 1,793,326 collector
+entries to 13 per 4,062,429 entries. The work completed in each instrumented
+timed run differs, so absolute instruction totals are not compared. X48
+profiles and validates the retained build again after removing THP localization.
+That retained-build profile recorded seven mapped-reabandon calls across
+2,494,418 collector entries, confirming the same elimination of futile calls.
+
+## X48 — Final retained-build gate
+
+Completed measurements on 2026-10-22. The retained production changes are X42
+with its owner marker before detached-list validation, and X47's exact
+main-heap null-destination gate. X43–X45 provide an application example and
+lifetime guidance; they do not change allocator defaults. Both X46 THP
+prototypes and their dedicated fixture/driver additions were removed.
+
+The original baseline is the X41 Rust build of `a3d20edd`. The retained
+interpose library is `artifacts/rust-kept.so`, SHA-256
+`e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`.
+The earlier `artifacts/rust.so` contains the rejected THP candidate and is
+not the retained result. Restoring source with preserved old timestamps first
+produced a stale cached build; its unchanged hash exposed the error before
+measurement. Source timestamps were refreshed, the library rebuilt, and its
+new hash and absence of the experimental THP helper verified before any
+retained-build run. Frozen inputs were checked again after measurement.
+
+The final performance comparison used only old/new Rust, as requested. Six
+balanced rounds ran all 21 workloads in fresh processes, shuffled scenario
+order, one invocation per process, and three seconds for timed workloads,
+on logical CPUs 0,2,4,6,8,10,12,14 of the same EPYC 7763 host. No builds,
+tests, profiles, or other benchmarks ran concurrently. Each cell below is
+the median of six paired candidate/baseline normalized-time differences;
+negative means less time. These are not ratios of independently aggregated
+medians.
+
+| Workload | Final / baseline time difference |
+|---|---:|
+| `glibc-simple` | +0.15% |
+| `malloc-large` | +0.00% |
+| `malloc-large-old` | +0.45% |
+| `cache-scratch1` | +0.02% |
+| `cache-thrash1` | -0.02% |
+| `cache-scratchN` | +0.01% |
+| `cache-thrashN` | +0.07% |
+| `mstressN` | -1.33% |
+| `sh6benchN` | -0.18% |
+| `sh8benchN` | -0.29% |
+| `alloc-test1` | +0.23% |
+| `alloc-testN` | +0.31% |
+| `barnes` | +0.13% |
+| `cfrac` | -1.13% |
+| `mleak10` | +3.84% |
+| `mleak100` | +1.78% |
+| `glibc-thread` | -0.17% |
+| `xmalloc-testN` | -14.83% |
+| `larsonN` | -13.47% |
+| `larsonN-sized` | -1.79% |
+| `rptestN` | -2.09% |
+
+The unweighted geometric-mean time ratio is **0.985501 (−1.45%)**, equivalent
+to +1.47% in reciprocal normalized throughput. This meets the requested 2%
+aggregate budget and the stricter 1% project budget. No workload's median
+exceeds the requested 5% regression limit. Xmalloc improves in every pair
+(12.7–23.4% less time). Larson's large median remains scheduling-sensitive:
+one pair is 10.9% slower, so its point estimate is not presented as a precise
+repeatable gain. Peak process RSS medians are retained alongside every timing;
+`malloc-large` is 254.197/254.174 MiB and xmalloc 68.941/69.689 MiB.
+
+The +3.84% `mleak10` point exceeds the stricter project's 3% per-case screen,
+but its six pairs range from −14.0% to +15.3%. A bounded eight-pair A/A control
+with one warmup plus three measured calls gives +0.27%; the matching eight-pair
+old/new confirmation gives −0.52% (range −13.5% to +17.6%). There is no repeated
+slowdown beyond this workload's noise. These follow-ups do not replace the
+primary six-pair value or alter the full-suite geometric mean.
+
+Redis was the held-out application, with fresh server processes and balanced
+old/new order. Throughput differences are positive for more requests/second:
+
+| Series | Pairs | SET | GET |
+|---|---:|---:|---:|
+| Primary old/new | 6 | +0.07% | −2.32% |
+| Identical-old A/A control | 4 | +2.30% | +0.30% |
+| Bounded old/new confirmation | 4 | −4.21% | +4.92% |
+
+Primary GET is lower in five of six pairs; that possible cost is not erased
+by the later sign reversal. Confirmation SET is lower in three of four pairs,
+with individual differences −6.36%, +0.13%, −2.57%, and −5.85%. A/A GET alone
+ranges from −5.13% to +8.44%. The available runs do not establish a stable
+application benefit or a stable greater-than-5% regression. Redis remains
+**inconclusive**, with both unfavorable series preserved. No further reruns
+were used to seek a favorable result.
+
+Three additional paired twelve-burst free-only retention repeats used the
+exact retained artifact. Every phase and payload check passed:
+
+| Library | First idle RSS, MiB | Twelfth idle RSS, MiB | Full pages at twelfth idle | After owner collect, MiB |
+|---|---:|---:|---:|---:|
+| Old Rust | 80.156 | 784.242 | 12,300 | 15.430 |
+| Retained Rust | 80.160 | 108.164 | 0 | 14.227 |
+
+These repeats confirm removal of cumulative owner-full-queue retention. The
+first idle still needs owner progress or explicit collection; 108 MiB is an
+observed endpoint, not a universal cap. The final profile and native free-only
+fixtures also pass after THP removal. Dynamic defined symbol names are
+identical to the baseline. Native `mi_free`/`mi_malloc` remain 162/81 bytes
+with cache-line offsets 32/0; no public API, C layout, or caller safety
+obligation changes.
+
+Local stable verification passed `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features`. The test command used
+`CARGO_PROFILE_TEST_OPT_LEVEL=3` with debug assertions retained, selected only
+`mechanical_mimalloc_raw` for the configurable native benchmark, and used the
+frozen retained library. That target's default smoke selects `glibc-simple`;
+the complete 21-workload comparison is the separate six-pair gate above.
+Other benchmark targets run their normal test-mode smoke checks. The runnable
+`worker_maintenance` example also completed.
+
+The remaining local checks passed:
+
+- `scripts/check-release-thread-stress.py`: release thread stress plus full-page
+  and normal free-only regressions for both portable C ABI and interpose builds.
+- Rust-only Unix mapping checks: hinted allocation retry success/failure both
+  leave zero live mappings; ordinary and secure release decommit/recommit
+  permissions, zeroing, and allocation reuse satisfy their expected contracts.
+- `scripts/check-concurrency-models.sh`: all six models pass with
+  `LOOM_MAX_PREEMPTIONS=3`.
+- `SANITIZER=address` and `SANITIZER=thread` through
+  `scripts/check-sanitizers.sh`, plus both consumer unit regressions under each
+  sanitizer. Nightly uses `RUSTFLAGS=-Aunused-unsafe` for the existing intrinsic
+  compatibility issue described in X40; stable formatting/lint/tests use no
+  warning suppression.
+- `git diff --check`.
+
+The first ASan consumer-unit attempt failed in fixture setup: unlike interposed
+std startup, sanitizer startup left no allocator thread state, and unconditional
+teardown hit the existing empty-default debug assertion. Both fixtures now
+check whether this thread is initialized before requesting teardown. They
+still verify the uninitialized free path and do not skip their assertions.
+ASan and TSan then pass both tests. Formatting, Clippy, and the complete
+workspace/all-target/all-feature test command were rerun successfully after
+that test-only correction. Production source did not change after the frozen
+performance build. The failed initial manifest/log remains alongside the
+successful follow-up and targeted ASan log.
+
+Cross-compilation with `--features std --lib` passes for
+`aarch64-apple-darwin`. Linux AArch64 fails with five pre-existing `c_char`
+signedness errors; Windows MSVC fails with 79 pre-existing platform/type/lint
+errors. Both failures were reproduced in a clean detached `a3d20edd` worktree,
+with exactly the same error-message sequences as the candidate. They are not
+claimed as passing platform validation. Native AArch64, macOS, and Windows
+execution was unavailable here. GitHub Actions was not used after the user's
+instruction to omit it.
+
+Raw manifests, commands, environment settings, source snapshots, all primary
+and confirmation results, profiles, and check logs are under
+`target/perf-experiments/X48/`. These ignored local artifacts retain failures
+as well as successes; this committed section is the durable result summary.

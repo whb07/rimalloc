@@ -92,6 +92,37 @@ unsafe {
 }
 ```
 
+## Retained Memory in Long-Lived Workers
+
+Freed storage can remain resident while its owner is idle or repeatedly reuses
+one hot free list. The [worker maintenance example](examples/worker_maintenance.rs)
+shows collection on the allocation owner after completed work and an idle grace
+period. Choose the grace from application arrival patterns and latency needs;
+collection can overlap the next arrival and make subsequent allocations fault
+pages back in. One forced collection per idle interval avoids repeated wakeups.
+
+Keep long-lived cache entries and temporary request buffers in separate `Heap`
+values when they would otherwise share allocation pages. Even one live object
+can keep its page occupied; collecting more often cannot release that page.
+The safe heap API ties each allocation to its heap and checks drop order:
+
+```rust
+use mechanical_mimalloc::Heap;
+
+let cache_heap = Heap::new().unwrap();
+let cache_entry = cache_heap.allocate_zeroed_bytes(64).unwrap();
+{
+    let request_heap = Heap::new().unwrap();
+    let scratch = request_heap.allocate_zeroed_bytes(4096).unwrap();
+    assert_eq!(scratch.len(), 4096);
+} // Scratch storage and its heap can be released independently of the cache.
+assert_eq!(cache_entry.len(), 64);
+```
+
+Separating heaps and collecting can reduce retention at the cost of additional
+heap metadata and refill work. Measurements and limits are recorded in
+`PERFORMANCE_WORKLOG.md` experiments X42–X45.
+
 ## Distribution Model
 
 The crates.io package is the Rust library distribution. Production C ABI
@@ -208,6 +239,7 @@ the explicit raw C-shaped API:
 cargo check --examples --features std
 cargo run --example global_allocator --features std
 cargo run --example allocation --features std
+cargo run --example worker_maintenance --features std
 ```
 
 ## Safety Model

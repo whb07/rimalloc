@@ -977,7 +977,10 @@ fn free_only_consumer_enables_owner_maintenance() {
         // Interposed std thread startup can initialize this worker. Remove that
         // state, then isolate the uninitialized free path under the lone-owner
         // policy, as the separate native probe does with system-allocated TLS.
-        crate::allocator::init::mi_thread_done();
+        // SAFETY: this query only inspects the executing thread's TLS.
+        if unsafe { crate::platform::_mi_thread_is_initialized() } {
+            crate::allocator::init::mi_thread_done();
+        }
         crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(false, Ordering::Relaxed);
         // SAFETY: this query only inspects the executing thread's TLS.
         assert!(!unsafe { crate::platform::_mi_thread_is_initialized() });
@@ -1004,6 +1007,53 @@ fn free_only_consumer_enables_owner_maintenance() {
         }
     }
     assert!(unsafe { (*full_queue).first }.is_null());
+}
+
+#[test]
+fn uninitialized_consumer_frees_abandoned_main_pages() {
+    if !enter_isolated_callback_test("uninitialized_consumer_frees_abandoned_main_pages") {
+        return;
+    }
+    crate::allocator::init::mi_thread_init();
+    let blocks = std::thread::spawn(|| {
+        (0..4096)
+            .map(|_| {
+                let block = crate::allocator::alloc::mi_malloc(64).cast::<u8>();
+                assert!(!block.is_null());
+                // SAFETY: this owner initializes its fresh 64-byte allocation.
+                unsafe { ptr::write_bytes(block, 0xa5, 64) };
+                block as usize
+            })
+            .collect::<Vec<_>>()
+    })
+    .join()
+    .unwrap();
+    std::thread::spawn(move || {
+        // Sanitizer builds need not initialize allocator TLS during std startup.
+        // SAFETY: this query only inspects the executing thread's TLS.
+        if unsafe { crate::platform::_mi_thread_is_initialized() } {
+            crate::allocator::init::mi_thread_done();
+        }
+        assert!(crate::allocator::init::mi_theap_main_tls_peek().is_null());
+        for address in blocks {
+            let block = address as *mut u8;
+            // SAFETY: the joined producer transferred this live allocation.
+            // Its exit abandoned the page; this consumer performs its only free.
+            unsafe {
+                let page = crate::internal::_mi_ptr_page(block.cast());
+                assert!(crate::allocator::page::mi_page_is_abandoned(page));
+                assert!(
+                    core::slice::from_raw_parts(block, 64)
+                        .iter()
+                        .all(|&b| b == 0xa5)
+                );
+                crate::allocator::free::mi_free(block.cast());
+            }
+        }
+        assert!(crate::allocator::init::mi_theap_main_tls_peek().is_null());
+    })
+    .join()
+    .unwrap();
 }
 
 #[test]

@@ -6,6 +6,12 @@
 **Pinned HEAD:** `08cf8a0d1dc04245cf7e5e5bf784a8fd52e53d46` (`08cf8a0`, master)  
 **Commit subject:** “Note collect_after_remote_free placement changes in the screen”
 
+**Follow-up status (2026-10-22):** this document preserves the original review
+at its pinned commit. Later authorized measurements, fixes, and implementation
+results are recorded in [PERFORMANCE_WORKLOG.md](PERFORMANCE_WORKLOG.md),
+experiments X33–X48. The Gate A stop and unanswered questions below describe
+that historical review, rather than the current implementation status.
+
 ## Scope and evidence conventions
 
 This is **Phase A only**, following the supplied investigation instructions. The GitHub connector supplied the repository. The local snapshot contains all 584 tracked blobs; their Git hashes, the tree, and the original commit were verified. The investigation made no tracked-file changes, commits, production prototypes, builds, benchmark runs, or test executions. This report is the requested ignored investigation artifact. Historical worklog results are evidence of earlier decisions, not fresh results at this HEAD.

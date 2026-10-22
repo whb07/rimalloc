@@ -190,13 +190,13 @@ pub(crate) unsafe fn collect_remote_for_local_page(
     detached: DetachedRemoteList,
     local: LocalFreeList,
 ) -> Result<LocalFreeList, BatchValidationError> {
+    if !detached.is_empty() {
+        // Native fast remote frees publish without entering the Rust free path.
+        super::mi_process_mark_multi_threaded();
+    }
     match unsafe { detached.into_batch_for_local(page) } {
         Ok(None) => Ok(local),
-        Ok(Some(batch)) => {
-            // Native fast remote frees publish without entering the Rust free path.
-            super::mi_process_mark_multi_threaded();
-            Ok(unsafe { batch.collect_into_local_page(page, local) })
-        }
+        Ok(Some(batch)) => Ok(unsafe { batch.collect_into_local_page(page, local) }),
         Err(error) => Err(report_remote_list_corruption(error)),
     }
 }

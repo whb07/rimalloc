@@ -3399,3 +3399,167 @@ complete correctness, retention, Redis old/new, and full native gates. No
 candidate has been implemented or accepted by this profiling task. Raw
 profiles, parsed self/call-edge totals, assembly, source snapshots, failed
 setup attempts, and `summary.json` live under `target/perf-experiments/X50/`.
+
+## X51 — Ryzen hardware profiles of Redis and shared allocator paths
+
+Investigation only, 2026-10-23; no allocator changes or speedup claim. At the
+user's request, profiling ran over SSH on `wbright@100.103.18.44`, host
+`amd-ubuntu`, in `~/projects/mechanical_mimalloc/target/perf-experiments/`
+`X51-hardware-20261023`. The checkout there was clean at `c8c815f9` and was
+left intact. The exact retained X48 allocator and X49 Redis binaries were
+copied there and their SHA-256 hashes verified before execution. Allocator
+source is `b1ce730a`; the library hash remains
+`e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`.
+Only our allocator was profiled; Redis's interposition check confirmed the
+server PID. The native harness selected only `mechanical_mimalloc_raw`.
+
+Hardware: Ryzen 9 5950X, 16 cores / 32 logical CPUs, 32 KiB L1D and 512 KiB L2
+per core, two 32 MiB L3 caches; Linux 7.0.0-31-generic and perf 7.0.14.
+Hardware counters and per-process AMD IBS worked with the existing permissions.
+The host was already saturated by other jobs: load averages were about 61–64,
+and the initial CPU sample showed all 32 logical CPUs busy. Those jobs were
+not stopped or changed. These are hotspot profiles under contention, not
+clean throughput measurements or an allocator comparison.
+
+Redis settings match X49/X50: 6.2.7, 256-byte values, 50 clients, pipeline 16,
+one client thread, random key range 3.2 million, and 3.2 million operations
+per phase. Startup, 1,000-request SET/GET warmup, and FLUSHALL precede profiling;
+SET grows an initially empty dataset and GET reads the resulting dataset.
+The server and client were pinned to CPUs 2 and 4, controller to CPU 6. A fresh
+server was used for each of two passes:
+
+- `cycles:u` at 997 Hz with DWARF call stacks, separately enabled for SET/GET.
+- `ibs_op/cnt_ctl=1/` with period 262,144, data addresses, memory data sources,
+  and weights, again separately enabled for SET/GET.
+
+Concurrent `perf stat` counted grouped user cycles, instructions, branches,
+and branch misses, plus task-clock, context switches, and page faults. All
+four hardware counters ran 100% of their enabled time: no multiplex scaling.
+The profiles report zero lost samples. Control acknowledgments and the normal
+SIGINT termination status required two wrapper corrections; the failed
+attempts are preserved separately and excluded from the tables below. The
+accepted Redis and native manifests both report completion, and no owned
+benchmark/profiler processes remained after collection.
+
+Native profiles cover Larson, sh6, mstress, rptest, and xmalloc, with one full
+quick run per profiler, five-second timed workloads, and affinity
+`0,2,4,6,8,10,12,14`. They include process startup, workload initialization,
+and cleanup. The short rptest profile has substantial startup/kernel-address
+attribution and is not used to rank small candidates. Native measurement is
+separate from the Redis runs.
+
+### Cycle evidence
+
+Percentages are self sample-period weights divided by the whole recorded
+`cycles:u` event weight. They are **not expected speedups**. Ordinary cycle
+sampling has skid: despite user-only counting, kernel-address samples account
+for 4.78% of SET and 6.18% of GET. They remain in the denominator rather than
+being silently discarded. IBS is used below for precise instruction locations.
+Perf names several aliases differently from Callgrind: `mi_malloc_usable_size`
+is the X50 `malloc_size` entry, and `operator delete[](void*, unsigned long)`
+shares the exact exported address with `free` and `mi_free` in this artifact.
+
+| Component | Redis SET | Redis GET | Larson | sh6 | xmalloc |
+|---|---:|---:|---:|---:|---:|
+| All allocator code | 17.54% | 6.97% | 43.45% | 87.10% | 79.83% |
+| malloc/new entry | 4.19% | 2.56% | 21.32% new[] | 39.13% | 10.67% |
+| free entry | 0.68% | 1.12% | 12.94% | 42.48% | 22.65% |
+| usable-size entry | 4.74% | 3.29% | — | — | — |
+| realloc entry | 1.84% | <0.01% | — | — | — |
+| Direct-page-cache update | 0.57% | no samples | 0.83% | 0.32% | 0.16% |
+| Return full page to normal queue | 0.77% | no samples | 0.005% | no samples | no samples |
+| Remote-free collector | no samples | no samples | 0.96% | 0.16% | 20.03% |
+| Release abandoned ownership | no samples | no samples | no samples | no samples | 11.37% |
+
+Redis SET has 5,981 cycle samples, GET 4,263; Larson 25,099, sh6 2,008, and
+xmalloc 21,513. Tiny entries, especially sh6's six direct-cache-update samples,
+are indications of reach, not precise estimates. SET counted 17.210 billion
+user cycles and 15.628 billion instructions (0.908 instructions/cycle); GET
+11.142 billion cycles and 9.166 billion instructions (0.823). Branch-miss
+rates were 0.471% and 0.420%. Contending workloads, SMT, and profiling overhead
+limit interpretation of these absolute values.
+
+Redis's `dictFind` alone accounts for 11.50% of SET and 21.92% of GET cycle
+weights. GET also spends 5.98% in `stringObjectLen`. Allocator-only changes
+therefore address a limited fraction of GET's measured cost. In mstress,
+87.36% is the benchmark's `stress` body and 11.37% allocator code. The previous
+remote-free work remains primarily an xmalloc opportunity; X50's exact
+instruction profiles establish zero collector calls in both Redis phases.
+
+### Precise memory evidence
+
+IBS yielded 73,002 total / 57,820 user samples for SET and 43,339 / 33,031 for
+GET. User/kernel separation uses the sampled instruction address, because IBS
+also samples kernel operations. L1-miss counts below include sampled loads
+with an identified non-L1 source; they are sample counts, not total misses.
+
+| Sampled loads | Redis SET | Redis GET |
+|---|---:|---:|
+| All user loads | 14,438 | 8,235 |
+| All user loads missing L1 | 957 | 504 |
+| Allocator loads | 2,740 | 947 |
+| Allocator loads missing L1 | 261 | 42 |
+| Allocator miss sources: L2 / other cache / RAM | 132 / 120 / 9 | 41 / 1 / 0 |
+
+The usable-size leaf page-map load at offset `+0x22`, page flags at `+0x2b`,
+and block size at `+0x2e` give a specific check of X50's locality hypothesis:
+SET has 51 L1 misses among 412 sampled loads at those three instructions,
+29 served by L2 and 22 reported as `core, same node Any cache hit`. Their
+median recorded miss latency is 12 cycles, mean 26.3. GET has 14 misses among
+218 such loads, all L2, median 10.5 cycles. No sampled load at those three
+sites was served by RAM. This supports a SET-sensitive lookup dependency/cache
+cost, but not a claim of pervasive DRAM stalls or a case for adding a new
+lookup cache to every free.
+
+SET's unfull function has 63 misses among 195 sampled loads, median miss
+latency 43 cycles; 41 were other-cache hits and six RAM hits. Queue bookkeeping
+and neighbouring-page state matter in addition to its redundant flag changes.
+Direct-cache update has 35 sampled loads and zero L1 misses in this run;
+its known repeated bin computations remain the concrete instruction target.
+
+Across native profiles, Larson's allocator has 3,595 misses among 25,114
+sampled loads; sh6 has only 59 among 4,482. In sh6, malloc/free together account
+for 81.61% of cycle weights despite mostly hot loads. Reducing fast-path work
+and dependent loads is therefore a broader hypothesis than reducing cache
+capacity misses alone. IBS latency sums contain a few roughly 10,000–13,000
+cycle outliers, including return/stack accesses, and are not interpreted as
+exclusive stall-time shares. Counts, locations, source categories, and medians
+above avoid treating those outliers as a large metadata speedup opportunity.
+
+### Follow-up order
+
+1. **Small shared change: direct-page-cache span computation.** Derive the
+   span from the queue index/class boundaries instead of repeatedly applying
+   the bin calculation in `page/queues.rs::mi_theap_direct_cache_start`.
+   Hardware confirms reach in SET and Larson, with smaller sh6/xmalloc
+   entries. Preserve alignment aliases and all cache entries. The measured
+   enclosing update is only 0.57% of SET and 0.83% of Larson, so expect a
+   modest opportunity, not a multi-percent promise.
+2. **Larger shared research: malloc/free/usable-size fast paths.** These are
+   substantial in Redis, Larson, and sh6. Examine avoidable dependent metadata
+   loads and repeated work using the exact pointer-to-page/header locations.
+   GET and sh6 are largely cache-resident, so a design must improve their hot
+   path too, without adding a cache-probe tax or weakening validation. No
+   specific redesign is justified or implemented by these profiles.
+3. **Concrete SET-focused change: remove temporary full-flag transitions.**
+   Compute the destination normal queue without clearing/restoring the full
+   flag, then perform the final transition once. The current three locked
+   modifications and repeated accounting remain visible in X50's assembly.
+   Hardware sees 0.77% in this function for SET but only 0.005% in the aggregate
+   Larson run; do not advertise a broad steady threaded benefit.
+4. **Secondary resize candidate: a compact in-place realloc path.** The SET
+   entry is 1.84%; X50 confirms almost all its 3.2 million calls retain the
+   block. This could help Redis and dedicated realloc-churn workloads. It is
+   not a demonstrated shared target across these native cases.
+
+Raw perf data, scripts, hashes, manifests, command lines, load snapshots, and
+reports remain in the remote X51 directory. A local copy of text reports and
+manifests is under `target/perf-experiments/X51/remote`; `summary.json` checks
+that symbol-period totals equal the reported event counts and that all
+counter running percentages are 100. `analyze-ibs.py` retains the load-source
+and instruction-offset aggregation. These scratch artifacts are untracked.
+No Rust source changed, so this investigation adds no Rust verification run;
+the change to this worklog is checked with `git diff --check`.
+
+IBS event/precision interpretation follows the
+[Linux perf AMD IBS documentation](https://linux.googlesource.com/linux/kernel/git/torvalds/linux/+/e34a79b96ab9d49ed8b605fee11099cf3efbb428/tools/perf/Documentation/perf-amd-ibs.txt).

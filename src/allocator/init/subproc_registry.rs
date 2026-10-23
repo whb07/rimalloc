@@ -2,7 +2,7 @@ use core::ptr::{self, NonNull};
 
 use crate::types::{
     HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainSubproc, MemoryOrder, MiLockGuard,
-    MiLockPtr, SubprocPtr, ThreadSeq, TldPtr, mi_subproc_t,
+    SubprocPtr, ThreadSeq, TldPtr, mi_subproc_t,
 };
 
 use super::{MiHeapMainPrefix, mi_subproc_prefix_typed, subprocs, subprocs_lock};
@@ -24,8 +24,8 @@ pub(super) enum AssignCurrentThreadResult {
 }
 
 /// A registry-validated subproc whose heap list lock is held.
-pub(super) struct LockedSubprocHeaps {
-    _lock: MiLockGuard<'static>,
+struct LockedSubprocHeaps<'a> {
+    _lock: MiLockGuard<'a>,
     subproc: SubprocPtr,
 }
 
@@ -42,12 +42,10 @@ impl SubprocRegistryGuard<'static> {
     pub(super) unsafe fn acquire() -> Self {
         // SAFETY: required by this constructor's contract; the guard releases
         // the same process-global lock on drop.
-        let lock = MiLockPtr::from_nonnull(unsafe {
-            NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock))
-        });
+        let lock = unsafe { &*ptr::addr_of!(subprocs_lock) };
         Self {
             // SAFETY: the process-global lock is initialized by `main_init`.
-            _lock: unsafe { MiLockGuard::acquire(lock) },
+            _lock: MiLockGuard::acquire(lock),
             // SAFETY: a static variable has a stable non-null address.
             head: unsafe { NonNull::new_unchecked(ptr::addr_of_mut!(subprocs)) },
         }
@@ -93,11 +91,25 @@ impl SubprocRegistryGuard<'static> {
         unsafe { assign_current_thread_from(self.head.as_ptr(), candidate, tld, main.ptr()) }
     }
 
-    /// Validates `candidate` and acquires its heap-list lock before the
-    /// registry lock can be released.
-    pub(super) fn lock_heaps(&self, candidate: *mut mi_subproc_t) -> Option<LockedSubprocHeaps> {
-        // SAFETY: this guard exclusively owns the initialized registry.
-        unsafe { lock_heaps_from(self.head.as_ptr(), candidate) }
+    /// Visits a registry-validated subproc after handing liveness to its heap lock.
+    ///
+    /// # Safety
+    /// The callback and argument must remain valid and obey the heap-visitor
+    /// reentrancy and no-unwind contract for this synchronous traversal.
+    pub(super) unsafe fn visit_heaps(
+        self,
+        candidate: *mut mi_subproc_t,
+        visitor: HeapVisitCallback,
+        arg: HeapVisitCallbackArg,
+    ) -> Option<bool> {
+        // SAFETY: registry ownership keeps the target live through acquisition;
+        // its heap lock then excludes destruction until the visit finishes.
+        unsafe {
+            with_locked_heaps_from(self.head.as_ptr(), candidate, |heaps| {
+                drop(self);
+                heaps.visit(visitor, arg)
+            })
+        }
     }
 }
 
@@ -133,22 +145,23 @@ unsafe fn assign_current_thread_from(
     AssignCurrentThreadResult::Assigned
 }
 
-unsafe fn lock_heaps_from(
+unsafe fn with_locked_heaps_from<R>(
     head: *mut *mut mi_subproc_t,
     candidate: *mut mi_subproc_t,
-) -> Option<LockedSubprocHeaps> {
+    visit: impl FnOnce(&LockedSubprocHeaps<'_>) -> R,
+) -> Option<R> {
     // SAFETY: caller exclusively owns the initialized registry, and candidate
     // is dereferenced only after address validation.
     let subproc = unsafe { find_from(head, candidate) }?;
     // SAFETY: registry membership keeps the dynamic lock live until acquired.
-    let lock = unsafe { subproc.heaps_lock() };
+    let lock = unsafe { &*subproc.heaps_lock() };
     // SAFETY: destruction must acquire this same lock before freeing the
     // subproc's heaps and metadata, so the token keeps it live until Drop.
-    let _lock = unsafe { MiLockGuard::acquire(lock) };
-    Some(LockedSubprocHeaps { _lock, subproc })
+    let _lock = MiLockGuard::acquire(lock);
+    Some(visit(&LockedSubprocHeaps { _lock, subproc }))
 }
 
-impl LockedSubprocHeaps {
+impl LockedSubprocHeaps<'_> {
     /// Invokes `visitor` over the locked heap list without exposing the
     /// registry-validated subproc capability.
     ///
@@ -457,30 +470,36 @@ mod tests {
         // SAFETY: the stack node remains initialized and live.
         let target_ptr = unsafe { node_ptr(&mut target) };
         // SAFETY: initialize the test node's dynamic heap-list lock.
-        unsafe { mi_lock_init(target_ptr.heaps_lock().as_ptr()) };
+        unsafe { mi_lock_init(target_ptr.heaps_lock()) };
         // SAFETY: this test exclusively owns the local head and node.
         unsafe { push_front(ptr::addr_of_mut!(head), target_ptr) };
 
         let forged = NonNull::<mi_subproc_t>::dangling().as_ptr();
         // SAFETY: forged is compared only by address in the local registry.
-        assert!(unsafe { lock_heaps_from(ptr::addr_of_mut!(head), forged) }.is_none());
+        assert!(
+            unsafe { with_locked_heaps_from(ptr::addr_of_mut!(head), forged, |_| ()) }.is_none()
+        );
         // SAFETY: the local registry keeps the target lock live through acquisition.
-        let locked = unsafe { lock_heaps_from(ptr::addr_of_mut!(head), target_ptr.as_ptr()) }
-            .expect("linked target must hand off its heap-list lock");
-        // SAFETY: the test node's lock is initialized and currently held.
-        assert!(!unsafe { mi_lock_try_acquire(target_ptr.heaps_lock().as_ptr()) });
-        drop(locked);
+        unsafe {
+            with_locked_heaps_from(ptr::addr_of_mut!(head), target_ptr.as_ptr(), |_| {
+                assert!(!mi_lock_try_acquire(target_ptr.heaps_lock()));
+            })
+        }
+        .expect("linked target must hand off its heap-list lock");
         // SAFETY: dropping the handoff token released the initialized lock.
-        assert!(unsafe { mi_lock_try_acquire(target_ptr.heaps_lock().as_ptr()) });
+        assert!(unsafe { mi_lock_try_acquire(target_ptr.heaps_lock()) });
         // SAFETY: release the successful test acquisition.
-        unsafe { mi_lock_release(target_ptr.heaps_lock().as_ptr()) };
+        unsafe { mi_lock_release(target_ptr.heaps_lock()) };
 
         // SAFETY: the local registry is initialized and exclusively owned.
         assert!(unsafe { detach_from(ptr::addr_of_mut!(head), target_ptr.as_ptr()) }.is_some());
         // SAFETY: stale is compared only by address in the now-empty registry.
-        assert!(unsafe { lock_heaps_from(ptr::addr_of_mut!(head), target_ptr.as_ptr()) }.is_none());
+        assert!(
+            unsafe { with_locked_heaps_from(ptr::addr_of_mut!(head), target_ptr.as_ptr(), |_| ()) }
+                .is_none()
+        );
         // SAFETY: the initialized stack lock is no longer held or reachable
         // from the local registry.
-        unsafe { crate::internal::atomic::mi_lock_done(target_ptr.heaps_lock().as_ptr()) };
+        unsafe { crate::internal::atomic::mi_lock_done(target_ptr.heaps_lock()) };
     }
 }

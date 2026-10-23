@@ -385,8 +385,7 @@ unsafe fn mi_debug_show_page_bfield(
 #[inline(never)]
 /// # Safety
 /// `arena` must retain live initialized metadata/backing and bitmaps covering `slice_count` for the
-/// synchronous render. `chunk_bins` must point to the full initialized `MI_CBIN_COUNT - 1` chunk-bin
-/// bitmap array, and every `i < chunk_count` must be a valid bit index. Page-map/page metadata and
+/// synchronous render. Every `i < chunk_count` must be a valid chunk-bin bit index. Page-map/page metadata and
 /// geometry must remain stable; concurrent atomic bitmap updates are permitted, but teardown/backing
 /// invalidation must not race.
 unsafe fn mi_debug_show_chunks(
@@ -395,7 +394,7 @@ unsafe fn mi_debug_show_chunks(
     header3: &str,
     slice_count: SliceCount,
     chunk_count: usize,
-    chunk_bins: *mut mi_bchunkmap_t,
+    chunk_bins: &[mi_bchunkmap_t; crate::allocator::stats::MI_CBIN_COUNT as usize - 1],
     arena: ArenaDebugView,
     narrow: bool,
 ) -> usize {
@@ -441,9 +440,7 @@ unsafe fn mi_debug_show_chunks(
             k += 3;
         }
 
-        // SAFETY: the contract keeps the complete initialized chunk-bin bitmap array readable and
-        // establishes `i < chunk_count` as a valid bit index.
-        let chunk_kind = match unsafe { mi_bbitmap_debug_get_bin(chunk_bins, i) } {
+        let chunk_kind = match mi_bbitmap_debug_get_bin(chunk_bins, i) {
             MI_CBIN_SMALL => b'S',
             MI_CBIN_MEDIUM => b'M',
             MI_CBIN_LARGE => b'L',
@@ -574,7 +571,7 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
                     header3,
                     slice_count,
                     mi_bbitmap_chunk_count(slices_free),
-                    (*slices_free).chunkmap_bins.as_mut_ptr(),
+                    &(*slices_free).chunkmap_bins,
                     arena_view,
                     narrow,
                 )

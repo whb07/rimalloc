@@ -51,10 +51,14 @@ pub type mi_lock_t = mi_lock_s;
 
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct pthread_mutex_t {
-    __data: [usize; 5],
+    __data: core::cell::UnsafeCell<[usize; 5]>,
 }
+
+// SAFETY: pthread operations synchronize all shared access to this opaque storage.
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+unsafe impl Sync for pthread_mutex_t {}
 
 /// Lock word of the portable lock: an `os_unfair_lock` on Apple targets, the
 /// lock libmalloc uses, whose waiters lend their priority to the owner instead
@@ -99,7 +103,9 @@ pub type mi_atomic_guard_t = AtomicUsize;
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 impl pthread_mutex_t {
     pub const fn new() -> Self {
-        Self { __data: [0; 5] }
+        Self {
+            __data: core::cell::UnsafeCell::new([0; 5]),
+        }
     }
 }
 
@@ -135,8 +141,8 @@ unsafe extern "C" {
     fn pthread_mutex_destroy(mutex: *mut pthread_mutex_t) -> c_int;
 }
 
-pub struct mi_atomic_guard_scope_t {
-    _guard: crate::core_types::AtomicGuard<'static>,
+pub struct mi_atomic_guard_scope_t<'a> {
+    _guard: crate::core_types::AtomicGuard<'a>,
 }
 
 #[repr(C)]
@@ -163,35 +169,24 @@ impl Default for mi_atomic_once_s {
     }
 }
 
-pub struct mi_atomic_once_scope_t {
-    _once: crate::core_types::OnceGuard<'static>,
+pub struct mi_atomic_once_scope_t<'a> {
+    _once: crate::core_types::OnceGuard<'a>,
 }
 
-/// # Safety
-/// `guard` must point to a valid atomic guard value.
-pub unsafe fn mi_atomic_guard_enter(
-    guard: *mut mi_atomic_guard_t,
-) -> Option<mi_atomic_guard_scope_t> {
-    let field = crate::core_types::AtomicUsizeField::from_raw(guard.cast::<usize>());
-    unsafe { crate::core_types::AtomicGuard::try_acquire(field) }
+pub fn mi_atomic_guard_enter(guard: &mi_atomic_guard_t) -> Option<mi_atomic_guard_scope_t<'_>> {
+    crate::core_types::AtomicGuard::try_acquire(guard)
         .map(|_guard| mi_atomic_guard_scope_t { _guard })
 }
 
-/// # Safety
-/// `once` must point to a valid once-state.
-pub unsafe fn mi_atomic_do_once_enter(
-    once: *mut mi_atomic_once_t,
-) -> Option<mi_atomic_once_scope_t> {
-    let state = crate::core_types::OnceStatePtr::from_raw(once.cast::<usize>());
-    unsafe { crate::core_types::OnceGuard::try_enter(state) }
-        .map(|_once| mi_atomic_once_scope_t { _once })
+pub fn mi_atomic_do_once_enter(once: &mi_atomic_once_t) -> Option<mi_atomic_once_scope_t<'_>> {
+    crate::core_types::OnceGuard::try_enter(once).map(|_once| mi_atomic_once_scope_t { _once })
 }
 
 macro_rules! mi_atomic_guard {
     ($guard:expr, $body:block) => {{
         let _mi_guard_ptr: *mut $crate::atomic::mi_atomic_guard_t = $guard;
         if let Some(_mi_guard_scope) =
-            unsafe { $crate::atomic::mi_atomic_guard_enter(_mi_guard_ptr) }
+            $crate::atomic::mi_atomic_guard_enter(unsafe { &*_mi_guard_ptr })
         {
             let _mi_guard_scope = _mi_guard_scope;
             $body
@@ -475,7 +470,7 @@ pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> b
         return false;
     }
 
-    unsafe { mi_lock_acquire(&mut (*once).lock) };
+    unsafe { mi_lock_acquire(core::ptr::addr_of_mut!((*once).lock)) };
     let expected = 0usize;
     if unsafe {
         (*once)
@@ -485,7 +480,7 @@ pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> b
     } {
         true
     } else {
-        unsafe { mi_lock_release(&mut (*once).lock) };
+        unsafe { mi_lock_release(core::ptr::addr_of_mut!((*once).lock)) };
         false
     }
 }
@@ -498,6 +493,6 @@ pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> b
 pub unsafe extern "C" fn _mi_atomic_once_release(once: *mut mi_atomic_once_t) {
     if unsafe { (*once).tid.load(Ordering::Acquire) } > 1 {
         unsafe { (*once).tid.store(1, Ordering::Release) };
-        unsafe { mi_lock_release(&mut (*once).lock) };
+        unsafe { mi_lock_release(core::ptr::addr_of_mut!((*once).lock)) };
     }
 }

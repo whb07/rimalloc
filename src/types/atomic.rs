@@ -12,7 +12,7 @@ mod thread_free;
 mod thread_heap_refcount;
 pub(crate) use arena_cells::{AtomicAbandonedCount, AtomicArenaPage};
 pub(crate) use fields::{AtomicI64Field, AtomicPtrField, AtomicUsizeField};
-pub(crate) use guards::{AtomicGuard, MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr};
+pub(crate) use guards::{AtomicGuard, MiLockGuard, OnceGuard};
 pub(crate) use page_thread::AtomicPageThreadId;
 pub(crate) use thread_free::{
     AtomicThreadFree, DetachedRemoteList, PublishedRemoteHead, RemotePushResult,

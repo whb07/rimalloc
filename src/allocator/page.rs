@@ -120,8 +120,8 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
     page_wrapper: crate::core_types::FullPage,
 ) -> crate::core_types::ActivePage {
     // SAFETY: the caller-proven full-page epoch keeps the page, owner, source/target queues, and
-    // direct cache live under exclusive local mutation. The temporary flag clear is restored before
-    // constructing the linked-full witness; consuming it moves the page and clears the flag once.
+    // direct cache live under exclusive local mutation. Select the destination without changing
+    // the full flag; consuming the linked-full witness moves the page and clears it once.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         crate::internal::mi_assert_internal!(!page.is_null());
@@ -132,17 +132,14 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
         let theap = mi_page_theap(page);
         let theap_ptr = ThreadHeapPtr::new_unchecked(theap);
         let pqfull = theap_ptr.page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
-        mi_page_set_in_full(page, false);
-        let pq = mi_theap_page_queue_of(theap, page);
-        mi_page_set_in_full(page, true);
+        let bin = stats_bin::_mi_page_stats_bin_typed(page).as_usize();
+        let pq = theap_ptr.page_queue(Bin::new_unchecked(bin as u16));
         let from = crate::core_types::FullPageQueue::new_unchecked(pqfull);
         let queued = crate::core_types::QueuedPage::<crate::core_types::FullQueue>::new_unchecked(
             page_wrapper,
             from,
         );
-        let to = crate::core_types::NormalPageQueue::new_unchecked(
-            crate::core_types::PageQueuePtr::new_unchecked(pq),
-        );
+        let to = crate::core_types::NormalPageQueue::new_unchecked(pq);
         queued.unfull(to)
     }
 }
@@ -2094,8 +2091,9 @@ unsafe fn malloc_generic_slow(
     // the later generic dispatch.
     let layout = unsafe {
         let padded = if size == 0 {
-            crate::core_types::RequestedSize::new(crate::core_types::RequestedSize::MIN_ZERO_SIZE)
-                .padded_unchecked()
+            crate::core_types::SmallRequestedSize::ZERO
+                .normalized()
+                .padded()
         } else {
             crate::core_types::PaddedSize::new_unchecked(size)
         };
@@ -2429,10 +2427,9 @@ mod tests {
                 let zero = usize::from(i % 11 == 0);
                 let p = if i % 5 == 0 {
                     let padded = if size == 0 {
-                        crate::core_types::RequestedSize::new(
-                            crate::core_types::RequestedSize::MIN_ZERO_SIZE,
-                        )
-                        .padded_unchecked()
+                        crate::core_types::SmallRequestedSize::ZERO
+                            .normalized()
+                            .padded()
                     } else {
                         crate::core_types::PaddedSize::new_unchecked(size)
                     };
@@ -2566,6 +2563,60 @@ mod tests {
             }
         }
         assert!(transitions > 0);
+    }
+
+    #[test]
+    fn unfull_preserves_queue_order_owner_flags_and_accounting() {
+        for size in [64, MI_LARGE_MAX_OBJ_SIZE + size_of::<usize>()] {
+            let mut heap = MaybeUninit::<mi_theap_t>::zeroed();
+            let mut pages = [const { MaybeUninit::<mi_page_t>::zeroed() }; 2];
+            // SAFETY: these local fixtures initialize the exact owner, class, full accounting,
+            // and links consumed by the transition. All metadata stays live and exclusive.
+            unsafe {
+                let raw = heap.as_mut_ptr();
+                (*raw).pages = crate::allocator::init::MI_PAGE_QUEUES_EMPTY();
+                (*raw).pages_free_direct = crate::allocator::init::MI_SMALL_PAGES_EMPTY();
+                (*raw).page_count = 2;
+                (*raw).pages_full_size = size;
+                let owner = ThreadHeapPtr::new_unchecked(raw);
+                let bin = bins::mi_bin_impl(size);
+                let normal = owner.page_queue(Bin::new_unchecked(bin as u16));
+                let full = owner.page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
+                let [first, moving] = pages.each_mut().map(|page| {
+                    let p = page.as_mut_ptr();
+                    (*p).theap = raw;
+                    (*p).block_size = size;
+                    (*p).capacity = 1;
+                    (*p).reserved = 1;
+                    (*p).used = 1;
+                    (*p).xthread_id = 8 | crate::types::MI_PAGE_HAS_INTERIOR_POINTERS;
+                    PagePtr::new_unchecked(p)
+                });
+                (*moving.as_ptr()).xthread_id |= crate::types::MI_PAGE_IN_FULL_QUEUE;
+                normal.set_first(Some(first));
+                normal.set_last(Some(first));
+                normal.set_count(crate::core_types::PageQueueCount::new(1));
+                full.set_first(Some(moving));
+                full.set_last(Some(moving));
+                full.set_count(crate::core_types::PageQueueCount::new(1));
+                let active = _mi_page_unfull_internal(
+                    crate::allocator::raw_bridge::assume_full_page(moving),
+                );
+                assert_eq!(active.page(), moving);
+                assert_eq!(full.first(), None);
+                assert_eq!(full.last(), None);
+                assert_eq!(full.count().get(), 0);
+                assert_eq!(normal.first(), Some(first));
+                assert_eq!(normal.last(), Some(moving));
+                assert_eq!(normal.count().get(), 2);
+                assert_eq!(first.queue_next(), Some(moving));
+                assert_eq!(moving.queue_prev(), Some(first));
+                assert_eq!(moving.queue_next(), None);
+                assert_eq!((*moving.as_ptr()).xthread_id, (*first.as_ptr()).xthread_id);
+                assert_eq!((*raw).pages_full_size, 0);
+                assert_eq!((*raw).page_count, 2);
+            }
+        }
     }
 
     #[test]

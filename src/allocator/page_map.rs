@@ -54,7 +54,7 @@ use crate::os::_mi_os_alloc_aligned;
 use crate::os::_mi_os_zalloc;
 use crate::types::{MI_PAGE_ALIGN, mi_page_t, mi_subproc_t};
 #[cfg(not(target_pointer_width = "32"))]
-use crate::types::{MiLockGuard, MiLockPtr, PageMapSubIndex};
+use crate::types::{MiLockGuard, PageMapSubIndex};
 
 mod lookup;
 
@@ -763,10 +763,10 @@ unsafe fn mi_page_map_ensure_submap_at(
     }
     let sub;
     {
-        let lock = unsafe { NonNull::new_unchecked(&raw mut mi_page_map_lock) };
+        let lock = unsafe { &*ptr::addr_of!(mi_page_map_lock) };
         // SAFETY: the process-global page-map lock remains live throughout
         // allocator operation and the guard releases it on every exit path.
-        let _guard = unsafe { MiLockGuard::acquire(MiLockPtr::from_nonnull(lock)) };
+        let _guard = MiLockGuard::acquire(lock);
         let atomic_submap =
             crate::core_types::AtomicPtrField::from_raw(unsafe { _mi_page_map.add(idx.get()) });
         let mut loaded = unsafe { atomic_submap.load(crate::core_types::MemoryOrder::Acquire) };

@@ -10,7 +10,6 @@ use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize};
 
 use crate::allocator::stats::mi_stats_t;
 use crate::atomic::mi_lock_t;
-pub use crate::atomic::mi_lock_t as mi_lock_t_pub;
 use crate::internal::MI_DEBUG;
 
 pub const MI_TYPES_H: () = ();

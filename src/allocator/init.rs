@@ -809,8 +809,7 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
 }
 
 unsafe fn mi_process_init_inner() {
-    if let Some(_once) = unsafe { mi_atomic_do_once_enter(ptr::addr_of!(PROCESS_INIT).cast_mut()) }
-    {
+    if let Some(_once) = mi_atomic_do_once_enter(&PROCESS_INIT) {
         unsafe {
             _mi_process_is_initialized = true;
             cpu::mi_detect_cpu_features();

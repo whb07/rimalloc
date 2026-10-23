@@ -312,3 +312,29 @@ fn slice_count_rejects_zero_and_too_large_values() {
     );
     assert!(SliceCount::from_usize_const(u32::MAX as usize + 1).is_none());
 }
+
+#[test]
+fn small_request_proves_nonzero_padding_and_rejects_unbounded_sizes() {
+    for raw in [
+        0,
+        1,
+        RequestedSize::MIN_ZERO_SIZE,
+        crate::types::MI_SMALL_SIZE_MAX,
+    ] {
+        let small = SmallRequestedSize::new(RequestedSize::new(raw)).unwrap();
+        assert_eq!(small.requested().get(), raw);
+        let effective = if raw == 0 {
+            RequestedSize::MIN_ZERO_SIZE
+        } else {
+            raw
+        };
+        assert_eq!(small.normalized().effective().get(), effective);
+        assert_eq!(
+            small.normalized().padded().get(),
+            effective + crate::types::MI_PADDING_SIZE
+        );
+    }
+    for raw in [crate::types::MI_SMALL_SIZE_MAX + 1, usize::MAX] {
+        assert!(SmallRequestedSize::new(RequestedSize::new(raw)).is_none());
+    }
+}

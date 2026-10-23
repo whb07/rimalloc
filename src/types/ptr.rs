@@ -4,7 +4,6 @@
 
 use super::atomic::{
     AtomicPageThreadId, AtomicThreadFree, AtomicThreadHeapRefcount, AtomicUsizeField, MemoryOrder,
-    MiLockPtr,
 };
 use super::constants::{
     mi_arena_t, mi_block_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_subproc_t, mi_theap_t,
@@ -598,13 +597,11 @@ impl HeapPtr {
     /// # Safety
     /// The heap pointer must refer to heap metadata whose lock field is valid.
     #[inline(always)]
-    pub(crate) unsafe fn arena_pages_lock(self) -> MiLockPtr {
+    pub(crate) unsafe fn arena_pages_lock(self) -> *mut mi_lock_t {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the heap allocation live and in bounds; its
         // aligned embedded arena-pages lock therefore has a non-null field address.
-        MiLockPtr::from_nonnull(unsafe {
-            NonNull::new_unchecked(ptr::addr_of_mut!((*raw).arena_pages_lock))
-        })
+        unsafe { ptr::addr_of_mut!((*raw).arena_pages_lock) }
     }
 
     /// # Safety
@@ -921,13 +918,11 @@ impl SubprocPtr {
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose lock field is valid.
     #[inline(always)]
-    pub(crate) unsafe fn arena_reserve_lock(self) -> MiLockPtr {
+    pub(crate) unsafe fn arena_reserve_lock(self) -> *mut mi_lock_t {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the subprocess live and in bounds; its
         // aligned embedded reserve lock therefore has a non-null field address.
-        MiLockPtr::from_nonnull(unsafe {
-            NonNull::new_unchecked(ptr::addr_of_mut!((*raw).arena_reserve_lock))
-        })
+        unsafe { ptr::addr_of_mut!((*raw).arena_reserve_lock) }
     }
 
     /// # Safety
@@ -954,13 +949,11 @@ impl SubprocPtr {
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose lock field is valid.
     #[inline(always)]
-    pub(crate) unsafe fn heaps_lock(self) -> MiLockPtr {
+    pub(crate) unsafe fn heaps_lock(self) -> *mut mi_lock_t {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the subprocess live and in bounds; its
         // aligned embedded heaps lock therefore has a non-null field address.
-        MiLockPtr::from_nonnull(unsafe {
-            NonNull::new_unchecked(ptr::addr_of_mut!((*raw).heaps_lock))
-        })
+        unsafe { ptr::addr_of_mut!((*raw).heaps_lock) }
     }
 
     /// # Safety

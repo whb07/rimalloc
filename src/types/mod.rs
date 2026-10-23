@@ -37,7 +37,7 @@ pub(crate) use scalar::{
     Errno, GoodSize, HeapSeq, Heartbeat, MaybeAlignment, NumaNode, OsPageSize, PaddedSize,
     PageCapacity, PageMapPrimaryIndex, PageMapSubIndex, PageQueueCount, PageReclaimLimit,
     PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire, SliceCount, SliceIndex,
-    StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount,
+    SmallRequestedSize, StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount,
 };
 
 pub(crate) use layout::{
@@ -104,8 +104,8 @@ mod heap;
 
 pub(crate) use atomic::{
     AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicI64Field, AtomicPtrField,
-    AtomicUsizeField, DetachedRemoteList, MemoryOrder, MiLockGuard, MiLockPtr, OnceGuard,
-    OnceStatePtr, PublishedRemoteHead, RemotePushResult,
+    AtomicUsizeField, DetachedRemoteList, MemoryOrder, MiLockGuard, OnceGuard, PublishedRemoteHead,
+    RemotePushResult,
 };
 mod padding;
 

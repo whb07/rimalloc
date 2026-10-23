@@ -3563,3 +3563,365 @@ the change to this worklog is checked with `git diff --check`.
 
 IBS event/precision interpretation follows the
 [Linux perf AMD IBS documentation](https://linux.googlesource.com/linux/kernel/git/torvalds/linux/+/e34a79b96ab9d49ed8b605fee11099cf3efbb428/tools/perf/Documentation/perf-amd-ibs.txt).
+
+## X52 — direct-cache span arithmetic: rejected (2026-10-23)
+
+Following X50/X51, replaced the backward bin search with the preceding queue's
+size boundary, including the alignment aliases on 32-bit and 64-bit targets.
+A focused regression checked every small request byte against the original
+bin classification; the optimized debug test passed. This was measured only
+on the local EPYC VM, against the frozen retained `b1ce730a` library with
+SHA-256 `e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`.
+Each screen used six alternating fresh-process pairs, the existing six native
+cases and pinned Redis SET/GET controls from X41/X42, selecting only our
+allocator.
+
+The first build let LLVM inline the enclosing queue update. Redis SET improved
+1.39% and GET declined 0.14%, but native elapsed time rose 0.55% geometrically:
+Larson +4.26%, sh8 +2.32%, each slower in five of six pairs. A second version
+preserved the previous outline boundary and hot malloc/free/collector addresses;
+the update shrank from 480 to 331 bytes. SET improved 2.33% and GET 0.71%, but
+native time still rose 0.30% overall, with xmalloc +3.44% and slower in four
+of six pairs. Other median native changes were Larson +0.90%, Larson-sized
+−1.60%, sh6 −0.33%, sh8 −0.69%, and glibc-thread +0.18%.
+
+Neither version demonstrated an all-around runtime improvement. Both source
+changes and the candidate-only test were reverted. Patches, frozen libraries,
+raw process outputs, resources, and summaries remain under untracked
+`target/perf-experiments/X52/{native-screen,redis-screen,native-outlined,redis-outlined}`.
+
+## X53 — select the unfull destination without temporary flag changes
+
+The full-page transition now uses the existing size/huge classifier to select
+its destination queue while the full flag remains set. The existing queue
+transfer clears it once. This removes two locked flag updates and their
+repeated full-size accounting per transition; it preserves the remaining
+owner/interior-pointer flags and queue ordering. A focused regression covers
+normal and huge destinations, existing destination pages, links, counts, and
+full-size accounting. It passes with optimized debug assertions.
+
+Against the original retained library, six local alternating Redis pairs give
+SET +2.29% throughput (five of six positive), GET −0.04%. The six-workload
+native screen gives elapsed-time changes of Larson −5.07%, Larson-sized
+−1.73%, sh6 +1.00%, sh8 −1.54%, xmalloc −1.23%, and rptest −2.85%; geometric
+mean −1.92%. Larson and rptest are highly variable; only sh8 meets the
+screen's likely-faster criterion. The sh6 cost needs checking in the full
+suite. The candidate is provisionally retained for the final combined gate,
+not declared broadly faster from this screen alone. Raw paired evidence and
+the isolated patch are under `target/perf-experiments/X53`.
+
+## X54 — outline realloc's allocate/copy fallback: rejected
+
+Kept validation, heap resolution, usable-size outputs, and the in-place
+eligibility test intact, but outlined allocation/copy/free behind a private
+helper. Boundary checks for half-size retention, below-half moves, private-heap
+ownership, and aligned interior payload copying passed (eight integration
+checks total). The exported realloc function became smaller, but materializing
+helper arguments added stack writes to the common path.
+
+The baseline for this independent experiment includes X53. Six local Redis
+pairs gave SET +0.59% and GET +0.57% throughput, with substantial variation.
+The existing public-allocator `realloc_churn` workload, however, took 6.59%
+more time: all six paired changes were worse, ranging from +4.81% to +12.65%.
+Both static benchmark binaries were frozen before measurement, ran on CPU 2,
+and used fresh Criterion output directories, the existing deterministic
+4,000-allocation workload, 100 samples, and ten seconds of measurement.
+The ratio uses each process's Criterion mean, then the median across pairs.
+No other allocator was selected. Redis and churn ran sequentially without
+concurrent builds or tests.
+
+Reverted the helper and candidate-specific tests. Their patch, frozen static
+and shared artifacts, raw samples, commands, hashes, and summaries remain
+under `target/perf-experiments/X54`. Smaller assembly alone did not justify
+this runtime regression.
+
+## X55 — schedule the free-path thread-ID load earlier: rejected
+
+Moved the independent TLS thread-ID load before the page-map loads in the
+release interpose free stub, using a caller-saved register. The instruction
+count, 162-byte function size, and malloc/free/collector addresses stayed
+unchanged. Release free-only checks passed for same-thread, cross-thread,
+abandoned-owner, and shutdown cases.
+
+Six local paired native runs against X53 showed xmalloc −4.18% time in every
+pair, but sh6 +5.46% in every pair (range +3.0% to +7.2%). The aggregate of six
+focused cases was essentially flat; the other medians were Larson +2.17%,
+Larson-sized −2.90%, sh8 −0.33%, and glibc-thread +0.07%. Redis's six pairs
+gave SET +0.13% throughput and GET −0.68%. This trades one hot workload's
+performance for another, so the assembly change was reverted. Frozen binaries,
+patch, release-check logs, raw pairs, and summaries are under
+`target/perf-experiments/X55`.
+
+## X56 — use the compact page-map leaf index in free: rejected
+
+The handwritten free stub used a 64-bit shift and scaled index where the
+compiler-generated usable-size path already used the equivalent low-32-bit
+byte offset. Tested `(low32(pointer) >> 13) & 0xfff8` in the free stub, saving
+two instruction bytes. Two bytes of unexecuted padding preserved the malloc
+and subsequent function addresses. Release free-only probes passed.
+
+Six native pairs against X53 gave +0.48% geometric-mean elapsed time, including
+Larson-sized +4.77%, sh6 +0.55%, glibc-thread +0.77%, and xmalloc −1.66%.
+The six Redis pairs gave SET −2.50% throughput (five of six lower) and GET
+−0.77%. Reverted the candidate. This arithmetic simplification does not remove
+a dependent metadata load; removing one would require a more substantial
+page-map/layout change or a cache with a correct invalidation protocol. The
+current evidence does not justify adding such a cache to each lookup.
+Raw paired results, patches, hashes, and release checks are under
+`target/perf-experiments/X56`.
+
+## X57 — pass scalar realloc fallback inputs (rejected)
+
+Revisited X54's argument-passing cost. The fallback now receives the already
+validated old pointer/usable size, requested size, zeroing policy, local heap,
+and optional output. It constructs the ordinary allocation layout inside the
+fallback. Pointer validation, heap resolution, usable-size outputs, in-place
+eligibility, zero-tail handling, and successful-copy-before-free ordering stay
+in place. The exported realloc body is 377 bytes and saves five registers,
+without X54's 64-byte stack packet and common-path layout stores. Boundary,
+alignment, compatibility zero-extension, and seeded allocation-sequence checks
+pass (22 integration tests).
+
+Six local alternating pairs against X53 give Redis SET +1.67% throughput
+(five of six higher), GET +1.43% with mixed signs. The existing frozen public
+realloc-churn benchmark gives +0.44% elapsed time, with paired changes
+−4.86%, +9.86%, +0.19%, +3.99%, −1.94%, and +0.69%. This removes X54's consistent
+churn regression, but does not establish a churn speedup. The full X59 gate
+then measured realloc churn **3.50% slower** than X53 alone, with five of six
+pairs slower. The abstraction-only comparison is −0.13%, locating this cost
+in the realloc experiment rather than the seven abstraction changes. Reverted
+the prototype and its two added integration tests before the final retained
+build. Raw samples, isolated patch, frozen
+shared/static binaries, hashes, and commands are in `target/perf-experiments/X57`.
+
+## X58 — profile another application before adding allocator work
+
+Profiled the cached portable RocksDB 10.10.1 `fillrandom` workload locally with
+the X53+X57 library: 50,000 writes, 256-byte values, one worker, seed 12345,
+compression disabled, WAL enabled, sync disabled, and a fresh database.
+Callgrind collected 645,771,121 instructions over the process lifetime. The
+allocator library accounts for 1,940,979 self instructions, **0.301%**. Its
+largest entries are free (0.102%) and the malloc/C++-new alias (0.079%).
+The dominant application entries are the memtable comparator (11.66%), two
+CRC routines (7.63% and 7.44%), and skip-list splice recomputation (6.15%).
+
+These are instruction shares, not cycle or wall-time shares; startup and
+cleanup are included. The profile does not justify another allocator change
+for this workload. The ownership checker reports one distinct process ID,
+and allocator-object call edges confirm the instrumented library is exercised.
+Frozen binary hashes, commands, raw profile, checked instruction totals,
+reports, and output are under `target/perf-experiments/X58/rocksdb-instructions`.
+The remote VM was not needed for these experiments.
+
+## X59 — Borrowed atomic fields and guards, locked-list capabilities, and bounded storage
+
+Implemented the seven requested internal changes in order. The initial
+pre-abstraction control contains X53 and the provisional X57 experiment:
+SHA-256 `a5400eff3ade41de818071ce80f39a9784ea37c4c58bd9406acf04b297299209`.
+The initial candidate is `4000f4e69483829040411fc389be13160a9c236bd3577b9378be1e3dd7e8c806`.
+The held-out realloc result rejects X57; the final retained build and its
+matching X53-only control are recorded below.
+
+- Arena count and page-table cells hold borrowed atomic fields. Their five
+  load/store/fetch methods are safe. Prefix projections accept the actual
+  fixed atomic arrays; raw metadata is borrowed only at the call site and
+  does not create a shared reference to unrelated mutable heap fields.
+- Atomic, once, and mutex guard constructors borrow their backing objects.
+  Guards retain their existing non-Send/non-Sync behavior. Linux pthread
+  storage uses `UnsafeCell` with the same 40-byte size and word alignment;
+  once operations no longer form exclusive references to borrowed locks.
+  Dynamic subprocess heap visits hand off the registry lock inside a scoped
+  callback, keeping the original lock order and callback reentrancy behavior
+  without inventing a dynamic `'static` lifetime.
+- Heap/TLD list capabilities identify the protected owner and replace both
+  acquire booleans throughout thread-heap teardown. Each path acquires the
+  other list lock once, preserves heap unlink → TLD unlink → TLD clear →
+  terminal decref, and releases locks at the original points. Inlining the
+  common free helper removes the capability packet and enum dispatch from
+  the caller boundary; no allocator metadata or synchronization is added.
+- `OwnedHeap` has neither `Copy` nor `Clone`. Intermediate drains borrow it;
+  terminal release consumes it. Raw aliases remain an unsafe caller concern.
+- A bounded `SmallRequestedSize` preserves the original request for tracking
+  and derives `NormalizedSmallSize` for safe padding. Both types occupy one
+  word. The existing small-path branch constructs the bounded proof; the two
+  public unsafe heap-small boundaries use their existing size precondition.
+  The old safe `RequestedSize::padded_unchecked` method is removed.
+- Statistics buffering borrows `[c_char; 256]`. An eight-bit cursor admits
+  only valid array indexes, and buffer writes use ordinary safe indexing.
+  A formatting enum replaces the nullable C format pointer. Callback/context
+  and input-string conversions retain their required unsafe boundaries.
+- Bitmap bin diagnostics accept the fixed chunk array directly. The helper
+  becomes safe and retains the same optimized instructions.
+
+Compiler probes compile positive borrow controls and reject all five local
+atomic/guard backing escapes with E0515. Probes built against the full crate
+also reject both locked-list scope escapes and a second move of `OwnedHeap`
+(E0382); their positive controls compile. Existing tests assert pointer-sized
+handles/guards, unchanged pthread layout, and noncopyable ownership/guards.
+New boundary tests cover zero, one, the small maximum, maximum + 1, and
+`usize::MAX`, plus statistics output across capacity and newline boundaries.
+
+Normalized x86-64 release code, excluding alignment padding and resolving GOT
+relocations, gives the following initial comparison to the pre-abstraction control:
+
+| Function | Before / after bytes | Normalized instruction bodies |
+| --- | ---: | --- |
+| `mi_malloc` | 81 / 81 | Identical |
+| `mi_free` | 162 / 162 | Identical |
+| `mi_theap_malloc` | 97 / 97 | Identical |
+| `mi_realloc` | 377 / 377 | Identical |
+| `mi_heap_free` | 610 / 610 | Identical |
+| Once enter / release | 226 / 226; 40 / 40 | Identical |
+| Bitmap debug bin lookup | 154 / 154 | Identical |
+| `mi_heap_malloc_small` | 184 / 154 | Bounds-check path removed; 56 → 47 instructions |
+| `mi_heap_zalloc_small` | 240 / 210 | Bounds-check path removed; 74 → 65 instructions |
+| Statistics output callback | 183 / 178 | Safe indexing adds no bounds-check path |
+
+Whole-library text grows by 336 bytes (0.13%), mostly from specializing the
+teardown paths. No new heap allocation, metadata word, lock operation, or
+atomic operation implements these abstractions. Code size and static
+instruction counts alone are not treated as throughput measurements.
+
+Validation: final `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features` pass without warning
+suppression. Portable C ABI/interpose release thread stress and free-only
+regressions pass. ASan and TSan suites pass with the already-required nightly
+`-Aunused-unsafe` compatibility flag for the existing CPUID intrinsic wrapper;
+the initial unsuppressed nightly invocation fails on that unrelated warning.
+
+The extra non-secure release unit run exposes an existing test problem:
+`free_validation_covers_null_invalid_and_bad_alignment` passes arbitrary
+invalid pointers to a release configuration requiring valid allocator
+pointers. It SIGSEGVs in both this tree and clean `f56f6089`; the other 306
+release unit tests pass with that case excluded. The production free path and
+that unrelated test are unchanged. Apple ARM64 release checking passes.
+Linux ARM64's five character-signedness errors and Windows MSVC's 79 existing
+platform/type/lint errors reproduce at `f56f6089` with identical error-message
+multisets. These cross-platform checks are not claimed as passes.
+
+All source diffs, compile-probe logs, code-generation comparisons, frozen
+shared/static artifacts, and verification logs are under
+`target/perf-experiments/X59`. Performance comparisons below use only this
+machine; no additional hardware-profile VM run was needed.
+
+Initial six-round measurement used all six execution orders for original,
+pre-abstraction, and candidate builds, with 378 successful fresh native
+processes across 21 workloads. Geometric-mean normalized time was −0.03%
+versus the original and −0.57% versus the pre-abstraction build. Against that
+pre-abstraction control, glibc-simple was +1.80% in time (all six slower),
+malloc-large +3.07% with mixed signs, and Larson +3.12% with mixed signs;
+these points prevent a blanket claim that every workload is unchanged.
+Redis's 18 successful server runs gave SET/GET throughput +0.37%/+1.77%
+against the original, and +3.05%/+1.13% against the pre-abstraction build.
+
+The 18-process realloc comparison was decisive for X57: candidate time was
++3.50% against the frozen X53-only build (five of six slower), but −0.13%
+against X53+X57, with mixed signs. Thus the outlined fallback was removed;
+the abstraction changes were retained for the final comparison. Six paired
+cold-path checks gave statistics-rendering time +0.07% and private-heap
+create/allocate/destroy time −0.44%, both mixed. The initial raw data remain
+under `native-primary`, `redis-primary`, `realloc-screen`, and `cold-paths`;
+they are not substituted for measurements of the final retained artifact.
+
+After removing X57, the retained shared library is SHA-256
+`ab2ef9b931ce917c036ddd47200dcf49682dd739ccb77291b4a06acc75680fbc`;
+its matching pre-abstraction X53-only control is
+`533d77733c55d15b9ed0a43580c93f852208f5e1c503f65b32374e6e61c2910e`.
+The original pre-X53 control remains
+`e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`.
+The final code-generation comparison preserves every conclusion in the table
+above; restored `mi_realloc` is 747 bytes/209 instructions in both builds,
+with identical normalized bodies. All 240 dynamic export names match.
+Text is 267,929 → 268,265 bytes (+336); data is unchanged at 44,008 bytes.
+
+Re-ran formatting, full-workspace/all-target/all-feature Clippy and tests on
+this exact source after the rollback: all pass, including 420 tests and the
+native smoke harnesses. Release C ABI/interpose thread stress and free-only
+regressions, ASan, and TSan pass again. The sanitizer commands retain the
+previously documented nightly CPUID warning compatibility flag. Frozen final
+artifacts and code-generation results are in `retained-artifacts.json` and
+`codegen-retained.json` under the X59 artifact directory.
+
+Final retained six-round comparison: all 378 native processes and all 18
+Redis server runs complete successfully. Lower native normalized time is
+better; higher Redis throughput is better. “Abstractions only” compares
+X53 plus the seven changes against X53 alone.
+
+| Native workload | Time vs original | Abstractions only |
+| --- | ---: | ---: |
+| glibc-simple | -0.07% | +0.21% |
+| malloc-large | +1.61% | -2.23% |
+| malloc-large-old | +0.42% | -0.14% |
+| cache-scratch1 | -0.02% | +0.02% |
+| cache-thrash1 | -0.03% | +0.03% |
+| cache-scratchN | -0.07% | -0.24% |
+| cache-thrashN | -0.18% | -0.18% |
+| mstressN | +0.32% | +0.13% |
+| sh6benchN | +1.08% | +1.51% |
+| sh8benchN | +0.36% | +0.26% |
+| alloc-test1 | -5.43% | -2.81% |
+| alloc-testN | -0.05% | +0.35% |
+| barnes | +0.51% | +0.75% |
+| cfrac | +1.14% | +0.62% |
+| mleak10 | +2.80% | -6.66% |
+| mleak100 | +1.02% | -0.29% |
+| glibc-thread | +0.94% | -0.18% |
+| xmalloc-testN | +1.39% | +1.10% |
+| larsonN | +2.42% | -1.99% |
+| larsonN-sized | -0.24% | -2.15% |
+| rptestN | -1.49% | +0.77% |
+| **Geometric mean** | **+0.29%** | **-0.55%** |
+
+| Redis operation | Throughput vs original | Abstractions only |
+| --- | ---: | ---: |
+| SET | +1.14% | +2.63% |
+| GET | +3.35% | +1.82% |
+
+SET improves in all six retained/original pairs. GET has mixed signs; its
+point estimate is not treated as a reliable application-wide speedup. The
+initial glibc-simple slowdown does not repeat on the final artifact: +0.21%
+versus the abstraction control, with mixed signs. The final xmalloc point
+is +1.10% with six positive differences and receives a bounded A/A and
+old/new confirmation. Short malloc-large and mleak10 points versus the
+original are also confirmed with identical-binary controls.
+
+The retained realloc-churn comparison is **−1.61% time** versus the frozen
+X53-only static build, with five of six pairs faster. This confirms that the
+earlier +3.50% cost did not survive removing X57. Six paired statistics and
+private-heap lifecycle checks give +0.49% and −1.23% respectively, with mixed
+signs. There is no measured aggregate penalty from the seven abstractions;
+these small point estimates are not universal zero-cycle guarantees.
+
+Bounded confirmation used twelve balanced rounds per workload, with two
+copies of the same frozen control and the retained candidate. The xmalloc
+control is X53 alone; the malloc-large/mleak10 control is the original build.
+All 108 processes pass. Median elapsed-time changes are:
+
+| Workload | Identical-binary A/A | Candidate / control A | Candidate / control B |
+| --- | ---: | ---: | ---: |
+| xmalloc-testN | −0.09% | +1.45% | +1.86% |
+| malloc-large | −0.42% | +0.87% | −0.33% |
+| mleak10 | +7.52% | +2.77% | −1.84% |
+
+The xmalloc confirmation has mixed signs (7/12 and 8/12 slower); descriptive
+95% bootstrap intervals for its two candidate comparisons are
+[−2.36%, +3.52%] and [−3.22%, +3.88%]. Its primary +1.10% point and positive
+confirmation medians leave a small regression possible, even though the
+confirmation cannot separate it from variation. No further reruns were used
+to select a favorable result. The short malloc-large/mleak10 measurements do
+not establish a source-level regression: the two identical controls themselves
+diverge substantially, especially mleak10. Raw samples and the A/A calculations
+are preserved in `confirm-abstractions`, `confirm-overall`, and
+`confirmations-summary.json`.
+
+Retain X53's removal of two redundant locked flag updates and all seven
+abstraction changes. Reject the direct-cache, lookup-index, earlier-TLS-load,
+and both realloc-outlining prototypes. The complete retained native suite is
+essentially flat versus the original (+0.29%), while Redis SET improves
+1.14% in all six pairs. The abstraction-only native aggregate is −0.55%.
+The compiler-checked lifetime, lock identity, ownership, bounds, and array
+extent guarantees require no additional allocator metadata, allocation,
+lock, or atomic operation. Main-path instruction bodies remain identical;
+the measurements support negligible overall cost, with the explicit xmalloc
+uncertainty above rather than a claim of identical throughput everywhere.

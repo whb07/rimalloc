@@ -70,23 +70,61 @@ impl RequestedSize {
             .map(PaddedSize)
             .ok_or(AllocSizeError::Overflow)
     }
+}
 
-    /// Padded size without overflow checking (branchless in release).
-    ///
-    /// # Safety (invariant)
-    ///
-    /// The caller must guarantee `self.get() + MI_PADDING_SIZE` does not overflow
-    /// and is non-zero. On the small allocation path this holds because
-    /// `size <= MI_SMALL_SIZE_MAX` (≤ 1024) and `MI_PADDING_SIZE` is tiny; on
-    /// other paths where overflow is possible, use `checked_padded` instead.
-    /// A `debug_assert!` catches violations in debug builds.
+/// A request bounded by the small-allocation limit; zero retains its tracking meaning.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct SmallRequestedSize(RequestedSize);
+
+impl SmallRequestedSize {
+    pub(crate) const ZERO: Self = Self(RequestedSize::new(0));
+
     #[inline(always)]
-    pub(crate) fn padded_unchecked(self) -> PaddedSize {
-        crate::internal::mi_debug_assert!(
-            self.0.checked_add(crate::types::MI_PADDING_SIZE).is_some(),
-            "requested size + padding must not overflow"
-        );
-        unsafe { PaddedSize::new_unchecked(self.0.wrapping_add(crate::types::MI_PADDING_SIZE)) }
+    pub(crate) const fn new(size: RequestedSize) -> Option<Self> {
+        if size.get() <= crate::types::MI_SMALL_SIZE_MAX {
+            Some(Self(size))
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) const fn requested(self) -> RequestedSize {
+        self.0
+    }
+
+    #[inline(always)]
+    pub(crate) const fn normalized(self) -> NormalizedSmallSize {
+        // SAFETY: zero becomes one word; every other request is positive and
+        // the constructor bounds both cases by MI_SMALL_SIZE_MAX.
+        NormalizedSmallSize(unsafe { NonZeroUsize::new_unchecked(self.0.effective_size()) })
+    }
+}
+
+/// A positive small request, bounded so adding allocator padding cannot overflow.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct NormalizedSmallSize(NonZeroUsize);
+
+const _: () = {
+    assert!(RequestedSize::MIN_ZERO_SIZE <= crate::types::MI_SMALL_SIZE_MAX);
+    assert!(crate::types::MI_SMALL_SIZE_MAX <= usize::MAX - crate::types::MI_PADDING_SIZE);
+};
+
+impl NormalizedSmallSize {
+    #[inline(always)]
+    pub(crate) const fn effective(self) -> EffectiveSize {
+        EffectiveSize(self.0)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn padded(self) -> PaddedSize {
+        // SAFETY: normalization supplies positivity; the small bound and the
+        // compile-time padding bound above exclude overflow.
+        PaddedSize(unsafe {
+            NonZeroUsize::new_unchecked(self.0.get() + crate::types::MI_PADDING_SIZE)
+        })
     }
 }
 

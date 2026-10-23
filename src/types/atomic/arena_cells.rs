@@ -8,59 +8,44 @@
 use core::ffi::c_void;
 use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
-use super::{AtomicPtrField, AtomicUsizeField};
-
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicAbandonedCount(*const AtomicUsize);
+pub(crate) struct AtomicAbandonedCount<'a>(&'a AtomicUsize);
 
-impl AtomicAbandonedCount {
+impl<'a> AtomicAbandonedCount<'a> {
     #[inline(always)]
-    pub(crate) fn from_cell(cell: *const AtomicUsize) -> Self {
+    pub(crate) fn from_cell(cell: &'a AtomicUsize) -> Self {
         Self(cell)
     }
 
-    #[inline(always)]
-    fn field(self) -> AtomicUsizeField {
-        AtomicUsizeField::from_raw(self.0.cast_mut().cast::<usize>())
+    pub(crate) fn load_relaxed(self) -> usize {
+        self.0.load(Ordering::Relaxed)
     }
 
-    pub(crate) unsafe fn load_relaxed(self) -> usize {
-        unsafe { self.field().load(Ordering::Relaxed) }
+    pub(crate) fn fetch_add_relaxed(self, value: usize) -> usize {
+        self.0.fetch_add(value, Ordering::Relaxed)
     }
 
-    pub(crate) unsafe fn fetch_add_relaxed(self, value: usize) -> usize {
-        unsafe { self.field().fetch_add(value, Ordering::Relaxed) }
-    }
-
-    pub(crate) unsafe fn fetch_sub_relaxed(self, value: usize) -> usize {
-        unsafe { self.field().fetch_sub(value, Ordering::Relaxed) }
+    pub(crate) fn fetch_sub_relaxed(self, value: usize) -> usize {
+        self.0.fetch_sub(value, Ordering::Relaxed)
     }
 }
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicArenaPage(*const AtomicPtr<c_void>);
+pub(crate) struct AtomicArenaPage<'a>(&'a AtomicPtr<c_void>);
 
-impl AtomicArenaPage {
+impl<'a> AtomicArenaPage<'a> {
     #[inline(always)]
-    pub(crate) fn from_cell(cell: *const AtomicPtr<c_void>) -> Self {
+    pub(crate) fn from_cell(cell: &'a AtomicPtr<c_void>) -> Self {
         Self(cell)
     }
 
-    #[inline(always)]
-    fn field(self) -> AtomicPtrField<c_void> {
-        AtomicPtrField::from_raw(self.0.cast_mut().cast::<*mut c_void>())
+    pub(crate) fn load_acquire(self) -> *mut crate::types::mi_arena_pages_t {
+        self.0.load(Ordering::Acquire).cast()
     }
 
-    pub(crate) unsafe fn load_acquire(self) -> *mut crate::types::mi_arena_pages_t {
-        unsafe { self.field().load(Ordering::Acquire) }.cast::<crate::types::mi_arena_pages_t>()
-    }
-
-    pub(crate) unsafe fn store_release(self, value: *mut crate::types::mi_arena_pages_t) {
-        unsafe {
-            self.field()
-                .store(value.cast::<c_void>(), Ordering::Release)
-        };
+    pub(crate) fn store_release(self, value: *mut crate::types::mi_arena_pages_t) {
+        self.0.store(value.cast(), Ordering::Release);
     }
 }

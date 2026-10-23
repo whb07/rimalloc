@@ -19,15 +19,11 @@ pub(super) struct MiHeapPrefix {
     pub(super) arena_pages_lock: crate::atomic::mi_lock_t,
 }
 
-pub(super) unsafe fn mi_heap_abandoned_count(
-    heap: *mut mi_heap_t,
+pub(super) fn mi_heap_abandoned_count(
+    counts: &[AtomicUsize; MI_BIN_COUNT],
     bin: crate::core_types::Bin,
-) -> crate::core_types::AtomicAbandonedCount {
-    unsafe {
-        crate::core_types::AtomicAbandonedCount::from_cell(ptr::addr_of!(
-            (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin.as_usize()]
-        ))
-    }
+) -> crate::core_types::AtomicAbandonedCount<'_> {
+    crate::core_types::AtomicAbandonedCount::from_cell(&counts[bin.as_usize()])
 }
 
 pub(super) unsafe fn mi_arena_index(arena: *mut mi_arena_t) -> crate::core_types::ArenaIndex {
@@ -36,16 +32,11 @@ pub(super) unsafe fn mi_arena_index(arena: *mut mi_arena_t) -> crate::core_types
     unsafe { crate::core_types::ArenaIndex::new_unchecked(arena_idx as u16) }
 }
 
-pub(super) unsafe fn mi_heap_arena_page_cell(
-    heap: BorrowedHeap,
+pub(super) fn mi_heap_arena_page_cell(
+    pages: &[AtomicPtr<c_void>; MI_MAX_ARENAS],
     arena_idx: crate::core_types::ArenaIndex,
-) -> crate::core_types::AtomicArenaPage {
-    let heap = heap.ptr().as_ptr();
-    unsafe {
-        crate::core_types::AtomicArenaPage::from_cell(ptr::addr_of!(
-            (*heap.cast::<MiHeapPrefix>()).arena_pages[arena_idx.get() as usize]
-        ))
-    }
+) -> crate::core_types::AtomicArenaPage<'_> {
+    crate::core_types::AtomicArenaPage::from_cell(&pages[arena_idx.get() as usize])
 }
 
 #[repr(C)]

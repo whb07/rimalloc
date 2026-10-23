@@ -117,7 +117,7 @@ unsafe fn destroy_detached(detached: subproc_registry::DetachedSubproc) {
     let subproc_prefix = mi_subproc_prefix_typed(subproc);
     let borrowed_subproc = unsafe { BorrowedSubproc::new(subproc) };
     loop {
-        let heaps_lock = unsafe { MiLockGuard::acquire(subproc.heaps_lock()) };
+        let heaps_lock = MiLockGuard::acquire(unsafe { &*subproc.heaps_lock() });
         let heap = unsafe { (*subproc_prefix).heaps };
         drop(heaps_lock);
         if heap.is_null() {
@@ -389,11 +389,7 @@ pub(super) unsafe fn visit_heaps(
     // SAFETY: `main_init` initialized the registry lock. Acquiring the heap
     // lock before releasing it hands target liveness to the returned token.
     let registry = unsafe { subproc_registry::SubprocRegistryGuard::acquire() };
-    let Some(heaps) = registry.lock_heaps(candidate) else {
-        return false;
-    };
-    drop(registry);
     // SAFETY: the public entrypoint requires a valid callback and argument for
     // this call, including its reentrancy and no-unwind obligations.
-    unsafe { heaps.visit(visitor, arg) }
+    unsafe { registry.visit_heaps(candidate, visitor, arg) }.unwrap_or(false)
 }

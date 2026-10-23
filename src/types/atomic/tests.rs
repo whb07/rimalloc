@@ -9,7 +9,7 @@ use crate::types::{mi_block_t, mi_page_t};
 use core::{
     ffi::c_void,
     mem::MaybeUninit,
-    ptr::{self, NonNull},
+    ptr,
     sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize},
 };
 
@@ -127,12 +127,10 @@ fn atomic_arena_page_loads_and_stores_page_table_pointer() {
     let atomic = AtomicPtr::new(ptr::null_mut::<c_void>());
     let field = AtomicArenaPage::from_cell(&atomic);
 
-    unsafe {
-        assert_eq!(field.load_acquire(), ptr::null_mut());
-        field.store_release(pages_ptr);
-        assert_eq!(field.load_acquire(), pages_ptr);
-        assert_eq!(atomic.load(Ordering::Acquire), pages_ptr.cast::<c_void>());
-    }
+    assert_eq!(field.load_acquire(), ptr::null_mut());
+    field.store_release(pages_ptr);
+    assert_eq!(field.load_acquire(), pages_ptr);
+    assert_eq!(atomic.load(Ordering::Acquire), pages_ptr.cast::<c_void>());
 }
 
 #[test]
@@ -302,13 +300,11 @@ fn atomic_abandoned_count_uses_relaxed_cell_operations() {
     let atomic = AtomicUsize::new(2);
     let count = AtomicAbandonedCount::from_cell(&atomic);
 
-    unsafe {
-        assert_eq!(count.load_relaxed(), 2);
-        assert_eq!(count.fetch_add_relaxed(1), 2);
-        assert_eq!(count.load_relaxed(), 3);
-        assert_eq!(count.fetch_sub_relaxed(2), 3);
-        assert_eq!(count.load_relaxed(), 1);
-    }
+    assert_eq!(count.load_relaxed(), 2);
+    assert_eq!(count.fetch_add_relaxed(1), 2);
+    assert_eq!(count.load_relaxed(), 3);
+    assert_eq!(count.fetch_sub_relaxed(2), 3);
+    assert_eq!(count.load_relaxed(), 1);
 }
 
 #[test]
@@ -330,48 +326,42 @@ fn atomic_thread_heap_refcount_uses_acq_rel_operations() {
 #[test]
 fn atomic_guard_acquires_once_and_releases_on_drop() {
     let atomic = AtomicUsize::new(0);
-    let field =
-        AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
+    let field = &atomic;
 
-    unsafe {
-        let guard = AtomicGuard::try_acquire(field).expect("first acquire succeeds");
-        assert_eq!(atomic.load(Ordering::Acquire), 1);
-        assert!(AtomicGuard::try_acquire(field).is_none());
+    let guard = AtomicGuard::try_acquire(field).expect("first acquire succeeds");
+    assert_eq!(atomic.load(Ordering::Acquire), 1);
+    assert!(AtomicGuard::try_acquire(field).is_none());
 
-        drop(guard);
-        assert_eq!(atomic.load(Ordering::Acquire), 0);
-        assert!(AtomicGuard::try_acquire(field).is_some());
-    }
+    drop(guard);
+    assert_eq!(atomic.load(Ordering::Acquire), 0);
+    assert!(AtomicGuard::try_acquire(field).is_some());
 }
 
 #[test]
 fn once_guard_enters_once_and_releases_on_drop() {
-    let mut once = crate::atomic::mi_atomic_once_t::new();
-    let state = OnceStatePtr::from_raw(ptr::addr_of_mut!(once).cast::<usize>());
+    let once = crate::atomic::mi_atomic_once_t::new();
+    let state = &once;
 
-    unsafe {
-        let guard = OnceGuard::try_enter(state).expect("first enter succeeds");
-        assert!(once.tid.load(Ordering::Acquire) > 1);
-        assert!(OnceGuard::try_enter(state).is_none());
+    let guard = OnceGuard::try_enter(state).expect("first enter succeeds");
+    assert!(once.tid.load(Ordering::Acquire) > 1);
+    assert!(OnceGuard::try_enter(state).is_none());
 
-        drop(guard);
-        assert_eq!(once.tid.load(Ordering::Acquire), 1);
-        assert!(OnceGuard::try_enter(state).is_none());
-    }
+    drop(guard);
+    assert_eq!(once.tid.load(Ordering::Acquire), 1);
+    assert!(OnceGuard::try_enter(state).is_none());
 }
 
 #[test]
 fn mi_lock_guard_acquires_and_releases_on_drop() {
-    let mut lock = crate::atomic::mi_lock_t::new();
-    let lock_ptr =
-        MiLockPtr::from_nonnull(unsafe { NonNull::new_unchecked(ptr::addr_of_mut!(lock)) });
+    let lock = crate::atomic::mi_lock_t::new();
+    let lock_ptr = ptr::from_ref(&lock).cast_mut();
 
     unsafe {
-        let guard = MiLockGuard::acquire(lock_ptr);
-        assert!(!crate::atomic::mi_lock_try_acquire(lock_ptr.as_ptr()));
+        let guard = MiLockGuard::acquire(&lock);
+        assert!(!crate::atomic::mi_lock_try_acquire(lock_ptr));
 
         drop(guard);
-        assert!(crate::atomic::mi_lock_try_acquire(lock_ptr.as_ptr()));
-        crate::atomic::mi_lock_release(lock_ptr.as_ptr());
+        assert!(crate::atomic::mi_lock_try_acquire(lock_ptr));
+        crate::atomic::mi_lock_release(lock_ptr);
     }
 }

@@ -123,23 +123,18 @@ pub(super) fn mi_chunkbin_of(slice_count: usize) -> mi_chunkbin_t {
     }
 }
 
-/// # Safety
-/// `chunkmap_bins` must point to at least `MI_CBIN_COUNT - 1` initialized bitmap chunks, and
-/// `chunk_idx` must be a valid bit index for those chunks.
+/// Returns the first matching chunk bin for a valid bit index.
 #[inline(never)]
-pub unsafe fn mi_bbitmap_debug_get_bin(
-    chunkmap_bins: *const mi_bchunk_t,
+pub fn mi_bbitmap_debug_get_bin(
+    chunkmap_bins: &[mi_bchunk_t; MI_CBIN_COUNT as usize - 1],
     chunk_idx: usize,
 ) -> mi_chunkbin_t {
-    unsafe {
-        let chunkmap_bins = core::slice::from_raw_parts(chunkmap_bins, MI_CBIN_COUNT as usize - 1);
-        let mut ibin = MI_CBIN_SMALL;
-        while (ibin as i32) < (MI_CBIN_NONE as i32) {
-            if mi_bchunk_is_xsetN(MI_BIT_SET, &chunkmap_bins[ibin as usize], chunk_idx, 1) {
-                return ibin;
-            }
-            ibin = mi_chunkbin_inc(ibin);
+    let mut ibin = MI_CBIN_SMALL;
+    while (ibin as i32) < (MI_CBIN_NONE as i32) {
+        if mi_bchunk_is_xsetN(MI_BIT_SET, &chunkmap_bins[ibin as usize], chunk_idx, 1) {
+            return ibin;
         }
-        MI_CBIN_NONE
+        ibin = mi_chunkbin_inc(ibin);
     }
+    MI_CBIN_NONE
 }

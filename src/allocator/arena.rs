@@ -1007,7 +1007,7 @@ unsafe fn mi_arenas_try_alloc(
     {
         // SAFETY: the live subprocess owns this initialized reserve lock; the guard serializes
         // registry growth and releases the same lock at scope exit.
-        let _lock = unsafe { MiLockGuard::acquire(subproc.arena_reserve_lock()) };
+        let _lock = MiLockGuard::acquire(unsafe { &*subproc.arena_reserve_lock() });
         // SAFETY: the held reserve lock stabilizes registry growth while the live subprocess count
         // is compared with the pre-lock snapshot.
         if arena_count == unsafe { mi_arenas_get_count_typed(subproc) } {
@@ -1319,7 +1319,10 @@ unsafe fn mi_arenas_page_try_find_abandoned(
     crate::internal::mi_assert_internal!(bin.as_usize() < MI_BIN_COUNT);
     // SAFETY: the live heap prefix contains this bin's initialized atomic
     // abandoned count; concurrent updates use the same atomic protocol.
-    if unsafe { mi_heap_abandoned_count(heap, bin).load_relaxed() } == 0 {
+    if unsafe {
+        mi_heap_abandoned_count(&(*heap.cast::<MiHeapPrefix>()).abandoned_count, bin).load_relaxed()
+    } == 0
+    {
         return None;
     }
 
@@ -1362,7 +1365,8 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                     arena,
                     page,
                 ));
-                mi_heap_abandoned_count(heap, bin).fetch_sub_relaxed(1);
+                mi_heap_abandoned_count(&(*heap.cast::<MiHeapPrefix>()).abandoned_count, bin)
+                    .fetch_sub_relaxed(1);
                 (*theap).stats.pages_reclaim_on_alloc.total += 1;
                 crate::internal::__mi_stat_decrease(
                     ptr::addr_of_mut!((*theap).stats.pages_abandoned),

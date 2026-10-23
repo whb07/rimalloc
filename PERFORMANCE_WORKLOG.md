@@ -3925,3 +3925,84 @@ extent guarantees require no additional allocator metadata, allocation,
 lock, or atomic operation. Main-path instruction bodies remain identical;
 the measurements support negligible overall cost, with the explicit xmalloc
 uncertainty above rather than a claim of identical throughput everywhere.
+
+## X60 — cross-thread measurement with more repetitions
+
+Followed up the possible X59 xmalloc-testN slowdown with allocator code and
+the benchmark executable held fixed. The candidate remains the verified
+`6eda1797` source, artifact `ab2ef9b931ce917c036ddd47200dcf49682dd739ccb77291b4a06acc75680fbc`;
+the X53-only control remains
+`533d77733c55d15b9ed0a43580c93f852208f5e1c503f65b32374e6e61c2910e`.
+Both control labels now use the exact same file and inode. The second phase
+also reuses the first phase's artifact files without rebuilding or recopying.
+No Rust source or benchmark workload code changes were made.
+
+The workload retains its original eight allocator/eight freer threads on
+CPUs 0,2,4,6,8,10,12,14 (one logical CPU per physical core). The controller
+waits on CPU 15. Each block contains two control processes and one candidate
+process. All six execution orders occur once per six-block cycle, shuffled
+with a fixed seed. Three warmup processes per phase are excluded by plan;
+all measured samples are retained. No other build, test, benchmark, or profile
+runs alongside the measurements. Both phases completed their declared sample
+counts without timing-based early stopping.
+
+The primary statistic is the geometric mean of paired normalized-time
+ratios: candidate / geometric-mean(two controls), with one observation per
+complete block. Intervals use 100,000 fixed-seed bootstrap resamples of
+complete blocks. Three-block moving and complete six-block-cycle resampling
+check sensitivity to consecutive-run variation. Earlier X59 data are
+recomputed with this same estimator; its original reported median estimates
+are not compared directly to the new mean-ratio estimates.
+
+| Run | Paired blocks | Seconds per process | Time change | 95% paired interval |
+| --- | ---: | ---: | ---: | --- |
+| Earlier X59 confirmation, same estimator | 12 | 3 | +0.73% | [−1.43%, +2.83%] |
+| X60 longer samples | 36 | 15 | +0.81% | [−0.56%, +2.18%] |
+| X60 more repetitions | 180 | 3 | **−0.03%** | **[−0.77%, +0.73%]** |
+
+Longer samples alone did not reduce the observed per-block spread: log-ratio
+standard deviation was 0.0424, compared with 0.0392 in the earlier short
+confirmation. Therefore, before starting the second phase, its count was
+fixed at 180 three-second blocks to target approximately ±0.6 percentage
+points of uncertainty. Its actual interval is approximately ±0.75 points,
+64.8% narrower than the earlier interval using the same estimator. The two
+durations are analyzed separately, without pooling them to choose a result.
+
+The larger run's checks agree with essentially flat performance:
+
+| Check | Time change | 95% interval |
+| --- | ---: | --- |
+| Identical-file A/A controls | −0.22% | [−1.10%, +0.67%] |
+| Candidate / control A | −0.14% | [−1.03%, +0.77%] |
+| Candidate / control B | +0.08% | [−0.76%, +0.93%] |
+| First 90 blocks | +0.19% | [−0.67%, +1.08%] |
+| Last 90 blocks | −0.26% | [−1.44%, +0.98%] |
+| Three-block moving bootstrap | −0.03% | [−0.79%, +0.73%] |
+| Six-block-cycle bootstrap | −0.03% | [−0.80%, +0.77%] |
+
+The median paired change is −0.42%; 82 of 180 blocks are slower. Candidate
+position estimates are −0.23%, +0.14%, and −0.01%, each with an interval
+spanning zero. Neither the two halves nor execution positions identify a
+consistent penalty. Both phases report zero guest-observed steal ticks,
+cgroup throttle events, and major faults. Median process CPU use is 7.78 and
+7.74 CPU-seconds per wall second respectively. All 648 measured processes and
+six warmups pass, and all frozen binary hashes match after measurement.
+
+Code-generation inspection also finds that the cross-thread collector has
+the same 1,483-byte, 367-instruction normalized body in both artifacts, but
+its entry moves from `0x1e440` (cache-line offset 0) to `0x1df50` (offset 16).
+That placement difference is a possible performance mechanism, not a proven
+cause. No alignment workaround or allocator change is justified by these
+measurements alone.
+
+Conclusion: the larger run, at the original three-second benchmark duration,
+does **not** support a repeatable 1–2% slowdown. Its conservative sensitivity
+interval is approximately [−0.80%, +0.77%], so the measured effect is
+essentially zero within roughly 0.8 percentage points on this machine.
+This replaces X59's unresolved 1–2% concern with a substantially tighter
+reading; it does not establish exact zero cost on every machine or workload.
+
+Commands, schedule, hashes, raw per-process output, process resources, CPU
+and cgroup snapshots, and analysis scripts/results are under
+`target/perf-experiments/X60`: `long-run`, `many-run`, `analysis.json`,
+`analysis-many.json`, and `collector-codegen.json`. No remote VM was used.

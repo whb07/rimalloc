@@ -314,7 +314,9 @@ unsafe extern "C" fn mi_heap_delete_page(
     } else {
         // SAFETY: the live page's initialized thread-free atomic remains stable under exclusive
         // heap deletion; this RMW must acquire its owner bit before any metadata mutation.
-        let atomic = unsafe { page_ptr.thread_free_cell() };
+        let atomic = unsafe {
+            crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
+        };
         // SAFETY: `atomic` is the matching live thread-free field. This idempotent fetch-or retains
         // an existing local owner bit or sets it; exclusive heap deletion excludes a competing
         // owner transition while protocol remote-head publication remains permitted.

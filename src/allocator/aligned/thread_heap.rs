@@ -6,7 +6,7 @@ use crate::allocator::tracking::mi_track_malloc;
 use crate::core_types::Errno;
 use crate::internal::{mi_likely, mi_page_usable_block_size, mi_theap_malloc_use_guarded};
 use crate::prim::MI_THEAP_INITASNULL;
-use crate::types::{MI_SMALL_SIZE_MAX, mi_theap_t};
+use crate::types::mi_theap_t;
 
 use super::{
     MI_GUARDED, MI_PAGE_MAX_OVERALLOC_ALIGN, aligned_layout_or_report,
@@ -40,6 +40,7 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at(
     unsafe { mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, usable) }
 }
 
+#[inline(always)]
 /// # Safety
 /// `theap` must be `None` only when lazy thread-heap initialization is enabled.
 /// `usable` must be writable for one `usize` when non-null.
@@ -65,12 +66,14 @@ pub(crate) unsafe fn mi_theap_malloc_zero_aligned_at_req(
     }
 
     if let Some(local_theap) = theap
-        && mi_likely(size <= MI_SMALL_SIZE_MAX && alignment_raw <= size)
+        && let Some(small) = crate::core_types::SmallRequestedSize::new(layout.requested())
+        && mi_likely(alignment_raw <= size)
     {
         let align_mask = alignment_raw - 1;
         let padded = layout.padded();
-        let available =
-            unsafe { crate::internal::_mi_theap_get_free_small_page_typed(local_theap, padded) };
+        let available = unsafe {
+            crate::internal::_mi_theap_get_free_small_page_typed(local_theap, small.normalized())
+        };
         if let Some(available) = available {
             let page_ptr = available.page();
             let free = unsafe { page_ptr.free_raw() };
@@ -254,6 +257,7 @@ pub unsafe fn mi_theap_calloc_aligned_at(
     unsafe { mi_theap_calloc_aligned_at_req(theap, request, alignment, offset) }
 }
 
+#[inline(always)]
 /// # Safety
 /// `theap` must be `None` only when lazy thread-heap initialization is enabled.
 pub(crate) unsafe fn mi_theap_calloc_aligned_at_req(

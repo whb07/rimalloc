@@ -187,12 +187,12 @@ fn packed_and_atomic_wrappers_match_raw_layout() {
     assert_layout!(atomic::PublishedRemoteHead, BlockPtr);
     assert_layout!(PaddingCanary, u32);
     assert_layout!(PaddingDelta, u32);
-    assert_layout!(atomic::AtomicUsizeField, *mut usize);
-    assert_layout!(atomic::AtomicI64Field, *mut i64);
-    assert_layout!(atomic::AtomicPtrField<u8>, *mut *mut u8);
-    assert_layout!(atomic::AtomicPageThreadId, *mut usize);
-    assert_layout!(atomic::AtomicThreadFree, *mut usize);
-    assert_layout!(atomic::AtomicThreadHeapRefcount, *mut usize);
+    assert_layout!(atomic::AtomicUsizeField<'_>, *mut usize);
+    assert_layout!(atomic::AtomicI64Field<'_>, *mut i64);
+    assert_layout!(atomic::AtomicPtrField<'_, u8>, *mut *mut u8);
+    assert_layout!(atomic::AtomicPageThreadId<'_>, *mut usize);
+    assert_layout!(atomic::AtomicThreadFree<'_>, *mut usize);
+    assert_layout!(atomic::AtomicThreadHeapRefcount<'_>, *mut usize);
     assert_layout!(atomic::AtomicAbandonedCount<'_>, *mut usize);
     assert_layout!(atomic::AtomicArenaPage<'_>, *mut usize);
     assert_layout!(atomic::AtomicGuard<'_>, *mut usize);

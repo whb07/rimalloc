@@ -872,7 +872,32 @@ impl StatsBin {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub(crate) struct DirectBin(u16);
 
+const _: () = {
+    assert!(crate::types::MI_PAGES_DIRECT - 1 <= u16::MAX as usize);
+    assert!(
+        (crate::types::MI_SMALL_SIZE_MAX + crate::types::MI_PADDING_SIZE)
+            .div_ceil(core::mem::size_of::<usize>())
+            < crate::types::MI_PAGES_DIRECT
+    );
+};
+
 impl DirectBin {
+    /// A bounded queue block size does not need request padding.
+    #[inline(always)]
+    pub(crate) const fn from_small(size: SmallRequestedSize) -> Self {
+        Self(
+            size.requested()
+                .get()
+                .div_ceil(core::mem::size_of::<usize>()) as u16,
+        )
+    }
+
+    /// A normalized small request retains its bound when padding is added.
+    #[inline(always)]
+    pub(crate) const fn from_small_padded(size: NormalizedSmallSize) -> Self {
+        Self(size.padded().get().div_ceil(core::mem::size_of::<usize>()) as u16)
+    }
+
     /// # Safety
     /// `index` must be less than `MI_PAGES_DIRECT`.
     #[inline(always)]

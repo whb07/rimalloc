@@ -56,14 +56,12 @@ pub(super) struct MiSubprocPrefix {
     pub(super) heap_count: AtomicUsize,
 }
 
-pub(super) unsafe fn mi_subproc_arena_cell(
+pub(super) unsafe fn mi_subproc_arena_field(
     subproc: *mut mi_subproc_t,
     arena_idx: ArenaIndex,
-) -> crate::core_types::AtomicPtrField<mi_arena_t> {
+) -> *const AtomicPtr<mi_arena_t> {
     unsafe {
-        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(
-            (*subproc.cast::<MiSubprocPrefix>()).arenas[arena_idx.get() as usize]
-        ))
+        ptr::addr_of!((*subproc.cast::<MiSubprocPrefix>()).arenas[arena_idx.get() as usize]).cast()
     }
 }
 
@@ -81,8 +79,11 @@ pub(super) unsafe fn mi_arena_from_index_typed(
     // SAFETY: the caller keeps this bounded registry cell live; acquire matches
     // the publication protocol before exposing the arena pointer.
     unsafe {
-        mi_subproc_arena_cell(subproc.as_ptr(), arena_idx)
-            .load(crate::core_types::MemoryOrder::Acquire)
+        crate::core_types::AtomicPtrField::from_cell(&*mi_subproc_arena_field(
+            subproc.as_ptr(),
+            arena_idx,
+        ))
+        .load(crate::core_types::MemoryOrder::Acquire)
     }
 }
 

@@ -218,7 +218,7 @@ impl AllocProduct {
     }
 }
 
-#[derive(Clone, Copy)]
+#[must_use = "the old allocation must be transferred through one realloc disposition"]
 pub(crate) struct OldAllocation {
     ptr: UserPtr,
     usable: UsableSize,
@@ -240,38 +240,42 @@ impl PreserveBytes {
 }
 
 impl OldAllocation {
-    unsafe fn new(ptr: UserPtr, usable: UsableSize, page: PagePtr) -> Self {
+    /// Consume one validated lookup and derive its matching usable extent.
+    ///
+    /// # Safety
+    /// The lookup must describe the live allocation exclusively held for this
+    /// realloc operation. Its page geometry, block, and padding must remain
+    /// initialized and stable until the operation returns or releases it.
+    #[inline(always)]
+    pub(crate) unsafe fn from_validated(lookup: super::validation::ValidPointerLookup) -> Self {
+        let (ptr, page, location) = lookup.into_parts();
+        // SAFETY: the consumed lookup couples the user, page, and block location;
+        // the caller retains their stable backing for this usable-size query.
+        let usable = unsafe {
+            crate::allocator::free::mi_usable_size_from_validated_location(page, location)
+        };
         Self { ptr, usable, page }
     }
 
-    /// Constructs an old allocation after pointer validation has proven the
-    /// user pointer and page belong together.
-    ///
-    /// # Safety
-    /// `ptr` and `page` must come from the same successful
-    /// `PointerLookup::Valid` result.
-    pub(crate) unsafe fn from_validated_parts(
-        ptr: UserPtr,
-        usable: UsableSize,
-        page: PagePtr,
-    ) -> Self {
-        unsafe { Self::new(ptr, usable, page) }
-    }
-
-    pub(crate) fn ptr(self) -> UserPtr {
+    pub(crate) fn ptr(&self) -> UserPtr {
         self.ptr
     }
 
-    pub(crate) fn usable(self) -> UsableSize {
+    pub(crate) fn usable(&self) -> UsableSize {
         self.usable
     }
 
-    pub(crate) fn page(self) -> PagePtr {
+    pub(crate) fn page(&self) -> PagePtr {
         self.page
+    }
+
+    /// Transfer the allocation to the raw release or return boundary.
+    #[inline(always)]
+    pub(crate) fn into_ptr(self) -> UserPtr {
+        self.ptr
     }
 }
 
-#[derive(Clone, Copy)]
 enum ReallocSource {
     Null,
     Existing(OldAllocation),
@@ -298,14 +302,11 @@ impl ReallocRequest {
     }
 
     pub(crate) fn ptr(&self) -> Option<UserPtr> {
-        match self.source {
-            ReallocSource::Null => None,
-            ReallocSource::Existing(old) => Some(old.ptr()),
-        }
+        self.old().map(OldAllocation::ptr)
     }
 
-    pub(crate) fn old(&self) -> Option<OldAllocation> {
-        match self.source {
+    pub(crate) fn old(&self) -> Option<&OldAllocation> {
+        match &self.source {
             ReallocSource::Null => None,
             ReallocSource::Existing(old) => Some(old),
         }
@@ -313,6 +314,15 @@ impl ReallocRequest {
 
     pub(crate) fn new_layout(&self) -> LayoutRequest {
         self.new_layout
+    }
+
+    #[inline(always)]
+    pub(crate) fn into_parts(self) -> (Option<OldAllocation>, LayoutRequest) {
+        let old = match self.source {
+            ReallocSource::Null => None,
+            ReallocSource::Existing(old) => Some(old),
+        };
+        (old, self.new_layout)
     }
 }
 

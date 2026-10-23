@@ -2,9 +2,7 @@
 //! All types are #[repr(transparent)], Copy, Clone, PartialEq, Eq, etc.
 //! They do not implement Deref or DerefMut.
 
-use super::atomic::{
-    AtomicPageThreadId, AtomicThreadFree, AtomicThreadHeapRefcount, AtomicUsizeField, MemoryOrder,
-};
+use super::atomic::{AtomicUsizeField, MemoryOrder};
 use super::constants::{
     mi_arena_t, mi_block_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_subproc_t, mi_theap_t,
     mi_tld_t,
@@ -17,6 +15,7 @@ use super::scalar::{
 };
 use core::ffi::c_void;
 use core::ptr::{self, NonNull};
+use core::sync::atomic::AtomicUsize;
 
 use crate::allocator::stats::mi_stats_t;
 use crate::atomic::mi_lock_t;
@@ -339,30 +338,26 @@ impl PagePtr {
 
     /// # Safety
     /// The page pointer and aligned `xthread_id` field must remain live and
-    /// initialized while the returned cell is used. Every concurrent access to
-    /// that field must follow the allocator's atomic protocol.
+    /// initialized during projection. Borrowing the returned field additionally
+    /// requires live atomic-compatible storage for the whole borrow.
     #[inline(always)]
-    pub(crate) unsafe fn thread_id_cell(self) -> AtomicPageThreadId {
+    pub(crate) unsafe fn thread_id_field(self) -> *const AtomicUsize {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the page allocation live; projecting the
         // properly aligned `xthread_id` field creates only an atomic raw view.
-        AtomicPageThreadId::from_field(AtomicUsizeField::from_raw(unsafe {
-            ptr::addr_of_mut!((*raw).xthread_id)
-        }))
+        unsafe { ptr::addr_of!((*raw).xthread_id).cast() }
     }
 
     /// # Safety
     /// The page pointer and aligned `xthread_free` field must remain live and
-    /// initialized while the returned cell is used. Every concurrent access to
-    /// that field must follow the allocator's atomic protocol.
+    /// initialized during projection. Borrowing the returned field additionally
+    /// requires live atomic-compatible storage for the whole borrow.
     #[inline(always)]
-    pub(crate) unsafe fn thread_free_cell(self) -> AtomicThreadFree {
+    pub(crate) unsafe fn thread_free_field(self) -> *const AtomicUsize {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the page allocation live; projecting the
         // properly aligned `xthread_free` field creates only an atomic raw view.
-        AtomicThreadFree::from_field(AtomicUsizeField::from_raw(unsafe {
-            ptr::addr_of_mut!((*raw).xthread_free)
-        }))
+        unsafe { ptr::addr_of!((*raw).xthread_free).cast() }
     }
 
     /// # Safety
@@ -637,13 +632,11 @@ impl ThreadHeapPtr {
     /// The thread-heap pointer must refer to thread-heap metadata whose
     /// refcount is valid for atomic access.
     #[inline(always)]
-    pub(crate) unsafe fn refcount_cell(self) -> AtomicThreadHeapRefcount {
+    pub(crate) unsafe fn refcount_field(self) -> *const AtomicUsize {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the thread heap live; the aligned `refcount`
         // field is initialized and all concurrent access follows its atomic protocol.
-        AtomicThreadHeapRefcount::from_field(AtomicUsizeField::from_raw(unsafe {
-            ptr::addr_of_mut!((*raw).refcount)
-        }))
+        unsafe { ptr::addr_of!((*raw).refcount).cast() }
     }
 
     /// # Safety
@@ -899,11 +892,11 @@ impl SubprocPtr {
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
     #[inline(always)]
-    pub(crate) unsafe fn arena_count_cell(self) -> AtomicUsizeField {
+    pub(crate) unsafe fn arena_count_field(self) -> *const AtomicUsize {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the subprocess live; its aligned arena count
         // is initialized and all concurrent access uses the atomic protocol.
-        AtomicUsizeField::from_raw(unsafe { ptr::addr_of_mut!((*raw).arena_count).cast::<usize>() })
+        unsafe { ptr::addr_of!((*raw).arena_count) }
     }
 
     /// # Safety
@@ -912,7 +905,8 @@ impl SubprocPtr {
     pub(crate) unsafe fn arena_count(self, order: MemoryOrder) -> ArenaCount {
         // SAFETY: the caller's live atomic-field contract remains in force for
         // this load, including exclusive use of the atomic access protocol.
-        ArenaCount::new(unsafe { self.arena_count_cell().load(order) })
+        let count = AtomicUsizeField::from_cell(unsafe { &*self.arena_count_field() });
+        ArenaCount::new(count.load(order))
     }
 
     /// # Safety
@@ -959,35 +953,31 @@ impl SubprocPtr {
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
     #[inline(always)]
-    pub(crate) unsafe fn thread_count_cell(self) -> AtomicUsizeField {
+    pub(crate) unsafe fn thread_count_field(self) -> *const AtomicUsize {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the subprocess live; its aligned thread count
         // is initialized and all concurrent access uses the atomic protocol.
-        AtomicUsizeField::from_raw(unsafe {
-            ptr::addr_of_mut!((*raw).thread_count).cast::<usize>()
-        })
+        unsafe { ptr::addr_of!((*raw).thread_count) }
     }
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
     #[inline(always)]
-    pub(crate) unsafe fn thread_total_count_cell(self) -> AtomicUsizeField {
+    pub(crate) unsafe fn thread_total_count_field(self) -> *const AtomicUsize {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the subprocess live; its aligned total-thread
         // count is initialized and all concurrent access uses atomics.
-        AtomicUsizeField::from_raw(unsafe {
-            ptr::addr_of_mut!((*raw).thread_total_count).cast::<usize>()
-        })
+        unsafe { ptr::addr_of!((*raw).thread_total_count) }
     }
 
     /// # Safety
     /// The subproc pointer must refer to subproc metadata whose count field is valid.
     #[inline(always)]
-    pub(crate) unsafe fn heap_count_cell(self) -> AtomicUsizeField {
+    pub(crate) unsafe fn heap_count_field(self) -> *const AtomicUsize {
         let raw = self.as_ptr();
         // SAFETY: the caller keeps the subprocess live; its aligned heap count
         // is initialized and all concurrent access uses the atomic protocol.
-        AtomicUsizeField::from_raw(unsafe { ptr::addr_of_mut!((*raw).heap_count).cast::<usize>() })
+        unsafe { ptr::addr_of!((*raw).heap_count) }
     }
 
     /// # Safety

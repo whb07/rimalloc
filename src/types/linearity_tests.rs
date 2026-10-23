@@ -1,8 +1,10 @@
 use static_assertions::assert_not_impl_any;
 
+use super::arena::ArenaAllocation;
 use super::atomic::{AtomicGuard, DetachedRemoteList, MiLockGuard, OnceGuard, PublishedRemoteHead};
 use super::freelist_wrappers::{AvailableFreeList, LocalFreeList};
 use super::heap::OwnedHeap;
+use super::layout::{OldAllocation, ReallocRequest};
 use super::page_batch::{LocalFreeBatch, RemoteFreeBatch};
 use super::page_queues::{NormalQueue, QueuedPage};
 use super::page_states::{
@@ -52,6 +54,9 @@ assert_not_impl_any!(FreeRouteSnapshot: Copy, Clone);
 assert_not_impl_any!(QueuedPage<NormalQueue>: Copy, Clone);
 
 assert_not_impl_any!(OwnedHeap: Copy, Clone);
+assert_not_impl_any!(ArenaAllocation: Copy, Clone);
+assert_not_impl_any!(OldAllocation: Copy, Clone);
+assert_not_impl_any!(ReallocRequest: Copy, Clone);
 assert_not_impl_any!(AtomicGuard<'_>: Copy, Clone, Send, Sync);
 assert_not_impl_any!(OnceGuard<'_>: Copy, Clone, Send, Sync);
 assert_not_impl_any!(MiLockGuard<'_>: Copy, Clone, Send, Sync);

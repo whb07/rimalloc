@@ -427,7 +427,7 @@ impl PageBatchBenchFixture {
             (*page_storage).block_size = mem::size_of::<mi_block_t>();
             (*page_storage).page_start = blocks.cast();
             page.set_keys(crate::core_types::PageKeys::disabled());
-            page.thread_id_cell()
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*page.thread_id_field())
                 .store_owner(crate::core_types::PageOwnerId::Thread(thread_id));
             ptr::write(
                 fixture_storage,

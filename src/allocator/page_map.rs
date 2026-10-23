@@ -767,9 +767,13 @@ unsafe fn mi_page_map_ensure_submap_at(
         // SAFETY: the process-global page-map lock remains live throughout
         // allocator operation and the guard releases it on every exit path.
         let _guard = MiLockGuard::acquire(lock);
-        let atomic_submap =
-            crate::core_types::AtomicPtrField::from_raw(unsafe { _mi_page_map.add(idx.get()) });
-        let mut loaded = unsafe { atomic_submap.load(crate::core_types::MemoryOrder::Acquire) };
+        // SAFETY: the held growth lock and page-map lifetime cover this atomic slot borrow.
+        let atomic_submap = crate::core_types::AtomicPtrField::from_cell(unsafe {
+            &*_mi_page_map
+                .add(idx.get())
+                .cast::<core::sync::atomic::AtomicPtr<*mut mi_page_t>>()
+        });
+        let mut loaded = atomic_submap.load(crate::core_types::MemoryOrder::Acquire);
         if loaded.is_null() {
             let mut memid = _mi_memid_none();
             let new_sub = unsafe { _mi_os_zalloc(MI_PAGE_MAP_SUB_SIZE, &raw mut memid) }
@@ -780,7 +784,7 @@ unsafe fn mi_page_map_ensure_submap_at(
                 ));
             } else {
                 let mut expect: mi_submap_t = ptr::null_mut();
-                if !unsafe { atomic_submap.compare_exchange_acq_rel(&mut expect, new_sub) } {
+                if !atomic_submap.compare_exchange_acq_rel(&mut expect, new_sub) {
                     unsafe { _mi_os_free(new_sub.cast::<c_void>(), MI_PAGE_MAP_SUB_SIZE, memid) };
                     loaded = expect;
                 } else {

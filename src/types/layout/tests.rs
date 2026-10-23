@@ -76,12 +76,48 @@ fn realloc_request_constructors_distinguish_null_from_existing() {
     assert!(null.ptr().is_none());
     assert!(null.old().is_none());
 
-    let user = unsafe { UserPtr::new_unchecked(core::ptr::dangling_mut::<u8>().cast()) };
-    let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
-    let old = unsafe { OldAllocation::from_validated_parts(user, UsableSize::new(128), page) };
+    let mut raw_page = core::mem::MaybeUninit::<crate::types::mi_page_t>::zeroed();
+    let mut storage = [0usize; 128 / core::mem::size_of::<usize>() + 2];
+    let block = crate::core_types::BlockPtr::new(storage.as_mut_ptr().cast()).unwrap();
+    let page = PagePtr::new(raw_page.as_mut_ptr()).unwrap();
+    // SAFETY: the stack fixtures provide aligned, initialized page geometry and
+    // block/padding storage for the complete lookup and consuming request.
+    let (user, old) = unsafe {
+        (*page.as_ptr()).block_size = 128 + crate::types::MI_PADDING_SIZE;
+        (*page.as_ptr()).page_start = block.as_ptr().cast();
+        let keys = crate::core_types::PageKeys::disabled();
+        page.set_keys(keys);
+        crate::core_types::PaddingPtr::from_block_usable(block, UsableSize::new(128)).write(
+            crate::core_types::Padding::new(
+                crate::core_types::PaddingCanary::from_page_block_keys(page, block, keys),
+                crate::core_types::PaddingDelta::for_usable(0, UsableSize::new(128)).unwrap(),
+            ),
+        );
+        let user = UserPtr::new(block.as_ptr().cast::<u8>().add(8).cast()).unwrap();
+        let lookup = crate::core_types::PointerLookup::valid(
+            user,
+            page,
+            crate::core_types::PointerLocation::Interior {
+                block,
+                offset: crate::core_types::BlockOffset(8),
+            },
+        );
+        let crate::core_types::PointerLookup::Valid(valid) = lookup else {
+            unreachable!()
+        };
+        let old = OldAllocation::from_validated(valid);
+        crate::allocator::tracking::mi_track_mem_defined(
+            block.as_ptr().cast(),
+            core::mem::size_of_val(&storage),
+        );
+        (user, old)
+    };
     let existing = ReallocRequest::from_existing(old, layout);
     assert_eq!(existing.ptr().map(|ptr| ptr.as_ptr()), Some(user.as_ptr()));
-    assert!(existing.old().is_some());
+    assert_eq!(existing.old().unwrap().usable().get(), 120);
+    let (old, new_layout) = existing.into_parts();
+    assert_eq!(new_layout.requested().get(), 64);
+    assert_eq!(old.unwrap().into_ptr(), user);
 }
 
 #[test]

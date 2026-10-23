@@ -438,7 +438,7 @@ mod tests {
             (*arena_raw.cast::<MiArenaPrefix>()).arena_idx = 0;
             (*arena_raw.cast::<MiArenaPrefix>()).slice_count = 16;
             let arena_ptr = ArenaPtr::new_unchecked(arena_raw);
-            let range = crate::types::SliceRange::new(5, 2, arena_ptr).unwrap();
+            let range = crate::types::SliceRange::new(5, 2, arena_ptr.slice_count()).unwrap();
             let arena_memid = crate::types::MemId::<crate::types::ArenaMem>::arena(
                 arena_ptr,
                 range,

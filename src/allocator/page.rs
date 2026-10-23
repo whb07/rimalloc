@@ -23,16 +23,16 @@ use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up, _mi_is_heap_main, _mi_os_commit,
     _mi_os_good_alloc_size, _mi_os_page_size_typed, _mi_page_malloc_zero_typed, _mi_ptr_page,
     _mi_theap_heap, _mi_theap_random_next, _mi_wsize_from_size, MI_DEBUG, MI_SECURE,
-    mi_direct_bin_from_size, mi_mem_is_zero, mi_page_all_free, mi_page_block_size,
-    mi_page_committed_typed, mi_page_has_interior_pointers, mi_page_immediate_available,
-    mi_page_is_expandable, mi_page_is_mostly_used, mi_page_is_singleton, mi_page_queue,
-    mi_page_set_has_interior_pointers, mi_page_set_keys, mi_page_slice_offset_of,
-    mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_theap_is_initialized,
+    mi_mem_is_zero, mi_page_all_free, mi_page_block_size, mi_page_committed_typed,
+    mi_page_has_interior_pointers, mi_page_immediate_available, mi_page_is_expandable,
+    mi_page_is_mostly_used, mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers,
+    mi_page_set_keys, mi_page_slice_offset_of, mi_page_slice_start, mi_page_start,
+    mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::types::{
     MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_ENCODE_FREELIST, MI_LARGE_MAX_OBJ_WSIZE, MI_PADDING,
-    MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_STAT, PageBlockLayout, PageBlockRange,
-    mi_block_t, mi_page_queue_t, mi_page_t, mi_theap_t,
+    MI_PAGE_MIN_COMMIT_SIZE, MI_STAT, PageBlockLayout, PageBlockRange, mi_block_t, mi_page_queue_t,
+    mi_page_t, mi_theap_t,
 };
 
 pub use crate::types::MI_PADDING_SIZE;
@@ -1256,7 +1256,10 @@ pub(crate) unsafe fn mi_page_init_typed(
     crate::internal::mi_assert_internal!(unsafe { crate::internal::mi_page_is_owned(page) });
     // SAFETY: the live initialized atomic thread-free word remains available for exactly one Relaxed
     // snapshot, with protocol publication excluded by the sole fresh-page capability.
-    let thread_free = unsafe { page_ptr.thread_free_cell().load_relaxed() };
+    let thread_free = unsafe {
+        crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
+            .load_relaxed()
+    };
     crate::internal::mi_assert_internal!(
         thread_free
             == crate::core_types::ThreadFreeWord::from_parts(
@@ -1518,10 +1521,11 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    let size = block_size.get();
-    if size > MI_SMALL_SIZE_MAX {
+    let Some(size) = crate::core_types::SmallRequestedSize::new(
+        crate::core_types::RequestedSize::new(block_size.get()),
+    ) else {
         return;
-    }
+    };
 
     // SAFETY: the caller keeps this live queue's initialized head link stable under exclusive
     // local queue mutation. Absence is preserved for the sentinel selection immediately below.
@@ -1534,7 +1538,7 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
         }
     });
 
-    let direct_idx = mi_direct_bin_from_size(size);
+    let direct_idx = crate::core_types::DirectBin::from_small(size);
     let idx = direct_idx.as_usize();
     crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
     let theap_ptr = theap.ptr();

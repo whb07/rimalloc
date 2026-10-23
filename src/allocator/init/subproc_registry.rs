@@ -133,13 +133,13 @@ unsafe fn assign_current_thread_from(
     // provides exclusive access to its current-thread TLD.
     unsafe {
         tld.set_subproc(Some(subproc));
-        let thread_seq = subproc
-            .thread_total_count_cell()
-            .fetch_add(1, MemoryOrder::Relaxed);
+        let thread_seq =
+            crate::types::atomic::AtomicUsizeField::from_cell(&*subproc.thread_total_count_field())
+                .fetch_add(1, MemoryOrder::Relaxed);
         tld.set_thread_seq(ThreadSeq::new(thread_seq));
-        main.thread_count_cell().fetch_sub(1, MemoryOrder::Relaxed);
-        subproc
-            .thread_count_cell()
+        crate::types::atomic::AtomicUsizeField::from_cell(&*main.thread_count_field())
+            .fetch_sub(1, MemoryOrder::Relaxed);
+        crate::types::atomic::AtomicUsizeField::from_cell(&*subproc.thread_count_field())
             .fetch_add(1, MemoryOrder::Relaxed);
     }
     AssignCurrentThreadResult::Assigned
@@ -431,20 +431,27 @@ mod tests {
         assert_eq!(unsafe { tld_ptr.subproc() }, Some(target_ptr));
         // SAFETY: both stack nodes remain initialized and live.
         assert_eq!(
-            unsafe { main_ptr.thread_count_cell().load(MemoryOrder::Relaxed) },
+            unsafe {
+                crate::types::atomic::AtomicUsizeField::from_cell(&*main_ptr.thread_count_field())
+                    .load(MemoryOrder::Relaxed)
+            },
             0
         );
         // SAFETY: both stack nodes remain initialized and live.
         assert_eq!(
-            unsafe { target_ptr.thread_count_cell().load(MemoryOrder::Relaxed) },
+            unsafe {
+                crate::types::atomic::AtomicUsizeField::from_cell(&*target_ptr.thread_count_field())
+                    .load(MemoryOrder::Relaxed)
+            },
             1
         );
         // SAFETY: both stack nodes remain initialized and live.
         assert_eq!(
             unsafe {
-                target_ptr
-                    .thread_total_count_cell()
-                    .load(MemoryOrder::Relaxed)
+                crate::types::atomic::AtomicUsizeField::from_cell(
+                    &*target_ptr.thread_total_count_field(),
+                )
+                .load(MemoryOrder::Relaxed)
             },
             1
         );

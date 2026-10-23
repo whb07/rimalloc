@@ -688,7 +688,8 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
             )
         };
     }
-    let Some(old) = request.old() else {
+    let (old, _) = request.into_parts();
+    let Some(old) = old else {
         return core::ptr::null_mut();
     };
     let size = old.usable().get();
@@ -746,7 +747,7 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
         }
         unsafe {
             _mi_memcpy(newp, p, preserve.get());
-            crate::mimalloc::mi_free(p);
+            crate::mimalloc::mi_free(old.into_ptr().as_ptr());
         }
     }
     newp

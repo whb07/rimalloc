@@ -4006,3 +4006,124 @@ Commands, schedule, hashes, raw per-process output, process resources, CPU
 and cgroup snapshots, and analysis scripts/results are under
 `target/perf-experiments/X60`: `long-run`, `many-run`, `analysis.json`,
 `analysis-many.json`, and `collector-codegen.json`. No remote VM was used.
+
+## X61 — six type-system fixes, checked against release assembly
+
+Implemented the six reviewed fixes against the retained `1a79864d` baseline:
+
+1. Bitmap claims pass the callback, arena, and result as typed arguments.
+   This removes the shared-reference-to-mutable-reference cast that the new
+   regression reproduces under Miri before the fix. The regression checks
+   accepted, retried, and discarded bits and preserves the result on failure.
+2. Three primitive and three specialized atomic views borrow actual atomic
+   storage. Raw field projections remain at the caller's unsafe validity
+   boundary; no lifetime is attached merely to a copied raw pointer.
+   Primitive operations are safe during that borrow. Remote publication
+   explicitly requires unique block ownership and a correctly prepared link.
+   The deferred-callback globals now use actual `AtomicPtr` storage.
+3. `SliceRange::new` validates arithmetic against a supplied slice count,
+   without dereferencing an arena. Callers obtain the live extent in their
+   existing unsafe context.
+4. Direct bins derive from bounded small sizes. Unrestricted safe size and
+   padded-size constructors are removed, and the bound reaches cache indexing.
+5. `ArenaAllocation` is non-copyable and holds its arena/range identity once.
+   Only initialization flags can change. Its consuming handoff constructs
+   the matching MemId. Removing the duplicate identity shrinks this internal
+   owner from 48 to 32 bytes on x86-64.
+6. `OldAllocation` is non-copyable and derives usable size from one consumed
+   validated lookup. Realloc borrows for inspection and moves the owner into
+   terminal release. No Drop implementation changes failed-realloc ownership.
+   Tests cover shrink boundaries, heap transfers, and interior payloads.
+
+The changes add no allocator metadata fields, allocations, locks, atomic
+operations, reference counts, or dynamic dispatch. Borrowed atomic views
+retain their pointer size and alignment. The compiler rejects backing-storage
+escapes and repeated moves; those restrictions require no runtime bookkeeping.
+
+### Assembly evidence
+
+Compared the actual release interpose libraries with Rust 1.92.0 / LLVM 21.1.3
+on x86-64 Linux, using the same build command for both:
+`cargo rustc --release --features interpose --lib --crate-type cdylib`.
+Disassembly comparison resolves dynamic relocations and normalizes relocated
+addresses; instruction counts exclude alignment padding. Full function bodies
+and callers are inspected when inlining changes.
+
+| Function | Baseline instructions | Retained instructions | Finding |
+| --- | ---: | ---: | --- |
+| `mi_malloc` | 20 | 20 | Identical normalized body |
+| `mi_free` | 45 | 45 | Identical normalized body |
+| `mi_theap_malloc` | 27 | 27 | Identical normalized body |
+| `mi_realloc` | 209 | 209 | Identical normalized body |
+| `mi_heap_malloc_small` | 47 | 47 | Identical normalized body |
+| `mi_heap_zalloc_small` | 65 | 65 | Identical normalized body |
+| `collect_after_remote_free` | 367 | 367 | Identical normalized body |
+| `mi_bitmap_try_find_and_claim` | 268 | 268 | Identical normalized body |
+| `mi_arena_try_alloc_at` | 212 | 207 | Smaller ownership packet |
+| `mi_malloc_aligned_at` | 75 | 67 | Removes redundant bin arithmetic and bounds failure |
+| `mi_calloc_aligned` | 111 | 111 | Same work; basic blocks reordered |
+| `mi_calloc_aligned_at` | 128 | 115 | Removes redundant bin arithmetic and bounds failure |
+| Aligned generic allocation | 241 | 242 | One extra mask on the large-alignment branch |
+| Aligned realloc worker | 199 | 226 | Null-input allocation is now inlined; removes cache bounds checks |
+
+Inspection led to three small implementation refinements: decrement the
+bitmap traversal count at the loop latch, store arena identity once, and
+inline the two typed aligned-request adapters. The last change prevents an
+extra helper call and repeated alignment validation in aligned calloc.
+The ordinary realloc core stays inlined, as in the baseline.
+
+All 240 dynamic export names match. The ELF `.text` section decreases from
+197,874 to 197,522 bytes; `.data` and `.bss` sizes are unchanged. Baseline SHA256:
+`ab2ef9b931ce917c036ddd47200dcf49682dd739ccb77291b4a06acc75680fbc`.
+Retained SHA256:
+`dbc2a7a669e9761987ccd4eb76598e4b4ee1fec7b80359b1eb971bcd2e489bb0`.
+
+The evidence establishes identical generated instructions for the listed
+core paths and removes runtime bookkeeping from the ownership/lifetime
+restrictions. It does **not** establish identical instructions everywhere:
+LLVM inserts `and $0x1,%dl` before widening the zeroing flag on the cold
+large-alignment path. That is one actual additional instruction, not hidden
+by a timing average. Inlining and block placement also change elsewhere.
+There is therefore no unconditional claim of zero added instructions on
+every allocator path or identical elapsed time on every target.
+
+### Correctness verification
+
+The required `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features` pass, including the full
+Rust suite and native smoke harnesses. ASan, TSan, and release thread stress pass.
+Thirty-three probes compile the actual modified crate: positive controls and
+the owner-size assertion compile; backing-storage escapes, raw/null atomic
+construction, safe remote publication, unbounded direct bins, identity
+mutation, independent old-allocation parts, and repeated transfers fail with
+the expected compiler errors. Committed assertions reject Copy/Clone for the
+owners.
+
+The supported Miri suite plus bitmap and arena-claim tests pass under Stacked
+and Tree Borrows, each with and without strict provenance: 135 tests per
+configuration, 540 passes in total, plus one existing ignored test per
+configuration. The final bitmap/arena refinements were rerun in all four
+configurations. An unrestricted `types::` selection reaches a pre-existing
+heap fixture's unsupported `sysconf(_SC_PHYS_PAGES)` call; that broader run
+does not pass. Nightly checks use the existing CPUID compatibility flag
+`RUSTFLAGS=-Aunused-unsafe`; stable gates use no warning suppression.
+
+### Earlier timing screen
+
+Before switching the primary check to assembly, an initial six-fix artifact
+completed 378 native workload processes and 18 Redis runs, with two control
+labels using the exact same baseline file. Remaining realloc, cold-path,
+aligned, and confirmation measurements were stopped or not started when
+assembly became the requested focus. The completed screen used artifact
+`85d3bf61171846c4a11c38b9378dc052ffbd57bbf1d916553ebb8115e8b69071`,
+before the assembly-driven refinements above. Its results are retained as
+historical observations, not presented as measurements of the final artifact
+or proof of exact zero cost. No further timing runs were used to accept the
+final code.
+
+Raw logs, compiler probes, source snapshots, disassembly/diffs, and frozen
+libraries are under `target/perf-experiments/X61`. The final evidence files
+are `assembly-final-manifest.json`, `codegen-final.json`, `final.asm`, and
+`*.final.diff`; earlier experimental artifacts are kept separately. No remote
+VM, GitHub Actions run, or sub-agent was used.

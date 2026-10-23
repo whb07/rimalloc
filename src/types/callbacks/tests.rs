@@ -271,13 +271,8 @@ fn callback_wrappers_invoke_local_callbacks() {
     let mut arena = MaybeUninit::<crate::types::mi_arena_t>::zeroed();
     let arena = ArenaPtr::new(arena.as_mut_ptr()).unwrap();
     let mut keep_set = false;
-    let claim_result = unsafe {
-        ThreadLocalClaimCallback::new(claim).invoke(
-            99,
-            Some(arena),
-            core::ptr::addr_of_mut!(keep_set),
-        )
-    };
+    let claim_result =
+        unsafe { ThreadLocalClaimCallback::new(claim).invoke(99, Some(arena), &mut keep_set) };
     assert!(claim_result);
     assert!(keep_set);
 }

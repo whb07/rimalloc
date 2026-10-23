@@ -374,7 +374,8 @@ pub(crate) unsafe fn visit_page_blocks(
         // metadata live. Preserve the original collect-until-empty CAS retry
         // transaction before terminally releasing the claim.
         unsafe {
-            let atomic = page_ptr.thread_free_cell();
+            let atomic =
+                crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field());
             loop {
                 let mut expected = atomic.load_relaxed();
                 crate::internal::mi_assert_internal!(expected.is_owned());
@@ -1180,7 +1181,8 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
             size_of::<mi_theap_t>(),
         );
         (*theap_raw).memid = memid;
-        theap.refcount_cell().store_seq_cst(1);
+        crate::types::atomic::AtomicThreadHeapRefcount::from_cell(&*theap.refcount_field())
+            .store_seq_cst(1);
         theap.set_tld(Some(tld));
         theap.set_heap(Some(heap));
         crate::internal::mi_assert_internal!(
@@ -1463,7 +1465,8 @@ pub(crate) unsafe fn _mi_theap_incref_typed(theap: ThreadHeapPtr) {
     // the terminal release while this conditional AcqRel increment executes.
     unsafe {
         if mi_memid_is_refcounted((*theap.as_ptr()).memid) {
-            theap.refcount_cell().incref_acq_rel();
+            crate::types::atomic::AtomicThreadHeapRefcount::from_cell(&*theap.refcount_field())
+                .incref_acq_rel();
         }
     }
 }
@@ -1490,7 +1493,10 @@ pub(crate) unsafe fn mi_theap_decref_inline(theap: ThreadHeapPtr) {
     // live for atomic access, and every concurrent user participates through
     // the same reference protocol. AcqRel publishes prior reference use to the
     // thread that observes the terminal transition.
-    let previous = unsafe { theap.refcount_cell().decref_acq_rel() };
+    let previous = unsafe {
+        crate::types::atomic::AtomicThreadHeapRefcount::from_cell(&*theap.refcount_field())
+            .decref_acq_rel()
+    };
     if previous != 1 {
         return;
     }
@@ -1536,8 +1542,10 @@ pub(crate) unsafe fn _mi_theap_free(
     // SAFETY: the heap pointer field is live atomic-compatible storage. The
     // AcqRel exchange is the unique detach claim; null reports a prior detach.
     let heap = unsafe {
-        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!((*theap).heap))
-            .exchange_acq_rel(ptr::null_mut())
+        crate::core_types::AtomicPtrField::from_cell(
+            &*ptr::addr_of!((*theap).heap).cast::<core::sync::atomic::AtomicPtr<mi_heap_t>>(),
+        )
+        .exchange_acq_rel(ptr::null_mut())
     };
     if heap.is_null() {
         return false;

@@ -153,8 +153,10 @@ pub(super) unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
             // SAFETY: exclusive teardown owns the live registry cell selected
             // by the checked index and publishes its removal with release order.
             unsafe {
-                mi_subproc_arena_cell(subproc, arena_idx)
-                    .store(ptr::null_mut(), crate::types::MemoryOrder::Release);
+                crate::core_types::AtomicPtrField::from_cell(&*mi_subproc_arena_field(
+                    subproc, arena_idx,
+                ))
+                .store(ptr::null_mut(), crate::types::MemoryOrder::Release);
             }
             // SAFETY: the removed arena remains live with initialized stable
             // MemId while teardown decides whether it owns OS backing.
@@ -180,10 +182,8 @@ pub(super) unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
     // SAFETY: exclusive teardown owns the live aligned atomic arena-count
     // field; all registry cells above are already cleared before publishing zero.
     let _ = unsafe {
-        crate::types::AtomicUsizeField::from_raw(
-            ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
-        )
-        .compare_exchange_acq_rel(&mut expected, 0)
+        crate::types::AtomicUsizeField::from_cell(&(*subproc.cast::<MiSubprocPrefix>()).arena_count)
+            .compare_exchange_acq_rel(&mut expected, 0)
     };
 }
 
@@ -230,8 +230,10 @@ unsafe fn mi_arenas_add(
             // SAFETY: this initialized registry cell belongs to the live
             // subproc; release CAS publishes the fully initialized arena once.
             if unsafe {
-                mi_subproc_arena_cell(subproc, arena_idx)
-                    .compare_exchange_release(&mut expected, arena)
+                crate::core_types::AtomicPtrField::from_cell(&*mi_subproc_arena_field(
+                    subproc, arena_idx,
+                ))
+                .compare_exchange_release(&mut expected, arena)
             } {
                 if !arena_id.is_null() {
                     // SAFETY: successful publication fixed the arena index;
@@ -248,8 +250,8 @@ unsafe fn mi_arenas_add(
         // SAFETY: the live aligned atomic count belongs to this subproc;
         // acq-rel CAS reserves one new table slot under the registry protocol.
         if unsafe {
-            crate::types::AtomicUsizeField::from_raw(
-                ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
+            crate::types::AtomicUsizeField::from_cell(
+                &(*subproc.cast::<MiSubprocPrefix>()).arena_count,
             )
             .compare_exchange_acq_rel(&mut count, next_count)
         } {
@@ -264,8 +266,10 @@ unsafe fn mi_arenas_add(
             // SAFETY: the reserved initialized registry cell belongs to this
             // live subproc; release CAS publishes the initialized arena once.
             if unsafe {
-                mi_subproc_arena_cell(subproc, arena_idx)
-                    .compare_exchange_release(&mut expected, arena)
+                crate::core_types::AtomicPtrField::from_cell(&*mi_subproc_arena_field(
+                    subproc, arena_idx,
+                ))
+                .compare_exchange_release(&mut expected, arena)
             } {
                 // SAFETY: the published arena retains a live initialized
                 // subproc pointer whose atomic-compatible counter field accepts

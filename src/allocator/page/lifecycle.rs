@@ -219,7 +219,10 @@ pub(crate) unsafe fn collect_remote_for_owned_abandoned_page(
 #[inline]
 unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
     let page_ptr = owner.page();
-    let remote = unsafe { page_ptr.thread_free_cell().detach_head() };
+    let remote = unsafe {
+        crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
+            .detach_head()
+    };
     if !remote.is_empty() {
         let local = unsafe { page_ptr.local_free() };
         let _ = unsafe { owner.collect_remote(remote, local) };
@@ -346,7 +349,8 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
     // prove the final one-block list before the terminal full collection.
     unsafe {
         if mi_page_used_count(page).get() == 1 {
-            let atomic_tf = page_ptr.thread_free_cell();
+            let atomic_tf =
+                crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field());
             crate::internal::mi_assert_internal!(atomic_tf.load_relaxed().head_raw() == head);
             crate::internal::mi_assert_internal!(mi_block_next(page, head).is_null());
             #[cfg(feature = "bench-diagnostics")]

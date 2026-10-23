@@ -714,7 +714,6 @@ where
     let mut bcount = mi_bfield_popcount(bfield);
     let mut b = bfield & cycle_mask;
     while bcount > 0 {
-        bcount -= 1;
         if b == 0 {
             b = bfield & !cycle_mask;
         }
@@ -725,22 +724,22 @@ where
         if !visit(name_idx) {
             return false;
         }
+        bcount -= 1;
     }
     true
 }
 
-type mi_bitmap_visit_fun_t =
-    unsafe fn(*mut mi_bitmap_t, usize, usize, *mut usize, *mut c_void, *mut c_void) -> bool;
-
-#[inline]
-unsafe fn mi_bitmap_find(
+/// # Safety
+/// `bitmap` must remain live and initialized throughout the search. `claim` must
+/// be callable for each selected slice, and `arena`, when present, must remain
+/// valid for the claim callback.
+#[inline(never)]
+pub(crate) unsafe fn mi_bitmap_try_find_and_claim(
     bitmap: *mut mi_bitmap_t,
-    tseq: usize,
-    n: usize,
-    pidx: *mut usize,
-    on_find: mi_bitmap_visit_fun_t,
-    arg1: *mut c_void,
-    arg2: *mut c_void,
+    tseq: ThreadSeq,
+    pidx: &mut SliceIndex,
+    claim: ThreadLocalClaimCallback,
+    arena: Option<ArenaPtr>,
 ) -> bool {
     unsafe {
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
@@ -749,10 +748,10 @@ unsafe fn mi_bitmap_find(
             let mut hi = 0usize;
             if mi_bfield_find_highest_bit(cmap_entry, &mut hi) {
                 let mut found = false;
-                let _ = mi_bfield_cycle_iterate(cmap_entry, tseq % 8, hi + 1, |eidx| {
+                let _ = mi_bfield_cycle_iterate(cmap_entry, tseq.get() % 8, hi + 1, |eidx| {
                     let chunk_idx = (i * MI_BFIELD_BITS) + eidx;
                     crate::internal::mi_debug_assert!(chunk_idx < mi_bitmap_chunk_count(bitmap));
-                    if on_find(bitmap, chunk_idx, n, pidx, arg1, arg2) {
+                    if mi_bitmap_try_find_and_claim_visit(bitmap, chunk_idx, pidx, claim, arena) {
                         found = true;
                         return false;
                     }
@@ -771,24 +770,20 @@ unsafe fn mi_bitmap_find(
 unsafe fn mi_bitmap_try_find_and_claim_visit(
     bitmap: *mut mi_bitmap_t,
     chunk_idx: usize,
-    n: usize,
-    pidx: *mut usize,
-    arg1: *mut c_void,
-    arg2: *mut c_void,
+    pidx: &mut SliceIndex,
+    claim: ThreadLocalClaimCallback,
+    arena: Option<ArenaPtr>,
 ) -> bool {
     unsafe {
-        crate::internal::mi_debug_assert!(n == 1);
-        let claim_fun = arg1 as *mut ThreadLocalClaimCallback;
-        let claim_data = &mut *(arg2 as *mut mi_claim_fun_data_t);
         let chunk = &(*bitmap).chunks[chunk_idx];
         let mut cidx = 0usize;
         if mi_bchunk_try_find_and_clear(chunk, &mut cidx) {
             let slice_index = (chunk_idx * MI_BCHUNK_BITS) + cidx;
             crate::internal::mi_debug_assert!(slice_index < mi_bitmap_max_bits(bitmap));
             let mut keep_set = true;
-            if (*claim_fun).invoke(slice_index, claim_data.arena, &mut keep_set as *mut bool) {
+            if claim.invoke(slice_index, arena, &mut keep_set) {
                 crate::internal::mi_debug_assert!(!keep_set);
-                *pidx = slice_index;
+                *pidx = SliceIndex::new(slice_index);
                 return true;
             }
             if keep_set {
@@ -800,40 +795,6 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
         }
         false
     }
-}
-
-/// # Safety
-/// `bitmap` and `pidx` must be valid for writes, `claim` must be callable, and `arena`, when
-/// present, must remain valid for the claim callback.
-#[inline(never)]
-pub(crate) unsafe fn mi_bitmap_try_find_and_claim(
-    bitmap: *mut mi_bitmap_t,
-    tseq: ThreadSeq,
-    pidx: &mut SliceIndex,
-    claim: ThreadLocalClaimCallback,
-    arena: Option<ArenaPtr>,
-) -> bool {
-    unsafe {
-        let mut claim = claim;
-        let claim_data = mi_claim_fun_data_t { arena };
-        let mut raw_idx = pidx.get();
-        mi_bitmap_find(
-            bitmap,
-            tseq.get(),
-            1,
-            ptr::addr_of_mut!(raw_idx),
-            mi_bitmap_try_find_and_claim_visit,
-            ptr::addr_of_mut!(claim).cast::<c_void>(),
-            &claim_data as *const mi_claim_fun_data_t as *mut c_void,
-        )
-        .then(|| *pidx = SliceIndex::new(raw_idx))
-        .is_some()
-    }
-}
-
-#[derive(Debug)]
-struct mi_claim_fun_data_t {
-    arena: Option<ArenaPtr>,
 }
 
 /// # Safety
@@ -1968,6 +1929,63 @@ mod tests {
             assert!(mi_bitmap_is_set(&mut bitmap, 10));
             assert!(mi_bitmap_is_clearN(&mut bitmap, 11, 2));
             assert_eq!(mi_bitmap_popcount(&mut bitmap), 1);
+        }
+    }
+
+    #[test]
+    fn bitmap_claim_preserves_result_and_bit_disposition() {
+        unsafe extern "C" fn accept(
+            index: usize,
+            arena: *mut mi_arena_t,
+            keep_set: *mut bool,
+        ) -> bool {
+            assert_eq!(index, 7);
+            assert!(arena.is_null());
+            unsafe { *keep_set = false };
+            true
+        }
+
+        unsafe extern "C" fn retry(
+            _index: usize,
+            _arena: *mut mi_arena_t,
+            keep_set: *mut bool,
+        ) -> bool {
+            unsafe { *keep_set = true };
+            false
+        }
+
+        unsafe extern "C" fn discard(
+            _index: usize,
+            _arena: *mut mi_arena_t,
+            keep_set: *mut bool,
+        ) -> bool {
+            unsafe { *keep_set = false };
+            false
+        }
+
+        for (callback, found, keep_set) in [
+            (ThreadLocalClaimCallback::new(accept), true, false),
+            (ThreadLocalClaimCallback::new(retry), false, true),
+            (ThreadLocalClaimCallback::new(discard), false, false),
+        ] {
+            let mut bitmap = mi_bitmap_t::default();
+            let mut index = SliceIndex::new(99);
+            unsafe {
+                mi_bitmap_init(&mut bitmap, 1024, true);
+                assert!(mi_bitmap_set(&mut bitmap, 7));
+                assert_eq!(
+                    mi_bitmap_try_find_and_claim(
+                        &mut bitmap,
+                        ThreadSeq::new(0),
+                        &mut index,
+                        callback,
+                        None,
+                    ),
+                    found,
+                );
+                assert_eq!(mi_bitmap_is_set(&mut bitmap, 7), keep_set);
+            }
+            assert_eq!(index.get(), if found { 7 } else { 99 });
         }
     }
 

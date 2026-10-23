@@ -678,8 +678,13 @@ fn full_collection_preserves_local_and_abandoned_owner_state() {
             } else {
                 crate::core_types::PageOwnerId::Thread(thread_id)
             };
-            fixture.page().thread_id_cell().store_owner(page_owner);
-            let owner_bits = fixture.page().thread_id_cell().load().owner_bits();
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*fixture.page().thread_id_field())
+                .store_owner(page_owner);
+            let owner_bits = crate::types::atomic::AtomicPageThreadId::from_cell(
+                &*fixture.page().thread_id_field(),
+            )
+            .load()
+            .owner_bits();
             (*fixture.page_storage).xthread_free = crate::core_types::ThreadFreeWord::from_parts(
                 None,
                 crate::core_types::ThreadFreeOwner::Owned,
@@ -696,10 +701,20 @@ fn full_collection_preserves_local_and_abandoned_owner_state() {
             }
 
             assert_eq!(
-                fixture.page().thread_id_cell().load().owner_bits(),
+                crate::types::atomic::AtomicPageThreadId::from_cell(
+                    &*fixture.page().thread_id_field()
+                )
+                .load()
+                .owner_bits(),
                 owner_bits
             );
-            assert!(fixture.page().thread_free_cell().load_relaxed().is_owned());
+            assert!(
+                crate::types::atomic::AtomicThreadFree::from_cell(
+                    &*fixture.page().thread_free_field()
+                )
+                .load_relaxed()
+                .is_owned()
+            );
             assert_eq!(fixture.head_index(fixture.page().free().head()), Some(0));
             assert!(fixture.page().local_free().is_empty());
             assert!(!(*fixture.page_storage).free_is_zero);

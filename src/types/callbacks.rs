@@ -242,7 +242,7 @@ impl ThreadLocalClaimCallback {
         self,
         slice_index: usize,
         arena: Option<ArenaPtr>,
-        keep_set: *mut bool,
+        keep_set: &mut bool,
     ) -> bool {
         unsafe {
             (self.raw())(

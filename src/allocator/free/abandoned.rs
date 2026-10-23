@@ -123,7 +123,7 @@ unsafe fn release_abandoned_ownership(
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
         crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
         crate::internal::mi_assert_internal!(!mi_page_all_free(page_raw));
-        page.page().thread_free_cell()
+        crate::types::atomic::AtomicThreadFree::from_cell(&*page.page().thread_free_field())
     };
 
     #[cfg(feature = "bench-diagnostics")]

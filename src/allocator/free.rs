@@ -617,11 +617,15 @@ pub(crate) unsafe fn mi_free_block_mt(
         }
     }
 
-    let atomic_tf = unsafe { page_ptr.thread_free_cell() };
+    let atomic_tf = unsafe {
+        crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
+    };
     let mut expected = atomic_tf.load_relaxed();
     let (previous, published) = loop {
         unsafe { mi_block_set_next_typed(page_ptr, bp, expected.head()) };
-        match atomic_tf.try_push(expected, bp) {
+        // SAFETY: the validated block is uniquely held for this page, and its
+        // link was initialized to this exact expected head before publication.
+        match unsafe { atomic_tf.try_push(expected, bp) } {
             crate::core_types::RemotePushResult::Published { previous, head } => {
                 break (previous, head);
             }

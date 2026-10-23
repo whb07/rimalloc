@@ -36,7 +36,9 @@ pub(super) unsafe fn mi_abandoned_page_unown(
     });
     // SAFETY: the caller keeps the page's aligned atomic thread-free field live
     // under the remote-publication protocol.
-    let atomic_tf = unsafe { page_ptr.thread_free_cell() };
+    let atomic_tf = unsafe {
+        crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
+    };
     let mut tf_old = atomic_tf.load_relaxed();
     loop {
         crate::internal::mi_assert_internal!(tf_old.is_owned());
@@ -263,7 +265,8 @@ unsafe fn mi_heap_ensure_arena_pages(
                 // SAFETY: the caller keeps the live arena's initialized nonzero
                 // slice count stable while constructing its complete table range.
                 let slice_count = unsafe { arena.slice_count() };
-                let Ok(range) = crate::types::SliceRange::new(0, slice_count.get() as usize, arena)
+                let Ok(range) =
+                    crate::types::SliceRange::new(0, slice_count.get() as usize, slice_count)
                 else {
                     crate::internal::mi_assert_internal!(false);
                     return ptr::null_mut();
@@ -443,7 +446,9 @@ pub(crate) unsafe fn _mi_arenas_page_abandon_internal(
 
         // SAFETY: the owned page keeps its aligned atomic thread-id field live;
         // this owner publication precedes the arena abandoned bit.
-        let atomic_tid = unsafe { page_ptr.thread_id_cell() };
+        let atomic_tid = unsafe {
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*page_ptr.thread_id_field())
+        };
         // SAFETY: the page is claimed, detached, and exclusively transitioning;
         // publishing AbandonedMapped preserves flags under the atomic protocol.
         unsafe { atomic_tid.store_owner(crate::types::PageOwnerId::AbandonedMapped) };

@@ -42,10 +42,8 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
     // SAFETY: the arena expiration field is aligned, initialized, and live; this atomic CAS
     // publishes the first delayed expiration.
     if unsafe {
-        crate::core_types::AtomicI64Field::from_raw(
-            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
-        )
-        .compare_exchange_acq_rel(&mut expire0, expire)
+        crate::core_types::AtomicI64Field::from_cell(&(*arena.cast::<MiArenaPrefix>()).purge_expire)
+            .compare_exchange_acq_rel(&mut expire0, expire)
     } {
         crate::internal::mi_assert_internal!(expire0 == 0);
         // SAFETY: the live arena metadata names its live subprocess under the no-teardown contract.
@@ -53,8 +51,8 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
         // SAFETY: the subprocess expiration field is aligned and initialized; this atomic update
         // publishes the arena's first expiration through the shared scheduling protocol.
         unsafe {
-            crate::core_types::AtomicI64Field::from_raw(
-                ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast::<i64>(),
+            crate::core_types::AtomicI64Field::from_cell(
+                &(*subproc.cast::<MiSubprocPrefix>()).purge_expire,
             )
             .compare_exchange_acq_rel(&mut expire0, expire)
         };
@@ -332,7 +330,10 @@ unsafe extern "C" fn mi_arena_try_purge_visitor(
         crate::internal::mi_assert_internal!(false);
         return true;
     };
-    let Some(range) = crate::core_types::SliceRange::new(slice_index, slice_count, arena_ptr).ok()
+    // SAFETY: the callback retains the initialized arena and its stable extent.
+    let arena_slices = unsafe { arena_ptr.slice_count() };
+    let Some(range) =
+        crate::core_types::SliceRange::new(slice_index, slice_count, arena_slices).ok()
     else {
         crate::internal::mi_assert_internal!(false);
         return true;
@@ -365,10 +366,8 @@ unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c
     // SAFETY: the contract keeps the aligned initialized expiration atomic live; this relaxed load
     // is the scheduling-policy snapshot.
     let expire = unsafe {
-        crate::core_types::AtomicI64Field::from_raw(
-            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
-        )
-        .load(crate::core_types::MemoryOrder::Relaxed)
+        crate::core_types::AtomicI64Field::from_cell(&(*arena.cast::<MiArenaPrefix>()).purge_expire)
+            .load(crate::core_types::MemoryOrder::Relaxed)
     };
     if !force {
         if expire == 0 {
@@ -382,10 +381,8 @@ unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c
     // SAFETY: the aligned live expiration field is cleared atomically before scheduled ranges are
     // visited.
     unsafe {
-        crate::core_types::AtomicI64Field::from_raw(
-            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
-        )
-        .store(0, crate::core_types::MemoryOrder::Release)
+        crate::core_types::AtomicI64Field::from_cell(&(*arena.cast::<MiArenaPrefix>()).purge_expire)
+            .store(0, crate::core_types::MemoryOrder::Release)
     };
     // SAFETY: the live arena names live subprocess stats; this aligned initialized counter is
     // updated only through the MT atomic helper.
@@ -439,8 +436,8 @@ unsafe fn mi_arenas_try_purge(
     // SAFETY: the contract keeps the aligned initialized subprocess expiration field live; acquire
     // observes its expiration publication. Purge bitmap traversal uses its own atomic protocol.
     let arenas_expire = unsafe {
-        crate::core_types::AtomicI64Field::from_raw(
-            ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast::<i64>(),
+        crate::core_types::AtomicI64Field::from_cell(
+            &(*subproc.cast::<MiSubprocPrefix>()).purge_expire,
         )
         .load(crate::core_types::MemoryOrder::Acquire)
     };
@@ -461,9 +458,8 @@ unsafe fn mi_arenas_try_purge(
             // SAFETY: the subprocess expiration field stays live; the purge guard serializes this
             // policy update and release publishes the shortened delay.
             unsafe {
-                crate::core_types::AtomicI64Field::from_raw(
-                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
-                        .cast::<i64>(),
+                crate::core_types::AtomicI64Field::from_cell(
+                    &(*subproc.cast::<MiSubprocPrefix>()).purge_expire,
                 )
                 .store(
                     now + ((delay as mi_msecs_t) / 10),
@@ -511,9 +507,8 @@ unsafe fn mi_arenas_try_purge(
             // SAFETY: the aligned live subprocess expiration field is cleared atomically only after
             // no arena reported pending or due work during this guarded traversal.
             unsafe {
-                crate::core_types::AtomicI64Field::from_raw(
-                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
-                        .cast::<i64>(),
+                crate::core_types::AtomicI64Field::from_cell(
+                    &(*subproc.cast::<MiSubprocPrefix>()).purge_expire,
                 )
                 .store(0, crate::core_types::MemoryOrder::Release)
             };

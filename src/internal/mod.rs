@@ -294,21 +294,6 @@ pub const fn _mi_wsize_from_size(size: usize) -> usize {
     size.div_ceil(size_of::<usize>())
 }
 
-#[inline(always)]
-pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectBin {
-    let idx = _mi_wsize_from_size(size);
-    crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
-    crate::internal::mi_debug_assert!(u16::try_from(idx).is_ok());
-    unsafe { crate::core_types::DirectBin::new_unchecked(idx as u16) }
-}
-
-#[inline(always)]
-pub(crate) fn mi_direct_bin_from_padded(
-    padded: crate::core_types::PaddedSize,
-) -> crate::core_types::DirectBin {
-    mi_direct_bin_from_size(padded.get())
-}
-
 #[inline]
 pub fn mi_mul_overflow(count: usize, size: usize, total: &mut usize) -> bool {
     match count.checked_mul(size) {
@@ -328,8 +313,10 @@ pub fn mi_mul_overflow(count: usize, size: usize, total: &mut usize) -> bool {
 #[inline]
 pub unsafe fn _mi_theap_heap(theap: *const mi_theap_t) -> *mut mi_heap_t {
     unsafe {
-        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of!((*theap).heap).cast_mut())
-            .load(crate::core_types::MemoryOrder::Acquire)
+        crate::core_types::AtomicPtrField::from_cell(
+            &*(ptr::addr_of!((*theap).heap).cast_mut()).cast::<core::sync::atomic::AtomicPtr<_>>(),
+        )
+        .load(crate::core_types::MemoryOrder::Acquire)
     }
 }
 
@@ -341,16 +328,15 @@ pub unsafe fn mi_theap_is_initialized(theap: *const mi_theap_t) -> bool {
 }
 
 /// # Safety
-/// `padded` must derive from a normalized request no larger than
-/// `MI_SMALL_SIZE_MAX`, so its direct bin is in range. `theap` and its
-/// initialized direct cache must remain live and locally owned for the call.
+/// `theap` and its initialized direct cache must remain live and locally owned
+/// for the call. The size type proves the padded direct bin is in range.
 #[inline]
 pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
     theap: crate::core_types::ThreadHeapLocal,
-    padded: crate::core_types::PaddedSize,
+    size: crate::types::scalar::NormalizedSmallSize,
 ) -> Option<crate::core_types::AvailablePage> {
     unsafe {
-        let bin = mi_direct_bin_from_padded(padded);
+        let bin = crate::core_types::DirectBin::from_small_padded(size);
         theap.direct_available_page(bin)
     }
 }
@@ -364,8 +350,10 @@ pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
 #[inline]
 pub unsafe fn _mi_page_map_at(idx: crate::core_types::PageMapPrimaryIndex) -> mi_submap_t {
     unsafe {
-        crate::core_types::AtomicPtrField::from_raw(_mi_page_map_base().add(idx.get()))
-            .load(crate::core_types::MemoryOrder::Acquire)
+        crate::core_types::AtomicPtrField::from_cell(
+            &*(_mi_page_map_base().add(idx.get())).cast::<core::sync::atomic::AtomicPtr<_>>(),
+        )
+        .load(crate::core_types::MemoryOrder::Acquire)
     }
 }
 
@@ -486,7 +474,7 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
     has_aligned: bool,
 ) {
     unsafe {
-        page.thread_id_cell().set_flags(
+        crate::types::atomic::AtomicPageThreadId::from_cell(&*page.thread_id_field()).set_flags(
             crate::core_types::PageFlags::HAS_INTERIOR_POINTERS,
             has_aligned,
         );
@@ -499,7 +487,8 @@ pub(crate) unsafe fn mi_page_set_has_interior_pointers(
 pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::PagePtr) {
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_is_abandoned_mapped(page.as_ptr()));
-        let atomic_tid = page.thread_id_cell();
+        let atomic_tid =
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*page.thread_id_field());
         let mut old = atomic_tid.load();
         loop {
             let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);

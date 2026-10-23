@@ -421,13 +421,13 @@ fn tld_alloc_non_main_typed(main_subproc: SubprocPtr) -> Option<TldPtr> {
         tld.set_thread_id(Some(ThreadId::new_unchecked(
             crate::platform::_mi_prim_thread_id(),
         )));
-        let thread_seq = main_subproc
-            .thread_total_count_cell()
-            .fetch_add(1, Ordering::Relaxed);
+        let thread_seq = crate::types::atomic::AtomicUsizeField::from_cell(
+            &*main_subproc.thread_total_count_field(),
+        )
+        .fetch_add(1, Ordering::Relaxed);
         tld.set_thread_seq(crate::types::ThreadSeq::new(thread_seq));
         tld.set_is_in_threadpool(crate::platform::_mi_prim_thread_is_in_threadpool());
-        main_subproc
-            .thread_count_cell()
+        crate::types::atomic::AtomicUsizeField::from_cell(&*main_subproc.thread_count_field())
             .fetch_add(1, Ordering::Relaxed);
         crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(true, Ordering::Relaxed);
         Some(tld)

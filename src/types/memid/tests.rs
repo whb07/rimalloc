@@ -122,7 +122,7 @@ fn arena_memid_round_trips_slice_metadata() {
     let mut arena = MaybeUninit::<crate::types::mi_arena_t>::zeroed();
     let arena_ptr = unsafe { ArenaPtr::new_unchecked(arena.as_mut_ptr()) };
     unsafe { (*arena_ptr.as_ptr()).slice_count = 32 }
-    let range = SliceRange::new(11, 5, arena_ptr).unwrap();
+    let range = SliceRange::new(11, 5, unsafe { arena_ptr.slice_count() }).unwrap();
     let memid = MemId::<ArenaMem>::arena(
         arena_ptr,
         range,

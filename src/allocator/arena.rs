@@ -136,8 +136,7 @@ use geometry::{
 pub(crate) use heap_pages::{_mi_heap_destroy_pages, _mi_heap_move_pages};
 pub(crate) use ids::{_mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable};
 use ids::{
-    mi_arena_id_from_arena_typed, mi_arena_is_suitable, mi_memid_create_arena, mi_page_full_size,
-    mi_page_memid_is_arena,
+    mi_arena_id_from_arena_typed, mi_arena_is_suitable, mi_page_full_size, mi_page_memid_is_arena,
 };
 use metadata::mi_arenas_unsafe_destroy;
 use os_memory::{
@@ -153,7 +152,7 @@ pub use os_memory::{
 use prefix::{
     MiArenaPagesPrefix, MiArenaPrefix, MiHeapPrefix, MiSubprocPrefix, mi_arena_from_index_typed,
     mi_arena_index, mi_arena_pages_t, mi_heap_abandoned_count, mi_heap_arena_page_cell,
-    mi_subproc_arena_cell,
+    mi_subproc_arena_field,
 };
 pub(crate) use purge::{_mi_arenas_collect, _mi_arenas_free};
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -240,7 +239,9 @@ impl ClaimedArenaSlices {
             return None;
         }
 
-        let Ok(range) = crate::core_types::SliceRange::new(start, count, arena) else {
+        // SAFETY: the claim contract keeps the arena's initialized extent live and stable.
+        let arena_slices = unsafe { arena.slice_count() };
+        let Ok(range) = crate::core_types::SliceRange::new(start, count, arena_slices) else {
             crate::internal::mi_assert_internal!(false);
             // SAFETY: the successful bitmap claim above owns this exact range,
             // so failure to represent it must return those bits before exit.
@@ -253,10 +254,10 @@ impl ClaimedArenaSlices {
             };
             return None;
         };
-        // SAFETY: `range` is a checked range in this initialized arena.
-        let memid = unsafe { mi_memid_create_arena(arena_raw, range) };
         Some(Self {
-            allocation: crate::core_types::ArenaAllocation::new(arena, range, memid),
+            // SAFETY: the successful bitmap claim exclusively owns this checked
+            // range in the initialized arena; construction binds its matching MemId.
+            allocation: unsafe { crate::core_types::ArenaAllocation::from_claimed(arena, range) },
         })
     }
 
@@ -271,19 +272,11 @@ impl ClaimedArenaSlices {
     }
 
     #[inline(always)]
-    fn memid(&self) -> mi_memid_t {
-        self.allocation.memid()
-    }
-
-    #[inline(always)]
-    fn memid_mut(&mut self) -> &mut mi_memid_t {
-        self.allocation.memid_mut()
-    }
-
-    #[inline(always)]
     fn publish(self) -> crate::core_types::ArenaAllocation {
         let claim = core::mem::ManuallyDrop::new(self);
-        claim.allocation
+        // SAFETY: the disarmed rollback guard transfers its allocation exactly
+        // once; neither the guard nor its field is used or dropped afterward.
+        unsafe { ptr::read(&claim.allocation) }
     }
 }
 
@@ -481,14 +474,14 @@ unsafe fn mi_arena_try_alloc_at(
     // initial-zero state is derived from its backing MemId.
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.initially_zero } {
         let mut already_dirty = 0usize;
-        claim.memid_mut().initially_zero = unsafe {
+        claim.allocation.set_initially_zero(unsafe {
             mi_bitmap_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_dirty,
                 slice_index,
                 slice_count,
                 &mut already_dirty,
             )
-        };
+        });
         crate::internal::mi_assert_internal!(already_dirty <= touched_slices);
         touched_slices -= already_dirty;
     }
@@ -515,7 +508,7 @@ unsafe fn mi_arena_try_alloc_at(
                 return None;
             }
             if commit_zero {
-                claim.memid_mut().initially_zero = true;
+                claim.allocation.set_initially_zero(true);
             }
             unsafe {
                 mi_bitmap_setN(
@@ -526,14 +519,14 @@ unsafe fn mi_arena_try_alloc_at(
                 )
             };
             if MI_DEBUG > 1
-                && claim.memid().initially_zero
+                && claim.allocation.initially_zero()
                 && !unsafe { mi_mem_is_zero(p.as_ptr(), mi_size_of_slices(slice_count)) }
             {
                 crate::allocator::options::_mi_error_message_fmt(
                     Errno::EFAULT,
                     format_args!("internal error: arena allocation was not zero-initialized!\n"),
                 );
-                claim.memid_mut().initially_zero = false;
+                claim.allocation.set_initially_zero(false);
             }
         } else {
             unsafe { _mi_os_reuse(p.as_ptr(), mi_size_of_slices(slice_count)) };
@@ -562,9 +555,9 @@ unsafe fn mi_arena_try_alloc_at(
                 slice_count,
             )
         });
-        claim.memid_mut().initially_committed = true;
+        claim.allocation.set_initially_committed(true);
 
-        if claim.memid().initially_zero {
+        if claim.allocation.initially_zero() {
             unsafe { mi_track_mem_defined(p.as_ptr(), slice_count * MI_ARENA_SLICE_SIZE) };
         } else {
             // SAFETY: the published claim owns this live slice range, which tracking transitions to
@@ -572,14 +565,14 @@ unsafe fn mi_arena_try_alloc_at(
             unsafe { mi_track_mem_undefined(p.as_ptr(), slice_count * MI_ARENA_SLICE_SIZE) };
         }
     } else {
-        claim.memid_mut().initially_committed = unsafe {
+        claim.allocation.set_initially_committed(unsafe {
             mi_bitmap_is_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
                 slice_index,
                 slice_count,
             )
-        };
-        if !claim.memid().initially_committed {
+        });
+        if !claim.allocation.initially_committed() {
             let mut already_committed_count = 0usize;
             unsafe {
                 mi_bitmap_setN(
@@ -620,7 +613,7 @@ unsafe fn mi_arena_try_alloc_at(
                 claim.range().count_usize(),
             )
         });
-        crate::internal::mi_assert_internal!(claim.memid().initially_committed);
+        crate::internal::mi_assert_internal!(claim.allocation.initially_committed());
     }
     crate::internal::mi_assert_internal!(unsafe {
         mi_bitmap_is_setN(
@@ -1807,7 +1800,10 @@ unsafe fn mi_arenas_page_alloc_fresh(
         )
         .raw()
     };
-    let claimed = unsafe { page_ptr.thread_free_cell().claim_acq_rel() };
+    let claimed = unsafe {
+        crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
+            .claim_acq_rel()
+    };
     crate::internal::mi_assert_internal!(claimed);
     // Keep memid diagnostics and page metadata synchronized before the pending
     // transaction enters registered state.
@@ -2582,9 +2578,22 @@ mod claim_tests {
                 )
                 .unwrap()
             };
-            let allocation = claim.publish();
+            let mut allocation = claim.publish();
             assert_eq!(allocation.range().start_usize(), 5);
             assert_eq!(allocation.range().count_usize(), 3);
+            allocation.set_initially_zero(true);
+            allocation.set_initially_committed(true);
+            let memid = allocation.into_memid();
+            assert!(memid.initially_zero);
+            assert!(memid.initially_committed);
+            let crate::core_types::MemIdView::Arena(backing) =
+                crate::core_types::MemId::view(memid)
+            else {
+                panic!("published allocation must retain its arena identity");
+            };
+            assert_eq!(backing.arena(), arena);
+            assert_eq!(backing.range().start_usize(), 5);
+            assert_eq!(backing.range().count_usize(), 3);
             // SAFETY: publication transfers the allocation while intentionally
             // leaving its exact free-bitmap range cleared.
             assert!(unsafe { mi_bbitmap_is_clearN(bitmap, 5, 3) });

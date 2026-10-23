@@ -1,6 +1,40 @@
 use super::*;
 
 #[test]
+fn direct_bins_preserve_small_bounds_and_padding() {
+    let maximum =
+        SmallRequestedSize::new(RequestedSize::new(crate::types::MI_SMALL_SIZE_MAX)).unwrap();
+    assert_eq!(
+        DirectBin::from_small(SmallRequestedSize::ZERO).as_usize(),
+        0
+    );
+    assert_eq!(
+        DirectBin::from_small(maximum).as_usize(),
+        crate::types::MI_SMALL_WSIZE_MAX
+    );
+    assert_eq!(
+        DirectBin::from_small_padded(maximum.normalized()).as_usize(),
+        crate::types::MI_PAGES_DIRECT - 1,
+    );
+    let minimum =
+        SmallRequestedSize::new(RequestedSize::new(RequestedSize::MIN_ZERO_SIZE)).unwrap();
+    assert_eq!(
+        DirectBin::from_small_padded(SmallRequestedSize::ZERO.normalized()),
+        DirectBin::from_small_padded(minimum.normalized()),
+    );
+    for requested in 0..=crate::types::MI_SMALL_SIZE_MAX {
+        let size = SmallRequestedSize::new(RequestedSize::new(requested))
+            .unwrap()
+            .normalized();
+        let bin = DirectBin::from_small_padded(size).as_usize();
+        assert!(bin < crate::types::MI_PAGES_DIRECT);
+        let bin_bytes = bin * core::mem::size_of::<usize>();
+        assert!(size.padded().get() <= bin_bytes);
+        assert!(size.padded().get() > bin_bytes - core::mem::size_of::<usize>());
+    }
+}
+
+#[test]
 fn requested_size_padding_checks_overflow() {
     assert!(RequestedSize::new(16).checked_padded().is_ok());
     let largest = RequestedSize::new(usize::MAX).checked_padded();

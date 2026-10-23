@@ -94,6 +94,8 @@ and the conclusion drawn from them.
 | X46 | Localize THP advice to dense backing | Every-allocation and first-use prototypes | **REJECT both**: repeated collapse costs up to 22×; first-use full-suite time +5.12%, sh6 +88.20%, rptest +52.21% | `target/perf-experiments/X46/` |
 | X47 | Skip reclaim/reabandon without a main-heap association | Exact null-destination gate after collection and final-free handling | **KEEP**: futile calls removed; final xmalloc time −14.83% in X48 | `target/perf-experiments/X47/` |
 | X48 | Qualify the final retained changes together | Six paired full-suite Rust old/new rounds, application controls, retention repeats, local verification | **KEEP retained scope**: full-suite time −1.45%, local checks pass; Redis inconclusive; cross-target limitations recorded below | `target/perf-experiments/X48/` |
+| X49 | Repeat Redis five consecutive times on request | Five balanced old/new Rust pairs, unchanged frozen artifacts | SET +1.77% in this batch (5/5 positive), GET −0.56% (2/5 positive); no repeatable overall application claim | `target/perf-experiments/X49/` |
+| X50 | Find Redis allocator hotspots shared with other workloads | Separate SET/GET instruction profiles, bounded cache simulation, native profiles, source/assembly checks | **INVESTIGATION ONLY**: prioritize queue-cache range calculation and redundant full-flag transitions; metadata locality is a broader research candidate | `target/perf-experiments/X50/` |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -3252,3 +3254,148 @@ Raw manifests, commands, environment settings, source snapshots, all primary
 and confirmation results, profiles, and check logs are under
 `target/perf-experiments/X48/`. These ignored local artifacts retain failures
 as well as successes; this committed section is the durable result summary.
+
+## X49 — Five consecutive Redis comparisons
+
+Requested follow-up, 2026-10-22. Five old/new Rust pairs reused the exact X48
+baseline and retained libraries, alternating execution order, with no other
+benchmarks or builds running. Each fresh server handled 3.2 million SETs and
+GETs, 256-byte values, 50 connections, pipeline 16, and separate pinned server
+and client cores. Allocator ownership and artifact hashes passed verification.
+Paired throughput differences, positive for faster:
+
+| Pair | SET | GET |
+|---|---:|---:|
+| 1 | +0.50% | −1.25% |
+| 2 | +1.77% | +1.80% |
+| 3 | +4.23% | −0.56% |
+| 4 | +3.53% | −3.27% |
+| 5 | +0.07% | +4.15% |
+| Median | +1.77% | −0.56% |
+
+SET measured faster in all five pairs, but X48's opposite-direction series
+and A/A variation still prevent attributing a repeatable application gain to
+the two fixes. No implementation or policy changed. Raw results and summary
+are under `target/perf-experiments/X49/redis-five/`.
+
+## X50 — Redis profiles and shared optimization candidates
+
+Investigation only, 2026-10-23; no allocator changes or new speedup claim.
+Profiles use the retained `b1ce730a` source and the exact X48 interpose artifact
+(SHA-256 `e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`).
+Only our allocator was profiled. Hardware events remain unavailable
+(`perf_event_paranoid=4`; an actual `perf stat` attempt was rejected), so
+Callgrind 3.22.0 supplies instruction counts and simulated cache events,
+not native cycles, hardware miss latency, or contention measurements.
+
+Redis 6.2.7 used the X49 request settings. Startup, warmup, and FLUSHALL were
+excluded; SET and GET each received their own 3.2-million-request profile.
+Process-title rewriting was disabled because it invalidated Valgrind's control
+FIFO identity. The final measured phases completed; the first wrapper then
+mistook SHUTDOWN's expected connection close for an error. Its original
+manifest is retained alongside a clarification and the clean server-exit log.
+The later cache-profile wrapper handles that EOF correctly.
+
+Fresh native instruction profiles cover Larson, sh6, mstress, and rptest with
+the same retained library. The completed X48 xmalloc profile is reused. Native
+profiles include startup, workload warmup, and teardown. In particular,
+Larson's single-owner warmup exercises unfull transitions; their aggregate
+share must not be presented as a steady threaded cost. Default Valgrind
+scheduling starved Larson's timer thread; that attempt was stopped after a
+bounded dump and excluded. The completed retry uses `--fair-sched=yes`.
+
+All percentages below are **self instructions divided by whole-process user
+instructions**. They are neither elapsed-time shares nor expected savings.
+
+| Component | Redis SET | Redis GET | Larson | sh6 | mstress | rptest | xmalloc |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| All allocator code | 16.165% | 8.205% | 36.780% | 60.201% | 4.913% | 8.022% | 81.059% |
+| Direct-page-cache update | 0.944% | <0.001% | 2.015% | 0.110% | 0.043% | 0.030% | 0.102% |
+| Page-queue search | 1.115% | <0.001% | 2.088% | 0.189% | 0.224% | 0.418% | 0.821% |
+| Return full page to normal queue | 0.864% | <0.001% | 0.469% | <0.001% | <0.001% | <0.001% | <0.001% |
+| Remote-free collector | 0 | 0 | 1.884% | 0.067% | 0.113% | 0.437% | 30.953% |
+
+Redis SET executed 15.319 billion instructions, GET 8.856 billion. The usable
+size entry (symbolized as `malloc_size`, also serving `malloc_usable_size`)
+accounted for 4.312% of SET and 3.770% of GET: 12.143 and 6.136 queries per
+request respectively. Its common path is already only 17 instructions.
+`mi_realloc` used 1.504% of SET instructions across 3,200,153 calls, but made
+only 71 calls to free old allocations; nearly all requests kept the block.
+SDS space trimming explains the repeated resize calls. GET made no calls to
+the remote-free collector, as did SET, confirming why X47 is not a direct
+Redis throughput optimization.
+
+A separate cache experiment first populated the same key range with 3.2
+million SETs while instrumentation was off, warmed with 10,000 GETs, then
+profiled 200,000 SETs and 200,000 GETs. This is a populated-dataset window,
+not the initial-growth phase above. The accepted model explicitly uses
+32 KiB, eight-way L1 instruction/data caches and a 32 MiB, sixteen-way last
+level, with 64-byte lines. Callgrind does not model the host's intermediate
+512 KiB L2, out-of-order latency, or coherence. An earlier automatic model
+incorrectly selected a 256 MiB direct-mapped last level; it is preserved but
+is not used for conclusions.
+
+In the corrected SET window, allocator code caused 40.23% of simulated L1
+read misses and 49.34% of write misses. The usable-size entry alone incurred
+832,535 L1 read misses: 395,353 at the leaf page-map read and 437,146 at the
+page flags/block-size reads. Thus the cold lookup/header chain is a concrete
+site to investigate, not just a large function name. Two neighbouring-page
+link stores in unfull caused 321,227 L1 write misses. GET's allocator accounted
+for only 0.98% of L1 read misses, and usable-size queries had just 1,595 misses.
+These results support a SET metadata-locality hypothesis, not a measured
+hardware stall attribution or a guaranteed GET improvement.
+
+Ranked follow-ups:
+
+1. **Derive direct-cache spans without repeatedly classifying sizes.**
+   `mi_theap_direct_cache_start` computes a bin from the current queue's size,
+   then computes bins again while walking predecessor queues. Assembly confirms
+   repeated bit scans/shifts. Derive the same span from the known queue index
+   and immutable class boundaries, preserving alignment aliases and every
+   published cache entry. This is the strongest small candidate with measured
+   reach across Redis and the native suite. Verify all size classes and both
+   pointer widths before a native performance gate; the entire helper's share
+   is only a ceiling on instruction savings.
+2. **Remove temporary full-flag changes used to locate a normal queue.**
+   `_mi_page_unfull_internal` clears the flag, restores it, then the consuming
+   queue move clears it again. All three locked operations and repeated
+   `pages_full_size` accounting survive compilation. This behavior is inherited
+   from bundled C, not introduced by the latest fixes. Compute the destination
+   without changing page state, then perform the final transition once. SET
+   made 1,482,299 such transitions in the full profile. Preserve queue order,
+   accounting, remote publication, and typed ownership. This differs from
+   X24's rejected no-op flag check and X32's rejected removal of queue links.
+   Reach beyond Redis includes lone-owner/private-heap full-page returns and
+   Larson warmup; a steady threaded benefit is not yet demonstrated.
+3. **Investigate shared page-map/header locality.** The pointer-to-page chain
+   is used by free, usable-size queries, and realloc. Free alone contributes
+   32.67% of sh6 and 10.92% of Larson instructions, but those figures include
+   work beyond lookup. Any improvement must reduce actual lookup/cache cost
+   without adding a per-free tax, changing public layouts, or weakening pointer
+   validation. The compact usable-size assembly leaves little obvious scalar
+   work to remove. Obtain native cache/stall evidence before committing to a
+   cache or metadata redesign; the prior X25 batching result warns that a
+   per-free lookup table can cost more than it saves.
+4. **Narrower candidate: a small in-place realloc path.** Isolate the existing
+   same-heap, nonzero, retained-size case from the large allocation/copy fallback
+   to avoid unnecessary register saves and repeated heap resolution. Preserve
+   current zero-size, alignment, heap-transfer, failure, and usable-size rules.
+   This could help Redis and the existing `realloc_churn` benchmark through
+   `GlobalAlloc`, but it is not a broad 21-workload candidate: the observed
+   mstress realloc calls were only 200 null-pointer allocations, and other
+   profiled native workloads did not use this ordinary resize path.
+
+Further remote-collector tuning would mainly help xmalloc, not this Redis
+workload. Rptest's 87.75% `memset` share includes required calloc zeroing and
+benchmark payload writes; it is not permission to remove initialization.
+Mstress spends 94.93% of instructions in its workload body. Neither fact
+supports promising uniform gains from an allocator change. THP localization,
+full-queue removal, and generic per-free batching remain rejected as recorded
+in X46, X32, and X25.
+
+The recommended implementation order is the direct-cache span calculation,
+then the temporary full-flag changes, each isolated and subjected to the
+complete correctness, retention, Redis old/new, and full native gates. No
+candidate has been implemented or accepted by this profiling task. Raw
+profiles, parsed self/call-edge totals, assembly, source snapshots, failed
+setup attempts, and `summary.json` live under `target/perf-experiments/X50/`.

@@ -4127,3 +4127,61 @@ libraries are under `target/perf-experiments/X61`. The final evidence files
 are `assembly-final-manifest.json`, `codegen-final.json`, `final.asm`, and
 `*.final.diff`; earlier experimental artifacts are kept separately. No remote
 VM, GitHub Actions run, or sub-agent was used.
+
+## X62 — preserve validated alignment through generic allocation
+
+Following the X61 assembly finding, the large-alignment path now passes its
+existing `Alignment` proof into `_mi_theap_malloc_zero_ex` as `MaybeAlignment`.
+The other three callers pass the existing zero-alignment value. A safe,
+inlined conversion preserves the proof; no unsafe constructor or caller
+obligation is added. This removes a redundant power-of-two validation and
+its unreachable diagnostic path from the internal helper. Public raw-input
+validation, heap/sentinel resolution, and allocation-failure behavior remain
+in place.
+
+Relative to the original pre-six-fix binary, the large-alignment routine
+decreases from 1,024 bytes / 241 instructions to 920 bytes / 226 instructions.
+Its stack reservation decreases from 152 to 136 bytes. For an initialized
+heap, a 129-byte request, 128 KiB alignment, zero offset, and a successful
+aligned return, the instruction trace decreases from **68 to 64**. This count
+includes calls as single instructions; the called generic allocator retains
+its identical 287-byte / 81-instruction body. The zeroing-flag mask remains,
+but the path now executes fewer instructions overall: the redundant alignment
+test and branch are gone. This resolves the added successful-path work found
+in X61 without special assembly or a change to the allocation algorithm.
+
+The X61 identical core bodies, bitmap claim body, and smaller arena owner
+remain unchanged. Against the X61 final artifact, the aligned generic routine
+is the only existing function whose instruction count changes; no function
+symbols are added or removed. All 240 dynamic exports still match the
+pre-six-fix baseline. ELF `.text` is 197,410 bytes versus 197,874 originally,
+a 464-byte reduction, with unchanged `.data` and `.bss` sizes. Final SHA256:
+`b83b8e826251bfc45a2d2c89bc7b2ee2ce225b55d427144927b7cfed061d9501`.
+
+Code layout still differs. For example, the ordinary over-allocation failure
+return has an additional unconditional jump after a failed allocation.
+Instruction equality on every error path, identical cache placement, and
+target-independent cycle counts are not claimed. The type restrictions add
+no runtime ownership/lifetime bookkeeping, and the inspected successful
+allocation paths are identical or perform less work.
+
+The required formatting, full-workspace/all-target/all-feature Clippy, and
+full test command pass again, including native smoke harnesses. A new
+integration regression exercises 128 KiB alignment on a fresh thread for
+zero, small, and above-small sizes, checking alignment, zeroing, writable
+payloads, release, calloc, and rejection of unsupported offsets. ASan passes
+all 25 selected tests; TSan passes its seven selected tests and this new
+regression separately. The frozen release library also passes a C ABI smoke
+test with a fresh pthread, as does the original baseline.
+
+Three additional whole-crate compiler probes verify the typed call and reject
+both raw integer arguments and unchecked safe integer conversions. The six
+fixes retain X61's 33 compiler probes and 540 supported Miri passes; this
+follow-up changes no pointer or borrowing operations. No further comparative
+timing run was used, following the requested emphasis on assembly.
+
+Evidence is under `target/perf-experiments/X62`: `manifest.json`,
+`codegen-final.json`, `large-alignment-path.json`, `final.asm`, `*.final.diff`,
+the compiler-probe logs, and the verification/C ABI logs. The ordinary-first
+branch layout, shared-null-check, return-value, and no-inline experiments
+were not retained.

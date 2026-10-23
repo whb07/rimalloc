@@ -237,7 +237,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
         let theap = theap
             .map(|theap| theap.ptr().as_ptr())
             .unwrap_or(core::ptr::null_mut());
-        p = unsafe { _mi_theap_malloc_zero_ex(theap, oversize, zero, alignment_raw, usable) };
+        p = unsafe { _mi_theap_malloc_zero_ex(theap, oversize, zero, alignment.into(), usable) };
         if p.is_null() {
             return core::ptr::null_mut();
         }

@@ -306,6 +306,13 @@ impl MaybeAlignment {
     }
 }
 
+impl From<Alignment> for MaybeAlignment {
+    #[inline(always)]
+    fn from(alignment: Alignment) -> Self {
+        Self(alignment.get())
+    }
+}
+
 /// Offset used by aligned-at allocation APIs.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

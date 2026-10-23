@@ -441,19 +441,6 @@ fn no_alignment() -> crate::core_types::MaybeAlignment {
     unsafe { crate::core_types::MaybeAlignment::new_unchecked(0) }
 }
 
-fn maybe_alignment_or_report(alignment: usize) -> Option<crate::core_types::MaybeAlignment> {
-    let Some(alignment) = crate::core_types::MaybeAlignment::new(alignment) else {
-        _mi_error_message_fmt(
-            Errno::EOVERFLOW,
-            format_args!(
-                "allocation alignment must be zero or a power-of-two (alignment {alignment})\n"
-            ),
-        );
-        return None;
-    };
-    Some(alignment)
-}
-
 fn alignment_or_report(size: usize, alignment: usize) -> Option<crate::core_types::Alignment> {
     let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
         if crate::internal::MI_DEBUG > 0 {
@@ -557,21 +544,18 @@ unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapL
 /// callbacks and their opaque arguments reached synchronously must remain valid,
 /// must not incompatibly reenter the selected heap's local allocation state,
 /// and must not unwind. If nonnull, `usable` must be aligned and uniquely
-/// writable for one `usize` throughout the call. `huge_alignment` may be
-/// arbitrary and is validated before allocation; when a request is small
-/// (`size <= MI_SMALL_SIZE_MAX`), it must be zero.
+/// writable for one `usize` throughout the call. `huge_alignment` must be zero
+/// for a small request (`size <= MI_SMALL_SIZE_MAX`), or a valid huge-page
+/// alignment for a generic request.
 #[inline(always)]
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     theap: *mut mi_theap_t,
     size: usize,
     zero: bool,
-    huge_alignment: usize,
+    huge_alignment: crate::core_types::MaybeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
-    crate::internal::mi_assert!((huge_alignment & 1) == 0);
-    let Some(huge_alignment) = maybe_alignment_or_report(huge_alignment) else {
-        return ptr::null_mut();
-    };
+    crate::internal::mi_assert!((huge_alignment.get() & 1) == 0);
     let Some(layout) = malloc_layout_or_report(size, zero) else {
         return ptr::null_mut();
     };
@@ -682,7 +666,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
         // SAFETY: the raw-boundary contract permits the configured lazy-null
         // resolver state and keeps the optional result slot writable through
         // this terminal unaligned allocation dispatch.
-        return unsafe { _mi_theap_malloc_zero_ex(theap, size, zero, 0, usable) };
+        return unsafe { _mi_theap_malloc_zero_ex(theap, size, zero, no_alignment(), usable) };
     }
     let Some(layout) = malloc_layout_or_report(size, zero) else {
         return ptr::null_mut();
@@ -821,7 +805,7 @@ pub unsafe extern "C" fn mi_theap_umalloc(
         // SAFETY: the raw-boundary contract permits the configured lazy-null
         // resolver state and keeps the optional result slot writable through
         // this terminal unaligned allocation dispatch.
-        return unsafe { _mi_theap_malloc_zero_ex(theap, size, false, 0, usable) };
+        return unsafe { _mi_theap_malloc_zero_ex(theap, size, false, no_alignment(), usable) };
     }
     let Some(layout) = malloc_layout_or_report(size, false) else {
         return ptr::null_mut();
@@ -873,7 +857,7 @@ pub unsafe extern "C" fn mi_umalloc(size: usize, usable: *mut usize) -> *mut c_v
 pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_void {
     // SAFETY: allocator lifecycle supplies the live current-thread default heap and exclusive
     // local allocation mutation; the caller supplies the optional usable-size output storage.
-    unsafe { _mi_theap_malloc_zero_ex(_mi_theap_default(), size, true, 0, usable) }
+    unsafe { _mi_theap_malloc_zero_ex(_mi_theap_default(), size, true, no_alignment(), usable) }
 }
 
 /// # Safety

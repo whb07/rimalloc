@@ -64,6 +64,36 @@ fn global_aligned_exports_link_and_allocate() {
 }
 
 #[test]
+fn huge_alignment_preserves_zeroing_and_lazy_thread_initialization() {
+    std::thread::spawn(|| unsafe {
+        let alignment = 128 * 1024;
+        for size in [0, 129, 1024, 1025] {
+            let p = mi_zalloc_aligned(size, alignment);
+            assert_aligned_at(p, alignment, 0);
+            assert_zeroed(p, size);
+            fill_sequence(p, size);
+            assert_sequence(p, size);
+            mi_free(p);
+
+            let p = mi_malloc_aligned(size, alignment);
+            assert_aligned_at(p, alignment, 0);
+            fill_sequence(p, size);
+            assert_sequence(p, size);
+            mi_free(p);
+        }
+
+        let p = mi_calloc_aligned(3, 97, alignment);
+        assert_aligned_at(p, alignment, 0);
+        assert_zeroed(p, 3 * 97);
+        mi_free(p);
+
+        assert!(mi_malloc_aligned_at(129, alignment, 8).is_null());
+    })
+    .join()
+    .expect("huge-alignment allocation thread");
+}
+
+#[test]
 fn aligned_realloc_exports_link_and_allocate_from_null() {
     unsafe {
         let p = mi_realloc_aligned(ptr::null_mut(), 96, 64);

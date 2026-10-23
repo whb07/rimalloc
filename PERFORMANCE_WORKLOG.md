@@ -4185,3 +4185,56 @@ Evidence is under `target/perf-experiments/X62`: `manifest.json`,
 the compiler-probe logs, and the verification/C ABI logs. The ordinary-first
 branch layout, shared-null-check, return-value, and no-inline experiments
 were not retained.
+
+## X63 — balanced verification of the final six-fix binary
+
+Checked the frozen X62 final library against the original pre-six-fix library,
+without rebuilding either artifact. The candidate remains
+`b83b8e826251bfc45a2d2c89bc7b2ee2ce225b55d427144927b7cfed061d9501`;
+both control labels use the exact same baseline file and inode, SHA256
+`ab2ef9b931ce917c036ddd47200dcf49682dd739ccb77291b4a06acc75680fbc`.
+
+Six workloads each run six balanced blocks, with all six orders of two
+controls and one candidate represented once: 108 fresh processes in total.
+Each process warms up with 128 operations, then runs for one second on CPU 0.
+No build, test, or other benchmark runs concurrently. The fixed schedule,
+all observations, and hashes are retained. No samples are discarded. There
+are no observed steal ticks or cgroup throttle events during the run.
+
+The statistic is the geometric mean of paired normalized-time ratios,
+candidate / geometric-mean(two controls). Intervals use 20,000 fixed-seed
+bootstrap resamples of the six complete blocks per workload. Negative changes
+are faster. The payload, alignment, zeroing, expected allocation failure, and
+release checks pass in all processes.
+
+| Workload | Time change | 95% paired interval | Identical-file A/A change |
+| --- | ---: | --- | ---: |
+| malloc/free | −0.81% | [−1.24%, −0.43%] | +0.91% |
+| realloc grow/shrink | −1.90% | [−3.37%, −0.93%] | −2.04% |
+| Small aligned allocation | −4.26% | [−11.27%, +0.27%] | +7.76% |
+| 128 KiB aligned allocation | +5.30% | [−5.39%, +13.54%] | −12.86% |
+| Ordinary over-allocation failure | −1.89% | [−2.19%, −1.59%] | +0.10% |
+| Private-heap lifecycle | −0.56% | [−1.71%, +0.53%] | −0.62% |
+
+The extra jump in the failure block is not an observed runtime penalty in
+this comparison. It does not justify requiring exact instruction equality on
+every error branch as an additional acceptance rule. The requested type
+constraints introduce no runtime ownership/lifetime bookkeeping; the core
+instruction bodies match, and the reviewed arena and aligned paths perform
+less work. Large-alignment elapsed time remains inconclusive in this short
+gate, with substantial variation even between identical controls; its direct
+68-to-64 instruction trace is the relevant evidence for the type changes.
+These measurements do not establish exact zero elapsed-time difference on
+every machine, and the small timing improvements are not attributed to the
+type restrictions.
+
+Two further source experiments expanded the aligned cold routine to 1,414
+and 1,137 bytes by inlining allocation dispatch. Both were rejected; production
+Rust source remains at `abd82301`, with all required verification from X62
+still applicable. No extra unsafe code, branch-hint helper, or layout padding
+was introduced to force a particular assembly layout.
+
+The executable source, schedule, resource snapshots, raw results, analysis,
+and artifact hashes are under `target/perf-experiments/X63` in `final-gate.c`,
+`final-gate.py`, `final-gate-manifest.json`, `final-gate-results.json`, and
+`final-gate-analysis.json`.

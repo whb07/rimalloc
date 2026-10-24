@@ -932,6 +932,10 @@ pub unsafe extern "C" fn mi_process_done() {
 mod tests {
     #[cfg(target_os = "linux")]
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "requires OS allocator initialization (unsupported sysconf)"
+    )]
     fn auto_process_init_initializes_large_page_config() {
         unsafe { super::_mi_auto_process_init() };
         assert!(unsafe { crate::os::_mi_os_canuse_large_page(1 << 30, 2 << 20) });
@@ -940,6 +944,10 @@ mod tests {
     /// The main theap's one-time initialization runs: options apply to it and its cookie is drawn
     /// from its random state (C 3.3.2 skips both).
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "requires OS allocator initialization (unsupported sysconf)"
+    )]
     fn main_theap_initialization_applies_options_and_cookie() {
         unsafe { super::_mi_auto_process_init() };
         // SAFETY: process initialization has completed; these reads observe settled fields.
@@ -965,8 +973,8 @@ mod tests {
         super::mi_theap_main_tls_set(crate::core_types::ThreadHeapPtr::new(marker));
         assert_eq!(super::mi_theap_main_tls_peek(), marker);
 
-        let child = std::thread::spawn(move || {
-            let marker = marker_addr as *mut crate::types::mi_theap_t;
+        let child = std::thread::spawn(|| {
+            let marker = crate::platform::__mi_theap_empty();
             let before = super::mi_theap_main_tls_peek() as usize;
             super::mi_theap_main_tls_set(crate::core_types::ThreadHeapPtr::new(marker));
             let after = super::mi_theap_main_tls_peek() as usize;

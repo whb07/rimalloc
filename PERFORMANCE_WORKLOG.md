@@ -4238,3 +4238,124 @@ The executable source, schedule, resource snapshots, raw results, analysis,
 and artifact hashes are under `target/perf-experiments/X63` in `final-gate.c`,
 `final-gate.py`, `final-gate-manifest.json`, `final-gate-results.json`, and
 `final-gate-analysis.json`.
+
+
+## X64 — broad Miri automation and bounded allocator proofs
+
+Replaced the Miri runner's fixed list of module filters with all library tests.
+New library tests now run automatically; tests that need unsupported OS calls,
+subprocesses, or C stdout declare their Miri exclusion at the test. The runner
+pins `nightly-2026-10-17`, isolates its build directory, rejects filters that
+select no tests, and supports explicit features, profiles, borrow models, and
+seed ranges.
+Pull-request validation checks strict provenance and symbolic alignment with
+Stacked Borrows and Tree Borrows, debug and release profiles, and `std` and
+`std,secure,guarded`. The existing required Miri check depends on every matrix
+entry. Weekly/manual hardening additionally checks eight seeds with Tree
+Borrows and the release secure/guarded profile.
+
+The expanded coverage first reproduced an out-of-bounds reference in
+`mi_bbitmap_setN`: compact arena storage was reborrowed as a Rust struct whose
+maximum-length trailing array extended beyond the allocation. The retained
+fixes address all four reviewed boundaries:
+
+- Bitmap structs now describe their headers and zero-length trailing arrays.
+  Raw chunk projection starts from the original allocation pointer, and only
+  the actual initialized chunk or header field is borrowed. Atomic chunk
+  operations use shared references. Tests allocate exactly the production
+  layout and exercise field, chunk, and multi-chunk boundaries. The old default
+  constructors, made unused by these compact fixtures, are removed.
+- `PointerLookup::after_validation` requires an explicit unsafe handoff coupling
+  the same live user pointer, page, block, offset, and guarded classification.
+  Ordinary safe code cannot promote unrelated valid pointers into that proof.
+- A private `MetaRequest` keeps the aligned size with its nonzero block count.
+  Its safe constructor performs the existing zero/maximum checks; only then
+  does it construct the bounded count. A constant proves the count fits u32.
+  Wrapping alignment rejects overflow in debug as well as release without
+  adding release checks. The previous arbitrary-count helper is removed.
+- Packed huge-alignment payloads come from checked `Alignment` values above
+  the existing over-allocation threshold. Ordinary allocation passes the zero
+  sentinel. Raw C flag decoding returns a raw payload until its existing
+  validation runs, rather than manufacturing a validated alignment type.
+
+The sweep also exposed a free-test fixture's invalidating whole-object
+reborrow, synthetic page fixtures with uninitialized encoded null links,
+release tests that violated unchecked-pointer preconditions, and fabricated
+integer-pointer test values. Fixtures now retain stable owned backing and
+initialize links through their real encoding APIs. Zero-size allocation uses
+`ptr::without_provenance_mut` for its aligned sentinel. Encoded-link validation
+uses the caller-supplied page geometry instead of requiring a second page-map
+lookup. This removes an unnecessary unsafe lookup and permits structural page
+models with ordinary owned storage. Native randomized list tests retain 256
+cases; Miri runs 32 alongside explicit length boundaries. Exhaustive native
+policy/bin sweeps retain their ranges and use boundary samples under Miri.
+
+Release assembly is compared to `2c940235` with Rust 1.92.0 / LLVM 21.1.3 and
+`cargo rustc --release --features interpose --lib --crate-type cdylib`.
+The normal artifact changes from SHA256
+`b83b8e826251bfc45a2d2c89bc7b2ee2ce225b55d427144927b7cfed061d9501` to
+`7f39715efb691f0d9acd2c14915db900ac1688791ce33332ed72de8a4cfb31c9`.
+The secure comparison adds `secure` to the same feature set; its baseline is
+`b02ed72ffb35cb62a7ecfc2208501c7d5295d9e070c3024baa29eb4d83bbab8c`
+and candidate is
+`0f0a2f36c7eecd4d9475503bae1c6efe037282a9ef66fd5994d699bb3321547e`.
+
+| Release code | Before → after instructions | Observation |
+| --- | ---: | --- |
+| Normal malloc/free/realloc, thread-heap malloc, both heap-small entry points | unchanged | Identical normalized bodies |
+| Normal arena allocation / bitmap claim / remote collection | 207 / 268 / 367, unchanged | Identical normalized bodies |
+| Metadata allocation, normal / secure | 208 / 235, unchanged | Identical normalized bodies |
+| Binned bitmap contiguous clear | 116 → 111 | Five fewer instructions |
+| Secure realloc | 241 → 220 | Supplied page geometry removes lookup work |
+| Secure remote collection | 342 → 317 | Supplied page geometry removes lookup work |
+
+The normal aligned generic routine retains 226 instructions; its equivalent
+threshold comparison changes from `cmp 0x10000; jbe` to `cmp 0x10001; jb`.
+Normal `.text` falls by 96 bytes (197,410 → 197,314); secure `.text` grows by
+16 bytes overall (204,178 → 204,194), despite the smaller reviewed paths.
+Data and BSS sizes are unchanged within both feature configurations, and all
+240 dynamic export names match in each comparison. The proof types add no
+production allocations, locks, atomic operations, or runtime ownership
+bookkeeping. No new comparative timing claim is made.
+
+
+All eight local Miri matrix configurations pass:
+
+| Features | Profile | Stacked Borrows passes | Tree Borrows passes |
+| --- | --- | ---: | ---: |
+| `std` | debug | 242 | 242 |
+| `std` | release | 243 | 243 |
+| `std,secure,guarded` | debug | 249 | 249 |
+| `std,secure,guarded` | release | 250 | 250 |
+
+That is 1,968 passes, with 60 ignored tests per configuration. The full
+release secure/guarded Tree Borrows suite also passes all eight seeds
+(`0..8`): another 2,000 passes and 480 ignored test instances. OS allocator,
+subprocess, and C stdout paths still require native validation. Miri's release
+profile disables debug assertions/overflow checks but does not run optimized
+machine code; the assembly comparisons above are separate evidence.
+
+Ten maintained compiler probes build the actual crate APIs in temporary
+copies. They compile valid handoffs and require the expected diagnostic at the
+invalid call site for compact chunk access, private metadata construction,
+validated-pointer forgery, and raw alignment/flag payloads. All pass. Missing
+test-name filters and invalid profiles also fail as intended.
+
+Final `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features` pass. Public C layout,
+strict-type boundaries, native page-list tests, ASan, TSan, and release thread
+stress/free-only regressions pass. Sanitizers use the pinned nightly and the
+existing `-Aunused-unsafe` compatibility flag for the now-safe CPUID intrinsic;
+stable checks and Miri use no warning suppression. Final compact-storage tests
+also pass under strict Stacked Borrows and release secure/guarded Tree Borrows
+after removal of the unused default constructors. No remote workflow was
+manually dispatched.
+
+Evidence is under `target/perf-experiments/X64`: `final-manifest.json`,
+`codegen-retained.json`, `secure-codegen.json`, the normalized assembly diffs,
+`matrix-signoff-results.json`, `seed-results.json`, reproduction/discovery logs,
+`miri-frozen-*.log`, `miri-seeds-frozen.log`, and the `*-signoff.log` validation
+logs. The earlier failing discovery runs remain alongside the corrected runs;
+only the successful final runs are counted above. Temporary source checkouts
+were removed.

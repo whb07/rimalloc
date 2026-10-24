@@ -94,7 +94,7 @@ fn realloc_request_constructors_distinguish_null_from_existing() {
             ),
         );
         let user = UserPtr::new(block.as_ptr().cast::<u8>().add(8).cast()).unwrap();
-        let lookup = crate::core_types::PointerLookup::valid(
+        let lookup = crate::core_types::PointerLookup::after_validation(
             user,
             page,
             crate::core_types::PointerLocation::Interior {
@@ -131,15 +131,35 @@ fn preserve_bytes_is_min_of_old_usable_and_new_requested() {
 
 #[test]
 fn generic_flags_pack_zero_bit_and_huge_alignment() {
-    let flags = MallocGenericFlags::new(Zeroed::Yes, MaybeHugeAlignment::new(64));
+    let alignment = Alignment::new(crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN * 2).unwrap();
+    let huge = MaybeHugeAlignment::for_overalloc(alignment).unwrap();
+    let flags = MallocGenericFlags::new(Zeroed::Yes, huge);
     assert_eq!(flags.zeroed(), Zeroed::Yes);
-    assert_eq!(flags.huge_alignment().get(), 64);
+    assert_eq!(flags.raw_huge_alignment(), alignment.get());
 
     let raw = MallocGenericFlags::from_raw(128);
     assert_eq!(raw.zeroed(), Zeroed::No);
-    assert_eq!(raw.huge_alignment().get(), 128);
+    assert_eq!(raw.raw_huge_alignment(), 128);
 
     let raw_zero_huge = MallocGenericFlags::from_raw(65);
     assert_eq!(raw_zero_huge.zeroed(), Zeroed::Yes);
-    assert_eq!(raw_zero_huge.huge_alignment().get(), 64);
+    assert_eq!(raw_zero_huge.raw_huge_alignment(), 64);
+}
+
+#[test]
+fn huge_alignment_requires_the_existing_large_alignment_boundary() {
+    for shift in 0..usize::BITS {
+        let alignment = Alignment::new(1usize << shift).unwrap();
+        let huge = MaybeHugeAlignment::for_overalloc(alignment);
+        assert_eq!(
+            huge.is_some(),
+            alignment.get() > crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN
+        );
+        for zeroed in [Zeroed::No, Zeroed::Yes] {
+            let payload = huge.unwrap_or_else(MaybeHugeAlignment::none);
+            let flags = MallocGenericFlags::new(zeroed, payload);
+            assert_eq!(flags.zeroed(), zeroed);
+            assert_eq!(flags.raw_huge_alignment(), payload.get());
+        }
+    }
 }

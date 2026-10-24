@@ -18,8 +18,8 @@ use crate::bitmap::{
 use crate::core_types::{BlockIndex, MemId, MetaMem};
 use crate::internal::memid::mi_memid_t;
 use crate::internal::{
-    _mi_align_down_ptr, _mi_align_up, _mi_arenas_alloc_aligned, _mi_arenas_free, _mi_divide_up,
-    _mi_is_aligned, _mi_memzero_aligned, _mi_os_alloc, MI_SECURE,
+    _mi_align_down_ptr, _mi_arenas_alloc_aligned, _mi_arenas_free, _mi_divide_up, _mi_is_aligned,
+    _mi_memzero_aligned, _mi_os_alloc, MI_SECURE,
 };
 use crate::mimalloc::mi_heap_main;
 use crate::os::{
@@ -53,10 +53,26 @@ fn meta_block_index(raw: usize) -> BlockIndex {
     BlockIndex(raw as u32)
 }
 
-#[inline]
-fn meta_block_count(block_count: usize) -> NonZeroU32 {
-    crate::internal::mi_assert_internal!(block_count > 0 && block_count <= u32::MAX as usize);
-    unsafe { NonZeroU32::new_unchecked(block_count as u32) }
+/// The aligned byte size and nonzero block count of one bounded meta request.
+struct MetaRequest {
+    size: usize,
+    block_count: NonZeroU32,
+}
+
+impl MetaRequest {
+    #[inline(always)]
+    fn new(size: usize) -> Option<Self> {
+        let size = size.wrapping_add(MI_META_BLOCK_SIZE - 1) & !(MI_META_BLOCK_SIZE - 1);
+        if size == 0 || size > MI_META_MAX_SIZE {
+            return None;
+        }
+        const { assert!(MI_META_MAX_SIZE / MI_META_BLOCK_SIZE <= u32::MAX as usize) };
+        // SAFETY: the aligned size is nonzero and bounded above; the constant
+        // bound proves its exact block count fits u32 without truncation.
+        let block_count =
+            unsafe { NonZeroU32::new_unchecked(_mi_divide_up(size, MI_META_BLOCK_SIZE) as u32) };
+        Some(Self { size, block_count })
+    }
 }
 
 #[inline]
@@ -190,13 +206,13 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
 ) -> *mut c_void {
     unsafe {
         crate::internal::mi_assert_internal!(!pmemid.is_null());
-        let size = _mi_align_up(size, MI_META_BLOCK_SIZE);
-        if size == 0 || size > MI_META_MAX_SIZE {
+        let Some(request) = MetaRequest::new(size) else {
             return ptr::null_mut();
-        }
+        };
+        let size = request.size;
         let block_count = _mi_divide_up(size, MI_META_BLOCK_SIZE);
         crate::internal::mi_assert_internal!(block_count > 0 && block_count < MI_BCHUNK_BITS);
-        let meta_block_count = meta_block_count(block_count);
+        let meta_block_count = request.block_count;
 
         let mpage0 = mi_meta_page_list_head();
         let mut mpage = mpage0;
@@ -293,4 +309,43 @@ pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
         mpage = unsafe { mi_meta_page_next(mpage) };
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn meta_request_rejects_zero_overflow_and_oversize() {
+        for size in [
+            0,
+            MI_META_MAX_SIZE + 1,
+            usize::MAX,
+            usize::MAX - MI_META_BLOCK_SIZE + 2,
+        ] {
+            assert!(MetaRequest::new(size).is_none(), "size {size}");
+        }
+    }
+
+    #[test]
+    fn meta_request_couples_aligned_size_to_nonzero_block_count() {
+        for size in [
+            1,
+            MI_META_BLOCK_SIZE - 1,
+            MI_META_BLOCK_SIZE,
+            MI_META_BLOCK_SIZE + 1,
+            MI_META_MAX_SIZE - 1,
+            MI_META_MAX_SIZE,
+        ] {
+            let request = MetaRequest::new(size).expect("bounded meta request");
+            assert_eq!(
+                request.size,
+                size.div_ceil(MI_META_BLOCK_SIZE) * MI_META_BLOCK_SIZE
+            );
+            assert_eq!(
+                request.block_count.get() as usize * MI_META_BLOCK_SIZE,
+                request.size
+            );
+        }
+    }
 }

@@ -818,6 +818,7 @@ mod buffer_tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "uses the native C stdout static, unsupported by Miri")]
     fn buffer_preserves_capacity_boundary_newlines_and_partial_flushes() {
         let mut storage = [0; 256];
         let mut output = Vec::<Vec<u8>>::new();

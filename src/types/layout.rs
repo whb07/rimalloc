@@ -39,12 +39,9 @@ impl MaybeHugeAlignment {
     }
 
     #[inline(always)]
-    pub(crate) fn new(alignment: usize) -> Self {
-        crate::internal::mi_debug_assert!(
-            (alignment & MallocGenericFlags::ZERO_BIT) == 0,
-            "huge alignment must not collide with the zeroing flag"
-        );
-        Self(alignment)
+    pub(crate) fn for_overalloc(alignment: Alignment) -> Option<Self> {
+        (alignment.get() > crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN)
+            .then_some(Self(alignment.get()))
     }
 
     #[inline(always)]
@@ -121,7 +118,7 @@ impl LayoutRequest {
             return Ok(unsafe { MaybeAlignment::new_unchecked(0) });
         }
         let alignment = Alignment::new(alignment).ok_or(LayoutError::AlignmentInvalid)?;
-        Ok(unsafe { MaybeAlignment::new_unchecked(alignment.get()) })
+        Ok(alignment.into())
     }
 
     pub(crate) fn aligned(size: usize, alignment: usize) -> Result<Self, LayoutError> {
@@ -366,8 +363,8 @@ impl MallocGenericFlags {
     }
 
     #[inline(always)]
-    pub(crate) fn huge_alignment(self) -> MaybeHugeAlignment {
-        MaybeHugeAlignment(self.0 & !Self::ZERO_BIT)
+    pub(crate) fn raw_huge_alignment(self) -> usize {
+        self.0 & !Self::ZERO_BIT
     }
 }
 impl LayoutRequest {

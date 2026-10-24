@@ -29,7 +29,7 @@ fn block_size(value: usize) -> BlockSize {
 }
 
 #[test]
-fn page_extension_matches_pre_extraction_formula_exhaustively() {
+fn page_extension_matches_pre_extraction_formula() {
     let block_sizes = [
         1,
         MIN_EXTEND,
@@ -47,7 +47,34 @@ fn page_extension_matches_pre_extraction_formula_exhaustively() {
     // The formula can observe capacity/reserved only through their difference.
     // Exhaust every possible difference and translate it to the low, midpoint,
     // and high valid capacity so subtraction boundaries are covered too.
-    for remaining in 0..=u16::MAX {
+    #[cfg(not(miri))]
+    let remaining_values = 0..=u16::MAX;
+    // Native tests exhaust every count; the interpreter covers arithmetic
+    // boundaries while also varying addresses and schedules across Miri seeds.
+    #[cfg(miri)]
+    let remaining_values = [
+        0,
+        1,
+        2,
+        7,
+        8,
+        15,
+        16,
+        31,
+        32,
+        63,
+        64,
+        127,
+        128,
+        255,
+        256,
+        4095,
+        4096,
+        32767,
+        u16::MAX - 1,
+        u16::MAX,
+    ];
+    for remaining in remaining_values {
         let max_capacity = u16::MAX - remaining;
         for capacity in [0, max_capacity / 2, max_capacity] {
             let reserved = capacity + remaining;

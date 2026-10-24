@@ -33,6 +33,7 @@ jobs:
           scripts/check-layout.sh
           scripts/check-abi-symbols.sh
           scripts/check-strict-types.py
+          python3 scripts/check-proof-constructors.py
           scripts/check-policy-boundaries.py
       - name: Feature-sensitive ABI
         run: scripts/check-feature-abi.sh
@@ -142,15 +143,38 @@ jobs:
       - name: Stress, fuzz, oversize, alignment, and zero-size coverage
         run: scripts/check-safety-stress.sh
 
-  miri:
-    name: Miri core unsafe validation
+  miri-matrix:
+    name: Miri (${{ matrix.model }}, ${{ matrix.profile }}, ${{ matrix.features }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        model: [stacked, tree-borrows]
+        profile: [debug, release]
+        features: [std, "std,secure,guarded"]
+    env:
+      MIRI_BORROW_MODEL: ${{ matrix.model }}
+      MIRI_PROFILE: ${{ matrix.profile }}
+      MIRI_FEATURES: ${{ matrix.features }}
+      MIRI_STRICT_PROVENANCE: "1"
     steps:
       - uses: actions/checkout@v4
-      - name: Install nightly Rust with Miri
-        run: rustup toolchain install nightly --component miri --component rust-src
-      - name: Run Miri stacked, tree-borrows, strict, and strict tree-borrows checks
-        run: bash scripts/check-miri-all.sh
+      - name: Install pinned Rust with Miri
+        run: |
+          rustup toolchain install "$(cat scripts/miri-toolchain)" --component miri --component rust-src --profile minimal
+          cargo +"$(cat scripts/miri-toolchain)" miri setup
+      - name: Check all supported library tests
+        run: bash scripts/check-miri.sh
+
+  miri:
+    name: Miri core unsafe validation
+    needs: miri-matrix
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every Miri configuration to pass
+        run: test "${{ needs.miri-matrix.result }}" = success
 
   address-sanitizer:
     name: AddressSanitizer

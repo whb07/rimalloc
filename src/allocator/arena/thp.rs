@@ -70,6 +70,10 @@ mod tests {
     /// Handing out arena pages past the threshold arms huge pages (arming is one-way, so this
     /// holds whatever other tests in the process have allocated).
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "requires OS allocator initialization (unsupported sysconf)"
+    )]
     fn arena_pages_past_the_threshold_arm_huge_pages() {
         // SAFETY: each block is allocated and freed once on this thread.
         unsafe {

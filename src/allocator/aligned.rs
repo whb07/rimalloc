@@ -219,7 +219,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
 
     let p: *mut c_void;
     let oversize: usize;
-    if mi_unlikely(alignment_raw > MI_PAGE_MAX_OVERALLOC_ALIGN) {
+    if let Some(huge_alignment) = crate::core_types::MaybeHugeAlignment::for_overalloc(alignment) {
         if mi_unlikely(offset_raw != 0) {
             _mi_error_message_fmt(
                 Errno::EOVERFLOW,
@@ -237,7 +237,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
         let theap = theap
             .map(|theap| theap.ptr().as_ptr())
             .unwrap_or(core::ptr::null_mut());
-        p = unsafe { _mi_theap_malloc_zero_ex(theap, oversize, zero, alignment.into(), usable) };
+        p = unsafe { _mi_theap_malloc_zero_ex(theap, oversize, zero, huge_alignment, usable) };
         if p.is_null() {
             return core::ptr::null_mut();
         }

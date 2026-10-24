@@ -124,8 +124,17 @@ impl ValidPointerLookup {
 }
 
 impl PointerLookup {
+    /// # Safety
+    /// `user`, `page`, and `location` must come from validating the same live
+    /// allocation. The location must describe the exact block and user offset,
+    /// including any guarded classification. Its metadata and backing must
+    /// remain live and stable while the returned capability is consumed.
     #[inline(always)]
-    pub(crate) fn valid(user: UserPtr, page: PagePtr, location: PointerLocation) -> Self {
+    pub(crate) unsafe fn after_validation(
+        user: UserPtr,
+        page: PagePtr,
+        location: PointerLocation,
+    ) -> Self {
         Self::Valid(ValidPointerLookup {
             user,
             page,

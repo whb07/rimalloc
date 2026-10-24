@@ -3,8 +3,19 @@
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd_repo_root
 
-toolchain="${MIRI_TOOLCHAIN:-nightly}"
+toolchain="${MIRI_TOOLCHAIN:-$(cat scripts/miri-toolchain)}"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target/miri-${toolchain}}"
 borrow_model="${MIRI_BORROW_MODEL:-stacked}"
+features="${MIRI_FEATURES:-std}"
+profile_args=()
+case "${MIRI_PROFILE:-debug}" in
+  debug) ;;
+  release) profile_args=(--release) ;;
+  *)
+    echo "unsupported MIRI_PROFILE; expected debug or release" >&2
+    exit 2
+    ;;
+esac
 
 if ! cargo +"${toolchain}" miri --version >/dev/null 2>&1; then
   echo "cargo-miri is not installed for toolchain '${toolchain}'" >&2
@@ -30,6 +41,10 @@ if [[ "${MIRI_STRICT_PROVENANCE:-0}" != "0" ]]; then
   append_default_miri_flag "-Zmiri-strict-provenance"
 fi
 
+if [[ -n "${MIRI_SEEDS:-}" ]]; then
+  append_default_miri_flag "-Zmiri-many-seeds=${MIRI_SEEDS}"
+fi
+
 case "${borrow_model}" in
   stacked | "") ;;
   tree | tree-borrows)
@@ -47,40 +62,25 @@ export MIRIFLAGS="${effective_miriflags}"
 if (($# > 0)); then
   filters=("$@")
 else
-  filters=(
-    allocator::alloc::tests::
-    types::arena::
-    types::atomic::
-    types::callbacks::
-    types::freelist::
-    types::freelist_wrappers::
-    types::layout::
-    types::layout_tests::
-    types::memid::
-    types::padding::
-    types::page::
-    types::page_queues::
-    types::page_states::
-    types::ptr::
-    types::scalar::
-    types::validation::
-  )
+  # Run new library tests automatically. Individual OS-dependent tests explain
+  # their Miri exclusions with cfg_attr(miri, ignore = "...").
+  filters=("")
 fi
 
 test_list="$(
   env MIRIFLAGS="${MIRIFLAGS}" \
-    cargo +"${toolchain}" miri test --quiet --features std --lib -- --list
+    cargo +"${toolchain}" miri test --quiet "${profile_args[@]}" --features "${features}" --lib -- --list
 )"
 
 for filter in "${filters[@]}"; do
   selected_count="$(
     printf '%s\n' "${test_list}" \
-      | awk -v filter="${filter}" 'index($0, filter) && /: test$/ { count++ } END { print count + 0 }'
+      | awk -v filter="${filter}" '(filter == "" || index($0, filter)) && /: test$/ { count++ } END { print count + 0 }'
   )"
   if [[ "${selected_count}" == "0" ]]; then
     printf 'error: Miri filter selected no tests: %s\n' "${filter}" >&2
     exit 1
   fi
-  printf 'selected %s Miri tests for %s\n' "${selected_count}" "${filter}"
-  run env MIRIFLAGS="${MIRIFLAGS}" cargo +"${toolchain}" miri test --features std --lib "${filter}"
+  printf 'selected %s Miri tests for %s\n' "${selected_count}" "${filter:-all library tests}"
+  run env MIRIFLAGS="${MIRIFLAGS}" cargo +"${toolchain}" miri test "${profile_args[@]}" --features "${features}" --lib "${filter}"
 done

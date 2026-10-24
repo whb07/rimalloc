@@ -418,7 +418,9 @@ mod tests {
 
     #[test]
     fn page_arena_membership_rejects_invalid_states_and_preserves_exact_range() {
-        let mut bitmap = MaybeUninit::<mi_bitmap_t>::zeroed();
+        let bitmap = crate::internal::bitmap::storage_tests::BitmapStorage::new(unsafe {
+            crate::bitmap::mi_bitmap_size(16, ptr::null_mut())
+        });
         let mut arena_pages = MaybeUninit::<mi_arena_pages_t>::zeroed();
         let mut arena = MaybeUninit::<mi_arena_t>::zeroed();
         let mut heap = MaybeUninit::<mi_heap_t>::zeroed();
@@ -427,7 +429,7 @@ mod tests {
         // SAFETY: all fixtures are stack-local, initialize every field read by
         // membership construction, and remain live for the test.
         unsafe {
-            let bitmap_raw = bitmap.as_mut_ptr();
+            let bitmap_raw = bitmap.ptr::<mi_bitmap_t>();
             let arena_pages_raw = arena_pages.as_mut_ptr();
             let arena_raw = arena.as_mut_ptr();
             let heap_raw = heap.as_mut_ptr();

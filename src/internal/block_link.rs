@@ -305,9 +305,15 @@ pub unsafe fn mi_block_next(page: *const mi_page_t, block: *const mi_block_t) ->
     if MI_ENCODE_FREELIST == 0 {
         return next;
     }
-    // SAFETY: `block` resolves to the same live page metadata supplied above;
-    // the decoded `next` is compared geometrically and is not dereferenced.
-    if !next.is_null() && !unsafe { mi_is_in_same_page(block.cast(), next.cast()) } {
+    // SAFETY: the caller supplies this block's live page with stable geometry;
+    // the decoded `next` is compared by address and is not dereferenced.
+    if !next.is_null()
+        && !unsafe {
+            crate::core_types::PagePtr::new_unchecked(page.cast_mut())
+                .area()
+                .is_some_and(|area| area.contains(next))
+        }
+    {
         // SAFETY: the caller keeps `page` live with initialized stable block
         // geometry while the diagnostic snapshots its block size.
         let block_size = unsafe { mi_page_block_size(page) };

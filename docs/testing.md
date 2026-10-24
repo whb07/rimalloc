@@ -247,14 +247,44 @@ process.
 
 ## Miri
 
-Miri is limited to pure Rust models and small library tests. The crate keeps
-core-type unit tests for layout math, scalar domains, page owner/flag packing,
-and thread-free word packing so those invariants can run without exercising the
-full OS allocator:
+The runner uses the nightly pinned in `scripts/miri-toolchain` and selects all
+library tests by default, including newly added tests. Install that toolchain
+with Miri and rust-src, then run:
 
 ```sh
-scripts/check-miri.sh
+rustup toolchain install "$(cat scripts/miri-toolchain)" --component miri --component rust-src --profile minimal
+scripts/check-miri-all.sh
+python3 scripts/check-proof-constructors.py
 ```
 
-Full OS allocator behavior is not expected to run under Miri until the relevant
-subsystems have model-only tests.
+Pull requests run strict provenance and symbolic alignment checks with both
+Stacked Borrows and Tree Borrows, debug and release profiles, and `std` and
+`std,secure,guarded` features. The weekly/manual hardening job additionally runs
+eight seeds (`0..8`) with Tree Borrows and the release secure/guarded profile.
+The named `Miri core unsafe validation` check requires the whole matrix to pass.
+
+Coverage includes exactly sized compact bitmap allocations, metadata request
+boundaries, pointer validation/free routing, packed alignment, atomic storage,
+and synthetic page-list transitions. Tests that require unsupported OS allocator
+calls, subprocesses, or the C stdout static explain their exclusions with
+`cfg_attr(miri, ignore = "...")`; they still run in native CI. Exhaustive native
+policy and bin checks use boundary samples under Miri; the randomized page-list
+model runs 32 cases instead of the native 256. Miri does not exercise the full
+OS allocator, and its release profile checks disabled debug assertions and
+overflow checks, not optimized machine code. Use release assembly and native
+sanitizers for those separate claims.
+
+For a focused reproduction, pass one or more test-name filters. Each filter
+must match tests. Configuration is explicit:
+
+```sh
+MIRI_BORROW_MODEL=tree-borrows MIRI_STRICT_PROVENANCE=1 \
+  MIRI_PROFILE=release MIRI_FEATURES=std,secure,guarded MIRI_SEEDS=0..8 \
+  scripts/check-miri.sh internal::bitmap allocator::arena_meta types::layout
+```
+
+`MIRI_TOOLCHAIN` overrides the pin; `CARGO_TARGET_DIR` overrides the separate
+Miri build directory. The compiler probes compile valid handoffs and require
+the expected error at the invalid caller for compact chunk access, private
+metadata requests, forged pointer proofs, and raw alignment payloads, so a
+general build failure cannot satisfy them.

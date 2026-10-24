@@ -1727,6 +1727,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "requires OS allocator initialization (unsupported sysconf)"
+    )]
     fn unix_wrappers_can_realloc_and_free_bootstrap_allocations_after_init() {
         unsafe {
             crate::allocator::init::mi_process_init();

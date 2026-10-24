@@ -14,16 +14,11 @@ struct SyntheticPage {
 impl SyntheticPage {
     fn new(used: u16) -> Self {
         unsafe {
-            let page_storage: *mut mi_page_t =
-                crate::mimalloc::mi_zalloc(core::mem::size_of::<mi_page_t>()).cast();
-            let blocks: *mut mi_block_t =
-                crate::mimalloc::mi_zalloc(SYNTHETIC_CAPACITY * core::mem::size_of::<mi_block_t>())
-                    .cast();
-            if page_storage.is_null() || blocks.is_null() {
-                crate::mimalloc::mi_free(blocks.cast());
-                crate::mimalloc::mi_free(page_storage.cast());
-                panic!("synthetic page allocation failed");
-            }
+            let page_storage = Box::into_raw(Box::new(core::mem::zeroed::<mi_page_t>()));
+            let blocks = Box::into_raw(Box::new(core::mem::zeroed::<
+                [mi_block_t; SYNTHETIC_CAPACITY],
+            >()))
+            .cast();
             Self {
                 page_storage,
                 blocks,
@@ -43,6 +38,9 @@ impl SyntheticPage {
             (*raw_page).block_size = core::mem::size_of::<mi_block_t>();
             (*raw_page).page_start = self.blocks.cast();
             page.set_keys(crate::core_types::PageKeys::disabled());
+            for slot in 0..SYNTHETIC_CAPACITY {
+                BlockPtr::new_unchecked(self.blocks.add(slot)).set_next(page, None);
+            }
         }
         self.page = Some(page);
     }
@@ -102,8 +100,10 @@ impl SyntheticPage {
 impl Drop for SyntheticPage {
     fn drop(&mut self) {
         unsafe {
-            crate::mimalloc::mi_free(self.blocks.cast());
-            crate::mimalloc::mi_free(self.page_storage.cast());
+            drop(Box::from_raw(
+                self.blocks.cast::<[mi_block_t; SYNTHETIC_CAPACITY]>(),
+            ));
+            drop(Box::from_raw(self.page_storage));
         }
     }
 }
@@ -334,6 +334,10 @@ impl Drop for SamePageBlocks {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn scans_basic_detached_chain_lengths_exactly() {
     unsafe {
         let fixture = SamePageBlocks::new(16);
@@ -360,6 +364,10 @@ fn scans_basic_detached_chain_lengths_exactly() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn trusted_and_validating_scans_match_for_valid_chains() {
     unsafe {
         let fixture = SamePageBlocks::new(16);
@@ -379,6 +387,10 @@ fn trusted_and_validating_scans_match_for_valid_chains() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn scans_capacity_boundary_lengths_exactly() {
     unsafe {
         let fixture = SamePageBlocks::full_page();
@@ -396,6 +408,10 @@ fn scans_capacity_boundary_lengths_exactly() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn capacity_bound_rejects_cycles_self_loops_and_duplicate_nodes() {
     unsafe {
         let fixture = SamePageBlocks::new(3);
@@ -443,6 +459,10 @@ fn capacity_bound_rejects_cycles_self_loops_and_duplicate_nodes() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn rejects_a_link_to_a_different_page_without_following_it() {
     unsafe {
         let first = SamePageBlocks::new(1);
@@ -463,6 +483,10 @@ fn rejects_a_link_to_a_different_page_without_following_it() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn rejects_a_misaligned_in_page_link_without_following_it() {
     unsafe {
         let fixture = SamePageBlocks::new(1);
@@ -478,6 +502,10 @@ fn rejects_a_misaligned_in_page_link_without_following_it() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn zero_capacity_rejects_a_nonempty_chain_before_traversal() {
     unsafe {
         let fixture = SamePageBlocks::new(1);
@@ -734,6 +762,9 @@ fn empty_available_transfer_preserves_secure_encoded_links() {
                 0x9e37_79b9_7f4a_7c15,
                 0xd1b5_4a32_d192_ed03,
             ]));
+        for slot in 0..SYNTHETIC_CAPACITY {
+            fixture.block(slot).set_next(fixture.page(), None);
+        }
         fixture.link(&[0, 1, 2]);
         fixture
             .page()
@@ -871,7 +902,10 @@ fn randomized_reference_algorithms_match_batch_transitions() {
     const INITIAL_SEED: u64 = 0xD1FF_E2E3_5A3B_0003;
     let mut state = INITIAL_SEED;
 
-    for iteration in 0..256u64 {
+    // Native tests retain the larger deterministic sweep; Miri checks these
+    // transitions alongside the explicit list-length boundary cases above.
+    let cases = if cfg!(miri) { 32u64 } else { 256u64 };
+    for iteration in 0..cases {
         let case_seed = state;
         let indexes = shuffled_indexes(&mut state);
         let local_len = (next_random(&mut state) as usize % 4) + 1;

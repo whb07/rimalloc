@@ -406,7 +406,7 @@ unsafe fn mi_theap_malloc_generic(
     }
 
     if MI_GUARDED != 0
-        && flags.huge_alignment().get() == 0
+        && flags.raw_huge_alignment() == 0
         // SAFETY: the caller grants exclusive guarded-sampling mutation on the
         // live current-thread heap; `layout` supplies the validated effective size.
         && mi_unlikely(unsafe { mi_theap_malloc_use_guarded(theap, layout.effective()) })
@@ -432,13 +432,6 @@ unsafe fn mi_theap_malloc_generic(
         crate::internal::mi_assert_expensive!(unsafe { crate::internal::mi_mem_is_zero(p, size) });
     }
     p
-}
-
-#[inline(always)]
-fn no_alignment() -> crate::core_types::MaybeAlignment {
-    // SAFETY: zero is the defined sentinel for an ordinary allocation with no
-    // requested optional alignment.
-    unsafe { crate::core_types::MaybeAlignment::new_unchecked(0) }
 }
 
 fn alignment_or_report(size: usize, alignment: usize) -> Option<crate::core_types::Alignment> {
@@ -552,7 +545,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     theap: *mut mi_theap_t,
     size: usize,
     zero: bool,
-    huge_alignment: crate::core_types::MaybeAlignment,
+    huge_alignment: crate::core_types::MaybeHugeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
     crate::internal::mi_assert!((huge_alignment.get() & 1) == 0);
@@ -579,10 +572,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
             )
         }
     } else {
-        let flags = crate::core_types::MallocGenericFlags::new(
-            layout.zeroed(),
-            crate::core_types::MaybeHugeAlignment::new(huge_alignment.get()),
-        );
+        let flags = crate::core_types::MallocGenericFlags::new(layout.zeroed(), huge_alignment);
         // SAFETY: this branch proves the configured lazy-null resolver state;
         // the caller's process/TLS lifecycle permits current-thread
         // initialization and default-heap lookup.
@@ -615,7 +605,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
 unsafe fn _mi_theap_malloc_zero_ex_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
-    huge_alignment: crate::core_types::MaybeAlignment,
+    huge_alignment: crate::core_types::MaybeHugeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
     let requested = layout.requested();
@@ -627,10 +617,7 @@ unsafe fn _mi_theap_malloc_zero_ex_typed(
         // alignment; the assertion is diagnostic only.
         unsafe { mi_theap_malloc_small_zero_typed(theap, size, layout.zeroed(), usable) }
     } else {
-        let flags = crate::core_types::MallocGenericFlags::new(
-            layout.zeroed(),
-            crate::core_types::MaybeHugeAlignment::new(huge_alignment.get()),
-        );
+        let flags = crate::core_types::MallocGenericFlags::new(layout.zeroed(), huge_alignment);
         // SAFETY: the function contract supplies the live current-thread heap,
         // exclusive local allocation epoch, and writable optional result slot.
         // This branch preserves the validated generic alignment policy.
@@ -666,7 +653,15 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
         // SAFETY: the raw-boundary contract permits the configured lazy-null
         // resolver state and keeps the optional result slot writable through
         // this terminal unaligned allocation dispatch.
-        return unsafe { _mi_theap_malloc_zero_ex(theap, size, zero, no_alignment(), usable) };
+        return unsafe {
+            _mi_theap_malloc_zero_ex(
+                theap,
+                size,
+                zero,
+                crate::core_types::MaybeHugeAlignment::none(),
+                usable,
+            )
+        };
     }
     let Some(layout) = malloc_layout_or_report(size, zero) else {
         return ptr::null_mut();
@@ -697,7 +692,14 @@ unsafe fn _mi_theap_malloc_zero_typed(
     // SAFETY: the caller keeps the local heap epoch exclusive and the optional
     // result slot writable; the zero alignment selects ordinary unaligned
     // small-or-generic allocation for the validated layout.
-    unsafe { _mi_theap_malloc_zero_ex_typed(theap, layout, no_alignment(), usable) }
+    unsafe {
+        _mi_theap_malloc_zero_ex_typed(
+            theap,
+            layout,
+            crate::core_types::MaybeHugeAlignment::none(),
+            usable,
+        )
+    }
 }
 
 /// # Safety
@@ -805,7 +807,15 @@ pub unsafe extern "C" fn mi_theap_umalloc(
         // SAFETY: the raw-boundary contract permits the configured lazy-null
         // resolver state and keeps the optional result slot writable through
         // this terminal unaligned allocation dispatch.
-        return unsafe { _mi_theap_malloc_zero_ex(theap, size, false, no_alignment(), usable) };
+        return unsafe {
+            _mi_theap_malloc_zero_ex(
+                theap,
+                size,
+                false,
+                crate::core_types::MaybeHugeAlignment::none(),
+                usable,
+            )
+        };
     }
     let Some(layout) = malloc_layout_or_report(size, false) else {
         return ptr::null_mut();
@@ -857,7 +867,15 @@ pub unsafe extern "C" fn mi_umalloc(size: usize, usable: *mut usize) -> *mut c_v
 pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_void {
     // SAFETY: allocator lifecycle supplies the live current-thread default heap and exclusive
     // local allocation mutation; the caller supplies the optional usable-size output storage.
-    unsafe { _mi_theap_malloc_zero_ex(_mi_theap_default(), size, true, no_alignment(), usable) }
+    unsafe {
+        _mi_theap_malloc_zero_ex(
+            _mi_theap_default(),
+            size,
+            true,
+            crate::core_types::MaybeHugeAlignment::none(),
+            usable,
+        )
+    }
 }
 
 /// # Safety

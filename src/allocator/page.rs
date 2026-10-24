@@ -2221,7 +2221,7 @@ unsafe fn malloc_generic_fast(
     // Bound the requested size, so a padded size that wrapped still reaches C's overflow error.
     let req_size = size.wrapping_sub(MI_PADDING_SIZE);
     if flags.zeroed() != crate::core_types::Zeroed::No
-        || flags.huge_alignment().get() != 0
+        || flags.raw_huge_alignment() != 0
         || req_size.wrapping_sub(1) >= MI_LARGE_MAX_OBJ_SIZE - MI_PADDING_SIZE
     {
         return GenericFast::NotCounted;
@@ -2311,7 +2311,7 @@ unsafe fn malloc_generic_body<const COUNTED: bool>(
 ) -> *mut c_void {
     let size = layout.padded().get();
     let zeroed = flags.zeroed();
-    let Some(huge_alignment) = crate::core_types::MaybeAlignment::new(flags.huge_alignment().get())
+    let Some(huge_alignment) = crate::core_types::MaybeAlignment::new(flags.raw_huge_alignment())
     else {
         crate::internal::mi_assert_internal!(false);
         return ptr::null_mut();
@@ -2413,6 +2413,10 @@ mod tests {
     /// size class, or page-search outcome it takes; maintenance (and the deferred-free
     /// heartbeat) runs exactly when the counter wraps.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "requires OS allocator initialization (unsupported sysconf)"
+    )]
     fn generic_allocations_keep_c_maintenance_cadence() {
         std::thread::spawn(|| unsafe {
             // Allocate the bookkeeping first: in test builds the global allocator is this one,
@@ -2525,6 +2529,10 @@ mod tests {
     /// An owner free is reused by the next allocation of its size (LIFO, `UPSTREAM_DIFF.md`), and
     /// `calloc` still zeroes it although its page's free list was fresh before.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "requires OS allocator initialization (unsupported sysconf)"
+    )]
     fn owner_frees_are_reused_first_and_calloc_still_zeroes() {
         std::thread::spawn(|| {
             // SAFETY: every block is allocated and freed once on this thread and written only
@@ -2556,7 +2564,18 @@ mod tests {
     fn bin_classification_characterization_retains_huge_bounds() {
         let mut last_bin = 0usize;
         let mut transitions = 0usize;
-        for wsize in 1..=((4 * 1024 * 1024) / 8 + 1024) {
+        let max_wsize = (4 * 1024 * 1024) / 8 + 1024;
+        #[cfg(not(miri))]
+        let word_sizes = 1..=max_wsize;
+        #[cfg(miri)]
+        let word_sizes = (0..usize::BITS)
+            .flat_map(|bit| {
+                let edge = 1usize << bit;
+                [edge.saturating_sub(1), edge, edge + 1]
+            })
+            .chain([max_wsize])
+            .filter(|&words| words > 0 && words <= max_wsize);
+        for wsize in word_sizes {
             let size = wsize * MI_INTPTR_SIZE;
             let bin = bins::_mi_bin(size);
             let alt_bin = upstream_bin4(size);

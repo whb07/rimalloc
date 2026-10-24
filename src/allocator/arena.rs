@@ -2521,7 +2521,11 @@ mod claim_tests {
     }
 
     fn with_claim_fixture(test: impl FnOnce(ArenaPtr, *mut mi_bbitmap_t)) {
-        let layout = Layout::new::<mi_bbitmap_t>();
+        let layout = Layout::from_size_align(
+            unsafe { crate::bitmap::mi_bbitmap_size(16, ptr::null_mut()) },
+            MI_BCHUNK_SIZE,
+        )
+        .unwrap();
         // SAFETY: the allocated bitmap and stack arena remain live throughout
         // `test`; all initialized free bits are restored before deallocation.
         unsafe {
@@ -2608,7 +2612,11 @@ mod claim_tests {
     #[cfg(not(miri))]
     #[test]
     fn pending_fresh_page_rollback_clears_heap_bit_and_separate_metadata() {
-        let bitmap_layout = Layout::new::<mi_bitmap_t>();
+        let bitmap_layout = Layout::from_size_align(
+            unsafe { crate::bitmap::mi_bitmap_size(16, ptr::null_mut()) },
+            MI_BCHUNK_SIZE,
+        )
+        .unwrap();
         // SAFETY: all raw fixtures are initialized and remain live through the
         // pending transaction; the None memid makes backing release a no-op.
         unsafe {
@@ -2652,7 +2660,11 @@ mod claim_tests {
 
     #[test]
     fn pending_fresh_page_drop_restores_heap_bit_for_reuse() {
-        let bitmap_layout = Layout::new::<mi_bitmap_t>();
+        let bitmap_layout = Layout::from_size_align(
+            unsafe { crate::bitmap::mi_bitmap_size(16, ptr::null_mut()) },
+            MI_BCHUNK_SIZE,
+        )
+        .unwrap();
         // SAFETY: raw bitmap fixtures remain initialized and live through both
         // pending transactions; the None memid makes backing release a no-op.
         unsafe {

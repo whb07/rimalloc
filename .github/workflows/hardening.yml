@@ -6,6 +6,25 @@ on:
     - cron: "23 4 * * 1"
 
 jobs:
+  miri-seeds:
+    name: Miri allocation and thread interleavings
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      MIRI_BORROW_MODEL: tree-borrows
+      MIRI_STRICT_PROVENANCE: "1"
+      MIRI_PROFILE: release
+      MIRI_FEATURES: std,secure,guarded
+      MIRI_SEEDS: 0..8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust with Miri
+        run: |
+          rustup toolchain install "$(cat scripts/miri-toolchain)" --component miri --component rust-src --profile minimal
+          cargo +"$(cat scripts/miri-toolchain)" miri setup
+      - name: Check multiple allocation layouts and thread schedules
+        run: bash scripts/check-miri.sh
+
   allocator-fuzz:
     name: Allocator transition fuzz smoke
     runs-on: ubuntu-24.04

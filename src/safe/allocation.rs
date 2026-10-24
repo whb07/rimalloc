@@ -749,5 +749,5 @@ impl fmt::Debug for InitializedAllocation {
 
 #[inline]
 pub(super) fn dangling_for(layout: Layout) -> NonNull<u8> {
-    unsafe { NonNull::new_unchecked(layout.align() as *mut u8) }
+    unsafe { NonNull::new_unchecked(ptr::without_provenance_mut(layout.align())) }
 }

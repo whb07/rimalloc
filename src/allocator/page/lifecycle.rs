@@ -365,6 +365,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "requires OS allocator initialization (unsupported sysconf)"
+    )]
     fn published_head_detaches_only_its_tail() {
         let mut blocks = [ptr::null_mut::<mi_block_t>(); 16];
         unsafe {

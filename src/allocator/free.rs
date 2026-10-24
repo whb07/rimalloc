@@ -747,7 +747,8 @@ pub(crate) unsafe fn mi_validate_block_from_ptr(
     // backing, and guard/interior metadata stable for the coherent location calculation.
     let location = unsafe { mi_pointer_location(page, user, MI_SECURE > 0, true) };
 
-    crate::core_types::PointerLookup::valid(user, page, location)
+    // SAFETY: the location was just derived from this same live page and user.
+    unsafe { crate::core_types::PointerLookup::after_validation(user, page, location) }
 }
 
 /// # Safety
@@ -982,7 +983,8 @@ pub(crate) unsafe fn mi_validate_pointer(
     // and stable while the exact block and interior offset are classified.
     let location = unsafe { mi_pointer_location(page_ptr, user_ptr, false, false) };
 
-    PointerLookup::valid(user_ptr, page_ptr, location)
+    // SAFETY: lookup and classification above validate these coupled facts.
+    unsafe { PointerLookup::after_validation(user_ptr, page_ptr, location) }
 }
 
 #[inline(always)]
@@ -1559,23 +1561,23 @@ mod tests {
     use crate::core_types::WasGuarded;
 
     struct FreeFixture {
-        page: MaybeUninit<mi_page_t>,
-        blocks: [mi_block_t; 4],
+        page: *mut mi_page_t,
+        blocks: *mut [mi_block_t; 4],
     }
 
     impl FreeFixture {
         fn new(owner: PageOwnerId, flags: PageFlags) -> Self {
-            let mut fixture = Self {
-                page: MaybeUninit::zeroed(),
-                blocks: [
+            let fixture = Self {
+                page: Box::into_raw(Box::new(MaybeUninit::<mi_page_t>::zeroed())).cast(),
+                blocks: Box::into_raw(Box::new([
                     mi_block_t::default(),
                     mi_block_t::default(),
                     mi_block_t::default(),
                     mi_block_t::default(),
-                ],
+                ])),
             };
             unsafe {
-                let page = fixture.page.as_mut_ptr();
+                let page = fixture.page;
                 let page_ptr = PagePtr::new_unchecked(page);
                 ptr::addr_of_mut!((*page).xthread_id)
                     .write(PageThreadId::from_parts(owner, flags).raw());
@@ -1590,7 +1592,7 @@ mod tests {
                     .write(ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned).raw());
                 ptr::addr_of_mut!((*page).block_size).write(2 * core::mem::size_of::<mi_block_t>());
                 ptr::addr_of_mut!((*page).page_start)
-                    .write(ptr::addr_of_mut!(fixture.blocks[0]).cast::<u8>());
+                    .write(fixture.blocks.cast::<mi_block_t>().cast::<u8>());
                 #[cfg(any(
                     feature = "secure",
                     debug_assertions,
@@ -1602,20 +1604,30 @@ mod tests {
             fixture
         }
 
-        fn page(&mut self) -> PagePtr {
+        fn page(&self) -> PagePtr {
+            // SAFETY: the boxed page stays at a stable address until Drop.
+            unsafe { PagePtr::new_unchecked(self.page) }
+        }
+
+        fn user(&self, index: usize) -> UserPtr {
+            UserPtr::new(self.block(index).as_ptr().cast()).unwrap()
+        }
+
+        fn block(&self, index: usize) -> BlockPtr {
+            assert!(index < 2);
+            // SAFETY: each logical block occupies two initialized link words.
+            unsafe { BlockPtr::new_unchecked(self.blocks.cast::<mi_block_t>().add(index * 2)) }
+        }
+    }
+
+    impl Drop for FreeFixture {
+        fn drop(&mut self) {
+            // SAFETY: both allocations came from Box::into_raw and all fixture
+            // operations are over before their sole owners are reconstructed.
             unsafe {
-                ptr::addr_of_mut!((*self.page.as_mut_ptr()).page_start)
-                    .write(ptr::addr_of_mut!(self.blocks[0]).cast::<u8>());
-                PagePtr::new_unchecked(self.page.as_mut_ptr())
+                drop(Box::from_raw(self.blocks));
+                drop(Box::from_raw(self.page.cast::<MaybeUninit<mi_page_t>>()));
             }
-        }
-
-        fn user(&mut self, index: usize) -> UserPtr {
-            unsafe { UserPtr::new_unchecked(ptr::addr_of_mut!(self.blocks[index * 2]).cast()) }
-        }
-
-        fn block(&mut self, index: usize) -> BlockPtr {
-            unsafe { BlockPtr::new_unchecked(ptr::addr_of_mut!(self.blocks[index * 2])) }
         }
     }
 
@@ -1654,26 +1666,29 @@ mod tests {
                 PointerLookup::Null
             ));
 
-            let mut aligned_non_heap = 0usize;
-            assert!(matches!(
-                mi_validate_pointer(
-                    ptr::addr_of_mut!(aligned_non_heap).cast(),
-                    c"free-test".as_ptr()
-                ),
-                PointerLookup::Invalid
-            ));
+            // Only checked configurations accept arbitrary nonnull addresses;
+            // the unchecked release path requires a live allocator pointer.
+            if MI_DEBUG != 0 || cfg!(feature = "secure") {
+                let mut aligned_non_heap = 0usize;
+                assert!(matches!(
+                    mi_validate_pointer(
+                        ptr::addr_of_mut!(aligned_non_heap).cast(),
+                        c"free-test".as_ptr()
+                    ),
+                    PointerLookup::Invalid
+                ));
 
-            assert!(matches!(
-                mi_validate_pointer(ptr::dangling_mut::<u8>().cast(), c"free-test".as_ptr()),
-                PointerLookup::Invalid
-            ));
+                assert!(matches!(
+                    mi_validate_pointer(ptr::dangling_mut::<u8>().cast(), c"free-test".as_ptr()),
+                    PointerLookup::Invalid
+                ));
+            }
         }
     }
 
     #[test]
     fn free_validation_covers_interior_pointer_lookup() {
-        let mut fixture =
-            FreeFixture::new(current_thread_owner(), PageFlags::HAS_INTERIOR_POINTERS);
+        let fixture = FreeFixture::new(current_thread_owner(), PageFlags::HAS_INTERIOR_POINTERS);
         unsafe {
             let page = fixture.page();
             let user = UserPtr::new_unchecked(fixture.user(0).as_ptr().cast::<u8>().add(1).cast());
@@ -1695,8 +1710,7 @@ mod tests {
     #[cfg(feature = "guarded")]
     #[test]
     fn free_validation_covers_guarded_pointer_lookup() {
-        let mut fixture =
-            FreeFixture::new(current_thread_owner(), PageFlags::HAS_INTERIOR_POINTERS);
+        let fixture = FreeFixture::new(current_thread_owner(), PageFlags::HAS_INTERIOR_POINTERS);
         unsafe {
             crate::core_types::BlockTag::write_guarded_to(fixture.block(0));
             let page = fixture.page();
@@ -1740,7 +1754,7 @@ mod tests {
     fn free_route_covers_local_remote_and_abandoned_owners() {
         let current = ThreadId::new(_mi_thread_id()).expect("current thread id is valid");
 
-        let mut local = FreeFixture::new(current_thread_owner(), PageFlags::new(0).unwrap());
+        let local = FreeFixture::new(current_thread_owner(), PageFlags::new(0).unwrap());
         unsafe {
             let validated =
                 mi_prepare_validated_free(mi_validate_block_from_ptr(local.page(), local.user(0)))
@@ -1762,7 +1776,7 @@ mod tests {
             0x1000
         };
         let remote_owner = PageOwnerId::Thread(ThreadId::new(remote_raw).expect("valid remote id"));
-        let mut remote = FreeFixture::new(remote_owner, PageFlags::new(0).unwrap());
+        let remote = FreeFixture::new(remote_owner, PageFlags::new(0).unwrap());
         unsafe {
             let validated = mi_prepare_validated_free(mi_validate_block_from_ptr(
                 remote.page(),
@@ -1780,7 +1794,7 @@ mod tests {
             ));
         }
 
-        let mut abandoned = FreeFixture::new(PageOwnerId::Abandoned, PageFlags::new(0).unwrap());
+        let abandoned = FreeFixture::new(PageOwnerId::Abandoned, PageFlags::new(0).unwrap());
         unsafe {
             let validated = mi_prepare_validated_free(mi_validate_block_from_ptr(
                 abandoned.page(),
@@ -1799,6 +1813,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "requires OS allocator initialization (unsupported sysconf)"
+    )]
     fn free_routes_flagged_pages_through_generic_free() {
         use crate::allocator::page::mi_page_is_in_full;
         use crate::mimalloc::{mi_malloc, mi_malloc_aligned};
@@ -1849,7 +1867,7 @@ mod tests {
 
     #[test]
     fn free_checks_cover_double_free_detection() {
-        let mut fixture = FreeFixture::new(current_thread_owner(), PageFlags::new(0).unwrap());
+        let fixture = FreeFixture::new(current_thread_owner(), PageFlags::new(0).unwrap());
         let _quiet_expected_errors = ShowErrorsGuard::disabled();
         unsafe {
             let page = fixture.page().as_ptr();

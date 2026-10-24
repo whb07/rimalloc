@@ -55,12 +55,11 @@ impl RequestedSize {
         self.0
     }
     #[inline(always)]
-    pub(crate) const fn effective_size(self) -> usize {
-        if self.0 == 0 {
-            Self::MIN_ZERO_SIZE
-        } else {
-            self.0
-        }
+    pub(crate) const fn effective_size(self) -> EffectiveSize {
+        EffectiveSize(match NonZeroUsize::new(self.0) {
+            Some(size) => size,
+            None => NonZeroUsize::MIN.saturating_add(Self::MIN_ZERO_SIZE - 1),
+        })
     }
     #[inline]
     pub(crate) fn checked_padded(self) -> Result<PaddedSize, AllocSizeError> {
@@ -96,9 +95,7 @@ impl SmallRequestedSize {
 
     #[inline(always)]
     pub(crate) const fn normalized(self) -> NormalizedSmallSize {
-        // SAFETY: zero becomes one word; every other request is positive and
-        // the constructor bounds both cases by MI_SMALL_SIZE_MAX.
-        NormalizedSmallSize(unsafe { NonZeroUsize::new_unchecked(self.0.effective_size()) })
+        NormalizedSmallSize(self.0.effective_size().0)
     }
 }
 
@@ -134,12 +131,6 @@ impl NormalizedSmallSize {
 pub(crate) struct EffectiveSize(NonZeroUsize);
 
 impl EffectiveSize {
-    /// # Safety
-    /// `size` must be non-zero.
-    #[inline(always)]
-    pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
-        Self(unsafe { NonZeroUsize::new_unchecked(size) })
-    }
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
         self.0.get()
@@ -286,6 +277,8 @@ impl Alignment {
 pub(crate) struct MaybeAlignment(usize);
 
 impl MaybeAlignment {
+    pub(crate) const NONE: Self = Self(0);
+
     #[inline(always)]
     pub(crate) const fn new(align: usize) -> Option<Self> {
         if align == 0 || align.is_power_of_two() {
@@ -293,12 +286,6 @@ impl MaybeAlignment {
         } else {
             None
         }
-    }
-    /// # Safety
-    /// `align` must be zero or a power of two.
-    #[inline(always)]
-    pub(crate) const unsafe fn new_unchecked(align: usize) -> Self {
-        Self(align)
     }
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
@@ -947,6 +934,13 @@ impl SliceIndex {
 pub(crate) struct SliceCount(NonZeroU32);
 
 impl SliceCount {
+    pub(crate) const ONE: Self = Self(NonZeroU32::MIN);
+
+    #[inline(always)]
+    pub(crate) const fn from_nonzero(count: NonZeroU32) -> Self {
+        Self(count)
+    }
+
     /// Construct from a `usize` count. Returns `None` if zero or too large for `u32`.
     #[inline(always)]
     pub(crate) fn from_usize(count: usize) -> Option<Self> {
@@ -954,10 +948,12 @@ impl SliceCount {
     }
     #[inline(always)]
     pub(crate) const fn from_usize_const(count: usize) -> Option<Self> {
-        if count == 0 || count > u32::MAX as usize {
-            None
-        } else {
-            Some(unsafe { Self::new_unchecked(count as u32) })
+        if count > u32::MAX as usize {
+            return None;
+        }
+        match NonZeroU32::new(count as u32) {
+            Some(count) => Some(Self(count)),
+            None => None,
         }
     }
     /// # Safety

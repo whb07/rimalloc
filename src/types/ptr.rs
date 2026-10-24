@@ -860,9 +860,8 @@ impl ArenaPtr {
         crate::internal::mi_assert_internal!(count != 0);
         SliceCount::from_usize(count).unwrap_or_else(|| {
             crate::internal::mi_assert_internal!(false);
-            // SAFETY: the caller guarantees a representable non-zero slice
-            // count; one only preserves release behavior after impossible failure.
-            unsafe { SliceCount::new_unchecked(1) }
+            // One preserves release behavior after an impossible invalid count.
+            SliceCount::ONE
         })
     }
 
@@ -1078,6 +1077,13 @@ impl PageQueuePtr {
 }
 
 define_ptr_wrapper!(UserPtr, c_void, "Non-null pointer returned to/from user");
+
+impl From<BlockPtr> for UserPtr {
+    #[inline(always)]
+    fn from(block: BlockPtr) -> Self {
+        Self(block.0.cast())
+    }
+}
 define_ptr_wrapper!(
     InteriorUserPtr,
     c_void,

@@ -18,9 +18,7 @@ use crate::allocator::options::{
     _mi_fputs, _mi_options_post_init, _mi_verbose_message, mi_option_get, mi_option_is_enabled,
     mi_option_t,
 };
-use crate::allocator::stats::{
-    __mi_stat_increase_mt, mi_stat_count_t, mi_stats_header_init, mi_stats_t,
-};
+use crate::allocator::stats::{__mi_stat_increase_mt, mi_stat_count_t, mi_stats_t};
 use crate::atomic::{
     mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t, mi_lock_init, mi_lock_t,
 };
@@ -476,9 +474,7 @@ struct MiSubprocPrefix {
 
 impl MiSubprocPrefix {
     fn new_with_memid(seq: crate::core_types::SubprocSeq, memid: mi_memid_t) -> Self {
-        let mut stats = mi_stats_t::default();
-        // SAFETY: `stats` points to a valid local `mi_stats_t`.
-        unsafe { mi_stats_header_init(&mut stats) };
+        let stats = MI_STATS_NULL();
         Self {
             subproc_seq: seq.get(),
             next: ptr::null_mut(),

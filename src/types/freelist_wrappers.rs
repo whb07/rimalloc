@@ -111,11 +111,10 @@ impl EncodedPtr<mi_block_t> {
 
     /// Decode an encoded block-pointer word using a raw null context.
     ///
-    /// # Safety
-    /// `null_context` and `keys` must belong to the page that owns this block
-    /// link.
+    /// The context and keys select the encoding domain; decoding does not
+    /// establish that the returned raw pointer is valid to dereference.
     #[inline(always)]
-    pub(crate) unsafe fn decode_block_raw(
+    pub(crate) fn decode_block_raw(
         self,
         null_context: *const c_void,
         keys: PageKeys,
@@ -125,14 +124,13 @@ impl EncodedPtr<mi_block_t> {
 
     /// Encode a raw block pointer using a raw null context.
     ///
-    /// # Safety
-    /// `null_context` and `keys` must belong to the page that owns this block
-    /// link.
+    /// The context and keys select the encoding domain; decoding does not
+    /// establish that the returned raw pointer is valid to dereference.
     // Retained for secure encoded free-list builds; routine non-secure builds
     // use the unencoded path.
     #[allow(dead_code)]
     #[inline(always)]
-    pub(crate) unsafe fn encode_block_raw(
+    pub(crate) fn encode_block_raw(
         block: *const mi_block_t,
         null_context: *const c_void,
         keys: PageKeys,
@@ -151,12 +149,10 @@ impl EncodedPtr<mi_block_t> {
     /// (`AvailableFreeList`/`LocalFreeList`) use `mi_block_next`/`mi_block_set_next`
     /// which call this under the hood.
     ///
-    /// # Safety
-    /// `null_context` must be the page's null sentinel base and `keys` the page's
-    /// encoding keys; mismatched keys yield a garbage pointer, not UB, but break
-    /// the free list.
+    /// The context and keys select the encoding domain. The resulting
+    /// `BlockPtr` proves only non-nullness, not allocation validity.
     #[inline]
-    pub(crate) unsafe fn decode_block(
+    pub(crate) fn decode_block(
         self,
         null_context: crate::core_types::PagePtr,
         keys: PageKeys,
@@ -168,10 +164,9 @@ impl EncodedPtr<mi_block_t> {
 
     /// Encode a block pointer (or `None` for null) into an encoded word.
     ///
-    /// # Safety
-    /// See `decode_block`; `null_context` and `keys` must belong to the page.
+    /// Use the owning page's context and keys when storing this word in a list.
     #[inline]
-    pub(crate) unsafe fn encode_block(
+    pub(crate) fn encode_block(
         block: Option<BlockPtr>,
         null_context: crate::core_types::PagePtr,
         keys: PageKeys,
@@ -355,10 +350,10 @@ impl AvailableFreeList {
     #[inline(always)]
     pub(crate) unsafe fn push(self, page: &LocalPage, block: FreeBlock) -> Self {
         let raw_page = page.page().as_ptr();
-        let block_raw = block.as_ptr().as_ptr();
+        let block = block.as_ptr();
         let prev_raw = self.as_raw();
-        unsafe { mi_block_set_next(raw_page, block_raw, prev_raw) };
-        Self(Some(unsafe { BlockPtr::new_unchecked(block_raw) }))
+        unsafe { mi_block_set_next(raw_page, block.as_ptr(), prev_raw) };
+        Self(Some(block))
     }
 
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).free`).

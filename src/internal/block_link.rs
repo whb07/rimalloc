@@ -161,9 +161,7 @@ pub unsafe fn mi_block_nextx(
     // block link, which remains stable for the raw word snapshot.
     let link = unsafe { crate::core_types::EncodedPtr::read_word_from_raw(block) };
     let next = if MI_ENCODE_FREELIST != 0 {
-        // SAFETY: the caller supplied the exact stable sentinel and keys used
-        // to encode this link; decoding only reconstructs the stored address.
-        unsafe { link.decode_block_raw(null, crate::core_types::PageKeys::from_raw(*keys)) }
+        link.decode_block_raw(null, crate::core_types::PageKeys::from_raw(*keys))
     } else {
         link.as_unencoded_raw()
     };
@@ -200,9 +198,7 @@ pub(crate) unsafe fn mi_block_set_nextx_typed(
         )
     };
     let link = if MI_ENCODE_FREELIST != 0 {
-        // SAFETY: `page`, `keys`, and `next` belong to the same stable encoding
-        // domain established by the caller.
-        unsafe { crate::core_types::EncodedPtr::encode_block(next, page, keys) }
+        crate::core_types::EncodedPtr::encode_block(next, page, keys)
     } else {
         crate::core_types::EncodedPtr::from_unencoded_raw(
             next.map(crate::core_types::BlockPtr::as_ptr)
@@ -264,15 +260,11 @@ pub unsafe fn mi_block_set_nextx(
         crate::allocator::tracking::mi_track_mem_undefined(block.cast(), size_of::<mi_block_t>())
     };
     let link = if MI_ENCODE_FREELIST != 0 {
-        // SAFETY: the caller supplied the exact null sentinel and stable keys
-        // for this raw list domain, and `next` is null or a member address.
-        unsafe {
-            crate::core_types::EncodedPtr::encode_block_raw(
-                next,
-                null,
-                crate::core_types::PageKeys::from_raw(*keys),
-            )
-        }
+        crate::core_types::EncodedPtr::encode_block_raw(
+            next,
+            null,
+            crate::core_types::PageKeys::from_raw(*keys),
+        )
     } else {
         crate::core_types::EncodedPtr::from_unencoded_raw(next)
     };

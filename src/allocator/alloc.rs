@@ -1,6 +1,6 @@
 //! Core allocation / free paths + libc overrides
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_void;
 use core::mem::size_of;
 use core::ptr;
 
@@ -992,17 +992,15 @@ pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_voi
 /// `p` must identify a live nonnull allocation returned by this allocator. Its
 /// page-map registration, page and block metadata, and backing must remain
 /// readable and stable, with no concurrent free, realloc, or teardown, for as
-/// long as the returned witness is used. `msg` must point to a live
-/// NUL-terminated UTF-8 diagnostic string for this call. Diagnostic callbacks and
+/// long as the returned witness is used. Diagnostic callbacks and
 /// their opaque arguments must remain valid, not unwind, and not incompatibly
 /// reenter allocation state. The returned ownership witness does not extend any
 /// of these lifetimes.
 unsafe fn mi_realloc_old_allocation(
     p: *mut c_void,
-    msg: *const c_char,
+    msg: &str,
 ) -> Option<crate::core_types::OldAllocation> {
-    // SAFETY: the caller keeps the nonnull allocation and its metadata stable;
-    // `msg` remains a readable NUL-terminated diagnostic string while pointer
+    // SAFETY: the caller keeps the nonnull allocation and its metadata stable while pointer
     // validation derives the matching page and block location.
     let lookup = unsafe { crate::allocator::free::mi_validate_pointer(p, msg) };
     let crate::core_types::PointerLookup::Valid(valid) = lookup else {
@@ -1185,9 +1183,8 @@ unsafe fn mi_realloc_old_from_ptr(
         return Some(None);
     };
     // SAFETY: the caller keeps this nonnull allocator allocation and its
-    // metadata stable through use of the returned witness; validation uses the
-    // fixed valid UTF-8 diagnostic string.
-    let old = unsafe { mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) };
+    // metadata stable through use of the returned witness.
+    let old = unsafe { mi_realloc_old_allocation(p, "mi_realloc") };
     let Some(old) = old else {
         if !usable_pre.is_null() {
             // SAFETY: the caller supplies uniquely writable output storage at
@@ -1241,9 +1238,8 @@ pub(crate) unsafe fn mi_realloc_request_from_user(
 ) -> Option<crate::core_types::ReallocRequest> {
     let p = user.as_ptr();
     // SAFETY: the caller keeps the typed nonnull user allocation and its
-    // metadata live and stable through use of the returned request; validation
-    // uses the fixed valid UTF-8 diagnostic string.
-    let old = unsafe { mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) };
+    // metadata live and stable through use of the returned request.
+    let old = unsafe { mi_realloc_old_allocation(p, "mi_realloc") };
     let Some(old) = old else {
         if !usable_pre.is_null() {
             // SAFETY: the caller supplies uniquely writable output storage at

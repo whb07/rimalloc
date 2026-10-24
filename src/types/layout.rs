@@ -97,14 +97,8 @@ impl LayoutRequest {
         // word-sized allocation before choosing a size class. Keep the original
         // requested size for API-visible accounting, but never build a zero
         // `PaddedSize`.
-        let eff_size = requested.effective_size();
-        let effective = unsafe { EffectiveSize::new_unchecked(eff_size) };
-        Self::from_parts(
-            requested,
-            effective,
-            unsafe { MaybeAlignment::new_unchecked(0) },
-            Zeroed::No,
-        )
+        let effective = requested.effective_size();
+        Self::from_parts(requested, effective, MaybeAlignment::NONE, Zeroed::No)
     }
 
     pub(crate) fn zalloc(size: usize) -> Result<Self, LayoutError> {
@@ -115,7 +109,7 @@ impl LayoutRequest {
 
     fn maybe_alignment_from_raw(alignment: usize) -> Result<MaybeAlignment, LayoutError> {
         if alignment == 0 {
-            return Ok(unsafe { MaybeAlignment::new_unchecked(0) });
+            return Ok(MaybeAlignment::NONE);
         }
         let alignment = Alignment::new(alignment).ok_or(LayoutError::AlignmentInvalid)?;
         Ok(alignment.into())
@@ -160,9 +154,9 @@ impl LayoutRequest {
         let effective_size = RequestedSize::new(requested_size).effective_size();
         Self {
             requested: RequestedSize::new(requested_size),
-            effective: unsafe { EffectiveSize::new_unchecked(effective_size) },
+            effective: effective_size,
             padded,
-            alignment: unsafe { MaybeAlignment::new_unchecked(0) },
+            alignment: MaybeAlignment::NONE,
             zeroed,
         }
     }

@@ -1756,7 +1756,7 @@ unsafe fn mi_page_queue_find_free_ex_active(
                 theap,
                 queue.ptr(),
                 block_size,
-                crate::core_types::MaybeAlignment::new_unchecked(0),
+                crate::core_types::MaybeAlignment::NONE,
             )
         };
         if let Some(fresh) = fresh {

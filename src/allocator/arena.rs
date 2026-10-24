@@ -1933,7 +1933,7 @@ unsafe fn mi_arenas_page_regular_alloc(
             theap,
             slice_count,
             block_size,
-            crate::core_types::MaybeAlignment::new_unchecked(0),
+            crate::core_types::MaybeAlignment::NONE,
             commit,
         )
     })?;

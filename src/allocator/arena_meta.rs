@@ -143,7 +143,7 @@ pub unsafe fn mi_meta_block_start(
 
 unsafe fn mi_meta_page_zalloc() -> *mut mi_meta_page_t {
     unsafe {
-        let mut memid: mi_memid_t = core::mem::zeroed();
+        let mut memid = crate::internal::memid::_mi_memid_none();
         let base = _mi_arenas_alloc_aligned(
             mi_heap_main(),
             MI_META_PAGE_SIZE,

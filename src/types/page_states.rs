@@ -403,7 +403,7 @@ impl LocalPage {
     /// its link word plus the page's available-list head, `free_is_zero`, and
     /// used-count transition.
     #[inline(always)]
-    pub(crate) unsafe fn push_free_block(
+    pub(in crate::types) unsafe fn push_free_block(
         self,
         block: crate::core_types::validation_extra::FreeBlock,
     ) -> crate::core_types::UsedBlockCount {

@@ -6,8 +6,8 @@
 
 use crate::types::page_states::{Abandoned, RetiredPage};
 use crate::types::{
-    AbandonedPage, ActivePage, AllFreePage, DestroyedPage, ForeignPage, FullPage, LocalPage,
-    OwnedAbandonedPage, Page, PagePtr, Uninit,
+    AbandonedPage, ActivePage, AllFreePage, DestroyedPage, FullPage, LocalPage, OwnedAbandonedPage,
+    Page, PagePtr, Uninit,
 };
 
 /// # Safety
@@ -64,11 +64,6 @@ raw_page_bridge!(
     assume_local_page,
     LocalPage,
     "`page` must be owned by the current thread heap."
-);
-raw_page_bridge!(
-    assume_foreign_page,
-    ForeignPage,
-    "`page` must be owned by another thread or abandoned for remote-free routing."
 );
 raw_page_bridge!(
     assume_abandoned_page,

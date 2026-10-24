@@ -93,6 +93,11 @@ pub(crate) struct SliceRange {
 }
 
 impl SliceRange {
+    pub(crate) const FIRST_SLICE: Self = Self {
+        start: SliceIndex::new(0),
+        count: SliceCount::ONE,
+    };
+
     pub(crate) fn new(
         start: usize,
         count: usize,
@@ -119,7 +124,7 @@ impl SliceRange {
 
         Ok(Self {
             start: SliceIndex::new(start as usize),
-            count: unsafe { SliceCount::new_unchecked(count.get()) },
+            count: SliceCount::from_nonzero(count),
         })
     }
 
@@ -131,7 +136,7 @@ impl SliceRange {
 
         Ok(Self {
             start,
-            count: unsafe { SliceCount::new_unchecked(1) },
+            count: SliceCount::ONE,
         })
     }
 

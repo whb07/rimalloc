@@ -286,8 +286,7 @@ fn maybe_alignment_accepts_zero_or_power_of_two() {
     assert_eq!(MaybeAlignment::new(64).map(MaybeAlignment::get), Some(64));
     assert!(MaybeAlignment::new(24).is_none());
 
-    let unchecked = unsafe { MaybeAlignment::new_unchecked(24) };
-    assert_eq!(unchecked.get(), 24);
+    assert_eq!(MaybeAlignment::NONE.get(), 0);
 }
 
 #[test]

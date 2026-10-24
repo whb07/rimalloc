@@ -29,8 +29,8 @@ fn malloc_layout_preserves_requested_and_normalizes_effective_size() {
 fn layout_request_from_parts_is_the_checked_padding_path() {
     let req = LayoutRequest::from_parts(
         RequestedSize::new(0),
-        unsafe { EffectiveSize::new_unchecked(1) },
-        unsafe { MaybeAlignment::new_unchecked(0) },
+        RequestedSize::new(1).effective_size(),
+        MaybeAlignment::NONE,
         Zeroed::No,
     )
     .expect("layout from parts");

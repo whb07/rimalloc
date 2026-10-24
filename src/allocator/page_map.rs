@@ -421,7 +421,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     }
     let zero_location = PageMapLocation::from_ptr(ptr::null());
     let zero_index = zero_location.index();
-    let one_slice = unsafe { crate::core_types::SliceCount::new_unchecked(1) };
+    let one_slice = crate::core_types::SliceCount::ONE;
     if !commit && !unsafe { mi_page_map_ensure_committed(zero_index, one_slice) } {
         mi_page_map_cannot_commit();
         return false;

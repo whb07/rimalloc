@@ -6,6 +6,9 @@
 //! and `BlockForFree` stay here because they are produced only by pointer
 //! classification and validation.
 
+use core::marker::PhantomData;
+
+use super::page_states::{ForeignPage, FreeRouteSnapshot, LocalPage};
 use super::ptr::{BlockPtr, PagePtr, UserPtr};
 
 /// Offset from the start of a block.
@@ -149,7 +152,10 @@ impl PointerLookup {
         };
         let (user, page, location) = valid.into_parts();
         let located = location.located_block();
-        let block = BlockForFree::new(located.block(), located.was_guarded());
+        let block = BlockForFree {
+            block: located.block(),
+            was_guarded: located.was_guarded(),
+        };
         Some(ValidatedFree { user, page, block })
     }
 }
@@ -161,7 +167,7 @@ pub(crate) enum WasGuarded {
     Yes,
 }
 
-/// A block that has been completely validated and is ready for the typed free path.
+/// A block that has been validated and is ready for the typed free path.
 #[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct BlockForFree {
     block: BlockPtr,
@@ -169,22 +175,6 @@ pub(crate) struct BlockForFree {
 }
 
 impl BlockForFree {
-    fn new(block: BlockPtr, was_guarded: WasGuarded) -> Self {
-        Self { block, was_guarded }
-    }
-
-    /// # Safety
-    /// `block` must be the exact start of a live, non-guarded block that is
-    /// ready to be freed. This is only for release fast paths that have already
-    /// ruled out interior-pointer and guarded-page modes.
-    #[inline(always)]
-    pub(crate) unsafe fn from_block_start_unchecked(block: BlockPtr) -> Self {
-        Self {
-            block,
-            was_guarded: WasGuarded::No,
-        }
-    }
-
     pub(crate) fn block(&self) -> BlockPtr {
         self.block
     }
@@ -198,12 +188,81 @@ impl BlockForFree {
     }
 
     #[inline(always)]
-    pub(crate) fn into_free_block(self) -> crate::core_types::FreeBlock {
-        unsafe { crate::core_types::validation_extra::FreeBlock::new_unchecked(self.block) }
+    fn into_free_block(self) -> super::validation_extra::FreeBlock {
+        unsafe { super::validation_extra::FreeBlock::new_unchecked(self.block) }
     }
 }
 
-/// A fully validated free request ready to be routed.
+/// A page whose invariant scope identifies its matching block-for-free.
+#[repr(transparent)]
+#[must_use = "a scoped free page must be consumed with its matching block"]
+pub(crate) struct FreePage<'scope, P> {
+    page: P,
+    _scope: PhantomData<fn(&'scope ()) -> &'scope ()>,
+}
+
+impl<P> FreePage<'_, P> {
+    #[inline(always)]
+    fn new(page: P) -> Self {
+        Self {
+            page,
+            _scope: PhantomData,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn owner(&self) -> &P {
+        &self.page
+    }
+}
+
+impl<'scope> FreePage<'scope, LocalPage> {
+    /// Publish the matching block after validation and accounting.
+    ///
+    /// # Safety
+    /// The page must remain live and current-thread owned, with exclusive
+    /// access to its available-list head, block link, zero flag and used count.
+    #[inline(always)]
+    pub(crate) unsafe fn push_free_block(
+        self,
+        block: ScopedFreeBlock<'scope>,
+    ) -> super::scalar::UsedBlockCount {
+        unsafe { self.page.push_free_block(block.block.into_free_block()) }
+    }
+}
+
+/// A validated block that cannot be mixed with another free request's page.
+#[repr(transparent)]
+#[must_use = "a scoped free block must be consumed with its matching page"]
+pub(crate) struct ScopedFreeBlock<'scope> {
+    block: BlockForFree,
+    _scope: PhantomData<fn(&'scope ()) -> &'scope ()>,
+}
+
+impl ScopedFreeBlock<'_> {
+    #[inline(always)]
+    pub(crate) fn block(&self) -> BlockPtr {
+        self.block.block()
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_guarded(&self) -> bool {
+        self.block.is_guarded()
+    }
+}
+
+/// An owner classification sharing its invariant scope with one free block.
+#[must_use = "a classified free request must be consumed"]
+pub(crate) enum FreeRoute<'scope> {
+    LocalFast(FreePage<'scope, LocalPage>),
+    LocalSlow(FreePage<'scope, LocalPage>),
+    ForeignPlain(FreePage<'scope, ForeignPage>),
+    ForeignSlow(FreePage<'scope, ForeignPage>),
+    Abandoned(FreePage<'scope, ForeignPage>),
+    AbandonedMapped(FreePage<'scope, ForeignPage>),
+}
+
+/// A fully validated free request retaining its matching page, block and user pointer.
 #[must_use = "allocator state capabilities must be consumed or explicitly returned"]
 pub(crate) struct ValidatedFree {
     user: UserPtr,
@@ -212,6 +271,22 @@ pub(crate) struct ValidatedFree {
 }
 
 impl ValidatedFree {
+    /// # Safety
+    /// `block` must be the exact start of one live non-guarded allocation from
+    /// `page`, ready to be freed. Interior-pointer and guarded-page modes must
+    /// already be excluded by the release fast-path classification.
+    #[inline(always)]
+    pub(crate) unsafe fn from_block_start_unchecked(page: PagePtr, block: BlockPtr) -> Self {
+        Self {
+            user: block.into(),
+            page,
+            block: BlockForFree {
+                block,
+                was_guarded: WasGuarded::No,
+            },
+        }
+    }
+
     pub(crate) fn user(&self) -> UserPtr {
         self.user
     }
@@ -224,20 +299,74 @@ impl ValidatedFree {
         &self.block
     }
 
-    pub(crate) fn into_parts(self) -> ValidatedFreeParts {
-        ValidatedFreeParts {
-            user: self.user,
-            page: self.page,
-            block: self.block,
-        }
+    /// Classify ownership and consume this request in a fresh invariant scope.
+    ///
+    /// # Safety
+    /// `current` must identify the executing thread. The page's registration,
+    /// backing and owner metadata must remain live and protocol-stable through
+    /// `f`. Local mutation must stay exclusive; callbacks must not reenter it.
+    #[inline(always)]
+    pub(crate) unsafe fn with_route<R>(
+        self,
+        current: super::page::ThreadId,
+        f: impl for<'scope> FnOnce(FreeRoute<'scope>, ScopedFreeBlock<'scope>) -> R,
+    ) -> R {
+        let route = match unsafe { self.page.snapshot_free_route(current) } {
+            FreeRouteSnapshot::LocalFast(page) => FreeRoute::LocalFast(FreePage::new(page)),
+            FreeRouteSnapshot::LocalSlow(page) => FreeRoute::LocalSlow(FreePage::new(page)),
+            FreeRouteSnapshot::ForeignPlain(page) => FreeRoute::ForeignPlain(FreePage::new(page)),
+            FreeRouteSnapshot::ForeignSlow(page) => FreeRoute::ForeignSlow(FreePage::new(page)),
+            FreeRouteSnapshot::Abandoned(page) => {
+                FreeRoute::Abandoned(FreePage::new(page.remote_free_page()))
+            }
+            FreeRouteSnapshot::AbandonedMapped(page) => {
+                FreeRoute::AbandonedMapped(FreePage::new(page.remote_free_page()))
+            }
+        };
+        f(
+            route,
+            ScopedFreeBlock {
+                block: self.block,
+                _scope: PhantomData,
+            },
+        )
     }
-}
 
-#[must_use = "allocator state capabilities must be consumed or explicitly returned"]
-pub(crate) struct ValidatedFreeParts {
-    pub(crate) user: UserPtr,
-    pub(crate) page: PagePtr,
-    pub(crate) block: BlockForFree,
+    /// # Safety
+    /// The page must remain live, current-thread owned and locally exclusive
+    /// through `f`; callbacks must not incompatibly reenter that local state.
+    #[inline(always)]
+    pub(crate) unsafe fn with_local<R>(
+        self,
+        f: impl for<'scope> FnOnce(FreePage<'scope, LocalPage>, ScopedFreeBlock<'scope>) -> R,
+    ) -> R {
+        let page = unsafe { LocalPage::new_unchecked(self.page) };
+        f(
+            FreePage::new(page),
+            ScopedFreeBlock {
+                block: self.block,
+                _scope: PhantomData,
+            },
+        )
+    }
+
+    /// # Safety
+    /// The page must remain live and foreign to the executing thread through
+    /// `f`, with publication and ownership changes following allocator atomics.
+    #[inline(always)]
+    pub(crate) unsafe fn with_foreign<R>(
+        self,
+        f: impl for<'scope> FnOnce(FreePage<'scope, ForeignPage>, ScopedFreeBlock<'scope>) -> R,
+    ) -> R {
+        let page = unsafe { ForeignPage::new_unchecked(self.page) };
+        f(
+            FreePage::new(page),
+            ScopedFreeBlock {
+                block: self.block,
+                _scope: PhantomData,
+            },
+        )
+    }
 }
 
 #[cfg(test)]

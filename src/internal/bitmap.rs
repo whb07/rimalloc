@@ -1183,7 +1183,7 @@ pub(crate) unsafe fn mi_bitmap_forall_set_typed(
 ) -> bool {
     unsafe {
         let arena = arena.map(ArenaPtr::as_ptr).unwrap_or(ptr::null_mut());
-        let one = SliceCount::new_unchecked(1);
+        let one = SliceCount::ONE;
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
         for i in 0..chunkmap_max {
             let mut cmap_entry = (*bitmap).chunkmap.bfields[i].load(Ordering::Relaxed);
@@ -1253,7 +1253,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_ranges_typed(
                         let range =
                             SliceRange::from_raw(idx as u32, rng as u32).unwrap_or_else(|_| {
                                 crate::internal::mi_assert_internal!(false);
-                                SliceRange::from_raw(0, 1).unwrap_unchecked()
+                                SliceRange::FIRST_SLICE
                             });
                         crate::internal::mi_debug_assert!((1..=MI_BFIELD_BITS).contains(&rng));
                         crate::internal::mi_debug_assert!(
@@ -1336,7 +1336,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_rangesn_typed(
                             let range = SliceRange::from_raw(idx as u32, rngslices_count.get())
                                 .unwrap_or_else(|_| {
                                     crate::internal::mi_assert_internal!(false);
-                                    SliceRange::from_raw(0, 1).unwrap_unchecked()
+                                    SliceRange::FIRST_SLICE
                                 });
                             if !visit(range.start_usize(), range.count_usize(), arena, arg) {
                                 let mut notyet_visited = 0usize;

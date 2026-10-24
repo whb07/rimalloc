@@ -145,8 +145,7 @@ impl StatsSnapshot {
     /// Does not panic.
     #[inline]
     pub fn capture() -> Result<Self, StatsError> {
-        let mut raw = crate::allocator::stats::mi_stats_t::default();
-        unsafe { crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
+        let mut raw = crate::allocator::init::MI_STATS_NULL();
         crate::allocator::init::mi_thread_init();
         if unsafe { crate::allocator::stats::mi_stats_get(ptr::addr_of_mut!(raw)) } {
             Ok(Self { raw })
@@ -167,8 +166,7 @@ impl StatsSnapshot {
     /// Does not panic.
     #[inline]
     pub fn for_heap(heap: HeapRef<'_>) -> Result<Self, StatsError> {
-        let mut raw = crate::allocator::stats::mi_stats_t::default();
-        unsafe { crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(raw)) };
+        let mut raw = crate::allocator::init::MI_STATS_NULL();
         crate::allocator::init::mi_thread_init();
         if unsafe {
             crate::allocator::stats::mi_heap_stats_get(heap.ptr.as_ptr(), ptr::addr_of_mut!(raw))

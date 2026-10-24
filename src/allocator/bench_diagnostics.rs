@@ -3,7 +3,7 @@
 use core::ffi::{c_char, c_ulonglong, c_void};
 use core::fmt;
 use core::fmt::Write as _;
-use core::mem;
+use core::mem::{self, MaybeUninit};
 use core::ptr;
 use core::sync::atomic::{AtomicU64, Ordering};
 
@@ -654,9 +654,8 @@ pub unsafe extern "C" fn mi_bench_page_occupancy(
     if used_bytes_out.is_null() || capacity_bytes_out.is_null() {
         return false;
     }
-    let mut stats = crate::allocator::stats::mi_stats_t::default();
+    let mut stats = crate::allocator::init::MI_STATS_NULL();
     unsafe {
-        crate::allocator::stats::mi_stats_init(ptr::addr_of_mut!(stats));
         crate::allocator::init::mi_thread_init();
         if !crate::allocator::stats::mi_stats_get(ptr::addr_of_mut!(stats)) {
             return false;
@@ -704,50 +703,40 @@ pub unsafe extern "C" fn mi_bench_diagnostics_snapshot(
     true
 }
 
-struct JsonBuf {
-    buf: *mut c_char,
-    len: usize,
-    written: usize,
+struct JsonBuf<'a> {
+    remaining: &'a mut [MaybeUninit<u8>],
     needed: usize,
 }
 
-impl JsonBuf {
-    fn new(buf: *mut c_char, len: usize) -> Self {
+impl<'a> JsonBuf<'a> {
+    fn new(remaining: &'a mut [MaybeUninit<u8>]) -> Self {
         Self {
-            buf,
-            len,
-            written: 0,
+            remaining,
             needed: 0,
         }
     }
 
     fn finish(&mut self) -> usize {
-        if !self.buf.is_null() && self.len > 0 {
-            let nul_at = self.written.min(self.len - 1);
-            unsafe { *self.buf.add(nul_at) = 0 };
+        if let Some(terminator) = self.remaining.first_mut() {
+            terminator.write(0);
         }
         self.needed
     }
 }
 
-impl fmt::Write for JsonBuf {
+impl fmt::Write for JsonBuf<'_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.needed += s.len();
-        if self.buf.is_null() || self.len == 0 {
+        if self.remaining.is_empty() {
             return Ok(());
         }
-        let cap = self.len - 1;
-        let available = cap.saturating_sub(self.written);
-        let copy_len = available.min(s.len());
+        let copy_len = (self.remaining.len() - 1).min(s.len());
         if copy_len > 0 {
-            unsafe {
-                ptr::copy_nonoverlapping(
-                    s.as_ptr(),
-                    self.buf.cast::<u8>().add(self.written),
-                    copy_len,
-                );
+            let (dest, remaining) = mem::take(&mut self.remaining).split_at_mut(copy_len);
+            self.remaining = remaining;
+            for (slot, byte) in dest.iter_mut().zip(s.bytes()) {
+                slot.write(byte);
             }
-            self.written += copy_len;
         }
         Ok(())
     }
@@ -757,7 +746,14 @@ impl fmt::Write for JsonBuf {
 /// If `buf` is non-null, it must point to `buf_len` writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_bench_diagnostics_json(buf: *mut c_char, buf_len: usize) -> usize {
-    let mut out = JsonBuf::new(buf, buf_len);
+    let output = if buf.is_null() || buf_len == 0 {
+        &mut []
+    } else {
+        // SAFETY: the caller uniquely owns this writable buffer for the call.
+        // MaybeUninit permits C callers to supply uninitialized output bytes.
+        unsafe { core::slice::from_raw_parts_mut(buf.cast::<MaybeUninit<u8>>(), buf_len) }
+    };
+    let mut out = JsonBuf::new(output);
     let _ = out.write_char('{');
     for (idx, name) in COUNTER_NAMES.iter().enumerate() {
         if idx != 0 {
@@ -947,6 +943,7 @@ mod tests {
 
         let null_needed = unsafe { mi_bench_diagnostics_json(core::ptr::null_mut(), 0) };
         assert!(null_needed > COUNTER_COUNT);
+        assert!(unsafe { mi_bench_diagnostics_json(core::ptr::null_mut(), 64) } >= null_needed);
 
         let mut zero_len = [0xA5_u8; 1];
         let zero_needed =
@@ -966,6 +963,17 @@ mod tests {
         assert!(needed >= small.len());
         assert_eq!(&small[..7], b"{\"page_");
         assert_eq!(small[7], 0);
+
+        let mut uninit = [MaybeUninit::<u8>::uninit(); 8];
+        // SAFETY: the output array is uniquely writable; the API permits
+        // uninitialized storage and fills this truncated buffer plus its NUL.
+        let needed = unsafe {
+            mi_bench_diagnostics_json(uninit.as_mut_ptr().cast::<c_char>(), uninit.len())
+        };
+        assert!(needed >= uninit.len());
+        let initialized = uninit.map(|byte| unsafe { byte.assume_init() });
+        assert_eq!(&initialized[..7], b"{\"page_");
+        assert_eq!(initialized[7], 0);
 
         mi_bench_diagnostics_reset();
     }

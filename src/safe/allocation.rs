@@ -107,10 +107,6 @@ unsafe impl Send for RawAllocation {}
 
 unsafe impl Sync for RawAllocation {}
 
-unsafe impl Send for Allocation {}
-
-unsafe impl Sync for Allocation {}
-
 impl fmt::Debug for Allocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Allocation")
@@ -542,10 +538,6 @@ impl fmt::Debug for RawAllocation {
 pub struct InitializedAllocation {
     raw: RawAllocation,
 }
-
-unsafe impl Send for InitializedAllocation {}
-
-unsafe impl Sync for InitializedAllocation {}
 
 impl InitializedAllocation {
     /// Allocates a zero-initialized byte block for `layout`.

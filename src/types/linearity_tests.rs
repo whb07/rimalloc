@@ -13,8 +13,8 @@ use super::page_states::{
     PageAbandonOutcome, PageForAbandon, RetiredPage, Uninit,
 };
 use super::validation::{
-    BlockForFree, GuardedBlock, LocatedBlock, PointerLocation, PointerLookup, ValidPointerLookup,
-    ValidatedFree, ValidatedFreeParts,
+    BlockForFree, FreePage, FreeRoute, GuardedBlock, LocatedBlock, PointerLocation, PointerLookup,
+    ScopedFreeBlock, ValidPointerLookup, ValidatedFree,
 };
 use super::validation_extra::{AllocatedBlock, FreeBlock};
 
@@ -24,7 +24,10 @@ assert_not_impl_any!(LocatedBlock: Copy, Clone);
 assert_not_impl_any!(ValidPointerLookup: Copy, Clone);
 assert_not_impl_any!(BlockForFree: Copy, Clone);
 assert_not_impl_any!(ValidatedFree: Copy, Clone);
-assert_not_impl_any!(ValidatedFreeParts: Copy, Clone);
+assert_not_impl_any!(FreeRoute<'_>: Copy, Clone);
+assert_not_impl_any!(FreePage<'_, LocalPage>: Copy, Clone);
+assert_not_impl_any!(FreePage<'_, ForeignPage>: Copy, Clone);
+assert_not_impl_any!(ScopedFreeBlock<'_>: Copy, Clone);
 assert_not_impl_any!(PointerLookup: Copy, Clone);
 
 assert_not_impl_any!(AllocatedBlock: Copy, Clone);

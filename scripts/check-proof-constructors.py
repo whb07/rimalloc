@@ -12,6 +12,31 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PROBES = [
     (
+        "scoped-free-handoff",
+        "src/allocator/free.rs",
+        "unsafe fn probe(v: crate::core_types::ValidatedFree) { unsafe { "
+        "v.with_local(|page, block| mi_free_block_local(page, block, "
+        "crate::core_types::LocalFreeMode::TrackOnly)); } }",
+        None,
+    ),
+    (
+        "scoped-free-rejects-independent-page-and-block",
+        "src/allocator/free.rs",
+        "unsafe fn probe(p: crate::core_types::LocalPage, "
+        "b: crate::core_types::BlockForFree) { unsafe { "
+        "mi_free_block_local(p, b, crate::core_types::LocalFreeMode::TrackOnly); } }",
+        "E0308",
+    ),
+    (
+        "scoped-free-rejects-cross-request-pairing",
+        "src/allocator/free.rs",
+        "unsafe fn probe(a: crate::core_types::ValidatedFree, "
+        "b: crate::core_types::ValidatedFree) { unsafe { "
+        "a.with_local(|page, _| b.with_local(|_, block| "
+        "mi_free_block_local(page, block, crate::core_types::LocalFreeMode::TrackOnly))); } }",
+        "E0521",
+    ),
+    (
         "compact-chunk-access-requires-unsafe",
         "src/internal/bitmap.rs",
         "fn probe(p: *const mi_bitmap_t) { let _ = mi_bitmap_chunk(p, 0); }",

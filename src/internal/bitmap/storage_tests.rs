@@ -40,6 +40,10 @@ fn compact_bitmap_bit_ranges_preserve_bounds_and_counts() {
             assert_eq!(mi_bitmap_init(bitmap, bits, true), storage.layout.size());
             let max_bits = mi_bitmap_max_bits(bitmap);
             let view = BitmapView::from_raw(bitmap);
+            let mut already_set = core::mem::MaybeUninit::uninit();
+            assert!(mi_bitmap_setN(bitmap, 0, 1, already_set.as_mut_ptr()));
+            assert_eq!(already_set.assume_init(), 0);
+            assert!(view.clear_n(0, 1));
             for (start, count) in [
                 (0, 1),
                 (MI_BFIELD_BITS - 1, 2),
@@ -105,6 +109,14 @@ fn compact_bbitmap_claims_field_chunk_and_multi_chunk_ranges() {
             let bitmap = storage.ptr::<mi_bbitmap_t>();
             assert_eq!(mi_bbitmap_init(bitmap, bits, true), storage.layout.size());
             assert!(mi_bbitmap_setN(bitmap, 0, bits));
+            let mut first = core::mem::MaybeUninit::uninit();
+            assert!(mi_bbitmap_try_find_and_clearN(
+                bitmap,
+                0,
+                1,
+                first.as_mut_ptr()
+            ));
+            assert!(mi_bbitmap_setN(bitmap, first.assume_init(), 1));
             for count in [
                 1,
                 8,

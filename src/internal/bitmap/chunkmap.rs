@@ -7,9 +7,8 @@ use crate::allocator::stats::{
 use crate::types::MI_ENABLE_LARGE_PAGES;
 
 use super::{
-    MI_BCHUNK_BITS, MI_BFIELD_BITS, MI_BIT_SET, mi_bbitmap_chunk, mi_bbitmap_chunk_count,
-    mi_bbitmap_t, mi_bchunk_all_are_clear_relaxed, mi_bchunk_all_are_set_relaxed, mi_bchunk_clear,
-    mi_bchunk_is_xsetN, mi_bchunk_set, mi_bchunk_t, mi_bitmap_chunk, mi_bitmap_chunk_count,
+    MI_BCHUNK_BITS, MI_BFIELD_BITS, MI_BIT_SET, mi_bbitmap_t, mi_bchunk_all_are_clear_relaxed,
+    mi_bchunk_all_are_set_relaxed, mi_bchunk_clear, mi_bchunk_is_xsetN, mi_bchunk_set, mi_bchunk_t,
     mi_bitmap_t,
 };
 
@@ -20,26 +19,22 @@ pub(super) fn mi_bitmap_chunkmap_set(bitmap: &mi_bitmap_t, chunk_idx: usize) {
     mi_bchunk_set(&bitmap.chunkmap, chunk_idx, None);
 }
 
-/// # Safety
-/// The bitmap header and trailing chunks must remain initialized and live,
-/// and `chunk_idx` must be below its initialized chunk count.
 #[inline(never)]
-pub(super) unsafe fn mi_bitmap_chunkmap_try_clear(
-    bitmap: *const mi_bitmap_t,
+pub(super) fn mi_bitmap_chunkmap_try_clear(
+    bitmap: &mi_bitmap_t,
     chunk_idx: usize,
+    chunk: &mi_bchunk_t,
 ) -> bool {
-    unsafe {
-        crate::internal::mi_debug_assert!(mi_bitmap_chunk_count(bitmap) > chunk_idx);
-        if !mi_bchunk_all_are_clear_relaxed(&*mi_bitmap_chunk(bitmap, chunk_idx)) {
-            return false;
-        }
-        mi_bchunk_clear(&(*bitmap).chunkmap, chunk_idx, None);
-        if !mi_bchunk_all_are_clear_relaxed(&*mi_bitmap_chunk(bitmap, chunk_idx)) {
-            mi_bchunk_set(&(*bitmap).chunkmap, chunk_idx, None);
-            return false;
-        }
-        true
+    crate::internal::mi_debug_assert!(bitmap.chunk_count.load(Ordering::Relaxed) > chunk_idx);
+    if !mi_bchunk_all_are_clear_relaxed(chunk) {
+        return false;
     }
+    mi_bchunk_clear(&bitmap.chunkmap, chunk_idx, None);
+    if !mi_bchunk_all_are_clear_relaxed(chunk) {
+        mi_bchunk_set(&bitmap.chunkmap, chunk_idx, None);
+        return false;
+    }
+    true
 }
 
 /// Update this initialized header's atomic bin maps for one chunk.
@@ -77,46 +72,38 @@ fn mi_bbitmap_chunkmap_set_max(bbitmap: &mi_bbitmap_t, chunk_idx: usize) {
     }
 }
 
-/// # Safety
-/// The bitmap header and trailing chunks must remain initialized and live,
-/// and `chunk_idx` must be below its initialized chunk count.
 #[inline]
-pub(super) unsafe fn mi_bbitmap_chunkmap_set(
-    bbitmap: *const mi_bbitmap_t,
+pub(super) fn mi_bbitmap_chunkmap_set(
+    bbitmap: &mi_bbitmap_t,
     chunk_idx: usize,
+    chunk: &mi_bchunk_t,
     check_all_set: bool,
 ) {
-    unsafe {
-        crate::internal::mi_debug_assert!(mi_bbitmap_chunk_count(bbitmap) > chunk_idx);
-        if check_all_set && mi_bchunk_all_are_set_relaxed(&*mi_bbitmap_chunk(bbitmap, chunk_idx)) {
-            mi_bbitmap_set_chunk_bin(&*bbitmap, chunk_idx, MI_CBIN_NONE);
-        }
-        mi_bchunk_set(&(*bbitmap).chunkmap, chunk_idx, None);
-        mi_bbitmap_chunkmap_set_max(&*bbitmap, chunk_idx);
+    crate::internal::mi_debug_assert!(bbitmap.chunk_count.load(Ordering::Relaxed) > chunk_idx);
+    if check_all_set && mi_bchunk_all_are_set_relaxed(chunk) {
+        mi_bbitmap_set_chunk_bin(bbitmap, chunk_idx, MI_CBIN_NONE);
     }
+    mi_bchunk_set(&bbitmap.chunkmap, chunk_idx, None);
+    mi_bbitmap_chunkmap_set_max(bbitmap, chunk_idx);
 }
 
-/// # Safety
-/// The bitmap header and trailing chunks must remain initialized and live,
-/// and `chunk_idx` must be below its initialized chunk count.
 #[inline(never)]
-pub(super) unsafe fn mi_bbitmap_chunkmap_try_clear(
-    bbitmap: *const mi_bbitmap_t,
+pub(super) fn mi_bbitmap_chunkmap_try_clear(
+    bbitmap: &mi_bbitmap_t,
     chunk_idx: usize,
+    chunk: &mi_bchunk_t,
 ) -> bool {
-    unsafe {
-        crate::internal::mi_debug_assert!(mi_bbitmap_chunk_count(bbitmap) > chunk_idx);
-        if !mi_bchunk_all_are_clear_relaxed(&*mi_bbitmap_chunk(bbitmap, chunk_idx)) {
-            return false;
-        }
-        mi_bchunk_clear(&(*bbitmap).chunkmap, chunk_idx, None);
-        if !mi_bchunk_all_are_clear_relaxed(&*mi_bbitmap_chunk(bbitmap, chunk_idx)) {
-            mi_bchunk_set(&(*bbitmap).chunkmap, chunk_idx, None);
-            return false;
-        }
-        mi_bbitmap_chunkmap_set_max(&*bbitmap, chunk_idx);
-        true
+    crate::internal::mi_debug_assert!(bbitmap.chunk_count.load(Ordering::Relaxed) > chunk_idx);
+    if !mi_bchunk_all_are_clear_relaxed(chunk) {
+        return false;
     }
+    mi_bchunk_clear(&bbitmap.chunkmap, chunk_idx, None);
+    if !mi_bchunk_all_are_clear_relaxed(chunk) {
+        mi_bchunk_set(&bbitmap.chunkmap, chunk_idx, None);
+        return false;
+    }
+    mi_bbitmap_chunkmap_set_max(bbitmap, chunk_idx);
+    true
 }
 
 #[inline]

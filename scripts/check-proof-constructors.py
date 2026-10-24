@@ -13,17 +13,33 @@ ROOT = Path(__file__).resolve().parents[1]
 PROBES = [
     (
         "arena-claim-authorizes-matching-bitmap-updates",
-        "src/allocator/arena.rs",
-        "fn probe(mut claim: ClaimedArenaSlices) { let _ = claim.mark_dirty(); "
+        "src/types/arena.rs",
+        "fn probe(mut claim: ClaimedArenaSlices<'_, '_>) { let _ = claim.mark_dirty(); "
         "let _ = claim.committed_count(); claim.mark_committed(None); claim.clear_committed(); }",
         None,
     ),
     (
         "arena-claim-rejects-independent-arena-and-range",
-        "src/allocator/arena.rs",
-        "fn probe(mut claim: ClaimedArenaSlices, arena: ArenaPtr, "
+        "src/types/arena.rs",
+        "fn probe(mut claim: ClaimedArenaSlices<'_, '_>, arena: ArenaPtr, "
         "range: crate::core_types::SliceRange) { let _ = claim.mark_dirty(arena, range); }",
         "E0061",
+    ),
+    (
+        "arena-claim-cannot-outlive-borrowed-access",
+        "src/types/arena.rs",
+        "unsafe fn probe(arena: ArenaPtr, count: SliceCount) { let claim; "
+        "{ let access = unsafe { ArenaSliceAccess::from_raw(arena) }; "
+        "claim = access.try_claim(count, crate::core_types::ThreadSeq::new(0)); } "
+        "drop(claim); }",
+        "E0597",
+    ),
+    (
+        "arena-publication-consumes-the-rollback-claim",
+        "src/types/arena.rs",
+        "fn probe(claim: ClaimedArenaSlices<'_, '_>) { "
+        "let _ = claim.publish(); drop(claim); }",
+        "E0382",
     ),
     (
         "terminal-release-requires-detached-all-free-page",

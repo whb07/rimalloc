@@ -4,6 +4,187 @@ use core::num::NonZeroU32;
 
 use super::ptr::ArenaPtr;
 use super::scalar::{SliceCount, SliceIndex};
+use crate::internal::bitmap::{BBitmapView, BitmapView, MI_BIT_CLEAR, MI_BIT_SET};
+
+/// Borrowed atomic bitmaps for one live arena allocation phase.
+pub(crate) struct ArenaSliceAccess<'a> {
+    arena: ArenaPtr,
+    slice_count: SliceCount,
+    pinned: bool,
+    free: BBitmapView<'a>,
+    dirty: BitmapView<'a>,
+    committed: BitmapView<'a>,
+}
+
+impl<'a> ArenaSliceAccess<'a> {
+    /// # Safety
+    /// The arena and its matching free, dirty and committed bitmaps must remain
+    /// initialized and live for `'a`, with stable policy, slice count and
+    /// bitmap backing. Their published extents must cover the arena's slices.
+    /// Teardown is excluded; concurrent access follows the bitmap protocol.
+    #[inline(always)]
+    pub(crate) unsafe fn from_raw(arena: ArenaPtr) -> Self {
+        unsafe {
+            let raw = arena.as_ptr();
+            Self {
+                arena,
+                slice_count: arena.slice_count(),
+                pinned: (*raw).memid.is_pinned,
+                free: BBitmapView::from_raw((*raw).slices_free),
+                dirty: BitmapView::from_raw((*raw).slices_dirty),
+                committed: BitmapView::from_raw((*raw).slices_committed),
+            }
+        }
+    }
+
+    #[forbid(unsafe_code)]
+    #[inline(always)]
+    pub(crate) fn try_claim(
+        &self,
+        slice_count: SliceCount,
+        tseq: super::ThreadSeq,
+    ) -> Option<ClaimedArenaSlices<'_, 'a>> {
+        let count = slice_count.get() as usize;
+        let mut start = 0usize;
+        if !self
+            .free
+            .try_find_and_clear_n(tseq.get(), count, &mut start)
+        {
+            return None;
+        }
+        let Ok(range) = SliceRange::new(start, count, self.slice_count) else {
+            crate::internal::mi_assert_internal!(false);
+            self.free.set_n(start, count);
+            return None;
+        };
+        Some(ClaimedArenaSlices {
+            access: self,
+            range,
+            initially_committed: false,
+            initially_zero: false,
+        })
+    }
+}
+
+/// A cleared range borrowing the exact arena bitmaps that granted its claim.
+/// Drop restores only the free bits; dirty/commit changes retain C semantics.
+pub(crate) struct ClaimedArenaSlices<'access, 'arena> {
+    access: &'access ArenaSliceAccess<'arena>,
+    range: SliceRange,
+    initially_committed: bool,
+    initially_zero: bool,
+}
+
+#[forbid(unsafe_code)]
+impl ClaimedArenaSlices<'_, '_> {
+    #[inline(always)]
+    pub(crate) fn range(&self) -> SliceRange {
+        self.range
+    }
+
+    #[inline(always)]
+    pub(crate) fn initially_zero(&self) -> bool {
+        self.initially_zero
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_initially_zero(&mut self, zero: bool) {
+        self.initially_zero = zero;
+    }
+
+    #[inline(always)]
+    pub(crate) fn initially_committed(&self) -> bool {
+        self.initially_committed
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_initially_committed(&mut self, committed: bool) {
+        self.initially_committed = committed;
+    }
+
+    #[inline(always)]
+    pub(crate) fn mark_dirty(&mut self) -> usize {
+        let mut already_dirty = 0;
+        self.initially_zero = self.access.dirty.set_n(
+            self.range.start_usize(),
+            self.range.count_usize(),
+            Some(&mut already_dirty),
+        );
+        already_dirty
+    }
+
+    #[inline(always)]
+    pub(crate) fn committed_count(&self) -> usize {
+        self.access
+            .committed
+            .popcount_n(self.range.start_usize(), self.range.count_usize())
+    }
+
+    #[inline(always)]
+    pub(crate) fn mark_committed(&self, already_committed: Option<&mut usize>) {
+        self.access.committed.set_n(
+            self.range.start_usize(),
+            self.range.count_usize(),
+            already_committed,
+        );
+    }
+
+    #[inline(always)]
+    pub(crate) fn clear_committed(&self) {
+        self.access
+            .committed
+            .clear_n(self.range.start_usize(), self.range.count_usize());
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_committed(&self) -> bool {
+        self.access.committed.is_xset_n(
+            MI_BIT_SET,
+            self.range.start_usize(),
+            self.range.count_usize(),
+        )
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_dirty(&self) -> bool {
+        self.access.dirty.is_xset_n(
+            MI_BIT_SET,
+            self.range.start_usize(),
+            self.range.count_usize(),
+        )
+    }
+
+    #[inline(always)]
+    pub(crate) fn free_range_is_claimed(&self) -> bool {
+        self.access.free.is_xset_n(
+            MI_BIT_CLEAR,
+            self.range.start_usize(),
+            self.range.count_usize(),
+        )
+    }
+
+    #[inline(always)]
+    pub(crate) fn publish(self) -> ArenaAllocation {
+        let allocation = ArenaAllocation {
+            arena: self.access.arena,
+            range: self.range,
+            initially_committed: self.initially_committed,
+            initially_zero: self.initially_zero,
+            pinned: self.access.pinned,
+        };
+        core::mem::forget(self);
+        allocation
+    }
+}
+
+#[forbid(unsafe_code)]
+impl Drop for ClaimedArenaSlices<'_, '_> {
+    fn drop(&mut self) {
+        self.access
+            .free
+            .set_n(self.range.start_usize(), self.range.count_usize());
+    }
+}
 
 #[must_use = "arena allocation ownership must be transferred to its backing MemId"]
 pub(crate) struct ArenaAllocation {
@@ -15,27 +196,6 @@ pub(crate) struct ArenaAllocation {
 }
 
 impl ArenaAllocation {
-    /// # Safety
-    /// `arena` must be live and initialized, and the caller must exclusively own
-    /// the cleared free-bitmap claim for this in-bounds `range`. No other
-    /// allocation owner may represent the same claim.
-    #[inline(always)]
-    pub(crate) unsafe fn from_claimed(arena: ArenaPtr, range: SliceRange) -> Self {
-        crate::internal::mi_assert_internal!(range.count_usize() > 0);
-        crate::internal::mi_assert_internal!(
-            range.start_usize() < unsafe { (*arena.as_ptr()).slice_count }
-        );
-        // SAFETY: the live arena's pinned policy is stable throughout this claim.
-        let pinned = unsafe { (*arena.as_ptr()).memid.is_pinned };
-        Self {
-            arena,
-            range,
-            initially_committed: false,
-            initially_zero: false,
-            pinned,
-        }
-    }
-
     #[inline(always)]
     pub(crate) fn arena(&self) -> ArenaPtr {
         self.arena
@@ -44,26 +204,6 @@ impl ArenaAllocation {
     #[inline(always)]
     pub(crate) fn range(&self) -> SliceRange {
         self.range
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_initially_zero(&mut self, zero: bool) {
-        self.initially_zero = zero;
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_initially_committed(&mut self, committed: bool) {
-        self.initially_committed = committed;
-    }
-
-    #[inline(always)]
-    pub(crate) fn initially_zero(&self) -> bool {
-        self.initially_zero
-    }
-
-    #[inline(always)]
-    pub(crate) fn initially_committed(&self) -> bool {
-        self.initially_committed
     }
 
     #[inline(always)]

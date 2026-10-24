@@ -150,3 +150,7 @@ These operation capabilities add no persistent allocator fields, locks,
 counters, or allocations. Encoded intrusive links, atomic publication, tracking,
 aligned bulk zeroing, OS operations, registration, terminal release, and raw
 storage construction retain explicit unsafe boundaries.
+
+The [borrowed-operation measurement report](../benchmarks/results/2026-10-24-borrowed-operations/README.md)
+records verification, net unsafe reduction, performance comparisons, and the
+remaining microbenchmark findings.

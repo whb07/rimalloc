@@ -334,7 +334,7 @@ impl<'page> PageCollection<'page> {
 
     /// # Safety
     /// `head` must own a uniquely detached chain for this exact page.
-    #[inline]
+    #[inline(always)]
     pub(crate) unsafe fn collect_head(
         &mut self,
         head: BlockPtr,

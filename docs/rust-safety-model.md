@@ -108,18 +108,27 @@ callbacks that may reenter. Raw entry contracts still establish live backing,
 thread ownership, and the permitted callback phase.
 
 Allocation pairs a `PageAccess` with a page-associated `PageRequest` in a fresh
-scope. Popping consumes the request and yields `PoppedBlockStorage`; its tracking
-transition yields `AllocatedBlockStorage`, whose initialization and padding
-operations stay within that owned block. Finishing consumes the storage before
-the pointer escapes. Freeing similarly pairs `FreePage` and `ScopedFreeBlock`,
-so safe list operations cannot combine different requests' pages and blocks.
-The ingress must restore guarded-block access before lending either capability.
+scope. The access borrows the actual free-list head and used count separately
+from stable geometry and the remote publication word. The request borrows an
+optional `MaybeUninit<usize>` output, so writing usable size does not require an
+initialized previous value. Popping consumes the request and yields
+`PoppedBlockStorage`; its tracking transition yields `AllocatedBlockStorage`
+with the exact block extent as `&mut [MaybeUninit<u8>]`. Initialization and
+padding use that bounded storage, including a reborrowed padding slot.
+Finishing consumes the storage before the pointer escapes. Freeing similarly
+pairs `FreePage` and `ScopedFreeBlock`, so safe list operations cannot combine
+different requests' pages and blocks. The ingress must restore guarded-block
+access before lending either capability.
 
 Queue membership and cursors borrow one queue phase and retain their destination.
 Removal consumes membership; an all-free member becomes `DetachedAllFree` before
-terminal release. Detached remote chains borrow the exact collection owner that
-removed them, preventing overlapping collection or an independently chosen
-local-list destination.
+terminal release. `PageCollection` borrows the actual available/local heads,
+used count, and zero flag, with shared access to capacity and the remote atomic
+word. Detached chains borrow that exact collection view. Local batches retain
+their destination loan through publication, which updates the available head
+and zero flag together. Safe callers cannot choose another page or supply a
+stale destination head. Collection ends its field loans before diagnostics that
+may reenter allocation, then projects fresh fields for the next phase.
 
 Remote publication consumes both the matching page access and block storage.
 Its link-write/CAS retry loop retains the block until success. Publication to an
@@ -131,8 +140,11 @@ Bitmap views borrow the actual initialized trailing chunk extent of a compact
 allocation. They derive trailing storage from the original allocation pointer,
 not a reference covering only the header. Range operations use bounded chunk
 references; raw compatibility workers retain their outlined argument shapes.
-An arena slice claim supplies its own arena and range to dirty/committed bitmap
-operations, and an unpublished claim returns its range through the existing
-rollback protocol. These operation capabilities add no persistent allocator
-fields, locks, counters, or allocations. OS, registration, terminal release, and
-raw storage construction remain explicit unsafe boundaries.
+`ArenaSliceAccess` projects free, dirty, and committed bitmap views once. A
+slice claim borrows those same views and retains a range checked against the
+arena's logical slice count. Dirty/committed operations and unpublished-claim
+rollback use the retained views without reconstructing raw bitmap access.
+These operation capabilities add no persistent allocator fields, locks,
+counters, or allocations. Encoded intrusive links, atomic publication, tracking,
+aligned bulk zeroing, OS operations, registration, terminal release, and raw
+storage construction retain explicit unsafe boundaries.

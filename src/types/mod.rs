@@ -8,6 +8,7 @@ pub(crate) mod free_actions;
 pub(crate) mod freelist;
 pub(crate) mod freelist_wrappers;
 pub(crate) mod layout;
+pub(crate) mod local;
 pub(crate) mod memid;
 pub(crate) mod page;
 pub(crate) mod page_batch;

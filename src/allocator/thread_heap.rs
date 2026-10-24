@@ -1221,8 +1221,8 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
     unsafe {
         if let Some(tld_theaps_head) = tld_theaps_head {
             _mi_random_split(
-                ptr::addr_of_mut!((*tld_theaps_head.as_ptr()).random),
-                ptr::addr_of_mut!((*theap_raw).random),
+                &(*tld_theaps_head.as_ptr()).random,
+                &mut (*theap_raw).random,
             );
         } else {
             #[cfg(any(target_os = "macos", windows))]
@@ -1230,7 +1230,7 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
             #[cfg(not(any(target_os = "macos", windows)))]
             _mi_random_init(ptr::addr_of_mut!((*theap_raw).random));
         }
-        (*theap_raw).cookie = _mi_random_next(ptr::addr_of_mut!((*theap_raw).random)) | 1;
+        (*theap_raw).cookie = _mi_random_next(&mut (*theap_raw).random) | 1;
         // SAFETY: the initialized current-thread heap remains exclusively owned
         // during publication setup; guarded fields/random state are mutable,
         // option storage and diagnostics are valid and non-unwinding, and
@@ -1369,10 +1369,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) ->
 
 #[inline(always)]
 unsafe fn _mi_theap_random_next_typed(theap: ThreadHeapLocal) -> usize {
-    unsafe {
-        let theap = theap.ptr().as_ptr();
-        _mi_random_next(ptr::addr_of_mut!((*theap).random))
-    }
+    unsafe { theap.with_local_access(|access| _mi_random_next(access.random())) }
 }
 
 #[inline]

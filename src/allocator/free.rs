@@ -488,27 +488,25 @@ pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
     }
 
     let bsize = unsafe { mi_page_usable_block_size(page) };
-    if bsize.get() <= MI_LARGE_MAX_OBJ_SIZE {
-        unsafe {
-            __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize.get());
-        }
-        if crate::types::MI_STAT > 1 {
-            let bin = mi_bin_from_usable(bsize);
-            unsafe {
-                __mi_stat_decrease(
-                    ptr::addr_of_mut!((*theap).stats.malloc_bins[bin.as_usize()]),
-                    1,
-                );
+    // SAFETY: the initialized current thread owns these local counters. The
+    // counter helpers and page-size reads cannot invoke allocator callbacks.
+    unsafe {
+        let local = crate::core_types::ThreadHeapLocal::new_unchecked(
+            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+        );
+        local.with_local_access(|access| {
+            let stats = access.stats();
+            if bsize.get() <= MI_LARGE_MAX_OBJ_SIZE {
+                __mi_stat_decrease(&mut stats.malloc_normal, bsize.get());
+                if crate::types::MI_STAT > 1 {
+                    let bin = mi_bin_from_usable(bsize);
+                    __mi_stat_decrease(&mut stats.malloc_bins[bin.as_usize()], 1);
+                }
+            } else {
+                let page_block_size = mi_page_block_size(page);
+                __mi_stat_decrease(&mut stats.malloc_huge, page_block_size);
             }
-        }
-    } else {
-        let page_block_size = unsafe { mi_page_block_size(page) };
-        unsafe {
-            __mi_stat_decrease(
-                ptr::addr_of_mut!((*theap).stats.malloc_huge),
-                page_block_size,
-            );
-        }
+        });
     }
 }
 

@@ -124,23 +124,9 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase_mt(
     }
 }
 
-/// # Safety
-/// - Pointer validity: `stat` must be non-null, aligned for
-///   `mi_stat_counter_t`, and valid for `total`.
-/// - Lifetime: `stat` must be live for the call.
-/// - Aliasing: `stat` must be exclusively writable for this non-atomic update.
-/// - Initialization: storage must be initialized.
-/// - Ownership: caller retains ownership.
-/// - Threading: caller must ensure no concurrent access to `stat`.
-/// - Unwind: must not unwind.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
-    stat: *mut mi_stat_counter_t,
-    amount: usize,
-) {
-    unsafe {
-        (*stat).total += amount as i64;
-    }
+pub(crate) extern "C" fn __mi_stat_counter_increase(stat: &mut mi_stat_counter_t, amount: usize) {
+    stat.total += amount as i64;
 }
 
 /// # Safety
@@ -157,17 +143,9 @@ pub(crate) unsafe extern "C" fn __mi_stat_increase_mt(stat: *mut mi_stat_count_t
     unsafe { mi_stat_update_mt(stat, amount as i64) };
 }
 
-/// # Safety
-/// - Pointer validity: `stat` non-null, aligned, writable count storage.
-/// - Lifetime: live for the call.
-/// - Aliasing: exclusive writable.
-/// - Initialization: initialized fields.
-/// - Ownership: caller retains ownership.
-/// - Threading: no concurrent access to `stat`.
-/// - Unwind: must not unwind.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn __mi_stat_increase(stat: *mut mi_stat_count_t, amount: usize) {
-    unsafe { mi_stat_update(&mut *stat, amount as i64) };
+pub(crate) extern "C" fn __mi_stat_increase(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_update(stat, amount as i64);
 }
 
 /// # Safety
@@ -184,17 +162,9 @@ pub(crate) unsafe extern "C" fn __mi_stat_decrease_mt(stat: *mut mi_stat_count_t
     unsafe { mi_stat_update_mt(stat, -(amount as i64)) };
 }
 
-/// # Safety
-/// - Pointer validity: `stat` non-null, aligned, writable.
-/// - Lifetime: live.
-/// - Aliasing: exclusive.
-/// - Initialization: initialized.
-/// - Ownership: retained by caller.
-/// - Threading: no concurrent access.
-/// - Unwind: must not unwind.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn __mi_stat_decrease(stat: *mut mi_stat_count_t, amount: usize) {
-    unsafe { mi_stat_update(&mut *stat, -(amount as i64)) };
+pub(crate) extern "C" fn __mi_stat_decrease(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_update(stat, -(amount as i64));
 }
 
 /// # Safety
@@ -258,20 +228,9 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease_mt(
     unsafe { mi_stat_adjust_mt(stat, -(amount as i64)) };
 }
 
-/// # Safety
-/// - Pointer validity: `stat` non-null, aligned, writable.
-/// - Lifetime: live.
-/// - Aliasing: exclusive.
-/// - Initialization: initialized.
-/// - Ownership: retained.
-/// - Threading: exclusive, no concurrent access.
-/// - Unwind: must not unwind.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease(
-    stat: *mut mi_stat_count_t,
-    amount: usize,
-) {
-    unsafe { mi_stat_adjust(&mut *stat, -(amount as i64)) };
+pub(crate) extern "C" fn __mi_stat_adjust_decrease(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_adjust(stat, -(amount as i64));
 }
 
 /// # Safety

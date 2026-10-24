@@ -276,11 +276,9 @@ unsafe fn mi_arenas_add(
                 // this registration increment.
                 unsafe {
                     __mi_stat_counter_increase(
-                        ptr::addr_of_mut!(
-                            (*(*arena.cast::<MiArenaPrefix>()).subproc)
-                                .stats
-                                .arena_count
-                        ),
+                        &mut (*(*arena.cast::<MiArenaPrefix>()).subproc)
+                            .stats
+                            .arena_count,
                         1,
                     )
                 };

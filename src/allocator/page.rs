@@ -435,7 +435,7 @@ pub(crate) unsafe fn _mi_page_retire_internal(
         unsafe {
             let theap = mi_page_theap(retired_raw);
             if MI_STAT > 0 {
-                __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);
+                __mi_stat_counter_increase(&mut (*theap).stats.pages_retire, 1);
             }
             let block_size = retired_page.block_size();
             mi_page_set_retire_expire(
@@ -892,7 +892,7 @@ unsafe fn mi_page_extend_free_typed(
         // SAFETY: the caller exclusively owns this live current-thread heap's statistics. Preserve
         // the pages-extended counter update before any free-list or capacity publication.
         unsafe {
-            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_extended), 1);
+            __mi_stat_counter_increase(&mut (*theap).stats.pages_extended, 1);
         }
     }
 
@@ -919,7 +919,7 @@ unsafe fn mi_page_extend_free_typed(
         // heap statistics. Preserve the page-committed byte update after capacity.
         unsafe {
             __mi_stat_increase(
-                ptr::addr_of_mut!((*theap).stats.page_committed),
+                &mut (*theap).stats.page_committed,
                 crate::core_types::CommittedBytes::new(extend * bsize).get(),
             );
         }
@@ -1706,11 +1706,8 @@ unsafe fn mi_page_queue_find_free_ex_active(
     // SAFETY: the caller exclusively owns this live heap's local search statistics. Preserve the
     // page-search total update before the search-count update in one coherent accounting epoch.
     unsafe {
-        __mi_stat_counter_increase(
-            ptr::addr_of_mut!((*theap_raw).stats.page_searches),
-            count.get(),
-        );
-        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap_raw).stats.page_searches_count), 1);
+        __mi_stat_counter_increase(&mut (*theap_raw).stats.page_searches, count.get());
+        __mi_stat_counter_increase(&mut (*theap_raw).stats.page_searches_count, 1);
     }
 
     if !page_candidate.is_null() {
@@ -1928,11 +1925,8 @@ unsafe fn mi_huge_page_alloc_typed(
         // returned page metadata stable. Preserve the second block-size read and bytes update before
         // the count update in one coherent statistics epoch.
         unsafe {
-            __mi_stat_increase(
-                ptr::addr_of_mut!((*theap).stats.malloc_huge),
-                mi_page_block_size(page),
-            );
-            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);
+            __mi_stat_increase(&mut (*theap).stats.malloc_huge, mi_page_block_size(page));
+            __mi_stat_counter_increase(&mut (*theap).stats.malloc_huge_count, 1);
         }
     }
     active.try_available().ok()

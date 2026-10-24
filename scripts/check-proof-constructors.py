@@ -12,6 +12,29 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PROBES = [
     (
+        "local-field-loan",
+        "src/types/local.rs",
+        "unsafe fn probe(h: ThreadHeapLocal) { unsafe { h.with_local_access(|a| { "
+        "a.stats().malloc_normal.current += 1; }); } }",
+        None,
+    ),
+    (
+        "local-field-loans-cannot-overlap",
+        "src/types/local.rs",
+        "unsafe fn probe(h: ThreadHeapLocal) { unsafe { h.with_local_access(|a| { "
+        "let stats = a.stats(); let _random = a.random(); "
+        "stats.malloc_normal.current += 1; }); } }",
+        "E0499",
+    ),
+    (
+        "local-field-loan-cannot-escape",
+        "src/types/local.rs",
+        "unsafe fn probe(h: ThreadHeapLocal) { let mut escaped = None; "
+        "unsafe { h.with_local_access(|a| { escaped = Some(a.stats()); }); } "
+        "let _ = escaped; }",
+        "E0521",
+    ),
+    (
         "scoped-free-handoff",
         "src/allocator/free.rs",
         "unsafe fn probe(v: crate::core_types::ValidatedFree) { unsafe { "

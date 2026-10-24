@@ -75,7 +75,6 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
-    let theap = local_theap.ptr().as_ptr();
     let page_ptr = available.page();
     let page = page_ptr.as_ptr();
     let size = padded.get();
@@ -156,27 +155,19 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     unsafe { mi_track_mem_undefined(block.cast(), bsize) };
 
     if MI_STAT > 0 && bsize <= MI_LARGE_MAX_OBJ_SIZE {
-        // SAFETY: `local_theap` grants exclusive current-thread access to its
-        // live local statistics for this allocation.
-        unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize) };
-        if MI_STAT > 1 {
-            // SAFETY: the same exclusive local-statistics access covers the
-            // ordered count update.
-            unsafe {
-                __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal_count), 1)
-            };
-            let bin = mi_bin_from_usable(usable_size).as_usize();
-            // SAFETY: `bin` is derived from the page's usable block size and
-            // indexes the live heap's exclusively mutable statistics array.
-            unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_bins[bin]), 1) };
-            // SAFETY: the fitting padded size makes the requested-size
-            // subtraction valid, and local statistics are exclusively mutable.
-            unsafe {
-                __mi_stat_increase(
-                    ptr::addr_of_mut!((*theap).stats.malloc_requested),
-                    size - MI_PADDING_SIZE,
-                )
-            };
+        // SAFETY: these counter updates cannot call out or reenter allocation.
+        // The current thread exclusively owns its live local statistics.
+        unsafe {
+            local_theap.with_local_access(|access| {
+                let stats = access.stats();
+                __mi_stat_increase(&mut stats.malloc_normal, bsize);
+                if MI_STAT > 1 {
+                    __mi_stat_counter_increase(&mut stats.malloc_normal_count, 1);
+                    let bin = mi_bin_from_usable(usable_size).as_usize();
+                    __mi_stat_increase(&mut stats.malloc_bins[bin], 1);
+                    __mi_stat_increase(&mut stats.malloc_requested, size - MI_PADDING_SIZE);
+                }
+            });
         }
     }
 
@@ -2239,23 +2230,14 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
         // SAFETY: the repeated initialized-state check proves the selected
         // statistics field is live for this exclusive guarded-count increment.
         unsafe {
-            __mi_stat_counter_increase(
-                ptr::addr_of_mut!((*stats_theap).stats.malloc_guarded_count),
-                1,
-            );
+            __mi_stat_counter_increase(&mut (*stats_theap).stats.malloc_guarded_count, 1);
         }
         if MI_STAT > 1 {
             // SAFETY: the same exclusive statistics epoch updates requested
             // bytes in the original decrease-then-increase order.
             unsafe {
-                __mi_stat_adjust_decrease(
-                    ptr::addr_of_mut!((*stats_theap).stats.malloc_requested),
-                    req_size,
-                );
-                __mi_stat_increase(
-                    ptr::addr_of_mut!((*stats_theap).stats.malloc_requested),
-                    size,
-                );
+                __mi_stat_adjust_decrease(&mut (*stats_theap).stats.malloc_requested, req_size);
+                __mi_stat_increase(&mut (*stats_theap).stats.malloc_requested, size);
             }
         }
     }

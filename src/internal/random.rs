@@ -151,9 +151,13 @@ fn _mi_prim_random_buf(buf: &mut [u8]) -> bool {
 }
 
 #[inline]
-fn mi_random_init_ex(ctx: &mut mi_random_ctx_t, use_weak: bool) {
+/// # Safety
+/// `ctx` must remain live and writable through entropy acquisition and any
+/// diagnostic callback, and exclusively writable during final initialization.
+unsafe fn mi_random_init_ex(ctx: *mut mi_random_ctx_t, use_weak: bool) {
     let mut key = [0u8; 32];
-    if use_weak || !_mi_prim_random_buf(&mut key) {
+    let weak = use_weak || !_mi_prim_random_buf(&mut key);
+    if weak {
         if !use_weak {
             crate::allocator::options::_mi_warning_message_fmt(format_args!(
                 "unable to use secure randomness\n"
@@ -168,25 +172,17 @@ fn mi_random_init_ex(ctx: &mut mi_random_ctx_t, use_weak: bool) {
             key[i + 3] = (x >> 24) as u8;
             x = x.wrapping_add(1);
         }
-        ctx.weak = true;
-    } else {
-        ctx.weak = false;
     }
+    // Entropy acquisition and warning callbacks finish before borrowing the
+    // destination, so an allocating callback cannot overlap that borrow.
+    let ctx = unsafe { &mut *ctx };
+    ctx.weak = weak;
     let nonce = ctx as *mut mi_random_ctx_t as usize as u64;
     chacha_init(ctx, &key, nonce);
 }
 
-/// # Safety
-///
-/// `ctx` and `ctx_new` must be valid, writable random contexts. They must be
-/// distinct, and `ctx` must already be initialized.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_random_split(
-    ctx: *mut mi_random_ctx_t,
-    ctx_new: *mut mi_random_ctx_t,
-) {
-    let ctx = unsafe { &mut *ctx };
-    let ctx_new = unsafe { &mut *ctx_new };
+pub(crate) extern "C" fn _mi_random_split(ctx: &mi_random_ctx_t, ctx_new: &mut mi_random_ctx_t) {
     crate::internal::mi_debug_assert!(mi_random_is_initialized(ctx));
     crate::internal::mi_debug_assert!(!core::ptr::eq(ctx, ctx_new));
     chacha_split(
@@ -196,13 +192,8 @@ pub(crate) unsafe extern "C" fn _mi_random_split(
     );
 }
 
-/// # Safety
-///
-/// `ctx` must point to an initialized random context that is writable for the
-/// duration of the call.
 #[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize {
-    let ctx = unsafe { &mut *ctx };
+pub(crate) extern "C" fn _mi_random_next(ctx: &mut mi_random_ctx_t) -> usize {
     crate::internal::mi_debug_assert!(mi_random_is_initialized(ctx));
     loop {
         #[cfg(target_pointer_width = "32")]
@@ -234,7 +225,7 @@ pub(crate) extern "C" fn _mi_os_random_weak(extra_seed: usize) -> usize {
 /// `ctx` must point to a writable random context.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_init(ctx: *mut mi_random_ctx_t) {
-    mi_random_init_ex(unsafe { &mut *ctx }, false);
+    unsafe { mi_random_init_ex(ctx, false) };
 }
 
 /// # Safety
@@ -242,7 +233,7 @@ pub(crate) unsafe extern "C" fn _mi_random_init(ctx: *mut mi_random_ctx_t) {
 /// `ctx` must point to a writable random context.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t) {
-    mi_random_init_ex(unsafe { &mut *ctx }, true);
+    unsafe { mi_random_init_ex(ctx, true) };
 }
 
 /// # Safety
@@ -251,15 +242,32 @@ pub(crate) unsafe extern "C" fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t) 
 /// initialized by the random initialization routines.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ctx_t) {
-    let ctx = unsafe { &mut *ctx };
-    if ctx.weak {
-        mi_random_init_ex(ctx, false);
+    if unsafe { (*ctx).weak } {
+        unsafe { mi_random_init_ex(ctx, false) };
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn borrowed_context_split_preserves_parent_and_uses_child_nonce() {
+        let mut parent = mi_random_ctx_t::default();
+        chacha_init(&mut parent, &[0x5A; 32], 7);
+        let original = parent;
+        let mut child = mi_random_ctx_t::default();
+        _mi_random_split(&parent, &mut child);
+        assert_eq!(parent, original);
+        assert_eq!(child.weak, parent.weak);
+        assert_eq!(&child.input[..12], &parent.input[..12]);
+        assert_ne!(&child.input[14..], &parent.input[14..]);
+        let mut same_child = child;
+        assert_eq!(
+            _mi_random_next(&mut child),
+            _mi_random_next(&mut same_child)
+        );
+    }
 
     #[test]
     fn primitive_random_buffer_accepts_empty_slice_without_platform_access() {

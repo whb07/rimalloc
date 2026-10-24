@@ -18,6 +18,8 @@ use super::validation::{
 };
 use super::validation_extra::{AllocatedBlock, FreeBlock};
 
+assert_not_impl_any!(super::local::LocalHeapAccess<'_>: Copy, Clone, Send, Sync);
+
 assert_not_impl_any!(GuardedBlock: Copy, Clone);
 assert_not_impl_any!(PointerLocation: Copy, Clone);
 assert_not_impl_any!(LocatedBlock: Copy, Clone);

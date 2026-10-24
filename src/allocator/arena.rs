@@ -1361,10 +1361,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                 mi_heap_abandoned_count(&(*heap.cast::<MiHeapPrefix>()).abandoned_count, bin)
                     .fetch_sub_relaxed(1);
                 (*theap).stats.pages_reclaim_on_alloc.total += 1;
-                crate::internal::__mi_stat_decrease(
-                    ptr::addr_of_mut!((*theap).stats.pages_abandoned),
-                    1,
-                );
+                crate::internal::__mi_stat_decrease(&mut (*theap).stats.pages_abandoned, 1);
                 Some(crate::allocator::raw_bridge::assume_owned_abandoned_page(
                     page,
                 ))
@@ -1816,9 +1813,9 @@ unsafe fn mi_arenas_page_alloc_fresh(
     // registration now stabilizes the initialized page metadata used to select
     // and increment its exact page-bin counters.
     unsafe {
-        __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.pages), 1);
+        __mi_stat_increase(&mut (*theap).stats.pages, 1);
         let stats_bin = _mi_page_stats_bin(page);
-        __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.page_bins[stats_bin]), 1);
+        __mi_stat_increase(&mut (*theap).stats.page_bins[stats_bin], 1);
     };
 
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
@@ -2167,13 +2164,10 @@ pub(crate) unsafe fn _mi_arenas_page_free_internal<S>(
         // exclusively mutable; preserve bin-before-pages decrement order.
         unsafe {
             crate::internal::__mi_stat_decrease(
-                ptr::addr_of_mut!((*current_theapx).stats.page_bins[stats_bin]),
+                &mut (*current_theapx).stats.page_bins[stats_bin],
                 1,
             );
-            crate::internal::__mi_stat_decrease(
-                ptr::addr_of_mut!((*current_theapx).stats.pages),
-                1,
-            );
+            crate::internal::__mi_stat_decrease(&mut (*current_theapx).stats.pages, 1);
         }
     } else {
         // SAFETY: the page's initialized heap association remains live and
@@ -2417,8 +2411,8 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
         };
         let theap = theap.as_ptr();
 
-        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reabandon_full), 1);
-        __mi_stat_adjust_decrease(ptr::addr_of_mut!((*theap).stats.pages_abandoned), 1);
+        __mi_stat_counter_increase(&mut (*theap).stats.pages_reabandon_full, 1);
+        __mi_stat_adjust_decrease(&mut (*theap).stats.pages_abandoned, 1);
         // Consume claimed ownership through publication or terminal release.
         let outcome = _mi_arenas_page_abandon_internal(
             page,

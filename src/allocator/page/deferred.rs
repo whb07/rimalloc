@@ -30,11 +30,7 @@ unsafe fn mi_theap_increment_heartbeat(theap: *mut mi_theap_t) -> crate::core_ty
 unsafe fn mi_theap_increment_heartbeat_typed(
     theap: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::Heartbeat {
-    unsafe {
-        let heartbeat = theap.ptr().heartbeat().increment_wrapping();
-        theap.ptr().set_heartbeat(heartbeat);
-        heartbeat
-    }
+    unsafe { theap.with_local_access(|access| access.increment_heartbeat()) }
 }
 
 #[inline(never)]

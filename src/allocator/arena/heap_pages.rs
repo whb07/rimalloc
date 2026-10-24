@@ -403,8 +403,8 @@ unsafe extern "C" fn mi_heap_delete_page(
         // SAFETY: the live target thread heap owns aligned initialized stats storage; exclusive
         // transfer updates the matching bin and page totals after heap reassignment.
         unsafe {
-            __mi_stat_increase(ptr::addr_of_mut!((*theap_target).stats.page_bins[sbin]), 1);
-            __mi_stat_increase(ptr::addr_of_mut!((*theap_target).stats.pages), 1);
+            __mi_stat_increase(&mut (*theap_target).stats.page_bins[sbin], 1);
+            __mi_stat_increase(&mut (*theap_target).stats.pages, 1);
         }
         // SAFETY: the page retains its active owner bit after reassignment and target publication;
         // the live target thread heap owns stats while raw abandon completes mapped publication.

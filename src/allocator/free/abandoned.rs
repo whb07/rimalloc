@@ -276,7 +276,7 @@ unsafe fn try_reclaim_abandoned(
     let active = unsafe {
         _mi_arenas_page_unabandon_internal(&page, Some(owner));
         let active = _mi_theap_page_reclaim(page, owner);
-        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reclaim_on_free), 1);
+        __mi_stat_counter_increase(&mut (*theap).stats.pages_reclaim_on_free, 1);
         active
     };
     #[cfg(feature = "bench-diagnostics")]

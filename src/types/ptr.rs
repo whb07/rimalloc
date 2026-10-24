@@ -10,8 +10,8 @@ use super::constants::{
 use super::freelist_wrappers::{AvailableFreeList, BlockLink, EncodedPtr, LocalFreeList, PageKeys};
 use super::page::ThreadId;
 use super::scalar::{
-    ArenaCount, ArenaIndex, Bin, BlockSize, DirectBin, Heartbeat, NumaNode, PageCapacity,
-    PageQueueCount, ReservedBlockCount, SliceCount, ThreadSeq, UsedBlockCount,
+    ArenaCount, ArenaIndex, Bin, BlockSize, DirectBin, NumaNode, PageCapacity, PageQueueCount,
+    ReservedBlockCount, SliceCount, ThreadSeq, UsedBlockCount,
 };
 use core::ffi::c_void;
 use core::ptr::{self, NonNull};
@@ -648,26 +648,6 @@ impl ThreadHeapPtr {
         // SAFETY: the caller exclusively owns this live thread heap's heap
         // association transition and supplies a live heap or null sentinel.
         unsafe { ptr::write(ptr::addr_of_mut!((*raw).heap), heap) };
-    }
-
-    /// # Safety
-    /// The thread-heap pointer must refer to initialized thread-heap metadata.
-    #[inline(always)]
-    pub(crate) unsafe fn heartbeat(self) -> Heartbeat {
-        let raw = self.as_ptr();
-        // SAFETY: the caller keeps the initialized thread heap live and grants
-        // stable readable access to its heartbeat field for this copy.
-        Heartbeat::new(unsafe { ptr::read(ptr::addr_of!((*raw).heartbeat)) })
-    }
-
-    /// # Safety
-    /// The thread-heap pointer must refer to writable thread-heap metadata.
-    #[inline(always)]
-    pub(crate) unsafe fn set_heartbeat(self, heartbeat: Heartbeat) {
-        let raw = self.as_ptr();
-        // SAFETY: the caller exclusively owns this live thread heap's heartbeat
-        // update and supplies an initialized typed value.
-        unsafe { ptr::write(ptr::addr_of_mut!((*raw).heartbeat), heartbeat.get()) };
     }
 
     /// # Safety

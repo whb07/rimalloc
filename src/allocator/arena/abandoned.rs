@@ -466,12 +466,7 @@ pub(crate) unsafe fn _mi_arenas_page_abandon_internal(
         };
         // SAFETY: current_theap is the live current-thread stats owner and this
         // transition has exclusive non-atomic access to its counter.
-        unsafe {
-            __mi_stat_increase(
-                ptr::addr_of_mut!((*current_theap_raw).stats.pages_abandoned),
-                1,
-            )
-        };
+        unsafe { __mi_stat_increase(&mut (*current_theap_raw).stats.pages_abandoned, 1) };
     } else {
         if !is_arena && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned) {
             // SAFETY: `heap` owns this live detached non-arena page; the helper
@@ -480,12 +475,7 @@ pub(crate) unsafe fn _mi_arenas_page_abandon_internal(
         }
         // SAFETY: current_theap remains the live current-thread stats owner and
         // exclusively updates its local abandoned-page count.
-        unsafe {
-            __mi_stat_increase(
-                ptr::addr_of_mut!((*current_theap_raw).stats.pages_abandoned),
-                1,
-            )
-        };
+        unsafe { __mi_stat_increase(&mut (*current_theap_raw).stats.pages_abandoned, 1) };
     }
     // SAFETY: current_theap_raw is the same live current-thread local heap
     // consumed at entry and remains valid through synchronous publication.
@@ -617,12 +607,7 @@ pub(crate) unsafe fn _mi_arenas_page_unabandon_internal(
     if !current_theapx.is_null() {
         // SAFETY: current_theapx is the live current-thread stats owner and this
         // transition exclusively updates its non-atomic abandoned count.
-        unsafe {
-            __mi_stat_decrease(
-                ptr::addr_of_mut!((*current_theapx).stats.pages_abandoned),
-                1,
-            )
-        };
+        unsafe { __mi_stat_decrease(&mut (*current_theapx).stats.pages_abandoned, 1) };
     } else {
         // SAFETY: without a current local owner, the live heap's aligned shared
         // abandoned counter is updated only through the MT atomic helper.

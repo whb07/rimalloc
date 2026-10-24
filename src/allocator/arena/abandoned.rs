@@ -43,32 +43,17 @@ pub(super) unsafe fn mi_abandoned_page_unown(
     loop {
         crate::internal::mi_assert_internal!(tf_old.is_owned());
         while tf_old.head().is_some() {
-            // SAFETY: claimed ownership gives exclusive page-local metadata
-            // access while remote producers touch only the atomic head.
-            let local_free = unsafe { page_ptr.local_free() };
-            // SAFETY: the live atomic field remains claimed; detaching preserves
-            // the owner bit while transferring the observed remote chain.
+            // Collect and recycle under a short field loan; end it before
+            // error callbacks, ownership release or terminal page destruction.
             let detached = unsafe { atomic_tf.detach_head() };
-            // SAFETY: owned_page proves exclusive abandoned collection; both
-            // detached and local lists belong to this live page, whose block
-            // geometry and encoding keys remain stable.
-            let local_free = unsafe {
-                match crate::allocator::page::collect_remote_for_owned_abandoned_page(
+            let _ = unsafe {
+                crate::allocator::page::collect_remote_for_owned_abandoned_page(
                     &owned_page,
                     detached,
-                    local_free,
-                ) {
-                    Ok(local_free) => local_free,
-                    Err(_) => page_ptr.local_free(),
-                }
+                )
             };
-            // SAFETY: collection retains exclusive access to this page's
-            // initialized available-list head for the emptiness snapshot.
-            if unsafe { page_ptr.free().is_empty() } && !local_free.is_empty() {
-                // SAFETY: `owned_page` retains the claimed abandoned owner and
-                // `local_free` was read from that same page immediately above.
-                unsafe { owned_page.transfer_local_to_available(local_free) };
-            }
+            unsafe { crate::types::PageCollection::for_abandoned(&owned_page) }
+                .transfer_local_if_available_empty();
             // SAFETY: after owned collection, the caller stabilizes used/free
             // accounting sufficiently to test the complete all-free state.
             if unsafe { mi_page_all_free(page) } {

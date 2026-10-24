@@ -70,7 +70,7 @@ pub(crate) use page_states::{
     PageAbandonOutcome, PageForAbandon, ThreadHeapLocal, Uninit,
 };
 
-pub(crate) use page_batch::{BatchValidationError, LocalFreeBatch, RemoteFreeBatch};
+pub(crate) use page_batch::{BatchValidationError, PageCollection};
 
 pub(crate) use freelist_wrappers::{
     AvailableFreeList, BlockLink, BlockTag, EncodedPtr, EncodedWord, LocalFreeList, PageKeys,

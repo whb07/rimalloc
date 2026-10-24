@@ -66,24 +66,39 @@ PROBES = [
     ),
     (
         "detached-collection-retains-exclusive-owner-loan",
-        "src/allocator/page/lifecycle.rs",
-        "fn probe(mut owner: PageCollectOwner<'_>) { "
+        "src/types/page_batch.rs",
+        "fn probe(mut owner: PageCollection<'_>) { "
         "let a = owner.detach_remote(); let _b = owner.detach_remote(); let _ = a.collect(); }",
         "E0499",
     ),
     (
         "detached-collection-rejects-independent-destination",
-        "src/allocator/page/lifecycle.rs",
-        "fn probe(chain: DetachedForPage<'_, '_>, other: PageCollectOwner<'_>) { "
+        "src/types/page_batch.rs",
+        "fn probe(chain: DetachedForPage<'_, '_>, other: PageCollection<'_>) { "
         "let _ = chain.collect(other); }",
         "E0061",
     ),
     (
         "detached-collection-consumes-chain",
-        "src/allocator/page/lifecycle.rs",
+        "src/types/page_batch.rs",
         "fn probe(chain: DetachedForPage<'_, '_>) { "
         "let _ = chain.collect(); let _ = chain.collect(); }",
         "E0382",
+    ),
+    (
+        "local-batch-borrows-destination-until-publication",
+        "src/types/page_batch.rs",
+        "fn probe(mut owner: PageCollection<'_>) { "
+        "let batch = owner.detach_local_free_batch(); "
+        "let _ = owner.recycle_local(false); drop(batch); }",
+        "E0499",
+    ),
+    (
+        "local-batch-rejects-independent-available-list",
+        "src/types/page_batch.rs",
+        "fn probe(batch: LocalFreeBatch<'_, '_>, other: AvailableFreeList) { "
+        "batch.prepend_to_available(other); }",
+        "E0061",
     ),
     (
         "remote-publication-handoff-is-safe",

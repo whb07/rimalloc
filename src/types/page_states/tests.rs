@@ -110,7 +110,7 @@ fn recycled_available_publication_updates_coupled_page_fields() {
     let local_thread = ThreadId::new(crate::prim::_mi_prim_thread_id())
         .expect("platform current-thread id is nonzero and unflagged");
 
-    let mut local_page = MaybeUninit::<mi_page_t>::uninit();
+    let mut local_page = MaybeUninit::<mi_page_t>::zeroed();
     let mut local_block = mi_block_t::default();
     // SAFETY: this initializes a distinct stack-local page as current-thread
     // owned with an unowned thread-free word and the exact list fields touched
@@ -128,13 +128,16 @@ fn recycled_available_publication_updates_coupled_page_fields() {
         ptr::addr_of_mut!((*raw).free_is_zero).write(true);
 
         let local_owner = LocalPage::new_unchecked(page_ptr);
-        local_owner.transfer_local_to_available(LocalFreeList::from_head(local_head));
+        assert!(
+            super::super::PageCollection::for_local(&local_owner)
+                .transfer_local_if_available_empty()
+        );
         assert_eq!((*raw).free, local_head.as_ptr());
         assert!((*raw).local_free.is_null());
         assert!(!(*raw).free_is_zero);
     }
 
-    let mut abandoned_page = MaybeUninit::<mi_page_t>::uninit();
+    let mut abandoned_page = MaybeUninit::<mi_page_t>::zeroed();
     let mut spliced_block = mi_block_t::default();
     // SAFETY: this initializes a separate stack-local page as abandoned with
     // its thread-free ownership bit already claimed. The spliced block belongs
@@ -148,11 +151,14 @@ fn recycled_available_publication_updates_coupled_page_fields() {
         ptr::addr_of_mut!((*raw).xthread_free)
             .write(ThreadFreeWord::from_parts(None, ThreadFreeOwner::Owned).raw());
         ptr::addr_of_mut!((*raw).free).write(ptr::null_mut());
-        ptr::addr_of_mut!((*raw).local_free).write(ptr::null_mut());
+        ptr::addr_of_mut!((*raw).local_free).write(spliced_head.as_ptr());
         ptr::addr_of_mut!((*raw).free_is_zero).write(true);
 
         let abandoned_owner = OwnedAbandonedPage::new_unchecked(page_ptr);
-        abandoned_owner.publish_recycled_available(AvailableFreeList::from_head(spliced_head));
+        assert!(
+            super::super::PageCollection::for_abandoned(&abandoned_owner)
+                .transfer_local_if_available_empty()
+        );
         assert_eq!((*raw).free, spliced_head.as_ptr());
         assert!((*raw).local_free.is_null());
         assert!(!(*raw).free_is_zero);

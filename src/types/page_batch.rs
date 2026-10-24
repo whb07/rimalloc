@@ -31,9 +31,17 @@ struct BatchCore {
 #[must_use = "remote free batches must be collected or republished"]
 pub(crate) struct RemoteFreeBatch(BatchCore);
 
-#[derive(Debug)]
 #[must_use = "local free batches must be returned to page availability"]
-pub(crate) struct LocalFreeBatch(BatchCore);
+pub(crate) struct LocalFreeBatch<'access, 'page> {
+    access: &'access mut PageCollection<'page>,
+    core: BatchCore,
+}
+
+impl core::fmt::Debug for LocalFreeBatch<'_, '_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("LocalFreeBatch").field(&self.core).finish()
+    }
+}
 
 impl BatchCore {
     #[inline(always)]
@@ -79,7 +87,6 @@ macro_rules! impl_batch_accessors {
 }
 
 impl_batch_accessors!(RemoteFreeBatch);
-impl_batch_accessors!(LocalFreeBatch);
 
 impl RemoteFreeBatch {
     #[inline(always)]
@@ -230,120 +237,205 @@ impl RemoteFreeBatch {
         Ok(Self(core))
     }
 
-    /// # Safety
-    /// `owner` and `current` must describe this batch's local destination.
     #[inline]
-    pub(crate) unsafe fn collect_into_local_page(
-        self,
-        owner: &LocalPage,
-        current: LocalFreeList,
-    ) -> LocalFreeList {
-        unsafe { self.collect_into_page(owner.page(), current) }
-    }
-
-    /// # Safety
-    /// `owner` and `current` must describe this batch's abandoned destination.
-    #[inline]
-    pub(crate) unsafe fn collect_into_owned_abandoned_page(
-        self,
-        owner: &OwnedAbandonedPage,
-        current: LocalFreeList,
-    ) -> LocalFreeList {
-        unsafe { self.collect_into_page(owner.page(), current) }
-    }
-
-    #[inline]
-    unsafe fn collect_into_page(self, owner: PagePtr, current: LocalFreeList) -> LocalFreeList {
-        crate::internal::mi_debug_assert!(owner == self.page());
-        unsafe { self.tail().set_next(owner, current.head()) };
-        let new_local = LocalFreeList::from_head(self.head());
+    fn collect_into(self, access: &mut PageCollection<'_>) {
+        crate::internal::mi_debug_assert!(access.page == self.page());
+        // The private caller validated this chain against this access's page
+        // and used count; no callback or other writer intervenes.
         unsafe {
-            owner.set_local_free(LocalFreeList::from_head(self.head()));
-            let used = owner.used();
-            let Some(used) = used.checked_sub_batch(self.len()) else {
-                core::hint::unreachable_unchecked()
-            };
-            owner.set_used(used);
-        }
-        new_local
+            self.tail()
+                .set_next(access.page, LocalFreeList::from_raw(*access.local).head())
+        };
+        *access.local = self.head().as_ptr();
+        *access.used -= self.len().get();
     }
 }
 
-impl LocalFreeBatch {
-    /// # Safety
-    /// `owner` and `available` must describe this batch's page destination.
-    #[inline]
-    pub(crate) unsafe fn prepend_to_available(
-        self,
-        owner: &LocalPage,
-        available: AvailableFreeList,
-    ) -> AvailableFreeList {
-        unsafe { self.prepend_to_page(owner.page(), available) }
-    }
-
-    /// # Safety
-    /// `owner` and `available` must describe this batch's abandoned destination.
-    #[inline]
-    pub(crate) unsafe fn prepend_to_owned_abandoned_page(
-        self,
-        owner: &OwnedAbandonedPage,
-        available: AvailableFreeList,
-    ) -> AvailableFreeList {
-        unsafe { self.prepend_to_page(owner.page(), available) }
-    }
-
-    #[inline]
-    unsafe fn prepend_to_page(
-        self,
-        owner: PagePtr,
-        available: AvailableFreeList,
-    ) -> AvailableFreeList {
-        crate::internal::mi_debug_assert!(owner == self.page());
-        unsafe { self.tail().set_next(owner, available.head()) };
-        AvailableFreeList::from_head(self.head())
-    }
-}
-
-impl LocalPage {
-    /// Detach the complete local free list as a validated batch.
-    ///
-    /// # Safety
-    /// The caller must hold current-thread ownership of this page.
-    #[inline]
-    pub(crate) unsafe fn detach_local_free_batch(
-        &self,
-    ) -> Result<Option<LocalFreeBatch>, BatchValidationError> {
-        unsafe { detach_local_free_batch(self.page()) }
-    }
-}
-
-impl OwnedAbandonedPage {
-    /// Detach the complete local free list as a validated batch.
-    ///
-    /// # Safety
-    /// The caller must hold claimed collection ownership of this abandoned page.
-    #[inline]
-    pub(crate) unsafe fn detach_local_free_batch(
-        &self,
-    ) -> Result<Option<LocalFreeBatch>, BatchValidationError> {
-        unsafe { detach_local_free_batch(self.page()) }
-    }
-}
-
-#[inline]
-unsafe fn detach_local_free_batch(
+/// The local fields borrowed for one callback-free collection phase.
+/// Remote producers retain independent access to the atomic publication word.
+pub(crate) struct PageCollection<'page> {
     page: PagePtr,
-) -> Result<Option<LocalFreeBatch>, BatchValidationError> {
-    let local = unsafe { page.local_free() };
-    let Some(head) = local.head() else {
-        return Ok(None);
-    };
-    let capacity = unsafe { page.capacity() };
-    let core = unsafe { scan_detached_chain(page, head, capacity) }?;
-    #[cfg(feature = "bench-diagnostics")]
-    crate::allocator::bench_diagnostics::local_tail_scan(core.len().get() as usize);
-    unsafe { page.set_local_free(LocalFreeList::empty()) };
-    Ok(Some(LocalFreeBatch(core)))
+    free: &'page mut *mut crate::types::mi_block_t,
+    local: &'page mut *mut crate::types::mi_block_t,
+    used: &'page mut u16,
+    free_is_zero: &'page mut bool,
+    capacity: &'page u16,
+    remote: crate::types::atomic::AtomicThreadFree<'page>,
+}
+
+#[must_use = "a detached remote chain must be collected"]
+pub(crate) struct DetachedForPage<'access, 'page> {
+    access: &'access mut PageCollection<'page>,
+    detached: crate::core_types::DetachedRemoteList,
+}
+
+impl<'page> PageCollection<'page> {
+    /// # Safety
+    /// `owner` must retain exclusive local-list/accounting access to its live,
+    /// initialized page and nodes for this loan. Geometry and encoding keys
+    /// remain stable. Only atomic remote publication may run concurrently;
+    /// callbacks and incompatible reentry must wait until the loan ends.
+    #[inline(always)]
+    pub(crate) unsafe fn for_local(owner: &'page LocalPage) -> Self {
+        unsafe { Self::from_page(owner.page()) }
+    }
+
+    /// # Safety
+    /// The claimed abandoned owner must retain the same exclusive fields,
+    /// node storage and stable geometry required by `for_local` for this loan.
+    #[inline(always)]
+    pub(crate) unsafe fn for_abandoned(owner: &'page OwnedAbandonedPage) -> Self {
+        unsafe { Self::from_page(owner.page()) }
+    }
+
+    #[inline(always)]
+    unsafe fn from_page(page: PagePtr) -> Self {
+        let raw = page.as_ptr();
+        // Borrow disjoint fields, never the aggregate page or client blocks.
+        unsafe {
+            Self {
+                page,
+                free: &mut (*raw).free,
+                local: &mut (*raw).local_free,
+                used: &mut (*raw).used,
+                free_is_zero: &mut (*raw).free_is_zero,
+                capacity: &(*raw).capacity,
+                remote: crate::types::atomic::AtomicThreadFree::from_cell(
+                    &*page.thread_free_field(),
+                ),
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn detach_remote(&mut self) -> DetachedForPage<'_, 'page> {
+        // The field loan retains the collection claim and backing for the CAS.
+        let detached = unsafe { self.remote.detach_head() };
+        DetachedForPage {
+            access: self,
+            detached,
+        }
+    }
+
+    /// # Safety
+    /// `detached` must be the uniquely detached chain for this exact page.
+    /// Used only where an external atomic or published-head operation detached
+    /// the chain before projecting these local fields.
+    #[inline]
+    pub(crate) unsafe fn collect_detached(
+        &mut self,
+        detached: crate::core_types::DetachedRemoteList,
+    ) -> Result<(), BatchValidationError> {
+        let Some(head) = detached.into_head() else {
+            return Ok(());
+        };
+        unsafe { self.collect_head(head) }
+    }
+
+    /// # Safety
+    /// `head` must own a uniquely detached chain for this exact page.
+    #[inline]
+    pub(crate) unsafe fn collect_head(
+        &mut self,
+        head: BlockPtr,
+    ) -> Result<(), BatchValidationError> {
+        let batch = unsafe {
+            RemoteFreeBatch::from_detached(
+                self.page,
+                head,
+                PageCapacity::new_unchecked(*self.capacity),
+                UsedBlockCount::new(*self.used),
+            )
+        }?;
+        batch.collect_into(self);
+        Ok(())
+    }
+
+    #[forbid(unsafe_code)]
+    #[inline(always)]
+    pub(crate) fn local_is_empty(&self) -> bool {
+        self.local.is_null()
+    }
+
+    #[forbid(unsafe_code)]
+    #[inline(always)]
+    pub(crate) fn transfer_local_if_available_empty(&mut self) -> bool {
+        if !self.free.is_null() || self.local.is_null() {
+            return false;
+        }
+        *self.free = *self.local;
+        *self.local = core::ptr::null_mut();
+        *self.free_is_zero = false;
+        true
+    }
+
+    #[inline]
+    pub(crate) fn detach_local_free_batch(
+        &mut self,
+    ) -> Result<Option<LocalFreeBatch<'_, 'page>>, BatchValidationError> {
+        let Some(head) = BlockPtr::new(*self.local) else {
+            return Ok(None);
+        };
+        let core = unsafe {
+            scan_detached_chain(self.page, head, PageCapacity::new_unchecked(*self.capacity))
+        }?;
+        #[cfg(feature = "bench-diagnostics")]
+        crate::allocator::bench_diagnostics::local_tail_scan(core.len().get() as usize);
+        *self.local = core::ptr::null_mut();
+        Ok(Some(LocalFreeBatch { access: self, core }))
+    }
+
+    #[forbid(unsafe_code)]
+    #[inline(always)]
+    pub(crate) fn recycle_local(&mut self, force: bool) -> Result<(), BatchValidationError> {
+        if self.local_is_empty() {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::allocator::bench_diagnostics::page_free_collect_local_empty();
+        } else if self.transfer_local_if_available_empty() {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(false);
+        } else if force {
+            if let Some(batch) = self.detach_local_free_batch()? {
+                batch.prepend_to_available();
+                #[cfg(feature = "bench-diagnostics")]
+                crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(true);
+            }
+        } else {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::allocator::bench_diagnostics::page_free_collect_noop_local_blocked();
+        }
+        Ok(())
+    }
+}
+
+impl DetachedForPage<'_, '_> {
+    #[inline(always)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.detached.is_empty()
+    }
+
+    #[inline(always)]
+    pub(crate) fn collect(self) -> Result<(), BatchValidationError> {
+        // Detaching and this exact field loan are stored together, so callers
+        // cannot substitute an unrelated page or stale destination head.
+        unsafe { self.access.collect_detached(self.detached) }
+    }
+}
+
+impl LocalFreeBatch<'_, '_> {
+    #[inline]
+    pub(crate) fn prepend_to_available(self) {
+        // The batch borrows its destination and was scanned with the same
+        // stable encoding domain; its tail remains exclusively owned.
+        unsafe {
+            self.core.tail().set_next(
+                self.access.page,
+                AvailableFreeList::from_raw(*self.access.free).head(),
+            )
+        };
+        *self.access.free = self.core.head().as_ptr();
+        *self.access.free_is_zero = false;
+    }
 }
 
 #[cfg(test)]

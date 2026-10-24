@@ -7,10 +7,7 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{AtomicUsizeField, BlockPtr};
-use crate::core_types::{
-    BatchValidationError, LocalPage, OwnedAbandonedPage, RemoteFreeBatch, ThreadFreeOwner,
-    ThreadFreeWord,
-};
+use crate::core_types::{OwnedAbandonedPage, ThreadFreeOwner, ThreadFreeWord};
 
 #[must_use = "remote push outcomes must be consumed to preserve publication ownership"]
 pub(crate) enum RemotePushResult {
@@ -90,36 +87,9 @@ impl DetachedRemoteList {
         self.0.is_none()
     }
 
-    /// # Safety
-    /// The detached chain must belong to `page` and remain uniquely owned.
-    #[inline]
-    pub(crate) unsafe fn into_batch_for_local(
-        self,
-        page: &LocalPage,
-    ) -> Result<Option<RemoteFreeBatch>, BatchValidationError> {
-        unsafe { self.into_batch(page.page()) }
-    }
-
-    /// # Safety
-    /// The detached chain must belong to `page` and remain uniquely owned.
-    #[inline]
-    pub(crate) unsafe fn into_batch_for_abandoned(
-        self,
-        page: &OwnedAbandonedPage,
-    ) -> Result<Option<RemoteFreeBatch>, BatchValidationError> {
-        unsafe { self.into_batch(page.page()) }
-    }
-
-    #[inline]
-    unsafe fn into_batch(
-        self,
-        page: crate::core_types::PagePtr,
-    ) -> Result<Option<RemoteFreeBatch>, BatchValidationError> {
-        let Some(head) = self.0 else {
-            return Ok(None);
-        };
-        let (capacity, used) = unsafe { (page.capacity(), page.used()) };
-        unsafe { RemoteFreeBatch::from_detached(page, head, capacity, used) }.map(Some)
+    #[inline(always)]
+    pub(in crate::types) fn into_head(self) -> Option<BlockPtr> {
+        self.0
     }
 }
 

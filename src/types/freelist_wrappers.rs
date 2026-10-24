@@ -331,23 +331,8 @@ pub(crate) struct LocalFreeList(Option<BlockPtr>);
 
 impl LocalFreeList {
     #[inline(always)]
-    pub(crate) const fn empty() -> Self {
-        Self(None)
-    }
-
-    #[inline(always)]
-    pub(crate) fn from_head(head: BlockPtr) -> Self {
-        Self(Some(head))
-    }
-
-    #[inline(always)]
     pub(crate) fn is_empty(&self) -> bool {
         self.0.is_none()
-    }
-
-    #[inline(always)]
-    pub(crate) fn into_available(self) -> AvailableFreeList {
-        AvailableFreeList(self.0)
     }
 
     #[inline(always)]
@@ -363,7 +348,7 @@ impl LocalFreeList {
 
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).local_free`).
     #[inline(always)]
-    pub(crate) unsafe fn from_raw(head: *mut mi_block_t) -> Self {
+    pub(crate) fn from_raw(head: *mut mi_block_t) -> Self {
         Self(BlockPtr::new(head))
     }
 }

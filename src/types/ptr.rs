@@ -278,17 +278,6 @@ impl PagePtr {
     }
 
     /// # Safety
-    /// The page pointer must refer to writable page metadata.
-    #[inline(always)]
-    pub(crate) unsafe fn set_local_free(self, local_free: LocalFreeList) {
-        let raw = self.as_ptr();
-        let head = local_free.as_raw();
-        // SAFETY: the caller has exclusive local ownership of this page field,
-        // and `local_free` is the initialized head to publish.
-        unsafe { ptr::write(ptr::addr_of_mut!((*raw).local_free), head) };
-    }
-
-    /// # Safety
     /// The page pointer must refer to initialized page metadata whose queue
     /// links may be inspected by the page-queue protocol.
     #[inline(always)]

@@ -167,8 +167,8 @@ unsafe fn reference_prepend_local_to_available(page: PagePtr) {
     unsafe {
         let available = page.free();
         tail.set_next(page, available.head());
-        page.set_free(local.into_available());
-        page.set_local_free(LocalFreeList::empty());
+        page.set_free(AvailableFreeList::from_raw(local.as_raw()));
+        (*page.as_ptr()).local_free = core::ptr::null_mut();
     }
 }
 
@@ -185,7 +185,7 @@ unsafe fn reference_collect_remote_into_local(page: PagePtr, head: BlockPtr) {
     unsafe {
         let local = page.local_free();
         tail.set_next(page, local.head());
-        page.set_local_free(LocalFreeList::from_head(head));
+        (*page.as_ptr()).local_free = head.as_ptr();
         page.set_used(UsedBlockCount::new(page.used().get() - count));
     }
 }
@@ -527,7 +527,7 @@ fn empty_local_list_converts_to_no_batch_without_mutation() {
     unsafe {
         let owner = LocalPage::new_unchecked(fixture.page());
         assert!(
-            owner
+            PageCollection::for_local(&owner)
                 .detach_local_free_batch()
                 .expect("empty local list is valid")
                 .is_none()
@@ -553,21 +553,19 @@ fn remote_batch_splices_destinations_and_subtracts_used_once() {
         unsafe {
             fixture.link(&[0, 1, 2]);
             fixture.link(destination);
-            let local = match destination.first() {
-                Some(&head) => LocalFreeList::from_head(fixture.block(head)),
-                None => LocalFreeList::empty(),
-            };
-            fixture.page().set_local_free(match destination.first() {
-                Some(&head) => LocalFreeList::from_head(fixture.block(head)),
-                None => LocalFreeList::empty(),
-            });
+            (*fixture.page().as_ptr()).local_free = (match destination.first() {
+                Some(&head) => LocalFreeList::from_raw(fixture.block(head).as_ptr()),
+                None => LocalFreeList::from_raw(core::ptr::null_mut()),
+            })
+            .as_raw();
             let capacity = fixture.page().capacity();
             let used = fixture.page().used();
             let page = fixture.page();
             let batch = RemoteFreeBatch::from_detached(page, fixture.block(0), capacity, used)
                 .expect("valid synthetic remote batch");
             let owner = LocalPage::new_unchecked(page);
-            let collected = batch.collect_into_local_page(&owner, local);
+            batch.collect_into(&mut PageCollection::for_local(&owner));
+            let collected = fixture.page().local_free();
 
             let expected = ListOrder::from_slices(&[0, 1, 2], destination);
             assert_eq!(fixture.order_from(collected.head()), expected);
@@ -585,20 +583,21 @@ fn local_batch_splices_destinations_without_changing_used() {
         unsafe {
             fixture.link(&[0, 1, 2]);
             fixture.link(destination);
-            fixture
-                .page()
-                .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+            (*fixture.page().as_ptr()).local_free = fixture.block(0).as_ptr();
             let available = match destination.first() {
                 Some(&head) => AvailableFreeList::from_head(fixture.block(head)),
                 None => AvailableFreeList::empty(),
             };
             let owner = LocalPage::new_unchecked(fixture.page());
-            let batch = owner
+            fixture.page().set_free(available);
+            let mut access = PageCollection::for_local(&owner);
+            let batch = access
                 .detach_local_free_batch()
                 .expect("valid local chain")
                 .expect("nonempty local chain");
+            batch.prepend_to_available();
             assert!(fixture.page().local_free().is_empty());
-            let available = batch.prepend_to_available(&owner, available);
+            let available = fixture.page().free();
 
             let expected = ListOrder::from_slices(&[0, 1, 2], destination);
             assert_eq!(fixture.order_from(available.head()), expected);
@@ -634,9 +633,7 @@ fn full_collection_matches_c_local_list_cases() {
     transfer.initialize();
     unsafe {
         transfer.link(&[0, 1, 2]);
-        transfer
-            .page()
-            .set_local_free(LocalFreeList::from_head(transfer.block(0)));
+        (*transfer.page().as_ptr()).local_free = transfer.block(0).as_ptr();
         (*transfer.page_storage).free_is_zero = true;
         let links = transfer.next_snapshot();
         let owner = LocalPage::new_unchecked(transfer.page());
@@ -656,9 +653,7 @@ fn full_collection_matches_c_local_list_cases() {
         unsafe {
             fixture.link(&[0, 1, 2]);
             fixture.link(&[3, 4]);
-            fixture
-                .page()
-                .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+            (*fixture.page().as_ptr()).local_free = fixture.block(0).as_ptr();
             fixture
                 .page()
                 .set_free(AvailableFreeList::from_head(fixture.block(3)));
@@ -696,9 +691,7 @@ fn full_collection_preserves_local_and_abandoned_owner_state() {
         fixture.initialize();
         unsafe {
             fixture.link(&[0, 1]);
-            fixture
-                .page()
-                .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+            (*fixture.page().as_ptr()).local_free = fixture.block(0).as_ptr();
             let thread_id = crate::core_types::ThreadId::new(crate::prim::_mi_prim_thread_id())
                 .expect("current thread id is nonzero and unflagged");
             let page_owner = if abandoned {
@@ -766,9 +759,7 @@ fn empty_available_transfer_preserves_secure_encoded_links() {
             fixture.block(slot).set_next(fixture.page(), None);
         }
         fixture.link(&[0, 1, 2]);
-        fixture
-            .page()
-            .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+        (*fixture.page().as_ptr()).local_free = fixture.block(0).as_ptr();
         (*fixture.page_storage).free_is_zero = true;
         let encoded_links = fixture.next_snapshot();
         let owner = LocalPage::new_unchecked(fixture.page());
@@ -794,9 +785,7 @@ fn local_page_ensure_available_preserves_or_clears_zero_status_with_publication(
         available
             .page()
             .set_free(AvailableFreeList::from_head(available.block(0)));
-        available
-            .page()
-            .set_local_free(LocalFreeList::from_head(available.block(2)));
+        (*available.page().as_ptr()).local_free = available.block(2).as_ptr();
         (*available.page_storage).free_is_zero = true;
         let available_head = available.page().free().head();
         let local_head = available.page().local_free().head();
@@ -827,9 +816,7 @@ fn local_page_ensure_available_preserves_or_clears_zero_status_with_publication(
     transfer.initialize();
     unsafe {
         transfer.link(&[0, 1, 2]);
-        transfer
-            .page()
-            .set_local_free(LocalFreeList::from_head(transfer.block(0)));
+        (*transfer.page().as_ptr()).local_free = transfer.block(0).as_ptr();
         (*transfer.page_storage).free_is_zero = true;
         let owner = LocalPage::new_unchecked(transfer.page());
         let result = owner.try_ensure_available();
@@ -847,16 +834,17 @@ fn abandoned_owner_detaches_and_splices_local_batch_without_local_proof() {
     unsafe {
         fixture.link(&[0, 1, 2]);
         fixture.link(&[3, 4]);
-        fixture
-            .page()
-            .set_local_free(LocalFreeList::from_head(fixture.block(0)));
+        (*fixture.page().as_ptr()).local_free = fixture.block(0).as_ptr();
         let available = AvailableFreeList::from_head(fixture.block(3));
         let owner = OwnedAbandonedPage::new_unchecked(fixture.page());
-        let batch = owner
+        fixture.page().set_free(available);
+        let mut access = PageCollection::for_abandoned(&owner);
+        let batch = access
             .detach_local_free_batch()
             .expect("valid abandoned local chain")
             .expect("nonempty abandoned local chain");
-        let available = batch.prepend_to_owned_abandoned_page(&owner, available);
+        batch.prepend_to_available();
+        let available = fixture.page().free();
 
         assert!(fixture.page().local_free().is_empty());
         assert_eq!(
@@ -921,9 +909,7 @@ fn randomized_reference_algorithms_match_batch_transitions() {
             for fixture in [&mut reference, &mut candidate] {
                 fixture.link(&indexes[..local_len]);
                 fixture.link(&indexes[local_len..local_len + destination_len]);
-                fixture
-                    .page()
-                    .set_local_free(LocalFreeList::from_head(fixture.block(indexes[0])));
+                (*fixture.page().as_ptr()).local_free = fixture.block(indexes[0]).as_ptr();
                 let available = match destination_len {
                     0 => AvailableFreeList::empty(),
                     _ => AvailableFreeList::from_head(fixture.block(indexes[local_len])),
@@ -933,7 +919,8 @@ fn randomized_reference_algorithms_match_batch_transitions() {
 
             reference_prepend_local_to_available(reference.page());
             let owner = LocalPage::new_unchecked(candidate.page());
-            let batch_result = owner.detach_local_free_batch();
+            let mut access = PageCollection::for_local(&owner);
+            let batch_result = access.detach_local_free_batch();
             assert!(
                 matches!(batch_result, Ok(Some(_))),
                 "local diagnostic mismatch: initial_seed={INITIAL_SEED:#x} case_seed={case_seed:#x} iteration={iteration}"
@@ -941,9 +928,7 @@ fn randomized_reference_algorithms_match_batch_transitions() {
             let batch = batch_result
                 .expect("checked successful local conversion")
                 .expect("checked nonempty local conversion");
-            let available = candidate.page().free();
-            let available = batch.prepend_to_available(&owner, available);
-            candidate.page().set_free(available);
+            batch.prepend_to_available();
 
             assert_eq!(
                 reference.order_from(reference.page().free().head()),
@@ -992,10 +977,10 @@ fn randomized_reference_algorithms_match_batch_transitions() {
                 fixture.link(&indexes[..remote_len]);
                 fixture.link(&indexes[remote_len..remote_len + local_len]);
                 let local = match local_len {
-                    0 => LocalFreeList::empty(),
-                    _ => LocalFreeList::from_head(fixture.block(indexes[remote_len])),
+                    0 => LocalFreeList::from_raw(core::ptr::null_mut()),
+                    _ => LocalFreeList::from_raw(fixture.block(indexes[remote_len]).as_ptr()),
                 };
-                fixture.page().set_local_free(local);
+                (*fixture.page().as_ptr()).local_free = local.as_raw();
             }
 
             reference_collect_remote_into_local(reference.page(), reference.block(indexes[0]));
@@ -1012,8 +997,7 @@ fn randomized_reference_algorithms_match_batch_transitions() {
             );
             let batch = batch_result.expect("checked successful remote conversion");
             let owner = LocalPage::new_unchecked(candidate.page());
-            let local = candidate.page().local_free();
-            let _ = batch.collect_into_local_page(&owner, local);
+            batch.collect_into(&mut PageCollection::for_local(&owner));
 
             assert_eq!(
                 reference.order_from(reference.page().local_free().head()),

@@ -2,8 +2,8 @@ use super::*;
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 use crate::atomic::mi_lock_t;
 use crate::core_types::{
-    LocalFreeList, OwnedAbandonedPage, PageFlags, PageOwnerId, PagePtr, PageThreadId,
-    ThreadFreeOwner, ThreadFreeWord,
+    OwnedAbandonedPage, PageFlags, PageOwnerId, PagePtr, PageThreadId, ThreadFreeOwner,
+    ThreadFreeWord,
 };
 use crate::types::{mi_block_t, mi_page_t};
 use core::{
@@ -247,7 +247,7 @@ fn remote_push_retry_returns_observation_without_consuming_block() {
 
 #[test]
 fn empty_remote_free_list_collects_through_detached_atomic_path() {
-    let mut page = MaybeUninit::<mi_page_t>::uninit();
+    let mut page = MaybeUninit::<mi_page_t>::zeroed();
     let mut local = mi_block_t::default();
     unsafe {
         let raw_page = page.as_mut_ptr();
@@ -263,15 +263,10 @@ fn empty_remote_free_list_collects_through_detached_atomic_path() {
         let remote = atomic.detach_head();
         assert!(remote.head().is_none());
 
-        let local_before = LocalFreeList::from_raw((*raw_page).local_free);
         let owned = OwnedAbandonedPage::new_unchecked(page_ptr);
-        let local_after = crate::allocator::page::collect_remote_for_owned_abandoned_page(
-            &owned,
-            remote,
-            local_before,
-        )
-        .expect("empty detached list is valid");
-        assert_eq!(local_after.as_raw(), ptr::addr_of_mut!(local));
+        crate::allocator::page::collect_remote_for_owned_abandoned_page(&owned, remote)
+            .expect("empty detached list is valid");
+        assert_eq!((*raw_page).local_free, ptr::addr_of_mut!(local));
     }
 }
 

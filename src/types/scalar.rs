@@ -434,14 +434,6 @@ impl UsedBlockCount {
         crate::internal::mi_debug_assert!(self.0 > 0);
         Self(self.0 - 1)
     }
-
-    #[inline(always)]
-    pub(crate) const fn checked_sub_batch(self, len: BatchLen) -> Option<Self> {
-        match self.0.checked_sub(len.get()) {
-            Some(used) => Some(Self(used)),
-            None => None,
-        }
-    }
 }
 
 /// Non-empty number of blocks owned by a page-homogeneous batch.

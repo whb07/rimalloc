@@ -42,7 +42,9 @@ assert_not_impl_any!(LocalFreeList: Copy, Clone);
 assert_not_impl_any!(PublishedRemoteHead: Copy, Clone);
 assert_not_impl_any!(DetachedRemoteList: Copy, Clone);
 assert_not_impl_any!(RemoteFreeBatch: Copy, Clone);
-assert_not_impl_any!(LocalFreeBatch: Copy, Clone);
+assert_not_impl_any!(LocalFreeBatch<'_, '_>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::page_batch::PageCollection<'_>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::page_batch::DetachedForPage<'_, '_>: Copy, Clone, Send, Sync);
 
 assert_not_impl_any!(Page<Uninit>: Copy, Clone);
 assert_not_impl_any!(ActivePage: Copy, Clone);

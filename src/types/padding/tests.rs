@@ -64,7 +64,10 @@ fn padding_ptr_reads_and_writes_stack_metadata() {
 
     assert_eq!(unsafe { raw.assume_init_ref() }.canary, 0x8765_4321);
     assert_eq!(unsafe { raw.assume_init_ref() }.delta, 8);
-    assert_eq!(unsafe { ptr.read() }.delta(), PaddingDelta(8));
+    // The mutable slot write creates a fresh loan; derive the read pointer
+    // afterwards instead of reusing the earlier raw-pointer provenance.
+    let updated_ptr = unsafe { PaddingPtr::new_unchecked(raw.as_mut_ptr()) };
+    assert_eq!(unsafe { updated_ptr.read() }.delta(), PaddingDelta(8));
 }
 
 #[cfg(not(mi_c_malloc_fast))]

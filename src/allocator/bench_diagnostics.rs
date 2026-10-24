@@ -482,13 +482,11 @@ impl PageBatchBenchFixture {
             if self.kind == PAGE_BATCH_REMOTE {
                 self.page
                     .set_free(crate::core_types::AvailableFreeList::empty());
-                self.page.set_local_free(match destination {
-                    Some(head) => crate::core_types::LocalFreeList::from_head(head),
-                    None => crate::core_types::LocalFreeList::empty(),
-                });
+                (*self.page.as_ptr()).local_free = destination
+                    .map(crate::core_types::BlockPtr::as_ptr)
+                    .unwrap_or(core::ptr::null_mut());
             } else {
-                self.page
-                    .set_local_free(crate::core_types::LocalFreeList::from_head(self.block(0)));
+                (*self.page.as_ptr()).local_free = self.block(0).as_ptr();
                 self.page.set_free(match destination {
                     Some(head) => crate::core_types::AvailableFreeList::from_head(head),
                     None => crate::core_types::AvailableFreeList::empty(),
@@ -503,28 +501,15 @@ impl PageBatchBenchFixture {
             return true;
         }
         let owner = unsafe { crate::allocator::raw_bridge::assume_local_page(self.page) };
+        let mut access = unsafe { crate::core_types::PageCollection::for_local(&owner) };
         if self.kind == PAGE_BATCH_LOCAL {
-            let Ok(Some(batch)) = (unsafe { owner.detach_local_free_batch() }) else {
+            let Ok(Some(batch)) = access.detach_local_free_batch() else {
                 return false;
             };
-            let available = unsafe { self.page.free() };
-            let available = unsafe { batch.prepend_to_available(&owner, available) };
-            unsafe { self.page.set_free(available) };
+            batch.prepend_to_available();
             true
         } else {
-            let Ok(batch) = (unsafe {
-                crate::core_types::RemoteFreeBatch::from_detached(
-                    self.page,
-                    self.block(0),
-                    self.page.capacity(),
-                    self.page.used(),
-                )
-            }) else {
-                return false;
-            };
-            let local = unsafe { self.page.local_free() };
-            let _ = unsafe { batch.collect_into_local_page(&owner, local) };
-            true
+            unsafe { access.collect_head(self.block(0)).is_ok() }
         }
     }
 }

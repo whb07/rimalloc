@@ -1165,3 +1165,169 @@ suite/rival pairs; the exception is Nginx against tcmalloc.
 3. `malloc-large`: a mimalloc design trade-off shared with C mimalloc; any
    change to large-allocation metadata or caching policy needs an explicit
    decision because it changes memory behaviour.
+
+## Scoped Allocator Ownership October 24 2026
+
+**Measured source:** `ca291ac89908cfd2c7a425702445d2d9e0144f82`.
+**Starting commit:** `6c99f4f0301f0f08b1b2d1de0b13d6da5e467e58`.
+
+Scoped access now couples local statistics and random state, allocated block
+storage and its page, queue membership and lifecycle, remote publication and
+detached collection, and arena claims and bounded bitmap storage. Production
+unsafe blocks fell from 3,236 to 3,219 and unsafe functions from 1,510 to 1,495;
+the 12 unsafe implementations are unchanged. These are 32 fewer production
+unsafe constructs. Allocator struct layouts, C ABI, atomic operations and
+orderings remain unchanged; both interposition configurations retain the same
+240 dynamic exports. The changes add no per-allocation metadata or locks.
+Final native geomeans were **-0.47% normal** and **+0.85% secure**; the longer Larson follow-up and
+public Rust-facade checks also remained within their investigation budgets.
+
+### Main heap placement regression and correction
+
+The initial completed implementation at `8e09a538` exposed a repeatable
+`glibc-simple` regression: +17.21% in five paired rounds, then +17.08% in an
+independent nine-round repeat. The fast allocation and free instruction
+sequences were unchanged. The private main thread-heap static had moved from
+cache-line offset 24 to 40 as linked data changed.
+
+C mimalloc 3.3.2 declares that static with `mi_decl_cache_align`, or 64-byte
+alignment. The Rust definition previously used its natural alignment. A private
+alignment wrapper restores C's placement requirement while keeping the
+`mi_theap_t` type and its field offsets unchanged. The aligned candidate's
+nine-round median was -0.27% against the starting commit; every paired round
+was within 0.5%. Its normalized function instruction sequences in normal mode
+are identical to the slow candidate's. Secure mode changes one cold initializer store from
+`movups` to `movaps`. The committed normal-mode library is byte-identical to
+the successful alignment experiment. The original failure and both repeats
+are preserved in the evidence.
+
+### Controls and verification
+
+Measurements use an AMD EPYC 7763 Azure VM with 16 logical CPUs, Linux x86_64,
+Rust 1.92.0 / LLVM 21.1.3, and GCC 13.3.0. Each paired round launches fresh
+processes and alternates candidate/baseline order. Ratios compare the two Rust
+commits. Native rows use the median of paired candidate/baseline time ratios;
+the aggregate is their unweighted geometric mean.
+
+Normal interposition (`interpose`) uses 11 canaries, five paired rounds,
+three measured short runs after one warmup, and 3-second timed scenarios.
+Secure interposition (`interpose,secure,guarded`) uses six bounded canaries,
+nine paired rounds, the same short-run controls, and 5-second timed scenarios.
+The broader secure attempt timed out after 300 seconds in `sh6benchN` on the
+starting binary; its coverage is limited to the six reported cases.
+
+The final source passed:
+
+```sh
+cargo fmt --all
+cargo clippy --workspace --all-targets --all-features
+cargo test --workspace --all-targets --all-features
+```
+
+All workspace tests and benchmark smoke cases passed. Additional checks
+passed all 41 compiler probes, six Loom models, strict type boundaries, public
+ABI and API inventories, no-default-features compilation, release thread
+stress, C behavioral/secure/guarded/debug-fill parity, AddressSanitizer, and
+ThreadSanitizer. All eight Miri configurations passed: Stacked and Tree
+Borrows, debug and release Cargo profiles, and `std` with and without
+`secure,guarded`, using strict provenance and symbolic alignment checks.
+Each Miri configuration excludes 60 OS-dependent tests; native checks cover
+the corresponding allocator lifecycle paths. Miri interprets the selected
+profiles; optimized native code was inspected separately in all four feature
+configurations.
+
+The [evidence manifest](benchmarks/results/2026-10-24-scoped-ownership/manifest.json)
+preserves resolved commands, controls, toolchain settings, and binary hashes.
+[Raw results](benchmarks/results/2026-10-24-scoped-ownership/results.json) retain
+paired samples and resource records, and
+[environment information](benchmarks/results/2026-10-24-scoped-ownership/environment.txt)
+records the host. This is focused change-validation evidence; the full
+five-mode release gate and application suites were not rerun.
+
+### Native paired comparison
+
+Negative values mean less time than the starting commit.
+
+| Scenario | `interpose` | `interpose,secure,guarded` |
+|---|---:|---:|
+| `xmalloc-testN` | -2.19% | -0.02% |
+| `larsonN` | -1.15% | +3.69% |
+| `larsonN-sized` | +0.58% | +1.83% |
+| `sh6benchN` | +1.27% | — |
+| `sh8benchN` | -0.43% | — |
+| `glibc-thread` | +0.04% | -0.15% |
+| `glibc-simple` | -0.51% | — |
+| `malloc-large` | -2.55% | +0.12% |
+| `mstressN` | +0.58% | — |
+| `mleak100` | -0.75% | -0.28% |
+| `cache-scratchN` | +0.06% | — |
+| **Geomean** | **-0.47%** | **+0.85%** |
+
+The normal-mode result is within the 1% aggregate and 3% scenario budgets.
+Larson remains noisy: normal `larsonN` paired rounds ranged from roughly
+-15% to +15%, and secure rounds from -10% to +11%. The secure `larsonN`
+row triggered a separate seven-pair repeat with 15-second runs, three times
+the original window. That repeat measured **+1.13%**, within the 3% scenario
+budget, with paired deltas from -6.5% to +1.7%. The original +3.69% row remains
+in the table above; the six-case secure geomean stays +0.85%, within its 1%
+aggregate budget. Larson remains a noisy watch item. The raw evidence retains both measurement windows.
+
+### Process memory and remote-free probes
+
+The final neutral C `LD_PRELOAD` probe uses three paired fresh-process rounds
+per mode and scenario: 20 million operations, 64-byte blocks, 8-byte alignment,
+and 4,096 live slots. It measures the libc allocation surface; internal
+allocator-only statistics are unavailable in this neutral probe. The earlier
+seven-round resource comparison at `8e09a538` is also retained in the raw
+evidence.
+
+| Mode | Scenario | Paired wall-time delta | Ending RSS, both builds | Commit growth, both builds |
+|---|---|---:|---:|---:|
+| `interpose` | `alloc_free` | -0.21% | 3,712 KiB | 256 KiB |
+| `interpose` | `remote_free_1x1` | -0.01% | 3,904 KiB | 384 KiB |
+| `interpose-secure` | `alloc_free` | +0.18% | 3,264 KiB | 320 KiB |
+| `interpose-secure` | `remote_free_1x1` | +0.94% | 3,456 KiB | 448 KiB |
+
+All final memory, fault, and variation gates passed. Ending RSS and reported
+commit medians matched between builds in every case, and every final process
+record had zero measured page-fault delta. These are workload elapsed times
+and process memory measurements; individual allocation latency percentiles
+were not sampled.
+
+### Public Rust facade
+
+A standalone probe links the matching `std` and `std,secure,guarded` rlibs
+and calls `MiMalloc` through `GlobalAlloc`. Each of nine paired fresh-process
+rounds is pinned to CPU 0, warms two batches, then allocates and fills 4,096
+blocks before freeing half in FIFO order and half in reverse order. Standard
+mode measures 2,048 batches (8,388,608 allocation/free pairs); secure mode
+measures 256 batches (1,048,576 pairs). Probe source, exact compiler commands,
+rlib/executable hashes, and every elapsed-time sample are embedded in the
+evidence manifest/results.
+
+| Features | Block size | Paired time delta |
+|---|---:|---:|
+| `std` | 16 B | +0.14% |
+| `std` | 64 B | +0.20% |
+| `std,secure,guarded` | 16 B | -0.61% |
+| `std,secure,guarded` | 64 B | -0.20% |
+
+All facade cases are within the 2% individual investigation budget. Their
+two-case geomeans are std: +0.17%, std-secure: -0.40%,
+within the 1% aggregate budget. These small deltas sit within observed run
+variation.
+
+### Release code generation
+
+Release captures cover `std`, `std,secure,guarded`, `interpose`, and
+`interpose,secure,guarded`. Tracked local/remote free, RNG-next, and counter kernels
+retain their normalized instruction sequences. Normal page allocation remains
+28 instructions; secure page allocation remains 135 instructions with the same
+16 branches and three calls, with one instruction rescheduled. Scoped views
+introduce no outlined view helpers or per-allocation storage.
+
+Some collection and bitmap controllers compile differently; their changes are
+covered by the native comparisons above. In particular, the normal interpose
+page collector retains its instruction count but adds a page-pointer reload
+and changes branch layout. The measured workload results justify that retained
+controller change; full function-level comparisons remain in the evidence.

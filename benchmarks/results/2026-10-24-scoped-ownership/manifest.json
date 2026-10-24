@@ -1,0 +1,2493 @@
+{
+  "baseline_builds": {
+    "builds": {
+      "interpose": {
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "interpose",
+          "--crate-type",
+          "cdylib",
+          "--",
+          "--emit=asm,link"
+        ],
+        "features": [
+          "interpose"
+        ]
+      },
+      "interpose-secure": {
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "interpose,secure,guarded",
+          "--crate-type",
+          "cdylib",
+          "--",
+          "--emit=asm,link"
+        ],
+        "features": [
+          "interpose",
+          "secure",
+          "guarded"
+        ]
+      },
+      "std": {
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "std",
+          "--",
+          "--emit=asm,link"
+        ],
+        "features": [
+          "std"
+        ]
+      },
+      "std-secure": {
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "std,secure,guarded",
+          "--",
+          "--emit=asm,link"
+        ],
+        "features": [
+          "std",
+          "secure",
+          "guarded"
+        ]
+      }
+    },
+    "commit": "6c99f4f0301f0f08b1b2d1de0b13d6da5e467e58"
+  },
+  "coverage": {
+    "facade_scope": "Two block sizes, direct GlobalAlloc calls, std and std,secure,guarded; source embedded in facade.probe_source.",
+    "normal_native_canaries": 11,
+    "release_gate": "Focused change-validation; full five-mode release gate and application suites were not rerun.",
+    "resource_final_paired_rounds": 3,
+    "resource_initial_paired_rounds": 7,
+    "resource_scope": "Neutral C process-memory/fault measurements; internal allocator-only statistics and individual allocation-latency percentiles unavailable.",
+    "secure_full_canary_attempt": "Starting binary timed out after 300 seconds in sh6benchN; six bounded secure cases reported.",
+    "secure_native_canaries": 6
+  },
+  "facade": {
+    "affinity": [
+      0
+    ],
+    "baseline_commit": "6c99f4f0301f0f08b1b2d1de0b13d6da5e467e58",
+    "binaries": {
+      "baseline-std": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-baseline-std",
+        "sha256": "a94be0cc073171b60ea25bfc01d754dbc6a960024d11c64345e78dc4ff945ff0"
+      },
+      "baseline-std-secure": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-baseline-std-secure",
+        "sha256": "ae58f1c4cd62ed8bca70d48ac0fdc6d8c1692fbee41247497d14d9e521e67329"
+      },
+      "verified-std": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-verified-std",
+        "sha256": "6a535a8a6a27c3f3e6e157c418b1343a13889ac19ac9370e36db25b224f0ca39"
+      },
+      "verified-std-secure": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-verified-std-secure",
+        "sha256": "8ad5ed7342a6c3ad70cfbdb6eed85aaa25ac245423dddbf208ebc1ed202842a1"
+      }
+    },
+    "commands": [
+      [
+        "rustc",
+        "--crate-name",
+        "scoped_facade_probe",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "panic=abort",
+        "-L",
+        "dependency=/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-std-build/release/deps",
+        "--extern",
+        "mechanical_mimalloc=/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-std-build/release/libmechanical_mimalloc.rlib",
+        "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-probe.rs",
+        "-o",
+        "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-baseline-std"
+      ],
+      [
+        "rustc",
+        "--crate-name",
+        "scoped_facade_probe",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "panic=abort",
+        "-L",
+        "dependency=/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-std-build/release/deps",
+        "--extern",
+        "mechanical_mimalloc=/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-std-build/release/libmechanical_mimalloc.rlib",
+        "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-probe.rs",
+        "-o",
+        "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-verified-std"
+      ],
+      [
+        "rustc",
+        "--crate-name",
+        "scoped_facade_probe",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "panic=abort",
+        "-L",
+        "dependency=/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-std-secure-build/release/deps",
+        "--extern",
+        "mechanical_mimalloc=/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-std-secure-build/release/libmechanical_mimalloc.rlib",
+        "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-probe.rs",
+        "-o",
+        "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-baseline-std-secure"
+      ],
+      [
+        "rustc",
+        "--crate-name",
+        "scoped_facade_probe",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "panic=abort",
+        "-L",
+        "dependency=/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-std-secure-build/release/deps",
+        "--extern",
+        "mechanical_mimalloc=/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-std-secure-build/release/libmechanical_mimalloc.rlib",
+        "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-probe.rs",
+        "-o",
+        "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/facade-verified-std-secure"
+      ]
+    ],
+    "features": {
+      "std": [
+        "std"
+      ],
+      "std-secure": [
+        "std",
+        "secure",
+        "guarded"
+      ]
+    },
+    "libraries": {
+      "baseline-std": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-std-build/release/libmechanical_mimalloc.rlib",
+        "sha256": "1beb09a7b664c6a4e7642a02cce95cc8bf8289e25ec936fddd2211aa1590076a"
+      },
+      "baseline-std-secure": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-std-secure-build/release/libmechanical_mimalloc.rlib",
+        "sha256": "3449648a2228406ab1ff3ed8aeffd0dbbfa23d3b9b2ad618f273641443468a26"
+      },
+      "verified-std": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-std-build/release/libmechanical_mimalloc.rlib",
+        "sha256": "4c57269cc9c7404674f9877b6c2597bf972ee5e141fe228e172cc1584be9b754"
+      },
+      "verified-std-secure": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-std-secure-build/release/libmechanical_mimalloc.rlib",
+        "sha256": "51582327f4660df2e600550a0cdac32c9011d9c2767416a93ec682e2485c7d3c"
+      }
+    },
+    "live_set": 4096,
+    "probe_source": "use mechanical_mimalloc::MiMalloc;\nuse std::alloc::{GlobalAlloc, Layout};\nuse std::time::Instant;\n\nconst LIVE: usize = 4096;\n\n#[inline(never)]\nfn batches(size: usize, count: usize) {\n    let layout = Layout::from_size_align(size, 8).unwrap();\n    let allocator = MiMalloc;\n    let mut blocks = [std::ptr::null_mut(); LIVE];\n    for _ in 0..count {\n        for block in &mut blocks {\n            // The layout is valid and each allocation is held until its matching free.\n            *block = unsafe { allocator.alloc(layout) };\n            assert!(!block.is_null());\n            for offset in 0..size {\n                // This allocation owns all `size` bytes until the free below.\n                unsafe { block.add(offset).write_volatile(offset as u8) };\n            }\n        }\n        for &block in &blocks[..LIVE / 2] {\n            // Each live pointer is freed exactly once with the original layout.\n            unsafe { allocator.dealloc(block, layout) };\n        }\n        for &block in blocks[LIVE / 2..].iter().rev() {\n            // The second half is disjoint from the pointers already freed.\n            unsafe { allocator.dealloc(block, layout) };\n        }\n    }\n}\n\nfn main() {\n    let mut args = std::env::args().skip(1);\n    let size: usize = args.next().unwrap().parse().unwrap();\n    let count: usize = args.next().unwrap().parse().unwrap();\n    assert!(args.next().is_none());\n    batches(size, 2);\n    let started = Instant::now();\n    batches(size, count);\n    println!(\"{}\", started.elapsed().as_nanos());\n}\n",
+    "probe_source_sha256": "455ac3c79f74e82d9e126b4a1b8f3621815ba0f3541898f1a20d003ed1e4f411",
+    "rounds": 9,
+    "sizes": [
+      16,
+      64
+    ],
+    "source_commit": "ca291ac89908cfd2c7a425702445d2d9e0144f82",
+    "warmup_batches": 2
+  },
+  "initial_builds": {
+    "builds": {
+      "interpose": {
+        "assembly_sha256": "baf3d8452826f5e64486708abee32fa6a7808c2c49d6166195d2b996546f2b46",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "interpose",
+          "--crate-type",
+          "cdylib",
+          "--",
+          "--emit=asm,link"
+        ],
+        "features": [
+          "interpose"
+        ],
+        "library_sha256": "dcb6835665149e83dd104fda203dc4cebe251178229184f80283157c81caa28c"
+      },
+      "interpose-secure": {
+        "assembly_sha256": "5ed19550b841c8420ac720b36047be7a266f6328b12cf7d1687b7f7c00d50d8c",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "interpose,secure,guarded",
+          "--crate-type",
+          "cdylib",
+          "--",
+          "--emit=asm,link"
+        ],
+        "features": [
+          "interpose",
+          "secure",
+          "guarded"
+        ],
+        "library_sha256": "48e79a5bf23cedf7e88cede225c98261b69f2472a78ecef5c392033c17463b8d"
+      },
+      "std": {
+        "assembly_sha256": "978b36dc07ff2bc328e85cfd9cb0cdd7c1b4eee7b1831f2091d0bc088dec2982",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "std",
+          "--",
+          "--emit=asm,link"
+        ],
+        "features": [
+          "std"
+        ]
+      },
+      "std-secure": {
+        "assembly_sha256": "104fa0177155aee1d5882a3f4b92a7c3ad9cde9ef1e35d9b1e1a3934d3cb59a9",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "std,secure,guarded",
+          "--",
+          "--emit=asm,link"
+        ],
+        "features": [
+          "std",
+          "secure",
+          "guarded"
+        ]
+      }
+    },
+    "commit": "8e09a538683f02a387edc9970ed7548b4640b5bd"
+  },
+  "initial_native_commands": {
+    "baseline_commit": "6c99f4f0301f0f08b1b2d1de0b13d6da5e467e58",
+    "commands": [
+      {
+        "argv": [
+          "python3",
+          "benchmarks/bench.py",
+          "screen",
+          "--baseline",
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "--candidate",
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "--rounds",
+          "5",
+          "--runs",
+          "3",
+          "--timed-secs",
+          "3",
+          "--scenario",
+          "xmalloc-testN",
+          "--scenario",
+          "larsonN",
+          "--scenario",
+          "larsonN-sized",
+          "--scenario",
+          "sh6benchN",
+          "--scenario",
+          "sh8benchN",
+          "--scenario",
+          "glibc-thread",
+          "--scenario",
+          "glibc-simple",
+          "--scenario",
+          "malloc-large",
+          "--scenario",
+          "mstressN",
+          "--scenario",
+          "mleak100",
+          "--scenario",
+          "cache-scratchN"
+        ],
+        "cwd": "/tmp/mimalloc-scoped-baseline-ycbmpocw"
+      },
+      {
+        "argv": [
+          "python3",
+          "benchmarks/bench.py",
+          "screen",
+          "--baseline",
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "--candidate",
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "--rounds",
+          "9",
+          "--runs",
+          "3",
+          "--timed-secs",
+          "5",
+          "--scenario",
+          "xmalloc-testN",
+          "--scenario",
+          "larsonN",
+          "--scenario",
+          "larsonN-sized",
+          "--scenario",
+          "glibc-thread",
+          "--scenario",
+          "malloc-large",
+          "--scenario",
+          "mleak100"
+        ],
+        "cwd": "/tmp/mimalloc-scoped-baseline-ycbmpocw"
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 3
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 3
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 3
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 3
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 4
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 4
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 4
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 4
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 5
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 5
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 5
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 5
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 6
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 6
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 6
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 6
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 3
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 3
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 3
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 3
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 4
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 4
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 4
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 4
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 5
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 5
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 5
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 5
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 6
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 6
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 6
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-final",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 6
+      }
+    ],
+    "controls": {
+      "interpose": {
+        "rounds": 5,
+        "runs": 3,
+        "scenarios": [
+          "xmalloc-testN",
+          "larsonN",
+          "larsonN-sized",
+          "sh6benchN",
+          "sh8benchN",
+          "glibc-thread",
+          "glibc-simple",
+          "malloc-large",
+          "mstressN",
+          "mleak100",
+          "cache-scratchN"
+        ],
+        "timed_secs": 3
+      },
+      "interpose-secure": {
+        "rounds": 9,
+        "runs": 3,
+        "scenarios": [
+          "xmalloc-testN",
+          "larsonN",
+          "larsonN-sized",
+          "glibc-thread",
+          "malloc-large",
+          "mleak100"
+        ],
+        "timed_secs": 5
+      }
+    },
+    "finished_utc": "2026-10-24T04:49:03Z",
+    "libraries": {
+      "baseline-interpose": {
+        "features": [
+          "interpose"
+        ],
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+        "sha256": "4cb3ac181a946c2a0f7dbd22861cbef0aa301e4d98a3411a8909c0ffa9f840bb"
+      },
+      "baseline-interpose-secure": {
+        "features": [
+          "interpose",
+          "secure",
+          "guarded"
+        ],
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+        "sha256": "3ae01ac2cac85e336d40dbd5973e6fedb68863c836f9141224d6f3c04d728a79"
+      },
+      "final-interpose": {
+        "features": [
+          "interpose"
+        ],
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose.so",
+        "sha256": "dcb6835665149e83dd104fda203dc4cebe251178229184f80283157c81caa28c"
+      },
+      "final-interpose-secure": {
+        "features": [
+          "interpose",
+          "secure",
+          "guarded"
+        ],
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/final-interpose-secure.so",
+        "sha256": "48e79a5bf23cedf7e88cede225c98261b69f2472a78ecef5c392033c17463b8d"
+      }
+    },
+    "resource_controls": {
+      "alignment": 8,
+      "live_set": 4096,
+      "operations": 20000000,
+      "rounds": 7,
+      "size": 64
+    },
+    "resource_gates": [
+      {
+        "config": "interpose",
+        "label": "baseline",
+        "returncode": 0
+      },
+      {
+        "config": "interpose",
+        "label": "final",
+        "returncode": 0
+      },
+      {
+        "config": "interpose-secure",
+        "label": "baseline",
+        "returncode": 0
+      },
+      {
+        "config": "interpose-secure",
+        "label": "final",
+        "returncode": 0
+      }
+    ],
+    "source_commit": "8e09a538683f02a387edc9970ed7548b4640b5bd",
+    "started_utc": "2026-10-24T04:27:32Z"
+  },
+  "kind": "scoped-allocator-ownership-change-validation",
+  "larson_long_repeat": {
+    "argv": [
+      "python3",
+      "benchmarks/bench.py",
+      "screen",
+      "--baseline",
+      "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+      "--candidate",
+      "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so",
+      "--scenario",
+      "larsonN",
+      "--rounds",
+      "7",
+      "--runs",
+      "3",
+      "--timed-secs",
+      "15"
+    ],
+    "baseline_commit": "6c99f4f0301f0f08b1b2d1de0b13d6da5e467e58",
+    "cwd": "/tmp/mimalloc-scoped-baseline-ycbmpocw",
+    "features": [
+      "interpose",
+      "secure",
+      "guarded"
+    ],
+    "libraries": {
+      "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so": "3ae01ac2cac85e336d40dbd5973e6fedb68863c836f9141224d6f3c04d728a79",
+      "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so": "3e681fbfb5e07b3e3d863228d89be1093a8bbf367221c2ca62dbd13434bf2a18"
+    },
+    "returncode": 0,
+    "rounds": 7,
+    "scenario": "larsonN",
+    "source_commit": "ca291ac89908cfd2c7a425702445d2d9e0144f82",
+    "timed_secs": 15
+  },
+  "schema": 1,
+  "source_commit": "ca291ac89908cfd2c7a425702445d2d9e0144f82",
+  "verification": {
+    "additional": [
+      {
+        "argv": [
+          "python3",
+          "scripts/check-behavioral-parity.py",
+          "--only",
+          "core"
+        ],
+        "check": "behavioral-parity",
+        "environment": {},
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/check-secure-mode-parity.py"
+        ],
+        "check": "secure-parity",
+        "environment": {},
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/check-guarded-mode-parity.py"
+        ],
+        "check": "guarded-parity",
+        "environment": {},
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/check-debug-fill-parity.py"
+        ],
+        "check": "debug-fill-parity",
+        "environment": {},
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "bash",
+          "scripts/check-sanitizers.sh"
+        ],
+        "check": "sanitizer-address",
+        "environment": {
+          "RUSTFLAGS": "-Aunused-unsafe",
+          "SANITIZER": "address",
+          "SANITIZER_TOOLCHAIN": "nightly-2026-10-17"
+        },
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "bash",
+          "scripts/check-sanitizers.sh"
+        ],
+        "check": "sanitizer-thread",
+        "environment": {
+          "RUSTFLAGS": "-Aunused-unsafe",
+          "SANITIZER": "thread",
+          "SANITIZER_TOOLCHAIN": "nightly-2026-10-17"
+        },
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/check-release-thread-stress.py"
+        ],
+        "check": "release-thread-stress",
+        "environment": {},
+        "returncode": 0
+      }
+    ],
+    "miri": {
+      "compatibility_rustflags": "-Aunused-unsafe",
+      "configurations": [
+        {
+          "features": "std,secure,guarded",
+          "model": "stacked",
+          "profile": "debug",
+          "returncode": 0,
+          "summaries": [
+            "test result: ok. 255 passed; 0 failed; 60 ignored; 0 measured; 0 filtered out; finished in 110.98s"
+          ]
+        },
+        {
+          "features": "std",
+          "model": "stacked",
+          "profile": "release",
+          "returncode": 0,
+          "summaries": [
+            "test result: ok. 249 passed; 0 failed; 60 ignored; 0 measured; 0 filtered out; finished in 102.16s"
+          ]
+        },
+        {
+          "features": "std,secure,guarded",
+          "model": "stacked",
+          "profile": "release",
+          "returncode": 0,
+          "summaries": [
+            "test result: ok. 256 passed; 0 failed; 60 ignored; 0 measured; 0 filtered out; finished in 105.21s"
+          ]
+        },
+        {
+          "features": "std",
+          "model": "stacked",
+          "profile": "debug",
+          "returncode": 0,
+          "summaries": [
+            "test result: ok. 248 passed; 0 failed; 60 ignored; 0 measured; 0 filtered out; finished in 109.40s"
+          ]
+        },
+        {
+          "features": "std",
+          "model": "tree",
+          "profile": "debug",
+          "returncode": 0,
+          "summaries": [
+            "test result: ok. 248 passed; 0 failed; 60 ignored; 0 measured; 0 filtered out; finished in 109.33s"
+          ]
+        },
+        {
+          "features": "std",
+          "model": "tree",
+          "profile": "release",
+          "returncode": 0,
+          "summaries": [
+            "test result: ok. 249 passed; 0 failed; 60 ignored; 0 measured; 0 filtered out; finished in 103.31s"
+          ]
+        },
+        {
+          "features": "std,secure,guarded",
+          "model": "tree",
+          "profile": "debug",
+          "returncode": 0,
+          "summaries": [
+            "test result: ok. 255 passed; 0 failed; 60 ignored; 0 measured; 0 filtered out; finished in 110.13s"
+          ]
+        },
+        {
+          "features": "std,secure,guarded",
+          "model": "tree",
+          "profile": "release",
+          "returncode": 0,
+          "summaries": [
+            "test result: ok. 256 passed; 0 failed; 60 ignored; 0 measured; 0 filtered out; finished in 106.00s"
+          ]
+        }
+      ],
+      "strict_provenance": true,
+      "symbolic_alignment": true,
+      "toolchain": "nightly-2026-10-17"
+    },
+    "native": [
+      {
+        "argv": [
+          "cargo",
+          "fmt",
+          "--all"
+        ],
+        "check": "fmt",
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "cargo",
+          "clippy",
+          "--workspace",
+          "--all-targets",
+          "--all-features"
+        ],
+        "check": "clippy",
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "cargo",
+          "test",
+          "--workspace",
+          "--all-targets",
+          "--all-features"
+        ],
+        "check": "tests",
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/check-proof-constructors.py"
+        ],
+        "check": "proofs",
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/check-strict-types.py"
+        ],
+        "check": "strict-types",
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/check-public-abi.py"
+        ],
+        "check": "public-abi",
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/check-ffi-boundary.py"
+        ],
+        "check": "ffi",
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/check-api-inventory.py"
+        ],
+        "check": "api",
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "cargo",
+          "check",
+          "--lib",
+          "--no-default-features"
+        ],
+        "check": "no-std",
+        "returncode": 0
+      },
+      {
+        "argv": [
+          "bash",
+          "scripts/check-concurrency-models.sh"
+        ],
+        "check": "concurrency",
+        "returncode": 0
+      }
+    ],
+    "workspace_test_summary": {
+      "failed": 0,
+      "ignored": 0,
+      "note": "Selected child-process test summaries repeat tests included in the parent suite; they are not added to the unfiltered suite total.",
+      "selected_subprocess_summaries": 12,
+      "unfiltered_suite_passed": 429
+    }
+  },
+  "verified_builds": {
+    "builds": {
+      "interpose": {
+        "assembly_sha256": "f34c34137b67f6911e24ba7f6bce3bf762c720e06f1ac0427c9620d5e6ff2df4",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "interpose",
+          "--crate-type",
+          "cdylib",
+          "--",
+          "--emit=asm,link"
+        ],
+        "environment": {
+          "CARGO_BUILD_JOBS": "2",
+          "CARGO_TARGET_DIR": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-interpose-build"
+        },
+        "features": [
+          "interpose"
+        ],
+        "library_sha256": "8e661a586ef4a2bf596e5d48ad565ab37a247d1cb535b84754f747e31c07e76d"
+      },
+      "interpose-secure": {
+        "assembly_sha256": "1bf35618777561e6306faaec0183c53f65ac7e17941ef90c8d436408e3ed5d44",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "interpose,secure,guarded",
+          "--crate-type",
+          "cdylib",
+          "--",
+          "--emit=asm,link"
+        ],
+        "environment": {
+          "CARGO_BUILD_JOBS": "2",
+          "CARGO_TARGET_DIR": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-interpose-secure-build"
+        },
+        "features": [
+          "interpose",
+          "secure",
+          "guarded"
+        ],
+        "library_sha256": "3e681fbfb5e07b3e3d863228d89be1093a8bbf367221c2ca62dbd13434bf2a18"
+      },
+      "std": {
+        "assembly_sha256": "9a56126a7c9ed9ff21c986a4e0cdb0d756254673f4008d83d29e2721a1222086",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "std",
+          "--",
+          "--emit=asm,link"
+        ],
+        "environment": {
+          "CARGO_BUILD_JOBS": "2",
+          "CARGO_TARGET_DIR": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-std-build"
+        },
+        "features": [
+          "std"
+        ]
+      },
+      "std-secure": {
+        "assembly_sha256": "72bc374dd2e6849765d9164a10581061454b819d386ad1a33411ac3659b25c59",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--release",
+          "--lib",
+          "--features",
+          "std,secure,guarded",
+          "--",
+          "--emit=asm,link"
+        ],
+        "environment": {
+          "CARGO_BUILD_JOBS": "2",
+          "CARGO_TARGET_DIR": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/candidate-std-secure-build"
+        },
+        "features": [
+          "std",
+          "secure",
+          "guarded"
+        ]
+      }
+    },
+    "commit": "ca291ac89908cfd2c7a425702445d2d9e0144f82"
+  },
+  "verified_native_commands": {
+    "baseline_commit": "6c99f4f0301f0f08b1b2d1de0b13d6da5e467e58",
+    "commands": [
+      {
+        "argv": [
+          "python3",
+          "benchmarks/bench.py",
+          "screen",
+          "--baseline",
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "--candidate",
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose.so",
+          "--rounds",
+          "5",
+          "--runs",
+          "3",
+          "--timed-secs",
+          "3",
+          "--scenario",
+          "xmalloc-testN",
+          "--scenario",
+          "larsonN",
+          "--scenario",
+          "larsonN-sized",
+          "--scenario",
+          "sh6benchN",
+          "--scenario",
+          "sh8benchN",
+          "--scenario",
+          "glibc-thread",
+          "--scenario",
+          "glibc-simple",
+          "--scenario",
+          "malloc-large",
+          "--scenario",
+          "mstressN",
+          "--scenario",
+          "mleak100",
+          "--scenario",
+          "cache-scratchN"
+        ],
+        "cwd": "/tmp/mimalloc-scoped-baseline-ycbmpocw"
+      },
+      {
+        "argv": [
+          "python3",
+          "benchmarks/bench.py",
+          "screen",
+          "--baseline",
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "--candidate",
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so",
+          "--rounds",
+          "9",
+          "--runs",
+          "3",
+          "--timed-secs",
+          "5",
+          "--scenario",
+          "xmalloc-testN",
+          "--scenario",
+          "larsonN",
+          "--scenario",
+          "larsonN-sized",
+          "--scenario",
+          "glibc-thread",
+          "--scenario",
+          "malloc-large",
+          "--scenario",
+          "mleak100"
+        ],
+        "cwd": "/tmp/mimalloc-scoped-baseline-ycbmpocw"
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 0
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 1
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "alloc_free",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "1"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-baseline",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 2
+      },
+      {
+        "argv": [
+          "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so",
+          "MIMALLOC_PROBE_ALIGNMENT": "8",
+          "MIMALLOC_PROBE_ARTIFACT_MODE": "scoped-interpose-secure-verified",
+          "MIMALLOC_PROBE_FEATURES": "interpose",
+          "MIMALLOC_PROBE_LIVE_SET": "4096",
+          "MIMALLOC_PROBE_OPERATIONS": "20000000",
+          "MIMALLOC_PROBE_SCENARIO": "remote_free_1x1",
+          "MIMALLOC_PROBE_SIZE": "64",
+          "MIMALLOC_PROBE_THREADS": "2"
+        },
+        "round": 2
+      }
+    ],
+    "controls": {
+      "interpose": {
+        "rounds": 5,
+        "runs": 3,
+        "scenarios": [
+          "xmalloc-testN",
+          "larsonN",
+          "larsonN-sized",
+          "sh6benchN",
+          "sh8benchN",
+          "glibc-thread",
+          "glibc-simple",
+          "malloc-large",
+          "mstressN",
+          "mleak100",
+          "cache-scratchN"
+        ],
+        "timed_secs": 3
+      },
+      "interpose-secure": {
+        "rounds": 9,
+        "runs": 3,
+        "scenarios": [
+          "xmalloc-testN",
+          "larsonN",
+          "larsonN-sized",
+          "glibc-thread",
+          "malloc-large",
+          "mleak100"
+        ],
+        "timed_secs": 5
+      }
+    },
+    "finished_utc": "2026-10-24T05:20:06Z",
+    "harness_artifacts": {
+      "c_library": "/tmp/mimalloc-scoped-baseline-ycbmpocw/target/bench-build/18760c9e965954b7/c-release/libmimalloc.so.3.3",
+      "cache": "/tmp/mimalloc-scoped-baseline-ycbmpocw/target/bench-build/18760c9e965954b7",
+      "configuration": {
+        "c_options": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "MI_BUILD_OBJECT": "OFF",
+          "MI_BUILD_SHARED": "ON",
+          "MI_BUILD_STATIC": "OFF",
+          "MI_BUILD_TESTS": "OFF",
+          "MI_GUARDED": "OFF",
+          "MI_OVERRIDE": "ON",
+          "MI_SECURE": "OFF",
+          "MI_SECURE_FULL": "OFF"
+        },
+        "cargo_config": {
+          "/tmp/mimalloc-scoped-baseline-ycbmpocw/.cargo/config.toml": "[alias]\nclippy-strict = [\"clippy\", \"--all-targets\", \"--all-features\"]\n"
+        },
+        "flags": {
+          "CARGO_ENCODED_RUSTFLAGS": "",
+          "CARGO_INCREMENTAL": "",
+          "CC": "",
+          "CFLAGS": "",
+          "CMAKE_GENERATOR": "",
+          "CXX": "",
+          "CXXFLAGS": "",
+          "LDFLAGS": "",
+          "RUSTC": "",
+          "RUSTC_WORKSPACE_WRAPPER": "",
+          "RUSTC_WRAPPER": "",
+          "RUSTFLAGS": ""
+        },
+        "harness_features": [
+          "bench"
+        ],
+        "rust_library_features": [
+          "interpose"
+        ],
+        "tool_paths": {
+          "cargo": "/home/azureuser/.cargo/bin/cargo",
+          "cc": "/usr/bin/cc",
+          "cmake": "/usr/bin/cmake",
+          "cxx": "/usr/bin/c++",
+          "rustc": "/home/azureuser/.cargo/bin/rustc"
+        },
+        "tools": {
+          "cargo": "cargo 1.92.0 (344c4567c 2025-10-21)",
+          "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+          "cmake": "cmake version 3.28.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+          "cxx": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+          "rustc": "rustc 1.92.0 (ded5c06cf 2025-12-08)"
+        }
+      },
+      "executable": "/tmp/mimalloc-scoped-baseline-ycbmpocw/target/bench-build/18760c9e965954b7/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+      "logs": [
+        "harness.log",
+        "rust.log",
+        "c-configure.log",
+        "c-build.log"
+      ],
+      "rust_library": "/tmp/mimalloc-scoped-baseline-ycbmpocw/target/bench-build/18760c9e965954b7/rust-interpose/release/libmechanical_mimalloc.so",
+      "rustc_verbose": "rustc 1.92.0 (ded5c06cf 2025-12-08)\nbinary: rustc\ncommit-hash: ded5c06cf21d2b93bffd5d884aa6e96934ee4234\ncommit-date: 2025-12-08\nhost: x86_64-unknown-linux-gnu\nrelease: 1.92.0\nLLVM version: 21.1.3",
+      "sha256": {
+        "c_library": "cdaf3428b31465974f973d0b1d5707021b75187096bbb3eacfc7cbb4a8e97772",
+        "executable": "d103e7628fadeb009ee213987d802edbad90d4d0c8beddef369b46a8ffa0b514",
+        "rust_library": "4cb3ac181a946c2a0f7dbd22861cbef0aa301e4d98a3411a8909c0ffa9f840bb"
+      }
+    },
+    "libraries": {
+      "baseline-interpose": {
+        "features": [
+          "interpose"
+        ],
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose.so",
+        "sha256": "4cb3ac181a946c2a0f7dbd22861cbef0aa301e4d98a3411a8909c0ffa9f840bb"
+      },
+      "baseline-interpose-secure": {
+        "features": [
+          "interpose",
+          "secure",
+          "guarded"
+        ],
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/baseline-interpose-secure.so",
+        "sha256": "3ae01ac2cac85e336d40dbd5973e6fedb68863c836f9141224d6f3c04d728a79"
+      },
+      "verified-interpose": {
+        "features": [
+          "interpose"
+        ],
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose.so",
+        "sha256": "8e661a586ef4a2bf596e5d48ad565ab37a247d1cb535b84754f747e31c07e76d"
+      },
+      "verified-interpose-secure": {
+        "features": [
+          "interpose",
+          "secure",
+          "guarded"
+        ],
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-interpose-secure.so",
+        "sha256": "3e681fbfb5e07b3e3d863228d89be1093a8bbf367221c2ca62dbd13434bf2a18"
+      }
+    },
+    "resource_controls": {
+      "alignment": 8,
+      "live_set": 4096,
+      "operations": 20000000,
+      "rounds": 3,
+      "size": 64
+    },
+    "resource_gates": [
+      {
+        "config": "interpose",
+        "label": "baseline",
+        "returncode": 0
+      },
+      {
+        "config": "interpose",
+        "label": "verified",
+        "returncode": 0
+      },
+      {
+        "config": "interpose-secure",
+        "label": "baseline",
+        "returncode": 0
+      },
+      {
+        "config": "interpose-secure",
+        "label": "verified",
+        "returncode": 0
+      }
+    ],
+    "resource_probe": {
+      "path": "/home/azureuser/projects/mechanical_mimalloc/target/scoped-ownership-20261024/verified-resource-probe",
+      "sha256": "d8e95c5a0165c53ee8a18acbabdcecbfbc111f6d7eba85f9ab4909050b71b66c",
+      "source_commit": "6c99f4f0301f0f08b1b2d1de0b13d6da5e467e58"
+    },
+    "source_commit": "ca291ac89908cfd2c7a425702445d2d9e0144f82",
+    "started_utc": "2026-10-24T05:02:23Z"
+  }
+}

@@ -139,7 +139,9 @@ page claim together with its matching published head.
 Bitmap views borrow the actual initialized trailing chunk extent of a compact
 allocation. They derive trailing storage from the original allocation pointer,
 not a reference covering only the header. Range operations use bounded chunk
-references; raw compatibility workers retain their outlined argument shapes.
+references. Private outlined kernels take borrowed headers and slices directly,
+so callers need not materialize a view just to pass its address. Raw
+compatibility signatures remain unchanged.
 `ArenaSliceAccess` projects free, dirty, and committed bitmap views once. A
 slice claim borrows those same views and retains a range checked against the
 arena's logical slice count. Dirty/committed operations and unpublished-claim

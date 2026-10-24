@@ -1,4 +1,6 @@
 //! Borrowed views over the initialized compact bitmap allocation.
+//! Outlined kernels receive the borrowed fields directly so callers do not
+//! materialize a temporary view just to pass its address.
 
 #![forbid(unsafe_code)]
 
@@ -21,9 +23,20 @@ impl<'a> BitmapView<'a> {
         Self { header, chunks }
     }
 
-    #[inline(never)]
+    #[inline(always)]
     pub(crate) fn set_n(&self, idx: usize, n: usize, palready_set: Option<&mut usize>) -> bool {
-        let Some(chunks) = BitmapChunks::new(self.chunks, idx, n) else {
+        Self::set_n_in(self.header, self.chunks, idx, n, palready_set)
+    }
+
+    #[inline(never)]
+    fn set_n_in(
+        header: &mi_bitmap_t,
+        chunks: &[mi_bchunk_t],
+        idx: usize,
+        n: usize,
+        palready_set: Option<&mut usize>,
+    ) -> bool {
+        let Some(chunks) = BitmapChunks::new(chunks, idx, n) else {
             return false;
         };
         let mut were_allclear = true;
@@ -32,7 +45,7 @@ impl<'a> BitmapView<'a> {
             let mut chunk_already_set = 0;
             were_allclear &= mi_bchunk_setN(chunk, cidx, n.get(), Some(&mut chunk_already_set));
             already_set += chunk_already_set;
-            mi_bitmap_chunkmap_set(self.header, chunk_idx);
+            mi_bitmap_chunkmap_set(header, chunk_idx);
         }
         if let Some(palready_set) = palready_set {
             *palready_set = already_set;
@@ -40,9 +53,14 @@ impl<'a> BitmapView<'a> {
         were_allclear
     }
 
-    #[inline(never)]
+    #[inline(always)]
     pub(crate) fn clear_n(&self, idx: usize, n: usize) -> bool {
-        let Some(chunks) = BitmapChunks::new(self.chunks, idx, n) else {
+        Self::clear_n_in(self.header, self.chunks, idx, n)
+    }
+
+    #[inline(never)]
+    fn clear_n_in(header: &mi_bitmap_t, chunks: &[mi_bchunk_t], idx: usize, n: usize) -> bool {
+        let Some(chunks) = BitmapChunks::new(chunks, idx, n) else {
             return false;
         };
         let mut were_allset = true;
@@ -50,15 +68,20 @@ impl<'a> BitmapView<'a> {
             let mut maybe_all_clear = false;
             were_allset &= mi_bchunk_clearN(chunk, cidx, n.get(), Some(&mut maybe_all_clear));
             if maybe_all_clear {
-                mi_bitmap_chunkmap_try_clear(self.header, chunk_idx, chunk);
+                mi_bitmap_chunkmap_try_clear(header, chunk_idx, chunk);
             }
         }
         were_allset
     }
 
-    #[inline(never)]
+    #[inline(always)]
     pub(crate) fn popcount_n(&self, idx: usize, n: usize) -> usize {
-        let Some(chunks) = BitmapChunks::new(self.chunks, idx, n) else {
+        Self::popcount_n_in(self.chunks, idx, n)
+    }
+
+    #[inline(never)]
+    fn popcount_n_in(chunks: &[mi_bchunk_t], idx: usize, n: usize) -> usize {
+        let Some(chunks) = BitmapChunks::new(chunks, idx, n) else {
             return 0;
         };
         let mut popcount = 0;
@@ -68,9 +91,14 @@ impl<'a> BitmapView<'a> {
         popcount
     }
 
-    #[inline(never)]
+    #[inline(always)]
     pub(crate) fn is_xset_n(&self, set: mi_xset_t, idx: usize, n: usize) -> bool {
-        let Some(chunks) = BitmapChunks::new(self.chunks, idx, n) else {
+        Self::is_xset_n_in(self.chunks, set, idx, n)
+    }
+
+    #[inline(never)]
+    fn is_xset_n_in(chunks: &[mi_bchunk_t], set: mi_xset_t, idx: usize, n: usize) -> bool {
+        let Some(chunks) = BitmapChunks::new(chunks, idx, n) else {
             return false;
         };
         for (_, chunk, cidx, n) in chunks {
@@ -89,24 +117,19 @@ impl<'a> BBitmapView<'a> {
     }
 
     #[inline(always)]
-    fn max_bits(&self) -> usize {
-        self.chunks.len() * MI_BCHUNK_BITS
-    }
-
-    #[inline(always)]
     pub(crate) fn try_find_and_clear_n(&self, tseq: usize, n: usize, pidx: &mut usize) -> bool {
         let found = if n == 1 {
-            self.try_find_one(tseq, pidx)
+            Self::try_find_one(self.header, self.chunks, tseq, pidx)
         } else if n == 8 {
-            self.try_find_eight(tseq, pidx)
+            Self::try_find_eight(self.header, self.chunks, tseq, pidx)
         } else if n == 0 {
             false
         } else if n <= MI_BFIELD_BITS {
-            self.try_find_field(tseq, n, pidx)
+            Self::try_find_field(self.header, self.chunks, tseq, n, pidx)
         } else if n <= MI_BCHUNK_BITS {
-            self.try_find_chunk(tseq, n, pidx)
+            Self::try_find_chunk(self.header, self.chunks, tseq, n, pidx)
         } else {
-            self.try_find_chunks(n, pidx)
+            Self::try_find_chunks(self.header, self.chunks, n, pidx)
         };
         #[cfg(feature = "bench-diagnostics")]
         crate::allocator::bench_diagnostics::bitmap_find_clear(found);
@@ -114,47 +137,102 @@ impl<'a> BBitmapView<'a> {
     }
 
     #[inline(never)]
-    fn try_find_one(&self, tseq: usize, pidx: &mut usize) -> bool {
-        self.try_find_and_clear_generic(tseq, 1, pidx, mi_bchunk_try_find_and_clear_1)
+    fn try_find_one(
+        header: &mi_bbitmap_t,
+        chunks: &[mi_bchunk_t],
+        tseq: usize,
+        pidx: &mut usize,
+    ) -> bool {
+        Self::try_find_and_clear_generic(
+            header,
+            chunks,
+            tseq,
+            1,
+            pidx,
+            mi_bchunk_try_find_and_clear_1,
+        )
     }
 
     #[inline(never)]
-    fn try_find_eight(&self, tseq: usize, pidx: &mut usize) -> bool {
-        self.try_find_and_clear_generic(tseq, 8, pidx, mi_bchunk_try_find_and_clear_8)
+    fn try_find_eight(
+        header: &mi_bbitmap_t,
+        chunks: &[mi_bchunk_t],
+        tseq: usize,
+        pidx: &mut usize,
+    ) -> bool {
+        Self::try_find_and_clear_generic(
+            header,
+            chunks,
+            tseq,
+            8,
+            pidx,
+            mi_bchunk_try_find_and_clear_8,
+        )
     }
 
     #[inline(never)]
-    fn try_find_field(&self, tseq: usize, n: usize, pidx: &mut usize) -> bool {
+    fn try_find_field(
+        header: &mi_bbitmap_t,
+        chunks: &[mi_bchunk_t],
+        tseq: usize,
+        n: usize,
+        pidx: &mut usize,
+    ) -> bool {
         crate::internal::mi_debug_assert!(n <= MI_BFIELD_BITS);
-        self.try_find_and_clear_generic(tseq, n, pidx, mi_bchunk_try_find_and_clearNX)
+        Self::try_find_and_clear_generic(
+            header,
+            chunks,
+            tseq,
+            n,
+            pidx,
+            mi_bchunk_try_find_and_clearNX,
+        )
     }
 
     #[inline(never)]
-    fn try_find_chunk(&self, tseq: usize, n: usize, pidx: &mut usize) -> bool {
+    fn try_find_chunk(
+        header: &mi_bbitmap_t,
+        chunks: &[mi_bchunk_t],
+        tseq: usize,
+        n: usize,
+        pidx: &mut usize,
+    ) -> bool {
         crate::internal::mi_debug_assert!(n <= MI_BCHUNK_BITS);
-        self.try_find_and_clear_generic(tseq, n, pidx, mi_bchunk_try_find_and_clearNC)
+        Self::try_find_and_clear_generic(
+            header,
+            chunks,
+            tseq,
+            n,
+            pidx,
+            mi_bchunk_try_find_and_clearNC,
+        )
     }
 
     #[inline(never)]
-    fn try_find_chunks(&self, n: usize, pidx: &mut usize) -> bool {
+    fn try_find_chunks(
+        header: &mi_bbitmap_t,
+        chunks: &[mi_bchunk_t],
+        n: usize,
+        pidx: &mut usize,
+    ) -> bool {
         let chunk_req = n.div_ceil(MI_BCHUNK_BITS);
-        if self.chunks.len() < chunk_req {
+        if chunks.len() < chunk_req {
             return false;
         }
         let mut chunk_idx = 0usize;
-        while chunk_idx <= self.chunks.len() - chunk_req {
-            let chunks = &self.chunks[chunk_idx..];
-            let count = chunks
+        while chunk_idx <= chunks.len() - chunk_req {
+            let remaining = &chunks[chunk_idx..];
+            let count = remaining
                 .iter()
                 .take(chunk_req)
                 .take_while(|chunk| mi_bchunk_all_are_set_relaxed(chunk))
                 .count();
-            if count == chunk_req && Self::try_clear_prefix(&chunks[..chunk_req], n) {
+            if count == chunk_req && Self::try_clear_prefix(&remaining[..chunk_req], n) {
                 *pidx = chunk_idx * MI_BCHUNK_BITS;
                 for i in 0..count {
-                    mi_bbitmap_set_chunk_bin(self.header, chunk_idx + i, MI_CBIN_HUGE);
+                    mi_bbitmap_set_chunk_bin(header, chunk_idx + i, MI_CBIN_HUGE);
                 }
-                crate::internal::mi_debug_assert!(*pidx + n <= self.max_bits());
+                crate::internal::mi_debug_assert!(*pidx + n <= chunks.len() * MI_BCHUNK_BITS);
                 return true;
             }
             chunk_idx += count + 1;
@@ -179,22 +257,32 @@ impl<'a> BBitmapView<'a> {
         false
     }
 
-    #[inline(never)]
+    #[inline(always)]
     pub(crate) fn set_n(&self, idx: usize, n: usize) -> bool {
-        let Some(chunks) = BitmapChunks::new(self.chunks, idx, n) else {
+        Self::set_n_in(self.header, self.chunks, idx, n)
+    }
+
+    #[inline(never)]
+    fn set_n_in(header: &mi_bbitmap_t, chunks: &[mi_bchunk_t], idx: usize, n: usize) -> bool {
+        let Some(chunks) = BitmapChunks::new(chunks, idx, n) else {
             return false;
         };
         let mut were_allclear = true;
         for (chunk_idx, chunk, cidx, n) in chunks {
             were_allclear &= mi_bchunk_setN(chunk, cidx, n.get(), None);
-            mi_bbitmap_chunkmap_set(self.header, chunk_idx, chunk, true);
+            mi_bbitmap_chunkmap_set(header, chunk_idx, chunk, true);
         }
         were_allclear
     }
 
-    #[inline(never)]
+    #[inline(always)]
     pub(crate) fn is_xset_n(&self, set: mi_xset_t, idx: usize, n: usize) -> bool {
-        let Some(chunks) = BitmapChunks::new(self.chunks, idx, n) else {
+        Self::is_xset_n_in(self.chunks, set, idx, n)
+    }
+
+    #[inline(never)]
+    fn is_xset_n_in(chunks: &[mi_bchunk_t], set: mi_xset_t, idx: usize, n: usize) -> bool {
+        let Some(chunks) = BitmapChunks::new(chunks, idx, n) else {
             return false;
         };
         for (_, chunk, cidx, n) in chunks {
@@ -206,8 +294,9 @@ impl<'a> BBitmapView<'a> {
     }
 
     #[inline(always)]
-    pub(super) fn try_find_and_clear_generic<F>(
-        &self,
+    fn try_find_and_clear_generic<F>(
+        header: &mi_bbitmap_t,
+        chunks: &[mi_bchunk_t],
         tseq: usize,
         n: usize,
         pidx: &mut usize,
@@ -216,9 +305,9 @@ impl<'a> BBitmapView<'a> {
     where
         F: Fn(&mi_bchunk_t, usize, &mut usize) -> bool,
     {
-        let chunk_count = self.chunks.len();
-        let cmap_max_count = self.chunks.len().div_ceil(MI_BFIELD_BITS);
-        let chunk_acc = self.header.chunk_max_accessed.load(Ordering::Relaxed);
+        let chunk_count = chunks.len();
+        let cmap_max_count = chunks.len().div_ceil(MI_BFIELD_BITS);
+        let chunk_acc = header.chunk_max_accessed.load(Ordering::Relaxed);
         let cmap_acc = chunk_acc / MI_BFIELD_BITS;
         let cmap_acc_bits = 1 + (chunk_acc % MI_BFIELD_BITS);
         let cmap_mask = mi_bfield_mask(cmap_max_count, 0);
@@ -228,7 +317,7 @@ impl<'a> BBitmapView<'a> {
         let mut found = false;
         let _ = mi_bfield_cycle_iterate(cmap_mask, tseq, cmap_cycle, |cmap_idx_in_cycle| {
             cmap_idx = cmap_idx_in_cycle;
-            let cmap_entry = self.header.chunkmap.bfields[cmap_idx].load(Ordering::Relaxed);
+            let cmap_entry = header.chunkmap.bfields[cmap_idx].load(Ordering::Relaxed);
             let cmap_entry_cycle = if cmap_idx != cmap_acc {
                 MI_BFIELD_BITS
             } else {
@@ -241,8 +330,8 @@ impl<'a> BBitmapView<'a> {
             cmap_bins[MI_CBIN_NONE as usize] = cmap_entry;
             let mut ibin = MI_CBIN_SMALL;
             while (ibin as i32) < (MI_CBIN_NONE as i32) {
-                let cmap_bin = self.header.chunkmap_bins[ibin as usize].bfields[cmap_idx]
-                    .load(Ordering::Relaxed);
+                let cmap_bin =
+                    header.chunkmap_bins[ibin as usize].bfields[cmap_idx].load(Ordering::Relaxed);
                 cmap_bins[ibin as usize] = cmap_bin & cmap_entry;
                 cmap_bins[MI_CBIN_NONE as usize] &= !cmap_bin;
                 ibin = mi_chunkbin_inc(ibin);
@@ -258,18 +347,20 @@ impl<'a> BBitmapView<'a> {
                         if chunk_idx >= chunk_count {
                             return true;
                         }
-                        let chunk = &self.chunks[chunk_idx];
+                        let chunk = &chunks[chunk_idx];
                         let mut cidx = 0usize;
                         if on_find(chunk, n, &mut cidx) {
                             if cidx == 0 && ibin == MI_CBIN_NONE {
-                                mi_bbitmap_set_chunk_bin(self.header, chunk_idx, bbin);
+                                mi_bbitmap_set_chunk_bin(header, chunk_idx, bbin);
                             }
                             *pidx = (chunk_idx * MI_BCHUNK_BITS) + cidx;
-                            crate::internal::mi_debug_assert!(*pidx + n <= self.max_bits());
+                            crate::internal::mi_debug_assert!(
+                                *pidx + n <= chunks.len() * MI_BCHUNK_BITS
+                            );
                             found = true;
                             return false;
                         }
-                        mi_bbitmap_chunkmap_try_clear(self.header, chunk_idx, chunk);
+                        mi_bbitmap_chunkmap_try_clear(header, chunk_idx, chunk);
                         true
                     });
                 if found {

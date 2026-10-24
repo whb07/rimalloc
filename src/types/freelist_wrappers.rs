@@ -3,10 +3,7 @@
 use core::{ffi::c_void, marker::PhantomData, ptr};
 
 use super::constants::mi_block_t;
-use super::page_states::AvailablePage;
 use super::ptr::{BlockPtr, ptr_exposed_addr};
-use super::validation_extra::AllocatedBlock;
-use crate::internal::mi_block_next;
 
 /// Keys used to encode and decode free-list pointers.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -316,27 +313,6 @@ impl AvailableFreeList {
     #[inline(always)]
     pub(crate) fn as_raw(&self) -> *mut mi_block_t {
         self.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut())
-    }
-
-    /// Pop a block off the page's available free list, returning the allocated
-    /// block and the updated list head. This is the allocation fast path.
-    ///
-    /// # Safety
-    /// `page` must be a valid `AvailablePage`; the caller must subsequently
-    /// store the returned list head back into `(*page).free` and increment
-    /// `(*page).used`.
-    #[inline(always)]
-    pub(crate) unsafe fn pop_one(page: AvailablePage) -> (AllocatedBlock, AvailableFreeList) {
-        let raw_page = page.page().as_ptr();
-        let free = unsafe { AvailableFreeList::from_raw((*raw_page).free) };
-        let head = unsafe { free.0.unwrap_unchecked() };
-        let head_raw = head.as_ptr();
-        let next_raw = unsafe { mi_block_next(raw_page, head_raw) };
-        let next = BlockPtr::new(next_raw);
-        (
-            unsafe { AllocatedBlock::new_unchecked(head) },
-            AvailableFreeList(next),
-        )
     }
 
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).free`).

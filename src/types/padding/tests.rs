@@ -49,21 +49,21 @@ fn padding_canary_uses_typed_page_and_block() {
 
 #[test]
 fn padding_ptr_reads_and_writes_stack_metadata() {
-    let mut raw = mi_padding_t {
+    let mut raw = MaybeUninit::new(mi_padding_t {
         canary: 0x1234_5678,
         delta: 4,
-    };
-    let ptr = unsafe { PaddingPtr::new_unchecked(core::ptr::addr_of_mut!(raw)) };
+    });
+    let ptr = unsafe { PaddingPtr::new_unchecked(raw.as_mut_ptr()) };
 
     let initial = unsafe { ptr.read() };
     assert_eq!(initial.canary(), PaddingCanary(0x1234_5678));
     assert_eq!(initial.delta(), PaddingDelta(4));
 
     let updated = Padding::new(PaddingCanary(0x8765_4321), PaddingDelta(8));
-    unsafe { ptr.write(updated) };
+    updated.write_to(&mut raw);
 
-    assert_eq!(raw.canary, 0x8765_4321);
-    assert_eq!(raw.delta, 8);
+    assert_eq!(unsafe { raw.assume_init_ref() }.canary, 0x8765_4321);
+    assert_eq!(unsafe { raw.assume_init_ref() }.delta, 8);
     assert_eq!(unsafe { ptr.read() }.delta(), PaddingDelta(8));
 }
 

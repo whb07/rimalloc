@@ -32,10 +32,14 @@ fn uninit_initialize_yields_active_page() {
 
 #[test]
 fn active_available_and_pop_free_block_update_page_state() {
-    let mut page = MaybeUninit::<mi_page_t>::uninit();
+    let mut page = MaybeUninit::<mi_page_t>::zeroed();
     let mut block = mi_block_t::default();
     unsafe {
         let raw = page.as_mut_ptr();
+        ptr::addr_of_mut!((*raw).block_size).write(size_of::<mi_block_t>());
+        ptr::addr_of_mut!((*raw).capacity).write(1);
+        ptr::addr_of_mut!((*raw).reserved).write(1);
+        ptr::addr_of_mut!((*raw).page_start).write(ptr::addr_of_mut!(block).cast());
         ptr::addr_of_mut!((*raw).free).write(ptr::addr_of_mut!(block));
         ptr::addr_of_mut!((*raw).used).write(0);
         #[cfg(any(
@@ -51,8 +55,13 @@ fn active_available_and_pop_free_block_update_page_state() {
         let available = active
             .try_available()
             .expect("non-null free head is available");
-        let (allocated, active_again) = available.pop_free_block();
-        assert_eq!(allocated.as_ptr().as_ptr(), ptr::addr_of_mut!(block));
+        let allocated = available.with_allocation_access(
+            crate::core_types::PaddedSize::new_unchecked(size_of::<mi_block_t>()),
+            ptr::null_mut(),
+            |page, request| page.pop(request).0.into_ptr(),
+        );
+        let active_again = ActivePage::new_unchecked(PagePtr::new_unchecked(raw));
+        assert_eq!(allocated.as_ptr(), ptr::addr_of_mut!(block));
         assert_eq!(active_again.page().as_ptr(), raw);
         assert!((*raw).free.is_null());
         assert_eq!((*raw).used, 1);

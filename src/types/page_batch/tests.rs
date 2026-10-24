@@ -1065,7 +1065,11 @@ fn randomized_reference_algorithms_match_batch_transitions() {
             }
             let reference_block = reference_available_pop(reference.page());
             let available = AvailablePage::new_unchecked(candidate.page());
-            let (candidate_block, _) = available.pop_free_block();
+            let candidate_block = available.with_allocation_access(
+                crate::core_types::PaddedSize::new_unchecked(size_of::<mi_block_t>()),
+                core::ptr::null_mut(),
+                |page, request| page.pop(request).0.into_ptr(),
+            );
 
             assert_eq!(
                 reference_block,
@@ -1073,7 +1077,7 @@ fn randomized_reference_algorithms_match_batch_transitions() {
                 "reference pop mismatch: initial_seed={INITIAL_SEED:#x} case_seed={case_seed:#x} iteration={iteration}"
             );
             assert_eq!(
-                candidate_block.into_ptr(),
+                candidate_block,
                 candidate.block(indexes[0]),
                 "candidate pop mismatch: initial_seed={INITIAL_SEED:#x} case_seed={case_seed:#x} iteration={iteration}"
             );

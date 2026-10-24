@@ -1,6 +1,6 @@
 //! DT-6: User pointer validation types.
 //!
-//! `AllocatedBlock` lives in `validation_extra` for the free-list pop handoff.
+//! Local allocation storage is lent by `local_page` after its free-list pop.
 //! Validated free requests retain their page and block until a scoped owner
 //! consumes the matching storage.
 

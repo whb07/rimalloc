@@ -289,26 +289,6 @@ impl FullPage {
     }
 }
 
-impl AvailablePage {
-    /// Pop one block while consuming the witness that proves a non-empty
-    /// available list and exclusive local ownership of its accounting transition.
-    #[inline(always)]
-    pub(crate) fn pop_free_block(
-        self,
-    ) -> (
-        crate::core_types::validation_extra::AllocatedBlock,
-        ActivePage,
-    ) {
-        let page = self.page();
-        let (block, next) = unsafe { crate::core_types::AvailableFreeList::pop_one(self) };
-        unsafe {
-            page.set_free(next);
-            page.set_used(page.used().increment_wrapping());
-        }
-        (block, unsafe { ActivePage::new_unchecked(page) })
-    }
-}
-
 impl LocalPage {
     /// Consume a locally owned page after classifying it as full.
     ///

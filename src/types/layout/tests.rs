@@ -87,11 +87,15 @@ fn realloc_request_constructors_distinguish_null_from_existing() {
         (*page.as_ptr()).page_start = block.as_ptr().cast();
         let keys = crate::core_types::PageKeys::disabled();
         page.set_keys(keys);
-        crate::core_types::PaddingPtr::from_block_usable(block, UsableSize::new(128)).write(
-            crate::core_types::Padding::new(
-                crate::core_types::PaddingCanary::from_page_block_keys(page, block, keys),
-                crate::core_types::PaddingDelta::for_usable(0, UsableSize::new(128)).unwrap(),
-            ),
+        let padding = crate::core_types::PaddingPtr::from_block_usable(block, UsableSize::new(128));
+        crate::core_types::Padding::new(
+            crate::core_types::PaddingCanary::from_page_block_keys(page, block, keys),
+            crate::core_types::PaddingDelta::for_usable(0, UsableSize::new(128)).unwrap(),
+        )
+        .write_to(
+            &mut *padding
+                .as_ptr()
+                .cast::<core::mem::MaybeUninit<crate::types::mi_padding_t>>(),
         );
         let user = UserPtr::new(block.as_ptr().cast::<u8>().add(8).cast()).unwrap();
         let lookup = crate::core_types::PointerLookup::after_validation(

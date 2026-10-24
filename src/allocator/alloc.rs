@@ -87,7 +87,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
 fn mi_page_malloc_scoped<'scope>(
     local: &mut crate::types::local::LocalHeapAccess<'_>,
     page: crate::types::local_page::PageAccess<'scope, crate::core_types::AvailablePage>,
-    request: crate::types::local_page::PageRequest<'scope>,
+    mut request: crate::types::local_page::PageRequest<'scope>,
     zeroed: crate::core_types::Zeroed,
 ) -> *mut c_void {
     let size = request.get();

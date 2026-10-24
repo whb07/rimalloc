@@ -141,8 +141,6 @@ fn scalar_wrappers_match_raw_layout() {
 
 #[test]
 fn witness_wrappers_match_pointer_layout() {
-    assert_layout!(validation_extra::AllocatedBlock, BlockPtr);
-    assert_layout!(local_page::PageAccess<'_, AvailablePage>, PagePtr);
     assert_layout!(local_page::PageRequest<'_>, (PaddedSize, *mut usize));
     assert_layout!(page_queues::DetachedAllFree<'_>, PagePtr);
     assert_layout!(GuardedBlock, BlockPtr);

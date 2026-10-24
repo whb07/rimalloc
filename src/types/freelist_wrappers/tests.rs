@@ -1,6 +1,6 @@
 use super::*;
 use crate::core_types::{ActivePage, PagePtr};
-use crate::internal::mi_block_set_next;
+use crate::internal::{mi_block_next, mi_block_set_next};
 use crate::types::{mi_block_t, mi_page_t};
 use core::{mem::MaybeUninit, ptr};
 
@@ -47,10 +47,14 @@ fn block_tag_explicit_aligned_write_is_not_guarded() {
 
 #[test]
 fn available_pop_consumes_available_page_witness() {
-    let mut page = MaybeUninit::<mi_page_t>::uninit();
+    let mut page = MaybeUninit::<mi_page_t>::zeroed();
     let mut block = mi_block_t::default();
     unsafe {
         let raw_page = page.as_mut_ptr();
+        ptr::addr_of_mut!((*raw_page).block_size).write(size_of::<mi_block_t>());
+        ptr::addr_of_mut!((*raw_page).capacity).write(1);
+        ptr::addr_of_mut!((*raw_page).reserved).write(1);
+        ptr::addr_of_mut!((*raw_page).page_start).write(ptr::addr_of_mut!(block).cast());
         #[cfg(any(
             feature = "secure",
             debug_assertions,
@@ -66,10 +70,14 @@ fn available_pop_consumes_available_page_witness() {
         let available = active
             .try_available()
             .expect("free head creates available page");
-        let (allocated, next) = AvailableFreeList::pop_one(available);
-
-        assert_eq!(allocated.as_ptr().as_ptr(), ptr::addr_of_mut!(block));
-        assert!(next.is_empty());
+        let allocated = available.with_allocation_access(
+            crate::core_types::PaddedSize::new_unchecked(size_of::<mi_block_t>()),
+            ptr::null_mut(),
+            |page, request| page.pop(request).0.into_ptr(),
+        );
+        assert_eq!(allocated.as_ptr(), ptr::addr_of_mut!(block));
+        assert!((*raw_page).free.is_null());
+        assert_eq!((*raw_page).used, 1);
     }
 }
 

@@ -18,7 +18,6 @@ pub(crate) mod page_states;
 pub(crate) mod ptr;
 pub(crate) mod scalar;
 pub(crate) mod validation;
-pub(crate) mod validation_extra;
 
 pub use constants::*;
 

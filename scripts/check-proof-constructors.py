@@ -178,6 +178,14 @@ PROBES = [
         "E0521",
     ),
     (
+        "borrowed-block-bytes-prevent-raw-escape",
+        "src/types/local_page.rs",
+        "fn probe<'s>(mut block: AllocatedBlockStorage<'s>, page: &PageAccess<'s, ActivePage>) { "
+        "let bytes = &mut block.bytes[..]; let _ = block.finish(page, Zeroed::Yes); "
+        "bytes.fill(MaybeUninit::new(0)); }",
+        "E0505",
+    ),
+    (
         "allocation-loan-handoff",
         "src/types/local_page.rs",
         "unsafe fn probe(p: AvailablePage, r: PaddedSize) { unsafe { "

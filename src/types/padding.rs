@@ -1,6 +1,6 @@
 //! DT-14: Padding types.
 
-use core::ptr::NonNull;
+use core::{mem::MaybeUninit, ptr::NonNull};
 
 use super::constants::mi_padding_t;
 use super::freelist_wrappers::PageKeys;
@@ -98,17 +98,6 @@ impl PaddingPtr {
 
     /// # Safety
     /// The padding memory must be valid for writes.
-    #[inline(always)]
-    pub(crate) unsafe fn write(self, padding: Padding) {
-        let ptr = self.as_ptr();
-        unsafe {
-            (*ptr).canary = padding.canary.get();
-            (*ptr).delta = padding.delta.get();
-        }
-    }
-
-    /// # Safety
-    /// The padding memory must be valid for writes.
     #[cfg(not(mi_c_malloc_fast))]
     #[inline(always)]
     pub(crate) unsafe fn write_delta(self, delta: PaddingDelta) {
@@ -123,6 +112,14 @@ pub(crate) struct Padding {
 }
 
 impl Padding {
+    #[inline(always)]
+    pub(crate) fn write_to(self, slot: &mut MaybeUninit<mi_padding_t>) {
+        slot.write(mi_padding_t {
+            canary: self.canary.get(),
+            delta: self.delta.get(),
+        });
+    }
+
     #[inline(always)]
     pub(crate) const fn new(canary: PaddingCanary, delta: PaddingDelta) -> Self {
         Self { canary, delta }

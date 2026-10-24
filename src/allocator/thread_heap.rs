@@ -642,45 +642,42 @@ unsafe fn mi_theap_visit_pages_typed(
     // SAFETY: preserve the original second page-count read before traversal;
     // the field is still live and callbacks have not yet run.
     let total = unsafe { (*theap_ptr).page_count };
-    let max_bin = if include_full {
-        MI_BIN_FULL
+    let queue_count = if include_full {
+        MI_BIN_FULL + 1
     } else {
-        MI_BIN_FULL - 1
+        MI_BIN_FULL
     };
 
-    for i in 0..=max_bin {
-        // SAFETY: the safe loop bounds keep `i` within the selected fixed-bin range. The caller
-        // keeps the complete queue array live and the selected queue head initialized until read.
-        let (queue, mut page) = unsafe {
+    for i in 0..queue_count {
+        // SAFETY: the bounded bin indexes this heap's live fixed queue table.
+        // The cursor retains the remaining chain while each callback consumes
+        // only its current page, with the successor captured beforehand.
+        let completed = unsafe {
             let bin = Bin::new_unchecked(i as u16);
             let queue = theap.page_queue(bin);
-            let page = queue.first();
-            (queue, page)
+            let local = crate::core_types::ThreadHeapLocal::new_unchecked(theap);
+            crate::core_types::PageQueue::for_visit(queue).with_cursor(local, |cursor| {
+                while let Some(keep_going) = cursor.visit_next(|member| {
+                    let current = member.into_raw();
+                    crate::internal::mi_assert_internal!(
+                        mi_page_theap(current.as_ptr()) == theap_ptr
+                    );
+                    if crate::internal::MI_DEBUG > 1 {
+                        count += 1;
+                    }
+                    state
+                        .visitor
+                        .is_none_or(|visitor| visitor.invoke(theap, queue, current, state))
+                }) {
+                    if !keep_going {
+                        return false;
+                    }
+                }
+                true
+            })
         };
-        while let Some(current) = page {
-            let current_ptr = current.as_ptr();
-            // SAFETY: the current page remains live with an initialized stable forward link until
-            // this read. Capturing it before owner validation and callback invocation preserves the
-            // original removal-safe traversal order.
-            let next = unsafe { current.queue_next() };
-            // SAFETY: the current page remains live with its initialized owner association stable
-            // before the callback. Keeping the read in the assertion preserves assertion-only
-            // evaluation after the successor snapshot.
-            crate::internal::mi_assert_internal!(
-                unsafe { mi_page_theap(current_ptr) } == theap_ptr
-            );
-            if crate::internal::MI_DEBUG > 1 {
-                count += 1;
-            }
-            if let Some(visitor) = state.visitor
-                // SAFETY: `next` was captured first. The callback, opaque arguments, current page,
-                // queue, and heap remain live for this synchronous invocation and the contract
-                // permits only current-page detach/consumption while preserving the successor.
-                && !unsafe { visitor.invoke(theap, queue, current, state) }
-            {
-                return false;
-            }
-            page = next;
+        if !completed {
+            return false;
         }
     }
 

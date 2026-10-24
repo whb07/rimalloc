@@ -58,7 +58,9 @@ assert_not_impl_any!(AllFreePage<Active>: Copy, Clone);
 assert_not_impl_any!(PageForAbandon: Copy, Clone);
 assert_not_impl_any!(PageAbandonOutcome: Copy, Clone);
 assert_not_impl_any!(FreeRouteSnapshot: Copy, Clone);
-assert_not_impl_any!(QueuedPage<NormalQueue>: Copy, Clone);
+assert_not_impl_any!(QueuedPage<'_, NormalQueue>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::page_queues::QueueCursor<'_, NormalQueue>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::page_queues::DetachedPage<'_, NormalQueue>: Copy, Clone, Send, Sync);
 
 assert_not_impl_any!(OwnedHeap: Copy, Clone);
 assert_not_impl_any!(ArenaAllocation: Copy, Clone);

@@ -76,16 +76,17 @@ pub(crate) use lifecycle::{
 };
 pub use queues::{mi_page_queue_contains, mi_page_queue_of};
 pub(crate) use queues::{
-    mi_page_queue_enqueue_from_raw, mi_page_queue_remove_raw, mi_page_queue_remove_typed,
+    mi_page_queue_enqueue_from_raw, mi_page_queue_move_to_front_raw,
+    mi_page_queue_push_at_end_internal, mi_page_queue_push_internal, mi_page_queue_remove_raw,
+    mi_page_queue_remove_typed,
 };
 use queues::{
-    mi_page_queue_move_to_front_typed, mi_page_queue_push_at_end_typed, mi_page_queue_push_raw,
-    mi_page_queue_push_typed, mi_theap_contains_queue, mi_theap_direct_cache_start,
-    mi_theap_queue_index,
+    mi_page_queue_push_at_end_typed, mi_page_queue_push_raw, mi_page_queue_push_typed,
+    mi_theap_contains_queue, mi_theap_direct_cache_start, mi_theap_queue_index,
 };
 #[allow(unused_imports)]
 pub use stats_bin::_mi_page_stats_bin;
-pub(crate) use stats_bin::mi_page_bin_typed;
+pub(crate) use stats_bin::{_mi_page_stats_bin_typed, mi_page_bin_typed};
 pub use validation::_mi_page_is_valid;
 pub(crate) use validation::mi_page_is_valid_init;
 
@@ -132,15 +133,12 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
         let theap = mi_page_theap(page);
         let theap_ptr = ThreadHeapPtr::new_unchecked(theap);
         let pqfull = theap_ptr.page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
-        let bin = stats_bin::_mi_page_stats_bin_typed(page).as_usize();
-        let pq = theap_ptr.page_queue(Bin::new_unchecked(bin as u16));
         let from = crate::core_types::FullPageQueue::new_unchecked(pqfull);
-        let queued = crate::core_types::QueuedPage::<crate::core_types::FullQueue>::new_unchecked(
-            page_wrapper,
-            from,
-        );
-        let to = crate::core_types::NormalPageQueue::new_unchecked(pq);
-        queued.unfull(to)
+        let owner = crate::core_types::ThreadHeapLocal::new_unchecked(theap_ptr);
+        let page =
+            crate::core_types::PageQueue::full(from)
+                .with_member(owner, page_wrapper, |queued| queued.unfull());
+        crate::allocator::raw_bridge::assume_active_page(page)
     }
 }
 
@@ -237,22 +235,21 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
         // source queue. Derive the owner's full queue, consume the linked Active capability through
         // move/full-flag publication, then collect only through the returned Full capability.
         unsafe {
-            let full_queue = ThreadHeapPtr::new_unchecked(theap)
-                .page_queue(Bin::new_unchecked(MI_BIN_FULL as u16));
+            let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
+                ThreadHeapPtr::new_unchecked(theap),
+            );
             let active = crate::allocator::raw_bridge::assume_active_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
             let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(
                 crate::core_types::PageQueuePtr::new_unchecked(pq),
             );
-            let queued =
-                crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
-                    active,
-                    normal_queue,
-                );
-            let full =
-                queued.into_full(crate::core_types::FullPageQueue::new_unchecked(full_queue));
-            _mi_page_free_collect(full.page().as_ptr(), false);
+            let full = crate::core_types::PageQueue::normal(normal_queue).with_member(
+                owner,
+                active,
+                |queued| queued.into_full(),
+            );
+            _mi_page_free_collect(full.as_ptr(), false);
         }
     }
 }
@@ -1002,44 +999,53 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
         // SAFETY: the input capability and live queue still describe the same exclusively owned
         // page. Successful typed removal returns Active; fallback raw removal clears links and the
         // full flag before consuming the retained PageForAbandon into the same detached state.
-        let detached = unsafe {
-            match page_wrapper {
-                crate::core_types::PageForAbandon::Full(page) => {
-                    if let Some(full_queue) = crate::core_types::FullPageQueue::new(queue) {
-                        match crate::core_types::QueuedPage::<
-                            crate::core_types::FullQueue,
-                        >::try_queue_full(page, full_queue) {
-                            Ok(queued) => queued.remove(),
-                            Err(page) => {
-                                crate::internal::mi_assert_internal!(false);
-                                mi_page_queue_remove_raw(pq, page.page().as_ptr());
-                                page.into_active_after_detach()
+        let detached =
+            unsafe {
+                match page_wrapper {
+                    crate::core_types::PageForAbandon::Full(page) => {
+                        if let Some(full_queue) = crate::core_types::FullPageQueue::new(queue) {
+                            let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
+                                ThreadHeapPtr::new_unchecked((*page.page().as_ptr()).theap),
+                            );
+                            match crate::core_types::PageQueue::full(full_queue).try_with_member(
+                                owner,
+                                page,
+                                |queued| queued.remove().into_raw(),
+                            ) {
+                                Ok(page) => crate::allocator::raw_bridge::assume_active_page(page),
+                                Err(page) => {
+                                    crate::internal::mi_assert_internal!(false);
+                                    mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                                    page.into_active_after_detach()
+                                }
                             }
+                        } else {
+                            mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                            page.into_active_after_detach()
                         }
-                    } else {
-                        mi_page_queue_remove_raw(pq, page.page().as_ptr());
-                        page.into_active_after_detach()
+                    }
+                    crate::core_types::PageForAbandon::Active(page) => {
+                        if let Some(normal_queue) = crate::core_types::NormalPageQueue::new(queue) {
+                            let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
+                                ThreadHeapPtr::new_unchecked((*page.page().as_ptr()).theap),
+                            );
+                            match crate::core_types::PageQueue::normal(normal_queue)
+                                .try_with_member(owner, page, |queued| queued.remove().into_raw())
+                            {
+                                Ok(page) => crate::allocator::raw_bridge::assume_active_page(page),
+                                Err(page) => {
+                                    crate::internal::mi_assert_internal!(false);
+                                    mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                                    page
+                                }
+                            }
+                        } else {
+                            mi_page_queue_remove_raw(pq, page.page().as_ptr());
+                            page
+                        }
                     }
                 }
-                crate::core_types::PageForAbandon::Active(page) => {
-                    if let Some(normal_queue) = crate::core_types::NormalPageQueue::new(queue) {
-                        match crate::core_types::QueuedPage::<
-                            crate::core_types::NormalQueue,
-                        >::try_queue(page, normal_queue) {
-                            Ok(queued) => queued.remove(),
-                            Err(page) => {
-                                crate::internal::mi_assert_internal!(false);
-                                mi_page_queue_remove_raw(pq, page.page().as_ptr());
-                                page
-                            }
-                        }
-                    } else {
-                        mi_page_queue_remove_raw(pq, page.page().as_ptr());
-                        page
-                    }
-                }
-            }
-        };
+            };
         let detached_page = detached.page();
         let detached_raw = detached_page.as_ptr();
         // SAFETY: the detached page retains its live current-thread association. Snapshot the
@@ -1139,7 +1145,7 @@ unsafe fn mi_page_fresh_alloc_typed(
                 // normal witness and consume Active through typed queue publication exactly once.
                 unsafe {
                     let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(queue);
-                    mi_page_queue_push_typed(owner, normal_queue, page).into_active()
+                    mi_page_queue_push_typed(owner, normal_queue, page)
                 }
             }
         }
@@ -1331,7 +1337,7 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
     // free-list metadata, plus the live current-thread target with exclusive queue mutation. This
     // coherent epoch validates the claim/geometry, reassigns ownership, collects protocol remote
     // frees, derives the target queue, and consumes the claim into its sole queue publication.
-    let queued = unsafe {
+    unsafe {
         crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
             mi_page_slice_start(page).cast(),
             MI_PAGE_ALIGN,
@@ -1344,17 +1350,16 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
 
         collect_page_free_lists_abandoned(&page_wrapper, false);
         let pq = mi_theap_page_queue_of(theap, page);
-        let queued = mi_page_queue_push_at_end_typed(
+        let active = mi_page_queue_push_at_end_typed(
             target,
             crate::core_types::NormalPageQueue::new_unchecked(
                 crate::core_types::PageQueuePtr::new_unchecked(pq),
             ),
             page_wrapper.into_reclaimed(target),
         );
-        crate::internal::mi_assert_expensive!(_mi_page_is_valid(queued.page().as_ptr()));
-        queued
-    };
-    queued.into_active()
+        crate::internal::mi_assert_expensive!(_mi_page_is_valid(active.page().as_ptr()));
+        active
+    }
 }
 
 /// Validate one queue's linked-page topology and classification against its owning thread heap.
@@ -1785,23 +1790,22 @@ unsafe fn mi_page_queue_find_free_ex_active(
     // SAFETY: traversal or candidate selection proves this live active page remains linked in the
     // exact compatible normal queue. Consume it into the queued witness, move that witness to the
     // front, then clear retirement only through the returned queued page identity.
-    let queued = unsafe {
+    let selected = unsafe {
         let active = crate::allocator::raw_bridge::assume_active_page(
             crate::core_types::PagePtr::new_unchecked(page),
         );
-        let queued = crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
-            active, queue,
-        );
-        let queued = mi_page_queue_move_to_front_typed(theap, queue, queued);
-        mi_page_reset_retire_expire(queued.page().as_ptr());
-        queued
+        crate::core_types::PageQueue::normal(queue).with_member(theap, active, |queued| {
+            let queued = queued.move_to_front();
+            mi_page_reset_retire_expire(queued.page().as_ptr());
+            queued.into_raw()
+        })
     };
     #[cfg(feature = "bench-diagnostics")]
     {
         crate::allocator::bench_diagnostics::page_queue_search(count.get(), true, failed_extend);
         crate::allocator::bench_diagnostics::page_queue_selected(selected_position);
     }
-    Some(queued.into_active())
+    Some(unsafe { crate::allocator::raw_bridge::assume_active_page(selected) })
 }
 
 /// Return an available page from the front of a normal queue or from the complete queue-search

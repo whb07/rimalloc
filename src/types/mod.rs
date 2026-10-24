@@ -85,9 +85,7 @@ pub(crate) use crate::internal::guarded::{
     GuardedSizeMin,
 };
 
-pub(crate) use page_queues::{
-    FullPageQueue, FullQueue, HugePageQueue, NormalPageQueue, NormalQueue, QueuedPage,
-};
+pub(crate) use page_queues::{FullPageQueue, HugePageQueue, NormalPageQueue, PageQueue};
 
 pub(crate) use heap::{
     BorrowedHeap, BorrowedSubproc, MainHeap, MainSubproc, OwnedHeap, ThreadHeapState,

@@ -12,6 +12,54 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PROBES = [
     (
+        "queue-membership-authorizes-safe-removal",
+        "src/types/page_queues.rs",
+        "fn remove(p: QueuedPage<'_, NormalQueue>) -> PagePtr { p.remove().into_raw() } "
+        "unsafe fn probe(q: NormalPageQueue, h: super::super::ThreadHeapLocal, "
+        "p: super::super::ActivePage) { unsafe { PageQueue::normal(q).with_member(h, p, remove); } }",
+        None,
+    ),
+    (
+        "queue-membership-cannot-escape",
+        "src/types/page_queues.rs",
+        "unsafe fn probe(q: NormalPageQueue, h: super::super::ThreadHeapLocal, "
+        "p: super::super::ActivePage) { let mut escaped = None; "
+        "unsafe { PageQueue::normal(q).with_member(h, p, |p| { escaped = Some(p); }); } "
+        "let _ = escaped; }",
+        "E0521",
+    ),
+    (
+        "detached-page-cannot-escape",
+        "src/types/page_queues.rs",
+        "unsafe fn probe(q: NormalPageQueue, h: super::super::ThreadHeapLocal, "
+        "p: super::super::ActivePage) { let mut escaped = None; "
+        "unsafe { PageQueue::normal(q).with_member(h, p, |p| { escaped = Some(p.remove()); }); } "
+        "let _ = escaped; }",
+        "E0521",
+    ),
+    (
+        "queue-membership-consumed-on-detach",
+        "src/types/page_queues.rs",
+        "fn probe(p: QueuedPage<'_, NormalQueue>) { "
+        "let _ = p.remove().into_raw(); let _ = p.remove().into_raw(); }",
+        "E0382",
+    ),
+    (
+        "queue-transition-rejects-independent-destination",
+        "src/types/page_queues.rs",
+        "fn probe(p: QueuedPage<'_, NormalQueue>, to: FullPageQueue) { "
+        "let _ = p.into_full(to); }",
+        "E0061",
+    ),
+    (
+        "queue-cursor-cannot-escape",
+        "src/types/page_queues.rs",
+        "unsafe fn probe(q: NormalPageQueue, h: super::super::ThreadHeapLocal) { "
+        "let mut escaped = None; unsafe { PageQueue::normal(q).with_cursor(h, |c| "
+        "{ escaped = Some(c); }); } let _ = escaped; }",
+        "E0521",
+    ),
+    (
         "allocation-loan-handoff",
         "src/types/local_page.rs",
         "unsafe fn probe(p: AvailablePage, r: PaddedSize) { unsafe { "

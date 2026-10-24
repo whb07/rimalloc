@@ -227,7 +227,7 @@ pub(super) unsafe fn mi_page_queue_push_raw(
 /// mutation, and heap teardown are excluded; protocol atomic remote-free publication is permitted.
 /// Allocator diagnostics must remain valid, non-unwinding, and free of incompatible reentry.
 #[inline]
-unsafe fn mi_page_queue_push_internal(
+pub(crate) unsafe fn mi_page_queue_push_internal(
     theap: crate::core_types::ThreadHeapLocal,
     queue: PageQueuePtr,
     page: PagePtr,
@@ -283,7 +283,7 @@ unsafe fn mi_page_queue_push_internal(
 /// mutation, and heap teardown are excluded; protocol atomic remote-free publication is permitted.
 /// Allocator diagnostics must remain valid, non-unwinding, and free of incompatible reentry.
 #[inline]
-unsafe fn mi_page_queue_push_at_end_internal(
+pub(crate) unsafe fn mi_page_queue_push_at_end_internal(
     theap: crate::core_types::ThreadHeapLocal,
     queue: PageQueuePtr,
     page: PagePtr,
@@ -333,7 +333,7 @@ unsafe fn mi_page_queue_push_at_end_internal(
     }
 }
 
-/// Link `page` at the end of its live normal queue and return the exact membership capability.
+/// Link `page` at the end of its compatible live normal queue.
 ///
 /// # Safety
 /// `theap` must be the live current-thread owner of `queue` and `page`, with exclusive local queue,
@@ -348,17 +348,19 @@ pub(super) unsafe fn mi_page_queue_push_at_end_typed(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
-) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
+) -> crate::core_types::ActivePage {
     // SAFETY: the typed inputs and caller contract establish the unique detached active page and
     // its exact owning normal queue. The insertion completes before that capability is consumed
     // into the resulting queued-page witness.
     unsafe {
-        mi_page_queue_push_at_end_internal(theap, queue.ptr(), page.page());
-        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::from_enqueued(page, queue)
+        let page =
+            crate::core_types::PageQueue::normal(queue)
+                .with_detached(theap, page, |detached| detached.push_at_end().into_raw());
+        crate::allocator::raw_bridge::assume_active_page(page)
     }
 }
 
-/// Link `page` at the front of its live normal queue and return the exact membership capability.
+/// Link `page` at the front of its compatible live normal queue.
 ///
 /// # Safety
 /// `theap` must be the live current-thread owner of `queue` and `page`, with exclusive local queue,
@@ -373,20 +375,22 @@ pub(super) unsafe fn mi_page_queue_push_typed(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
-) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
+) -> crate::core_types::ActivePage {
     // SAFETY: the typed inputs and caller contract establish the unique detached active page and
     // its exact owning normal queue. The insertion completes before that capability is consumed
     // into the resulting queued-page witness.
     unsafe {
-        mi_page_queue_push_internal(theap, queue.ptr(), page.page());
-        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::from_enqueued(page, queue)
+        let page =
+            crate::core_types::PageQueue::normal(queue)
+                .with_detached(theap, page, |detached| detached.push_front().into_raw());
+        crate::allocator::raw_bridge::assume_active_page(page)
     }
 }
 
 /// # Safety
-/// `theap` must identify the live initialized locally owned heap that owns `queued.page()`, under
-/// current-thread ownership or exclusive collection access. `queue` must be the exact live
-/// initialized normal queue represented by `queued`, and the page must be live, initialized,
+/// `theap` must identify the live initialized locally owned heap that owns `page_ptr`, under
+/// current-thread ownership or exclusive collection access. `queue` must be the page's exact live
+/// initialized normal queue, and the page must be live, initialized,
 /// linked exactly once in that queue, not marked full, and block-size compatible with it. The
 /// queue's initialized block size and first/last links, every adjacent page link, the owning
 /// heap's complete page-queue array and direct cache, and the page's owner, class, flag, and link
@@ -398,15 +402,14 @@ pub(super) unsafe fn mi_page_queue_push_typed(
 /// operation, and concurrent local relinking, cache mutation, and heap teardown are excluded;
 /// protocol atomic remote-free publication is permitted. Allocator diagnostics must remain valid,
 /// must not unwind, and must not incompatibly reenter page, queue, or heap mutation. If the page is
-/// already first, it is returned unchanged. Otherwise it is relinked at the front and the direct
+/// already first, the function returns immediately. Otherwise it is relinked at the front and the direct
 /// cache is updated; queue and heap page counts and the page's full flag are unchanged.
 #[inline]
-pub(super) unsafe fn mi_page_queue_move_to_front_typed(
+pub(crate) unsafe fn mi_page_queue_move_to_front_raw(
     theap: crate::core_types::ThreadHeapLocal,
     queue: crate::core_types::NormalPageQueue,
-    queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
-) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
-    let page_ptr = queued.page();
+    page_ptr: PagePtr,
+) {
     let page = page_ptr.as_ptr();
     let queue_ptr;
     let first;
@@ -416,16 +419,15 @@ pub(super) unsafe fn mi_page_queue_move_to_front_typed(
     // and snapshots the current queue front.
     unsafe {
         crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.ptr().as_ptr());
-        crate::internal::mi_assert_internal!(queue.ptr() == queued.normal_queue().ptr());
         queue_ptr = queue.ptr();
         first = queue_ptr.first();
     }
     let Some(first) = first else {
         crate::internal::mi_assert_internal!(false);
-        return queued;
+        return;
     };
     if ptr::eq(first.as_ptr(), page) {
-        return queued;
+        return;
     }
 
     // SAFETY: the successful preflight and function contract give exclusive local ownership of
@@ -437,7 +439,7 @@ pub(super) unsafe fn mi_page_queue_move_to_front_typed(
         crate::internal::mi_assert_internal!(first.queue_prev().is_none());
         let Some(prev) = page_ptr.queue_prev() else {
             crate::internal::mi_assert_internal!(false);
-            return queued;
+            return;
         };
         let next = page_ptr.queue_next();
         prev.set_queue_next(next);
@@ -454,7 +456,6 @@ pub(super) unsafe fn mi_page_queue_move_to_front_typed(
         mi_theap_queue_first_update_typed(theap, queue);
 
         crate::internal::mi_assert_internal!(queue_ptr.first() == Some(page_ptr));
-        queued
     }
 }
 
@@ -709,7 +710,15 @@ mod tests {
             mi_theap_queue_first_update_typed(owner, normal_queue);
             let direct_idx = direct_bin(block_size);
 
-            mi_page_queue_remove_typed(normal, middle);
+            let active = crate::allocator::raw_bridge::assume_active_page(middle);
+            crate::core_types::PageQueue::normal(normal_queue).with_member(owner, active, |page| {
+                let detached = page.remove();
+                assert_eq!((*theap).page_count, 4);
+                let restored = detached.push_front();
+                assert_eq!(normal.first(), Some(middle));
+                assert_eq!((*theap).page_count, 5);
+                restored.remove().into_raw()
+            });
             assert_eq!(normal.first(), Some(first));
             assert_eq!(normal.last(), Some(tail));
             assert_eq!(normal.count().get(), 3);
@@ -749,7 +758,13 @@ mod tests {
             assert_eq!(owner.ptr().direct_page(direct_idx), remaining);
             assert_eq!((*theap).page_count, 2);
 
-            mi_page_queue_remove_typed(normal, remaining);
+            crate::core_types::PageQueue::normal(normal_queue).with_cursor(owner, |cursor| {
+                assert_eq!(
+                    cursor.visit_next(|page| page.remove().into_raw()),
+                    Some(remaining)
+                );
+                assert_eq!(cursor.visit_next(|page| page.into_raw()), None);
+            });
             assert_eq!(normal.first(), None);
             assert_eq!(normal.last(), None);
             assert_eq!(normal.count().get(), 0);
@@ -1020,12 +1035,12 @@ mod tests {
             let normal = crate::core_types::NormalPageQueue::new_unchecked(queue);
             let direct_idx = direct_bin(block_size);
             let active = crate::allocator::raw_bridge::assume_active_page(middle);
-            let queued = crate::core_types::QueuedPage::try_queue(active, normal)
-                .expect("middle page is linked in the normal queue");
             let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             );
-            let _ = mi_page_queue_move_to_front_typed(owner, normal, queued);
+            crate::core_types::PageQueue::normal(normal)
+                .try_with_member(owner, active, |queued| queued.move_to_front().into_raw())
+                .expect("page is linked in its normal queue");
 
             assert_eq!(queue.first(), Some(middle));
             assert_eq!(queue.last(), Some(last));
@@ -1043,9 +1058,9 @@ mod tests {
             assert_eq!(owner.ptr().direct_page(direct_idx), middle);
 
             let active = crate::allocator::raw_bridge::assume_active_page(last);
-            let queued = crate::core_types::QueuedPage::try_queue(active, normal)
-                .expect("last page remains linked in the normal queue");
-            let _ = mi_page_queue_move_to_front_typed(owner, normal, queued);
+            crate::core_types::PageQueue::normal(normal)
+                .try_with_member(owner, active, |queued| queued.move_to_front().into_raw())
+                .expect("page remains linked in its normal queue");
 
             assert_eq!(queue.first(), Some(last));
             assert_eq!(queue.last(), Some(first));
@@ -1063,9 +1078,9 @@ mod tests {
             assert_eq!(owner.ptr().direct_page(direct_idx), last);
 
             let active = crate::allocator::raw_bridge::assume_active_page(last);
-            let queued = crate::core_types::QueuedPage::try_queue(active, normal)
-                .expect("front page remains linked in the normal queue");
-            let _ = mi_page_queue_move_to_front_typed(owner, normal, queued);
+            crate::core_types::PageQueue::normal(normal)
+                .try_with_member(owner, active, |queued| queued.move_to_front().into_raw())
+                .expect("page remains linked in its normal queue");
 
             assert_eq!(queue.first(), Some(last));
             assert_eq!(queue.last(), Some(first));

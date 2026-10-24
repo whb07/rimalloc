@@ -216,8 +216,9 @@ struct ClaimedArenaSlices {
 impl ClaimedArenaSlices {
     /// # Safety
     ///
-    /// `arena` and its free bitmap must remain initialized and live until this
-    /// claim is published or dropped, with concurrent arena teardown excluded.
+    /// `arena` and its matching free, dirty and committed bitmaps must remain
+    /// initialized, stable and live until publication or drop. Each bitmap must
+    /// cover the arena slice extent; concurrent teardown is excluded.
     unsafe fn try_claim(
         arena: ArenaPtr,
         slice_count: SliceCount,
@@ -269,6 +270,95 @@ impl ClaimedArenaSlices {
     #[inline(always)]
     fn range(&self) -> crate::core_types::SliceRange {
         self.allocation.range()
+    }
+
+    #[inline(always)]
+    fn mark_dirty(&mut self) -> usize {
+        let range = self.range();
+        let mut already_dirty = 0;
+        let initially_zero = unsafe {
+            mi_bitmap_setN(
+                (*self.arena().as_ptr().cast::<MiArenaPrefix>()).slices_dirty,
+                range.start_usize(),
+                range.count_usize(),
+                &mut already_dirty,
+            )
+        };
+        self.allocation.set_initially_zero(initially_zero);
+        already_dirty
+    }
+
+    #[inline(always)]
+    fn committed_count(&self) -> usize {
+        let range = self.range();
+        unsafe {
+            mi_bitmap_popcountN(
+                (*self.arena().as_ptr().cast::<MiArenaPrefix>()).slices_committed,
+                range.start_usize(),
+                range.count_usize(),
+            )
+        }
+    }
+
+    #[inline(always)]
+    fn mark_committed(&self, already_committed: Option<&mut usize>) {
+        let range = self.range();
+        unsafe {
+            mi_bitmap_setN(
+                (*self.arena().as_ptr().cast::<MiArenaPrefix>()).slices_committed,
+                range.start_usize(),
+                range.count_usize(),
+                already_committed.map_or(ptr::null_mut(), |count| count),
+            )
+        };
+    }
+
+    #[inline(always)]
+    fn clear_committed(&self) {
+        let range = self.range();
+        unsafe {
+            mi_bitmap_clearN(
+                (*self.arena().as_ptr().cast::<MiArenaPrefix>()).slices_committed,
+                range.start_usize(),
+                range.count_usize(),
+            )
+        };
+    }
+
+    #[inline(always)]
+    fn is_committed(&self) -> bool {
+        let range = self.range();
+        unsafe {
+            mi_bitmap_is_setN(
+                (*self.arena().as_ptr().cast::<MiArenaPrefix>()).slices_committed,
+                range.start_usize(),
+                range.count_usize(),
+            )
+        }
+    }
+
+    #[inline(always)]
+    fn is_dirty(&self) -> bool {
+        let range = self.range();
+        unsafe {
+            mi_bitmap_is_setN(
+                (*self.arena().as_ptr().cast::<MiArenaPrefix>()).slices_dirty,
+                range.start_usize(),
+                range.count_usize(),
+            )
+        }
+    }
+
+    #[inline(always)]
+    fn free_range_is_claimed(&self) -> bool {
+        let range = self.range();
+        unsafe {
+            mi_bbitmap_is_clearN(
+                (*self.arena().as_ptr().cast::<MiArenaPrefix>()).slices_free,
+                range.start_usize(),
+                range.count_usize(),
+            )
+        }
     }
 
     #[inline(always)]
@@ -473,27 +563,13 @@ unsafe fn mi_arena_try_alloc_at(
     // SAFETY: the function contract keeps the arena prefix initialized and stable while the claim's
     // initial-zero state is derived from its backing MemId.
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.initially_zero } {
-        let mut already_dirty = 0usize;
-        claim.allocation.set_initially_zero(unsafe {
-            mi_bitmap_setN(
-                (*arena.cast::<MiArenaPrefix>()).slices_dirty,
-                slice_index,
-                slice_count,
-                &mut already_dirty,
-            )
-        });
+        let already_dirty = claim.mark_dirty();
         crate::internal::mi_assert_internal!(already_dirty <= touched_slices);
         touched_slices -= already_dirty;
     }
 
     if commit {
-        let already_committed = unsafe {
-            mi_bitmap_popcountN(
-                (*arena.cast::<MiArenaPrefix>()).slices_committed,
-                slice_index,
-                slice_count,
-            )
-        };
+        let already_committed = claim.committed_count();
         if already_committed < slice_count {
             let mut commit_zero = false;
             if !unsafe {
@@ -510,14 +586,7 @@ unsafe fn mi_arena_try_alloc_at(
             if commit_zero {
                 claim.allocation.set_initially_zero(true);
             }
-            unsafe {
-                mi_bitmap_setN(
-                    (*arena.cast::<MiArenaPrefix>()).slices_committed,
-                    slice_index,
-                    slice_count,
-                    ptr::null_mut(),
-                )
-            };
+            claim.mark_committed(None);
             if MI_DEBUG > 1
                 && claim.allocation.initially_zero()
                 && !unsafe { mi_mem_is_zero(p.as_ptr(), mi_size_of_slices(slice_count)) }
@@ -548,13 +617,7 @@ unsafe fn mi_arena_try_alloc_at(
             }
         }
 
-        crate::internal::mi_assert_internal!(unsafe {
-            mi_bitmap_is_setN(
-                (*arena.cast::<MiArenaPrefix>()).slices_committed,
-                slice_index,
-                slice_count,
-            )
-        });
+        crate::internal::mi_assert_internal!(claim.is_committed());
         claim.allocation.set_initially_committed(true);
 
         if claim.allocation.initially_zero() {
@@ -565,30 +628,13 @@ unsafe fn mi_arena_try_alloc_at(
             unsafe { mi_track_mem_undefined(p.as_ptr(), slice_count * MI_ARENA_SLICE_SIZE) };
         }
     } else {
-        claim.allocation.set_initially_committed(unsafe {
-            mi_bitmap_is_setN(
-                (*arena.cast::<MiArenaPrefix>()).slices_committed,
-                slice_index,
-                slice_count,
-            )
-        });
+        claim
+            .allocation
+            .set_initially_committed(claim.is_committed());
         if !claim.allocation.initially_committed() {
             let mut already_committed_count = 0usize;
-            unsafe {
-                mi_bitmap_setN(
-                    (*arena.cast::<MiArenaPrefix>()).slices_committed,
-                    slice_index,
-                    slice_count,
-                    &mut already_committed_count,
-                )
-            };
-            unsafe {
-                mi_bitmap_clearN(
-                    (*arena.cast::<MiArenaPrefix>()).slices_committed,
-                    slice_index,
-                    slice_count,
-                )
-            };
+            claim.mark_committed(Some(&mut already_committed_count));
+            claim.clear_committed();
             unsafe {
                 __mi_stat_adjust_decrease_mt(
                     ptr::addr_of_mut!((*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed),
@@ -598,30 +644,12 @@ unsafe fn mi_arena_try_alloc_at(
         }
     }
 
-    crate::internal::mi_assert_internal!(unsafe {
-        mi_bbitmap_is_clearN(
-            (*claim.arena().as_ptr().cast::<MiArenaPrefix>()).slices_free,
-            claim.range().start_usize(),
-            claim.range().count_usize(),
-        )
-    });
+    crate::internal::mi_assert_internal!(claim.free_range_is_claimed());
     if commit {
-        crate::internal::mi_assert_internal!(unsafe {
-            mi_bitmap_is_setN(
-                (*claim.arena().as_ptr().cast::<MiArenaPrefix>()).slices_committed,
-                claim.range().start_usize(),
-                claim.range().count_usize(),
-            )
-        });
+        crate::internal::mi_assert_internal!(claim.is_committed());
         crate::internal::mi_assert_internal!(claim.allocation.initially_committed());
     }
-    crate::internal::mi_assert_internal!(unsafe {
-        mi_bitmap_is_setN(
-            (*claim.arena().as_ptr().cast::<MiArenaPrefix>()).slices_dirty,
-            claim.range().start_usize(),
-            claim.range().count_usize(),
-        )
-    });
+    crate::internal::mi_assert_internal!(claim.is_dirty());
 
     Some((p, claim.publish()))
 }
@@ -2436,6 +2464,7 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
 #[cfg(test)]
 mod claim_tests {
     use super::*;
+    use crate::bitmap::mi_bitmap_is_clear;
     use core::mem::MaybeUninit;
     use std::alloc::{Layout, alloc_zeroed, dealloc};
 
@@ -2527,11 +2556,23 @@ mod claim_tests {
             assert!(!bitmap.is_null());
             mi_bbitmap_init(bitmap, 16, true);
             assert!(mi_bbitmap_setN(bitmap, 5, 3));
+            let dirty = crate::bitmap::storage_tests::BitmapStorage::new(mi_bitmap_size(
+                16,
+                ptr::null_mut(),
+            ));
+            let committed = crate::bitmap::storage_tests::BitmapStorage::new(mi_bitmap_size(
+                16,
+                ptr::null_mut(),
+            ));
+            mi_bitmap_init(dirty.ptr(), 16, true);
+            mi_bitmap_init(committed.ptr(), 16, true);
 
             let mut arena = MaybeUninit::<mi_arena_t>::zeroed();
             let arena_raw = arena.as_mut_ptr();
             ptr::addr_of_mut!((*arena_raw).slice_count).write(16);
             ptr::addr_of_mut!((*arena_raw).slices_free).write(bitmap);
+            ptr::addr_of_mut!((*arena_raw).slices_dirty).write(dirty.ptr());
+            ptr::addr_of_mut!((*arena_raw).slices_committed).write(committed.ptr());
             let arena = ArenaPtr::new_unchecked(arena_raw);
 
             test(arena, bitmap);
@@ -2560,6 +2601,44 @@ mod claim_tests {
             drop(claim);
             // SAFETY: dropping the unpublished claim restores its exact range.
             assert!(unsafe { mi_bbitmap_is_setN(bitmap, 5, 3) });
+        });
+    }
+
+    #[test]
+    fn arena_claim_updates_only_its_matching_dirty_and_committed_range() {
+        with_claim_fixture(|arena, _| {
+            // The fixture owns all three compact bitmaps through rollback.
+            unsafe {
+                let dirty = (*arena.as_ptr()).slices_dirty;
+                let committed = (*arena.as_ptr()).slices_committed;
+                mi_bitmap_set(dirty, 4);
+                mi_bitmap_set(committed, 8);
+                let mut claim = ClaimedArenaSlices::try_claim(
+                    arena,
+                    SliceCount::from_usize(3).unwrap(),
+                    crate::core_types::ThreadSeq::new(0),
+                )
+                .unwrap();
+                assert!(claim.free_range_is_claimed());
+                assert_eq!(claim.mark_dirty(), 0);
+                assert!(claim.allocation.initially_zero());
+                assert!(claim.is_dirty());
+                assert_eq!(claim.mark_dirty(), 3);
+                assert!(!claim.allocation.initially_zero());
+                assert_eq!(claim.committed_count(), 0);
+                assert!(!claim.is_committed());
+                let mut already_committed = usize::MAX;
+                claim.mark_committed(Some(&mut already_committed));
+                assert_eq!(already_committed, 0);
+                assert!(claim.is_committed());
+                assert_eq!(claim.committed_count(), 3);
+                claim.clear_committed();
+                assert_eq!(claim.committed_count(), 0);
+                assert!(mi_bitmap_is_set(dirty, 4));
+                assert!(mi_bitmap_is_clear(dirty, 8));
+                assert!(mi_bitmap_is_clear(committed, 4));
+                assert!(mi_bitmap_is_set(committed, 8));
+            }
         });
     }
 

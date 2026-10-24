@@ -39,6 +39,7 @@ fn compact_bitmap_bit_ranges_preserve_bounds_and_counts() {
             let bitmap = storage.ptr::<mi_bitmap_t>();
             assert_eq!(mi_bitmap_init(bitmap, bits, true), storage.layout.size());
             let max_bits = mi_bitmap_max_bits(bitmap);
+            let view = BitmapView::from_raw(bitmap);
             for (start, count) in [
                 (0, 1),
                 (MI_BFIELD_BITS - 1, 2),
@@ -49,13 +50,27 @@ fn compact_bitmap_bit_ranges_preserve_bounds_and_counts() {
                     continue;
                 }
                 let mut already_set = usize::MAX;
-                assert!(mi_bitmap_setN(bitmap, start, count, &mut already_set));
+                assert!(view.set_n(start, count, Some(&mut already_set)));
                 assert_eq!(already_set, 0);
-                assert!(mi_bitmap_is_setN(bitmap, start, count));
+                assert!(view.is_xset_n(MI_BIT_SET, start, count));
                 assert_eq!(mi_bitmap_popcount(bitmap), count);
-                assert!(!mi_bitmap_setN(bitmap, start, count, &mut already_set));
+                assert!(!view.set_n(start, count, Some(&mut already_set)));
                 assert_eq!(already_set, count);
-                assert!(mi_bitmap_clearN(bitmap, start, count));
+                assert!(view.clear_n(start, count));
+                assert!(mi_bitmap_is_all_clear(bitmap));
+            }
+            if !cfg!(debug_assertions) {
+                // Oversized inputs must still bound the unchecked chunk cursor
+                // to this exact allocation when debug preconditions are absent.
+                let mut empty_count = usize::MAX;
+                assert!(view.set_n(max_bits, 0, Some(&mut empty_count)));
+                assert_eq!(empty_count, 0);
+                assert!(view.clear_n(max_bits, 0));
+                assert!(view.is_xset_n(MI_BIT_SET, max_bits, 0));
+                assert!(!view.set_n(usize::MAX, 1, None));
+                assert!(view.set_n(max_bits - 1, usize::MAX, None));
+                assert_eq!(view.popcount_n(0, max_bits), 1);
+                assert!(view.clear_n(max_bits - 1, usize::MAX));
                 assert!(mi_bitmap_is_all_clear(bitmap));
             }
         }

@@ -12,6 +12,20 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PROBES = [
     (
+        "arena-claim-authorizes-matching-bitmap-updates",
+        "src/allocator/arena.rs",
+        "fn probe(mut claim: ClaimedArenaSlices) { let _ = claim.mark_dirty(); "
+        "let _ = claim.committed_count(); claim.mark_committed(None); claim.clear_committed(); }",
+        None,
+    ),
+    (
+        "arena-claim-rejects-independent-arena-and-range",
+        "src/allocator/arena.rs",
+        "fn probe(mut claim: ClaimedArenaSlices, arena: ArenaPtr, "
+        "range: crate::core_types::SliceRange) { let _ = claim.mark_dirty(arena, range); }",
+        "E0061",
+    ),
+    (
         "terminal-release-requires-detached-all-free-page",
         "src/allocator/page.rs",
         "unsafe fn probe(p: crate::core_types::AllFreePage<crate::core_types::Active>) { "

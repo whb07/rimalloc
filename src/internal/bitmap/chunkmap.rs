@@ -13,15 +13,11 @@ use super::{
     mi_bitmap_t,
 };
 
-/// # Safety
-/// The bitmap header and trailing chunks must remain initialized and live,
-/// and `chunk_idx` must be below its initialized chunk count.
+/// Mark the chunk in this initialized header's atomic map.
 #[inline]
-pub(super) unsafe fn mi_bitmap_chunkmap_set(bitmap: *const mi_bitmap_t, chunk_idx: usize) {
-    unsafe {
-        crate::internal::mi_debug_assert!(mi_bitmap_chunk_count(bitmap) > chunk_idx);
-        mi_bchunk_set(&(*bitmap).chunkmap, chunk_idx, None);
-    }
+pub(super) fn mi_bitmap_chunkmap_set(bitmap: &mi_bitmap_t, chunk_idx: usize) {
+    crate::internal::mi_debug_assert!(bitmap.chunk_count.load(Ordering::Relaxed) > chunk_idx);
+    mi_bchunk_set(&bitmap.chunkmap, chunk_idx, None);
 }
 
 /// # Safety
@@ -46,43 +42,37 @@ pub(super) unsafe fn mi_bitmap_chunkmap_try_clear(
     }
 }
 
-/// # Safety
-/// The bitmap header and trailing chunks must remain initialized and live,
-/// and `chunk_idx` must be below its initialized chunk count.
+/// Update this initialized header's atomic bin maps for one chunk.
 #[inline(never)]
-pub(super) unsafe fn mi_bbitmap_set_chunk_bin(
-    bbitmap: *const mi_bbitmap_t,
+pub(super) fn mi_bbitmap_set_chunk_bin(
+    bbitmap: &mi_bbitmap_t,
     chunk_idx: usize,
     bin: mi_chunkbin_t,
 ) {
-    unsafe {
-        crate::internal::mi_debug_assert!(mi_bbitmap_chunk_count(bbitmap) > chunk_idx);
-        let mut ibin = MI_CBIN_SMALL;
-        while (ibin as i32) < (MI_CBIN_NONE as i32) {
-            if ibin == bin {
-                mi_bchunk_set(&(*bbitmap).chunkmap_bins[ibin as usize], chunk_idx, None);
-            } else {
-                mi_bchunk_clear(&(*bbitmap).chunkmap_bins[ibin as usize], chunk_idx, None);
-            }
-            ibin = mi_chunkbin_inc(ibin);
+    crate::internal::mi_debug_assert!(bbitmap.chunk_count.load(Ordering::Relaxed) > chunk_idx);
+    let mut ibin = MI_CBIN_SMALL;
+    while (ibin as i32) < (MI_CBIN_NONE as i32) {
+        if ibin == bin {
+            mi_bchunk_set(&bbitmap.chunkmap_bins[ibin as usize], chunk_idx, None);
+        } else {
+            mi_bchunk_clear(&bbitmap.chunkmap_bins[ibin as usize], chunk_idx, None);
         }
+        ibin = mi_chunkbin_inc(ibin);
     }
 }
 
 #[inline]
-unsafe fn mi_bbitmap_chunkmap_set_max(bbitmap: *const mi_bbitmap_t, chunk_idx: usize) {
-    unsafe {
-        let mut oldmax = (*bbitmap).chunk_max_accessed.load(Ordering::Relaxed);
-        while chunk_idx > oldmax {
-            match (*bbitmap).chunk_max_accessed.compare_exchange_weak(
-                oldmax,
-                chunk_idx,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => break,
-                Err(next) => oldmax = next,
-            }
+fn mi_bbitmap_chunkmap_set_max(bbitmap: &mi_bbitmap_t, chunk_idx: usize) {
+    let mut oldmax = bbitmap.chunk_max_accessed.load(Ordering::Relaxed);
+    while chunk_idx > oldmax {
+        match bbitmap.chunk_max_accessed.compare_exchange_weak(
+            oldmax,
+            chunk_idx,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => break,
+            Err(next) => oldmax = next,
         }
     }
 }
@@ -99,10 +89,10 @@ pub(super) unsafe fn mi_bbitmap_chunkmap_set(
     unsafe {
         crate::internal::mi_debug_assert!(mi_bbitmap_chunk_count(bbitmap) > chunk_idx);
         if check_all_set && mi_bchunk_all_are_set_relaxed(&*mi_bbitmap_chunk(bbitmap, chunk_idx)) {
-            mi_bbitmap_set_chunk_bin(bbitmap, chunk_idx, MI_CBIN_NONE);
+            mi_bbitmap_set_chunk_bin(&*bbitmap, chunk_idx, MI_CBIN_NONE);
         }
         mi_bchunk_set(&(*bbitmap).chunkmap, chunk_idx, None);
-        mi_bbitmap_chunkmap_set_max(bbitmap, chunk_idx);
+        mi_bbitmap_chunkmap_set_max(&*bbitmap, chunk_idx);
     }
 }
 
@@ -124,7 +114,7 @@ pub(super) unsafe fn mi_bbitmap_chunkmap_try_clear(
             mi_bchunk_set(&(*bbitmap).chunkmap, chunk_idx, None);
             return false;
         }
-        mi_bbitmap_chunkmap_set_max(bbitmap, chunk_idx);
+        mi_bbitmap_chunkmap_set_max(&*bbitmap, chunk_idx);
         true
     }
 }

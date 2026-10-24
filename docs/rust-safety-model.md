@@ -98,3 +98,41 @@ use transparent representation, inline constructors/accessors, and layout/niche
 tests so the type-level invariants do not change C layout or hot-path code
 shape. If a wrapper introduces measurable hot-path cost, the change must be
 justified with evidence or redesigned.
+
+## Scoped Internal Operations
+
+Local allocator access is lent for short operation phases. `LocalHeapAccess`
+projects statistics, random state, and heartbeat fields individually; it never
+creates an exclusive reference to the whole heap. Loans end before allocator
+callbacks that may reenter. Raw entry contracts still establish live backing,
+thread ownership, and the permitted callback phase.
+
+Allocation pairs a `PageAccess` with a page-associated `PageRequest` in a fresh
+scope. Popping consumes the request and yields `PoppedBlockStorage`; its tracking
+transition yields `AllocatedBlockStorage`, whose initialization and padding
+operations stay within that owned block. Finishing consumes the storage before
+the pointer escapes. Freeing similarly pairs `FreePage` and `ScopedFreeBlock`,
+so safe list operations cannot combine different requests' pages and blocks.
+The ingress must restore guarded-block access before lending either capability.
+
+Queue membership and cursors borrow one queue phase and retain their destination.
+Removal consumes membership; an all-free member becomes `DetachedAllFree` before
+terminal release. Detached remote chains borrow the exact collection owner that
+removed them, preventing overlapping collection or an independently chosen
+local-list destination.
+
+Remote publication consumes both the matching page access and block storage.
+Its link-write/CAS retry loop retains the block until success. Publication to an
+existing owner returns no page or block access, since that owner may immediately
+recycle the block or release the page. Acquiring abandoned ownership returns the
+page claim together with its matching published head.
+
+Bitmap views borrow the actual initialized trailing chunk extent of a compact
+allocation. They derive trailing storage from the original allocation pointer,
+not a reference covering only the header. Range operations use bounded chunk
+references; raw compatibility workers retain their outlined argument shapes.
+An arena slice claim supplies its own arena and range to dirty/committed bitmap
+operations, and an unpublished claim returns its range through the existing
+rollback protocol. These operation capabilities add no persistent allocator
+fields, locks, counters, or allocations. OS, registration, terminal release, and
+raw storage construction remain explicit unsafe boundaries.

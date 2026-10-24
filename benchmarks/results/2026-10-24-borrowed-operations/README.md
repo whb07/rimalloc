@@ -1,5 +1,13 @@
 # Borrowed allocator operations
 
+The [expanded normal-mode comparison](full-suite/README.md) now includes all 21
+native vendor cases, Redis/RocksDB, all 36 Nginx profile cases, all three axum
+cases, architecture and retention. All primary aggregates meet the 1% review
+limit. A longer debug-palloc header confirmation is +22.66%; a same-baseline
+control also varies substantially, so that case remains inconclusive for a
+no-regression claim. The original screen and microbenchmark findings below remain
+visible. Full secure-mode application coverage is not claimed.
+
 Baseline: `4219da2bcdbba7f9273c46b5dbc9e194f343464a`.
 Measured candidate: `70a3ce3ab5980660ddd4c9f0ace1d5052b80d993`.
 Both use Rust 1.92.0 / LLVM 21.1.3 on the same Linux x86_64 Azure VM

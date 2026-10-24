@@ -302,7 +302,7 @@ def wrk_run(config, case, port, seconds, directory, name, monitored):
             while process.poll() is None:
                 sample = {"seconds": time.monotonic() - start, **{role: memory_cpu(pids) for role, pids in monitored.items()}}
                 try: sample["load"] = memory_cpu([process.pid])
-                except FileNotFoundError: pass
+                except (FileNotFoundError, ProcessLookupError): pass
                 samples.append(sample)
                 if time.monotonic() > deadline: raise TimeoutError("wrk timed out")
                 time.sleep(min(1, max(.05, seconds / 4)))

@@ -1,0 +1,2898 @@
+{
+  "plan": {
+    "recorded_utc": "2026-10-24T19:04:03Z",
+    "baseline_commit": "4219da2bcdbba7f9273c46b5dbc9e194f343464a",
+    "candidate_source_commit": "70a3ce3ab5980660ddd4c9f0ace1d5052b80d993",
+    "repository_commit": "827df2f94f665d272dc81a44e0cb3822c51d2c62",
+    "features": [
+      "interpose"
+    ],
+    "purpose": "Extend the previous limited canary/microbenchmark comparison to every native/application workload selected by run --full, both complete Nginx profiles, all axum web cases, and the architectural and retention benchmark families.",
+    "acceptance": {
+      "aggregate_time_slowdown": 0.01,
+      "individual_case_time_slowdown": 0.03,
+      "response": "Retain and investigate findings with longer paired holdouts; do not widen limits or omit cases. Memory and HTTP p99 remain separate metrics."
+    },
+    "labels": {
+      "old": "baseline Rust allocator",
+      "new": "candidate Rust allocator"
+    },
+    "order": "Alternate old/new order by paired round, reverse case order every other round. Compare the same cached executable and fixed allocator alias/input paths for both labels. All builds and copies complete before timing.",
+    "runtime_inputs": "active-allocator.so and active-worker paths are identical for both labels. Move each completed worker directory to its recorded archive path between serialized jobs. Label and actual library SHA are recorded outside worker configuration.",
+    "native": {
+      "scenarios": [
+        "glibc-simple",
+        "malloc-large",
+        "malloc-large-old",
+        "cache-scratch1",
+        "cache-thrash1",
+        "cache-scratchN",
+        "cache-thrashN",
+        "mstressN",
+        "sh6benchN",
+        "sh8benchN",
+        "alloc-test1",
+        "alloc-testN",
+        "barnes",
+        "cfrac",
+        "mleak10",
+        "mleak100",
+        "glibc-thread",
+        "xmalloc-testN",
+        "larsonN",
+        "larsonN-sized",
+        "rptestN"
+      ],
+      "rounds": 3,
+      "samples": 10,
+      "measurement_secs": 3,
+      "warmup_secs": 1,
+      "affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ]
+    },
+    "applications": {
+      "scenarios": [
+        "redis",
+        "rocksdb"
+      ],
+      "rounds": 5,
+      "samples": 10,
+      "operations": 1000000,
+      "threads": 1,
+      "value_size": 256,
+      "timeout": 120,
+      "affinity": [
+        0,
+        2
+      ]
+    },
+    "webserver": {
+      "scenarios": [
+        "json",
+        "plaintext",
+        "fortunes"
+      ],
+      "rounds": 3,
+      "duration_secs": 30,
+      "warmup_secs": 5,
+      "connections": 256,
+      "load_threads": 4,
+      "server_cpus": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "load_cpus": [
+        8,
+        10,
+        12,
+        14
+      ]
+    },
+    "nginx": {
+      "profiles": [
+        "production",
+        "debug-palloc"
+      ],
+      "cases": [
+        {
+          "workload": "static",
+          "label": "static",
+          "path": "/small"
+        },
+        {
+          "workload": "churn",
+          "label": "churn",
+          "path": "/small"
+        },
+        {
+          "workload": "headers",
+          "label": "headers",
+          "path": "/small"
+        },
+        {
+          "workload": "proxy",
+          "label": "proxy-1024-on",
+          "path": "/proxy/1024",
+          "size": 1024,
+          "buffering": "on"
+        },
+        {
+          "workload": "proxy",
+          "label": "proxy-1024-off",
+          "path": "/proxy/1024",
+          "size": 1024,
+          "buffering": "off"
+        },
+        {
+          "workload": "proxy",
+          "label": "proxy-16384-on",
+          "path": "/proxy/16384",
+          "size": 16384,
+          "buffering": "on"
+        },
+        {
+          "workload": "proxy",
+          "label": "proxy-16384-off",
+          "path": "/proxy/16384",
+          "size": 16384,
+          "buffering": "off"
+        },
+        {
+          "workload": "proxy",
+          "label": "proxy-65536-on",
+          "path": "/proxy/65536",
+          "size": 65536,
+          "buffering": "on"
+        },
+        {
+          "workload": "proxy",
+          "label": "proxy-65536-off",
+          "path": "/proxy/65536",
+          "size": 65536,
+          "buffering": "off"
+        },
+        {
+          "workload": "proxy",
+          "label": "proxy-262144-on",
+          "path": "/proxy/262144",
+          "size": 262144,
+          "buffering": "on"
+        },
+        {
+          "workload": "proxy",
+          "label": "proxy-262144-off",
+          "path": "/proxy/262144",
+          "size": 262144,
+          "buffering": "off"
+        },
+        {
+          "workload": "transfer",
+          "label": "upload-4096",
+          "path": "/upload",
+          "size": 4096,
+          "upload": true
+        },
+        {
+          "workload": "transfer",
+          "label": "download-4096",
+          "path": "/4096",
+          "size": 4096,
+          "upload": false
+        },
+        {
+          "workload": "transfer",
+          "label": "upload-65536",
+          "path": "/upload",
+          "size": 65536,
+          "upload": true
+        },
+        {
+          "workload": "transfer",
+          "label": "download-65536",
+          "path": "/65536",
+          "size": 65536,
+          "upload": false
+        },
+        {
+          "workload": "transfer",
+          "label": "upload-1048576",
+          "path": "/upload",
+          "size": 1048576,
+          "upload": true
+        },
+        {
+          "workload": "transfer",
+          "label": "download-1048576",
+          "path": "/1048576",
+          "size": 1048576,
+          "upload": false
+        },
+        {
+          "workload": "burst-idle",
+          "label": "burst-idle",
+          "path": "/small"
+        }
+      ],
+      "rounds": 3,
+      "duration_secs": 5,
+      "warmup_secs": 2,
+      "preflight_secs": 1,
+      "workers": 2,
+      "connections": 256,
+      "load_threads": 2,
+      "burst_cycles": 2,
+      "idle_secs": 10,
+      "server_cpus": [
+        0,
+        2
+      ],
+      "load_cpus": [
+        4,
+        6
+      ],
+      "upstream_cpus": [
+        8,
+        10
+      ]
+    },
+    "architecture": {
+      "scenarios": [
+        "segment-occupancy",
+        "cross-thread",
+        "decommit-oscillation",
+        "thread-churn"
+      ],
+      "rounds": 5,
+      "bytes": 67108864,
+      "block_size": 4096,
+      "threads": 4,
+      "cycles": 8,
+      "affinity": [
+        0,
+        2,
+        4,
+        6
+      ]
+    },
+    "retention": {
+      "actions": [
+        "idle",
+        "owner-collect",
+        "other-collect",
+        "owner-exit",
+        "empty"
+      ],
+      "rounds": 3,
+      "aa_actions": [
+        "idle",
+        "empty"
+      ],
+      "aa_rounds": 2,
+      "bytes": 67108864,
+      "block_size": 64,
+      "idle_ms": 10000,
+      "sample_ms": 100,
+      "worker_cpu": 0,
+      "sampler_cpu": 2
+    },
+    "suite_order": [
+      "applications",
+      "webserver",
+      "native",
+      "nginx",
+      "architecture",
+      "retention-aa",
+      "retention"
+    ],
+    "statistics": "Median paired candidate/baseline normalized-time ratio per case. HTTP uses baseline/candidate throughput. Equal-weight geometric mean per suite/profile; report each component, memory metrics, p99 and quality flags separately. No cross-suite overall score.",
+    "limits": [
+      "Normal interpose feature mode; full secure application coverage is not claimed.",
+      "One Linux x86_64 host.",
+      "Nginx uses the documented default five-second load with three paired repetitions; over-limit results require longer confirmation.",
+      "Local closed-loop HTTP load may be generator or upstream limited; preserve all quality flags.",
+      "Retention is an observation with an A/A calibration; idle duration is not allocator work and no mixed timing/memory score is computed."
+    ],
+    "benchmark_sources_unchanged_from_baseline": true,
+    "artifact_fingerprints": {
+      "native-harness": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/native-harness",
+        "sha256": "9e07f2c980a5a4e03c2a3005fd6d64567a4d339d137a6482cee3ad625afb79e7"
+      },
+      "redis_server": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/redis-6.2.7/src/redis-server",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/redis_server",
+        "sha256": "59620ba2418ffec5aefe276866ad6653b4c5d85b16b036e0339309452ba9d713"
+      },
+      "redis_benchmark": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/redis-6.2.7/src/redis-benchmark",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/redis_benchmark",
+        "sha256": "51efebd43ff248ea78ad375ecaea9075fe897fa4be46e92dfedfbff57bddbc82"
+      },
+      "rocksdb": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/rocksdb/db_bench",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/rocksdb",
+        "sha256": "8b4381acd037955077a8739cc1495ae4d4828cd9edcae065d90876cb910804e2"
+      },
+      "allocator_check": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/allocator-check.so",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/allocator_check",
+        "sha256": "5c912e5bbed84ef303e622269614f5a39921418ebb3bd7c9d954e091306a1536"
+      },
+      "nginx-production": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production/objs/nginx",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-production",
+        "sha256": "d6b69199fede6742777c0d546be9059b1b31ad15da779528e9cf11bf0ec3b55e"
+      },
+      "nginx-production-trace": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production-trace/objs/nginx",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-production-trace",
+        "sha256": "086249688c062a7b4d0b24198d695e360d708da10e1dd85cc643404c3dd87157"
+      },
+      "nginx-debug-palloc": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc/objs/nginx",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-debug-palloc",
+        "sha256": "6416de3a5e31e22e521698416877931ac7529ee2d821fad288f37c113924a12e"
+      },
+      "nginx-debug-palloc-trace": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc-trace/objs/nginx",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-debug-palloc-trace",
+        "sha256": "9fde515c93cf0461cc8c54939f66e78f4cfea8430ad81ea93ac4daa853489330"
+      },
+      "nginx-wrk": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/wrk-source/wrk",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-wrk",
+        "sha256": "8013f3aa61b7818e397ccb1a298368c4402d5bc853116ba48986386c6a7bbbd1"
+      },
+      "nginx-guard": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_guard.so",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-guard",
+        "sha256": "92a8a9bc022c9f298304c67967a4d44e21722b7eace9bd702339781c0055ebb7"
+      },
+      "webserver-axum": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/target/release/axum",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/webserver-axum",
+        "sha256": "6e8a4d6af22531007b6d615e8a532cbe279214e6d4a824a3b60885928b742622"
+      },
+      "webserver-axum-sqlite": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/target/release/axum-sqlite",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/webserver-axum-sqlite",
+        "sha256": "db4e45a2df19858b85b8cc53cbf0ed3a163ba675980f2588f171d41326e3fa01"
+      },
+      "webserver-wrk": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/wrk-source/wrk",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/webserver-wrk",
+        "sha256": "b0f76e8ff22d4c6619b9611005d8006e6d5da8ce50d7c166a2b107602e257e84"
+      },
+      "architecture-probe": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/architectural-bench-d94208b84248c31e",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/architecture-probe",
+        "sha256": "617f18c1f7d712cf6f876b6ffd9dba3d4c37fc54d213c9c9ee5b1c36d5145048"
+      },
+      "old.so": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/baseline-interpose.so",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/old.so",
+        "sha256": "8e661a586ef4a2bf596e5d48ad565ab37a247d1cb535b84754f747e31c07e76d"
+      },
+      "new.so": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/final-interpose.so",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/new.so",
+        "sha256": "0331fe15ec19655fa945f4f572cc13716ec8b488d248f87abe59dc45b585973d"
+      }
+    }
+  },
+  "status": {
+    "started_utc": "2026-10-24T19:07:35Z",
+    "suites": [
+      {
+        "name": "applications",
+        "returncode": 0,
+        "started_utc": "2026-10-24T19:05:51Z",
+        "finished_utc": "2026-10-24T19:16:53Z"
+      },
+      {
+        "name": "webserver",
+        "command": [
+          "python3",
+          "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/run.py",
+          "webserver"
+        ],
+        "started_utc": "2026-10-24T19:16:55Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T19:28:04Z"
+      },
+      {
+        "name": "native",
+        "command": [
+          "python3",
+          "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/run.py",
+          "native"
+        ],
+        "started_utc": "2026-10-24T19:28:04Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T20:50:51Z"
+      },
+      {
+        "name": "nginx",
+        "command": [
+          "python3",
+          "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/run.py",
+          "nginx"
+        ],
+        "started_utc": "2026-10-24T20:58:49Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T21:42:50Z"
+      },
+      {
+        "name": "architecture",
+        "command": [
+          "python3",
+          "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/run.py",
+          "architecture"
+        ],
+        "started_utc": "2026-10-24T21:42:50Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T21:42:54Z"
+      },
+      {
+        "name": "retention-aa",
+        "command": [
+          "python3",
+          "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/run.py",
+          "retention-aa"
+        ],
+        "started_utc": "2026-10-24T21:42:54Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T21:47:04Z"
+      },
+      {
+        "name": "retention",
+        "command": [
+          "python3",
+          "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/run.py",
+          "retention"
+        ],
+        "started_utc": "2026-10-24T21:47:04Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T22:02:39Z"
+      }
+    ],
+    "failed_attempts": [
+      {
+        "name": "nginx",
+        "command": [
+          "python3",
+          "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/run.py",
+          "nginx"
+        ],
+        "started_utc": "2026-10-24T20:50:51Z",
+        "returncode": 1,
+        "finished_utc": "2026-10-24T20:56:18Z",
+        "archive": "failed-attempts/nginx-001"
+      }
+    ],
+    "finished_utc": "2026-10-24T22:02:39Z"
+  },
+  "artifacts": {
+    "core": {
+      "cache": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8",
+      "configuration": {
+        "tools": {
+          "cargo": "cargo 1.92.0 (344c4567c 2025-10-21)",
+          "rustc": "rustc 1.92.0 (ded5c06cf 2025-12-08)",
+          "cmake": "cmake version 3.28.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+          "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+          "cxx": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+        },
+        "tool_paths": {
+          "cargo": "/home/azureuser/.cargo/bin/cargo",
+          "rustc": "/home/azureuser/.cargo/bin/rustc",
+          "cmake": "/usr/bin/cmake",
+          "cc": "/usr/bin/cc",
+          "cxx": "/usr/bin/c++"
+        },
+        "flags": {
+          "CC": "",
+          "CXX": "",
+          "CFLAGS": "",
+          "CXXFLAGS": "",
+          "LDFLAGS": "",
+          "RUSTFLAGS": "",
+          "CARGO_ENCODED_RUSTFLAGS": "",
+          "RUSTC": "",
+          "RUSTC_WRAPPER": "",
+          "RUSTC_WORKSPACE_WRAPPER": "",
+          "CMAKE_GENERATOR": "",
+          "CARGO_INCREMENTAL": ""
+        },
+        "cargo_config": {
+          "/home/azureuser/projects/mechanical_mimalloc/.cargo/config.toml": "[alias]\nclippy-strict = [\"clippy\", \"--all-targets\", \"--all-features\"]\n"
+        },
+        "harness_features": [
+          "bench"
+        ],
+        "rust_library_features": [
+          "interpose"
+        ],
+        "c_options": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "MI_BUILD_SHARED": "ON",
+          "MI_BUILD_STATIC": "OFF",
+          "MI_BUILD_OBJECT": "OFF",
+          "MI_BUILD_TESTS": "OFF",
+          "MI_OVERRIDE": "ON",
+          "MI_SECURE": "OFF",
+          "MI_SECURE_FULL": "OFF",
+          "MI_GUARDED": "OFF"
+        }
+      },
+      "rustc_verbose": "rustc 1.92.0 (ded5c06cf 2025-12-08)\nbinary: rustc\ncommit-hash: ded5c06cf21d2b93bffd5d884aa6e96934ee4234\ncommit-date: 2025-12-08\nhost: x86_64-unknown-linux-gnu\nrelease: 1.92.0\nLLVM version: 21.1.3",
+      "logs": [
+        "harness.log",
+        "rust.log",
+        "c-configure.log",
+        "c-build.log"
+      ],
+      "executable": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/native-harness",
+      "rust_library": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/rust-interpose/release/libmechanical_mimalloc.so",
+      "c_library": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/c-release/libmimalloc.so.3.3",
+      "sha256": {
+        "executable": "9e07f2c980a5a4e03c2a3005fd6d64567a4d339d137a6482cee3ad625afb79e7",
+        "rust_library": "dadf84b295df1e50716bc1952606b741acd50ac65d72a086163a6a48b8a78d26",
+        "c_library": "be00068c7a1cbdcdd5c61a7ef51934d525d642e6360273074fcfbc4e9813477a"
+      }
+    },
+    "applications": {
+      "sources": {
+        "redis": {
+          "version": "6.2.7",
+          "url": "https://download.redis.io/releases/redis-6.2.7.tar.gz",
+          "sha256": "b7a79cc3b46d3c6eb52fa37dde34a4a60824079ebdfb3abfbbfa035947c55319"
+        },
+        "rocksdb": {
+          "version": "10.10.1",
+          "url": "https://codeload.github.com/facebook/rocksdb/tar.gz/refs/tags/v10.10.1",
+          "sha256": "df2ff348f3fac8578fd4b727eee7267aaf90cd403c99b55e898d1db63fa8cff5"
+        },
+        "gflags": {
+          "version": "2.2.2",
+          "url": "https://codeload.github.com/gflags/gflags/tar.gz/refs/tags/v2.2.2",
+          "sha256": "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf"
+        }
+      },
+      "build_commands": [
+        [
+          "make",
+          "-C",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/redis-6.2.7/src",
+          "-j",
+          "16",
+          "MALLOC=libc",
+          "USE_JEMALLOC=no",
+          "BUILD_TLS=no",
+          "OPTIMIZATION=-O2",
+          "redis-server",
+          "redis-benchmark"
+        ],
+        [
+          "cmake",
+          "-S",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-app-sources/gflags-2.2.2",
+          "-B",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DBUILD_SHARED_LIBS=OFF",
+          "-DBUILD_TESTING=OFF",
+          "-DREGISTER_BUILD_DIR=OFF",
+          "-DREGISTER_INSTALL_PREFIX=OFF",
+          "-DCMAKE_INSTALL_PREFIX=/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags-install"
+        ],
+        [
+          "cmake",
+          "--build",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags",
+          "--parallel",
+          "16"
+        ],
+        [
+          "cmake",
+          "--install",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags"
+        ],
+        [
+          "cmake",
+          "-S",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-app-sources/rocksdb-10.10.1",
+          "-B",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/rocksdb",
+          "-DCMAKE_PREFIX_PATH=/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags-install",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DPORTABLE=1",
+          "-DWITH_TESTS=OFF",
+          "-DWITH_TOOLS=OFF",
+          "-DWITH_BENCHMARK_TOOLS=ON",
+          "-DROCKSDB_BUILD_SHARED=OFF",
+          "-DWITH_GFLAGS=ON",
+          "-DWITH_JEMALLOC=OFF",
+          "-DWITH_LIBURING=OFF",
+          "-DWITH_SNAPPY=OFF",
+          "-DWITH_ZLIB=OFF",
+          "-DWITH_BZ2=OFF",
+          "-DWITH_LZ4=OFF",
+          "-DWITH_ZSTD=OFF",
+          "-DFAIL_ON_WARNINGS=OFF"
+        ],
+        [
+          "cmake",
+          "--build",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/rocksdb",
+          "--target",
+          "db_bench",
+          "--parallel",
+          "16"
+        ],
+        [
+          "cc",
+          "-shared",
+          "-fPIC",
+          "-O2",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/home/azureuser/projects/mechanical_mimalloc/benchmarks/allocator-check.c",
+          "-ldl",
+          "-o",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/allocator-check.so"
+        ]
+      ],
+      "rocksdb_options": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PORTABLE": "1",
+        "WITH_TESTS": "OFF",
+        "WITH_TOOLS": "OFF",
+        "WITH_BENCHMARK_TOOLS": "ON",
+        "ROCKSDB_BUILD_SHARED": "OFF",
+        "WITH_GFLAGS": "ON",
+        "WITH_JEMALLOC": "OFF",
+        "WITH_LIBURING": "OFF",
+        "WITH_SNAPPY": "OFF",
+        "WITH_ZLIB": "OFF",
+        "WITH_BZ2": "OFF",
+        "WITH_LZ4": "OFF",
+        "WITH_ZSTD": "OFF",
+        "FAIL_ON_WARNINGS": "OFF"
+      },
+      "redis_server": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/redis_server",
+      "redis_benchmark": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/redis_benchmark",
+      "rocksdb": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/rocksdb",
+      "allocator_check": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/allocator_check",
+      "sha256": {
+        "redis_server": "59620ba2418ffec5aefe276866ad6653b4c5d85b16b036e0339309452ba9d713",
+        "redis_benchmark": "51efebd43ff248ea78ad375ecaea9075fe897fa4be46e92dfedfbff57bddbc82",
+        "rocksdb": "8b4381acd037955077a8739cc1495ae4d4828cd9edcae065d90876cb910804e2",
+        "allocator_check": "5c912e5bbed84ef303e622269614f5a39921418ebb3bd7c9d954e091306a1536"
+      }
+    },
+    "nginx": {
+      "binaries": {
+        "production": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-production",
+        "production-trace": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-production-trace",
+        "debug-palloc": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-debug-palloc",
+        "debug-palloc-trace": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-debug-palloc-trace"
+      },
+      "wrk": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-wrk",
+      "guard": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-guard",
+      "libraries": {
+        "rust": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/active-allocator.so"
+      },
+      "sources": {
+        "nginx": {
+          "version": "1.28.0",
+          "url": "https://nginx.org/download/nginx-1.28.0.tar.gz",
+          "sha256": "c6b5c6b086c0df9d3ca3ff5e084c1d0ef909e6038279c71c1c3e985f576ff76a"
+        },
+        "wrk": {
+          "version": "4.2.0",
+          "url": "https://codeload.github.com/wg/wrk/tar.gz/refs/tags/4.2.0",
+          "sha256": "e255f696bff6e329f5d19091da6b06164b8d59d62cb9e673625bdcd27fe7bdad"
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "cc",
+            "-O2",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-c",
+            "/home/azureuser/projects/mechanical_mimalloc/benches/nginx/allocator_probe.c",
+            "-o",
+            "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_probe.o"
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+        },
+        {
+          "command": [
+            "cc",
+            "-O2",
+            "-shared",
+            "-fPIC",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "/home/azureuser/projects/mechanical_mimalloc/benches/nginx/allocator_guard.c",
+            "-ldl",
+            "-o",
+            "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_guard.so"
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+        },
+        {
+          "command": [
+            "./configure",
+            "--without-http_rewrite_module",
+            "--without-http_gzip_module",
+            "--without-http_fastcgi_module",
+            "--without-http_uwsgi_module",
+            "--without-http_scgi_module",
+            "--add-module=/home/azureuser/projects/mechanical_mimalloc/benches/nginx",
+            "--with-cc=cc",
+            "--with-cc-opt=",
+            "--with-ld-opt="
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production"
+        },
+        {
+          "command": [
+            "make",
+            "-C",
+            "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production",
+            "-j",
+            "16"
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+        },
+        {
+          "command": [
+            "./configure",
+            "--without-http_rewrite_module",
+            "--without-http_gzip_module",
+            "--without-http_fastcgi_module",
+            "--without-http_uwsgi_module",
+            "--without-http_scgi_module",
+            "--add-module=/home/azureuser/projects/mechanical_mimalloc/benches/nginx",
+            "--with-cc=cc",
+            "--with-cc-opt=",
+            "--with-ld-opt= /home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_probe.o -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=free -Wl,--wrap=posix_memalign"
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production-trace"
+        },
+        {
+          "command": [
+            "make",
+            "-C",
+            "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production-trace",
+            "-j",
+            "16"
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+        },
+        {
+          "command": [
+            "./configure",
+            "--without-http_rewrite_module",
+            "--without-http_gzip_module",
+            "--without-http_fastcgi_module",
+            "--without-http_uwsgi_module",
+            "--without-http_scgi_module",
+            "--add-module=/home/azureuser/projects/mechanical_mimalloc/benches/nginx",
+            "--with-cc=cc",
+            "--with-cc-opt= -DNGX_DEBUG_PALLOC=1",
+            "--with-ld-opt="
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc"
+        },
+        {
+          "command": [
+            "make",
+            "-C",
+            "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc",
+            "-j",
+            "16"
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+        },
+        {
+          "command": [
+            "./configure",
+            "--without-http_rewrite_module",
+            "--without-http_gzip_module",
+            "--without-http_fastcgi_module",
+            "--without-http_uwsgi_module",
+            "--without-http_scgi_module",
+            "--add-module=/home/azureuser/projects/mechanical_mimalloc/benches/nginx",
+            "--with-cc=cc",
+            "--with-cc-opt= -DNGX_DEBUG_PALLOC=1",
+            "--with-ld-opt= /home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_probe.o -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=free -Wl,--wrap=posix_memalign"
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc-trace"
+        },
+        {
+          "command": [
+            "make",
+            "-C",
+            "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc-trace",
+            "-j",
+            "16"
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+        },
+        {
+          "command": [
+            "make",
+            "-C",
+            "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/wrk-source",
+            "-j",
+            "16",
+            "WITH_OPENSSL=/usr",
+            "VER=4.2.0"
+          ],
+          "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+        }
+      ],
+      "logs": [
+        "probe-build.log",
+        "guard-build.log",
+        "production-configure.log",
+        "production-build.log",
+        "production-trace-configure.log",
+        "production-trace-build.log",
+        "debug-palloc-configure.log",
+        "debug-palloc-build.log",
+        "debug-palloc-trace-configure.log",
+        "debug-palloc-trace-build.log",
+        "wrk-build.log"
+      ],
+      "cache": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042",
+      "openssl": "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)",
+      "sha256": {
+        "production": "d6b69199fede6742777c0d546be9059b1b31ad15da779528e9cf11bf0ec3b55e",
+        "production-trace": "086249688c062a7b4d0b24198d695e360d708da10e1dd85cc643404c3dd87157",
+        "debug-palloc": "6416de3a5e31e22e521698416877931ac7529ee2d821fad288f37c113924a12e",
+        "debug-palloc-trace": "9fde515c93cf0461cc8c54939f66e78f4cfea8430ad81ea93ac4daa853489330",
+        "wrk": "8013f3aa61b7818e397ccb1a298368c4402d5bc853116ba48986386c6a7bbbd1",
+        "guard": "92a8a9bc022c9f298304c67967a4d44e21722b7eace9bd702339781c0055ebb7",
+        "rust": "6cbe5b1635ee1ce2f8a1c263d76449dc31792558a3bb096644c85fec26044bae",
+        "mimalloc": "be00068c7a1cbdcdd5c61a7ef51934d525d642e6360273074fcfbc4e9813477a"
+      }
+    },
+    "webserver": {
+      "binaries": {
+        "axum": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/webserver-axum",
+        "axum-sqlite": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/webserver-axum-sqlite"
+      },
+      "wrk": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/webserver-wrk",
+      "libraries": {
+        "rust": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/active-allocator.so"
+      },
+      "cache": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746",
+      "logs": [
+        "axum-build.log",
+        "wrk-build.log"
+      ],
+      "rustflags": "-C target-cpu=native",
+      "commands": [
+        [
+          "cargo",
+          "build",
+          "--release",
+          "--locked",
+          "--manifest-path",
+          "/home/azureuser/projects/mechanical_mimalloc/benches/webserver/axum/Cargo.toml",
+          "--target-dir",
+          "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/target"
+        ]
+      ],
+      "wrk_source": {
+        "version": "4.2.0",
+        "url": "https://codeload.github.com/wg/wrk/tar.gz/refs/tags/4.2.0",
+        "sha256": "e255f696bff6e329f5d19091da6b06164b8d59d62cb9e673625bdcd27fe7bdad"
+      },
+      "sha256": {
+        "axum": "6e8a4d6af22531007b6d615e8a532cbe279214e6d4a824a3b60885928b742622",
+        "axum-sqlite": "db4e45a2df19858b85b8cc53cbf0ed3a163ba675980f2588f171d41326e3fa01",
+        "wrk": "b0f76e8ff22d4c6619b9611005d8006e6d5da8ce50d7c166a2b107602e257e84"
+      }
+    },
+    "architecture_probe": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/architecture-probe",
+    "libraries": {
+      "old": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/old.so",
+      "new": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/new.so"
+    },
+    "input_manifests": {
+      "core": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/artifacts.json",
+        "sha256": "33ea49c4817b99b6a9be59394c2ea9edde6f8c6e05193ee05c6053408a960b9a",
+        "data": {
+          "cache": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8",
+          "configuration": {
+            "tools": {
+              "cargo": "cargo 1.92.0 (344c4567c 2025-10-21)",
+              "rustc": "rustc 1.92.0 (ded5c06cf 2025-12-08)",
+              "cmake": "cmake version 3.28.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+              "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+              "cxx": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+            },
+            "tool_paths": {
+              "cargo": "/home/azureuser/.cargo/bin/cargo",
+              "rustc": "/home/azureuser/.cargo/bin/rustc",
+              "cmake": "/usr/bin/cmake",
+              "cc": "/usr/bin/cc",
+              "cxx": "/usr/bin/c++"
+            },
+            "flags": {
+              "CC": "",
+              "CXX": "",
+              "CFLAGS": "",
+              "CXXFLAGS": "",
+              "LDFLAGS": "",
+              "RUSTFLAGS": "",
+              "CARGO_ENCODED_RUSTFLAGS": "",
+              "RUSTC": "",
+              "RUSTC_WRAPPER": "",
+              "RUSTC_WORKSPACE_WRAPPER": "",
+              "CMAKE_GENERATOR": "",
+              "CARGO_INCREMENTAL": ""
+            },
+            "cargo_config": {
+              "/home/azureuser/projects/mechanical_mimalloc/.cargo/config.toml": "[alias]\nclippy-strict = [\"clippy\", \"--all-targets\", \"--all-features\"]\n"
+            },
+            "harness_features": [
+              "bench"
+            ],
+            "rust_library_features": [
+              "interpose"
+            ],
+            "c_options": {
+              "CMAKE_BUILD_TYPE": "Release",
+              "MI_BUILD_SHARED": "ON",
+              "MI_BUILD_STATIC": "OFF",
+              "MI_BUILD_OBJECT": "OFF",
+              "MI_BUILD_TESTS": "OFF",
+              "MI_OVERRIDE": "ON",
+              "MI_SECURE": "OFF",
+              "MI_SECURE_FULL": "OFF",
+              "MI_GUARDED": "OFF"
+            }
+          },
+          "rustc_verbose": "rustc 1.92.0 (ded5c06cf 2025-12-08)\nbinary: rustc\ncommit-hash: ded5c06cf21d2b93bffd5d884aa6e96934ee4234\ncommit-date: 2025-12-08\nhost: x86_64-unknown-linux-gnu\nrelease: 1.92.0\nLLVM version: 21.1.3",
+          "logs": [
+            "harness.log",
+            "rust.log",
+            "c-configure.log",
+            "c-build.log"
+          ],
+          "executable": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+          "rust_library": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/rust-interpose/release/libmechanical_mimalloc.so",
+          "c_library": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/c-release/libmimalloc.so.3.3",
+          "sha256": {
+            "executable": "9e07f2c980a5a4e03c2a3005fd6d64567a4d339d137a6482cee3ad625afb79e7",
+            "rust_library": "dadf84b295df1e50716bc1952606b741acd50ac65d72a086163a6a48b8a78d26",
+            "c_library": "be00068c7a1cbdcdd5c61a7ef51934d525d642e6360273074fcfbc4e9813477a"
+          }
+        }
+      },
+      "applications": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/artifacts.json",
+        "sha256": "ac0bbb6be55c79340020dfb800c44ffd52d3f951f7a8f31fdfc029a41eb60d5c",
+        "data": {
+          "sources": {
+            "redis": {
+              "version": "6.2.7",
+              "url": "https://download.redis.io/releases/redis-6.2.7.tar.gz",
+              "sha256": "b7a79cc3b46d3c6eb52fa37dde34a4a60824079ebdfb3abfbbfa035947c55319"
+            },
+            "rocksdb": {
+              "version": "10.10.1",
+              "url": "https://codeload.github.com/facebook/rocksdb/tar.gz/refs/tags/v10.10.1",
+              "sha256": "df2ff348f3fac8578fd4b727eee7267aaf90cd403c99b55e898d1db63fa8cff5"
+            },
+            "gflags": {
+              "version": "2.2.2",
+              "url": "https://codeload.github.com/gflags/gflags/tar.gz/refs/tags/v2.2.2",
+              "sha256": "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf"
+            }
+          },
+          "build_commands": [
+            [
+              "make",
+              "-C",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/redis-6.2.7/src",
+              "-j",
+              "16",
+              "MALLOC=libc",
+              "USE_JEMALLOC=no",
+              "BUILD_TLS=no",
+              "OPTIMIZATION=-O2",
+              "redis-server",
+              "redis-benchmark"
+            ],
+            [
+              "cmake",
+              "-S",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-app-sources/gflags-2.2.2",
+              "-B",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags",
+              "-DCMAKE_BUILD_TYPE=Release",
+              "-DBUILD_SHARED_LIBS=OFF",
+              "-DBUILD_TESTING=OFF",
+              "-DREGISTER_BUILD_DIR=OFF",
+              "-DREGISTER_INSTALL_PREFIX=OFF",
+              "-DCMAKE_INSTALL_PREFIX=/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags",
+              "--parallel",
+              "16"
+            ],
+            [
+              "cmake",
+              "--install",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags"
+            ],
+            [
+              "cmake",
+              "-S",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-app-sources/rocksdb-10.10.1",
+              "-B",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/rocksdb",
+              "-DCMAKE_PREFIX_PATH=/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/gflags-install",
+              "-DCMAKE_BUILD_TYPE=Release",
+              "-DPORTABLE=1",
+              "-DWITH_TESTS=OFF",
+              "-DWITH_TOOLS=OFF",
+              "-DWITH_BENCHMARK_TOOLS=ON",
+              "-DROCKSDB_BUILD_SHARED=OFF",
+              "-DWITH_GFLAGS=ON",
+              "-DWITH_JEMALLOC=OFF",
+              "-DWITH_LIBURING=OFF",
+              "-DWITH_SNAPPY=OFF",
+              "-DWITH_ZLIB=OFF",
+              "-DWITH_BZ2=OFF",
+              "-DWITH_LZ4=OFF",
+              "-DWITH_ZSTD=OFF",
+              "-DFAIL_ON_WARNINGS=OFF"
+            ],
+            [
+              "cmake",
+              "--build",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/rocksdb",
+              "--target",
+              "db_bench",
+              "--parallel",
+              "16"
+            ],
+            [
+              "cc",
+              "-shared",
+              "-fPIC",
+              "-O2",
+              "-Wall",
+              "-Wextra",
+              "-Werror",
+              "/home/azureuser/projects/mechanical_mimalloc/benchmarks/allocator-check.c",
+              "-ldl",
+              "-o",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/allocator-check.so"
+            ]
+          ],
+          "rocksdb_options": {
+            "CMAKE_BUILD_TYPE": "Release",
+            "PORTABLE": "1",
+            "WITH_TESTS": "OFF",
+            "WITH_TOOLS": "OFF",
+            "WITH_BENCHMARK_TOOLS": "ON",
+            "ROCKSDB_BUILD_SHARED": "OFF",
+            "WITH_GFLAGS": "ON",
+            "WITH_JEMALLOC": "OFF",
+            "WITH_LIBURING": "OFF",
+            "WITH_SNAPPY": "OFF",
+            "WITH_ZLIB": "OFF",
+            "WITH_BZ2": "OFF",
+            "WITH_LZ4": "OFF",
+            "WITH_ZSTD": "OFF",
+            "FAIL_ON_WARNINGS": "OFF"
+          },
+          "redis_server": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/redis-6.2.7/src/redis-server",
+          "redis_benchmark": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/redis-6.2.7/src/redis-benchmark",
+          "rocksdb": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/rocksdb/db_bench",
+          "allocator_check": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/allocator-check.so",
+          "sha256": {
+            "redis_server": "59620ba2418ffec5aefe276866ad6653b4c5d85b16b036e0339309452ba9d713",
+            "redis_benchmark": "51efebd43ff248ea78ad375ecaea9075fe897fa4be46e92dfedfbff57bddbc82",
+            "rocksdb": "8b4381acd037955077a8739cc1495ae4d4828cd9edcae065d90876cb910804e2",
+            "allocator_check": "5c912e5bbed84ef303e622269614f5a39921418ebb3bd7c9d954e091306a1536"
+          }
+        }
+      },
+      "nginx": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/artifacts.json",
+        "sha256": "3259245406683b40a2985431300571de80206fab9a87ffe3439222c4cacb70c5",
+        "data": {
+          "binaries": {
+            "production": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production/objs/nginx",
+            "production-trace": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production-trace/objs/nginx",
+            "debug-palloc": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc/objs/nginx",
+            "debug-palloc-trace": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc-trace/objs/nginx"
+          },
+          "wrk": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/wrk-source/wrk",
+          "guard": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_guard.so",
+          "libraries": {
+            "rust": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/rust-interpose/release/libmechanical_mimalloc.so",
+            "mimalloc": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/c-release/libmimalloc.so.3.3",
+            "glibc": null
+          },
+          "sources": {
+            "nginx": {
+              "version": "1.28.0",
+              "url": "https://nginx.org/download/nginx-1.28.0.tar.gz",
+              "sha256": "c6b5c6b086c0df9d3ca3ff5e084c1d0ef909e6038279c71c1c3e985f576ff76a"
+            },
+            "wrk": {
+              "version": "4.2.0",
+              "url": "https://codeload.github.com/wg/wrk/tar.gz/refs/tags/4.2.0",
+              "sha256": "e255f696bff6e329f5d19091da6b06164b8d59d62cb9e673625bdcd27fe7bdad"
+            }
+          },
+          "commands": [
+            {
+              "command": [
+                "cc",
+                "-O2",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-c",
+                "/home/azureuser/projects/mechanical_mimalloc/benches/nginx/allocator_probe.c",
+                "-o",
+                "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_probe.o"
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+            },
+            {
+              "command": [
+                "cc",
+                "-O2",
+                "-shared",
+                "-fPIC",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "/home/azureuser/projects/mechanical_mimalloc/benches/nginx/allocator_guard.c",
+                "-ldl",
+                "-o",
+                "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_guard.so"
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+            },
+            {
+              "command": [
+                "./configure",
+                "--without-http_rewrite_module",
+                "--without-http_gzip_module",
+                "--without-http_fastcgi_module",
+                "--without-http_uwsgi_module",
+                "--without-http_scgi_module",
+                "--add-module=/home/azureuser/projects/mechanical_mimalloc/benches/nginx",
+                "--with-cc=cc",
+                "--with-cc-opt=",
+                "--with-ld-opt="
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production"
+            },
+            {
+              "command": [
+                "make",
+                "-C",
+                "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production",
+                "-j",
+                "16"
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+            },
+            {
+              "command": [
+                "./configure",
+                "--without-http_rewrite_module",
+                "--without-http_gzip_module",
+                "--without-http_fastcgi_module",
+                "--without-http_uwsgi_module",
+                "--without-http_scgi_module",
+                "--add-module=/home/azureuser/projects/mechanical_mimalloc/benches/nginx",
+                "--with-cc=cc",
+                "--with-cc-opt=",
+                "--with-ld-opt= /home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_probe.o -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=free -Wl,--wrap=posix_memalign"
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production-trace"
+            },
+            {
+              "command": [
+                "make",
+                "-C",
+                "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production-trace",
+                "-j",
+                "16"
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+            },
+            {
+              "command": [
+                "./configure",
+                "--without-http_rewrite_module",
+                "--without-http_gzip_module",
+                "--without-http_fastcgi_module",
+                "--without-http_uwsgi_module",
+                "--without-http_scgi_module",
+                "--add-module=/home/azureuser/projects/mechanical_mimalloc/benches/nginx",
+                "--with-cc=cc",
+                "--with-cc-opt= -DNGX_DEBUG_PALLOC=1",
+                "--with-ld-opt="
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc"
+            },
+            {
+              "command": [
+                "make",
+                "-C",
+                "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc",
+                "-j",
+                "16"
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+            },
+            {
+              "command": [
+                "./configure",
+                "--without-http_rewrite_module",
+                "--without-http_gzip_module",
+                "--without-http_fastcgi_module",
+                "--without-http_uwsgi_module",
+                "--without-http_scgi_module",
+                "--add-module=/home/azureuser/projects/mechanical_mimalloc/benches/nginx",
+                "--with-cc=cc",
+                "--with-cc-opt= -DNGX_DEBUG_PALLOC=1",
+                "--with-ld-opt= /home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_probe.o -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=free -Wl,--wrap=posix_memalign"
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc-trace"
+            },
+            {
+              "command": [
+                "make",
+                "-C",
+                "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc-trace",
+                "-j",
+                "16"
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+            },
+            {
+              "command": [
+                "make",
+                "-C",
+                "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/wrk-source",
+                "-j",
+                "16",
+                "WITH_OPENSSL=/usr",
+                "VER=4.2.0"
+              ],
+              "cwd": "/home/azureuser/projects/mechanical_mimalloc"
+            }
+          ],
+          "logs": [
+            "probe-build.log",
+            "guard-build.log",
+            "production-configure.log",
+            "production-build.log",
+            "production-trace-configure.log",
+            "production-trace-build.log",
+            "debug-palloc-configure.log",
+            "debug-palloc-build.log",
+            "debug-palloc-trace-configure.log",
+            "debug-palloc-trace-build.log",
+            "wrk-build.log"
+          ],
+          "cache": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042",
+          "openssl": "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)",
+          "sha256": {
+            "production": "d6b69199fede6742777c0d546be9059b1b31ad15da779528e9cf11bf0ec3b55e",
+            "production-trace": "086249688c062a7b4d0b24198d695e360d708da10e1dd85cc643404c3dd87157",
+            "debug-palloc": "6416de3a5e31e22e521698416877931ac7529ee2d821fad288f37c113924a12e",
+            "debug-palloc-trace": "9fde515c93cf0461cc8c54939f66e78f4cfea8430ad81ea93ac4daa853489330",
+            "wrk": "8013f3aa61b7818e397ccb1a298368c4402d5bc853116ba48986386c6a7bbbd1",
+            "guard": "92a8a9bc022c9f298304c67967a4d44e21722b7eace9bd702339781c0055ebb7",
+            "rust": "6cbe5b1635ee1ce2f8a1c263d76449dc31792558a3bb096644c85fec26044bae",
+            "mimalloc": "be00068c7a1cbdcdd5c61a7ef51934d525d642e6360273074fcfbc4e9813477a"
+          }
+        }
+      },
+      "webserver": {
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/artifacts.json",
+        "sha256": "86e069ae4ce2e9c1e6caabd5e3f4f0a850697717049c54bafeb11d7a16ca3fa5",
+        "data": {
+          "binaries": {
+            "axum": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/target/release/axum",
+            "axum-sqlite": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/target/release/axum-sqlite"
+          },
+          "wrk": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/wrk-source/wrk",
+          "libraries": {
+            "rust": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/rust-interpose/release/libmechanical_mimalloc.so",
+            "mimalloc": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/c-release/libmimalloc.so.3.3",
+            "glibc": null
+          },
+          "cache": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746",
+          "logs": [
+            "axum-build.log",
+            "wrk-build.log"
+          ],
+          "rustflags": "-C target-cpu=native",
+          "commands": [
+            [
+              "cargo",
+              "build",
+              "--release",
+              "--locked",
+              "--manifest-path",
+              "/home/azureuser/projects/mechanical_mimalloc/benches/webserver/axum/Cargo.toml",
+              "--target-dir",
+              "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/target"
+            ]
+          ],
+          "wrk_source": {
+            "version": "4.2.0",
+            "url": "https://codeload.github.com/wg/wrk/tar.gz/refs/tags/4.2.0",
+            "sha256": "e255f696bff6e329f5d19091da6b06164b8d59d62cb9e673625bdcd27fe7bdad"
+          },
+          "sha256": {
+            "axum": "6e8a4d6af22531007b6d615e8a532cbe279214e6d4a824a3b60885928b742622",
+            "axum-sqlite": "db4e45a2df19858b85b8cc53cbf0ed3a163ba675980f2588f171d41326e3fa01",
+            "wrk": "b0f76e8ff22d4c6619b9611005d8006e6d5da8ce50d7c166a2b107602e257e84"
+          }
+        }
+      }
+    },
+    "verified": {
+      "native-harness": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/native-harness",
+        "sha256": "9e07f2c980a5a4e03c2a3005fd6d64567a4d339d137a6482cee3ad625afb79e7"
+      },
+      "redis_server": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/redis-6.2.7/src/redis-server",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/redis_server",
+        "sha256": "59620ba2418ffec5aefe276866ad6653b4c5d85b16b036e0339309452ba9d713"
+      },
+      "redis_benchmark": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/redis-6.2.7/src/redis-benchmark",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/redis_benchmark",
+        "sha256": "51efebd43ff248ea78ad375ecaea9075fe897fa4be46e92dfedfbff57bddbc82"
+      },
+      "rocksdb": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/rocksdb/db_bench",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/rocksdb",
+        "sha256": "8b4381acd037955077a8739cc1495ae4d4828cd9edcae065d90876cb910804e2"
+      },
+      "allocator_check": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/applications/allocator-check.so",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/allocator_check",
+        "sha256": "5c912e5bbed84ef303e622269614f5a39921418ebb3bd7c9d954e091306a1536"
+      },
+      "nginx-production": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production/objs/nginx",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-production",
+        "sha256": "d6b69199fede6742777c0d546be9059b1b31ad15da779528e9cf11bf0ec3b55e"
+      },
+      "nginx-production-trace": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/production-trace/objs/nginx",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-production-trace",
+        "sha256": "086249688c062a7b4d0b24198d695e360d708da10e1dd85cc643404c3dd87157"
+      },
+      "nginx-debug-palloc": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc/objs/nginx",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-debug-palloc",
+        "sha256": "6416de3a5e31e22e521698416877931ac7529ee2d821fad288f37c113924a12e"
+      },
+      "nginx-debug-palloc-trace": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/debug-palloc-trace/objs/nginx",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-debug-palloc-trace",
+        "sha256": "9fde515c93cf0461cc8c54939f66e78f4cfea8430ad81ea93ac4daa853489330"
+      },
+      "nginx-wrk": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/wrk-source/wrk",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-wrk",
+        "sha256": "8013f3aa61b7818e397ccb1a298368c4402d5bc853116ba48986386c6a7bbbd1"
+      },
+      "nginx-guard": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/nginx/9235b5e5c4b94042/allocator_guard.so",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/nginx-guard",
+        "sha256": "92a8a9bc022c9f298304c67967a4d44e21722b7eace9bd702339781c0055ebb7"
+      },
+      "webserver-axum": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/target/release/axum",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/webserver-axum",
+        "sha256": "6e8a4d6af22531007b6d615e8a532cbe279214e6d4a824a3b60885928b742622"
+      },
+      "webserver-axum-sqlite": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/target/release/axum-sqlite",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/webserver-axum-sqlite",
+        "sha256": "db4e45a2df19858b85b8cc53cbf0ed3a163ba675980f2588f171d41326e3fa01"
+      },
+      "webserver-wrk": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/webserver/3c3137e2ab6f0746/wrk-source/wrk",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/webserver-wrk",
+        "sha256": "b0f76e8ff22d4c6619b9611005d8006e6d5da8ce50d7c166a2b107602e257e84"
+      },
+      "architecture-probe": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/architectural-bench-d94208b84248c31e",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/architecture-probe",
+        "sha256": "617f18c1f7d712cf6f876b6ffd9dba3d4c37fc54d213c9c9ee5b1c36d5145048"
+      },
+      "old.so": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/baseline-interpose.so",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/old.so",
+        "sha256": "8e661a586ef4a2bf596e5d48ad565ab37a247d1cb535b84754f747e31c07e76d"
+      },
+      "new.so": {
+        "original": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/final-interpose.so",
+        "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/artifacts/new.so",
+        "sha256": "0331fe15ec19655fa945f4f572cc13716ec8b488d248f87abe59dc45b585973d"
+      }
+    }
+  },
+  "allocator_builds": {
+    "old": {
+      "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/baseline-build-manifest.json",
+      "sha256": "05e39a9a5771738541247b202678b02bd374f601e35ab24a187c3c515cef392b",
+      "data": {
+        "commit": "4219da2bcdbba7f9273c46b5dbc9e194f343464a",
+        "label": "baseline",
+        "builds": {
+          "std": {
+            "command": [
+              "cargo",
+              "rustc",
+              "--locked",
+              "--release",
+              "--lib",
+              "--features",
+              "std",
+              "--",
+              "--emit=asm,link"
+            ],
+            "features": [
+              "std"
+            ],
+            "target_dir": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-20261024/baseline-std-build",
+            "assembly_sha256": "9a56126a7c9ed9ff21c986a4e0cdb0d756254673f4008d83d29e2721a1222086",
+            "rlib_sha256": "db1e8cd885ee5425c71e55c9fc37ad919c5e983cc239016ba9194ace21da8f36"
+          },
+          "std-secure": {
+            "command": [
+              "cargo",
+              "rustc",
+              "--locked",
+              "--release",
+              "--lib",
+              "--features",
+              "std,secure,guarded",
+              "--",
+              "--emit=asm,link"
+            ],
+            "features": [
+              "std",
+              "secure",
+              "guarded"
+            ],
+            "target_dir": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-20261024/baseline-std-secure-build",
+            "assembly_sha256": "72bc374dd2e6849765d9164a10581061454b819d386ad1a33411ac3659b25c59",
+            "rlib_sha256": "32e95a86d4ac9eb6751c64aa1bb1a027a9ceafadd0607c4c6588ab4ac6e25eea"
+          },
+          "interpose": {
+            "command": [
+              "cargo",
+              "rustc",
+              "--locked",
+              "--release",
+              "--lib",
+              "--features",
+              "interpose",
+              "--crate-type",
+              "cdylib",
+              "--",
+              "--emit=asm,link"
+            ],
+            "features": [
+              "interpose"
+            ],
+            "target_dir": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-20261024/baseline-interpose-build",
+            "assembly_sha256": "f34c34137b67f6911e24ba7f6bce3bf762c720e06f1ac0427c9620d5e6ff2df4",
+            "library_sha256": "8e661a586ef4a2bf596e5d48ad565ab37a247d1cb535b84754f747e31c07e76d"
+          },
+          "interpose-secure": {
+            "command": [
+              "cargo",
+              "rustc",
+              "--locked",
+              "--release",
+              "--lib",
+              "--features",
+              "interpose,secure,guarded",
+              "--crate-type",
+              "cdylib",
+              "--",
+              "--emit=asm,link"
+            ],
+            "features": [
+              "interpose",
+              "secure",
+              "guarded"
+            ],
+            "target_dir": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-20261024/baseline-interpose-secure-build",
+            "assembly_sha256": "1bf35618777561e6306faaec0183c53f65ac7e17941ef90c8d436408e3ed5d44",
+            "library_sha256": "3e681fbfb5e07b3e3d863228d89be1093a8bbf367221c2ca62dbd13434bf2a18"
+          }
+        }
+      }
+    },
+    "new": {
+      "path": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/final-build-manifest.json",
+      "sha256": "bf8e1407fabc78056ff285d8d6355418463dc828d520ad73f5d898017d573338",
+      "data": {
+        "commit": "70a3ce3ab5980660ddd4c9f0ace1d5052b80d993",
+        "label": "final",
+        "builds": {
+          "std": {
+            "command": [
+              "cargo",
+              "rustc",
+              "--locked",
+              "--release",
+              "--lib",
+              "--features",
+              "std",
+              "--",
+              "--emit=asm,link"
+            ],
+            "features": [
+              "std"
+            ],
+            "target_dir": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/final-std-build",
+            "assembly_sha256": "ea18719e90d38da3887006805ebc17ed8c8f8db55978fbaf1a64881c00f0831b",
+            "rlib_sha256": "30ae7ea8909cce791a1808b5875d97c5e8781dbd6932723525f65eb9ca100281"
+          },
+          "std-secure": {
+            "command": [
+              "cargo",
+              "rustc",
+              "--locked",
+              "--release",
+              "--lib",
+              "--features",
+              "std,secure,guarded",
+              "--",
+              "--emit=asm,link"
+            ],
+            "features": [
+              "std",
+              "secure",
+              "guarded"
+            ],
+            "target_dir": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/final-std-secure-build",
+            "assembly_sha256": "4b3f49ef87fa2f525141c42bb3ae32a1cc219b9bbb43e8ae38aa328a33637217",
+            "rlib_sha256": "799050b06129b770010383969c2b362db7084b28c53ca07cb6a4d6ea62bc01e7"
+          },
+          "interpose": {
+            "command": [
+              "cargo",
+              "rustc",
+              "--locked",
+              "--release",
+              "--lib",
+              "--features",
+              "interpose",
+              "--crate-type",
+              "cdylib",
+              "--",
+              "--emit=asm,link"
+            ],
+            "features": [
+              "interpose"
+            ],
+            "target_dir": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/final-interpose-build",
+            "assembly_sha256": "349643c90e38e682c834fda128fcb72c0a07fa3be9f494c84e7087cd0b1b8173",
+            "library_sha256": "0331fe15ec19655fa945f4f572cc13716ec8b488d248f87abe59dc45b585973d"
+          },
+          "interpose-secure": {
+            "command": [
+              "cargo",
+              "rustc",
+              "--locked",
+              "--release",
+              "--lib",
+              "--features",
+              "interpose,secure,guarded",
+              "--crate-type",
+              "cdylib",
+              "--",
+              "--emit=asm,link"
+            ],
+            "features": [
+              "interpose",
+              "secure",
+              "guarded"
+            ],
+            "target_dir": "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-kernel-20261024/final-interpose-secure-build",
+            "assembly_sha256": "b9ac3248457ede69f96032631f8d5a98e44970ed459fa652e88e3663989a4022",
+            "library_sha256": "0dd5aad8453660d50006b01d557462f7f53268dba0983039955df92ac31238be"
+          }
+        }
+      }
+    }
+  },
+  "source_tree": "c02cf3089142fa9207b1e7d5affeb3040732932d",
+  "initial_source_confirmation": {
+    "architecture_probe": {
+      "cache_key": "d94208b84248c31e",
+      "source_sha256": "1bed9df09195e5b9a7253189c94b53ab19edbca9165997430f08a0a216a51175",
+      "header_sha256": {
+        "mimalloc-3.3.2/include/mimalloc/atomic.h": "e9512b521a82cc0cbc262f6060dd70bb4243ac4a7d69d6ab8b1ef8e56f181a21",
+        "mimalloc-3.3.2/include/mimalloc/bits.h": "57a7297e18ae464a7bfd3fc25a46229008602385697305c69ed289b89ece7631",
+        "mimalloc-3.3.2/include/mimalloc/internal.h": "5aeeff21d667daf4aadcc66f634aa957ecd688d15b277828f367c8c2274251a8",
+        "mimalloc-3.3.2/include/mimalloc/prim.h": "555302d2fcd05e974441d0c9c9208c26e860db4b3f17b9025a08f42e0f4807ba",
+        "mimalloc-3.3.2/include/mimalloc/track.h": "1f378b4b6063c078d2aeb5d916c1d30b5db787a44ab9118e7daf673b086882c6",
+        "mimalloc-3.3.2/include/mimalloc/types.h": "b54e760da2a8d9d8a9cb708e280268c2d194c99bc518b21f72db70100578ad6a",
+        "mimalloc-3.3.2/include/mimalloc-new-delete.h": "dd4f25cae53209d45d73f8e6a2b9c219e8fc7434d97f20eba9af1a8b850030fd",
+        "mimalloc-3.3.2/include/mimalloc-override.h": "21fcf61c4443341ac6bf6ea528af31dc7267e8e3456fc64bfd07704503032175",
+        "mimalloc-3.3.2/include/mimalloc-stats.h": "5260df227ea1612b8678a06b063cc8f48e739b551554541cdeb4d430a7e257b3",
+        "mimalloc-3.3.2/include/mimalloc.h": "869161433ab2d807a75752d0762accf5b68b6b24ce67e417af46bf181b9b6c72"
+      },
+      "command": [
+        "c++",
+        "-std=c++20",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pthread",
+        "-I",
+        "/home/azureuser/projects/mechanical_mimalloc/mimalloc-3.3.2/include",
+        "/home/azureuser/projects/mechanical_mimalloc/benches/architectural_bench.cpp",
+        "-ldl",
+        "-o",
+        "/home/azureuser/projects/mechanical_mimalloc/target/bench-build/0fce6e5472d5a7b8/architectural-bench-d94208b84248c31e"
+      ],
+      "executable_sha256": "617f18c1f7d712cf6f876b6ffd9dba3d4c37fc54d213c9c9ee5b1c36d5145048"
+    },
+    "benchmark_sources": {
+      "benchmarks/bench.py": "1bd43fa407307aa0ddaa8480247f6de0dc8f51b2eadbbdd3a95e9fdb1f78f90f",
+      "benchmarks/applications.py": "08d0e271fad148ed9483228c53326f7bc4e0f5dccf7f2a195494316b00ac1389",
+      "benchmarks/nginx.py": "86ac21626b466da4260b0f0fdb1b5df257222b6bfead7292b1904eca2b2db174",
+      "benchmarks/webserver.py": "8403efb1434479b350a6446393d9412dc656c3faa042c7407b8694d08c2de37d",
+      "benchmarks/architecture.py": "f17fda09621a14dbf6198bd294b16267ce797fc21c0e59ff52be22613226c4f9",
+      "benchmarks/retention.py": "9171a35bbaf041fdf1253842ad7e69a772372546d49d0ecb170dc13b3f263de8",
+      "benchmarks/common.py": "39e065b86b983ff68949ee7bf949ad4ce0f17a5d61c7e1bd3808bb7ef20f3c52"
+    }
+  },
+  "benchmark_harness_correction": {
+    "recorded_utc": "2026-10-24T20:58:27.001342+00:00",
+    "reason": "ProcessLookupError reading a finished wrk process smaps_rollup during the independent upstream preflight, before loading the compared allocator. The existing handler already skipped FileNotFoundError for this race; the correction also handles ESRCH. Server disappearance and nonzero wrk exit remain errors.",
+    "failed_attempt": "failed-attempts/nginx-001",
+    "excluded_successful_measurements": 30,
+    "restart_scope": "Restart the entire 216-job Nginx family under the corrected sampler; retain all original successful and failed raw data. Other benchmark families, allocator builds, controls and acceptance limits are unchanged.",
+    "source": {
+      "path": "benchmarks/nginx.py",
+      "before_sha256": "86ac21626b466da4260b0f0fdb1b5df257222b6bfead7292b1904eca2b2db174",
+      "after_sha256": "7698d8e0a01b132ed5ec0ab86fae643b789b455bae43d6a49f0b8c62c0e3acb2"
+    },
+    "patch_sha256": "f4b615947e2e16ad7717fa9f0f0cccd5976daf0bbec1611ffe3f11efa9c76d0e",
+    "regression_test": "test_wrk_exit_during_load_memory_sample_keeps_completed_result reproduces ProcessLookupError before the fix and passes after it",
+    "verification": {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "benchmarks",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "tests": 72,
+      "skipped_optional_integrations": 8
+    }
+  },
+  "confirmations": {
+    "plan": {
+      "recorded_utc": "2026-10-24T21:46:31.754106+00:00",
+      "purpose": "Independent longer observations of the primary architectural timing finding and the largest HTTP latency/memory findings. These remain separate from primary throughput acceptance and do not erase adverse screen results.",
+      "baseline_commit": "4219da2bcdbba7f9273c46b5dbc9e194f343464a",
+      "candidate_source_commit": "70a3ce3ab5980660ddd4c9f0ace1d5052b80d993",
+      "labels": {
+        "old": "baseline Rust allocator",
+        "new": "candidate Rust allocator"
+      },
+      "order": "Alternate old/new order by paired round, reverse case order every other round. Compare the same cached executable and fixed allocator alias/input paths for both labels. All builds and copies complete before timing.",
+      "nginx": {
+        "selection": "For each profile, the two largest positive median paired p99 ratios and the largest positive peak-worker-PSS ratio; take their union. This diagnostic selection rule is not a new latency or memory pass/fail threshold.",
+        "cases": [
+          {
+            "profile": "debug-palloc",
+            "case": {
+              "workload": "headers",
+              "label": "headers",
+              "path": "/small"
+            }
+          },
+          {
+            "profile": "debug-palloc",
+            "case": {
+              "workload": "proxy",
+              "label": "proxy-1024-off",
+              "path": "/proxy/1024",
+              "size": 1024,
+              "buffering": "off"
+            }
+          },
+          {
+            "profile": "debug-palloc",
+            "case": {
+              "workload": "proxy",
+              "label": "proxy-262144-on",
+              "path": "/proxy/262144",
+              "size": 262144,
+              "buffering": "on"
+            }
+          },
+          {
+            "profile": "production",
+            "case": {
+              "workload": "proxy",
+              "label": "proxy-262144-on",
+              "path": "/proxy/262144",
+              "size": 262144,
+              "buffering": "on"
+            }
+          },
+          {
+            "profile": "production",
+            "case": {
+              "workload": "proxy",
+              "label": "proxy-65536-off",
+              "path": "/proxy/65536",
+              "size": 65536,
+              "buffering": "off"
+            }
+          },
+          {
+            "profile": "production",
+            "case": {
+              "workload": "transfer",
+              "label": "upload-65536",
+              "path": "/upload",
+              "size": 65536,
+              "upload": true
+            }
+          }
+        ],
+        "selection_evidence": [
+          {
+            "profile": "debug-palloc",
+            "case": "headers",
+            "medians": {
+              "p50_us": {
+                "old": 5832.0,
+                "new": 4672.0
+              },
+              "p95_us": {
+                "old": 6428.0,
+                "new": 5509.0
+              },
+              "p99_us": {
+                "old": 6684.0,
+                "new": 5738.0
+              },
+              "cpu_seconds_per_request": {
+                "old": 4.533271865240246e-05,
+                "new": 3.589005179342804e-05
+              },
+              "peak_worker_pss_bytes": {
+                "old": 36804608,
+                "new": 42475520
+              },
+              "allocations_per_request": {
+                "old": 30.32458324788328,
+                "new": 30.272164648205226
+              },
+              "requested_bytes_per_request": {
+                "old": 26994.072188204962,
+                "new": 26956.271776326965
+              },
+              "idle_final_pss_bytes": {
+                "old": null,
+                "new": null
+              }
+            },
+            "ratios": {
+              "p50_us": {
+                "paired": [
+                  0.8227912497880278,
+                  0.8010973936899863,
+                  0.7837837837837838
+                ],
+                "median": 0.8010973936899863
+              },
+              "p95_us": {
+                "paired": [
+                  0.9849097697573118,
+                  0.8715393133997785,
+                  0.8183626625860749
+                ],
+                "median": 0.8715393133997785
+              },
+              "p99_us": {
+                "paired": [
+                  0.8931487889273356,
+                  0.8792522218817039,
+                  0.8240574506283662
+                ],
+                "median": 0.8792522218817039
+              },
+              "cpu_seconds_per_request": {
+                "paired": [
+                  0.8867160867508912,
+                  0.7917030537837819,
+                  0.8447504521224177
+                ],
+                "median": 0.8447504521224177
+              },
+              "peak_worker_pss_bytes": {
+                "paired": [
+                  1.0754439543038117,
+                  1.1540815758722387,
+                  1.1124225592822046
+                ],
+                "median": 1.1124225592822046
+              },
+              "allocations_per_request": {
+                "paired": [
+                  1.0001365695508944,
+                  0.9981161099657894,
+                  0.9982714156613608
+                ],
+                "median": 0.9982714156613608
+              },
+              "requested_bytes_per_request": {
+                "paired": [
+                  1.0001081392611593,
+                  0.9984297576617388,
+                  0.9985996773063934
+                ],
+                "median": 0.9985996773063934
+              },
+              "idle_final_pss_bytes": {
+                "paired": [],
+                "median": null
+              }
+            },
+            "quality_flags": {
+              "old": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ],
+              "new": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ]
+            },
+            "errors": {
+              "old": 0,
+              "new": 0
+            }
+          },
+          {
+            "profile": "debug-palloc",
+            "case": "proxy-1024-off",
+            "medians": {
+              "p50_us": {
+                "old": 3225.0,
+                "new": 3212.0
+              },
+              "p95_us": {
+                "old": 3820.0,
+                "new": 4249.0
+              },
+              "p99_us": {
+                "old": 5302.0,
+                "new": 6196.0
+              },
+              "cpu_seconds_per_request": {
+                "old": 2.5513523443101016e-05,
+                "new": 2.5979688607089003e-05
+              },
+              "peak_worker_pss_bytes": {
+                "old": 18669568,
+                "new": 18673664
+              },
+              "allocations_per_request": {
+                "old": 41.28641815668614,
+                "new": 41.296985303911555
+              },
+              "requested_bytes_per_request": {
+                "old": 20941.77812458198,
+                "new": 20946.924344003906
+              },
+              "idle_final_pss_bytes": {
+                "old": null,
+                "new": null
+              }
+            },
+            "ratios": {
+              "p50_us": {
+                "paired": [
+                  1.0116535433070866,
+                  1.0061957868649318,
+                  0.9572093023255814
+                ],
+                "median": 1.0061957868649318
+              },
+              "p95_us": {
+                "paired": [
+                  1.0650163220892275,
+                  1.112303664921466,
+                  1.1443850267379678
+                ],
+                "median": 1.112303664921466
+              },
+              "p99_us": {
+                "paired": [
+                  1.0511879466872707,
+                  1.1686156167483968,
+                  1.09712
+                ],
+                "median": 1.09712
+              },
+              "cpu_seconds_per_request": {
+                "paired": [
+                  1.012190731512877,
+                  1.0300300384248933,
+                  1.0108151263557583
+                ],
+                "median": 1.012190731512877
+              },
+              "peak_worker_pss_bytes": {
+                "paired": [
+                  0.9937424525194862,
+                  1.0006567425569177,
+                  1.0002193944712594
+                ],
+                "median": 1.0002193944712594
+              },
+              "allocations_per_request": {
+                "paired": [
+                  1.0004365925240435,
+                  0.9999697204693309,
+                  1.0003617337330568
+                ],
+                "median": 1.0003617337330568
+              },
+              "requested_bytes_per_request": {
+                "paired": [
+                  1.0004168486669422,
+                  1.0001856273243441,
+                  1.0002960196295831
+                ],
+                "median": 1.0002960196295831
+              },
+              "idle_final_pss_bytes": {
+                "paired": [],
+                "median": null
+              }
+            },
+            "quality_flags": {
+              "old": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ],
+              "new": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ]
+            },
+            "errors": {
+              "old": 0,
+              "new": 0
+            }
+          },
+          {
+            "profile": "debug-palloc",
+            "case": "proxy-262144-on",
+            "medians": {
+              "p50_us": {
+                "old": 17961.0,
+                "new": 17828.0
+              },
+              "p95_us": {
+                "old": 18963.0,
+                "new": 20446.0
+              },
+              "p99_us": {
+                "old": 23458.0,
+                "new": 27505.0
+              },
+              "cpu_seconds_per_request": {
+                "old": 0.00014186601856692714,
+                "new": 0.00014246225813310654
+              },
+              "peak_worker_pss_bytes": {
+                "old": 23631872,
+                "new": 26183680
+              },
+              "allocations_per_request": {
+                "old": 117.91717119670231,
+                "new": 129.8384879725086
+              },
+              "requested_bytes_per_request": {
+                "old": 239515.36545150072,
+                "new": 267172.8639175258
+              },
+              "idle_final_pss_bytes": {
+                "old": null,
+                "new": null
+              }
+            },
+            "ratios": {
+              "p50_us": {
+                "paired": [
+                  1.015843586718355,
+                  0.9867714617811479,
+                  0.9854128389287902
+                ],
+                "median": 0.9867714617811479
+              },
+              "p95_us": {
+                "paired": [
+                  1.0791014080050625,
+                  1.0832891808837555,
+                  0.9939783839423572
+                ],
+                "median": 1.0791014080050625
+              },
+              "p99_us": {
+                "paired": [
+                  1.2236408933179108,
+                  1.2013811919174695,
+                  1.159486982828412
+                ],
+                "median": 1.2013811919174695
+              },
+              "cpu_seconds_per_request": {
+                "paired": [
+                  1.0296483178411862,
+                  1.0019940179461615,
+                  0.9902864520292363
+                ],
+                "median": 1.0019940179461615
+              },
+              "peak_worker_pss_bytes": {
+                "paired": [
+                  1.1862135412104755,
+                  1.045636705651427,
+                  0.9441026085449346
+                ],
+                "median": 1.045636705651427
+              },
+              "allocations_per_request": {
+                "paired": [
+                  1.155734281740179,
+                  1.212563719234481,
+                  1.0344587162888603
+                ],
+                "median": 1.155734281740179
+              },
+              "requested_bytes_per_request": {
+                "paired": [
+                  1.1585153189763016,
+                  1.236386565088193,
+                  1.0439278650769512
+                ],
+                "median": 1.1585153189763016
+              },
+              "idle_final_pss_bytes": {
+                "paired": [],
+                "median": null
+              }
+            },
+            "quality_flags": {
+              "old": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ],
+              "new": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ]
+            },
+            "errors": {
+              "old": 0,
+              "new": 0
+            }
+          },
+          {
+            "profile": "production",
+            "case": "proxy-262144-on",
+            "medians": {
+              "p50_us": {
+                "old": 17638.0,
+                "new": 17749.0
+              },
+              "p95_us": {
+                "old": 20314.0,
+                "new": 19106.0
+              },
+              "p99_us": {
+                "old": 26968.0,
+                "new": 26341.0
+              },
+              "cpu_seconds_per_request": {
+                "old": 0.0001403351830367751,
+                "new": 0.00014029487125635318
+              },
+              "peak_worker_pss_bytes": {
+                "old": 20287488,
+                "new": 21026816
+              },
+              "allocations_per_request": {
+                "old": 20.123922126411237,
+                "new": 19.84010152284264
+              },
+              "requested_bytes_per_request": {
+                "old": 266726.8187394435,
+                "new": 261955.3067440174
+              },
+              "idle_final_pss_bytes": {
+                "old": null,
+                "new": null
+              }
+            },
+            "ratios": {
+              "p50_us": {
+                "paired": [
+                  1.0176595378705349,
+                  1.006633405147976,
+                  1.00373810602628
+                ],
+                "median": 1.006633405147976
+              },
+              "p95_us": {
+                "paired": [
+                  0.9671695218614165,
+                  0.9405336221325195,
+                  0.9359388774610637
+                ],
+                "median": 0.9405336221325195
+              },
+              "p99_us": {
+                "paired": [
+                  1.0372105843439912,
+                  0.9829427469593592,
+                  0.8943858504584828
+                ],
+                "median": 0.9829427469593592
+              },
+              "cpu_seconds_per_request": {
+                "paired": [
+                  0.9997127464435531,
+                  1.0063169529766038,
+                  0.9969835676747575
+                ],
+                "median": 0.9997127464435531
+              },
+              "peak_worker_pss_bytes": {
+                "paired": [
+                  1.0355340197859884,
+                  1.0659313725490196,
+                  1.1204845574593474
+                ],
+                "median": 1.0659313725490196
+              },
+              "allocations_per_request": {
+                "paired": [
+                  0.9999621276894874,
+                  0.9972068370344398,
+                  0.9642455278838851
+                ],
+                "median": 0.9972068370344398
+              },
+              "requested_bytes_per_request": {
+                "paired": [
+                  0.9996140532039464,
+                  0.9967379474678665,
+                  0.9532025552174686
+                ],
+                "median": 0.9967379474678665
+              },
+              "idle_final_pss_bytes": {
+                "paired": [],
+                "median": null
+              }
+            },
+            "quality_flags": {
+              "old": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ],
+              "new": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ]
+            },
+            "errors": {
+              "old": 0,
+              "new": 0
+            }
+          },
+          {
+            "profile": "production",
+            "case": "proxy-65536-off",
+            "medians": {
+              "p50_us": {
+                "old": 15012.0,
+                "new": 15671.0
+              },
+              "p95_us": {
+                "old": 16623.0,
+                "new": 17760.0
+              },
+              "p99_us": {
+                "old": 20144.0,
+                "new": 22409.0
+              },
+              "cpu_seconds_per_request": {
+                "old": 0.0001189995966115369,
+                "new": 0.00012022605377776177
+              },
+              "peak_worker_pss_bytes": {
+                "old": 17133568,
+                "new": 17225728
+              },
+              "allocations_per_request": {
+                "old": 4.129015873015873,
+                "new": 4.127609196834694
+              },
+              "requested_bytes_per_request": {
+                "old": 17672.988444444443,
+                "new": 17675.990890625962
+              },
+              "idle_final_pss_bytes": {
+                "old": null,
+                "new": null
+              }
+            },
+            "ratios": {
+              "p50_us": {
+                "paired": [
+                  1.0470534787123573,
+                  1.0235811350919264,
+                  1.0452908217716115
+                ],
+                "median": 1.0452908217716115
+              },
+              "p95_us": {
+                "paired": [
+                  1.1157340985174558,
+                  1.1098328354414289,
+                  1.068399205919509
+                ],
+                "median": 1.1098328354414289
+              },
+              "p99_us": {
+                "paired": [
+                  1.3322046857080443,
+                  0.9162802904382819,
+                  1.1124404289118348
+                ],
+                "median": 1.1124404289118348
+              },
+              "cpu_seconds_per_request": {
+                "paired": [
+                  1.005128290267267,
+                  1.0233623011629354,
+                  1.0103063976782083
+                ],
+                "median": 1.0103063976782083
+              },
+              "peak_worker_pss_bytes": {
+                "paired": [
+                  0.9984460913220177,
+                  1.0065820966969843,
+                  1.006638217164533
+                ],
+                "median": 1.0065820966969843
+              },
+              "allocations_per_request": {
+                "paired": [
+                  0.9927121786373712,
+                  1.008638369555721,
+                  0.999659319260463
+                ],
+                "median": 0.999659319260463
+              },
+              "requested_bytes_per_request": {
+                "paired": [
+                  0.9990762676160128,
+                  0.9995894510281207,
+                  1.0011868841624179
+                ],
+                "median": 0.9995894510281207
+              },
+              "idle_final_pss_bytes": {
+                "paired": [],
+                "median": null
+              }
+            },
+            "quality_flags": {
+              "old": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ],
+              "new": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ]
+            },
+            "errors": {
+              "old": 0,
+              "new": 0
+            }
+          },
+          {
+            "profile": "production",
+            "case": "upload-65536",
+            "medians": {
+              "p50_us": {
+                "old": 7068.0,
+                "new": 6989.0
+              },
+              "p95_us": {
+                "old": 8032.0,
+                "new": 8363.0
+              },
+              "p99_us": {
+                "old": 11316.0,
+                "new": 11738.0
+              },
+              "cpu_seconds_per_request": {
+                "old": 5.5752153301729314e-05,
+                "new": 5.589643277102525e-05
+              },
+              "peak_worker_pss_bytes": {
+                "old": 33214464,
+                "new": 33228800
+              },
+              "allocations_per_request": {
+                "old": 7.08048824702399,
+                "new": 7.076208829712684
+              },
+              "requested_bytes_per_request": {
+                "old": 83688.7324020155,
+                "new": 83678.7655337538
+              },
+              "idle_final_pss_bytes": {
+                "old": null,
+                "new": null
+              }
+            },
+            "ratios": {
+              "p50_us": {
+                "paired": [
+                  0.9856155690311663,
+                  0.981476204046737,
+                  1.0053763440860215
+                ],
+                "median": 0.9856155690311663
+              },
+              "p95_us": {
+                "paired": [
+                  0.9671574178935447,
+                  0.9455569461827285,
+                  1.0412101593625498
+                ],
+                "median": 0.9671574178935447
+              },
+              "p99_us": {
+                "paired": [
+                  1.1645996626649469,
+                  1.0068704307231569,
+                  1.1127606928243194
+                ],
+                "median": 1.1127606928243194
+              },
+              "cpu_seconds_per_request": {
+                "paired": [
+                  0.9369548802280817,
+                  0.982145092894509,
+                  1.0061484377836127
+                ],
+                "median": 0.982145092894509
+              },
+              "peak_worker_pss_bytes": {
+                "paired": [
+                  1.0174064966998835,
+                  1.0004316191885558,
+                  0.9662269129287598
+                ],
+                "median": 1.0004316191885558
+              },
+              "allocations_per_request": {
+                "paired": [
+                  1.0012772875455953,
+                  0.9993045687637627,
+                  0.9990467950190248
+                ],
+                "median": 0.9993045687637627
+              },
+              "requested_bytes_per_request": {
+                "paired": [
+                  1.0002471392753964,
+                  0.9998809054937787,
+                  0.9996163736938015
+                ],
+                "median": 0.9998809054937787
+              },
+              "idle_final_pss_bytes": {
+                "paired": [],
+                "median": null
+              }
+            },
+            "quality_flags": {
+              "old": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ],
+              "new": [
+                "local closed-loop wrk; not fixed-rate latency or proven sustainable throughput"
+              ]
+            },
+            "errors": {
+              "old": 0,
+              "new": 0
+            }
+          }
+        ],
+        "controls": {
+          "profiles": [
+            "production",
+            "debug-palloc"
+          ],
+          "cases": [
+            {
+              "workload": "static",
+              "label": "static",
+              "path": "/small"
+            },
+            {
+              "workload": "churn",
+              "label": "churn",
+              "path": "/small"
+            },
+            {
+              "workload": "headers",
+              "label": "headers",
+              "path": "/small"
+            },
+            {
+              "workload": "proxy",
+              "label": "proxy-1024-on",
+              "path": "/proxy/1024",
+              "size": 1024,
+              "buffering": "on"
+            },
+            {
+              "workload": "proxy",
+              "label": "proxy-1024-off",
+              "path": "/proxy/1024",
+              "size": 1024,
+              "buffering": "off"
+            },
+            {
+              "workload": "proxy",
+              "label": "proxy-16384-on",
+              "path": "/proxy/16384",
+              "size": 16384,
+              "buffering": "on"
+            },
+            {
+              "workload": "proxy",
+              "label": "proxy-16384-off",
+              "path": "/proxy/16384",
+              "size": 16384,
+              "buffering": "off"
+            },
+            {
+              "workload": "proxy",
+              "label": "proxy-65536-on",
+              "path": "/proxy/65536",
+              "size": 65536,
+              "buffering": "on"
+            },
+            {
+              "workload": "proxy",
+              "label": "proxy-65536-off",
+              "path": "/proxy/65536",
+              "size": 65536,
+              "buffering": "off"
+            },
+            {
+              "workload": "proxy",
+              "label": "proxy-262144-on",
+              "path": "/proxy/262144",
+              "size": 262144,
+              "buffering": "on"
+            },
+            {
+              "workload": "proxy",
+              "label": "proxy-262144-off",
+              "path": "/proxy/262144",
+              "size": 262144,
+              "buffering": "off"
+            },
+            {
+              "workload": "transfer",
+              "label": "upload-4096",
+              "path": "/upload",
+              "size": 4096,
+              "upload": true
+            },
+            {
+              "workload": "transfer",
+              "label": "download-4096",
+              "path": "/4096",
+              "size": 4096,
+              "upload": false
+            },
+            {
+              "workload": "transfer",
+              "label": "upload-65536",
+              "path": "/upload",
+              "size": 65536,
+              "upload": true
+            },
+            {
+              "workload": "transfer",
+              "label": "download-65536",
+              "path": "/65536",
+              "size": 65536,
+              "upload": false
+            },
+            {
+              "workload": "transfer",
+              "label": "upload-1048576",
+              "path": "/upload",
+              "size": 1048576,
+              "upload": true
+            },
+            {
+              "workload": "transfer",
+              "label": "download-1048576",
+              "path": "/1048576",
+              "size": 1048576,
+              "upload": false
+            },
+            {
+              "workload": "burst-idle",
+              "label": "burst-idle",
+              "path": "/small"
+            }
+          ],
+          "rounds": 6,
+          "duration_secs": 15,
+          "warmup_secs": 5,
+          "preflight_secs": 1,
+          "workers": 2,
+          "connections": 256,
+          "load_threads": 2,
+          "burst_cycles": 2,
+          "idle_secs": 10,
+          "server_cpus": [
+            0,
+            2
+          ],
+          "load_cpus": [
+            4,
+            6
+          ],
+          "upstream_cpus": [
+            8,
+            10
+          ]
+        },
+        "pre_timing_revision": {
+          "recorded_utc": "2026-10-24T22:13:12.433769+00:00",
+          "previous_rounds": 5,
+          "new_rounds": 6,
+          "reason": "Primary retention data exposed a footprint pattern associated with which process ran second. Before any HTTP confirmation timing, balance three old-first and three new-first rounds. Cases, durations, remaining controls and review limits are unchanged.",
+          "original_plan": "confirmation-plan.initial.json"
+        }
+      },
+      "architecture": {
+        "selection": "Repeat the complete thread-churn scenario because its collect-abandoned phase exceeds the 3% timing review prompt.",
+        "cases": [
+          {
+            "scenario": "thread-churn"
+          }
+        ],
+        "triggering_results": [
+          {
+            "scenario": "thread-churn",
+            "phase": "collect-abandoned",
+            "medians": {
+              "old": {
+                "elapsed_ns": 490093.5,
+                "operations": 1.0,
+                "live_bytes": 0.0,
+                "rss_bytes": 7127040.0,
+                "rss_delta_bytes": -67108864.0,
+                "minor_faults": 0.0,
+                "major_faults": 0.0,
+                "occupied_pages": -1.0
+              },
+              "new": {
+                "elapsed_ns": 523456.5,
+                "operations": 1.0,
+                "live_bytes": 0.0,
+                "rss_bytes": 5332992.0,
+                "rss_delta_bytes": -67108864.0,
+                "minor_faults": 0.0,
+                "major_faults": 0.0,
+                "occupied_pages": -1.0
+              }
+            },
+            "time_ratios": [
+              1.103852673610457,
+              1.1025100312491392,
+              0.868265411153629,
+              1.197019208781157,
+              0.9348698677629914
+            ],
+            "median_time_ratio": 1.1025100312491392
+          }
+        ],
+        "controls": {
+          "scenarios": [
+            "thread-churn"
+          ],
+          "rounds": 9,
+          "bytes": 67108864,
+          "block_size": 4096,
+          "threads": 4,
+          "cycles": 32,
+          "affinity": [
+            0,
+            2,
+            4,
+            6
+          ]
+        }
+      },
+      "execution": "After every primary family finishes. All confirmations run serially using the same immutable executable/library inputs and common alias/worker paths. Retain all primary and confirmation measurements.",
+      "throughput_review_limits": {
+        "aggregate_time_slowdown": 0.01,
+        "individual_case_time_slowdown": 0.03,
+        "response": "Retain and investigate findings with longer paired holdouts; do not widen limits or omit cases. Memory and HTTP p99 remain separate metrics."
+      }
+    },
+    "status": {
+      "status": "complete",
+      "started_utc": "2026-10-24T21:48:36Z",
+      "suites": [
+        {
+          "name": "architecture-holdout",
+          "command": [
+            "python3",
+            "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/confirm.py",
+            "architecture"
+          ],
+          "started_utc": "2026-10-24T22:02:41Z",
+          "returncode": 0,
+          "finished_utc": "2026-10-24T22:02:44Z"
+        },
+        {
+          "name": "native-holdout",
+          "command": [
+            "python3",
+            "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/native-holdout.py"
+          ],
+          "started_utc": "2026-10-24T22:02:44Z",
+          "returncode": 0,
+          "finished_utc": "2026-10-24T22:16:16Z"
+        },
+        {
+          "name": "nginx-holdout",
+          "command": [
+            "python3",
+            "/home/azureuser/projects/mechanical_mimalloc/target/borrowed-operations-applications-20261024/confirm.py",
+            "nginx"
+          ],
+          "started_utc": "2026-10-24T22:16:16Z",
+          "returncode": 0,
+          "finished_utc": "2026-10-24T22:45:33Z"
+        }
+      ],
+      "finished_utc": "2026-10-24T22:45:33Z"
+    }
+  },
+  "final_checks": {
+    "started_utc": "2026-10-24T23:07:12Z",
+    "checks": [
+      {
+        "command": [
+          "cargo",
+          "fmt",
+          "--all"
+        ],
+        "log": "final-check-1.log",
+        "started_utc": "2026-10-24T23:07:12Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T23:07:13Z",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": [
+          "cargo",
+          "clippy",
+          "--workspace",
+          "--all-targets",
+          "--all-features"
+        ],
+        "log": "final-check-2.log",
+        "started_utc": "2026-10-24T23:07:13Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T23:07:13Z",
+        "log_sha256": "22e0df986057b9ba5be07526ac5fb348862a3dedef42108383cc3e088acbb889"
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--workspace",
+          "--all-targets",
+          "--all-features"
+        ],
+        "log": "final-check-3.log",
+        "started_utc": "2026-10-24T23:07:13Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T23:09:05Z",
+        "log_sha256": "0981f6aa29cfdc2c348ed1ddfbaa61a827bc44af93f7204089d559b680f17a68"
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "benchmarks",
+          "-p",
+          "test_*.py"
+        ],
+        "log": "final-check-4.log",
+        "started_utc": "2026-10-24T23:09:05Z",
+        "returncode": 0,
+        "finished_utc": "2026-10-24T23:09:06Z",
+        "log_sha256": "d458135f8a8527e6632599eb798c4ebbbc171602b17c8de44fb76fbb31568d08"
+      }
+    ],
+    "finished_utc": "2026-10-24T23:09:06Z",
+    "status": "complete"
+  },
+  "raw_archive": {
+    "path": "raw-data.tar.gz",
+    "sha256": "333181b66fe328615ac570e9787b8bb1b68af42acb244858f887d9870ab3e3d5",
+    "files": 9550,
+    "scope": "Complete frozen-run controller sources, plans, configuration, per-worker raw samples, logs and protocol results, including the failed Nginx attempt. Large application executables, allocator libraries and raw perf recordings are represented by verified fingerprints and build provenance."
+  },
+  "portable_raw_recomputation": {
+    "verified_utc": "2026-10-24T23:13:48.578119+00:00",
+    "archive_sha256": "333181b66fe328615ac570e9787b8bb1b68af42acb244858f887d9870ab3e3d5",
+    "extracted_members": 9550,
+    "checks": [
+      {
+        "command": [
+          "python3",
+          "summarize.py"
+        ],
+        "output": "summary.json",
+        "exact_json_match": true,
+        "stdout": "applications applications 2 cases +0.339%\nwebserver webserver 3 cases +0.158%\nnative native 21 cases +0.513%\nnginx production 18 cases -0.151%\nnginx debug-palloc 18 cases -1.063%\nReview cases: [\n  {\n    \"suite\": \"native\",\n    \"case\": {\n      \"scenario\": \"larsonN-sized\"\n    },\n    \"ratios\": [\n      1.089617052609856,\n      1.1121680607185682,\n      1.0117984534764874\n    ],\n    \"median_ratio\": 1.089617052609856\n  }\n]\nReview aggregates: []\nReview components: []\nIncomplete: []\n"
+      },
+      {
+        "command": [
+          "python3",
+          "http-metrics.py"
+        ],
+        "output": "http-metrics.json",
+        "exact_json_match": true,
+        "stdout": "HTTP cases: {'webserver': 3, 'nginx': 36}\nIncomplete: []\n"
+      },
+      {
+        "command": [
+          "python3",
+          "observations.py"
+        ],
+        "output": "observations.json",
+        "exact_json_match": true,
+        "stdout": "Architectural timing findings: 1\nIncomplete observations: []\n"
+      },
+      {
+        "command": [
+          "python3",
+          "observations.py",
+          "--holdout"
+        ],
+        "output": "observations-holdout.json",
+        "exact_json_match": true,
+        "stdout": "Architectural timing findings: 0\nIncomplete observations: []\n"
+      },
+      {
+        "command": [
+          "python3",
+          "validate-native-holdout.py"
+        ],
+        "output": "native-holdout-summary.json",
+        "exact_json_match": true,
+        "stdout": "larsonN-sized +0.195%\n"
+      },
+      {
+        "command": [
+          "python3",
+          "http-metrics.py",
+          "--holdout"
+        ],
+        "output": "http-metrics-holdout.json",
+        "exact_json_match": true,
+        "stdout": "HTTP cases: {'nginx-holdout': 6}\nIncomplete: []\n"
+      },
+      {
+        "command": [
+          "python3",
+          "observations.py",
+          "--retention-followup"
+        ],
+        "output": "observations-retention-followup.json",
+        "exact_json_match": true,
+        "stdout": "Architectural timing findings: 1\nIncomplete observations: []\n"
+      },
+      {
+        "command": [
+          "python3",
+          "http-metrics.py",
+          "--header-aa"
+        ],
+        "output": "http-metrics-header-aa.json",
+        "exact_json_match": true,
+        "stdout": "HTTP cases: {'nginx-header-aa': 1}\nIncomplete: []\n"
+      }
+    ],
+    "table_markdown_exact_match": true
+  }
+}

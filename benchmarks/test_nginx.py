@@ -55,6 +55,26 @@ class NginxTests(unittest.TestCase):
                 nginx.parse_wrk("BENCH_JSON " + json.dumps({**value, key: bad}))
         with self.assertRaises(ValueError): nginx.parse_wrk("missing output")
 
+    def test_wrk_exit_during_load_memory_sample_keeps_completed_result(self):
+        value = dict(requests=1000, duration_us=1000000, bytes=4096000, p50_us=10, p95_us=20, p99_us=30, errors=0)
+        config = dict(load_cpus=[0], load_threads=1, connections=1, artifacts={"wrk": "wrk"})
+        for disappearance in (FileNotFoundError, ProcessLookupError):
+            with self.subTest(error=disappearance):
+                process = unittest.mock.Mock(pid=2, returncode=0)
+                process.poll.side_effect = [None, 0, 0]
+                def start(command, stdout, **kwargs):
+                    stdout.write("BENCH_JSON " + json.dumps(value) + "\n")
+                    return process
+                def memory(pids):
+                    if pids == [2]: raise disappearance
+                    return {"pss_bytes": 4096, "cpu_seconds": 1.0}
+                with patch.object(nginx.subprocess, "Popen", side_effect=start), \
+                     patch.object(nginx, "memory_cpu", side_effect=memory), patch.object(nginx.time, "sleep"):
+                    result = nginx.wrk_run(config, {"workload": "static", "path": "/small"}, 8080, 1, self.root, "load", {"server": [1]})
+                self.assertEqual(result["requests_per_second"], 1000)
+                self.assertEqual(len(result["resources"]), 1)
+                self.assertNotIn("load", result["resources"][0])
+
     def test_trace_decodes_worker_counts_and_requires_all_workers(self):
         values = tuple(range(41))
         (self.root / "123.bin").write_bytes(struct.pack("=41Q", *values))

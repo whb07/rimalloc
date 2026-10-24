@@ -564,7 +564,7 @@ pub(crate) unsafe fn mi_theap_malloc_use_guarded(
 #[inline]
 pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
     unsafe {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(miri)))]
         {
             core::arch::asm!(
                 "rep stosb",
@@ -574,7 +574,7 @@ pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
                 options(nostack, preserves_flags),
             );
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(any(not(target_arch = "x86_64"), miri))]
         {
             ptr::write_bytes(dst.cast::<u8>(), val, n);
         }
@@ -599,7 +599,7 @@ pub(crate) const fn mi_committed_bytes_of_slices(
 }
 
 #[inline]
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(target_os = "linux", target_arch = "x86_64", not(miri)))]
 unsafe fn mi_cpu_stosb_max() -> usize {
     let max: usize;
     unsafe {
@@ -613,7 +613,7 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 }
 
 #[inline]
-#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+#[cfg(all(not(all(target_os = "linux", target_arch = "x86_64")), not(miri)))]
 unsafe fn mi_cpu_stosb_max() -> usize {
     unsafe { crate::allocator::init::_mi_cpu_stosb_max }
 }
@@ -638,7 +638,7 @@ pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) -> *mut
 #[inline]
 pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
     unsafe {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(miri)))]
         {
             if n <= mi_cpu_stosb_max() {
                 mi_rep_stosb(dst, val as u8, n);

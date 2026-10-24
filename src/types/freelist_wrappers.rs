@@ -3,10 +3,10 @@
 use core::{ffi::c_void, marker::PhantomData, ptr};
 
 use super::constants::mi_block_t;
-use super::page_states::{AvailablePage, LocalPage};
+use super::page_states::AvailablePage;
 use super::ptr::{BlockPtr, ptr_exposed_addr};
-use super::validation_extra::{AllocatedBlock, FreeBlock};
-use crate::internal::{mi_block_next, mi_block_set_next};
+use super::validation_extra::AllocatedBlock;
+use crate::internal::mi_block_next;
 
 /// Keys used to encode and decode free-list pointers.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -337,23 +337,6 @@ impl AvailableFreeList {
             unsafe { AllocatedBlock::new_unchecked(head) },
             AvailableFreeList(next),
         )
-    }
-
-    /// Push a block freed by the page's owner onto the available list, returning
-    /// the new list head, so the next allocation reuses it. This is the local
-    /// free fast path (C pushes onto `local_free`; see `UPSTREAM_DIFF.md`).
-    ///
-    /// # Safety
-    /// `page` must be a valid `LocalPage` whose `free` field matches `self`,
-    /// and the caller must subsequently store the returned head back into
-    /// `(*page).free`, clear `(*page).free_is_zero`, and decrement `(*page).used`.
-    #[inline(always)]
-    pub(crate) unsafe fn push(self, page: &LocalPage, block: FreeBlock) -> Self {
-        let raw_page = page.page().as_ptr();
-        let block = block.as_ptr();
-        let prev_raw = self.as_raw();
-        unsafe { mi_block_set_next(raw_page, block.as_ptr(), prev_raw) };
-        Self(Some(block))
     }
 
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).free`).

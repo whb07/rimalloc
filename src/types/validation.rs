@@ -1,10 +1,8 @@
 //! DT-6: User pointer validation types.
 //!
-//! Block types are intentionally split by validation phase: `AllocatedBlock` and
-//! `FreeBlock` live in `validation_extra` because free-list wrappers consume
-//! them without depending on user-pointer validation internals. `GuardedBlock`
-//! and `BlockForFree` stay here because they are produced only by pointer
-//! classification and validation.
+//! `AllocatedBlock` lives in `validation_extra` for the free-list pop handoff.
+//! Validated free requests retain their page and block until a scoped owner
+//! consumes the matching storage.
 
 use core::marker::PhantomData;
 
@@ -186,11 +184,6 @@ impl BlockForFree {
     pub(crate) fn is_guarded(&self) -> bool {
         self.was_guarded == WasGuarded::Yes
     }
-
-    #[inline(always)]
-    fn into_free_block(self) -> super::validation_extra::FreeBlock {
-        unsafe { super::validation_extra::FreeBlock::new_unchecked(self.block) }
-    }
 }
 
 /// A page whose invariant scope identifies its matching block-for-free.
@@ -218,16 +211,25 @@ impl<P> FreePage<'_, P> {
 
 impl<'scope> FreePage<'scope, LocalPage> {
     /// Publish the matching block after validation and accounting.
-    ///
-    /// # Safety
-    /// The page must remain live and current-thread owned, with exclusive
-    /// access to its available-list head, block link, zero flag and used count.
     #[inline(always)]
-    pub(crate) unsafe fn push_free_block(
+    pub(crate) fn push_free_block(
         self,
         block: ScopedFreeBlock<'scope>,
     ) -> super::scalar::UsedBlockCount {
-        unsafe { self.page.push_free_block(block.block.into_free_block()) }
+        let page = self.page.page().as_ptr();
+        let block = block.block.block;
+        // The scope's ingress retains this page and block, with exclusive
+        // local access. Borrow only the fields mutated by this publication;
+        // remote threads may continue to access the disjoint atomic words.
+        let head = unsafe { &mut (*page).free };
+        unsafe { crate::internal::mi_block_set_next(page, block.as_ptr(), *head) };
+        *head = block.as_ptr();
+        let free_is_zero = unsafe { &mut (*page).free_is_zero };
+        *free_is_zero = false;
+        let used = unsafe { &mut (*page).used };
+        let next = super::scalar::UsedBlockCount::new(*used).decrement();
+        *used = next.get();
+        next
     }
 }
 
@@ -304,7 +306,9 @@ impl ValidatedFree {
     /// # Safety
     /// `current` must identify the executing thread. The page's registration,
     /// backing and owner metadata must remain live and protocol-stable through
-    /// `f`. Local mutation must stay exclusive; callbacks must not reenter it.
+    /// `f`. The validated block's storage must remain exclusively owned until
+    /// publication. Local free-list, count and zero-state mutation must stay
+    /// exclusive; callbacks must not reenter those local fields.
     #[inline(always)]
     pub(crate) unsafe fn with_route<R>(
         self,
@@ -333,8 +337,10 @@ impl ValidatedFree {
     }
 
     /// # Safety
-    /// The page must remain live, current-thread owned and locally exclusive
-    /// through `f`; callbacks must not incompatibly reenter that local state.
+    /// The initialized page and validated block must remain live and locally
+    /// exclusive through `f`. The local list, used count and zero flag must be
+    /// valid for their coupled free transition, with stable page keys; callbacks
+    /// must not incompatibly reenter that local state.
     #[inline(always)]
     pub(crate) unsafe fn with_local<R>(
         self,

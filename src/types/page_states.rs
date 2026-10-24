@@ -394,29 +394,6 @@ impl LocalPage {
         // ordered available-list publication.
         unsafe { publish_recycled_available(self.page(), available) };
     }
-
-    /// Push a block freed by the owner onto the available list (LIFO reuse).
-    ///
-    /// # Safety
-    /// `self` must remain the current thread's live page. `block` must be a
-    /// valid free block owned by that page, and the caller must exclusively own
-    /// its link word plus the page's available-list head, `free_is_zero`, and
-    /// used-count transition.
-    #[inline(always)]
-    pub(in crate::types) unsafe fn push_free_block(
-        self,
-        block: crate::core_types::validation_extra::FreeBlock,
-    ) -> crate::core_types::UsedBlockCount {
-        let page = self.page();
-        let free = unsafe { page.free() };
-        let new_free = unsafe { free.push(&self, block) };
-        unsafe {
-            publish_recycled_available(page, new_free);
-            let used = page.used().decrement();
-            page.set_used(used);
-            used
-        }
-    }
 }
 
 impl AllFreePage<Active> {

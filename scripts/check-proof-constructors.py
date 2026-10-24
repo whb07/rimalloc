@@ -12,6 +12,47 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PROBES = [
     (
+        "allocation-loan-handoff",
+        "src/types/local_page.rs",
+        "unsafe fn probe(p: AvailablePage, r: PaddedSize) { unsafe { "
+        "p.with_allocation_access(r, |p, r| { let (b, p) = p.pop(r); "
+        "let _ = b.track_undefined().finish(&p, Zeroed::Yes); }); } }",
+        None,
+    ),
+    (
+        "allocation-rejects-cross-page-request",
+        "src/types/local_page.rs",
+        "unsafe fn probe(a: AvailablePage, b: AvailablePage, r: PaddedSize) { unsafe { "
+        "a.with_allocation_access(r, |a, _| b.with_allocation_access(r, |_, r| "
+        "{ let _ = a.pop(r); })); } }",
+        "E0521",
+    ),
+    (
+        "allocation-storage-cannot-escape",
+        "src/types/local_page.rs",
+        "unsafe fn probe(p: AvailablePage, r: PaddedSize) { let mut escaped = None; unsafe { "
+        "p.with_allocation_access(r, |p, r| { escaped = Some(p.pop(r).0); }); } "
+        "let _ = escaped; }",
+        "E0521",
+    ),
+    (
+        "allocation-storage-consumed-on-finish",
+        "src/types/local_page.rs",
+        "unsafe fn probe(p: AvailablePage, r: PaddedSize) { unsafe { "
+        "p.with_allocation_access(r, |p, r| { let (b, p) = p.pop(r); "
+        "let b = b.track_undefined(); let _ = b.finish(&p, Zeroed::Yes); "
+        "let _ = b.finish(&p, Zeroed::Yes); }); } }",
+        "E0382",
+    ),
+    (
+        "allocation-storage-requires-tracking-transition",
+        "src/types/local_page.rs",
+        "unsafe fn probe(p: AvailablePage, r: PaddedSize) { unsafe { "
+        "p.with_allocation_access(r, |p, r| { let (b, p) = p.pop(r); "
+        "let _ = b.finish(&p, Zeroed::Yes); }); } }",
+        "E0599",
+    ),
+    (
         "local-field-loan",
         "src/types/local.rs",
         "unsafe fn probe(h: ThreadHeapLocal) { unsafe { h.with_local_access(|a| { "

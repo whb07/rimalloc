@@ -16,8 +16,11 @@ use super::validation::{
     BlockForFree, FreePage, FreeRoute, GuardedBlock, LocatedBlock, PointerLocation, PointerLookup,
     ScopedFreeBlock, ValidPointerLookup, ValidatedFree,
 };
-use super::validation_extra::{AllocatedBlock, FreeBlock};
+use super::validation_extra::AllocatedBlock;
 
+assert_not_impl_any!(super::local_page::PageAccess<'_, AvailablePage>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::local_page::AllocatedBlockStorage<'_>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::local_page::AllocatedBlockStorage<'_, super::local_page::Writable>: Copy, Clone, Send, Sync);
 assert_not_impl_any!(super::local::LocalHeapAccess<'_>: Copy, Clone, Send, Sync);
 
 assert_not_impl_any!(GuardedBlock: Copy, Clone);
@@ -33,7 +36,6 @@ assert_not_impl_any!(ScopedFreeBlock<'_>: Copy, Clone);
 assert_not_impl_any!(PointerLookup: Copy, Clone);
 
 assert_not_impl_any!(AllocatedBlock: Copy, Clone);
-assert_not_impl_any!(FreeBlock: Copy, Clone);
 assert_not_impl_any!(AvailableFreeList: Copy, Clone);
 assert_not_impl_any!(LocalFreeList: Copy, Clone);
 assert_not_impl_any!(PublishedRemoteHead: Copy, Clone);

@@ -1,7 +1,7 @@
 use super::*;
 use crate::core_types::{
-    BlockPtr, DirectBin, FreeBlock, PageFlags, PageOwnerId, PageThreadId, ThreadFreeOwner,
-    ThreadFreeWord, ThreadHeapPtr, ThreadId,
+    BlockPtr, DirectBin, PageFlags, PageOwnerId, PageThreadId, ThreadFreeOwner, ThreadFreeWord,
+    ThreadHeapPtr, ThreadId,
 };
 use crate::types::{mi_block_t, mi_page_t, mi_theap_t};
 use core::{mem::MaybeUninit, ptr};
@@ -80,9 +80,12 @@ fn owner_push_free_block_updates_free_list_zero_flag_and_used_count() {
         ))]
         ptr::addr_of_mut!((*raw).keys).write([0, 0]);
 
-        let local = LocalPage::new_unchecked(PagePtr::new_unchecked(raw));
         let block_ptr = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
-        let used = local.push_free_block(FreeBlock::new_unchecked(block_ptr));
+        let free = crate::core_types::ValidatedFree::from_block_start_unchecked(
+            PagePtr::new_unchecked(raw),
+            block_ptr,
+        );
+        let used = free.with_local(|page, block| page.push_free_block(block));
 
         assert_eq!(used.get(), 0);
         assert_eq!((*raw).used, 0);

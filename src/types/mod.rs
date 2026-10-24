@@ -9,6 +9,7 @@ pub(crate) mod freelist;
 pub(crate) mod freelist_wrappers;
 pub(crate) mod layout;
 pub(crate) mod local;
+pub(crate) mod local_page;
 pub(crate) mod memid;
 pub(crate) mod page;
 pub(crate) mod page_batch;
@@ -71,9 +72,6 @@ pub(crate) use page_states::{
 };
 
 pub(crate) use page_batch::{BatchValidationError, LocalFreeBatch, RemoteFreeBatch};
-
-#[cfg(test)]
-pub(crate) use validation_extra::FreeBlock;
 
 pub(crate) use freelist_wrappers::{
     AvailableFreeList, BlockLink, BlockTag, EncodedPtr, EncodedWord, LocalFreeList, PageKeys,

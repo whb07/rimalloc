@@ -1,5 +1,6 @@
 use super::*;
-use crate::core_types::{ActivePage, LocalPage, PagePtr};
+use crate::core_types::{ActivePage, PagePtr};
+use crate::internal::mi_block_set_next;
 use crate::types::{mi_block_t, mi_page_t};
 use core::{mem::MaybeUninit, ptr};
 
@@ -73,7 +74,7 @@ fn available_pop_consumes_available_page_witness() {
 }
 
 #[test]
-fn owner_push_requires_free_block_witness() {
+fn owner_push_requires_scoped_free_block_witness() {
     let mut page = MaybeUninit::<mi_page_t>::uninit();
     let mut block = mi_block_t::default();
     unsafe {
@@ -88,12 +89,16 @@ fn owner_push_requires_free_block_witness() {
         ptr::addr_of_mut!((*raw_page).free).write(ptr::null_mut());
 
         let page_ptr = PagePtr::new_unchecked(raw_page);
-        let local_page = LocalPage::new_unchecked(page_ptr);
+        ptr::addr_of_mut!((*raw_page).used).write(1);
+        ptr::addr_of_mut!((*raw_page).free_is_zero).write(true);
         let block_ptr = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
-        let free = FreeBlock::new_unchecked(block_ptr);
-        let list = AvailableFreeList::from_raw(ptr::null_mut()).push(&local_page, free);
+        let free =
+            crate::core_types::ValidatedFree::from_block_start_unchecked(page_ptr, block_ptr);
+        free.with_local(|page, block| {
+            page.push_free_block(block);
+        });
 
-        assert_eq!(list.as_raw(), block_ptr.as_ptr());
+        assert_eq!((*raw_page).free, block_ptr.as_ptr());
         assert!(mi_block_next(raw_page, block_ptr.as_ptr()).is_null());
     }
 }

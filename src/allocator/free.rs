@@ -550,7 +550,7 @@ pub(crate) unsafe fn mi_free_block_local<'scope>(
     // SAFETY: after validation/accounting, the caller still exclusively owns this page's block
     // link, local list, used count, retirement state, and queue membership. This publication
     // pushes the block onto the local free list with stable page keys encoding.
-    let used = unsafe { page_wrapper.push_free_block(block_wrapper) };
+    let used = page_wrapper.push_free_block(block_wrapper);
     if used.get() == 0 {
         let expire_is_zero =
             unsafe { crate::allocator::page::mi_page_retire_expire(page).is_zero() };

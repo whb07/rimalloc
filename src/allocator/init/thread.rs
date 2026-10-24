@@ -13,7 +13,9 @@ use crate::allocator::options::mi_option_get_clamp;
 #[cfg(feature = "guarded")]
 use crate::allocator::options::{mi_option_get, mi_option_t};
 use crate::allocator::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt};
-use crate::allocator::thread_heap::{_mi_theap_collect_abandon, _mi_theap_create, _mi_theap_free};
+use crate::allocator::thread_heap::{
+    _mi_theap_collect_abandon, _mi_theap_create, _mi_theap_free, lists,
+};
 use crate::internal::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
 use crate::internal::memid::mi_memid_t;
 use crate::internal::{_mi_meta_free, _mi_meta_zalloc};
@@ -419,13 +421,13 @@ fn tld_alloc_non_main_typed(main_subproc: SubprocPtr) -> Option<TldPtr> {
         tld.set_thread_id(Some(ThreadId::new_unchecked(
             crate::platform::_mi_prim_thread_id(),
         )));
-        let thread_seq = main_subproc
-            .thread_total_count_cell()
-            .fetch_add(1, Ordering::Relaxed);
+        let thread_seq = crate::types::atomic::AtomicUsizeField::from_cell(
+            &*main_subproc.thread_total_count_field(),
+        )
+        .fetch_add(1, Ordering::Relaxed);
         tld.set_thread_seq(crate::types::ThreadSeq::new(thread_seq));
         tld.set_is_in_threadpool(crate::platform::_mi_prim_thread_is_in_threadpool());
-        main_subproc
-            .thread_count_cell()
+        crate::types::atomic::AtomicUsizeField::from_cell(&*main_subproc.thread_count_field())
             .fetch_add(1, Ordering::Relaxed);
         crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(true, Ordering::Relaxed);
         Some(tld)
@@ -635,22 +637,25 @@ unsafe fn theaps_done(tld: TldPtr) {
         // SAFETY: the TLD list lock serializes traversal and unlinking. Snapshot
         // `tnext` before `_mi_theap_free`: success unlinks and may release the
         // current node, while failure leaves it live for a later retry. The heap
-        // list lock is acquired by the callee (`true`) and this TLD list lock is
-        // already held (`false`). No current-node access follows the call.
+        // list lock is acquired by the callee and this TLD list capability is
+        // borrowed for the unlink. No current-node access follows the call.
         unsafe {
-            mi_lock_acquire(tld.thread_heaps_lock());
-            let mut theap = tld
-                .thread_heaps()
-                .map_or(ptr::null_mut(), ThreadHeapPtr::as_ptr);
-            while !theap.is_null() {
-                let next = (*theap).tnext;
-                crate::internal::mi_assert_internal!((*theap).page_count == 0);
-                if !_mi_theap_free(theap, true, false) {
-                    all_freed = false;
+            lists::with_tld_list(tld, |list| {
+                let mut theap = tld
+                    .thread_heaps()
+                    .map_or(ptr::null_mut(), ThreadHeapPtr::as_ptr);
+                while !theap.is_null() {
+                    let next = (*theap).tnext;
+                    crate::internal::mi_assert_internal!((*theap).page_count == 0);
+                    if !_mi_theap_free(
+                        ThreadHeapPtr::new_unchecked(theap),
+                        lists::HeldThreadHeapList::Tld(list),
+                    ) {
+                        all_freed = false;
+                    }
+                    theap = next;
                 }
-                theap = next;
-            }
-            mi_lock_release(tld.thread_heaps_lock());
+            });
         }
 
         if !all_freed {

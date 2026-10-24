@@ -127,14 +127,21 @@ Adopted 2026-10-15 by owner decision (`PERFORMANCE_WORKLOG.md` X31). C
 abandons a page as soon as it moves to the full queue, so that other threads
 freeing into it can reclaim it; when the owner frees into it instead, the owner
 reclaims it, which costs a thread-free CAS, an owner CAS, list collection and a
-queue push for every page that fills and empties again. Until a thread other
-than the main thread initializes its allocator state, no other thread exists to
-reclaim anything, so Rust moves such pages to the owner's full queue without
-abandoning them (as C does for heaps that cannot abandon), and the owner's next
-free returns the page with a queue move. The first non-main thread sets a
-process-wide flag for good; afterwards pages are abandoned as in C, and the
-generic path's periodic maintenance abandons the pages kept before (C asserts
-that only non-abandoning heaps have full-queue pages; that assertion is dropped).
+queue push for every page that fills and empties again. Rust initially treats
+the main thread as the only allocator participant, moving such pages to its
+full queue without abandoning them (as C does for heaps that cannot abandon).
+The owner's next free returns the page with a queue move. A non-main thread's
+allocator initialization sets a process-wide flag for good; afterwards pages
+are abandoned as in C, and generic periodic maintenance abandons pages kept
+before (C's assertion that only non-abandoning heaps have full-queue pages is
+dropped).
+
+Corrected 2026-10-22 (`PERFORMANCE_WORKLOG.md` X42): a free-only consumer also
+counts as a participant. An owned remote free through the generic path sets
+the flag, as does an owner collecting a nonempty remote list. The latter covers
+the native non-full-page free path without changing its assembly or creating
+consumer thread state. Owner maintenance or explicit owner collection is still
+required to release previously retained pages.
 
 Evidence: Redis SET (single-threaded server) +4.6% interleaved against master,
 1.747M against tcmalloc's 1.754M requests/s in the application suite (Redis

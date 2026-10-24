@@ -4,7 +4,7 @@
 //! owner bit. Callers get typed operations for push, collect, claim, and release
 //! instead of spelling bit manipulation or CAS ordering at each use site.
 
-use core::sync::atomic::Ordering;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{AtomicUsizeField, BlockPtr};
 use crate::core_types::{
@@ -125,34 +125,40 @@ impl DetachedRemoteList {
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicThreadFree(AtomicUsizeField);
+pub(crate) struct AtomicThreadFree<'a>(AtomicUsizeField<'a>);
 
-impl AtomicThreadFree {
+impl<'a> AtomicThreadFree<'a> {
     #[inline(always)]
-    pub(crate) fn from_field(field: AtomicUsizeField) -> Self {
-        Self(field)
+    pub(crate) fn from_cell(field: &'a AtomicUsize) -> Self {
+        Self(AtomicUsizeField::from_cell(field))
     }
 
     #[inline(always)]
-    fn field(self) -> AtomicUsizeField {
+    fn field(self) -> AtomicUsizeField<'a> {
         self.0
     }
 
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord {
-        ThreadFreeWord::from_raw(unsafe { self.field().load(Ordering::Relaxed) })
+        ThreadFreeWord::from_raw(self.field().load(Ordering::Relaxed))
     }
 
-    pub(crate) fn try_push(self, expected: ThreadFreeWord, block: BlockPtr) -> RemotePushResult {
+    /// # Safety
+    /// `block` must be uniquely owned for remote publication to this page, with
+    /// its link initialized to `expected.head()` using this page's encoding.
+    /// The page and block must stay live through the CAS and its result.
+    pub(crate) unsafe fn try_push(
+        self,
+        expected: ThreadFreeWord,
+        block: BlockPtr,
+    ) -> RemotePushResult {
         let new_tf = ThreadFreeWord::from_parts(Some(block), ThreadFreeOwner::Owned);
         let mut raw_expected = expected.raw();
-        if unsafe {
-            self.field().compare_exchange_weak(
-                &mut raw_expected,
-                new_tf.raw(),
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-        } {
+        if self.field().compare_exchange_weak(
+            &mut raw_expected,
+            new_tf.raw(),
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
             RemotePushResult::Published {
                 previous: expected,
                 head: PublishedRemoteHead(block),
@@ -180,14 +186,12 @@ impl AtomicThreadFree {
         }
         let new = expected.with_owner(ThreadFreeOwner::Unowned);
         let mut raw_expected = expected.raw();
-        if unsafe {
-            self.field().compare_exchange_weak(
-                &mut raw_expected,
-                new.raw(),
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-        } {
+        if self.field().compare_exchange_weak(
+            &mut raw_expected,
+            new.raw(),
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
             true
         } else {
             *expected = ThreadFreeWord::from_raw(raw_expected);
@@ -205,7 +209,7 @@ impl AtomicThreadFree {
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]
     pub(crate) unsafe fn detach_head(self) -> DetachedRemoteList {
-        let mut old = ThreadFreeWord::from_raw(unsafe { self.field().load(Ordering::Relaxed) });
+        let mut old = ThreadFreeWord::from_raw(self.field().load(Ordering::Relaxed));
         loop {
             let head = old.head();
             if head.is_none() {
@@ -213,14 +217,12 @@ impl AtomicThreadFree {
             }
             let new = old.without_head();
             let mut raw_old = old.raw();
-            if unsafe {
-                self.field().compare_exchange_weak(
-                    &mut raw_old,
-                    new.raw(),
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
-            } {
+            if self.field().compare_exchange_weak(
+                &mut raw_old,
+                new.raw(),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
                 return DetachedRemoteList(head);
             }
             old = ThreadFreeWord::from_raw(raw_old);
@@ -235,7 +237,7 @@ impl AtomicThreadFree {
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]
     pub(crate) unsafe fn claim_acq_rel(self) -> bool {
-        let old = unsafe { self.field().fetch_or(1, Ordering::AcqRel) };
+        let old = self.field().fetch_or(1, Ordering::AcqRel);
         (old & 1) == 0
     }
 }

@@ -123,7 +123,7 @@ unsafe fn release_abandoned_ownership(
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
         crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
         crate::internal::mi_assert_internal!(!mi_page_all_free(page_raw));
-        page.page().thread_free_cell()
+        crate::types::atomic::AtomicThreadFree::from_cell(&*page.page().thread_free_field())
     };
 
     #[cfg(feature = "bench-diagnostics")]
@@ -384,6 +384,17 @@ pub(super) unsafe fn collect_after_remote_free(
         Ok(page) => return crate::core_types::AbandonedDisposition::Destroyed(page),
         Err(page) => page,
     };
+    // Main-heap pages have no local reclaim/reabandon destination when the
+    // current thread has no main-heap association. This is the same null case
+    // returned by `_mi_page_associated_theap_peek`, without trying both paths.
+    // SAFETY: the retained claim keeps the page's heap association stable.
+    if unsafe { (*page_raw).heap.is_null() }
+        && crate::allocator::init::mi_theap_main_tls_peek().is_null()
+    {
+        // SAFETY: collection and all-free destruction already ran; the retained
+        // claim and captured expectation satisfy the unchanged release protocol.
+        return unsafe { release_abandoned_ownership(page, expected_thread_free) };
+    }
     if block_size <= MI_MEDIUM_MAX_OBJ_SIZE && reclaim_on_free.is_enabled() {
         let decision = crate::allocator::policy::ReclaimDecision::new(reclaim_on_free, None);
         // SAFETY: the non-all-free claimed page retains stable backing, MemId,

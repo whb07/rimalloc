@@ -36,7 +36,9 @@ pub(super) unsafe fn mi_abandoned_page_unown(
     });
     // SAFETY: the caller keeps the page's aligned atomic thread-free field live
     // under the remote-publication protocol.
-    let atomic_tf = unsafe { page_ptr.thread_free_cell() };
+    let atomic_tf = unsafe {
+        crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
+    };
     let mut tf_old = atomic_tf.load_relaxed();
     loop {
         crate::internal::mi_assert_internal!(tf_old.is_owned());
@@ -247,7 +249,7 @@ unsafe fn mi_heap_ensure_arena_pages(
     if arena_pages.is_null() {
         // SAFETY: the caller keeps this heap's initialized arena-pages lock live;
         // holding it serializes table allocation and publication.
-        let _lock = unsafe { MiLockGuard::acquire(heap.ptr().arena_pages_lock()) };
+        let _lock = MiLockGuard::acquire(unsafe { &*heap.ptr().arena_pages_lock() });
         // SAFETY: under the live heap lock, recheck the matching atomic table
         // cell after acquiring prior publication.
         arena_pages = unsafe { mi_heap_arena_pages(heap, arena) };
@@ -263,7 +265,8 @@ unsafe fn mi_heap_ensure_arena_pages(
                 // SAFETY: the caller keeps the live arena's initialized nonzero
                 // slice count stable while constructing its complete table range.
                 let slice_count = unsafe { arena.slice_count() };
-                let Ok(range) = crate::types::SliceRange::new(0, slice_count.get() as usize, arena)
+                let Ok(range) =
+                    crate::types::SliceRange::new(0, slice_count.get() as usize, slice_count)
                 else {
                     crate::internal::mi_assert_internal!(false);
                     return ptr::null_mut();
@@ -278,7 +281,13 @@ unsafe fn mi_heap_ensure_arena_pages(
             // SAFETY: this locked heap owns the initialized cell selected by
             // the matching registered index; release-store publishes null or
             // the fully initialized table exactly as the existing protocol.
-            unsafe { mi_heap_arena_page_cell(heap, arena_idx).store_release(arena_pages.cast()) };
+            unsafe {
+                mi_heap_arena_page_cell(
+                    &(*heap.ptr().as_ptr().cast::<MiHeapPrefix>()).arena_pages,
+                    arena_idx,
+                )
+                .store_release(arena_pages.cast())
+            };
         }
     }
     // SAFETY: the live heap identity remains stable; main heaps must always use
@@ -437,7 +446,9 @@ pub(crate) unsafe fn _mi_arenas_page_abandon_internal(
 
         // SAFETY: the owned page keeps its aligned atomic thread-id field live;
         // this owner publication precedes the arena abandoned bit.
-        let atomic_tid = unsafe { page_ptr.thread_id_cell() };
+        let atomic_tid = unsafe {
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*page_ptr.thread_id_field())
+        };
         // SAFETY: the page is claimed, detached, and exclusively transitioning;
         // publishing AbandonedMapped preserves flags under the atomic protocol.
         unsafe { atomic_tid.store_owner(crate::types::PageOwnerId::AbandonedMapped) };
@@ -449,7 +460,10 @@ pub(crate) unsafe fn _mi_arenas_page_abandon_internal(
         crate::internal::mi_assert_internal!(was_clear);
         // SAFETY: heap and checked bin remain live; this atomic field is the
         // matching per-heap mapped-abandoned counter.
-        unsafe { mi_heap_abandoned_count(heap, bin).fetch_add_relaxed(1) };
+        unsafe {
+            mi_heap_abandoned_count(&(*heap.cast::<MiHeapPrefix>()).abandoned_count, bin)
+                .fetch_add_relaxed(1)
+        };
         // SAFETY: current_theap is the live current-thread stats owner and this
         // transition has exclusive non-atomic access to its counter.
         unsafe {
@@ -590,7 +604,10 @@ pub(crate) unsafe fn _mi_arenas_page_unabandon_internal(
         unsafe { mi_page_clear_abandoned_mapped(page_ptr) };
         // SAFETY: the live heap and checked bin select the matching atomic
         // mapped-abandoned counter decremented after bitmap removal.
-        unsafe { mi_heap_abandoned_count(heap, bin).fetch_sub_relaxed(1) };
+        unsafe {
+            mi_heap_abandoned_count(&(*heap.cast::<MiHeapPrefix>()).abandoned_count, bin)
+                .fetch_sub_relaxed(1)
+        };
     } else if !is_arena && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned) {
         // SAFETY: `heap` owns this live claimed non-arena page; the helper
         // serializes removal from its OS-abandoned list before claim release.

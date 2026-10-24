@@ -29,6 +29,10 @@ impl Drop for ShowErrorsGuard {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn owned_allocation_round_trips_bytes() {
     let layout = Layout::from_size_align(64, 16).expect("layout");
     let allocation = Allocation::new(layout).expect("allocation");
@@ -38,6 +42,10 @@ fn owned_allocation_round_trips_bytes() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn owned_allocation_covers_sizes_and_alignments() {
     let sizes = [1usize, 7, 64, 4096, 1 << 20];
     let alignments = [1usize, 2, 4, 8, 16, 64, 256, 4096];
@@ -57,6 +65,10 @@ fn owned_allocation_covers_sizes_and_alignments() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn zeroed_allocation_returns_zeroed_bytes() {
     let allocation = Allocation::zeroed_with_size_align(32, 8).expect("allocation");
     let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
@@ -64,6 +76,10 @@ fn zeroed_allocation_returns_zeroed_bytes() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn zeroed_allocation_covers_sizes_and_alignments() {
     let sizes = [1usize, 32, 257, 4096];
     let alignments = [1usize, 8, 64, 4096];
@@ -84,6 +100,10 @@ fn zeroed_allocation_covers_sizes_and_alignments() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn uninitialized_allocation_can_be_written_before_unsafe_read() {
     let mut allocation = Allocation::with_size_align(32, 16).expect("allocation");
     assert_eq!(
@@ -101,6 +121,10 @@ fn uninitialized_allocation_can_be_written_before_unsafe_read() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn maybe_uninit_allocation_views_initialize_without_raw_pointer_loop() {
     let mut allocation = Allocation::with_size_align(8, 8).expect("allocation");
     assert_eq!(allocation.as_uninit_slice().len(), 8);
@@ -133,6 +157,10 @@ fn zero_sized_allocation_does_not_call_allocator() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn byte_allocation_constructors_use_alignment_one() {
     let zero = Allocation::new_bytes(0).expect("zero byte allocation");
     assert_eq!(zero.len(), 0);
@@ -155,6 +183,10 @@ fn byte_allocation_constructors_use_alignment_one() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn allocation_is_move_only_and_drops_once() {
     let mut allocation = Allocation::with_size_align(64, 16).expect("allocation");
     let ptr = allocation.as_mut_ptr();
@@ -221,6 +253,10 @@ fn error_types_are_copy_clone_and_format_without_owned_strings() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn resize_error_preserves_allocation_access() {
     let allocation = Allocation::with_size_align(16, 8).expect("allocation");
     let layout_err = LayoutError { size: 1, align: 3 };
@@ -242,6 +278,10 @@ fn resize_error_preserves_allocation_access() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn allocation_resize_grow_shrink_same_and_zero_edges() {
     let layout = Layout::from_size_align(16, 8).expect("layout");
     let mut allocation = Allocation::new(layout).expect("allocation");
@@ -276,6 +316,10 @@ fn allocation_resize_grow_shrink_same_and_zero_edges() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn allocation_resize_invalid_layout_preserves_original() {
     let allocation = Allocation::with_size_align(24, 8).expect("allocation");
     let err = allocation
@@ -288,6 +332,10 @@ fn allocation_resize_invalid_layout_preserves_original() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn initialized_allocation_exposes_safe_slices_and_clone() {
     let allocation = Allocation::zeroed_with_size_align(32, 8).expect("allocation");
     assert!(allocation.as_bytes().iter().all(|byte| *byte == 0));
@@ -316,6 +364,10 @@ fn initialized_allocation_exposes_safe_slices_and_clone() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn uninitialized_allocation_requires_explicit_initialization() {
     let mut allocation = Allocation::with_size_align(8, 8).expect("allocation");
     for idx in 0..allocation.len() {
@@ -326,6 +378,10 @@ fn uninitialized_allocation_requires_explicit_initialization() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn initialized_resize_zeroes_grown_tail() {
     let mut allocation = Allocation::zeroed_with_size_align(4, 4).expect("allocation");
     allocation.as_mut_bytes().copy_from_slice(&[1, 2, 3, 4]);
@@ -336,6 +392,10 @@ fn initialized_resize_zeroes_grown_tail() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn deterministic_allocation_failure_returns_alloc_error_without_leaking_state() {
     let _lock = FAILURE_INJECTION_TEST_LOCK.lock().expect("failure lock");
     let layout = Layout::from_size_align(32, 8).expect("layout");
@@ -349,6 +409,10 @@ fn deterministic_allocation_failure_returns_alloc_error_without_leaking_state() 
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn deterministic_resize_failure_preserves_original_allocation() {
     let _lock = FAILURE_INJECTION_TEST_LOCK.lock().expect("failure lock");
     let old_layout = Layout::from_size_align(8, 8).expect("old layout");
@@ -373,6 +437,10 @@ fn deterministic_resize_failure_preserves_original_allocation() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn heap_errors_and_owned_heap_allocation_paths_work() {
     assert!(matches!(HeapError::Create, HeapError::Create));
     assert!(matches!(
@@ -401,6 +469,10 @@ fn heap_errors_and_owned_heap_allocation_paths_work() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn heap_allocations_honor_alignment_above_size() {
     let heap = Heap::new().expect("heap");
     for size in [1usize, 7, 8, 9, 15] {
@@ -424,6 +496,10 @@ fn heap_allocations_honor_alignment_above_size() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn heap_zeroed_allocation_and_resize_preserve_ownership() {
     let heap = Heap::new().expect("heap");
     let zeroed = heap
@@ -460,6 +536,10 @@ fn heap_zeroed_allocation_and_resize_preserve_ownership() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn deterministic_heap_allocation_failure_preserves_heap_ownership() {
     let _lock = FAILURE_INJECTION_TEST_LOCK.lock().expect("failure lock");
     let heap = Heap::new().expect("heap");
@@ -509,6 +589,10 @@ fn raw_product_allocation_failure_is_deterministic_and_null_returning() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn heap_byte_allocation_apis_use_alignment_one() {
     let heap = Heap::new().expect("heap");
     let zero = heap.allocate_bytes(0).expect("zero heap bytes");
@@ -542,6 +626,10 @@ fn heap_byte_allocation_apis_use_alignment_one() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn maybe_uninit_heap_views_initialize_without_raw_pointer_loop() {
     let heap = Heap::new().expect("heap");
     let mut allocation = heap
@@ -563,6 +651,10 @@ fn maybe_uninit_heap_views_initialize_without_raw_pointer_loop() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn main_heap_allocates_without_owning_heap() {
     let main = MainHeap::get().expect("main heap");
     let allocation = main
@@ -577,6 +669,10 @@ fn main_heap_allocates_without_owning_heap() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn main_heap_allocations_outlive_temporary_handle() {
     let mut allocation;
     let zeroed;
@@ -645,6 +741,10 @@ fn global_options_mutations_are_process_global_and_restored() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn stats_and_process_info_are_typed_and_nonprinting() {
     // Process totals are sampled across heaps; concurrent heap teardown in other
     // tests can move counters between the snapshots being aggregated.
@@ -802,6 +902,10 @@ fn enter_isolated_callback_test(name: &str) -> bool {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn error_callback_guard_invokes_and_restores_previous_callback_quietly() {
     if !enter_isolated_callback_test(
         "error_callback_guard_invokes_and_restores_previous_callback_quietly",
@@ -830,6 +934,10 @@ fn error_callback_guard_invokes_and_restores_previous_callback_quietly() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn nested_error_callback_guards_restore_lifo_previous_callbacks() {
     if !enter_isolated_callback_test("nested_error_callback_guards_restore_lifo_previous_callbacks")
     {
@@ -870,6 +978,10 @@ fn nested_error_callback_guards_restore_lifo_previous_callbacks() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn panicking_error_callback_is_caught_before_c_abi_return() {
     if !enter_isolated_callback_test("panicking_error_callback_is_caught_before_c_abi_return") {
         return;
@@ -893,6 +1005,10 @@ fn panicking_error_callback_is_caught_before_c_abi_return() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn deferred_free_callback_guard_registers_and_restores() {
     if !enter_isolated_callback_test("deferred_free_callback_guard_registers_and_restores") {
         return;
@@ -916,6 +1032,10 @@ fn deferred_free_callback_guard_registers_and_restores() {
 /// While only one thread uses the allocator, a page that fills goes to its owner's full queue
 /// instead of being abandoned; once another thread has initialized, maintenance abandons it.
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn full_pages_stay_with_a_lone_thread_until_another_thread_runs() {
     if !enter_isolated_callback_test("full_pages_stay_with_a_lone_thread_until_another_thread_runs")
     {
@@ -954,6 +1074,121 @@ fn full_pages_stay_with_a_lone_thread_until_another_thread_runs() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
+fn free_only_consumer_enables_owner_maintenance() {
+    if !enter_isolated_callback_test("free_only_consumer_enables_owner_maintenance") {
+        return;
+    }
+    crate::allocator::init::mi_thread_init();
+    crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(false, Ordering::Relaxed);
+    // The isolated owner keeps its heap alive. Each pointer is sent to
+    // exactly one consumer for its only free; the owner never accesses it again.
+    let blocks: Vec<usize> = (0..512)
+        .map(|_| crate::allocator::alloc::mi_malloc(1024) as usize)
+        .collect();
+    assert!(blocks.iter().all(|&p| p != 0));
+    // SAFETY: this is the current thread's initialized heap, and only its owner
+    // reads or mutates the queue. The consumer only publishes remote frees.
+    let full_queue = unsafe {
+        let theap = crate::platform::_mi_theap_default();
+        ptr::addr_of!((*theap).pages[crate::types::MI_BIN_FULL])
+    };
+    assert!(!unsafe { (*full_queue).first }.is_null());
+    let recognized = std::thread::spawn(move || {
+        // Interposed std thread startup can initialize this worker. Remove that
+        // state, then isolate the uninitialized free path under the lone-owner
+        // policy, as the separate native probe does with system-allocated TLS.
+        // SAFETY: this query only inspects the executing thread's TLS.
+        if unsafe { crate::platform::_mi_thread_is_initialized() } {
+            crate::allocator::init::mi_thread_done();
+        }
+        crate::allocator::page::MI_PROCESS_MULTI_THREADED.store(false, Ordering::Relaxed);
+        // SAFETY: this query only inspects the executing thread's TLS.
+        assert!(!unsafe { crate::platform::_mi_thread_is_initialized() });
+        for block in blocks {
+            // SAFETY: the producer transferred this live allocation;
+            // remote frees are supported and this is its only free.
+            unsafe { crate::allocator::free::mi_free(block as *mut c_void) };
+        }
+        // A free-only consumer must not need to create allocator thread state.
+        assert!(!unsafe { crate::platform::_mi_thread_is_initialized() });
+        crate::allocator::page::MI_PROCESS_MULTI_THREADED.load(Ordering::Relaxed)
+    })
+    .join()
+    .unwrap();
+    assert!(recognized);
+    // These sizes enter generic allocation even with LIFO reuse. Let ordinary
+    // owner maintenance process the old full queue without an explicit collect.
+    for _ in 0..2000 {
+        // SAFETY: each allocation is freed exactly once by its owning thread.
+        unsafe {
+            let p = crate::allocator::alloc::mi_malloc(2048);
+            assert!(!p.is_null());
+            crate::allocator::free::mi_free(p);
+        }
+    }
+    assert!(unsafe { (*full_queue).first }.is_null());
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
+fn uninitialized_consumer_frees_abandoned_main_pages() {
+    if !enter_isolated_callback_test("uninitialized_consumer_frees_abandoned_main_pages") {
+        return;
+    }
+    crate::allocator::init::mi_thread_init();
+    let blocks = std::thread::spawn(|| {
+        (0..4096)
+            .map(|_| {
+                let block = crate::allocator::alloc::mi_malloc(64).cast::<u8>();
+                assert!(!block.is_null());
+                // SAFETY: this owner initializes its fresh 64-byte allocation.
+                unsafe { ptr::write_bytes(block, 0xa5, 64) };
+                block as usize
+            })
+            .collect::<Vec<_>>()
+    })
+    .join()
+    .unwrap();
+    std::thread::spawn(move || {
+        // Sanitizer builds need not initialize allocator TLS during std startup.
+        // SAFETY: this query only inspects the executing thread's TLS.
+        if unsafe { crate::platform::_mi_thread_is_initialized() } {
+            crate::allocator::init::mi_thread_done();
+        }
+        assert!(crate::allocator::init::mi_theap_main_tls_peek().is_null());
+        for address in blocks {
+            let block = address as *mut u8;
+            // SAFETY: the joined producer transferred this live allocation.
+            // Its exit abandoned the page; this consumer performs its only free.
+            unsafe {
+                let page = crate::internal::_mi_ptr_page(block.cast());
+                assert!(crate::allocator::page::mi_page_is_abandoned(page));
+                assert!(
+                    core::slice::from_raw_parts(block, 64)
+                        .iter()
+                        .all(|&b| b == 0xa5)
+                );
+                crate::allocator::free::mi_free(block.cast());
+            }
+        }
+        assert!(crate::allocator::init::mi_theap_main_tls_peek().is_null());
+    })
+    .join()
+    .unwrap();
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
     if !enter_isolated_callback_test(
         "nested_deferred_free_callback_guards_restore_lifo_previous_callbacks",
@@ -1003,6 +1238,10 @@ fn nested_deferred_free_callback_guards_restore_lifo_previous_callbacks() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn error_callback_allows_allocator_reentry_without_recursive_error() {
     if !enter_isolated_callback_test(
         "error_callback_allows_allocator_reentry_without_recursive_error",
@@ -1038,6 +1277,10 @@ fn error_callback_allows_allocator_reentry_without_recursive_error() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn deferred_free_callback_allows_allocator_reentry_and_suppresses_recursive_entry() {
     if !enter_isolated_callback_test(
         "deferred_free_callback_allows_allocator_reentry_and_suppresses_recursive_entry",
@@ -1080,6 +1323,10 @@ fn deferred_free_callback_allows_allocator_reentry_and_suppresses_recursive_entr
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns a native subprocess; unavailable with Miri isolation"
+)]
 fn panicking_deferred_free_callback_is_caught_before_c_abi_return() {
     if !enter_isolated_callback_test(
         "panicking_deferred_free_callback_is_caught_before_c_abi_return",

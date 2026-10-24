@@ -1,7 +1,10 @@
 use static_assertions::assert_not_impl_any;
 
-use super::atomic::{DetachedRemoteList, PublishedRemoteHead};
+use super::arena::ArenaAllocation;
+use super::atomic::{AtomicGuard, DetachedRemoteList, MiLockGuard, OnceGuard, PublishedRemoteHead};
 use super::freelist_wrappers::{AvailableFreeList, LocalFreeList};
+use super::heap::OwnedHeap;
+use super::layout::{OldAllocation, ReallocRequest};
 use super::page_batch::{LocalFreeBatch, RemoteFreeBatch};
 use super::page_queues::{NormalQueue, QueuedPage};
 use super::page_states::{
@@ -10,8 +13,8 @@ use super::page_states::{
     PageAbandonOutcome, PageForAbandon, RetiredPage, Uninit,
 };
 use super::validation::{
-    BlockForFree, GuardedBlock, LocatedBlock, PointerLocation, PointerLookup, ValidPointerLookup,
-    ValidatedFree, ValidatedFreeParts,
+    BlockForFree, FreePage, FreeRoute, GuardedBlock, LocatedBlock, PointerLocation, PointerLookup,
+    ScopedFreeBlock, ValidPointerLookup, ValidatedFree,
 };
 use super::validation_extra::{AllocatedBlock, FreeBlock};
 
@@ -21,7 +24,10 @@ assert_not_impl_any!(LocatedBlock: Copy, Clone);
 assert_not_impl_any!(ValidPointerLookup: Copy, Clone);
 assert_not_impl_any!(BlockForFree: Copy, Clone);
 assert_not_impl_any!(ValidatedFree: Copy, Clone);
-assert_not_impl_any!(ValidatedFreeParts: Copy, Clone);
+assert_not_impl_any!(FreeRoute<'_>: Copy, Clone);
+assert_not_impl_any!(FreePage<'_, LocalPage>: Copy, Clone);
+assert_not_impl_any!(FreePage<'_, ForeignPage>: Copy, Clone);
+assert_not_impl_any!(ScopedFreeBlock<'_>: Copy, Clone);
 assert_not_impl_any!(PointerLookup: Copy, Clone);
 
 assert_not_impl_any!(AllocatedBlock: Copy, Clone);
@@ -49,3 +55,11 @@ assert_not_impl_any!(PageForAbandon: Copy, Clone);
 assert_not_impl_any!(PageAbandonOutcome: Copy, Clone);
 assert_not_impl_any!(FreeRouteSnapshot: Copy, Clone);
 assert_not_impl_any!(QueuedPage<NormalQueue>: Copy, Clone);
+
+assert_not_impl_any!(OwnedHeap: Copy, Clone);
+assert_not_impl_any!(ArenaAllocation: Copy, Clone);
+assert_not_impl_any!(OldAllocation: Copy, Clone);
+assert_not_impl_any!(ReallocRequest: Copy, Clone);
+assert_not_impl_any!(AtomicGuard<'_>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(OnceGuard<'_>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(MiLockGuard<'_>: Copy, Clone, Send, Sync);

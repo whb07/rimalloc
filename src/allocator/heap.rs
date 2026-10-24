@@ -14,7 +14,7 @@ use crate::allocator::init::{
 use crate::allocator::options::{_mi_error_message_fmt, _mi_warning_message_fmt};
 use crate::allocator::page_map::_mi_safe_ptr_page;
 use crate::allocator::stats::{_mi_stats_merge_into, mi_stats_header_init};
-use crate::allocator::thread_heap::{_mi_theap_create, _mi_theap_free};
+use crate::allocator::thread_heap::{_mi_theap_create, _mi_theap_free, lists};
 use crate::allocator::threadlocal::{
     _mi_thread_local_create, _mi_thread_local_free, _mi_thread_local_get, _mi_thread_local_set,
 };
@@ -202,28 +202,32 @@ pub unsafe extern "C" fn mi_heap_new() -> *mut mi_heap_t {
 /// not incompatibly reenter either protected list, and must not unwind. A
 /// successfully detached node may be released and must not be accessed again.
 unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
+    let heap_ptr = heap;
     let heap = heap.as_ptr();
     loop {
         // SAFETY: the exclusive teardown epoch keeps the heap list, lock, and
         // every linked node live for this complete lock-held pass. Snapshot
         // `hnext` before the free attempt: success may unlink and release the
         // current node, while failure leaves it live for a later pass. The
-        // callee uses the already-held heap-list lock (`false`) and acquires the
-        // matching TLD-list lock (`true`). No current-node access follows the
+        // callee borrows this heap-list capability and acquires the matching
+        // TLD-list lock. No current-node access follows the
         // call, and the lock is released before any retry accounting or yield.
         let all_freed = unsafe {
-            let mut all_freed = true;
-            mi_lock_acquire(ptr::addr_of_mut!((*heap).theaps_lock));
-            let mut theap = (*heap).theaps;
-            while !theap.is_null() {
-                let next = (*theap).hnext;
-                if !_mi_theap_free(theap, false, true) {
-                    all_freed = false;
+            lists::with_heap_list(heap_ptr, |list| {
+                let mut all_freed = true;
+                let mut theap = (*heap).theaps;
+                while !theap.is_null() {
+                    let next = (*theap).hnext;
+                    if !_mi_theap_free(
+                        ThreadHeapPtr::new_unchecked(theap),
+                        lists::HeldThreadHeapList::Heap(list),
+                    ) {
+                        all_freed = false;
+                    }
+                    theap = next;
                 }
-                theap = next;
-            }
-            mi_lock_release(ptr::addr_of_mut!((*heap).theaps_lock));
-            all_freed
+                all_freed
+            })
         };
 
         if all_freed {
@@ -252,7 +256,7 @@ unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
 /// the caller must hold its exclusive delete/destroy epoch. No new thread heap,
 /// competing teardown, or non-protocol list mutation may race; existing users
 /// may finish through the thread-heap refcount protocol.
-unsafe fn mi_heap_free_theaps(heap: OwnedHeap) {
+unsafe fn mi_heap_free_theaps(heap: &OwnedHeap) {
     // SAFETY: the caller supplies the exclusive teardown epoch; `OwnedHeap`
     // additionally excludes the main-heap lifetime policy.
     unsafe { mi_heap_free_theaps_in(heap.ptr()) };
@@ -344,7 +348,7 @@ pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
     // non-main heap. Thread heaps are drained before pages move to the live main
     // heap, and metadata is freed only after both transitions complete.
     unsafe {
-        mi_heap_free_theaps(heap);
+        mi_heap_free_theaps(&heap);
         _mi_heap_move_pages(heap_raw, mi_heap_main());
         mi_heap_free(heap);
     }
@@ -402,7 +406,7 @@ unsafe fn mi_heap_force_destroy_owned(heap: OwnedHeap) {
     // SAFETY: the exclusive epoch orders thread-heap drain before page
     // destruction and delays metadata release until both are complete.
     unsafe {
-        mi_heap_free_theaps(heap);
+        mi_heap_free_theaps(&heap);
         _mi_heap_destroy_pages(heap_ptr.as_ptr());
         mi_heap_free(heap);
     }

@@ -5,26 +5,24 @@
 //! and release happens only through `Drop`.
 
 use core::marker::PhantomData;
-use core::ptr::NonNull;
-use core::sync::atomic::Ordering;
-
-use super::AtomicUsizeField;
+use core::ptr;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 pub(crate) struct AtomicGuard<'a> {
-    field: AtomicUsizeField,
-    _borrow: PhantomData<&'a ()>,
+    field: &'a AtomicUsize,
+    _thread: PhantomData<*mut ()>,
 }
 
 impl<'a> AtomicGuard<'a> {
-    /// # Safety
-    /// `field` must refer to a valid atomic guard word.
     #[inline(always)]
-    pub(crate) unsafe fn try_acquire(field: AtomicUsizeField) -> Option<Self> {
-        let mut expected = 0;
-        if unsafe { field.compare_exchange_acq_rel(&mut expected, 1) } {
+    pub(crate) fn try_acquire(field: &'a AtomicUsize) -> Option<Self> {
+        if field
+            .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
             Some(Self {
                 field,
-                _borrow: PhantomData,
+                _thread: PhantomData,
             })
         } else {
             None
@@ -35,40 +33,24 @@ impl<'a> AtomicGuard<'a> {
 impl Drop for AtomicGuard<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        unsafe { self.field.store(0, Ordering::Release) };
-    }
-}
-
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub(crate) struct OnceStatePtr(*mut usize);
-
-impl OnceStatePtr {
-    #[inline(always)]
-    pub(crate) fn from_raw(state: *mut usize) -> Self {
-        Self(state)
-    }
-
-    #[inline(always)]
-    fn as_once_ptr(self) -> *mut crate::atomic::mi_atomic_once_t {
-        self.0.cast::<crate::atomic::mi_atomic_once_t>()
+        self.field.store(0, Ordering::Release);
     }
 }
 
 pub(crate) struct OnceGuard<'a> {
-    once: OnceStatePtr,
-    _borrow: PhantomData<&'a ()>,
+    once: &'a crate::atomic::mi_atomic_once_t,
+    _thread: PhantomData<*mut ()>,
 }
 
 impl<'a> OnceGuard<'a> {
-    /// # Safety
-    /// `once` must refer to a valid allocator once-state.
     #[inline(always)]
-    pub(crate) unsafe fn try_enter(once: OnceStatePtr) -> Option<Self> {
-        if unsafe { crate::atomic::_mi_atomic_once_enter(once.as_once_ptr()) } {
+    pub(crate) fn try_enter(once: &'a crate::atomic::mi_atomic_once_t) -> Option<Self> {
+        // SAFETY: the borrow keeps the atomic once-state and its interior-mutable
+        // lock live through release on this thread.
+        if unsafe { crate::atomic::_mi_atomic_once_enter(ptr::from_ref(once).cast_mut()) } {
             Some(Self {
                 once,
-                _borrow: PhantomData,
+                _thread: PhantomData,
             })
         } else {
             None
@@ -79,40 +61,24 @@ impl<'a> OnceGuard<'a> {
 impl Drop for OnceGuard<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        unsafe { crate::atomic::_mi_atomic_once_release(self.once.as_once_ptr()) };
-    }
-}
-
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub(crate) struct MiLockPtr(NonNull<crate::types::mi_lock_t_pub>);
-
-impl MiLockPtr {
-    #[inline(always)]
-    pub(crate) fn from_nonnull(lock: NonNull<crate::types::mi_lock_t_pub>) -> Self {
-        Self(lock)
-    }
-
-    #[inline(always)]
-    pub(crate) fn as_ptr(self) -> *mut crate::types::mi_lock_t_pub {
-        self.0.as_ptr()
+        // SAFETY: this thread entered the borrowed once-state and still holds it.
+        unsafe { crate::atomic::_mi_atomic_once_release(ptr::from_ref(self.once).cast_mut()) };
     }
 }
 
 pub(crate) struct MiLockGuard<'a> {
-    lock: MiLockPtr,
-    _borrow: PhantomData<&'a ()>,
+    lock: &'a crate::atomic::mi_lock_t,
+    _thread: PhantomData<*mut ()>,
 }
 
 impl<'a> MiLockGuard<'a> {
-    /// # Safety
-    /// `lock` must refer to a valid allocator lock.
     #[inline(always)]
-    pub(crate) unsafe fn acquire(lock: MiLockPtr) -> Self {
-        unsafe { crate::atomic::mi_lock_acquire(lock.as_ptr()) };
+    pub(crate) fn acquire(lock: &'a crate::atomic::mi_lock_t) -> Self {
+        // SAFETY: the borrow keeps this interior-mutable lock live until Drop.
+        unsafe { crate::atomic::mi_lock_acquire(ptr::from_ref(lock).cast_mut()) };
         Self {
             lock,
-            _borrow: PhantomData,
+            _thread: PhantomData,
         }
     }
 }
@@ -120,6 +86,7 @@ impl<'a> MiLockGuard<'a> {
 impl Drop for MiLockGuard<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        unsafe { crate::atomic::mi_lock_release(self.lock.as_ptr()) };
+        // SAFETY: this thread acquired the borrowed lock and still holds it.
+        unsafe { crate::atomic::mi_lock_release(ptr::from_ref(self.lock).cast_mut()) };
     }
 }

@@ -44,7 +44,7 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
         << MI_ARENA_SLICE_SHIFT) as *mut mi_page_t;
     let page = PagePtr::new(page)?;
     let sub_idx = unsafe { crate::core_types::PageMapSubIndex::new_unchecked(0) };
-    let slice_count = unsafe { SliceCount::from_usize_const(1).unwrap_unchecked() };
+    let slice_count = SliceCount::ONE;
     Some(unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) })
 }
 
@@ -97,7 +97,7 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
         return None;
     }
     let page = PagePtr::new(unsafe { *sub.add(sub_idx.get()) })?;
-    let slice_count = unsafe { SliceCount::from_usize_const(1).unwrap_unchecked() };
+    let slice_count = SliceCount::ONE;
     Some(unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) })
 }
 

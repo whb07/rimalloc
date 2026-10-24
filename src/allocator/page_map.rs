@@ -54,7 +54,7 @@ use crate::os::_mi_os_alloc_aligned;
 use crate::os::_mi_os_zalloc;
 use crate::types::{MI_PAGE_ALIGN, mi_page_t, mi_subproc_t};
 #[cfg(not(target_pointer_width = "32"))]
-use crate::types::{MiLockGuard, MiLockPtr, PageMapSubIndex};
+use crate::types::{MiLockGuard, PageMapSubIndex};
 
 mod lookup;
 
@@ -421,7 +421,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     }
     let zero_location = PageMapLocation::from_ptr(ptr::null());
     let zero_index = zero_location.index();
-    let one_slice = unsafe { crate::core_types::SliceCount::new_unchecked(1) };
+    let one_slice = crate::core_types::SliceCount::ONE;
     if !commit && !unsafe { mi_page_map_ensure_committed(zero_index, one_slice) } {
         mi_page_map_cannot_commit();
         return false;
@@ -763,13 +763,17 @@ unsafe fn mi_page_map_ensure_submap_at(
     }
     let sub;
     {
-        let lock = unsafe { NonNull::new_unchecked(&raw mut mi_page_map_lock) };
+        let lock = unsafe { &*ptr::addr_of!(mi_page_map_lock) };
         // SAFETY: the process-global page-map lock remains live throughout
         // allocator operation and the guard releases it on every exit path.
-        let _guard = unsafe { MiLockGuard::acquire(MiLockPtr::from_nonnull(lock)) };
-        let atomic_submap =
-            crate::core_types::AtomicPtrField::from_raw(unsafe { _mi_page_map.add(idx.get()) });
-        let mut loaded = unsafe { atomic_submap.load(crate::core_types::MemoryOrder::Acquire) };
+        let _guard = MiLockGuard::acquire(lock);
+        // SAFETY: the held growth lock and page-map lifetime cover this atomic slot borrow.
+        let atomic_submap = crate::core_types::AtomicPtrField::from_cell(unsafe {
+            &*_mi_page_map
+                .add(idx.get())
+                .cast::<core::sync::atomic::AtomicPtr<*mut mi_page_t>>()
+        });
+        let mut loaded = atomic_submap.load(crate::core_types::MemoryOrder::Acquire);
         if loaded.is_null() {
             let mut memid = _mi_memid_none();
             let new_sub = unsafe { _mi_os_zalloc(MI_PAGE_MAP_SUB_SIZE, &raw mut memid) }
@@ -780,7 +784,7 @@ unsafe fn mi_page_map_ensure_submap_at(
                 ));
             } else {
                 let mut expect: mi_submap_t = ptr::null_mut();
-                if !unsafe { atomic_submap.compare_exchange_acq_rel(&mut expect, new_sub) } {
+                if !atomic_submap.compare_exchange_acq_rel(&mut expect, new_sub) {
                     unsafe { _mi_os_free(new_sub.cast::<c_void>(), MI_PAGE_MAP_SUB_SIZE, memid) };
                     loaded = expect;
                 } else {

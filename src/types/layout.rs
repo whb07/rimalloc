@@ -39,12 +39,9 @@ impl MaybeHugeAlignment {
     }
 
     #[inline(always)]
-    pub(crate) fn new(alignment: usize) -> Self {
-        crate::internal::mi_debug_assert!(
-            (alignment & MallocGenericFlags::ZERO_BIT) == 0,
-            "huge alignment must not collide with the zeroing flag"
-        );
-        Self(alignment)
+    pub(crate) fn for_overalloc(alignment: Alignment) -> Option<Self> {
+        (alignment.get() > crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN)
+            .then_some(Self(alignment.get()))
     }
 
     #[inline(always)]
@@ -100,14 +97,8 @@ impl LayoutRequest {
         // word-sized allocation before choosing a size class. Keep the original
         // requested size for API-visible accounting, but never build a zero
         // `PaddedSize`.
-        let eff_size = requested.effective_size();
-        let effective = unsafe { EffectiveSize::new_unchecked(eff_size) };
-        Self::from_parts(
-            requested,
-            effective,
-            unsafe { MaybeAlignment::new_unchecked(0) },
-            Zeroed::No,
-        )
+        let effective = requested.effective_size();
+        Self::from_parts(requested, effective, MaybeAlignment::NONE, Zeroed::No)
     }
 
     pub(crate) fn zalloc(size: usize) -> Result<Self, LayoutError> {
@@ -118,10 +109,10 @@ impl LayoutRequest {
 
     fn maybe_alignment_from_raw(alignment: usize) -> Result<MaybeAlignment, LayoutError> {
         if alignment == 0 {
-            return Ok(unsafe { MaybeAlignment::new_unchecked(0) });
+            return Ok(MaybeAlignment::NONE);
         }
         let alignment = Alignment::new(alignment).ok_or(LayoutError::AlignmentInvalid)?;
-        Ok(unsafe { MaybeAlignment::new_unchecked(alignment.get()) })
+        Ok(alignment.into())
     }
 
     pub(crate) fn aligned(size: usize, alignment: usize) -> Result<Self, LayoutError> {
@@ -163,9 +154,9 @@ impl LayoutRequest {
         let effective_size = RequestedSize::new(requested_size).effective_size();
         Self {
             requested: RequestedSize::new(requested_size),
-            effective: unsafe { EffectiveSize::new_unchecked(effective_size) },
+            effective: effective_size,
             padded,
-            alignment: unsafe { MaybeAlignment::new_unchecked(0) },
+            alignment: MaybeAlignment::NONE,
             zeroed,
         }
     }
@@ -218,7 +209,7 @@ impl AllocProduct {
     }
 }
 
-#[derive(Clone, Copy)]
+#[must_use = "the old allocation must be transferred through one realloc disposition"]
 pub(crate) struct OldAllocation {
     ptr: UserPtr,
     usable: UsableSize,
@@ -240,38 +231,42 @@ impl PreserveBytes {
 }
 
 impl OldAllocation {
-    unsafe fn new(ptr: UserPtr, usable: UsableSize, page: PagePtr) -> Self {
+    /// Consume one validated lookup and derive its matching usable extent.
+    ///
+    /// # Safety
+    /// The lookup must describe the live allocation exclusively held for this
+    /// realloc operation. Its page geometry, block, and padding must remain
+    /// initialized and stable until the operation returns or releases it.
+    #[inline(always)]
+    pub(crate) unsafe fn from_validated(lookup: super::validation::ValidPointerLookup) -> Self {
+        let (ptr, page, location) = lookup.into_parts();
+        // SAFETY: the consumed lookup couples the user, page, and block location;
+        // the caller retains their stable backing for this usable-size query.
+        let usable = unsafe {
+            crate::allocator::free::mi_usable_size_from_validated_location(page, location)
+        };
         Self { ptr, usable, page }
     }
 
-    /// Constructs an old allocation after pointer validation has proven the
-    /// user pointer and page belong together.
-    ///
-    /// # Safety
-    /// `ptr` and `page` must come from the same successful
-    /// `PointerLookup::Valid` result.
-    pub(crate) unsafe fn from_validated_parts(
-        ptr: UserPtr,
-        usable: UsableSize,
-        page: PagePtr,
-    ) -> Self {
-        unsafe { Self::new(ptr, usable, page) }
-    }
-
-    pub(crate) fn ptr(self) -> UserPtr {
+    pub(crate) fn ptr(&self) -> UserPtr {
         self.ptr
     }
 
-    pub(crate) fn usable(self) -> UsableSize {
+    pub(crate) fn usable(&self) -> UsableSize {
         self.usable
     }
 
-    pub(crate) fn page(self) -> PagePtr {
+    pub(crate) fn page(&self) -> PagePtr {
         self.page
+    }
+
+    /// Transfer the allocation to the raw release or return boundary.
+    #[inline(always)]
+    pub(crate) fn into_ptr(self) -> UserPtr {
+        self.ptr
     }
 }
 
-#[derive(Clone, Copy)]
 enum ReallocSource {
     Null,
     Existing(OldAllocation),
@@ -298,14 +293,11 @@ impl ReallocRequest {
     }
 
     pub(crate) fn ptr(&self) -> Option<UserPtr> {
-        match self.source {
-            ReallocSource::Null => None,
-            ReallocSource::Existing(old) => Some(old.ptr()),
-        }
+        self.old().map(OldAllocation::ptr)
     }
 
-    pub(crate) fn old(&self) -> Option<OldAllocation> {
-        match self.source {
+    pub(crate) fn old(&self) -> Option<&OldAllocation> {
+        match &self.source {
             ReallocSource::Null => None,
             ReallocSource::Existing(old) => Some(old),
         }
@@ -313,6 +305,15 @@ impl ReallocRequest {
 
     pub(crate) fn new_layout(&self) -> LayoutRequest {
         self.new_layout
+    }
+
+    #[inline(always)]
+    pub(crate) fn into_parts(self) -> (Option<OldAllocation>, LayoutRequest) {
+        let old = match self.source {
+            ReallocSource::Null => None,
+            ReallocSource::Existing(old) => Some(old),
+        };
+        (old, self.new_layout)
     }
 }
 
@@ -356,8 +357,8 @@ impl MallocGenericFlags {
     }
 
     #[inline(always)]
-    pub(crate) fn huge_alignment(self) -> MaybeHugeAlignment {
-        MaybeHugeAlignment(self.0 & !Self::ZERO_BIT)
+    pub(crate) fn raw_huge_alignment(self) -> usize {
+        self.0 & !Self::ZERO_BIT
     }
 }
 impl LayoutRequest {

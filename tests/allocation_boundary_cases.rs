@@ -159,3 +159,59 @@ fn realloc_null_allocates_and_existing_realloc_preserves_prefix() {
         mi_free(q.cast());
     }
 }
+
+#[test]
+fn realloc_keeps_half_usable_size_and_moves_below_it() {
+    unsafe {
+        let p = mi_malloc(256).cast::<u8>();
+        assert!(!p.is_null());
+        let usable = mi_usable_size(p.cast());
+        p.write_bytes(0x5a, usable);
+
+        let q = mi_realloc(p.cast(), usable / 2).cast::<u8>();
+        assert_eq!(q, p);
+        let smaller = usable / 2 - 1;
+        let r = mi_realloc(q.cast(), smaller).cast::<u8>();
+        assert!(!r.is_null());
+        assert_ne!(r, q);
+        assert!(
+            core::slice::from_raw_parts(r, smaller)
+                .iter()
+                .all(|&b| b == 0x5a)
+        );
+        mi_free(r.cast());
+    }
+}
+
+#[test]
+fn realloc_moves_private_heap_and_interior_allocations_with_their_contents() {
+    unsafe {
+        let heap = mi_heap_new();
+        assert!(!heap.is_null());
+        let p = mi_heap_malloc(heap, 256).cast::<u8>();
+        assert!(!p.is_null());
+        p.write_bytes(0x6b, 256);
+        let q = mi_realloc(p.cast(), 256).cast::<u8>();
+        assert!(!q.is_null());
+        assert_ne!(q, p);
+        assert!(
+            core::slice::from_raw_parts(q, 256)
+                .iter()
+                .all(|&b| b == 0x6b)
+        );
+        mi_heap_destroy(heap);
+        mi_free(q.cast());
+
+        let p = mi_malloc_aligned_at(128, 64, 8).cast::<u8>();
+        assert_aligned_at(p.cast(), 64, 8);
+        p.write_bytes(0x7c, 128);
+        let q = mi_realloc(p.cast(), 1024).cast::<u8>();
+        assert!(!q.is_null());
+        assert!(
+            core::slice::from_raw_parts(q, 128)
+                .iter()
+                .all(|&b| b == 0x7c)
+        );
+        mi_free(q.cast());
+    }
+}

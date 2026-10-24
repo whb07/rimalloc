@@ -22,15 +22,15 @@ use super::{
 };
 
 #[repr(C)]
-struct buffered_s {
+struct buffered_s<'a> {
     out: Option<mi_output_fun>,
     arg: *mut c_void,
-    buf: *mut c_char,
-    used: usize,
-    count: usize,
+    buf: &'a mut [c_char; 256],
+    // Every cursor value is a valid buffer index, including the terminator slot.
+    used: u8,
 }
 
-type buffered_t = buffered_s;
+type buffered_t<'a> = buffered_s<'a>;
 
 fn c_char_buffer_str(buf: &[c_char]) -> &str {
     // SAFETY: fixed formatting buffers are written only from ASCII format fragments and
@@ -85,30 +85,29 @@ fn format_amount(buf: &mut [c_char; 32], mut n: i64, unit: i64) {
     }
 }
 
+enum AmountFormat {
+    Column,
+    Plain,
+}
+
 fn mi_printf_amount(
     n: i64,
     unit: i64,
     out: Option<mi_output_fun>,
     arg: *mut c_void,
-    fmt: *const c_char,
+    mode: AmountFormat,
 ) {
     let mut buf = [0 as c_char; 32];
     format_amount(&mut buf, n, unit);
     let rendered = c_char_buffer_str(&buf);
-    if fmt.is_null() {
-        _mi_fprintf(out, arg, format_args!("{rendered:>12}"));
-        return;
-    }
-    let fmt_bytes = unsafe { CStr::from_ptr(fmt) }.to_bytes();
-    if fmt_bytes == b"%s" {
-        _mi_fprintf(out, arg, format_args!("{rendered}"));
-    } else {
-        _mi_fprintf(out, arg, format_args!("{rendered:>12}"));
+    match mode {
+        AmountFormat::Column => _mi_fprintf(out, arg, format_args!("{rendered:>12}")),
+        AmountFormat::Plain => _mi_fprintf(out, arg, format_args!("{rendered}")),
     }
 }
 
 fn mi_print_amount(n: i64, unit: i64, out: Option<mi_output_fun>, arg: *mut c_void) {
-    mi_printf_amount(n, unit, out, arg, ptr::null());
+    mi_printf_amount(n, unit, out, arg, AmountFormat::Column);
 }
 
 fn mi_print_count(n: i64, unit: i64, out: Option<mi_output_fun>, arg: *mut c_void) {
@@ -271,14 +270,11 @@ fn mi_stats_print_bins(
     found
 }
 
-fn mi_buffered_flush(buf: &mut buffered_t) {
-    if buf.buf.is_null() {
-        return;
-    }
-    unsafe {
-        *buf.buf.add(buf.used) = 0;
-        _mi_fputs(buf.out, buf.arg, ptr::null(), buf.buf);
-    }
+fn mi_buffered_flush(buf: &mut buffered_t<'_>) {
+    buf.buf[usize::from(buf.used)] = 0;
+    // SAFETY: the array is terminated at its bounded cursor and the enclosing
+    // print operation keeps the synchronous callback and argument valid.
+    unsafe { _mi_fputs(buf.out, buf.arg, ptr::null(), buf.buf.as_ptr()) };
     buf.used = 0;
 }
 
@@ -290,21 +286,27 @@ unsafe extern "C" fn mi_buffered_out(msg: *const c_char, arg: *mut c_void) {
     if msg.is_null() || arg.is_null() {
         return;
     }
-    unsafe {
-        let buf = &mut *(arg as *mut buffered_t);
-        let mut src = msg;
-        while *src != 0 {
-            let c = *src;
-            if buf.used >= buf.count {
-                mi_buffered_flush(buf);
-            }
-            *buf.buf.add(buf.used) = c;
-            buf.used += 1;
-            if c == b'\n' as c_char {
-                mi_buffered_flush(buf);
-            }
-            src = src.add(1);
+    // SAFETY: the callback contract supplies the uniquely borrowed buffer and
+    // a readable NUL-terminated input for this synchronous call.
+    let buf = unsafe { &mut *(arg as *mut buffered_t<'_>) };
+    let mut src = msg;
+    loop {
+        // SAFETY: the input remains readable until its NUL terminator.
+        let c = unsafe { *src };
+        if c == 0 {
+            break;
         }
+        if buf.used == u8::MAX {
+            mi_buffered_flush(buf);
+        }
+        let used = buf.used;
+        buf.buf[usize::from(used)] = c;
+        buf.used = used + 1;
+        if c == b'\n' as c_char {
+            mi_buffered_flush(buf);
+        }
+        // SAFETY: a non-NUL byte has a following byte in the input string.
+        src = unsafe { src.add(1) };
     }
 }
 
@@ -332,13 +334,11 @@ pub(super) unsafe fn _mi_stats_print(
     let mut buffer = buffered_t {
         out: out0,
         arg: arg0,
-        buf: ptr::null_mut(),
+        buf: &mut buf,
         used: 0,
-        count: 255,
     };
-    buffer.buf = buf.as_mut_ptr();
     let out: Option<mi_output_fun> = Some(mi_buffered_out as mi_output_fun);
-    let arg = (&mut buffer as *mut buffered_t).cast::<c_void>();
+    let arg = (&mut buffer as *mut buffered_t<'_>).cast::<c_void>();
 
     _mi_fprintf(out, arg, format_args!("{name} {id}\n"));
 
@@ -484,10 +484,10 @@ pub(super) unsafe fn mi_process_info_print_out_impl(out: Option<mi_output_fun>, 
             page_faults
         ),
     );
-    mi_printf_amount(peak_rss as i64, 1, out, arg, c"%s".as_ptr());
+    mi_printf_amount(peak_rss as i64, 1, out, arg, AmountFormat::Plain);
     if peak_commit > 0 {
         _mi_fprintf(out, arg, format_args!(", peak commit: "));
-        mi_printf_amount(peak_commit as i64, 1, out, arg, c"%s".as_ptr());
+        mi_printf_amount(peak_commit as i64, 1, out, arg, AmountFormat::Plain);
     }
     _mi_fprintf(out, arg, format_args!("\n"));
 }
@@ -799,5 +799,51 @@ pub(super) unsafe fn mi_stats_get_json_from_impl(
         ptr::null_mut()
     } else {
         hbuf.buf
+    }
+}
+
+#[cfg(test)]
+mod buffer_tests {
+    use super::*;
+    use std::ffi::CString;
+    use std::vec::Vec;
+
+    unsafe extern "C" fn record(msg: *const c_char, arg: *mut c_void) {
+        // SAFETY: the test supplies a live output vector and the renderer passes
+        // a terminated buffer for this synchronous callback.
+        unsafe {
+            let output = &mut *arg.cast::<Vec<Vec<u8>>>();
+            output.push(CStr::from_ptr(msg).to_bytes().to_vec());
+        }
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "uses the native C stdout static, unsupported by Miri")]
+    fn buffer_preserves_capacity_boundary_newlines_and_partial_flushes() {
+        let mut storage = [0; 256];
+        let mut output = Vec::<Vec<u8>>::new();
+        let mut buffer = buffered_t {
+            out: Some(record),
+            arg: ptr::from_mut(&mut output).cast(),
+            buf: &mut storage,
+            used: 0,
+        };
+        let first = CString::new(vec![b'a'; 255]).unwrap();
+        let second = CString::new([vec![b'b', b'\n'], vec![b'c'; 256]].concat()).unwrap();
+        // SAFETY: both inputs and the uniquely borrowed context remain live.
+        unsafe {
+            mi_buffered_out(first.as_ptr(), ptr::from_mut(&mut buffer).cast());
+            mi_buffered_out(second.as_ptr(), ptr::from_mut(&mut buffer).cast());
+        }
+        mi_buffered_flush(&mut buffer);
+        assert_eq!(buffer.used, 0);
+        assert_eq!(
+            output.iter().map(Vec::len).collect::<Vec<_>>(),
+            [255, 2, 255, 1]
+        );
+        assert_eq!(
+            output.concat(),
+            [first.as_bytes(), second.as_bytes()].concat()
+        );
     }
 }

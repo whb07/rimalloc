@@ -55,12 +55,11 @@ impl RequestedSize {
         self.0
     }
     #[inline(always)]
-    pub(crate) const fn effective_size(self) -> usize {
-        if self.0 == 0 {
-            Self::MIN_ZERO_SIZE
-        } else {
-            self.0
-        }
+    pub(crate) const fn effective_size(self) -> EffectiveSize {
+        EffectiveSize(match NonZeroUsize::new(self.0) {
+            Some(size) => size,
+            None => NonZeroUsize::MIN.saturating_add(Self::MIN_ZERO_SIZE - 1),
+        })
     }
     #[inline]
     pub(crate) fn checked_padded(self) -> Result<PaddedSize, AllocSizeError> {
@@ -70,23 +69,59 @@ impl RequestedSize {
             .map(PaddedSize)
             .ok_or(AllocSizeError::Overflow)
     }
+}
 
-    /// Padded size without overflow checking (branchless in release).
-    ///
-    /// # Safety (invariant)
-    ///
-    /// The caller must guarantee `self.get() + MI_PADDING_SIZE` does not overflow
-    /// and is non-zero. On the small allocation path this holds because
-    /// `size <= MI_SMALL_SIZE_MAX` (≤ 1024) and `MI_PADDING_SIZE` is tiny; on
-    /// other paths where overflow is possible, use `checked_padded` instead.
-    /// A `debug_assert!` catches violations in debug builds.
+/// A request bounded by the small-allocation limit; zero retains its tracking meaning.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct SmallRequestedSize(RequestedSize);
+
+impl SmallRequestedSize {
+    pub(crate) const ZERO: Self = Self(RequestedSize::new(0));
+
     #[inline(always)]
-    pub(crate) fn padded_unchecked(self) -> PaddedSize {
-        crate::internal::mi_debug_assert!(
-            self.0.checked_add(crate::types::MI_PADDING_SIZE).is_some(),
-            "requested size + padding must not overflow"
-        );
-        unsafe { PaddedSize::new_unchecked(self.0.wrapping_add(crate::types::MI_PADDING_SIZE)) }
+    pub(crate) const fn new(size: RequestedSize) -> Option<Self> {
+        if size.get() <= crate::types::MI_SMALL_SIZE_MAX {
+            Some(Self(size))
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) const fn requested(self) -> RequestedSize {
+        self.0
+    }
+
+    #[inline(always)]
+    pub(crate) const fn normalized(self) -> NormalizedSmallSize {
+        NormalizedSmallSize(self.0.effective_size().0)
+    }
+}
+
+/// A positive small request, bounded so adding allocator padding cannot overflow.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct NormalizedSmallSize(NonZeroUsize);
+
+const _: () = {
+    assert!(RequestedSize::MIN_ZERO_SIZE <= crate::types::MI_SMALL_SIZE_MAX);
+    assert!(crate::types::MI_SMALL_SIZE_MAX <= usize::MAX - crate::types::MI_PADDING_SIZE);
+};
+
+impl NormalizedSmallSize {
+    #[inline(always)]
+    pub(crate) const fn effective(self) -> EffectiveSize {
+        EffectiveSize(self.0)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn padded(self) -> PaddedSize {
+        // SAFETY: normalization supplies positivity; the small bound and the
+        // compile-time padding bound above exclude overflow.
+        PaddedSize(unsafe {
+            NonZeroUsize::new_unchecked(self.0.get() + crate::types::MI_PADDING_SIZE)
+        })
     }
 }
 
@@ -96,12 +131,6 @@ impl RequestedSize {
 pub(crate) struct EffectiveSize(NonZeroUsize);
 
 impl EffectiveSize {
-    /// # Safety
-    /// `size` must be non-zero.
-    #[inline(always)]
-    pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
-        Self(unsafe { NonZeroUsize::new_unchecked(size) })
-    }
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
         self.0.get()
@@ -248,6 +277,8 @@ impl Alignment {
 pub(crate) struct MaybeAlignment(usize);
 
 impl MaybeAlignment {
+    pub(crate) const NONE: Self = Self(0);
+
     #[inline(always)]
     pub(crate) const fn new(align: usize) -> Option<Self> {
         if align == 0 || align.is_power_of_two() {
@@ -256,15 +287,16 @@ impl MaybeAlignment {
             None
         }
     }
-    /// # Safety
-    /// `align` must be zero or a power of two.
-    #[inline(always)]
-    pub(crate) const unsafe fn new_unchecked(align: usize) -> Self {
-        Self(align)
-    }
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
         self.0
+    }
+}
+
+impl From<Alignment> for MaybeAlignment {
+    #[inline(always)]
+    fn from(alignment: Alignment) -> Self {
+        Self(alignment.get())
     }
 }
 
@@ -834,7 +866,32 @@ impl StatsBin {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub(crate) struct DirectBin(u16);
 
+const _: () = {
+    assert!(crate::types::MI_PAGES_DIRECT - 1 <= u16::MAX as usize);
+    assert!(
+        (crate::types::MI_SMALL_SIZE_MAX + crate::types::MI_PADDING_SIZE)
+            .div_ceil(core::mem::size_of::<usize>())
+            < crate::types::MI_PAGES_DIRECT
+    );
+};
+
 impl DirectBin {
+    /// A bounded queue block size does not need request padding.
+    #[inline(always)]
+    pub(crate) const fn from_small(size: SmallRequestedSize) -> Self {
+        Self(
+            size.requested()
+                .get()
+                .div_ceil(core::mem::size_of::<usize>()) as u16,
+        )
+    }
+
+    /// A normalized small request retains its bound when padding is added.
+    #[inline(always)]
+    pub(crate) const fn from_small_padded(size: NormalizedSmallSize) -> Self {
+        Self(size.padded().get().div_ceil(core::mem::size_of::<usize>()) as u16)
+    }
+
     /// # Safety
     /// `index` must be less than `MI_PAGES_DIRECT`.
     #[inline(always)]
@@ -877,6 +934,13 @@ impl SliceIndex {
 pub(crate) struct SliceCount(NonZeroU32);
 
 impl SliceCount {
+    pub(crate) const ONE: Self = Self(NonZeroU32::MIN);
+
+    #[inline(always)]
+    pub(crate) const fn from_nonzero(count: NonZeroU32) -> Self {
+        Self(count)
+    }
+
     /// Construct from a `usize` count. Returns `None` if zero or too large for `u32`.
     #[inline(always)]
     pub(crate) fn from_usize(count: usize) -> Option<Self> {
@@ -884,10 +948,12 @@ impl SliceCount {
     }
     #[inline(always)]
     pub(crate) const fn from_usize_const(count: usize) -> Option<Self> {
-        if count == 0 || count > u32::MAX as usize {
-            None
-        } else {
-            Some(unsafe { Self::new_unchecked(count as u32) })
+        if count > u32::MAX as usize {
+            return None;
+        }
+        match NonZeroU32::new(count as u32) {
+            Some(count) => Some(Self(count)),
+            None => None,
         }
     }
     /// # Safety

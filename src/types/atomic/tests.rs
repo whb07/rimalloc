@@ -9,7 +9,7 @@ use crate::types::{mi_block_t, mi_page_t};
 use core::{
     ffi::c_void,
     mem::MaybeUninit,
-    ptr::{self, NonNull},
+    ptr,
     sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize},
 };
 
@@ -31,48 +31,37 @@ fn linux_mi_lock_matches_pthread_mutex_layout() {
 #[test]
 fn atomic_usize_field_updates_stack_atomic_word() {
     let atomic = AtomicUsize::new(4);
-    let field =
-        AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
+    let field = AtomicUsizeField::from_cell(&atomic);
 
-    unsafe {
-        assert_eq!(field.load(Ordering::Relaxed), 4);
-        field.store(7, Ordering::Relaxed);
-        assert_eq!(atomic.load(Ordering::Relaxed), 7);
-        assert_eq!(field.fetch_add(5, Ordering::Relaxed), 7);
-        assert_eq!(field.fetch_sub(2, Ordering::Relaxed), 12);
-        assert_eq!(field.fetch_or(0b1000, Ordering::Relaxed), 10);
-        assert_eq!(field.fetch_and(0b1010, Ordering::Relaxed), 10);
+    assert_eq!(field.load(Ordering::Relaxed), 4);
+    field.store(7, Ordering::Relaxed);
+    assert_eq!(atomic.load(Ordering::Relaxed), 7);
+    assert_eq!(field.fetch_add(5, Ordering::Relaxed), 7);
+    assert_eq!(field.fetch_sub(2, Ordering::Relaxed), 12);
+    assert_eq!(field.fetch_or(0b1000, Ordering::Relaxed), 10);
+    assert_eq!(field.fetch_and(0b1010, Ordering::Relaxed), 10);
 
-        let mut expected = 10;
-        assert!(field.compare_exchange_acq_rel(&mut expected, 42));
-        assert_eq!(field.load(Ordering::Relaxed), 42);
+    let mut expected = 10;
+    assert!(field.compare_exchange_acq_rel(&mut expected, 42));
+    assert_eq!(field.load(Ordering::Relaxed), 42);
 
-        let mut stale = 10;
-        assert!(!field.compare_exchange_acq_rel(&mut stale, 99));
-        assert_eq!(stale, 42);
-    }
+    let mut stale = 10;
+    assert!(!field.compare_exchange_acq_rel(&mut stale, 99));
+    assert_eq!(stale, 42);
 }
 
 #[test]
 fn atomic_usize_field_weak_cas_updates_expected_on_failure() {
     let atomic = AtomicUsize::new(33);
-    let field =
-        AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
+    let field = AtomicUsizeField::from_cell(&atomic);
 
     let mut expected = 11;
-    unsafe {
-        assert!(!field.compare_exchange_weak(
-            &mut expected,
-            44,
-            Ordering::AcqRel,
-            Ordering::Acquire
-        ));
-        assert_eq!(expected, 33);
-        assert_eq!(atomic.load(Ordering::Acquire), 33);
+    assert!(!field.compare_exchange_weak(&mut expected, 44, Ordering::AcqRel, Ordering::Acquire));
+    assert_eq!(expected, 33);
+    assert_eq!(atomic.load(Ordering::Acquire), 33);
 
-        while !field.compare_exchange_weak(&mut expected, 44, Ordering::AcqRel, Ordering::Acquire) {
-            assert_eq!(expected, 33);
-        }
+    while !field.compare_exchange_weak(&mut expected, 44, Ordering::AcqRel, Ordering::Acquire) {
+        assert_eq!(expected, 33);
     }
     assert_eq!(atomic.load(Ordering::Acquire), 44);
 }
@@ -80,20 +69,18 @@ fn atomic_usize_field_weak_cas_updates_expected_on_failure() {
 #[test]
 fn atomic_i64_field_updates_expected_on_cas_failure() {
     let atomic = AtomicI64::new(-4);
-    let field = AtomicI64Field::from_raw((&atomic as *const AtomicI64).cast_mut().cast::<i64>());
+    let field = AtomicI64Field::from_cell(&atomic);
 
-    unsafe {
-        assert_eq!(field.load(Ordering::Relaxed), -4);
-        field.store(11, Ordering::Relaxed);
+    assert_eq!(field.load(Ordering::Relaxed), -4);
+    field.store(11, Ordering::Relaxed);
 
-        let mut expected = 9;
-        assert!(!field.compare_exchange_acq_rel(&mut expected, 12));
-        assert_eq!(expected, 11);
-        assert_eq!(atomic.load(Ordering::Relaxed), 11);
+    let mut expected = 9;
+    assert!(!field.compare_exchange_acq_rel(&mut expected, 12));
+    assert_eq!(expected, 11);
+    assert_eq!(atomic.load(Ordering::Relaxed), 11);
 
-        assert!(field.compare_exchange_acq_rel(&mut expected, 12));
-        assert_eq!(atomic.load(Ordering::Relaxed), 12);
-    }
+    assert!(field.compare_exchange_acq_rel(&mut expected, 12));
+    assert_eq!(atomic.load(Ordering::Relaxed), 12);
 }
 
 #[test]
@@ -103,21 +90,17 @@ fn atomic_ptr_field_round_trips_pointer_values() {
     let first_ptr = (&mut first as *mut u8).cast::<c_void>();
     let second_ptr = (&mut second as *mut u8).cast::<c_void>();
     let atomic = AtomicPtr::new(first_ptr);
-    let field = || {
-        AtomicPtrField::<c_void>::from_raw((&atomic as *const AtomicPtr<c_void>).cast_mut().cast())
-    };
+    let field = || AtomicPtrField::<c_void>::from_cell(&atomic);
 
-    unsafe {
-        assert_eq!(field().load(Ordering::Acquire), first_ptr);
-        assert_eq!(field().exchange_acq_rel(second_ptr), first_ptr);
-        assert_eq!(atomic.load(Ordering::Acquire), second_ptr);
+    assert_eq!(field().load(Ordering::Acquire), first_ptr);
+    assert_eq!(field().exchange_acq_rel(second_ptr), first_ptr);
+    assert_eq!(atomic.load(Ordering::Acquire), second_ptr);
 
-        let mut expected = first_ptr;
-        assert!(!field().compare_exchange_acq_rel(&mut expected, first_ptr));
-        assert_eq!(expected, second_ptr);
-        assert!(field().compare_exchange_release(&mut expected, first_ptr));
-        assert_eq!(atomic.load(Ordering::Acquire), first_ptr);
-    }
+    let mut expected = first_ptr;
+    assert!(!field().compare_exchange_acq_rel(&mut expected, first_ptr));
+    assert_eq!(expected, second_ptr);
+    assert!(field().compare_exchange_release(&mut expected, first_ptr));
+    assert_eq!(atomic.load(Ordering::Acquire), first_ptr);
 }
 
 #[test]
@@ -127,12 +110,10 @@ fn atomic_arena_page_loads_and_stores_page_table_pointer() {
     let atomic = AtomicPtr::new(ptr::null_mut::<c_void>());
     let field = AtomicArenaPage::from_cell(&atomic);
 
-    unsafe {
-        assert_eq!(field.load_acquire(), ptr::null_mut());
-        field.store_release(pages_ptr);
-        assert_eq!(field.load_acquire(), pages_ptr);
-        assert_eq!(atomic.load(Ordering::Acquire), pages_ptr.cast::<c_void>());
-    }
+    assert_eq!(field.load_acquire(), ptr::null_mut());
+    field.store_release(pages_ptr);
+    assert_eq!(field.load_acquire(), pages_ptr);
+    assert_eq!(atomic.load(Ordering::Acquire), pages_ptr.cast::<c_void>());
 }
 
 #[test]
@@ -140,9 +121,7 @@ fn atomic_page_thread_id_updates_owner_and_flags() {
     let initial =
         PageThreadId::from_parts(PageOwnerId::Abandoned, PageFlags::HAS_INTERIOR_POINTERS);
     let atomic = AtomicUsize::new(initial.raw());
-    let field = AtomicPageThreadId::from_field(AtomicUsizeField::from_raw(
-        (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
-    ));
+    let field = AtomicPageThreadId::from_cell(&atomic);
 
     unsafe {
         assert!(
@@ -177,9 +156,7 @@ fn atomic_page_thread_id_updates_owner_and_flags() {
 #[test]
 fn atomic_thread_free_claims_and_releases_ownership_bit() {
     let atomic = AtomicUsize::new(0);
-    let field = AtomicThreadFree::from_field(AtomicUsizeField::from_raw(
-        (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
-    ));
+    let field = AtomicThreadFree::from_cell(&atomic);
 
     assert!(!field.load_relaxed().is_owned());
     unsafe {
@@ -202,9 +179,7 @@ fn atomic_thread_free_take_head_preserves_owner_bit() {
     let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
     let word = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
     let atomic = AtomicUsize::new(word.raw());
-    let field = AtomicThreadFree::from_field(AtomicUsizeField::from_raw(
-        (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
-    ));
+    let field = AtomicThreadFree::from_cell(&atomic);
 
     let list = unsafe { field.detach_head() };
     assert_eq!(list.head().map(BlockPtr::as_ptr), Some(head.as_ptr()));
@@ -223,10 +198,11 @@ fn remote_push_publishes_head_and_atomic_detach_owns_it() {
     let raw_page = page.as_mut_ptr();
     unsafe { ptr::addr_of_mut!((*raw_page).xthread_free).write(initial.raw()) };
     let page = unsafe { PagePtr::new_unchecked(raw_page) };
-    let field = unsafe { page.thread_free_cell() };
+    let field =
+        unsafe { crate::types::atomic::AtomicThreadFree::from_cell(&*page.thread_free_field()) };
 
     let published = loop {
-        match field.try_push(initial, block) {
+        match unsafe { field.try_push(initial, block) } {
             RemotePushResult::Published { previous, head } => {
                 assert_eq!(previous.raw(), initial.raw());
                 assert_eq!(head.head().as_ptr(), block.as_ptr());
@@ -258,9 +234,10 @@ fn remote_push_retry_returns_observation_without_consuming_block() {
     let raw_page = page.as_mut_ptr();
     unsafe { ptr::addr_of_mut!((*raw_page).xthread_free).write(live.raw()) };
     let page = unsafe { PagePtr::new_unchecked(raw_page) };
-    let field = unsafe { page.thread_free_cell() };
+    let field =
+        unsafe { crate::types::atomic::AtomicThreadFree::from_cell(&*page.thread_free_field()) };
 
-    match field.try_push(stale, block) {
+    match unsafe { field.try_push(stale, block) } {
         RemotePushResult::Retry { observed } => assert_eq!(observed.raw(), live.raw()),
         RemotePushResult::Published { .. } => panic!("stale CAS must retry"),
     }
@@ -279,9 +256,10 @@ fn empty_remote_free_list_collects_through_detached_atomic_path() {
         ptr::addr_of_mut!((*raw_page).local_free).write(ptr::addr_of_mut!(local));
 
         let page_ptr = PagePtr::new_unchecked(raw_page);
-        let atomic = AtomicThreadFree::from_field(AtomicUsizeField::from_raw(ptr::addr_of_mut!(
-            (*raw_page).xthread_free
-        )));
+        let atomic = AtomicThreadFree::from_cell(
+            &*(ptr::addr_of_mut!((*raw_page).xthread_free))
+                .cast::<core::sync::atomic::AtomicUsize>(),
+        );
         let remote = atomic.detach_head();
         assert!(remote.head().is_none());
 
@@ -302,21 +280,17 @@ fn atomic_abandoned_count_uses_relaxed_cell_operations() {
     let atomic = AtomicUsize::new(2);
     let count = AtomicAbandonedCount::from_cell(&atomic);
 
-    unsafe {
-        assert_eq!(count.load_relaxed(), 2);
-        assert_eq!(count.fetch_add_relaxed(1), 2);
-        assert_eq!(count.load_relaxed(), 3);
-        assert_eq!(count.fetch_sub_relaxed(2), 3);
-        assert_eq!(count.load_relaxed(), 1);
-    }
+    assert_eq!(count.load_relaxed(), 2);
+    assert_eq!(count.fetch_add_relaxed(1), 2);
+    assert_eq!(count.load_relaxed(), 3);
+    assert_eq!(count.fetch_sub_relaxed(2), 3);
+    assert_eq!(count.load_relaxed(), 1);
 }
 
 #[test]
 fn atomic_thread_heap_refcount_uses_acq_rel_operations() {
     let atomic = AtomicUsize::new(0);
-    let refcount = AtomicThreadHeapRefcount::from_field(AtomicUsizeField::from_raw(
-        (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
-    ));
+    let refcount = AtomicThreadHeapRefcount::from_cell(&atomic);
 
     unsafe {
         refcount.store_seq_cst(1);
@@ -330,48 +304,42 @@ fn atomic_thread_heap_refcount_uses_acq_rel_operations() {
 #[test]
 fn atomic_guard_acquires_once_and_releases_on_drop() {
     let atomic = AtomicUsize::new(0);
-    let field =
-        AtomicUsizeField::from_raw((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
+    let field = &atomic;
 
-    unsafe {
-        let guard = AtomicGuard::try_acquire(field).expect("first acquire succeeds");
-        assert_eq!(atomic.load(Ordering::Acquire), 1);
-        assert!(AtomicGuard::try_acquire(field).is_none());
+    let guard = AtomicGuard::try_acquire(field).expect("first acquire succeeds");
+    assert_eq!(atomic.load(Ordering::Acquire), 1);
+    assert!(AtomicGuard::try_acquire(field).is_none());
 
-        drop(guard);
-        assert_eq!(atomic.load(Ordering::Acquire), 0);
-        assert!(AtomicGuard::try_acquire(field).is_some());
-    }
+    drop(guard);
+    assert_eq!(atomic.load(Ordering::Acquire), 0);
+    assert!(AtomicGuard::try_acquire(field).is_some());
 }
 
 #[test]
 fn once_guard_enters_once_and_releases_on_drop() {
-    let mut once = crate::atomic::mi_atomic_once_t::new();
-    let state = OnceStatePtr::from_raw(ptr::addr_of_mut!(once).cast::<usize>());
+    let once = crate::atomic::mi_atomic_once_t::new();
+    let state = &once;
 
-    unsafe {
-        let guard = OnceGuard::try_enter(state).expect("first enter succeeds");
-        assert!(once.tid.load(Ordering::Acquire) > 1);
-        assert!(OnceGuard::try_enter(state).is_none());
+    let guard = OnceGuard::try_enter(state).expect("first enter succeeds");
+    assert!(once.tid.load(Ordering::Acquire) > 1);
+    assert!(OnceGuard::try_enter(state).is_none());
 
-        drop(guard);
-        assert_eq!(once.tid.load(Ordering::Acquire), 1);
-        assert!(OnceGuard::try_enter(state).is_none());
-    }
+    drop(guard);
+    assert_eq!(once.tid.load(Ordering::Acquire), 1);
+    assert!(OnceGuard::try_enter(state).is_none());
 }
 
 #[test]
 fn mi_lock_guard_acquires_and_releases_on_drop() {
-    let mut lock = crate::atomic::mi_lock_t::new();
-    let lock_ptr =
-        MiLockPtr::from_nonnull(unsafe { NonNull::new_unchecked(ptr::addr_of_mut!(lock)) });
+    let lock = crate::atomic::mi_lock_t::new();
+    let lock_ptr = ptr::from_ref(&lock).cast_mut();
 
     unsafe {
-        let guard = MiLockGuard::acquire(lock_ptr);
-        assert!(!crate::atomic::mi_lock_try_acquire(lock_ptr.as_ptr()));
+        let guard = MiLockGuard::acquire(&lock);
+        assert!(!crate::atomic::mi_lock_try_acquire(lock_ptr));
 
         drop(guard);
-        assert!(crate::atomic::mi_lock_try_acquire(lock_ptr.as_ptr()));
-        crate::atomic::mi_lock_release(lock_ptr.as_ptr());
+        assert!(crate::atomic::mi_lock_try_acquire(lock_ptr));
+        crate::atomic::mi_lock_release(lock_ptr);
     }
 }

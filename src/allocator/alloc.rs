@@ -1,6 +1,6 @@
 //! Core allocation / free paths + libc overrides
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_void;
 use core::mem::size_of;
 use core::ptr;
 
@@ -26,8 +26,8 @@ use crate::internal::{
 use crate::mimalloc::mi_free;
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::types::{
-    MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING, MI_PADDING_CHECK, MI_PADDING_SIZE,
-    MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_heap_t, mi_theap_t,
+    MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING, MI_PADDING_CHECK, MI_PADDING_SIZE, MI_STAT,
+    mi_block_t, mi_heap_t, mi_theap_t,
 };
 
 mod cxx_new;
@@ -287,8 +287,8 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
 /// `_mi_malloc_generic`, which initializes the thread or returns null. The caller
 /// must hold exclusive current-thread mutation rights over its direct-page cache, local
 /// page queues and free lists, guarded-sampling state, and local statistics;
-/// protocol atomic remote-free publication is permitted. `size` must not exceed
-/// `MI_SMALL_SIZE_MAX`. The page map, backing metadata, guarded configuration,
+/// protocol atomic remote-free publication is permitted. The page map, backing
+/// metadata, guarded configuration,
 /// and allocator lifecycle must remain stable. Heap collection, deferred-free,
 /// arena allocation/commit/purge/release, guarded protection, tracking, and
 /// diagnostic callbacks plus their opaque arguments must remain valid for
@@ -298,15 +298,15 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
 /// not overlap allocator metadata.
 unsafe fn mi_theap_malloc_small_zero_typed(
     theap: ThreadHeapLocal,
-    size: crate::core_types::RequestedSize,
+    size: crate::core_types::SmallRequestedSize,
     zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
     let local_theap = theap;
     let theap = local_theap.ptr().as_ptr();
-    let mut size = size.get();
+    let requested_size = size.requested().get();
+    let size = size.normalized();
     crate::internal::mi_assert!(!theap.is_null());
-    crate::internal::mi_assert!(size <= MI_SMALL_SIZE_MAX);
     if cfg!(debug_assertions) {
         // SAFETY: the caller keeps the current-thread heap and its TLD live and
         // stable; preserve the original thread-id read followed by the two
@@ -318,10 +318,6 @@ unsafe fn mi_theap_malloc_small_zero_typed(
             );
         }
     }
-    let requested_size = size;
-    if mi_unlikely(size == 0) {
-        size = crate::core_types::RequestedSize::MIN_ZERO_SIZE;
-    }
     let zero = zeroed.as_bool();
     if crate::internal::MI_GUARDED != 0
         // SAFETY: the caller grants exclusive guarded-sampling mutation on the
@@ -329,27 +325,20 @@ unsafe fn mi_theap_malloc_small_zero_typed(
         && mi_unlikely(unsafe {
             mi_theap_malloc_use_guarded(
                 local_theap,
-                crate::core_types::EffectiveSize::new_unchecked(size),
+                size.effective(),
             )
         })
     {
         // SAFETY: the caller keeps the heap, backing state, OS configuration,
         // and synchronous guarded allocation/protection callbacks valid; this
         // terminal branch preserves the original guarded allocation dispatch.
-        return unsafe { _mi_theap_malloc_guarded(theap, size, zero) };
+        return unsafe { _mi_theap_malloc_guarded(theap, size.effective().get(), zero) };
     }
 
-    // Compute the padded size once via the typed `PaddedSize` boundary so both
-    // the page lookup and the page-malloc use the same value, instead of
-    // open-coding `size + MI_PADDING_SIZE` twice. Uses the branchless unchecked
-    // path: `size <= MI_SMALL_SIZE_MAX` (≤ 1024, guarded upstream) and is
-    // normalized to non-zero above, so the sum cannot overflow or yield zero.
-    // The preceding bound and normalization establish the branchless padded
-    // size calculation's representability and nonzero requirements.
-    let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
+    let padded = size.padded();
     // SAFETY: the caller keeps the live current-thread heap's initialized direct
     // cache locally owned; `padded` derives from the bounded normalized request.
-    let available = unsafe { _mi_theap_get_free_small_page_typed(local_theap, padded) };
+    let available = unsafe { _mi_theap_get_free_small_page_typed(local_theap, size) };
     let p = if let Some(available) = available {
         // SAFETY: `available` came from this heap's direct cache for `padded`;
         // its page/free-list metadata and optional usable output remain valid
@@ -417,7 +406,7 @@ unsafe fn mi_theap_malloc_generic(
     }
 
     if MI_GUARDED != 0
-        && flags.huge_alignment().get() == 0
+        && flags.raw_huge_alignment() == 0
         // SAFETY: the caller grants exclusive guarded-sampling mutation on the
         // live current-thread heap; `layout` supplies the validated effective size.
         && mi_unlikely(unsafe { mi_theap_malloc_use_guarded(theap, layout.effective()) })
@@ -443,26 +432,6 @@ unsafe fn mi_theap_malloc_generic(
         crate::internal::mi_assert_expensive!(unsafe { crate::internal::mi_mem_is_zero(p, size) });
     }
     p
-}
-
-#[inline(always)]
-fn no_alignment() -> crate::core_types::MaybeAlignment {
-    // SAFETY: zero is the defined sentinel for an ordinary allocation with no
-    // requested optional alignment.
-    unsafe { crate::core_types::MaybeAlignment::new_unchecked(0) }
-}
-
-fn maybe_alignment_or_report(alignment: usize) -> Option<crate::core_types::MaybeAlignment> {
-    let Some(alignment) = crate::core_types::MaybeAlignment::new(alignment) else {
-        _mi_error_message_fmt(
-            Errno::EOVERFLOW,
-            format_args!(
-                "allocation alignment must be zero or a power-of-two (alignment {alignment})\n"
-            ),
-        );
-        return None;
-    };
-    Some(alignment)
 }
 
 fn alignment_or_report(size: usize, alignment: usize) -> Option<crate::core_types::Alignment> {
@@ -510,7 +479,8 @@ unsafe fn mi_theap_malloc_zero_fast(
     zero: bool,
     usable: *mut usize,
 ) -> *mut c_void {
-    if size <= MI_SMALL_SIZE_MAX
+    if let Some(size) =
+        crate::core_types::SmallRequestedSize::new(crate::core_types::RequestedSize::new(size))
         && let Some(theap_ptr) = ThreadHeapPtr::new(theap)
     {
         // The only uninitialized heaps allowed here are the sentinels, which the small path
@@ -526,7 +496,7 @@ unsafe fn mi_theap_malloc_zero_fast(
         return unsafe {
             mi_theap_malloc_small_zero_typed(
                 ThreadHeapLocal::new_unchecked(theap_ptr),
-                crate::core_types::RequestedSize::new(size),
+                size,
                 crate::core_types::Zeroed::from_bool(zero),
                 usable,
             )
@@ -567,21 +537,18 @@ unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapL
 /// callbacks and their opaque arguments reached synchronously must remain valid,
 /// must not incompatibly reenter the selected heap's local allocation state,
 /// and must not unwind. If nonnull, `usable` must be aligned and uniquely
-/// writable for one `usize` throughout the call. `huge_alignment` may be
-/// arbitrary and is validated before allocation; when a request is small
-/// (`size <= MI_SMALL_SIZE_MAX`), it must be zero.
+/// writable for one `usize` throughout the call. `huge_alignment` must be zero
+/// for a small request (`size <= MI_SMALL_SIZE_MAX`), or a valid huge-page
+/// alignment for a generic request.
 #[inline(always)]
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     theap: *mut mi_theap_t,
     size: usize,
     zero: bool,
-    huge_alignment: usize,
+    huge_alignment: crate::core_types::MaybeHugeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
-    crate::internal::mi_assert!((huge_alignment & 1) == 0);
-    let Some(huge_alignment) = maybe_alignment_or_report(huge_alignment) else {
-        return ptr::null_mut();
-    };
+    crate::internal::mi_assert!((huge_alignment.get() & 1) == 0);
     let Some(layout) = malloc_layout_or_report(size, zero) else {
         return ptr::null_mut();
     };
@@ -605,10 +572,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
             )
         }
     } else {
-        let flags = crate::core_types::MallocGenericFlags::new(
-            layout.zeroed(),
-            crate::core_types::MaybeHugeAlignment::new(huge_alignment.get()),
-        );
+        let flags = crate::core_types::MallocGenericFlags::new(layout.zeroed(), huge_alignment);
         // SAFETY: this branch proves the configured lazy-null resolver state;
         // the caller's process/TLS lifecycle permits current-thread
         // initialization and default-heap lookup.
@@ -641,23 +605,19 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
 unsafe fn _mi_theap_malloc_zero_ex_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
-    huge_alignment: crate::core_types::MaybeAlignment,
+    huge_alignment: crate::core_types::MaybeHugeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
     let requested = layout.requested();
-    let size = requested.get();
-    if size <= MI_SMALL_SIZE_MAX {
+    if let Some(size) = crate::core_types::SmallRequestedSize::new(requested) {
         crate::internal::mi_assert_internal!(huge_alignment.get() == 0);
         // SAFETY: the function contract supplies the live current-thread heap,
         // exclusive local allocation epoch, and writable optional result slot.
         // The branch uses the caller-required ordinary small-allocation
         // alignment; the assertion is diagnostic only.
-        unsafe { mi_theap_malloc_small_zero_typed(theap, requested, layout.zeroed(), usable) }
+        unsafe { mi_theap_malloc_small_zero_typed(theap, size, layout.zeroed(), usable) }
     } else {
-        let flags = crate::core_types::MallocGenericFlags::new(
-            layout.zeroed(),
-            crate::core_types::MaybeHugeAlignment::new(huge_alignment.get()),
-        );
+        let flags = crate::core_types::MallocGenericFlags::new(layout.zeroed(), huge_alignment);
         // SAFETY: the function contract supplies the live current-thread heap,
         // exclusive local allocation epoch, and writable optional result slot.
         // This branch preserves the validated generic alignment policy.
@@ -693,7 +653,15 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
         // SAFETY: the raw-boundary contract permits the configured lazy-null
         // resolver state and keeps the optional result slot writable through
         // this terminal unaligned allocation dispatch.
-        return unsafe { _mi_theap_malloc_zero_ex(theap, size, zero, 0, usable) };
+        return unsafe {
+            _mi_theap_malloc_zero_ex(
+                theap,
+                size,
+                zero,
+                crate::core_types::MaybeHugeAlignment::none(),
+                usable,
+            )
+        };
     }
     let Some(layout) = malloc_layout_or_report(size, zero) else {
         return ptr::null_mut();
@@ -724,7 +692,14 @@ unsafe fn _mi_theap_malloc_zero_typed(
     // SAFETY: the caller keeps the local heap epoch exclusive and the optional
     // result slot writable; the zero alignment selects ordinary unaligned
     // small-or-generic allocation for the validated layout.
-    unsafe { _mi_theap_malloc_zero_ex_typed(theap, layout, no_alignment(), usable) }
+    unsafe {
+        _mi_theap_malloc_zero_ex_typed(
+            theap,
+            layout,
+            crate::core_types::MaybeHugeAlignment::none(),
+            usable,
+        )
+    }
 }
 
 /// # Safety
@@ -832,7 +807,15 @@ pub unsafe extern "C" fn mi_theap_umalloc(
         // SAFETY: the raw-boundary contract permits the configured lazy-null
         // resolver state and keeps the optional result slot writable through
         // this terminal unaligned allocation dispatch.
-        return unsafe { _mi_theap_malloc_zero_ex(theap, size, false, 0, usable) };
+        return unsafe {
+            _mi_theap_malloc_zero_ex(
+                theap,
+                size,
+                false,
+                crate::core_types::MaybeHugeAlignment::none(),
+                usable,
+            )
+        };
     }
     let Some(layout) = malloc_layout_or_report(size, false) else {
         return ptr::null_mut();
@@ -884,7 +867,15 @@ pub unsafe extern "C" fn mi_umalloc(size: usize, usable: *mut usize) -> *mut c_v
 pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_void {
     // SAFETY: allocator lifecycle supplies the live current-thread default heap and exclusive
     // local allocation mutation; the caller supplies the optional usable-size output storage.
-    unsafe { _mi_theap_malloc_zero_ex(_mi_theap_default(), size, true, 0, usable) }
+    unsafe {
+        _mi_theap_malloc_zero_ex(
+            _mi_theap_default(),
+            size,
+            true,
+            crate::core_types::MaybeHugeAlignment::none(),
+            usable,
+        )
+    }
 }
 
 /// # Safety
@@ -1001,32 +992,23 @@ pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_voi
 /// `p` must identify a live nonnull allocation returned by this allocator. Its
 /// page-map registration, page and block metadata, and backing must remain
 /// readable and stable, with no concurrent free, realloc, or teardown, for as
-/// long as the returned witness is used. `msg` must point to a live
-/// NUL-terminated UTF-8 diagnostic string for this call. Diagnostic callbacks and
+/// long as the returned witness is used. Diagnostic callbacks and
 /// their opaque arguments must remain valid, not unwind, and not incompatibly
-/// reenter allocation state. The returned copyable witness does not extend any
+/// reenter allocation state. The returned ownership witness does not extend any
 /// of these lifetimes.
 unsafe fn mi_realloc_old_allocation(
     p: *mut c_void,
-    msg: *const c_char,
+    msg: &str,
 ) -> Option<crate::core_types::OldAllocation> {
-    // SAFETY: the caller keeps the nonnull allocation and its metadata stable;
-    // `msg` remains a readable NUL-terminated diagnostic string while pointer
+    // SAFETY: the caller keeps the nonnull allocation and its metadata stable while pointer
     // validation derives the matching page and block location.
     let lookup = unsafe { crate::allocator::free::mi_validate_pointer(p, msg) };
     let crate::core_types::PointerLookup::Valid(valid) = lookup else {
         return None;
     };
-    let (user, page, location) = valid.into_parts();
-    // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and
-    // supplies the block location derived by the validation boundary. The
-    // caller keeps that geometry live and stable through the returned witness.
-    unsafe {
-        let usable = crate::allocator::free::mi_usable_size_from_validated_location(page, location);
-        Some(crate::core_types::OldAllocation::from_validated_parts(
-            user, usable, page,
-        ))
-    }
+    // SAFETY: the consumed lookup retains the matching user/page/location;
+    // the caller keeps its geometry live and stable through the realloc disposition.
+    Some(unsafe { crate::core_types::OldAllocation::from_validated(valid) })
 }
 
 /// # Safety
@@ -1077,7 +1059,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
 /// is permitted. If `old` is present, it must identify a live allocator
 /// allocation whose page-map registration, page and block metadata, and backing
 /// remain initialized and stable with no concurrent free, realloc, or teardown
-/// until this call returns or frees it. The Copy witness does not extend those
+/// until this call returns or frees it. The ownership witness does not extend those
 /// lifetimes. Each nonnull usable-size
 /// output must be valid, aligned, and uniquely writable for one `usize` when
 /// accessed, and must not overlap allocator metadata. The outputs may alias
@@ -1099,12 +1081,13 @@ unsafe fn mi_theap_realloc_validated_core(
     usable_post: *mut usize,
 ) -> *mut c_void {
     let p = old
+        .as_ref()
         .map(|old| old.ptr().as_ptr())
         .unwrap_or(core::ptr::null_mut());
     let new_requested = layout.requested();
     let newsize = new_requested.get();
 
-    let (page, size) = if let Some(old) = old {
+    let (page, size) = if let Some(old) = old.as_ref() {
         let page = old.page().as_ptr();
         let size = old.usable();
         if !usable_pre.is_null() {
@@ -1143,8 +1126,9 @@ unsafe fn mi_theap_realloc_validated_core(
     // exclusive, `layout` is validated, and `usable_post` is valid when accessed.
     let newp = unsafe { mi_theap_umalloc_typed(theap, layout, usable_post) };
     if mi_likely(!newp.is_null()) {
-        let preserve =
-            old.map(|old| crate::core_types::PreserveBytes::new(old.usable(), new_requested));
+        let preserve = old
+            .as_ref()
+            .map(|old| crate::core_types::PreserveBytes::new(old.usable(), new_requested));
         let preserved = preserve.map_or(0, |preserve| preserve.get());
         if layout.zeroed() == crate::core_types::Zeroed::Yes && newsize > preserved {
             let start = if preserved >= size_of::<isize>() {
@@ -1159,7 +1143,7 @@ unsafe fn mi_theap_realloc_validated_core(
             // SAFETY: `newp` is the newly allocated writable block.
             unsafe { *newp.cast::<u8>() = 0 };
         }
-        if mi_likely(!p.is_null()) {
+        if let Some(old) = old {
             let Some(preserve) = preserve else {
                 crate::internal::mi_assert_internal!(false);
                 return ptr::null_mut();
@@ -1171,7 +1155,7 @@ unsafe fn mi_theap_realloc_validated_core(
             unsafe {
                 mi_track_mem_defined(p, copysize);
                 _mi_memcpy(newp, p, copysize);
-                mi_free(p);
+                mi_free(old.into_ptr().as_ptr());
             }
         }
     }
@@ -1183,7 +1167,7 @@ unsafe fn mi_theap_realloc_validated_core(
 /// `p` must identify a live allocation returned by this allocator. Its page-map
 /// registration, page and block metadata, and backing must remain readable and
 /// stable, without concurrent free, realloc, or teardown, for as long as the
-/// returned `OldAllocation` is used; copying that witness does not extend this
+/// returned `OldAllocation` is used; moving that witness does not extend this
 /// lifetime. `None` reports failed pointer validation after writing zero to a
 /// nonnull `usable_pre`; `Some(Some(..))` reports a validated allocation without
 /// writing it. If nonnull, `usable_pre` must be aligned and uniquely writable
@@ -1199,9 +1183,8 @@ unsafe fn mi_realloc_old_from_ptr(
         return Some(None);
     };
     // SAFETY: the caller keeps this nonnull allocator allocation and its
-    // metadata stable through use of the returned witness; validation uses the
-    // fixed valid UTF-8 diagnostic string.
-    let old = unsafe { mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) };
+    // metadata stable through use of the returned witness.
+    let old = unsafe { mi_realloc_old_allocation(p, "mi_realloc") };
     let Some(old) = old else {
         if !usable_pre.is_null() {
             // SAFETY: the caller supplies uniquely writable output storage at
@@ -1255,9 +1238,8 @@ pub(crate) unsafe fn mi_realloc_request_from_user(
 ) -> Option<crate::core_types::ReallocRequest> {
     let p = user.as_ptr();
     // SAFETY: the caller keeps the typed nonnull user allocation and its
-    // metadata live and stable through use of the returned request; validation
-    // uses the fixed valid UTF-8 diagnostic string.
-    let old = unsafe { mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) };
+    // metadata live and stable through use of the returned request.
+    let old = unsafe { mi_realloc_old_allocation(p, "mi_realloc") };
     let Some(old) = old else {
         if !usable_pre.is_null() {
             // SAFETY: the caller supplies uniquely writable output storage at
@@ -1356,17 +1338,10 @@ unsafe fn mi_theap_realloc_typed(
     theap: ThreadHeapLocal,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
+    let (old, layout) = req.into_parts();
     // SAFETY: the caller keeps the current-thread heap locally exclusive and any old allocation
     // metadata stable through the core disposition; the typed request carries its validated layout.
-    unsafe {
-        mi_theap_realloc_validated_core(
-            theap,
-            req.old(),
-            req.new_layout(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    }
+    unsafe { mi_theap_realloc_validated_core(theap, old, layout, ptr::null_mut(), ptr::null_mut()) }
 }
 
 /// # Safety
@@ -1455,14 +1430,15 @@ unsafe fn mi_theap_realloc_request_raw(
     let Some(theap) = (unsafe { _mi_theap_or_default_typed(theap) }) else {
         return ptr::null_mut();
     };
+    let (old, layout) = req.into_parts();
     // SAFETY: localization establishes the live current-thread heap witness and exclusive local
     // mutation. The request's old allocation remains stable through disposition, its layout is
     // validated, and both optional outputs are valid at access before any moved free.
     unsafe {
         mi_theap_realloc_validated_core(
             ThreadHeapLocal::new_unchecked(theap),
-            req.old(),
-            req.new_layout(),
+            old,
+            layout,
             usable_pre,
             usable_post,
         )

@@ -6,7 +6,8 @@ use crate::types::{mi_block_t, mi_page_flags_t, mi_page_t, mi_threadid_t};
 pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
     unsafe {
         let page = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
-        let atomic_tid = page.thread_id_cell();
+        let atomic_tid =
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*page.thread_id_field());
         atomic_tid.load().raw()
     }
 }
@@ -48,7 +49,8 @@ pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
 pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
     unsafe {
         let page = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
-        let atomic_tf = page.thread_free_cell();
+        let atomic_tf =
+            crate::types::atomic::AtomicThreadFree::from_cell(&*page.thread_free_field());
         atomic_tf.load_relaxed().head_raw()
     }
 }
@@ -72,7 +74,8 @@ pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
 pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
     unsafe {
         let page = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
-        let atomic_tf = page.thread_free_cell();
+        let atomic_tf =
+            crate::types::atomic::AtomicThreadFree::from_cell(&*page.thread_free_field());
         atomic_tf.load_relaxed().is_owned()
     }
 }

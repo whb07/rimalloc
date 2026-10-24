@@ -194,39 +194,35 @@ pub(crate) fn mi_vsnprintf_args(buf: &mut [c_char], args: fmt::Arguments<'_>) ->
         return 0;
     }
 
-    struct FixedBuffer {
-        ptr: *mut u8,
-        cap: usize,
-        used: usize,
+    struct FixedBuffer<'a> {
+        remaining: &'a mut [c_char],
     }
 
-    impl fmt::Write for FixedBuffer {
+    impl fmt::Write for FixedBuffer<'_> {
         fn write_str(&mut self, s: &str) -> fmt::Result {
-            let available = self.cap.saturating_sub(self.used);
-            let n = min(s.len(), available);
+            if self.remaining.is_empty() {
+                return Ok(());
+            }
+            let n = min(s.len(), self.remaining.len() - 1);
             if n > 0 {
-                unsafe {
-                    ptr::copy_nonoverlapping(s.as_ptr(), self.ptr.add(self.used), n);
+                let (dest, remaining) = core::mem::take(&mut self.remaining).split_at_mut(n);
+                self.remaining = remaining;
+                for (slot, byte) in dest.iter_mut().zip(s.bytes()) {
+                    *slot = byte as c_char;
                 }
-                self.used += n;
             }
             Ok(())
         }
     }
 
-    let mut out = FixedBuffer {
-        ptr: as_bytes_mut_ptr(buf.as_mut_ptr()),
-        cap: buf.len() - 1,
-        used: 0,
-    };
+    let capacity = buf.len();
+    let mut out = FixedBuffer { remaining: buf };
     let _ = fmt::write(&mut out, args);
-
-    // SAFETY: `out.ptr` came from `buf`, which remains exclusively borrowed,
-    // and `out.used <= buf.len() - 1`.
-    unsafe {
-        *out.ptr.add(out.used) = 0;
-    }
-    out.used as i32
+    let used = capacity - out.remaining.len();
+    // SAFETY: the initial buffer is nonempty, and each write reserves one
+    // element by splitting off at most `remaining.len() - 1` bytes.
+    unsafe { *out.remaining.as_mut_ptr() = 0 };
+    used as i32
 }
 
 /// # Safety
@@ -261,10 +257,16 @@ pub(crate) unsafe extern "C" fn _mi_vsnprintf(
         let fmt_str = unsafe { CStr::from_ptr(fmt) }.to_string_lossy();
         // SAFETY: the raw boundary checked that `buf` is nonnull and the caller
         // guarantees it is writable for `bufsize` elements for this call.
-        mi_vsnprintf_args(
-            unsafe { core::slice::from_raw_parts_mut(buf, bufsize) },
-            format_args!("{}", fmt_str),
-        )
+        let output = unsafe {
+            core::slice::from_raw_parts_mut(buf.cast::<core::mem::MaybeUninit<c_char>>(), bufsize)
+        };
+        let n = min(fmt_str.len(), output.len() - 1);
+        let (dest, remaining) = output.split_at_mut(n);
+        for (slot, byte) in dest.iter_mut().zip(fmt_str.bytes()) {
+            slot.write(byte as c_char);
+        }
+        remaining[0].write(0);
+        n as c_int
     }
 }
 

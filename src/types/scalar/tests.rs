@@ -1,6 +1,40 @@
 use super::*;
 
 #[test]
+fn direct_bins_preserve_small_bounds_and_padding() {
+    let maximum =
+        SmallRequestedSize::new(RequestedSize::new(crate::types::MI_SMALL_SIZE_MAX)).unwrap();
+    assert_eq!(
+        DirectBin::from_small(SmallRequestedSize::ZERO).as_usize(),
+        0
+    );
+    assert_eq!(
+        DirectBin::from_small(maximum).as_usize(),
+        crate::types::MI_SMALL_WSIZE_MAX
+    );
+    assert_eq!(
+        DirectBin::from_small_padded(maximum.normalized()).as_usize(),
+        crate::types::MI_PAGES_DIRECT - 1,
+    );
+    let minimum =
+        SmallRequestedSize::new(RequestedSize::new(RequestedSize::MIN_ZERO_SIZE)).unwrap();
+    assert_eq!(
+        DirectBin::from_small_padded(SmallRequestedSize::ZERO.normalized()),
+        DirectBin::from_small_padded(minimum.normalized()),
+    );
+    for requested in 0..=crate::types::MI_SMALL_SIZE_MAX {
+        let size = SmallRequestedSize::new(RequestedSize::new(requested))
+            .unwrap()
+            .normalized();
+        let bin = DirectBin::from_small_padded(size).as_usize();
+        assert!(bin < crate::types::MI_PAGES_DIRECT);
+        let bin_bytes = bin * core::mem::size_of::<usize>();
+        assert!(size.padded().get() <= bin_bytes);
+        assert!(size.padded().get() > bin_bytes - core::mem::size_of::<usize>());
+    }
+}
+
+#[test]
 fn requested_size_padding_checks_overflow() {
     assert!(RequestedSize::new(16).checked_padded().is_ok());
     let largest = RequestedSize::new(usize::MAX).checked_padded();
@@ -252,8 +286,7 @@ fn maybe_alignment_accepts_zero_or_power_of_two() {
     assert_eq!(MaybeAlignment::new(64).map(MaybeAlignment::get), Some(64));
     assert!(MaybeAlignment::new(24).is_none());
 
-    let unchecked = unsafe { MaybeAlignment::new_unchecked(24) };
-    assert_eq!(unchecked.get(), 24);
+    assert_eq!(MaybeAlignment::NONE.get(), 0);
 }
 
 #[test]
@@ -311,4 +344,30 @@ fn slice_count_rejects_zero_and_too_large_values() {
         Some(7)
     );
     assert!(SliceCount::from_usize_const(u32::MAX as usize + 1).is_none());
+}
+
+#[test]
+fn small_request_proves_nonzero_padding_and_rejects_unbounded_sizes() {
+    for raw in [
+        0,
+        1,
+        RequestedSize::MIN_ZERO_SIZE,
+        crate::types::MI_SMALL_SIZE_MAX,
+    ] {
+        let small = SmallRequestedSize::new(RequestedSize::new(raw)).unwrap();
+        assert_eq!(small.requested().get(), raw);
+        let effective = if raw == 0 {
+            RequestedSize::MIN_ZERO_SIZE
+        } else {
+            raw
+        };
+        assert_eq!(small.normalized().effective().get(), effective);
+        assert_eq!(
+            small.normalized().padded().get(),
+            effective + crate::types::MI_PADDING_SIZE
+        );
+    }
+    for raw in [crate::types::MI_SMALL_SIZE_MAX + 1, usize::MAX] {
+        assert!(SmallRequestedSize::new(RequestedSize::new(raw)).is_none());
+    }
 }

@@ -3,7 +3,7 @@
 use core::cell::UnsafeCell;
 use core::ffi::{CStr, c_char, c_long};
 use core::ptr;
-use core::ptr::{NonNull, addr_of_mut};
+use core::ptr::addr_of_mut;
 use core::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
 
 use crate::allocator::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
@@ -13,7 +13,7 @@ use crate::ffi::libc;
 use crate::internal::MI_GUARDED;
 use crate::internal::atomic::{mi_lock_s, mi_lock_t};
 use crate::internal::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
-use crate::types::{MiLockGuard, MiLockPtr};
+use crate::types::MiLockGuard;
 use crate::types::{mi_option_desc_t, mi_option_init_t};
 
 use super::diagnostics::_mi_warning_message_fmt;
@@ -387,7 +387,7 @@ const OPTION_DEFAULTS: [mi_option_desc_t; MI_OPTION_COUNT] = [
 #[inline]
 fn with_options_table<R>(f: impl FnOnce(&mut [mi_option_desc_t; MI_OPTION_COUNT]) -> R) -> R {
     unsafe {
-        let lock = MiLockPtr::from_nonnull(NonNull::new_unchecked(addr_of_mut!(options_lock)));
+        let lock = &*addr_of_mut!(options_lock);
         let _lock = MiLockGuard::acquire(lock);
         f(&mut *OPTIONS.0.get())
     }

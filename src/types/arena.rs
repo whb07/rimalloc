@@ -5,50 +5,77 @@ use core::num::NonZeroU32;
 use super::ptr::ArenaPtr;
 use super::scalar::{SliceCount, SliceIndex};
 
-#[derive(Clone, Copy)]
+#[must_use = "arena allocation ownership must be transferred to its backing MemId"]
 pub(crate) struct ArenaAllocation {
     arena: ArenaPtr,
     range: SliceRange,
-    memid: crate::internal::memid::mi_memid_t,
+    initially_committed: bool,
+    initially_zero: bool,
+    pinned: bool,
 }
 
 impl ArenaAllocation {
+    /// # Safety
+    /// `arena` must be live and initialized, and the caller must exclusively own
+    /// the cleared free-bitmap claim for this in-bounds `range`. No other
+    /// allocation owner may represent the same claim.
     #[inline(always)]
-    pub(crate) const fn new(
-        arena: ArenaPtr,
-        range: SliceRange,
-        memid: crate::internal::memid::mi_memid_t,
-    ) -> Self {
+    pub(crate) unsafe fn from_claimed(arena: ArenaPtr, range: SliceRange) -> Self {
+        crate::internal::mi_assert_internal!(range.count_usize() > 0);
+        crate::internal::mi_assert_internal!(
+            range.start_usize() < unsafe { (*arena.as_ptr()).slice_count }
+        );
+        // SAFETY: the live arena's pinned policy is stable throughout this claim.
+        let pinned = unsafe { (*arena.as_ptr()).memid.is_pinned };
         Self {
             arena,
             range,
-            memid,
+            initially_committed: false,
+            initially_zero: false,
+            pinned,
         }
     }
 
     #[inline(always)]
-    pub(crate) fn arena(self) -> ArenaPtr {
+    pub(crate) fn arena(&self) -> ArenaPtr {
         self.arena
     }
 
     #[inline(always)]
-    pub(crate) fn range(self) -> SliceRange {
+    pub(crate) fn range(&self) -> SliceRange {
         self.range
     }
 
     #[inline(always)]
-    pub(crate) fn memid_mut(&mut self) -> &mut crate::internal::memid::mi_memid_t {
-        &mut self.memid
+    pub(crate) fn set_initially_zero(&mut self, zero: bool) {
+        self.initially_zero = zero;
     }
 
     #[inline(always)]
-    pub(crate) fn memid(self) -> crate::internal::memid::mi_memid_t {
-        self.memid
+    pub(crate) fn set_initially_committed(&mut self, committed: bool) {
+        self.initially_committed = committed;
+    }
+
+    #[inline(always)]
+    pub(crate) fn initially_zero(&self) -> bool {
+        self.initially_zero
+    }
+
+    #[inline(always)]
+    pub(crate) fn initially_committed(&self) -> bool {
+        self.initially_committed
     }
 
     #[inline(always)]
     pub(crate) fn into_memid(self) -> crate::internal::memid::mi_memid_t {
-        self.memid
+        crate::core_types::MemId::<crate::core_types::ArenaMem>::arena(
+            self.arena,
+            self.range,
+            super::memid::InitiallyCommitted(self.initially_committed),
+            super::memid::InitiallyZero(self.initially_zero),
+            super::memid::Pinned(self.pinned),
+        )
+        .into_raw()
     }
 }
 
@@ -66,20 +93,28 @@ pub(crate) struct SliceRange {
 }
 
 impl SliceRange {
-    pub(crate) fn new(start: usize, count: usize, arena: ArenaPtr) -> Result<Self, SliceError> {
+    pub(crate) const FIRST_SLICE: Self = Self {
+        start: SliceIndex::new(0),
+        count: SliceCount::ONE,
+    };
+
+    pub(crate) fn new(
+        start: usize,
+        count: usize,
+        arena_slices: SliceCount,
+    ) -> Result<Self, SliceError> {
         let start_u32: u32 = start.try_into().map_err(|_| SliceError::Overflow)?;
-        let count_u32: u32 = count.try_into().map_err(|_| SliceError::Overflow)?;
-        let nz_count = NonZeroU32::new(count_u32).ok_or(SliceError::Overflow)?;
+        let count = SliceCount::from_usize(count).ok_or(SliceError::Overflow)?;
         let end = start_u32
-            .checked_add(count_u32)
+            .checked_add(count.get())
             .ok_or(SliceError::Overflow)?;
-        if end > unsafe { arena.slice_count().get() } {
+        if end > arena_slices.get() {
             return Err(SliceError::OutOfBounds);
         }
 
         Ok(Self {
             start: SliceIndex::new(start_u32 as usize),
-            count: unsafe { SliceCount::new_unchecked(nz_count.get()) },
+            count,
         })
     }
 
@@ -89,7 +124,7 @@ impl SliceRange {
 
         Ok(Self {
             start: SliceIndex::new(start as usize),
-            count: unsafe { SliceCount::new_unchecked(count.get()) },
+            count: SliceCount::from_nonzero(count),
         })
     }
 
@@ -101,7 +136,7 @@ impl SliceRange {
 
         Ok(Self {
             start,
-            count: unsafe { SliceCount::new_unchecked(1) },
+            count: SliceCount::ONE,
         })
     }
 

@@ -34,7 +34,6 @@ impl MainHeap {
 }
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
 pub(crate) struct OwnedHeap(HeapPtr);
 
 impl OwnedHeap {
@@ -59,7 +58,7 @@ impl OwnedHeap {
     }
 
     #[inline(always)]
-    pub(crate) fn ptr(self) -> HeapPtr {
+    pub(crate) fn ptr(&self) -> HeapPtr {
         self.0
     }
 }
@@ -103,7 +102,7 @@ const _: unsafe fn(HeapPtr) -> MainHeap = MainHeap::new_unchecked;
 const _: fn(MainHeap) -> HeapPtr = MainHeap::ptr;
 const _: unsafe fn(HeapPtr) -> Option<OwnedHeap> = OwnedHeap::new;
 const _: unsafe fn(HeapPtr) -> OwnedHeap = OwnedHeap::new_unchecked;
-const _: fn(OwnedHeap) -> HeapPtr = OwnedHeap::ptr;
+const _: fn(&OwnedHeap) -> HeapPtr = OwnedHeap::ptr;
 const _: unsafe fn(*mut mi_heap_t) -> Option<BorrowedHeap> = BorrowedHeap::from_allocation_raw;
 const _: unsafe fn(*mut mi_heap_t) -> Option<BorrowedHeap> = BorrowedHeap::from_lookup_raw;
 const _: unsafe fn(HeapPtr) -> BorrowedHeap = BorrowedHeap::new_unchecked;

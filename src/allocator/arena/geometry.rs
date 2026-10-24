@@ -51,7 +51,14 @@ pub(super) unsafe fn mi_heap_arena_pages(
     let arena_idx = unsafe { mi_arena_index(arena) };
     // SAFETY: the borrowed heap remains live and owns the initialized atomic
     // cell at the checked arena index; acquire pairs with table publication.
-    unsafe { mi_heap_arena_page_cell(heap, arena_idx).load_acquire() }.cast::<mi_arena_pages_t>()
+    unsafe {
+        mi_heap_arena_page_cell(
+            &(*heap.ptr().as_ptr().cast::<MiHeapPrefix>()).arena_pages,
+            arena_idx,
+        )
+        .load_acquire()
+    }
+    .cast::<mi_arena_pages_t>()
 }
 
 /// An operation-scoped snapshot of a page's validated arena membership.
@@ -130,8 +137,14 @@ pub(super) unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page:
     let arena_idx = unsafe { mi_arena_index(arena) };
     // SAFETY: the borrowed live heap owns the initialized atomic cell selected
     // by the checked arena index; acquire observes table publication.
-    let arena_pages = unsafe { mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire() }
-        .cast::<MiArenaPagesPrefix>();
+    let arena_pages = unsafe {
+        mi_heap_arena_page_cell(
+            &(*borrowed_heap.ptr().as_ptr().cast::<MiHeapPrefix>()).arena_pages,
+            arena_idx,
+        )
+        .load_acquire()
+    }
+    .cast::<MiArenaPagesPrefix>();
     // SAFETY: the caller keeps this live page's initialized MemId stable for
     // the arena identity and slice-start membership checks.
     match crate::types::MemId::view(unsafe { (*page).memid }) {
@@ -405,7 +418,9 @@ mod tests {
 
     #[test]
     fn page_arena_membership_rejects_invalid_states_and_preserves_exact_range() {
-        let mut bitmap = MaybeUninit::<mi_bitmap_t>::zeroed();
+        let bitmap = crate::internal::bitmap::storage_tests::BitmapStorage::new(unsafe {
+            crate::bitmap::mi_bitmap_size(16, ptr::null_mut())
+        });
         let mut arena_pages = MaybeUninit::<mi_arena_pages_t>::zeroed();
         let mut arena = MaybeUninit::<mi_arena_t>::zeroed();
         let mut heap = MaybeUninit::<mi_heap_t>::zeroed();
@@ -414,7 +429,7 @@ mod tests {
         // SAFETY: all fixtures are stack-local, initialize every field read by
         // membership construction, and remain live for the test.
         unsafe {
-            let bitmap_raw = bitmap.as_mut_ptr();
+            let bitmap_raw = bitmap.ptr::<mi_bitmap_t>();
             let arena_pages_raw = arena_pages.as_mut_ptr();
             let arena_raw = arena.as_mut_ptr();
             let heap_raw = heap.as_mut_ptr();
@@ -425,7 +440,7 @@ mod tests {
             (*arena_raw.cast::<MiArenaPrefix>()).arena_idx = 0;
             (*arena_raw.cast::<MiArenaPrefix>()).slice_count = 16;
             let arena_ptr = ArenaPtr::new_unchecked(arena_raw);
-            let range = crate::types::SliceRange::new(5, 2, arena_ptr).unwrap();
+            let range = crate::types::SliceRange::new(5, 2, arena_ptr.slice_count()).unwrap();
             let arena_memid = crate::types::MemId::<crate::types::ArenaMem>::arena(
                 arena_ptr,
                 range,

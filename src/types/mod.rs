@@ -37,7 +37,7 @@ pub(crate) use scalar::{
     Errno, GoodSize, HeapSeq, Heartbeat, MaybeAlignment, NumaNode, OsPageSize, PaddedSize,
     PageCapacity, PageMapPrimaryIndex, PageMapSubIndex, PageQueueCount, PageReclaimLimit,
     PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire, SliceCount, SliceIndex,
-    StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount,
+    SmallRequestedSize, StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount,
 };
 
 pub(crate) use layout::{
@@ -53,8 +53,8 @@ pub(crate) use page::{
 pub(crate) use freelist::{ThreadFreeOwner, ThreadFreeWord};
 
 pub(crate) use validation::{
-    BlockForFree, BlockOffset, GuardedBlock, PointerLocation, PointerLookup, ValidatedFree,
-    ValidatedFreeParts, WasGuarded,
+    BlockForFree, BlockOffset, FreePage, FreeRoute, GuardedBlock, PointerLocation, PointerLookup,
+    ScopedFreeBlock, ValidatedFree, WasGuarded,
 };
 
 pub(crate) use memid::{
@@ -65,12 +65,13 @@ pub(crate) use memid::{
 
 pub(crate) use page_states::{
     AbandonedDisposition, AbandonedPageType as AbandonedPage, Active, ActivePage, AllFreePage,
-    AvailablePage, DestroyedPage, ForeignPage, FreeRouteSnapshot, Full, FullPage, LocalPage,
-    OwnedAbandonedPage, Page, PageAbandonOutcome, PageForAbandon, ThreadHeapLocal, Uninit,
+    AvailablePage, DestroyedPage, ForeignPage, Full, FullPage, LocalPage, OwnedAbandonedPage, Page,
+    PageAbandonOutcome, PageForAbandon, ThreadHeapLocal, Uninit,
 };
 
 pub(crate) use page_batch::{BatchValidationError, LocalFreeBatch, RemoteFreeBatch};
 
+#[cfg(test)]
 pub(crate) use validation_extra::FreeBlock;
 
 pub(crate) use freelist_wrappers::{
@@ -104,8 +105,8 @@ mod heap;
 
 pub(crate) use atomic::{
     AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicI64Field, AtomicPtrField,
-    AtomicUsizeField, DetachedRemoteList, MemoryOrder, MiLockGuard, MiLockPtr, OnceGuard,
-    OnceStatePtr, PublishedRemoteHead, RemotePushResult,
+    AtomicUsizeField, DetachedRemoteList, MemoryOrder, MiLockGuard, OnceGuard, PublishedRemoteHead,
+    RemotePushResult,
 };
 mod padding;
 

@@ -94,18 +94,8 @@ macro_rules! define_bitmap_types {
             pub chunk_count: AtomicUsize,
             pub _padding: [usize; MI_BCHUNK_SIZE / MI_SIZE_SIZE - 1],
             pub chunkmap: mi_bchunkmap_t,
-            pub chunks: [mi_bchunk_t; MI_BITMAP_MAX_CHUNK_COUNT],
-        }
-
-        impl Default for mi_bitmap_s {
-            fn default() -> Self {
-                Self {
-                    chunk_count: AtomicUsize::new(0),
-                    _padding: [0; MI_BCHUNK_SIZE / MI_SIZE_SIZE - 1],
-                    chunkmap: Default::default(),
-                    chunks: core::array::from_fn(|_| Default::default()),
-                }
-            }
+            /// Flexible trailing storage; only `chunk_count` chunks are allocated.
+            pub chunks: [mi_bchunk_t; 0],
         }
 
         pub type mi_bitmap_t = mi_bitmap_s;
@@ -118,20 +108,8 @@ macro_rules! define_bitmap_types {
             pub _padding: [usize; MI_BCHUNK_SIZE / MI_SIZE_SIZE - 2],
             pub chunkmap: mi_bchunkmap_t,
             pub chunkmap_bins: [mi_bchunkmap_t; MI_CBIN_COUNT as usize - 1],
-            pub chunks: [mi_bchunk_t; MI_BITMAP_MAX_CHUNK_COUNT],
-        }
-
-        impl Default for mi_bbitmap_s {
-            fn default() -> Self {
-                Self {
-                    chunk_count: AtomicUsize::new(0),
-                    chunk_max_accessed: AtomicUsize::new(0),
-                    _padding: [0; MI_BCHUNK_SIZE / MI_SIZE_SIZE - 2],
-                    chunkmap: Default::default(),
-                    chunkmap_bins: core::array::from_fn(|_| Default::default()),
-                    chunks: core::array::from_fn(|_| Default::default()),
-                }
-            }
+            /// Flexible trailing storage; only `chunk_count` chunks are allocated.
+            pub chunks: [mi_bchunk_t; 0],
         }
 
         pub type mi_bbitmap_t = mi_bbitmap_s;
@@ -143,6 +121,30 @@ define_bitmap_types!(64);
 
 #[cfg(target_pointer_width = "32")]
 define_bitmap_types!(32);
+
+/// # Safety
+/// `bitmap` must have initialized trailing storage covering `index`.
+#[inline(always)]
+unsafe fn mi_bitmap_chunk(bitmap: *const mi_bitmap_t, index: usize) -> *const mi_bchunk_t {
+    // Project from the original allocation pointer, not from a header reference:
+    // a header borrow does not cover the flexible trailing allocation.
+    unsafe {
+        ptr::addr_of!((*bitmap).chunks)
+            .cast::<mi_bchunk_t>()
+            .add(index)
+    }
+}
+
+/// # Safety
+/// `bbitmap` must have initialized trailing storage covering `index`.
+#[inline(always)]
+unsafe fn mi_bbitmap_chunk(bbitmap: *const mi_bbitmap_t, index: usize) -> *const mi_bchunk_t {
+    unsafe {
+        ptr::addr_of!((*bbitmap).chunks)
+            .cast::<mi_bchunk_t>()
+            .add(index)
+    }
+}
 
 /// # Safety
 /// `bitmap` must point to an initialized `mi_bitmap_t`.
@@ -545,7 +547,7 @@ fn mi_bchunk_try_find_and_clear8(chunk: &mi_bchunk_t, pidx: &mut usize) -> bool 
 }
 
 #[inline(never)]
-fn mi_bchunk_try_find_and_clearNX(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
+fn mi_bchunk_try_find_and_clearNX(chunk: &mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
     if n == 0 || n > MI_BFIELD_BITS {
         return false;
     }
@@ -595,7 +597,7 @@ fn mi_bchunk_try_find_and_clearNX(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
 
 #[inline(never)]
 #[allow(clippy::many_single_char_names)]
-fn mi_bchunk_try_find_and_clearNC(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
+fn mi_bchunk_try_find_and_clearNC(chunk: &mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
     if n == 0 || n > MI_BCHUNK_BITS {
         return false;
     }
@@ -714,7 +716,6 @@ where
     let mut bcount = mi_bfield_popcount(bfield);
     let mut b = bfield & cycle_mask;
     while bcount > 0 {
-        bcount -= 1;
         if b == 0 {
             b = bfield & !cycle_mask;
         }
@@ -725,22 +726,22 @@ where
         if !visit(name_idx) {
             return false;
         }
+        bcount -= 1;
     }
     true
 }
 
-type mi_bitmap_visit_fun_t =
-    unsafe fn(*mut mi_bitmap_t, usize, usize, *mut usize, *mut c_void, *mut c_void) -> bool;
-
-#[inline]
-unsafe fn mi_bitmap_find(
+/// # Safety
+/// `bitmap` must remain live and initialized throughout the search. `claim` must
+/// be callable for each selected slice, and `arena`, when present, must remain
+/// valid for the claim callback.
+#[inline(never)]
+pub(crate) unsafe fn mi_bitmap_try_find_and_claim(
     bitmap: *mut mi_bitmap_t,
-    tseq: usize,
-    n: usize,
-    pidx: *mut usize,
-    on_find: mi_bitmap_visit_fun_t,
-    arg1: *mut c_void,
-    arg2: *mut c_void,
+    tseq: ThreadSeq,
+    pidx: &mut SliceIndex,
+    claim: ThreadLocalClaimCallback,
+    arena: Option<ArenaPtr>,
 ) -> bool {
     unsafe {
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
@@ -749,10 +750,10 @@ unsafe fn mi_bitmap_find(
             let mut hi = 0usize;
             if mi_bfield_find_highest_bit(cmap_entry, &mut hi) {
                 let mut found = false;
-                let _ = mi_bfield_cycle_iterate(cmap_entry, tseq % 8, hi + 1, |eidx| {
+                let _ = mi_bfield_cycle_iterate(cmap_entry, tseq.get() % 8, hi + 1, |eidx| {
                     let chunk_idx = (i * MI_BFIELD_BITS) + eidx;
                     crate::internal::mi_debug_assert!(chunk_idx < mi_bitmap_chunk_count(bitmap));
-                    if on_find(bitmap, chunk_idx, n, pidx, arg1, arg2) {
+                    if mi_bitmap_try_find_and_claim_visit(bitmap, chunk_idx, pidx, claim, arena) {
                         found = true;
                         return false;
                     }
@@ -771,24 +772,20 @@ unsafe fn mi_bitmap_find(
 unsafe fn mi_bitmap_try_find_and_claim_visit(
     bitmap: *mut mi_bitmap_t,
     chunk_idx: usize,
-    n: usize,
-    pidx: *mut usize,
-    arg1: *mut c_void,
-    arg2: *mut c_void,
+    pidx: &mut SliceIndex,
+    claim: ThreadLocalClaimCallback,
+    arena: Option<ArenaPtr>,
 ) -> bool {
     unsafe {
-        crate::internal::mi_debug_assert!(n == 1);
-        let claim_fun = arg1 as *mut ThreadLocalClaimCallback;
-        let claim_data = &mut *(arg2 as *mut mi_claim_fun_data_t);
-        let chunk = &(*bitmap).chunks[chunk_idx];
+        let chunk = &*mi_bitmap_chunk(bitmap, chunk_idx);
         let mut cidx = 0usize;
         if mi_bchunk_try_find_and_clear(chunk, &mut cidx) {
             let slice_index = (chunk_idx * MI_BCHUNK_BITS) + cidx;
             crate::internal::mi_debug_assert!(slice_index < mi_bitmap_max_bits(bitmap));
             let mut keep_set = true;
-            if (*claim_fun).invoke(slice_index, claim_data.arena, &mut keep_set as *mut bool) {
+            if claim.invoke(slice_index, arena, &mut keep_set) {
                 crate::internal::mi_debug_assert!(!keep_set);
-                *pidx = slice_index;
+                *pidx = SliceIndex::new(slice_index);
                 return true;
             }
             if keep_set {
@@ -796,44 +793,10 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
                 crate::internal::mi_debug_assert!(wasclear);
             }
         } else {
-            mi_bitmap_chunkmap_try_clear(&mut *bitmap, chunk_idx);
+            mi_bitmap_chunkmap_try_clear(bitmap, chunk_idx);
         }
         false
     }
-}
-
-/// # Safety
-/// `bitmap` and `pidx` must be valid for writes, `claim` must be callable, and `arena`, when
-/// present, must remain valid for the claim callback.
-#[inline(never)]
-pub(crate) unsafe fn mi_bitmap_try_find_and_claim(
-    bitmap: *mut mi_bitmap_t,
-    tseq: ThreadSeq,
-    pidx: &mut SliceIndex,
-    claim: ThreadLocalClaimCallback,
-    arena: Option<ArenaPtr>,
-) -> bool {
-    unsafe {
-        let mut claim = claim;
-        let claim_data = mi_claim_fun_data_t { arena };
-        let mut raw_idx = pidx.get();
-        mi_bitmap_find(
-            bitmap,
-            tseq.get(),
-            1,
-            ptr::addr_of_mut!(raw_idx),
-            mi_bitmap_try_find_and_claim_visit,
-            ptr::addr_of_mut!(claim).cast::<c_void>(),
-            &claim_data as *const mi_claim_fun_data_t as *mut c_void,
-        )
-        .then(|| *pidx = SliceIndex::new(raw_idx))
-        .is_some()
-    }
-}
-
-#[derive(Debug)]
-struct mi_claim_fun_data_t {
-    arena: Option<ArenaPtr>,
 }
 
 /// # Safety
@@ -891,12 +854,12 @@ fn mi_bchunks_unsafe_setN(
     let mut chunk_idx = idx / MI_BCHUNK_BITS;
     let cidx = idx % MI_BCHUNK_BITS;
     let ccount = n.div_ceil(MI_BCHUNK_BITS);
-    mi_bchunk_setN(unsafe { &mut *cmap.add(0) }, chunk_idx, ccount, None);
+    mi_bchunk_setN(unsafe { &*cmap.add(0) }, chunk_idx, ccount, None);
     let mut m = MI_BCHUNK_BITS - cidx;
     if m > n {
         m = n;
     }
-    mi_bchunk_setN(unsafe { &mut *chunks.add(chunk_idx) }, cidx, m, None);
+    mi_bchunk_setN(unsafe { &*chunks.add(chunk_idx) }, cidx, m, None);
     chunk_idx += 1;
     n -= m;
     let mid_chunks = n / MI_BCHUNK_BITS;
@@ -913,7 +876,7 @@ fn mi_bchunks_unsafe_setN(
     }
     if n > 0 {
         crate::internal::mi_debug_assert!(n < MI_BCHUNK_BITS);
-        mi_bchunk_setN(unsafe { &mut *chunks.add(chunk_idx) }, 0, n, None);
+        mi_bchunk_setN(unsafe { &*chunks.add(chunk_idx) }, 0, n, None);
     }
 }
 
@@ -925,7 +888,7 @@ pub unsafe fn mi_bitmap_unsafe_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usi
         crate::internal::mi_debug_assert!(n > 0);
         crate::internal::mi_debug_assert!(idx + n <= mi_bitmap_max_bits(bitmap));
         mi_bchunks_unsafe_setN(
-            (*bitmap).chunks.as_mut_ptr(),
+            mi_bitmap_chunk(bitmap, 0).cast_mut(),
             &mut (*bitmap).chunkmap,
             idx,
             n,
@@ -965,13 +928,13 @@ pub unsafe fn mi_bitmap_setN(
             };
             let mut _already_set = 0usize;
             were_allclear &= mi_bchunk_setN(
-                &(*bitmap).chunks[chunk_idx],
+                &*mi_bitmap_chunk(bitmap, chunk_idx),
                 cidx,
                 m,
                 Some(&mut _already_set),
             );
             already_set += _already_set;
-            mi_bitmap_chunkmap_set(&mut *bitmap, chunk_idx);
+            mi_bitmap_chunkmap_set(bitmap, chunk_idx);
             n -= m;
             cidx = 0;
             chunk_idx += 1;
@@ -1008,13 +971,13 @@ pub unsafe fn mi_bitmap_clearN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usiz
             };
             let mut maybe_all_clear = false;
             were_allset &= mi_bchunk_clearN(
-                &(*bitmap).chunks[chunk_idx],
+                &*mi_bitmap_chunk(bitmap, chunk_idx),
                 cidx,
                 m,
                 Some(&mut maybe_all_clear),
             );
             if maybe_all_clear {
-                mi_bitmap_chunkmap_try_clear(&mut *bitmap, chunk_idx);
+                mi_bitmap_chunkmap_try_clear(bitmap, chunk_idx);
             }
             n -= m;
             cidx = 0;
@@ -1061,7 +1024,7 @@ pub unsafe fn mi_bitmap_popcountN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: u
             } else {
                 n
             };
-            popcount += mi_bchunk_popcountN(&(*bitmap).chunks[chunk_idx], cidx, m);
+            popcount += mi_bchunk_popcountN(&*mi_bitmap_chunk(bitmap, chunk_idx), cidx, m);
             n -= m;
             cidx = 0;
             chunk_idx += 1;
@@ -1098,7 +1061,7 @@ pub unsafe fn mi_bitmap_is_xsetN(
             } else {
                 n
             };
-            xset &= mi_bchunk_is_xsetN(set, &(*bitmap).chunks[chunk_idx], cidx, m);
+            xset &= mi_bchunk_is_xsetN(set, &*mi_bitmap_chunk(bitmap, chunk_idx), cidx, m);
             n -= m;
             cidx = 0;
             chunk_idx += 1;
@@ -1152,7 +1115,7 @@ pub unsafe fn mi_bitmap_clear_once_set(bitmap: *mut mi_bitmap_t, idx: usize) {
         let chunk_idx = idx / MI_BCHUNK_BITS;
         let cidx = idx % MI_BCHUNK_BITS;
         crate::internal::mi_debug_assert!(chunk_idx < mi_bitmap_chunk_count(bitmap));
-        mi_bchunk_clear_once_set(&(*bitmap).chunks[chunk_idx], cidx);
+        mi_bchunk_clear_once_set(&*mi_bitmap_chunk(bitmap, chunk_idx), cidx);
     }
 }
 
@@ -1168,7 +1131,7 @@ pub unsafe fn mi_bitmap_bsr(bitmap: *mut mi_bitmap_t, idx: *mut usize) -> bool {
             if mi_bfield_find_highest_bit(cmap, &mut cmap_idx) {
                 let chunk_idx = (i * MI_BFIELD_BITS) + cmap_idx;
                 let mut cidx = 0usize;
-                if mi_bchunk_bsr(&(*bitmap).chunks[chunk_idx], &mut cidx) {
+                if mi_bchunk_bsr(&*mi_bitmap_chunk(bitmap, chunk_idx), &mut cidx) {
                     *idx = (chunk_idx * MI_BCHUNK_BITS) + cidx;
                     return true;
                 }
@@ -1190,7 +1153,7 @@ pub unsafe fn mi_bitmap_popcount(bitmap: *mut mi_bitmap_t) -> usize {
             let mut cmap_idx = 0usize;
             while mi_bfield_foreach_bit(&mut cmap_entry, &mut cmap_idx) {
                 let chunk_idx = (i * MI_BFIELD_BITS) + cmap_idx;
-                popcount += mi_bchunk_popcount(&(*bitmap).chunks[chunk_idx]);
+                popcount += mi_bchunk_popcount(&*mi_bitmap_chunk(bitmap, chunk_idx));
             }
         }
         popcount
@@ -1220,14 +1183,14 @@ pub(crate) unsafe fn mi_bitmap_forall_set_typed(
 ) -> bool {
     unsafe {
         let arena = arena.map(ArenaPtr::as_ptr).unwrap_or(ptr::null_mut());
-        let one = SliceCount::new_unchecked(1);
+        let one = SliceCount::ONE;
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
         for i in 0..chunkmap_max {
             let mut cmap_entry = (*bitmap).chunkmap.bfields[i].load(Ordering::Relaxed);
             let mut cmap_idx = 0usize;
             while mi_bfield_foreach_bit(&mut cmap_entry, &mut cmap_idx) {
                 let chunk_idx = (i * MI_BFIELD_BITS) + cmap_idx;
-                let chunk = &(*bitmap).chunks[chunk_idx];
+                let chunk = &*mi_bitmap_chunk(bitmap, chunk_idx);
                 for j in 0..MI_BCHUNK_FIELDS {
                     let base_idx = (chunk_idx * MI_BCHUNK_BITS) + (j * MI_BFIELD_BITS);
                     let mut b = chunk.bfields[j].load(Ordering::Relaxed);
@@ -1274,7 +1237,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_ranges_typed(
             let mut cmap_idx = 0usize;
             while mi_bfield_foreach_bit(&mut cmap_entry, &mut cmap_idx) {
                 let chunk_idx = (i * MI_BFIELD_BITS) + cmap_idx;
-                let chunk = &(*bitmap).chunks[chunk_idx];
+                let chunk = &*mi_bitmap_chunk(bitmap, chunk_idx);
                 for j in 0..MI_BCHUNK_FIELDS {
                     let base_idx = (chunk_idx * MI_BCHUNK_BITS) + (j * MI_BFIELD_BITS);
                     let mut b = chunk.bfields[j].swap(0, Ordering::Relaxed);
@@ -1290,7 +1253,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_ranges_typed(
                         let range =
                             SliceRange::from_raw(idx as u32, rng as u32).unwrap_or_else(|_| {
                                 crate::internal::mi_assert_internal!(false);
-                                SliceRange::from_raw(0, 1).unwrap_unchecked()
+                                SliceRange::FIRST_SLICE
                             });
                         crate::internal::mi_debug_assert!((1..=MI_BFIELD_BITS).contains(&rng));
                         crate::internal::mi_debug_assert!(
@@ -1360,7 +1323,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_rangesn_typed(
             let mut cmap_idx = 0usize;
             while mi_bfield_foreach_bit(&mut cmap_entry, &mut cmap_idx) {
                 let chunk_idx = (i * MI_BFIELD_BITS) + cmap_idx;
-                let chunk = &(*bitmap).chunks[chunk_idx];
+                let chunk = &*mi_bitmap_chunk(bitmap, chunk_idx);
                 for j in 0..MI_BCHUNK_FIELDS {
                     let base_idx = (chunk_idx * MI_BCHUNK_BITS) + (j * MI_BFIELD_BITS);
                     let b = chunk.bfields[j].swap(0, Ordering::Relaxed);
@@ -1373,7 +1336,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_rangesn_typed(
                             let range = SliceRange::from_raw(idx as u32, rngslices_count.get())
                                 .unwrap_or_else(|_| {
                                     crate::internal::mi_assert_internal!(false);
-                                    SliceRange::from_raw(0, 1).unwrap_unchecked()
+                                    SliceRange::FIRST_SLICE
                                 });
                             if !visit(range.start_usize(), range.count_usize(), arena, arg) {
                                 let mut notyet_visited = 0usize;
@@ -1454,7 +1417,7 @@ pub unsafe fn mi_bbitmap_unsafe_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: 
         crate::internal::mi_debug_assert!(n > 0);
         crate::internal::mi_debug_assert!(idx + n <= mi_bbitmap_max_bits(bbitmap));
         mi_bchunks_unsafe_setN(
-            (*bbitmap).chunks.as_mut_ptr(),
+            mi_bbitmap_chunk(bbitmap, 0).cast_mut(),
             &mut (*bbitmap).chunkmap,
             idx,
             n,
@@ -1481,7 +1444,7 @@ pub unsafe fn mi_bbitmap_bsr_inv(bbitmap: *mut mi_bbitmap_t, idx: *mut usize) ->
             if mi_bfield_find_highest_bit(!cmap, &mut cmap_idx) {
                 let chunk_idx = (i * MI_BFIELD_BITS) + cmap_idx;
                 let mut cidx = 0usize;
-                if mi_bchunk_bsr_inv(&(*bbitmap).chunks[chunk_idx], &mut cidx) {
+                if mi_bchunk_bsr_inv(&*mi_bbitmap_chunk(bbitmap, chunk_idx), &mut cidx) {
                     *idx = (chunk_idx * MI_BCHUNK_BITS) + cidx;
                     return true;
                 }
@@ -1514,8 +1477,8 @@ pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usi
             } else {
                 n
             };
-            were_allclear &= mi_bchunk_setN(&(*bbitmap).chunks[chunk_idx], cidx, m, None);
-            mi_bbitmap_chunkmap_set(&mut *bbitmap, chunk_idx, true);
+            were_allclear &= mi_bchunk_setN(&*mi_bbitmap_chunk(bbitmap, chunk_idx), cidx, m, None);
+            mi_bbitmap_chunkmap_set(bbitmap, chunk_idx, true);
             n -= m;
             cidx = 0;
             chunk_idx += 1;
@@ -1541,13 +1504,13 @@ pub unsafe fn mi_bbitmap_try_clearNC(bbitmap: *mut mi_bbitmap_t, idx: usize, n: 
         }
         let mut maybe_all_clear = false;
         let cleared = mi_bchunk_try_clearN(
-            &(*bbitmap).chunks[chunk_idx],
+            &*mi_bbitmap_chunk(bbitmap, chunk_idx),
             cidx,
             n,
             Some(&mut maybe_all_clear),
         );
         if cleared && maybe_all_clear {
-            mi_bbitmap_chunkmap_try_clear(&mut *bbitmap, chunk_idx);
+            mi_bbitmap_chunkmap_try_clear(bbitmap, chunk_idx);
         }
         cleared
     }
@@ -1581,7 +1544,7 @@ pub unsafe fn mi_bbitmap_is_xsetN(
             } else {
                 n
             };
-            xset &= mi_bchunk_is_xsetN(set, &(*bbitmap).chunks[chunk_idx], cidx, m);
+            xset &= mi_bchunk_is_xsetN(set, &*mi_bbitmap_chunk(bbitmap, chunk_idx), cidx, m);
             n -= m;
             cidx = 0;
             chunk_idx += 1;
@@ -1605,13 +1568,13 @@ pub unsafe fn mi_bbitmap_is_clearN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: us
 }
 
 #[inline]
-fn mi_bchunk_try_find_and_clear_1(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
+fn mi_bchunk_try_find_and_clear_1(chunk: &mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
     crate::internal::mi_debug_assert!(n == 1);
     mi_bchunk_try_find_and_clear(chunk, pidx)
 }
 
 #[inline]
-fn mi_bchunk_try_find_and_clear_8(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
+fn mi_bchunk_try_find_and_clear_8(chunk: &mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
     crate::internal::mi_debug_assert!(n == 8);
     mi_bchunk_try_find_and_clear8(chunk, pidx)
 }
@@ -1627,7 +1590,7 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic<F>(
     on_find: F,
 ) -> bool
 where
-    F: Fn(&mut mi_bchunk_t, usize, &mut usize) -> bool,
+    F: Fn(&mi_bchunk_t, usize, &mut usize) -> bool,
 {
     unsafe {
         let chunk_count = mi_bbitmap_chunk_count(bbitmap);
@@ -1672,11 +1635,11 @@ where
                         if chunk_idx >= chunk_count {
                             return true;
                         }
-                        let chunk = &mut (*bbitmap).chunks[chunk_idx];
+                        let chunk = &*mi_bbitmap_chunk(bbitmap, chunk_idx);
                         let mut cidx = 0usize;
                         if on_find(chunk, n, &mut cidx) {
                             if cidx == 0 && ibin == MI_CBIN_NONE {
-                                mi_bbitmap_set_chunk_bin(&mut *bbitmap, chunk_idx, bbin);
+                                mi_bbitmap_set_chunk_bin(bbitmap, chunk_idx, bbin);
                             }
                             *pidx = (chunk_idx * MI_BCHUNK_BITS) + cidx;
                             crate::internal::mi_debug_assert!(
@@ -1685,7 +1648,7 @@ where
                             found = true;
                             return false;
                         }
-                        mi_bbitmap_chunkmap_try_clear(&mut *bbitmap, chunk_idx);
+                        mi_bbitmap_chunkmap_try_clear(bbitmap, chunk_idx);
                         true
                     });
                 if found {
@@ -1789,14 +1752,14 @@ pub unsafe fn mi_bbitmap_try_find_and_clearNC(
 }
 
 #[inline]
-fn mi_bchunk_try_clearN_(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, n: usize) -> bool {
+unsafe fn mi_bchunk_try_clearN_(bbitmap: *const mi_bbitmap_t, chunk_idx: usize, n: usize) -> bool {
     crate::internal::mi_debug_assert!(
         (chunk_idx * MI_BCHUNK_BITS) + n <= unsafe { mi_bbitmap_max_bits(bbitmap) }
     );
     let mut m = n;
     let mut count = 0usize;
     while m > 0 {
-        let chunk = &mut bbitmap.chunks[chunk_idx + count];
+        let chunk = unsafe { &*mi_bbitmap_chunk(bbitmap, chunk_idx + count) };
         if !mi_bchunk_try_clearN(
             chunk,
             0,
@@ -1809,7 +1772,7 @@ fn mi_bchunk_try_clearN_(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, n: usize)
         ) {
             while count > 0 {
                 count -= 1;
-                let chunk = &mut bbitmap.chunks[chunk_idx + count];
+                let chunk = unsafe { &*mi_bbitmap_chunk(bbitmap, chunk_idx + count) };
                 mi_bchunk_setN(chunk, 0, MI_BCHUNK_BITS, None);
             }
             return false;
@@ -1841,7 +1804,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN_(
         while chunk_idx <= chunk_max - chunk_req {
             let mut count = 0usize;
             while chunk_idx + count < chunk_max {
-                let chunk = &mut (*bbitmap).chunks[chunk_idx + count];
+                let chunk = &*mi_bbitmap_chunk(bbitmap, chunk_idx + count);
                 if !mi_bchunk_all_are_set_relaxed(chunk) {
                     break;
                 }
@@ -1850,10 +1813,10 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN_(
                     break;
                 }
             }
-            if count == chunk_req && mi_bchunk_try_clearN_(&mut *bbitmap, chunk_idx, n) {
+            if count == chunk_req && mi_bchunk_try_clearN_(bbitmap, chunk_idx, n) {
                 *pidx = chunk_idx * MI_BCHUNK_BITS;
                 for i in 0..count {
-                    mi_bbitmap_set_chunk_bin(&mut *bbitmap, chunk_idx + i, MI_CBIN_HUGE);
+                    mi_bbitmap_set_chunk_bin(bbitmap, chunk_idx + i, MI_CBIN_HUGE);
                 }
                 crate::internal::mi_debug_assert!(*pidx + n <= mi_bbitmap_max_bits(bbitmap));
                 return true;
@@ -1914,6 +1877,9 @@ type mi_bchunk_xsetNC_fun_t =
     fn(mi_xset_t, &mi_bchunk_t, usize, usize, Option<&mut usize>, Option<&mut bool>) -> bool;
 
 #[cfg(test)]
+pub(crate) mod storage_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1948,38 +1914,101 @@ mod tests {
 
     #[test]
     fn bitmap_set_clear_tracks_existing_bits() {
-        let mut bitmap = mi_bitmap_t::default();
+        let storage =
+            storage_tests::BitmapStorage::new(unsafe { mi_bitmap_size(1024, ptr::null_mut()) });
+        let bitmap = storage.ptr::<mi_bitmap_t>();
         unsafe {
-            mi_bitmap_init(&mut bitmap, 1024, true);
-            assert!(mi_bitmap_is_all_clear(&mut bitmap));
+            mi_bitmap_init(bitmap, 1024, true);
+            assert!(mi_bitmap_is_all_clear(bitmap));
 
             let mut already_set = usize::MAX;
-            assert!(mi_bitmap_setN(&mut bitmap, 10, 3, &mut already_set));
+            assert!(mi_bitmap_setN(bitmap, 10, 3, &mut already_set));
             assert_eq!(already_set, 0);
-            assert!(mi_bitmap_is_setN(&mut bitmap, 10, 3));
-            assert_eq!(mi_bitmap_popcount(&mut bitmap), 3);
+            assert!(mi_bitmap_is_setN(bitmap, 10, 3));
+            assert_eq!(mi_bitmap_popcount(bitmap), 3);
 
             already_set = 0;
-            assert!(!mi_bitmap_setN(&mut bitmap, 11, 2, &mut already_set));
+            assert!(!mi_bitmap_setN(bitmap, 11, 2, &mut already_set));
             assert_eq!(already_set, 2);
-            assert_eq!(mi_bitmap_popcount(&mut bitmap), 3);
+            assert_eq!(mi_bitmap_popcount(bitmap), 3);
 
-            assert!(mi_bitmap_clearN(&mut bitmap, 11, 2));
-            assert!(mi_bitmap_is_set(&mut bitmap, 10));
-            assert!(mi_bitmap_is_clearN(&mut bitmap, 11, 2));
-            assert_eq!(mi_bitmap_popcount(&mut bitmap), 1);
+            assert!(mi_bitmap_clearN(bitmap, 11, 2));
+            assert!(mi_bitmap_is_set(bitmap, 10));
+            assert!(mi_bitmap_is_clearN(bitmap, 11, 2));
+            assert_eq!(mi_bitmap_popcount(bitmap), 1);
+        }
+    }
+
+    #[test]
+    fn bitmap_claim_preserves_result_and_bit_disposition() {
+        unsafe extern "C" fn accept(
+            index: usize,
+            arena: *mut mi_arena_t,
+            keep_set: *mut bool,
+        ) -> bool {
+            assert_eq!(index, 7);
+            assert!(arena.is_null());
+            unsafe { *keep_set = false };
+            true
+        }
+
+        unsafe extern "C" fn retry(
+            _index: usize,
+            _arena: *mut mi_arena_t,
+            keep_set: *mut bool,
+        ) -> bool {
+            unsafe { *keep_set = true };
+            false
+        }
+
+        unsafe extern "C" fn discard(
+            _index: usize,
+            _arena: *mut mi_arena_t,
+            keep_set: *mut bool,
+        ) -> bool {
+            unsafe { *keep_set = false };
+            false
+        }
+
+        for (callback, found, keep_set) in [
+            (ThreadLocalClaimCallback::new(accept), true, false),
+            (ThreadLocalClaimCallback::new(retry), false, true),
+            (ThreadLocalClaimCallback::new(discard), false, false),
+        ] {
+            let storage =
+                storage_tests::BitmapStorage::new(unsafe { mi_bitmap_size(1024, ptr::null_mut()) });
+            let bitmap = storage.ptr::<mi_bitmap_t>();
+            let mut index = SliceIndex::new(99);
+            unsafe {
+                mi_bitmap_init(bitmap, 1024, true);
+                assert!(mi_bitmap_set(bitmap, 7));
+                assert_eq!(
+                    mi_bitmap_try_find_and_claim(
+                        bitmap,
+                        ThreadSeq::new(0),
+                        &mut index,
+                        callback,
+                        None,
+                    ),
+                    found,
+                );
+                assert_eq!(mi_bitmap_is_set(bitmap, 7), keep_set);
+            }
+            assert_eq!(index.get(), if found { 7 } else { 99 });
         }
     }
 
     #[test]
     fn bitmap_traversal_visits_bits_and_ranges() {
-        let mut bitmap = mi_bitmap_t::default();
+        let storage =
+            storage_tests::BitmapStorage::new(unsafe { mi_bitmap_size(1024, ptr::null_mut()) });
+        let bitmap = storage.ptr::<mi_bitmap_t>();
         let mut visits = VisitLog::default();
         unsafe {
-            mi_bitmap_init(&mut bitmap, 1024, true);
-            assert!(mi_bitmap_setN(&mut bitmap, 2, 3, core::ptr::null_mut()));
+            mi_bitmap_init(bitmap, 1024, true);
+            assert!(mi_bitmap_setN(bitmap, 2, 3, core::ptr::null_mut()));
             assert!(_mi_bitmap_forall_set(
-                &mut bitmap,
+                bitmap,
                 record_visit,
                 core::ptr::null_mut(),
                 (&mut visits as *mut VisitLog).cast::<core::ffi::c_void>(),
@@ -1987,56 +2016,55 @@ mod tests {
         }
         assert_eq!(visits.as_slice(), &[(2, 1), (3, 1), (4, 1)]);
 
-        let mut range_bitmap = mi_bitmap_t::default();
+        let range_storage =
+            storage_tests::BitmapStorage::new(unsafe { mi_bitmap_size(1024, ptr::null_mut()) });
+        let range_bitmap = range_storage.ptr::<mi_bitmap_t>();
         let mut ranges = VisitLog::default();
         unsafe {
-            mi_bitmap_init(&mut range_bitmap, 1024, true);
-            assert!(mi_bitmap_setN(
-                &mut range_bitmap,
-                16,
-                4,
-                core::ptr::null_mut()
-            ));
+            mi_bitmap_init(range_bitmap, 1024, true);
+            assert!(mi_bitmap_setN(range_bitmap, 16, 4, core::ptr::null_mut()));
             assert!(_mi_bitmap_forall_setc_ranges(
-                &mut range_bitmap,
+                range_bitmap,
                 record_visit,
                 core::ptr::null_mut(),
                 (&mut ranges as *mut VisitLog).cast::<core::ffi::c_void>(),
             ));
-            assert!(mi_bitmap_is_all_clear(&mut range_bitmap));
+            assert!(mi_bitmap_is_all_clear(range_bitmap));
         }
         assert_eq!(ranges.as_slice(), &[(16, 4)]);
     }
 
     #[test]
     fn bbitmap_find_and_clear_claims_one_range() {
-        let mut bitmap = mi_bbitmap_t::default();
+        let storage =
+            storage_tests::BitmapStorage::new(unsafe { mi_bbitmap_size(1024, ptr::null_mut()) });
+        let bitmap = storage.ptr::<mi_bbitmap_t>();
         unsafe {
-            mi_bbitmap_init(&mut bitmap, 1024, true);
-            assert!(mi_bbitmap_setN(&mut bitmap, 0, 4));
+            mi_bbitmap_init(bitmap, 1024, true);
+            assert!(mi_bbitmap_setN(bitmap, 0, 4));
 
             let mut idx = usize::MAX;
-            assert!(mi_bbitmap_try_find_and_clearN(&mut bitmap, 0, 1, &mut idx));
+            assert!(mi_bbitmap_try_find_and_clearN(bitmap, 0, 1, &mut idx));
             assert_eq!(idx, 0);
 
-            let remaining = (0..4)
-                .filter(|i| mi_bbitmap_is_setN(&mut bitmap, *i, 1))
-                .count();
+            let remaining = (0..4).filter(|i| mi_bbitmap_is_setN(bitmap, *i, 1)).count();
             assert_eq!(remaining, 3);
         }
     }
 
     #[test]
     fn bbitmap_find_and_clear_rejects_empty_request() {
-        let mut bitmap = mi_bbitmap_t::default();
+        let storage =
+            storage_tests::BitmapStorage::new(unsafe { mi_bbitmap_size(1024, ptr::null_mut()) });
+        let bitmap = storage.ptr::<mi_bbitmap_t>();
         unsafe {
-            mi_bbitmap_init(&mut bitmap, 1024, true);
-            assert!(mi_bbitmap_setN(&mut bitmap, 0, 4));
+            mi_bbitmap_init(bitmap, 1024, true);
+            assert!(mi_bbitmap_setN(bitmap, 0, 4));
 
             let mut idx = usize::MAX;
-            assert!(!mi_bbitmap_try_find_and_clearN(&mut bitmap, 0, 0, &mut idx));
+            assert!(!mi_bbitmap_try_find_and_clearN(bitmap, 0, 0, &mut idx));
             assert_eq!(idx, usize::MAX);
-            assert!(mi_bbitmap_is_setN(&mut bitmap, 0, 4));
+            assert!(mi_bbitmap_is_setN(bitmap, 0, 4));
         }
     }
 }

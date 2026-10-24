@@ -645,6 +645,14 @@ pub(super) unsafe fn mi_theap_direct_cache_start(
 
 #[cfg(test)]
 mod tests {
+    fn direct_bin(size: crate::core_types::BlockSize) -> crate::core_types::DirectBin {
+        let small = crate::core_types::SmallRequestedSize::new(
+            crate::core_types::RequestedSize::new(size.get()),
+        )
+        .expect("fixture block size is small");
+        crate::core_types::DirectBin::from_small(small)
+    }
+
     use super::*;
     use core::mem::MaybeUninit;
 
@@ -699,7 +707,7 @@ mod tests {
             );
             let normal_queue = crate::core_types::NormalPageQueue::new_unchecked(normal);
             mi_theap_queue_first_update_typed(owner, normal_queue);
-            let direct_idx = mi_direct_bin_from_size(block_size.get());
+            let direct_idx = direct_bin(block_size);
 
             mi_page_queue_remove_typed(normal, middle);
             assert_eq!(normal.first(), Some(first));
@@ -827,12 +835,7 @@ mod tests {
             assert_eq!(front_first.queue_prev(), None);
             assert_eq!(front_first.queue_next(), None);
             assert!(!mi_page_is_in_full(front_first.as_ptr()));
-            assert_eq!(
-                owner
-                    .ptr()
-                    .direct_page(mi_direct_bin_from_size(front_size.get())),
-                front_first
-            );
+            assert_eq!(owner.ptr().direct_page(direct_bin(front_size)), front_first);
             assert_eq!((*theap).page_count, 1);
 
             let _ = mi_page_queue_push_typed(
@@ -849,9 +852,7 @@ mod tests {
             assert_eq!(front_first.queue_next(), None);
             assert!(!mi_page_is_in_full(front_second.as_ptr()));
             assert_eq!(
-                owner
-                    .ptr()
-                    .direct_page(mi_direct_bin_from_size(front_size.get())),
+                owner.ptr().direct_page(direct_bin(front_size)),
                 front_second
             );
             assert_eq!((*theap).page_count, 2);
@@ -867,12 +868,7 @@ mod tests {
             assert_eq!(tail_first.queue_prev(), None);
             assert_eq!(tail_first.queue_next(), None);
             assert!(!mi_page_is_in_full(tail_first.as_ptr()));
-            assert_eq!(
-                owner
-                    .ptr()
-                    .direct_page(mi_direct_bin_from_size(tail_size.get())),
-                tail_first
-            );
+            assert_eq!(owner.ptr().direct_page(direct_bin(tail_size)), tail_first);
             assert_eq!((*theap).page_count, 3);
 
             let _ = mi_page_queue_push_at_end_typed(
@@ -888,12 +884,7 @@ mod tests {
             assert_eq!(tail_second.queue_prev(), Some(tail_first));
             assert_eq!(tail_second.queue_next(), None);
             assert!(!mi_page_is_in_full(tail_second.as_ptr()));
-            assert_eq!(
-                owner
-                    .ptr()
-                    .direct_page(mi_direct_bin_from_size(tail_size.get())),
-                tail_first
-            );
+            assert_eq!(owner.ptr().direct_page(direct_bin(tail_size)), tail_first);
             assert_eq!((*theap).page_count, 4);
         }
     }
@@ -946,7 +937,7 @@ mod tests {
                 crate::core_types::ThreadHeapPtr::new_unchecked(theap),
             );
             mi_theap_queue_first_update_typed(owner, normal_queue);
-            let direct_idx = mi_direct_bin_from_size(block_size.get());
+            let direct_idx = direct_bin(block_size);
 
             mi_page_queue_enqueue_from_raw(full, normal, true, middle);
 
@@ -1027,7 +1018,7 @@ mod tests {
             queue.set_count(crate::core_types::PageQueueCount::new(3));
 
             let normal = crate::core_types::NormalPageQueue::new_unchecked(queue);
-            let direct_idx = mi_direct_bin_from_size(block_size.get());
+            let direct_idx = direct_bin(block_size);
             let active = crate::allocator::raw_bridge::assume_active_page(middle);
             let queued = crate::core_types::QueuedPage::try_queue(active, normal)
                 .expect("middle page is linked in the normal queue");

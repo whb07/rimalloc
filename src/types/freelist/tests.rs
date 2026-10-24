@@ -70,15 +70,17 @@ fn default_freelist_links_are_raw_pointers() {
     }
 
     let keys = [0x1234usize, 0x5678usize];
-    let raw_next = 0x1234_5678usize as *mut crate::types::mi_block_t;
-    let mut block = crate::types::mi_block_t {
-        next: raw_next as usize,
-    };
+    let mut next_block = crate::types::mi_block_t::default();
+    let raw_next = ptr::addr_of_mut!(next_block);
+    let mut block = crate::types::mi_block_t::default();
+    unsafe { crate::internal::mi_block_set_nextx(ptr::null(), &mut block, raw_next, &keys) };
+    assert_eq!(block.next, raw_next as usize);
 
     let decoded = unsafe { crate::internal::mi_block_nextx(ptr::null(), &block, &keys) };
     assert_eq!(decoded, raw_next);
 
-    let replacement = 0x8765_4321usize as *const crate::types::mi_block_t;
+    let replacement_block = crate::types::mi_block_t::default();
+    let replacement = ptr::addr_of!(replacement_block);
     unsafe { crate::internal::mi_block_set_nextx(ptr::null(), &mut block, replacement, &keys) };
     assert_eq!(block.next, replacement as usize);
 }

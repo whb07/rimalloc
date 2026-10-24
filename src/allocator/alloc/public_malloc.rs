@@ -53,7 +53,11 @@ pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize)
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return ptr::null_mut();
     };
-    let size = crate::core_types::RequestedSize::new(size);
+    // SAFETY: this public small-allocation API requires the small-size bound.
+    let size = unsafe {
+        crate::core_types::SmallRequestedSize::new(crate::core_types::RequestedSize::new(size))
+            .unwrap_unchecked()
+    };
     // SAFETY: the caller keeps the classified heap current-thread owned with a
     // stable association while the resolver localizes it.
     let Some(theap) = (unsafe { mi_heap_borrowed_theap_local(heap) }) else {
@@ -176,7 +180,11 @@ pub unsafe extern "C" fn mi_heap_zalloc_small(heap: *mut mi_heap_t, size: usize)
     let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
         return ptr::null_mut();
     };
-    let size = crate::core_types::RequestedSize::new(size);
+    // SAFETY: this public small-allocation API requires the small-size bound.
+    let size = unsafe {
+        crate::core_types::SmallRequestedSize::new(crate::core_types::RequestedSize::new(size))
+            .unwrap_unchecked()
+    };
     // SAFETY: the caller keeps the classified heap current-thread owned with a
     // stable association while the resolver localizes it.
     let Some(theap) = (unsafe { mi_heap_borrowed_theap_local(heap) }) else {

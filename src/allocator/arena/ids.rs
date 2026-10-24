@@ -95,26 +95,6 @@ pub(crate) unsafe extern "C" fn _mi_arena_memid_is_suitable(
     unsafe { mi_arena_memid_is_suitable_typed(memid, request_arena) }
 }
 
-pub(super) unsafe fn mi_memid_create_arena(
-    arena: *mut mi_arena_t,
-    range: crate::core_types::SliceRange,
-) -> mi_memid_t {
-    let slice_index = range.start_usize();
-    let slice_count = range.count_usize();
-    crate::internal::mi_assert_internal!(slice_count > 0);
-    crate::internal::mi_assert_internal!(
-        slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
-    );
-    crate::core_types::MemId::<crate::core_types::ArenaMem>::arena(
-        unsafe { crate::core_types::ArenaPtr::new_unchecked(arena) },
-        range,
-        crate::core_types::InitiallyCommitted(false),
-        crate::core_types::InitiallyZero(false),
-        crate::core_types::Pinned(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned }),
-    )
-    .into_raw()
-}
-
 #[inline]
 pub(super) unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool {
     matches!(

@@ -86,6 +86,16 @@ and the conclusion drawn from them.
 | X38 | Compare grace periods under irregular repeated bursts | Passive, immediate, 100 ms and 1 s owner collection, including arrivals near timer deadlines | **NO POLICY CHANGE**: 100 ms grace reduces mean Rust RSS from 102 to 33 MiB at similar measured CPU cost in this mix; near-deadline arrivals expose collection stalls | `target/perf-experiments/X38/`; recorded below |
 | X39 | Check secure-release decommit protection against C | Owned primitive mapping, isolated access probe, recommit and allocation reuse | **FIXED**: secure level 4 now protects decommitted memory and requests recommit, matching C | `target/perf-experiments/X39/`; recorded below |
 | X40 | Resolve the historical thread-lifecycle TSan report | Reproducing release C-ABI stress, minimized lifecycle test, direct pthread-key regression | **FIXED inherited defect**: explicit teardown now clears the destructor association before metadata release; ten clean runs of each repaired Rust probe | `target/perf-experiments/X40/`; recorded below |
+| X41 | Establish a fresh baseline for the authorized follow-ups | Six balanced full-suite Rust/C rounds before the Rust-only scope change | Complete: frozen inputs and remaining gaps recorded below | `target/perf-experiments/X41/` |
+| X42 | Recognize consumers that free without allocating | Mark participation on owned remote publication and owner collection | **KEEP**: twelve-burst RSS 784→108 MiB; final combined gate in X48 | `target/perf-experiments/X42/` |
+| X43 | Measure idle grace with real producer arrivals | Queue-driven owner, external sampling, overlap timestamps | **KEEP application recipe**: 100 ms grace reduces mean RSS 102→33 MiB in this workload; overlapping arrivals remain a latency cost | `target/perf-experiments/X43/` |
+| X44 | Avoid sparse survivor pinning by separating lifetimes | Same live cache and temporary payload in one versus two private heaps | **KEEP application guidance**: RSS 50→18 MiB, occupied cache pages 512→1 | `target/perf-experiments/X44/` |
+| X45 | Provide maintenance during uninterrupted hot reuse | Non-forced owner collection between batches | **KEEP application recipe**: 1 s checkpoint reduces final RSS 72→8 MiB at −0.18% measured loop rate | `target/perf-experiments/X45/` |
+| X46 | Localize THP advice to dense backing | Every-allocation and first-use prototypes | **REJECT both**: repeated collapse costs up to 22×; first-use full-suite time +5.12%, sh6 +88.20%, rptest +52.21% | `target/perf-experiments/X46/` |
+| X47 | Skip reclaim/reabandon without a main-heap association | Exact null-destination gate after collection and final-free handling | **KEEP**: futile calls removed; final xmalloc time −14.83% in X48 | `target/perf-experiments/X47/` |
+| X48 | Qualify the final retained changes together | Six paired full-suite Rust old/new rounds, application controls, retention repeats, local verification | **KEEP retained scope**: full-suite time −1.45%, local checks pass; Redis inconclusive; cross-target limitations recorded below | `target/perf-experiments/X48/` |
+| X49 | Repeat Redis five consecutive times on request | Five balanced old/new Rust pairs, unchanged frozen artifacts | SET +1.77% in this batch (5/5 positive), GET −0.56% (2/5 positive); no repeatable overall application claim | `target/perf-experiments/X49/` |
+| X50 | Find Redis allocator hotspots shared with other workloads | Separate SET/GET instruction profiles, bounded cache simulation, native profiles, source/assembly checks | **INVESTIGATION ONLY**: prioritize queue-cache range calculation and redundant full-flag transitions; metadata locality is a broader research candidate | `target/perf-experiments/X50/` |
 | X10 | Measure rptestN like upstream rptest (worker CPU time per op) instead of wall time that includes ~20 s of main-thread sleep polling | Harness: `rptest::run` returns summed worker ticks per 1M ops; metric renamed `per-1M-rptest-cpu-ops` | **KEEP (measurement change)**: missed the planned <2% CV bar (Rust 4.6%, C 3.8%; both bimodal from thread scheduling); adopted with a rule of at least 5 runs per allocator | Recorded below |
 | H01 | Fix native harness publication and timing defects found in external review | mstressN AcqRel handoff; sh8benchN atomic foreign slots; rptestN metric renamed `per-1M-rptest-worker-ops` and final foreign drain timed; Larson start gate; xmalloc counts only dequeued batches | **KEEP (measurement change)**: A/A screen of the six affected scenarios runs clean; their old and new numbers are not comparable | Recorded below |
 
@@ -2692,3 +2702,1660 @@ host is claimed as runtime-validated.
 `X40/manifest.json` records source/probe/binary hashes and toolchains. Failing
 and passing probes, all raw sanitizer and gate logs, the diagnostic C source,
 and the assembly comparison remain under `target/perf-experiments/X40/`.
+
+## X41 — Fresh baseline before the retention follow-ups
+
+Completed 2026-10-22. Baseline `a3d20edd` was committed and pushed before this
+round. Release interpose Rust and bundled C 3.3.2 were rebuilt with the same
+benchmark driver and frozen with the native executable. The six paired rounds
+ran all 21 workloads in fresh processes, alternating allocator order and
+shuffling scenario order. Affinity used the eight physical cores (logical CPUs
+0,2,4,6,8,10,12,14) of this Linux x86_64 EPYC 7763 VM. Builds and tests were
+paused during measurement. THP was in `madvise` mode.
+
+Short workloads used one warmup and three samples per process. The longer
+`cfrac`/`rptestN` workloads used one invocation per independent process; the
+three timed workloads used two seconds. Ratios below are medians of the six
+paired normalized-time ratios. Negative is less time for Rust. These are
+exploratory workload results, not application-wide throughput guarantees.
+
+| Workload | Rust / C time difference | Paired verdict |
+|---|---:|---|
+| `glibc-simple` | -2.16% | faster |
+| `malloc-large` | -5.52% | faster |
+| `malloc-large-old` | +0.05% | ~ |
+| `cache-scratch1` | +0.01% | ~ |
+| `cache-thrash1` | +0.02% | ~ |
+| `cache-scratchN` | +0.05% | ~ |
+| `cache-thrashN` | +0.02% | ~ |
+| `mstressN` | -3.67% | faster |
+| `sh6benchN` | -0.96% | likely faster |
+| `sh8benchN` | +3.73% | SLOWER |
+| `alloc-test1` | -0.55% | ~ |
+| `alloc-testN` | -0.84% | likely faster |
+| `barnes` | -0.05% | ~ |
+| `cfrac` | +0.48% | ~ |
+| `mleak10` | +1.52% | ~ |
+| `mleak100` | +1.36% | ~ |
+| `glibc-thread` | -2.24% | faster |
+| `xmalloc-testN` | +3.16% | SLOWER |
+| `larsonN` | -5.01% | ~ |
+| `larsonN-sized` | -12.94% | faster |
+| `rptestN` | +6.48% | SLOWER |
+
+The unweighted geometric-mean time ratio was 0.99112
+(-0.89%). `sh8benchN`, `xmalloc-testN`, and `rptestN` supply the clearest
+remaining deficits; `larsonN` changes direction in the last two pairs, so its
+median alone is not sufficient evidence of a win. Hardware performance events
+are unavailable on this host (`perf_event_paranoid=4`); this round makes no
+hardware-counter claims.
+
+`target/perf-experiments/X41/rust-vs-c-v2/` preserves commands, library and
+executable hashes, every raw timing, process CPU/fault/RSS/context-switch
+resources, host controls, paired ratios, and bootstrap intervals. An earlier
+incomplete run was retained separately after reducing redundant repetitions
+of the long workloads; it is excluded from these results.
+
+## X42 — Free-only consumers participate in retained-page maintenance
+
+Kept on the follow-up branch, 2026-10-22. X31 treated non-main allocator TLD creation
+as evidence of multiple participants. A consumer that only freed allocations
+could leave that flag false indefinitely, so each producer burst added another
+set of full pages to the producer's retained queue.
+
+The fix marks participation in two existing slow paths: publication into an
+owned page through `mi_free_block_mt`, and collection of a nonempty remote
+list by its local owner. The second path covers normal native assembly frees,
+including publication racing the owner's transition to a full page. Neither
+path initializes the consumer's allocator state or mutates a foreign owner's
+queues. The flag remains a relaxed, one-way policy signal. Local allocation
+and free assembly is unchanged; both frozen libraries have `mi_free` at
+`0x125e0` (162 bytes) and `mi_malloc` at `0x12bc0` (81 bytes).
+
+A new isolated Rust regression failed at the missing participation assertion
+on the old source and passes with the fix. A system-allocated pthread/dlopen
+fixture independently failed against the frozen old Rust library in both
+full-page and normal native remote-free cases; bundled C passed both. The
+candidate passes both with the portable C ABI and native interpose artifact.
+The normal case checks recognition before any full-page remote free can mask
+an omitted native path. The release-thread stress driver now runs these cases,
+and both Linux x86_64 and aarch64 CI jobs invoke it.
+
+The memory comparison reused the X35 producer/consumer protocol with twelve
+64 MiB, 64-byte-object bursts, 300 ms idle per burst, three fresh processes per
+library/history, alternating library order, full payload verification, external
+100 ms memory sampling, and quiescent owner-queue reads. All 27 processes
+completed; requested live bytes were zero at every idle checkpoint. Median
+whole-process RSS for the free-only history:
+
+| Library | First idle, MiB | Twelfth idle, MiB | Full pages at twelfth idle | After owner collect, MiB |
+|---|---:|---:|---:|---:|
+| Old Rust | 80.195 | 784.281 | 12,300 | 15.469 |
+| Candidate Rust | 80.160 | 108.164 | 0 | 14.227 |
+| Bundled C | 80.133 | 108.137 | 0 | 14.199 |
+
+Old Rust added 1,025 retained full pages per burst in every repeat. The
+candidate's second burst drained the old queue in every repeat, and later
+idle RSS stayed at or below 108.200 MiB in this experiment. The initialized
+consumer controls remained approximately 108.1–108.2 MiB at the twelfth idle
+for all libraries. The first idle still retains the initial burst: later
+owner maintenance or explicit owner collection is required. This experiment
+establishes the observed twelve-burst behavior, not a general memory cap.
+
+Validation passed: `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, the isolated regression,
+and `scripts/check-release-thread-stress.py`. The all-target test command
+passed with `MIMALLOC_BENCH_SCENARIOS=cache-scratch1`, running all unit,
+integration, example, and other benchmark targets while selecting one native
+benchmark smoke case. The earlier unrestricted invocation passed its unit and
+integration tests and was interrupted in the expensive debug native benchmark;
+the complete 21-workload performance comparison is run separately in release
+mode. Initial test-fixture compilation errors were corrected before the
+recorded pre-fix failure and post-fix pass.
+
+Frozen libraries, native layout, pre-fix failures, passing checks, all phase
+records, samples, and repeat summaries are under
+`target/perf-experiments/X42/`.
+
+The first placement was screened against frozen pre-fix Rust in six balanced
+pairs across all 21 native workloads, with three-second timed workloads and
+one invocation per process. Its geometric mean time ratio was +1.07%.
+Warm focused repeats resolved the short, cold `malloc-large` difference
+(+0.33% across eight pairs), but Larson and rptest had positive, noisy medians.
+The owner-side marker was therefore moved before remote-list validation,
+where a uniquely detached nonempty list already proves remote activity. This
+reduced collection-routine growth from 78 to 48 bytes without changing the
+native malloc/free entrypoints. Invalid lists still follow the existing error
+path; the policy flag can conservatively become true before that error.
+
+Six further balanced old-Rust/new-Rust pairs used the final placement,
+five-second timed workloads, and one warmup plus three measured invocations
+for the short cases. Median candidate time differences:
+
+| Workload | Final placement versus pre-fix Rust |
+|---|---:|
+| Larson | −1.75% |
+| rptest | −0.04% |
+| xmalloc | +1.64% |
+| glibc-simple | +0.13% |
+| sh8 | −0.92% |
+
+The five-case geometric mean was −0.20%. Threaded results remain variable:
+Larson pairs ranged from −11.4% to +13.4%, and sh8 from −5.2% to +11.0%.
+Five of six xmalloc pairs were slower, so the +1.64% median is retained as a
+possible cost, not dismissed as a demonstrated zero-cost change. The clear
+retention/progress benefit justifies keeping this small policy correction;
+these measurements do not establish a general throughput improvement.
+
+A held-out Redis 6.2.7 check of the first placement used six balanced pairs,
+3.2 million SET/GET operations, 256-byte values, 50 connections, pipeline 16,
+disjoint server/client physical cores, and an allocator-ownership check.
+Median throughput ratios were +1.33% SET and +0.35% GET, with mixed pair
+signs. This did not reveal a repeatable application regression and is not
+claimed as an application speedup. The final placement also passed both
+native free-only cases and a fresh twelve-burst old/new Rust confirmation.
+Final aggregate Rust and sanitizer checks are recorded with the completed
+follow-up results below.
+
+## X43 — Owner idle collection with an actual producer queue
+
+Kept as an opt-in application pattern, 2026-10-22. A system-allocated producer
+thread enqueues work after the previous job completes; an allocator-owning
+worker waits on a condition variable. This replaces X38's single-thread
+arrival simulation with actual enqueue/wakeup and collection overlap. Four
+fixed-seed orders contain 32 gaps each: twelve 10 ms, six 100 ms, four
+100.25 ms, four 500 ms, three 1,000.25 ms, two 1.5 s, and one 5 s.
+Every job allocates, touches, verifies, and frees 64 MiB of 64-byte objects.
+The producer cannot tell the owner a future arrival time. A timeout collects
+once, then waits for the next job, including jobs arriving during collection.
+
+All sixteen fresh processes used only final-placement Rust from X42. Policy
+order rotates by repeat; owner, producer, and external sampler use separate
+physical cores 2, 4, and 6. Sampling is every 20 ms. Mean RSS is integrated
+over the sequence and includes the system-allocated pointer array and harness.
+CPU covers refill, free, and collection, excluding payload verification.
+The latency measure ends after the first 1 MiB of each refill; it is not a
+complete application-request latency or an HTTP benchmark.
+
+| Policy | Mean RSS, MiB | Allocator CPU, ms/burst | First 1 MiB median, ms | First 1 MiB p95, ms | Collections per 32 jobs |
+|---|---:|---:|---:|---:|---:|
+| Passive | 101.866 | 14.909 | 0.227 | 2.077 | 0 |
+| Immediate forced collection | 21.264 | 16.458 | 0.756 | 0.938 | 32 |
+| 100 ms idle grace | 33.003 | 15.070 | 0.249 | 1.202 | 14.5 |
+| 1 s idle grace | 72.565 | 14.382 | 0.224 | 1.520 | 6 |
+
+RSS, CPU, and call counts are medians of the four process results; response
+quantiles pool 128 bursts per policy. In this sequence the 100 ms grace reduced
+mean RSS by 67.6%, with an observed 1.1% higher median CPU cost. Immediate
+collection reduced residency further but raised median CPU by 10.4% and
+increased the median first-refill response. These are workload-specific
+tradeoffs, not universal timeout recommendations or statistically established
+small CPU improvements. There were 18 collection/arrival overlaps with the
+100 ms grace and 12 with the 1 s grace across all repeats. Maximum measured
+collection overruns past actual enqueue were 0.759 ms and 0.944 ms.
+
+`examples/worker_maintenance.rs` demonstrates owner-side idle collection
+using the existing raw API, with a single collection per idle interval.
+Applications should choose their grace from their own idle gaps, memory
+budget, and response-time requirements. No real application arrival trace
+was supplied, and the existing small-footprint web-server benchmark does not
+justify imposing this policy on every request. Source, frozen library/hashes,
+actual arrival timestamps, samples, payload checks, and summaries are under
+`target/perf-experiments/X43/worker-primary/`.
+
+A two-seed control repeated passive and 100 ms grace without the sampler.
+Median CPU was 14.921 / 15.030 ms per burst, versus 14.997 / 15.047 ms for
+the same two sampled seeds. Arrival overlaps remained present (ten across
+the two grace runs). This supports the qualitative tradeoff without treating
+the roughly one-percent CPU difference as a precise universal cost. Control
+records are under `target/perf-experiments/X43/worker-no-sampling/`.
+
+## X44 — Separate temporary allocations from sparse cache survivors
+
+Kept as application guidance using existing heap ownership, 2026-10-22.
+Six balanced pairs used only final X42 Rust. Both policies made exactly
+1,048,576 allocations of 64 bytes: 512 cache entries, each interleaved with
+2,047 temporary objects. The mixed policy allocated both classes in one
+private heap; the separate policy used two private heaps through the same
+allocation API. All payload bytes were verified. Temporary objects were then
+freed, both relevant heaps force-collected, and the 32 KiB of cache payload
+left live for three seconds. A visitor counted occupied pages only after the
+observation window. Refill used the same temporary heap and traffic.
+
+| Policy | Settled process RSS, MiB | Pages holding 512 cache objects | Initial fill, ms | Refill, ms | Refill minor faults |
+|---|---:|---:|---:|---:|---:|
+| Mixed lifetimes | 50.070 | 512 | 34.237 | 17.719 | 4,951 |
+| Separate heaps | 18.135 | 1 | 34.283 | 13.012 | 552 |
+
+Values are medians of six fresh processes per policy. The RSS reduction was
+31.936 MiB despite the additional heap's metadata; initial fill time was
+similar. The exact one-page versus 512-page occupancy and identical live
+payload identify sparse lifetime mixing as the retained-capacity cause.
+Refill also improved here, but that result depends on page layout, reuse, and
+THP history and is not promised for every heap split. All cache bytes survived
+refill verification; final live payload was zero after freeing objects and
+deleting the heaps. Deleting a heap with live objects was not used as a
+substitute for freeing those objects.
+
+The README now demonstrates separate safe `Heap` lifetimes. This is an
+allocation-classification decision for an application that knows which data
+outlives a request, rather than a new allocator heuristic that tries to infer
+object lifetime. Frozen artifacts, raw phases, samples, and strict-compiled
+probe source are under `target/perf-experiments/X44/lifetimes-primary/`.
+
+## X45 — Maintenance between hot allocation batches
+
+Kept as an explicit application checkpoint, 2026-10-22. Eight balanced
+four-policy rounds used final X42 Rust only. An initialized worker retains a
+64-byte anchor, allocates/touches/verifies/frees a 64 MiB cold burst of 8 KiB
+objects, then runs a three-second 64-byte allocate/write/free loop. Time is
+checked between batches of 2,048 pairs. Policies are passive, non-forced
+collection every 100 ms or 1 s, and forced collection every 100 ms. The
+external sampler runs every 100 ms on a separate physical core. Payload
+verification, anchor preservation, and zero final live bytes passed in all
+32 processes.
+
+| Policy | Final active RSS, MiB | Million pairs/s | Collections | Median RSS t90, s | Maximum single collection, ms |
+|---|---:|---:|---:|---:|---:|
+| Passive | 72.191 | 167.922 | 0 | Not reached in 3 s | 0 |
+| Non-forced, 100 ms | 8.148 | 167.497 | 29 | 1.069 | 0.661 |
+| Non-forced, 1 s | 8.254 | 167.621 | 2 | 1.069 | 1.360 |
+| Forced, 100 ms | 8.174 | 171.248 | 29 | 0.161 | 0.673 |
+
+RSS, rate, calls, and t90 are medians of eight processes. The pause column is
+the maximum across all processes. t90 is relative to the pre-burst baseline
+and requires three consecutive periodic samples; its precision is limited by
+the sampling cadence. Both non-forced policies reached t90 in all repeats;
+calling ten times as often did not bypass the pending arena-purge deadline.
+The 1 s policy's median rate was 0.18% below passive, versus 0.25% for 100 ms.
+The forced policy's higher measured rate is not treated as a general speedup.
+Median excess RSS integrals over the three seconds were 203.45, 76.76, 76.78,
+and 18.55 MiB-seconds respectively.
+
+The worker example now includes non-forced maintenance between completed
+batches as well as one forced collection after sustained idleness. These
+hooks provide progress when the X26 hot free-list cycle never reaches generic
+allocation. They do not add work to every allocator free. The previously
+rejected X23 per-free countdown remains rejected; repeating its known fast
+path cost would not improve this result. Normal collection of pending arena
+purges is not a promise to drain every possible remote-owner retention state.
+The source, frozen inputs, samples, resource counts, and summaries are under
+`target/perf-experiments/X45/batches-primary/`.
+
+## X46 — Localize THP advice without repeatedly collapsing reused backing
+
+The first density prototype was rejected. It retained the 32 MiB activation
+threshold, but advised/collapsed only fully allocated, aligned 2 MiB regions,
+using the existing free-slice bitmap. Fresh arenas cleared the primitive's
+broad huge-page advice before touching metadata. Three Rust-only paired memory
+repeats saved about 1.6–1.8 MiB after empty/packed/large-to-small histories,
+while a fresh small-process control stayed approximately 12.7 MiB. Dense
+64 MiB bursts retained 66–68 MiB of huge-page coverage versus 68–70 MiB.
+
+However, advising on every subsequent arena allocation repeated collapse on
+recycled ranges. Two complete balanced native rounds found `malloc-large`
+21.46–22.29 times slower and sh8 1.55–1.95 times slower. The four-round screen
+was stopped after those two complete rounds; the interruption and partial
+next round are retained, and only complete pairs are summarized. A separate
+syscall trace of one `malloc-large` invocation found one `MADV_HUGEPAGE` and
+one `MADV_COLLAPSE` in the baseline, versus 15,239 of each in this prototype.
+That cost decisively outweighed the RSS reduction.
+
+The revised candidate uses first-use information already produced by the
+arena's dirty-slice bitmap. It captures that fact before recommit can report
+zero-filled memory for reused backing. After activation, only wholly fresh
+claimed ranges reconsider their overlapping dense regions. Dirty bits do not
+reset, so recycled backing cannot repeatedly trigger these requests. The
+initial activation still scans existing registered arenas. No persistent
+per-region tracking structure, arena field, option, or public API was added.
+The new density/fresh-range policy is limited to Linux/Android x86_64; other
+architectures retain whole-arena advice because their native huge-page
+configuration and performance were not validated here.
+
+An experimental executable intercepts `madvise`, warms twenty rotating 16 MiB
+slots, then repeats the same allocation/free traffic with purging disabled.
+It verifies payload endpoints and requires no further huge-page requests once
+backing is reused. Baseline: 1/1 warm advice/collapse calls and 0/0 reused calls.
+Rejected prototype: 4,097/4,097 warm and 4,096/4,096 reused calls (test fails).
+First-use candidate: 169/169 warm and 0/0 reused calls (test passes). The regression also passed against the combined candidate. Its prototype-only
+source and release-driver hook were removed when the policy was rejected.
+
+Four balanced native pairs screened the first-use candidate against X42 Rust,
+with one warmup plus three short-workload measurements and three-second timed
+workloads. Median time differences were Larson −1.82%, Larson-sized −1.70%,
+mstress −4.34%, sh8 +0.93%, and `malloc-large` +0.47%; five-case geometric mean
+−1.31%. These noisy focused results support a full-suite gate, not a standalone
+KEEP. The first two cold `malloc-large` pairs were 15.404/15.402 ms and
+15.557/15.780 ms (baseline/candidate), so the removed regression was not merely
+hidden by discarding warmup. Process peak RSS in those pairs fell from about
+254.37 to 238.40 MiB.
+
+Two paired first-use memory repeats found empty RSS 18.207→16.631 MiB,
+packed-survivor RSS 19.043→16.703 MiB, and post-burst four-small-worker RSS
+18.154→17.264 MiB. The last case varied by roughly one huge page; its two-run
+median is not a precise universal saving. Fresh-small RSS was 12.709/12.727 MiB.
+The complete native gate then rejected this candidate. In three complete
+fresh-process, single-invocation rounds across all 21 workloads, the combined
+candidate had a +5.12% geometric mean time ratio, sh6 +88.20%, rptest +52.21%,
+mstress +8.21%, and sh8 +6.10%. Every sh6 pair was 83.4–98.0% slower and every
+rptest pair 47.6–58.5% slower. The remaining planned rounds were stopped;
+partial fourth-round records are preserved separately. These large effects
+exceed both the requested budget and the observed noise.
+
+Removing THP localization while retaining the participation and remote-work
+fixes brought two balanced recovery pairs to sh6 +2.56% and rptest +0.34%
+versus the original Rust build. The small post-burst RSS saving does not
+justify the broader workload regressions. Both THP implementations, the new
+primitive, and the prototype-only regression plumbing were reverted. The
+existing X29 policy is retained. X48 reruns the full gate on the remaining
+changes; it does not treat the favorable five-case screen as acceptance.
+
+All variants, patches, frozen inputs, failed/passing regression results, traces,
+and raw measurements are under `target/perf-experiments/X46/`.
+
+## X47 — Skip heap-local work when a main-heap association is absent
+
+Fresh profiling used only Rust. Hardware performance counters were unavailable
+on this host, so Callgrind 3.22.0 recorded instruction counts for the native
+xmalloc and rptest workloads using the frozen X42 build. Instrumentation
+changes timing and scheduling; these counts are not cycle costs or evidence
+about native CAS contention. In xmalloc, `collect_after_remote_free` accounted
+for 46.78% of recorded instructions and mapped reabandon for 8.71%. The latter
+was called 1,459,499 times. In rptest, byte filling accounted for 86.33% of
+recorded instructions, including required calloc zeroing and the benchmark's
+explicit payload fills; those writes cannot be dropped as allocator overhead.
+
+The candidate targets the exact null case of `_mi_page_associated_theap_peek`:
+`page.heap` is null (main heap), and the executing thread has no main-heap TLS
+association. After collecting the published remote batch and handling final
+page destruction, that case goes directly to the existing ownership-release
+routine. It cannot reclaim or map-reabandon into an absent local heap. Other
+heap associations follow the existing path. In particular, a general
+"uninitialized default heap" test was not substituted: the non-null main-heap
+lookup path can initialize a main association and has different semantics.
+
+The option read, remote-list validation, all-free destruction, atomic orders,
+captured release-CAS expectation, and nested collect/retry/terminal transitions
+are preserved. This is narrower than the previously rejected X06 general
+inlining attempt and removes more futile work than E04's rejected
+reclaim-only gate. The collector's generated body shrank from 1,990 to 1,483
+bytes; ownership release is now separately outlined at 506 bytes. Their
+combined 1,989 bytes are essentially unchanged from the original 1,990; the
+benefit is skipped work, rather than a claimed reduction in total code size.
+
+A new isolated Rust test exits an allocating producer, transfers 4,096 live
+64-byte objects to a consumer with no allocator thread state, checks each
+abandoned page and complete payload, frees every object once, and verifies
+that the consumer still has no main-heap association. It passes, as do the
+native full/normal free-only tests and the THP reuse regression.
+
+Four balanced pairs against the first-use THP build gave median time changes:
+xmalloc −15.56% (all pairs between −13.8% and −16.6%), Larson −1.14%,
+Larson-sized +0.82%, rptest −9.63%, and glibc-thread +1.14%. The five-case
+geometric mean was −5.11%. Larson and rptest remain variable, so the full-suite
+and held-out application results in X48 decide acceptance. Native malloc/free
+bodies remain 81/162 bytes with their 64-byte alignment offsets unchanged.
+Source snapshots, profiles, annotations, regression output, and native pairs
+are under `target/perf-experiments/X47/`. The first combined-candidate profile
+in X48 reduced mapped-reabandon calls from 1,459,499 per 1,793,326 collector
+entries to 13 per 4,062,429 entries. The work completed in each instrumented
+timed run differs, so absolute instruction totals are not compared. X48
+profiles and validates the retained build again after removing THP localization.
+That retained-build profile recorded seven mapped-reabandon calls across
+2,494,418 collector entries, confirming the same elimination of futile calls.
+
+## X48 — Final retained-build gate
+
+Completed measurements on 2026-10-22. The retained production changes are X42
+with its owner marker before detached-list validation, and X47's exact
+main-heap null-destination gate. X43–X45 provide an application example and
+lifetime guidance; they do not change allocator defaults. Both X46 THP
+prototypes and their dedicated fixture/driver additions were removed.
+
+The original baseline is the X41 Rust build of `a3d20edd`. The retained
+interpose library is `artifacts/rust-kept.so`, SHA-256
+`e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`.
+The earlier `artifacts/rust.so` contains the rejected THP candidate and is
+not the retained result. Restoring source with preserved old timestamps first
+produced a stale cached build; its unchanged hash exposed the error before
+measurement. Source timestamps were refreshed, the library rebuilt, and its
+new hash and absence of the experimental THP helper verified before any
+retained-build run. Frozen inputs were checked again after measurement.
+
+The final performance comparison used only old/new Rust, as requested. Six
+balanced rounds ran all 21 workloads in fresh processes, shuffled scenario
+order, one invocation per process, and three seconds for timed workloads,
+on logical CPUs 0,2,4,6,8,10,12,14 of the same EPYC 7763 host. No builds,
+tests, profiles, or other benchmarks ran concurrently. Each cell below is
+the median of six paired candidate/baseline normalized-time differences;
+negative means less time. These are not ratios of independently aggregated
+medians.
+
+| Workload | Final / baseline time difference |
+|---|---:|
+| `glibc-simple` | +0.15% |
+| `malloc-large` | +0.00% |
+| `malloc-large-old` | +0.45% |
+| `cache-scratch1` | +0.02% |
+| `cache-thrash1` | -0.02% |
+| `cache-scratchN` | +0.01% |
+| `cache-thrashN` | +0.07% |
+| `mstressN` | -1.33% |
+| `sh6benchN` | -0.18% |
+| `sh8benchN` | -0.29% |
+| `alloc-test1` | +0.23% |
+| `alloc-testN` | +0.31% |
+| `barnes` | +0.13% |
+| `cfrac` | -1.13% |
+| `mleak10` | +3.84% |
+| `mleak100` | +1.78% |
+| `glibc-thread` | -0.17% |
+| `xmalloc-testN` | -14.83% |
+| `larsonN` | -13.47% |
+| `larsonN-sized` | -1.79% |
+| `rptestN` | -2.09% |
+
+The unweighted geometric-mean time ratio is **0.985501 (−1.45%)**, equivalent
+to +1.47% in reciprocal normalized throughput. This meets the requested 2%
+aggregate budget and the stricter 1% project budget. No workload's median
+exceeds the requested 5% regression limit. Xmalloc improves in every pair
+(12.7–23.4% less time). Larson's large median remains scheduling-sensitive:
+one pair is 10.9% slower, so its point estimate is not presented as a precise
+repeatable gain. Peak process RSS medians are retained alongside every timing;
+`malloc-large` is 254.197/254.174 MiB and xmalloc 68.941/69.689 MiB.
+
+The +3.84% `mleak10` point exceeds the stricter project's 3% per-case screen,
+but its six pairs range from −14.0% to +15.3%. A bounded eight-pair A/A control
+with one warmup plus three measured calls gives +0.27%; the matching eight-pair
+old/new confirmation gives −0.52% (range −13.5% to +17.6%). There is no repeated
+slowdown beyond this workload's noise. These follow-ups do not replace the
+primary six-pair value or alter the full-suite geometric mean.
+
+Redis was the held-out application, with fresh server processes and balanced
+old/new order. Throughput differences are positive for more requests/second:
+
+| Series | Pairs | SET | GET |
+|---|---:|---:|---:|
+| Primary old/new | 6 | +0.07% | −2.32% |
+| Identical-old A/A control | 4 | +2.30% | +0.30% |
+| Bounded old/new confirmation | 4 | −4.21% | +4.92% |
+
+Primary GET is lower in five of six pairs; that possible cost is not erased
+by the later sign reversal. Confirmation SET is lower in three of four pairs,
+with individual differences −6.36%, +0.13%, −2.57%, and −5.85%. A/A GET alone
+ranges from −5.13% to +8.44%. The available runs do not establish a stable
+application benefit or a stable greater-than-5% regression. Redis remains
+**inconclusive**, with both unfavorable series preserved. No further reruns
+were used to seek a favorable result.
+
+Three additional paired twelve-burst free-only retention repeats used the
+exact retained artifact. Every phase and payload check passed:
+
+| Library | First idle RSS, MiB | Twelfth idle RSS, MiB | Full pages at twelfth idle | After owner collect, MiB |
+|---|---:|---:|---:|---:|
+| Old Rust | 80.156 | 784.242 | 12,300 | 15.430 |
+| Retained Rust | 80.160 | 108.164 | 0 | 14.227 |
+
+These repeats confirm removal of cumulative owner-full-queue retention. The
+first idle still needs owner progress or explicit collection; 108 MiB is an
+observed endpoint, not a universal cap. The final profile and native free-only
+fixtures also pass after THP removal. Dynamic defined symbol names are
+identical to the baseline. Native `mi_free`/`mi_malloc` remain 162/81 bytes
+with cache-line offsets 32/0; no public API, C layout, or caller safety
+obligation changes.
+
+Local stable verification passed `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features`. The test command used
+`CARGO_PROFILE_TEST_OPT_LEVEL=3` with debug assertions retained, selected only
+`mechanical_mimalloc_raw` for the configurable native benchmark, and used the
+frozen retained library. That target's default smoke selects `glibc-simple`;
+the complete 21-workload comparison is the separate six-pair gate above.
+Other benchmark targets run their normal test-mode smoke checks. The runnable
+`worker_maintenance` example also completed.
+
+The remaining local checks passed:
+
+- `scripts/check-release-thread-stress.py`: release thread stress plus full-page
+  and normal free-only regressions for both portable C ABI and interpose builds.
+- Rust-only Unix mapping checks: hinted allocation retry success/failure both
+  leave zero live mappings; ordinary and secure release decommit/recommit
+  permissions, zeroing, and allocation reuse satisfy their expected contracts.
+- `scripts/check-concurrency-models.sh`: all six models pass with
+  `LOOM_MAX_PREEMPTIONS=3`.
+- `SANITIZER=address` and `SANITIZER=thread` through
+  `scripts/check-sanitizers.sh`, plus both consumer unit regressions under each
+  sanitizer. Nightly uses `RUSTFLAGS=-Aunused-unsafe` for the existing intrinsic
+  compatibility issue described in X40; stable formatting/lint/tests use no
+  warning suppression.
+- `git diff --check`.
+
+The first ASan consumer-unit attempt failed in fixture setup: unlike interposed
+std startup, sanitizer startup left no allocator thread state, and unconditional
+teardown hit the existing empty-default debug assertion. Both fixtures now
+check whether this thread is initialized before requesting teardown. They
+still verify the uninitialized free path and do not skip their assertions.
+ASan and TSan then pass both tests. Formatting, Clippy, and the complete
+workspace/all-target/all-feature test command were rerun successfully after
+that test-only correction. Production source did not change after the frozen
+performance build. The failed initial manifest/log remains alongside the
+successful follow-up and targeted ASan log.
+
+Cross-compilation with `--features std --lib` passes for
+`aarch64-apple-darwin`. Linux AArch64 fails with five pre-existing `c_char`
+signedness errors; Windows MSVC fails with 79 pre-existing platform/type/lint
+errors. Both failures were reproduced in a clean detached `a3d20edd` worktree,
+with exactly the same error-message sequences as the candidate. They are not
+claimed as passing platform validation. Native AArch64, macOS, and Windows
+execution was unavailable here. GitHub Actions was not used after the user's
+instruction to omit it.
+
+Raw manifests, commands, environment settings, source snapshots, all primary
+and confirmation results, profiles, and check logs are under
+`target/perf-experiments/X48/`. These ignored local artifacts retain failures
+as well as successes; this committed section is the durable result summary.
+
+## X49 — Five consecutive Redis comparisons
+
+Requested follow-up, 2026-10-22. Five old/new Rust pairs reused the exact X48
+baseline and retained libraries, alternating execution order, with no other
+benchmarks or builds running. Each fresh server handled 3.2 million SETs and
+GETs, 256-byte values, 50 connections, pipeline 16, and separate pinned server
+and client cores. Allocator ownership and artifact hashes passed verification.
+Paired throughput differences, positive for faster:
+
+| Pair | SET | GET |
+|---|---:|---:|
+| 1 | +0.50% | −1.25% |
+| 2 | +1.77% | +1.80% |
+| 3 | +4.23% | −0.56% |
+| 4 | +3.53% | −3.27% |
+| 5 | +0.07% | +4.15% |
+| Median | +1.77% | −0.56% |
+
+SET measured faster in all five pairs, but X48's opposite-direction series
+and A/A variation still prevent attributing a repeatable application gain to
+the two fixes. No implementation or policy changed. Raw results and summary
+are under `target/perf-experiments/X49/redis-five/`.
+
+## X50 — Redis profiles and shared optimization candidates
+
+Investigation only, 2026-10-23; no allocator changes or new speedup claim.
+Profiles use the retained `b1ce730a` source and the exact X48 interpose artifact
+(SHA-256 `e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`).
+Only our allocator was profiled. Hardware events remain unavailable
+(`perf_event_paranoid=4`; an actual `perf stat` attempt was rejected), so
+Callgrind 3.22.0 supplies instruction counts and simulated cache events,
+not native cycles, hardware miss latency, or contention measurements.
+
+Redis 6.2.7 used the X49 request settings. Startup, warmup, and FLUSHALL were
+excluded; SET and GET each received their own 3.2-million-request profile.
+Process-title rewriting was disabled because it invalidated Valgrind's control
+FIFO identity. The final measured phases completed; the first wrapper then
+mistook SHUTDOWN's expected connection close for an error. Its original
+manifest is retained alongside a clarification and the clean server-exit log.
+The later cache-profile wrapper handles that EOF correctly.
+
+Fresh native instruction profiles cover Larson, sh6, mstress, and rptest with
+the same retained library. The completed X48 xmalloc profile is reused. Native
+profiles include startup, workload warmup, and teardown. In particular,
+Larson's single-owner warmup exercises unfull transitions; their aggregate
+share must not be presented as a steady threaded cost. Default Valgrind
+scheduling starved Larson's timer thread; that attempt was stopped after a
+bounded dump and excluded. The completed retry uses `--fair-sched=yes`.
+
+All percentages below are **self instructions divided by whole-process user
+instructions**. They are neither elapsed-time shares nor expected savings.
+
+| Component | Redis SET | Redis GET | Larson | sh6 | mstress | rptest | xmalloc |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| All allocator code | 16.165% | 8.205% | 36.780% | 60.201% | 4.913% | 8.022% | 81.059% |
+| Direct-page-cache update | 0.944% | <0.001% | 2.015% | 0.110% | 0.043% | 0.030% | 0.102% |
+| Page-queue search | 1.115% | <0.001% | 2.088% | 0.189% | 0.224% | 0.418% | 0.821% |
+| Return full page to normal queue | 0.864% | <0.001% | 0.469% | <0.001% | <0.001% | <0.001% | <0.001% |
+| Remote-free collector | 0 | 0 | 1.884% | 0.067% | 0.113% | 0.437% | 30.953% |
+
+Redis SET executed 15.319 billion instructions, GET 8.856 billion. The usable
+size entry (symbolized as `malloc_size`, also serving `malloc_usable_size`)
+accounted for 4.312% of SET and 3.770% of GET: 12.143 and 6.136 queries per
+request respectively. Its common path is already only 17 instructions.
+`mi_realloc` used 1.504% of SET instructions across 3,200,153 calls, but made
+only 71 calls to free old allocations; nearly all requests kept the block.
+SDS space trimming explains the repeated resize calls. GET made no calls to
+the remote-free collector, as did SET, confirming why X47 is not a direct
+Redis throughput optimization.
+
+A separate cache experiment first populated the same key range with 3.2
+million SETs while instrumentation was off, warmed with 10,000 GETs, then
+profiled 200,000 SETs and 200,000 GETs. This is a populated-dataset window,
+not the initial-growth phase above. The accepted model explicitly uses
+32 KiB, eight-way L1 instruction/data caches and a 32 MiB, sixteen-way last
+level, with 64-byte lines. Callgrind does not model the host's intermediate
+512 KiB L2, out-of-order latency, or coherence. An earlier automatic model
+incorrectly selected a 256 MiB direct-mapped last level; it is preserved but
+is not used for conclusions.
+
+In the corrected SET window, allocator code caused 40.23% of simulated L1
+read misses and 49.34% of write misses. The usable-size entry alone incurred
+832,535 L1 read misses: 395,353 at the leaf page-map read and 437,146 at the
+page flags/block-size reads. Thus the cold lookup/header chain is a concrete
+site to investigate, not just a large function name. Two neighbouring-page
+link stores in unfull caused 321,227 L1 write misses. GET's allocator accounted
+for only 0.98% of L1 read misses, and usable-size queries had just 1,595 misses.
+These results support a SET metadata-locality hypothesis, not a measured
+hardware stall attribution or a guaranteed GET improvement.
+
+Ranked follow-ups:
+
+1. **Derive direct-cache spans without repeatedly classifying sizes.**
+   `mi_theap_direct_cache_start` computes a bin from the current queue's size,
+   then computes bins again while walking predecessor queues. Assembly confirms
+   repeated bit scans/shifts. Derive the same span from the known queue index
+   and immutable class boundaries, preserving alignment aliases and every
+   published cache entry. This is the strongest small candidate with measured
+   reach across Redis and the native suite. Verify all size classes and both
+   pointer widths before a native performance gate; the entire helper's share
+   is only a ceiling on instruction savings.
+2. **Remove temporary full-flag changes used to locate a normal queue.**
+   `_mi_page_unfull_internal` clears the flag, restores it, then the consuming
+   queue move clears it again. All three locked operations and repeated
+   `pages_full_size` accounting survive compilation. This behavior is inherited
+   from bundled C, not introduced by the latest fixes. Compute the destination
+   without changing page state, then perform the final transition once. SET
+   made 1,482,299 such transitions in the full profile. Preserve queue order,
+   accounting, remote publication, and typed ownership. This differs from
+   X24's rejected no-op flag check and X32's rejected removal of queue links.
+   Reach beyond Redis includes lone-owner/private-heap full-page returns and
+   Larson warmup; a steady threaded benefit is not yet demonstrated.
+3. **Investigate shared page-map/header locality.** The pointer-to-page chain
+   is used by free, usable-size queries, and realloc. Free alone contributes
+   32.67% of sh6 and 10.92% of Larson instructions, but those figures include
+   work beyond lookup. Any improvement must reduce actual lookup/cache cost
+   without adding a per-free tax, changing public layouts, or weakening pointer
+   validation. The compact usable-size assembly leaves little obvious scalar
+   work to remove. Obtain native cache/stall evidence before committing to a
+   cache or metadata redesign; the prior X25 batching result warns that a
+   per-free lookup table can cost more than it saves.
+4. **Narrower candidate: a small in-place realloc path.** Isolate the existing
+   same-heap, nonzero, retained-size case from the large allocation/copy fallback
+   to avoid unnecessary register saves and repeated heap resolution. Preserve
+   current zero-size, alignment, heap-transfer, failure, and usable-size rules.
+   This could help Redis and the existing `realloc_churn` benchmark through
+   `GlobalAlloc`, but it is not a broad 21-workload candidate: the observed
+   mstress realloc calls were only 200 null-pointer allocations, and other
+   profiled native workloads did not use this ordinary resize path.
+
+Further remote-collector tuning would mainly help xmalloc, not this Redis
+workload. Rptest's 87.75% `memset` share includes required calloc zeroing and
+benchmark payload writes; it is not permission to remove initialization.
+Mstress spends 94.93% of instructions in its workload body. Neither fact
+supports promising uniform gains from an allocator change. THP localization,
+full-queue removal, and generic per-free batching remain rejected as recorded
+in X46, X32, and X25.
+
+The recommended implementation order is the direct-cache span calculation,
+then the temporary full-flag changes, each isolated and subjected to the
+complete correctness, retention, Redis old/new, and full native gates. No
+candidate has been implemented or accepted by this profiling task. Raw
+profiles, parsed self/call-edge totals, assembly, source snapshots, failed
+setup attempts, and `summary.json` live under `target/perf-experiments/X50/`.
+
+## X51 — Ryzen hardware profiles of Redis and shared allocator paths
+
+Investigation only, 2026-10-23; no allocator changes or speedup claim. At the
+user's request, profiling ran over SSH on `wbright@100.103.18.44`, host
+`amd-ubuntu`, in `~/projects/mechanical_mimalloc/target/perf-experiments/`
+`X51-hardware-20261023`. The checkout there was clean at `c8c815f9` and was
+left intact. The exact retained X48 allocator and X49 Redis binaries were
+copied there and their SHA-256 hashes verified before execution. Allocator
+source is `b1ce730a`; the library hash remains
+`e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`.
+Only our allocator was profiled; Redis's interposition check confirmed the
+server PID. The native harness selected only `mechanical_mimalloc_raw`.
+
+Hardware: Ryzen 9 5950X, 16 cores / 32 logical CPUs, 32 KiB L1D and 512 KiB L2
+per core, two 32 MiB L3 caches; Linux 7.0.0-31-generic and perf 7.0.14.
+Hardware counters and per-process AMD IBS worked with the existing permissions.
+The host was already saturated by other jobs: load averages were about 61–64,
+and the initial CPU sample showed all 32 logical CPUs busy. Those jobs were
+not stopped or changed. These are hotspot profiles under contention, not
+clean throughput measurements or an allocator comparison.
+
+Redis settings match X49/X50: 6.2.7, 256-byte values, 50 clients, pipeline 16,
+one client thread, random key range 3.2 million, and 3.2 million operations
+per phase. Startup, 1,000-request SET/GET warmup, and FLUSHALL precede profiling;
+SET grows an initially empty dataset and GET reads the resulting dataset.
+The server and client were pinned to CPUs 2 and 4, controller to CPU 6. A fresh
+server was used for each of two passes:
+
+- `cycles:u` at 997 Hz with DWARF call stacks, separately enabled for SET/GET.
+- `ibs_op/cnt_ctl=1/` with period 262,144, data addresses, memory data sources,
+  and weights, again separately enabled for SET/GET.
+
+Concurrent `perf stat` counted grouped user cycles, instructions, branches,
+and branch misses, plus task-clock, context switches, and page faults. All
+four hardware counters ran 100% of their enabled time: no multiplex scaling.
+The profiles report zero lost samples. Control acknowledgments and the normal
+SIGINT termination status required two wrapper corrections; the failed
+attempts are preserved separately and excluded from the tables below. The
+accepted Redis and native manifests both report completion, and no owned
+benchmark/profiler processes remained after collection.
+
+Native profiles cover Larson, sh6, mstress, rptest, and xmalloc, with one full
+quick run per profiler, five-second timed workloads, and affinity
+`0,2,4,6,8,10,12,14`. They include process startup, workload initialization,
+and cleanup. The short rptest profile has substantial startup/kernel-address
+attribution and is not used to rank small candidates. Native measurement is
+separate from the Redis runs.
+
+### Cycle evidence
+
+Percentages are self sample-period weights divided by the whole recorded
+`cycles:u` event weight. They are **not expected speedups**. Ordinary cycle
+sampling has skid: despite user-only counting, kernel-address samples account
+for 4.78% of SET and 6.18% of GET. They remain in the denominator rather than
+being silently discarded. IBS is used below for precise instruction locations.
+Perf names several aliases differently from Callgrind: `mi_malloc_usable_size`
+is the X50 `malloc_size` entry, and `operator delete[](void*, unsigned long)`
+shares the exact exported address with `free` and `mi_free` in this artifact.
+
+| Component | Redis SET | Redis GET | Larson | sh6 | xmalloc |
+|---|---:|---:|---:|---:|---:|
+| All allocator code | 17.54% | 6.97% | 43.45% | 87.10% | 79.83% |
+| malloc/new entry | 4.19% | 2.56% | 21.32% new[] | 39.13% | 10.67% |
+| free entry | 0.68% | 1.12% | 12.94% | 42.48% | 22.65% |
+| usable-size entry | 4.74% | 3.29% | — | — | — |
+| realloc entry | 1.84% | <0.01% | — | — | — |
+| Direct-page-cache update | 0.57% | no samples | 0.83% | 0.32% | 0.16% |
+| Return full page to normal queue | 0.77% | no samples | 0.005% | no samples | no samples |
+| Remote-free collector | no samples | no samples | 0.96% | 0.16% | 20.03% |
+| Release abandoned ownership | no samples | no samples | no samples | no samples | 11.37% |
+
+Redis SET has 5,981 cycle samples, GET 4,263; Larson 25,099, sh6 2,008, and
+xmalloc 21,513. Tiny entries, especially sh6's six direct-cache-update samples,
+are indications of reach, not precise estimates. SET counted 17.210 billion
+user cycles and 15.628 billion instructions (0.908 instructions/cycle); GET
+11.142 billion cycles and 9.166 billion instructions (0.823). Branch-miss
+rates were 0.471% and 0.420%. Contending workloads, SMT, and profiling overhead
+limit interpretation of these absolute values.
+
+Redis's `dictFind` alone accounts for 11.50% of SET and 21.92% of GET cycle
+weights. GET also spends 5.98% in `stringObjectLen`. Allocator-only changes
+therefore address a limited fraction of GET's measured cost. In mstress,
+87.36% is the benchmark's `stress` body and 11.37% allocator code. The previous
+remote-free work remains primarily an xmalloc opportunity; X50's exact
+instruction profiles establish zero collector calls in both Redis phases.
+
+### Precise memory evidence
+
+IBS yielded 73,002 total / 57,820 user samples for SET and 43,339 / 33,031 for
+GET. User/kernel separation uses the sampled instruction address, because IBS
+also samples kernel operations. L1-miss counts below include sampled loads
+with an identified non-L1 source; they are sample counts, not total misses.
+
+| Sampled loads | Redis SET | Redis GET |
+|---|---:|---:|
+| All user loads | 14,438 | 8,235 |
+| All user loads missing L1 | 957 | 504 |
+| Allocator loads | 2,740 | 947 |
+| Allocator loads missing L1 | 261 | 42 |
+| Allocator miss sources: L2 / other cache / RAM | 132 / 120 / 9 | 41 / 1 / 0 |
+
+The usable-size leaf page-map load at offset `+0x22`, page flags at `+0x2b`,
+and block size at `+0x2e` give a specific check of X50's locality hypothesis:
+SET has 51 L1 misses among 412 sampled loads at those three instructions,
+29 served by L2 and 22 reported as `core, same node Any cache hit`. Their
+median recorded miss latency is 12 cycles, mean 26.3. GET has 14 misses among
+218 such loads, all L2, median 10.5 cycles. No sampled load at those three
+sites was served by RAM. This supports a SET-sensitive lookup dependency/cache
+cost, but not a claim of pervasive DRAM stalls or a case for adding a new
+lookup cache to every free.
+
+SET's unfull function has 63 misses among 195 sampled loads, median miss
+latency 43 cycles; 41 were other-cache hits and six RAM hits. Queue bookkeeping
+and neighbouring-page state matter in addition to its redundant flag changes.
+Direct-cache update has 35 sampled loads and zero L1 misses in this run;
+its known repeated bin computations remain the concrete instruction target.
+
+Across native profiles, Larson's allocator has 3,595 misses among 25,114
+sampled loads; sh6 has only 59 among 4,482. In sh6, malloc/free together account
+for 81.61% of cycle weights despite mostly hot loads. Reducing fast-path work
+and dependent loads is therefore a broader hypothesis than reducing cache
+capacity misses alone. IBS latency sums contain a few roughly 10,000–13,000
+cycle outliers, including return/stack accesses, and are not interpreted as
+exclusive stall-time shares. Counts, locations, source categories, and medians
+above avoid treating those outliers as a large metadata speedup opportunity.
+
+### Follow-up order
+
+1. **Small shared change: direct-page-cache span computation.** Derive the
+   span from the queue index/class boundaries instead of repeatedly applying
+   the bin calculation in `page/queues.rs::mi_theap_direct_cache_start`.
+   Hardware confirms reach in SET and Larson, with smaller sh6/xmalloc
+   entries. Preserve alignment aliases and all cache entries. The measured
+   enclosing update is only 0.57% of SET and 0.83% of Larson, so expect a
+   modest opportunity, not a multi-percent promise.
+2. **Larger shared research: malloc/free/usable-size fast paths.** These are
+   substantial in Redis, Larson, and sh6. Examine avoidable dependent metadata
+   loads and repeated work using the exact pointer-to-page/header locations.
+   GET and sh6 are largely cache-resident, so a design must improve their hot
+   path too, without adding a cache-probe tax or weakening validation. No
+   specific redesign is justified or implemented by these profiles.
+3. **Concrete SET-focused change: remove temporary full-flag transitions.**
+   Compute the destination normal queue without clearing/restoring the full
+   flag, then perform the final transition once. The current three locked
+   modifications and repeated accounting remain visible in X50's assembly.
+   Hardware sees 0.77% in this function for SET but only 0.005% in the aggregate
+   Larson run; do not advertise a broad steady threaded benefit.
+4. **Secondary resize candidate: a compact in-place realloc path.** The SET
+   entry is 1.84%; X50 confirms almost all its 3.2 million calls retain the
+   block. This could help Redis and dedicated realloc-churn workloads. It is
+   not a demonstrated shared target across these native cases.
+
+Raw perf data, scripts, hashes, manifests, command lines, load snapshots, and
+reports remain in the remote X51 directory. A local copy of text reports and
+manifests is under `target/perf-experiments/X51/remote`; `summary.json` checks
+that symbol-period totals equal the reported event counts and that all
+counter running percentages are 100. `analyze-ibs.py` retains the load-source
+and instruction-offset aggregation. These scratch artifacts are untracked.
+No Rust source changed, so this investigation adds no Rust verification run;
+the change to this worklog is checked with `git diff --check`.
+
+IBS event/precision interpretation follows the
+[Linux perf AMD IBS documentation](https://linux.googlesource.com/linux/kernel/git/torvalds/linux/+/e34a79b96ab9d49ed8b605fee11099cf3efbb428/tools/perf/Documentation/perf-amd-ibs.txt).
+
+## X52 — direct-cache span arithmetic: rejected (2026-10-23)
+
+Following X50/X51, replaced the backward bin search with the preceding queue's
+size boundary, including the alignment aliases on 32-bit and 64-bit targets.
+A focused regression checked every small request byte against the original
+bin classification; the optimized debug test passed. This was measured only
+on the local EPYC VM, against the frozen retained `b1ce730a` library with
+SHA-256 `e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`.
+Each screen used six alternating fresh-process pairs, the existing six native
+cases and pinned Redis SET/GET controls from X41/X42, selecting only our
+allocator.
+
+The first build let LLVM inline the enclosing queue update. Redis SET improved
+1.39% and GET declined 0.14%, but native elapsed time rose 0.55% geometrically:
+Larson +4.26%, sh8 +2.32%, each slower in five of six pairs. A second version
+preserved the previous outline boundary and hot malloc/free/collector addresses;
+the update shrank from 480 to 331 bytes. SET improved 2.33% and GET 0.71%, but
+native time still rose 0.30% overall, with xmalloc +3.44% and slower in four
+of six pairs. Other median native changes were Larson +0.90%, Larson-sized
+−1.60%, sh6 −0.33%, sh8 −0.69%, and glibc-thread +0.18%.
+
+Neither version demonstrated an all-around runtime improvement. Both source
+changes and the candidate-only test were reverted. Patches, frozen libraries,
+raw process outputs, resources, and summaries remain under untracked
+`target/perf-experiments/X52/{native-screen,redis-screen,native-outlined,redis-outlined}`.
+
+## X53 — select the unfull destination without temporary flag changes
+
+The full-page transition now uses the existing size/huge classifier to select
+its destination queue while the full flag remains set. The existing queue
+transfer clears it once. This removes two locked flag updates and their
+repeated full-size accounting per transition; it preserves the remaining
+owner/interior-pointer flags and queue ordering. A focused regression covers
+normal and huge destinations, existing destination pages, links, counts, and
+full-size accounting. It passes with optimized debug assertions.
+
+Against the original retained library, six local alternating Redis pairs give
+SET +2.29% throughput (five of six positive), GET −0.04%. The six-workload
+native screen gives elapsed-time changes of Larson −5.07%, Larson-sized
+−1.73%, sh6 +1.00%, sh8 −1.54%, xmalloc −1.23%, and rptest −2.85%; geometric
+mean −1.92%. Larson and rptest are highly variable; only sh8 meets the
+screen's likely-faster criterion. The sh6 cost needs checking in the full
+suite. The candidate is provisionally retained for the final combined gate,
+not declared broadly faster from this screen alone. Raw paired evidence and
+the isolated patch are under `target/perf-experiments/X53`.
+
+## X54 — outline realloc's allocate/copy fallback: rejected
+
+Kept validation, heap resolution, usable-size outputs, and the in-place
+eligibility test intact, but outlined allocation/copy/free behind a private
+helper. Boundary checks for half-size retention, below-half moves, private-heap
+ownership, and aligned interior payload copying passed (eight integration
+checks total). The exported realloc function became smaller, but materializing
+helper arguments added stack writes to the common path.
+
+The baseline for this independent experiment includes X53. Six local Redis
+pairs gave SET +0.59% and GET +0.57% throughput, with substantial variation.
+The existing public-allocator `realloc_churn` workload, however, took 6.59%
+more time: all six paired changes were worse, ranging from +4.81% to +12.65%.
+Both static benchmark binaries were frozen before measurement, ran on CPU 2,
+and used fresh Criterion output directories, the existing deterministic
+4,000-allocation workload, 100 samples, and ten seconds of measurement.
+The ratio uses each process's Criterion mean, then the median across pairs.
+No other allocator was selected. Redis and churn ran sequentially without
+concurrent builds or tests.
+
+Reverted the helper and candidate-specific tests. Their patch, frozen static
+and shared artifacts, raw samples, commands, hashes, and summaries remain
+under `target/perf-experiments/X54`. Smaller assembly alone did not justify
+this runtime regression.
+
+## X55 — schedule the free-path thread-ID load earlier: rejected
+
+Moved the independent TLS thread-ID load before the page-map loads in the
+release interpose free stub, using a caller-saved register. The instruction
+count, 162-byte function size, and malloc/free/collector addresses stayed
+unchanged. Release free-only checks passed for same-thread, cross-thread,
+abandoned-owner, and shutdown cases.
+
+Six local paired native runs against X53 showed xmalloc −4.18% time in every
+pair, but sh6 +5.46% in every pair (range +3.0% to +7.2%). The aggregate of six
+focused cases was essentially flat; the other medians were Larson +2.17%,
+Larson-sized −2.90%, sh8 −0.33%, and glibc-thread +0.07%. Redis's six pairs
+gave SET +0.13% throughput and GET −0.68%. This trades one hot workload's
+performance for another, so the assembly change was reverted. Frozen binaries,
+patch, release-check logs, raw pairs, and summaries are under
+`target/perf-experiments/X55`.
+
+## X56 — use the compact page-map leaf index in free: rejected
+
+The handwritten free stub used a 64-bit shift and scaled index where the
+compiler-generated usable-size path already used the equivalent low-32-bit
+byte offset. Tested `(low32(pointer) >> 13) & 0xfff8` in the free stub, saving
+two instruction bytes. Two bytes of unexecuted padding preserved the malloc
+and subsequent function addresses. Release free-only probes passed.
+
+Six native pairs against X53 gave +0.48% geometric-mean elapsed time, including
+Larson-sized +4.77%, sh6 +0.55%, glibc-thread +0.77%, and xmalloc −1.66%.
+The six Redis pairs gave SET −2.50% throughput (five of six lower) and GET
+−0.77%. Reverted the candidate. This arithmetic simplification does not remove
+a dependent metadata load; removing one would require a more substantial
+page-map/layout change or a cache with a correct invalidation protocol. The
+current evidence does not justify adding such a cache to each lookup.
+Raw paired results, patches, hashes, and release checks are under
+`target/perf-experiments/X56`.
+
+## X57 — pass scalar realloc fallback inputs (rejected)
+
+Revisited X54's argument-passing cost. The fallback now receives the already
+validated old pointer/usable size, requested size, zeroing policy, local heap,
+and optional output. It constructs the ordinary allocation layout inside the
+fallback. Pointer validation, heap resolution, usable-size outputs, in-place
+eligibility, zero-tail handling, and successful-copy-before-free ordering stay
+in place. The exported realloc body is 377 bytes and saves five registers,
+without X54's 64-byte stack packet and common-path layout stores. Boundary,
+alignment, compatibility zero-extension, and seeded allocation-sequence checks
+pass (22 integration tests).
+
+Six local alternating pairs against X53 give Redis SET +1.67% throughput
+(five of six higher), GET +1.43% with mixed signs. The existing frozen public
+realloc-churn benchmark gives +0.44% elapsed time, with paired changes
+−4.86%, +9.86%, +0.19%, +3.99%, −1.94%, and +0.69%. This removes X54's consistent
+churn regression, but does not establish a churn speedup. The full X59 gate
+then measured realloc churn **3.50% slower** than X53 alone, with five of six
+pairs slower. The abstraction-only comparison is −0.13%, locating this cost
+in the realloc experiment rather than the seven abstraction changes. Reverted
+the prototype and its two added integration tests before the final retained
+build. Raw samples, isolated patch, frozen
+shared/static binaries, hashes, and commands are in `target/perf-experiments/X57`.
+
+## X58 — profile another application before adding allocator work
+
+Profiled the cached portable RocksDB 10.10.1 `fillrandom` workload locally with
+the X53+X57 library: 50,000 writes, 256-byte values, one worker, seed 12345,
+compression disabled, WAL enabled, sync disabled, and a fresh database.
+Callgrind collected 645,771,121 instructions over the process lifetime. The
+allocator library accounts for 1,940,979 self instructions, **0.301%**. Its
+largest entries are free (0.102%) and the malloc/C++-new alias (0.079%).
+The dominant application entries are the memtable comparator (11.66%), two
+CRC routines (7.63% and 7.44%), and skip-list splice recomputation (6.15%).
+
+These are instruction shares, not cycle or wall-time shares; startup and
+cleanup are included. The profile does not justify another allocator change
+for this workload. The ownership checker reports one distinct process ID,
+and allocator-object call edges confirm the instrumented library is exercised.
+Frozen binary hashes, commands, raw profile, checked instruction totals,
+reports, and output are under `target/perf-experiments/X58/rocksdb-instructions`.
+The remote VM was not needed for these experiments.
+
+## X59 — Borrowed atomic fields and guards, locked-list capabilities, and bounded storage
+
+Implemented the seven requested internal changes in order. The initial
+pre-abstraction control contains X53 and the provisional X57 experiment:
+SHA-256 `a5400eff3ade41de818071ce80f39a9784ea37c4c58bd9406acf04b297299209`.
+The initial candidate is `4000f4e69483829040411fc389be13160a9c236bd3577b9378be1e3dd7e8c806`.
+The held-out realloc result rejects X57; the final retained build and its
+matching X53-only control are recorded below.
+
+- Arena count and page-table cells hold borrowed atomic fields. Their five
+  load/store/fetch methods are safe. Prefix projections accept the actual
+  fixed atomic arrays; raw metadata is borrowed only at the call site and
+  does not create a shared reference to unrelated mutable heap fields.
+- Atomic, once, and mutex guard constructors borrow their backing objects.
+  Guards retain their existing non-Send/non-Sync behavior. Linux pthread
+  storage uses `UnsafeCell` with the same 40-byte size and word alignment;
+  once operations no longer form exclusive references to borrowed locks.
+  Dynamic subprocess heap visits hand off the registry lock inside a scoped
+  callback, keeping the original lock order and callback reentrancy behavior
+  without inventing a dynamic `'static` lifetime.
+- Heap/TLD list capabilities identify the protected owner and replace both
+  acquire booleans throughout thread-heap teardown. Each path acquires the
+  other list lock once, preserves heap unlink → TLD unlink → TLD clear →
+  terminal decref, and releases locks at the original points. Inlining the
+  common free helper removes the capability packet and enum dispatch from
+  the caller boundary; no allocator metadata or synchronization is added.
+- `OwnedHeap` has neither `Copy` nor `Clone`. Intermediate drains borrow it;
+  terminal release consumes it. Raw aliases remain an unsafe caller concern.
+- A bounded `SmallRequestedSize` preserves the original request for tracking
+  and derives `NormalizedSmallSize` for safe padding. Both types occupy one
+  word. The existing small-path branch constructs the bounded proof; the two
+  public unsafe heap-small boundaries use their existing size precondition.
+  The old safe `RequestedSize::padded_unchecked` method is removed.
+- Statistics buffering borrows `[c_char; 256]`. An eight-bit cursor admits
+  only valid array indexes, and buffer writes use ordinary safe indexing.
+  A formatting enum replaces the nullable C format pointer. Callback/context
+  and input-string conversions retain their required unsafe boundaries.
+- Bitmap bin diagnostics accept the fixed chunk array directly. The helper
+  becomes safe and retains the same optimized instructions.
+
+Compiler probes compile positive borrow controls and reject all five local
+atomic/guard backing escapes with E0515. Probes built against the full crate
+also reject both locked-list scope escapes and a second move of `OwnedHeap`
+(E0382); their positive controls compile. Existing tests assert pointer-sized
+handles/guards, unchanged pthread layout, and noncopyable ownership/guards.
+New boundary tests cover zero, one, the small maximum, maximum + 1, and
+`usize::MAX`, plus statistics output across capacity and newline boundaries.
+
+Normalized x86-64 release code, excluding alignment padding and resolving GOT
+relocations, gives the following initial comparison to the pre-abstraction control:
+
+| Function | Before / after bytes | Normalized instruction bodies |
+| --- | ---: | --- |
+| `mi_malloc` | 81 / 81 | Identical |
+| `mi_free` | 162 / 162 | Identical |
+| `mi_theap_malloc` | 97 / 97 | Identical |
+| `mi_realloc` | 377 / 377 | Identical |
+| `mi_heap_free` | 610 / 610 | Identical |
+| Once enter / release | 226 / 226; 40 / 40 | Identical |
+| Bitmap debug bin lookup | 154 / 154 | Identical |
+| `mi_heap_malloc_small` | 184 / 154 | Bounds-check path removed; 56 → 47 instructions |
+| `mi_heap_zalloc_small` | 240 / 210 | Bounds-check path removed; 74 → 65 instructions |
+| Statistics output callback | 183 / 178 | Safe indexing adds no bounds-check path |
+
+Whole-library text grows by 336 bytes (0.13%), mostly from specializing the
+teardown paths. No new heap allocation, metadata word, lock operation, or
+atomic operation implements these abstractions. Code size and static
+instruction counts alone are not treated as throughput measurements.
+
+Validation: final `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features` pass without warning
+suppression. Portable C ABI/interpose release thread stress and free-only
+regressions pass. ASan and TSan suites pass with the already-required nightly
+`-Aunused-unsafe` compatibility flag for the existing CPUID intrinsic wrapper;
+the initial unsuppressed nightly invocation fails on that unrelated warning.
+
+The extra non-secure release unit run exposes an existing test problem:
+`free_validation_covers_null_invalid_and_bad_alignment` passes arbitrary
+invalid pointers to a release configuration requiring valid allocator
+pointers. It SIGSEGVs in both this tree and clean `f56f6089`; the other 306
+release unit tests pass with that case excluded. The production free path and
+that unrelated test are unchanged. Apple ARM64 release checking passes.
+Linux ARM64's five character-signedness errors and Windows MSVC's 79 existing
+platform/type/lint errors reproduce at `f56f6089` with identical error-message
+multisets. These cross-platform checks are not claimed as passes.
+
+All source diffs, compile-probe logs, code-generation comparisons, frozen
+shared/static artifacts, and verification logs are under
+`target/perf-experiments/X59`. Performance comparisons below use only this
+machine; no additional hardware-profile VM run was needed.
+
+Initial six-round measurement used all six execution orders for original,
+pre-abstraction, and candidate builds, with 378 successful fresh native
+processes across 21 workloads. Geometric-mean normalized time was −0.03%
+versus the original and −0.57% versus the pre-abstraction build. Against that
+pre-abstraction control, glibc-simple was +1.80% in time (all six slower),
+malloc-large +3.07% with mixed signs, and Larson +3.12% with mixed signs;
+these points prevent a blanket claim that every workload is unchanged.
+Redis's 18 successful server runs gave SET/GET throughput +0.37%/+1.77%
+against the original, and +3.05%/+1.13% against the pre-abstraction build.
+
+The 18-process realloc comparison was decisive for X57: candidate time was
++3.50% against the frozen X53-only build (five of six slower), but −0.13%
+against X53+X57, with mixed signs. Thus the outlined fallback was removed;
+the abstraction changes were retained for the final comparison. Six paired
+cold-path checks gave statistics-rendering time +0.07% and private-heap
+create/allocate/destroy time −0.44%, both mixed. The initial raw data remain
+under `native-primary`, `redis-primary`, `realloc-screen`, and `cold-paths`;
+they are not substituted for measurements of the final retained artifact.
+
+After removing X57, the retained shared library is SHA-256
+`ab2ef9b931ce917c036ddd47200dcf49682dd739ccb77291b4a06acc75680fbc`;
+its matching pre-abstraction X53-only control is
+`533d77733c55d15b9ed0a43580c93f852208f5e1c503f65b32374e6e61c2910e`.
+The original pre-X53 control remains
+`e696b6f92b8573d64f53e70a448a8ff671e4860c2a80f2236217530a1aedc3f3`.
+The final code-generation comparison preserves every conclusion in the table
+above; restored `mi_realloc` is 747 bytes/209 instructions in both builds,
+with identical normalized bodies. All 240 dynamic export names match.
+Text is 267,929 → 268,265 bytes (+336); data is unchanged at 44,008 bytes.
+
+Re-ran formatting, full-workspace/all-target/all-feature Clippy and tests on
+this exact source after the rollback: all pass, including 420 tests and the
+native smoke harnesses. Release C ABI/interpose thread stress and free-only
+regressions, ASan, and TSan pass again. The sanitizer commands retain the
+previously documented nightly CPUID warning compatibility flag. Frozen final
+artifacts and code-generation results are in `retained-artifacts.json` and
+`codegen-retained.json` under the X59 artifact directory.
+
+Final retained six-round comparison: all 378 native processes and all 18
+Redis server runs complete successfully. Lower native normalized time is
+better; higher Redis throughput is better. “Abstractions only” compares
+X53 plus the seven changes against X53 alone.
+
+| Native workload | Time vs original | Abstractions only |
+| --- | ---: | ---: |
+| glibc-simple | -0.07% | +0.21% |
+| malloc-large | +1.61% | -2.23% |
+| malloc-large-old | +0.42% | -0.14% |
+| cache-scratch1 | -0.02% | +0.02% |
+| cache-thrash1 | -0.03% | +0.03% |
+| cache-scratchN | -0.07% | -0.24% |
+| cache-thrashN | -0.18% | -0.18% |
+| mstressN | +0.32% | +0.13% |
+| sh6benchN | +1.08% | +1.51% |
+| sh8benchN | +0.36% | +0.26% |
+| alloc-test1 | -5.43% | -2.81% |
+| alloc-testN | -0.05% | +0.35% |
+| barnes | +0.51% | +0.75% |
+| cfrac | +1.14% | +0.62% |
+| mleak10 | +2.80% | -6.66% |
+| mleak100 | +1.02% | -0.29% |
+| glibc-thread | +0.94% | -0.18% |
+| xmalloc-testN | +1.39% | +1.10% |
+| larsonN | +2.42% | -1.99% |
+| larsonN-sized | -0.24% | -2.15% |
+| rptestN | -1.49% | +0.77% |
+| **Geometric mean** | **+0.29%** | **-0.55%** |
+
+| Redis operation | Throughput vs original | Abstractions only |
+| --- | ---: | ---: |
+| SET | +1.14% | +2.63% |
+| GET | +3.35% | +1.82% |
+
+SET improves in all six retained/original pairs. GET has mixed signs; its
+point estimate is not treated as a reliable application-wide speedup. The
+initial glibc-simple slowdown does not repeat on the final artifact: +0.21%
+versus the abstraction control, with mixed signs. The final xmalloc point
+is +1.10% with six positive differences and receives a bounded A/A and
+old/new confirmation. Short malloc-large and mleak10 points versus the
+original are also confirmed with identical-binary controls.
+
+The retained realloc-churn comparison is **−1.61% time** versus the frozen
+X53-only static build, with five of six pairs faster. This confirms that the
+earlier +3.50% cost did not survive removing X57. Six paired statistics and
+private-heap lifecycle checks give +0.49% and −1.23% respectively, with mixed
+signs. There is no measured aggregate penalty from the seven abstractions;
+these small point estimates are not universal zero-cycle guarantees.
+
+Bounded confirmation used twelve balanced rounds per workload, with two
+copies of the same frozen control and the retained candidate. The xmalloc
+control is X53 alone; the malloc-large/mleak10 control is the original build.
+All 108 processes pass. Median elapsed-time changes are:
+
+| Workload | Identical-binary A/A | Candidate / control A | Candidate / control B |
+| --- | ---: | ---: | ---: |
+| xmalloc-testN | −0.09% | +1.45% | +1.86% |
+| malloc-large | −0.42% | +0.87% | −0.33% |
+| mleak10 | +7.52% | +2.77% | −1.84% |
+
+The xmalloc confirmation has mixed signs (7/12 and 8/12 slower); descriptive
+95% bootstrap intervals for its two candidate comparisons are
+[−2.36%, +3.52%] and [−3.22%, +3.88%]. Its primary +1.10% point and positive
+confirmation medians leave a small regression possible, even though the
+confirmation cannot separate it from variation. No further reruns were used
+to select a favorable result. The short malloc-large/mleak10 measurements do
+not establish a source-level regression: the two identical controls themselves
+diverge substantially, especially mleak10. Raw samples and the A/A calculations
+are preserved in `confirm-abstractions`, `confirm-overall`, and
+`confirmations-summary.json`.
+
+Retain X53's removal of two redundant locked flag updates and all seven
+abstraction changes. Reject the direct-cache, lookup-index, earlier-TLS-load,
+and both realloc-outlining prototypes. The complete retained native suite is
+essentially flat versus the original (+0.29%), while Redis SET improves
+1.14% in all six pairs. The abstraction-only native aggregate is −0.55%.
+The compiler-checked lifetime, lock identity, ownership, bounds, and array
+extent guarantees require no additional allocator metadata, allocation,
+lock, or atomic operation. Main-path instruction bodies remain identical;
+the measurements support negligible overall cost, with the explicit xmalloc
+uncertainty above rather than a claim of identical throughput everywhere.
+
+## X60 — cross-thread measurement with more repetitions
+
+Followed up the possible X59 xmalloc-testN slowdown with allocator code and
+the benchmark executable held fixed. The candidate remains the verified
+`6eda1797` source, artifact `ab2ef9b931ce917c036ddd47200dcf49682dd739ccb77291b4a06acc75680fbc`;
+the X53-only control remains
+`533d77733c55d15b9ed0a43580c93f852208f5e1c503f65b32374e6e61c2910e`.
+Both control labels now use the exact same file and inode. The second phase
+also reuses the first phase's artifact files without rebuilding or recopying.
+No Rust source or benchmark workload code changes were made.
+
+The workload retains its original eight allocator/eight freer threads on
+CPUs 0,2,4,6,8,10,12,14 (one logical CPU per physical core). The controller
+waits on CPU 15. Each block contains two control processes and one candidate
+process. All six execution orders occur once per six-block cycle, shuffled
+with a fixed seed. Three warmup processes per phase are excluded by plan;
+all measured samples are retained. No other build, test, benchmark, or profile
+runs alongside the measurements. Both phases completed their declared sample
+counts without timing-based early stopping.
+
+The primary statistic is the geometric mean of paired normalized-time
+ratios: candidate / geometric-mean(two controls), with one observation per
+complete block. Intervals use 100,000 fixed-seed bootstrap resamples of
+complete blocks. Three-block moving and complete six-block-cycle resampling
+check sensitivity to consecutive-run variation. Earlier X59 data are
+recomputed with this same estimator; its original reported median estimates
+are not compared directly to the new mean-ratio estimates.
+
+| Run | Paired blocks | Seconds per process | Time change | 95% paired interval |
+| --- | ---: | ---: | ---: | --- |
+| Earlier X59 confirmation, same estimator | 12 | 3 | +0.73% | [−1.43%, +2.83%] |
+| X60 longer samples | 36 | 15 | +0.81% | [−0.56%, +2.18%] |
+| X60 more repetitions | 180 | 3 | **−0.03%** | **[−0.77%, +0.73%]** |
+
+Longer samples alone did not reduce the observed per-block spread: log-ratio
+standard deviation was 0.0424, compared with 0.0392 in the earlier short
+confirmation. Therefore, before starting the second phase, its count was
+fixed at 180 three-second blocks to target approximately ±0.6 percentage
+points of uncertainty. Its actual interval is approximately ±0.75 points,
+64.8% narrower than the earlier interval using the same estimator. The two
+durations are analyzed separately, without pooling them to choose a result.
+
+The larger run's checks agree with essentially flat performance:
+
+| Check | Time change | 95% interval |
+| --- | ---: | --- |
+| Identical-file A/A controls | −0.22% | [−1.10%, +0.67%] |
+| Candidate / control A | −0.14% | [−1.03%, +0.77%] |
+| Candidate / control B | +0.08% | [−0.76%, +0.93%] |
+| First 90 blocks | +0.19% | [−0.67%, +1.08%] |
+| Last 90 blocks | −0.26% | [−1.44%, +0.98%] |
+| Three-block moving bootstrap | −0.03% | [−0.79%, +0.73%] |
+| Six-block-cycle bootstrap | −0.03% | [−0.80%, +0.77%] |
+
+The median paired change is −0.42%; 82 of 180 blocks are slower. Candidate
+position estimates are −0.23%, +0.14%, and −0.01%, each with an interval
+spanning zero. Neither the two halves nor execution positions identify a
+consistent penalty. Both phases report zero guest-observed steal ticks,
+cgroup throttle events, and major faults. Median process CPU use is 7.78 and
+7.74 CPU-seconds per wall second respectively. All 648 measured processes and
+six warmups pass, and all frozen binary hashes match after measurement.
+
+Code-generation inspection also finds that the cross-thread collector has
+the same 1,483-byte, 367-instruction normalized body in both artifacts, but
+its entry moves from `0x1e440` (cache-line offset 0) to `0x1df50` (offset 16).
+That placement difference is a possible performance mechanism, not a proven
+cause. No alignment workaround or allocator change is justified by these
+measurements alone.
+
+Conclusion: the larger run, at the original three-second benchmark duration,
+does **not** support a repeatable 1–2% slowdown. Its conservative sensitivity
+interval is approximately [−0.80%, +0.77%], so the measured effect is
+essentially zero within roughly 0.8 percentage points on this machine.
+This replaces X59's unresolved 1–2% concern with a substantially tighter
+reading; it does not establish exact zero cost on every machine or workload.
+
+Commands, schedule, hashes, raw per-process output, process resources, CPU
+and cgroup snapshots, and analysis scripts/results are under
+`target/perf-experiments/X60`: `long-run`, `many-run`, `analysis.json`,
+`analysis-many.json`, and `collector-codegen.json`. No remote VM was used.
+
+## X61 — six type-system fixes, checked against release assembly
+
+Implemented the six reviewed fixes against the retained `1a79864d` baseline:
+
+1. Bitmap claims pass the callback, arena, and result as typed arguments.
+   This removes the shared-reference-to-mutable-reference cast that the new
+   regression reproduces under Miri before the fix. The regression checks
+   accepted, retried, and discarded bits and preserves the result on failure.
+2. Three primitive and three specialized atomic views borrow actual atomic
+   storage. Raw field projections remain at the caller's unsafe validity
+   boundary; no lifetime is attached merely to a copied raw pointer.
+   Primitive operations are safe during that borrow. Remote publication
+   explicitly requires unique block ownership and a correctly prepared link.
+   The deferred-callback globals now use actual `AtomicPtr` storage.
+3. `SliceRange::new` validates arithmetic against a supplied slice count,
+   without dereferencing an arena. Callers obtain the live extent in their
+   existing unsafe context.
+4. Direct bins derive from bounded small sizes. Unrestricted safe size and
+   padded-size constructors are removed, and the bound reaches cache indexing.
+5. `ArenaAllocation` is non-copyable and holds its arena/range identity once.
+   Only initialization flags can change. Its consuming handoff constructs
+   the matching MemId. Removing the duplicate identity shrinks this internal
+   owner from 48 to 32 bytes on x86-64.
+6. `OldAllocation` is non-copyable and derives usable size from one consumed
+   validated lookup. Realloc borrows for inspection and moves the owner into
+   terminal release. No Drop implementation changes failed-realloc ownership.
+   Tests cover shrink boundaries, heap transfers, and interior payloads.
+
+The changes add no allocator metadata fields, allocations, locks, atomic
+operations, reference counts, or dynamic dispatch. Borrowed atomic views
+retain their pointer size and alignment. The compiler rejects backing-storage
+escapes and repeated moves; those restrictions require no runtime bookkeeping.
+
+### Assembly evidence
+
+Compared the actual release interpose libraries with Rust 1.92.0 / LLVM 21.1.3
+on x86-64 Linux, using the same build command for both:
+`cargo rustc --release --features interpose --lib --crate-type cdylib`.
+Disassembly comparison resolves dynamic relocations and normalizes relocated
+addresses; instruction counts exclude alignment padding. Full function bodies
+and callers are inspected when inlining changes.
+
+| Function | Baseline instructions | Retained instructions | Finding |
+| --- | ---: | ---: | --- |
+| `mi_malloc` | 20 | 20 | Identical normalized body |
+| `mi_free` | 45 | 45 | Identical normalized body |
+| `mi_theap_malloc` | 27 | 27 | Identical normalized body |
+| `mi_realloc` | 209 | 209 | Identical normalized body |
+| `mi_heap_malloc_small` | 47 | 47 | Identical normalized body |
+| `mi_heap_zalloc_small` | 65 | 65 | Identical normalized body |
+| `collect_after_remote_free` | 367 | 367 | Identical normalized body |
+| `mi_bitmap_try_find_and_claim` | 268 | 268 | Identical normalized body |
+| `mi_arena_try_alloc_at` | 212 | 207 | Smaller ownership packet |
+| `mi_malloc_aligned_at` | 75 | 67 | Removes redundant bin arithmetic and bounds failure |
+| `mi_calloc_aligned` | 111 | 111 | Same work; basic blocks reordered |
+| `mi_calloc_aligned_at` | 128 | 115 | Removes redundant bin arithmetic and bounds failure |
+| Aligned generic allocation | 241 | 242 | One extra mask on the large-alignment branch |
+| Aligned realloc worker | 199 | 226 | Null-input allocation is now inlined; removes cache bounds checks |
+
+Inspection led to three small implementation refinements: decrement the
+bitmap traversal count at the loop latch, store arena identity once, and
+inline the two typed aligned-request adapters. The last change prevents an
+extra helper call and repeated alignment validation in aligned calloc.
+The ordinary realloc core stays inlined, as in the baseline.
+
+All 240 dynamic export names match. The ELF `.text` section decreases from
+197,874 to 197,522 bytes; `.data` and `.bss` sizes are unchanged. Baseline SHA256:
+`ab2ef9b931ce917c036ddd47200dcf49682dd739ccb77291b4a06acc75680fbc`.
+Retained SHA256:
+`dbc2a7a669e9761987ccd4eb76598e4b4ee1fec7b80359b1eb971bcd2e489bb0`.
+
+The evidence establishes identical generated instructions for the listed
+core paths and removes runtime bookkeeping from the ownership/lifetime
+restrictions. It does **not** establish identical instructions everywhere:
+LLVM inserts `and $0x1,%dl` before widening the zeroing flag on the cold
+large-alignment path. That is one actual additional instruction, not hidden
+by a timing average. Inlining and block placement also change elsewhere.
+There is therefore no unconditional claim of zero added instructions on
+every allocator path or identical elapsed time on every target.
+
+### Correctness verification
+
+The required `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features` pass, including the full
+Rust suite and native smoke harnesses. ASan, TSan, and release thread stress pass.
+Thirty-three probes compile the actual modified crate: positive controls and
+the owner-size assertion compile; backing-storage escapes, raw/null atomic
+construction, safe remote publication, unbounded direct bins, identity
+mutation, independent old-allocation parts, and repeated transfers fail with
+the expected compiler errors. Committed assertions reject Copy/Clone for the
+owners.
+
+The supported Miri suite plus bitmap and arena-claim tests pass under Stacked
+and Tree Borrows, each with and without strict provenance: 135 tests per
+configuration, 540 passes in total, plus one existing ignored test per
+configuration. The final bitmap/arena refinements were rerun in all four
+configurations. An unrestricted `types::` selection reaches a pre-existing
+heap fixture's unsupported `sysconf(_SC_PHYS_PAGES)` call; that broader run
+does not pass. Nightly checks use the existing CPUID compatibility flag
+`RUSTFLAGS=-Aunused-unsafe`; stable gates use no warning suppression.
+
+### Earlier timing screen
+
+Before switching the primary check to assembly, an initial six-fix artifact
+completed 378 native workload processes and 18 Redis runs, with two control
+labels using the exact same baseline file. Remaining realloc, cold-path,
+aligned, and confirmation measurements were stopped or not started when
+assembly became the requested focus. The completed screen used artifact
+`85d3bf61171846c4a11c38b9378dc052ffbd57bbf1d916553ebb8115e8b69071`,
+before the assembly-driven refinements above. Its results are retained as
+historical observations, not presented as measurements of the final artifact
+or proof of exact zero cost. No further timing runs were used to accept the
+final code.
+
+Raw logs, compiler probes, source snapshots, disassembly/diffs, and frozen
+libraries are under `target/perf-experiments/X61`. The final evidence files
+are `assembly-final-manifest.json`, `codegen-final.json`, `final.asm`, and
+`*.final.diff`; earlier experimental artifacts are kept separately. No remote
+VM, GitHub Actions run, or sub-agent was used.
+
+## X62 — preserve validated alignment through generic allocation
+
+Following the X61 assembly finding, the large-alignment path now passes its
+existing `Alignment` proof into `_mi_theap_malloc_zero_ex` as `MaybeAlignment`.
+The other three callers pass the existing zero-alignment value. A safe,
+inlined conversion preserves the proof; no unsafe constructor or caller
+obligation is added. This removes a redundant power-of-two validation and
+its unreachable diagnostic path from the internal helper. Public raw-input
+validation, heap/sentinel resolution, and allocation-failure behavior remain
+in place.
+
+Relative to the original pre-six-fix binary, the large-alignment routine
+decreases from 1,024 bytes / 241 instructions to 920 bytes / 226 instructions.
+Its stack reservation decreases from 152 to 136 bytes. For an initialized
+heap, a 129-byte request, 128 KiB alignment, zero offset, and a successful
+aligned return, the instruction trace decreases from **68 to 64**. This count
+includes calls as single instructions; the called generic allocator retains
+its identical 287-byte / 81-instruction body. The zeroing-flag mask remains,
+but the path now executes fewer instructions overall: the redundant alignment
+test and branch are gone. This resolves the added successful-path work found
+in X61 without special assembly or a change to the allocation algorithm.
+
+The X61 identical core bodies, bitmap claim body, and smaller arena owner
+remain unchanged. Against the X61 final artifact, the aligned generic routine
+is the only existing function whose instruction count changes; no function
+symbols are added or removed. All 240 dynamic exports still match the
+pre-six-fix baseline. ELF `.text` is 197,410 bytes versus 197,874 originally,
+a 464-byte reduction, with unchanged `.data` and `.bss` sizes. Final SHA256:
+`b83b8e826251bfc45a2d2c89bc7b2ee2ce225b55d427144927b7cfed061d9501`.
+
+Code layout still differs. For example, the ordinary over-allocation failure
+return has an additional unconditional jump after a failed allocation.
+Instruction equality on every error path, identical cache placement, and
+target-independent cycle counts are not claimed. The type restrictions add
+no runtime ownership/lifetime bookkeeping, and the inspected successful
+allocation paths are identical or perform less work.
+
+The required formatting, full-workspace/all-target/all-feature Clippy, and
+full test command pass again, including native smoke harnesses. A new
+integration regression exercises 128 KiB alignment on a fresh thread for
+zero, small, and above-small sizes, checking alignment, zeroing, writable
+payloads, release, calloc, and rejection of unsupported offsets. ASan passes
+all 25 selected tests; TSan passes its seven selected tests and this new
+regression separately. The frozen release library also passes a C ABI smoke
+test with a fresh pthread, as does the original baseline.
+
+Three additional whole-crate compiler probes verify the typed call and reject
+both raw integer arguments and unchecked safe integer conversions. The six
+fixes retain X61's 33 compiler probes and 540 supported Miri passes; this
+follow-up changes no pointer or borrowing operations. No further comparative
+timing run was used, following the requested emphasis on assembly.
+
+Evidence is under `target/perf-experiments/X62`: `manifest.json`,
+`codegen-final.json`, `large-alignment-path.json`, `final.asm`, `*.final.diff`,
+the compiler-probe logs, and the verification/C ABI logs. The ordinary-first
+branch layout, shared-null-check, return-value, and no-inline experiments
+were not retained.
+
+## X63 — balanced verification of the final six-fix binary
+
+Checked the frozen X62 final library against the original pre-six-fix library,
+without rebuilding either artifact. The candidate remains
+`b83b8e826251bfc45a2d2c89bc7b2ee2ce225b55d427144927b7cfed061d9501`;
+both control labels use the exact same baseline file and inode, SHA256
+`ab2ef9b931ce917c036ddd47200dcf49682dd739ccb77291b4a06acc75680fbc`.
+
+Six workloads each run six balanced blocks, with all six orders of two
+controls and one candidate represented once: 108 fresh processes in total.
+Each process warms up with 128 operations, then runs for one second on CPU 0.
+No build, test, or other benchmark runs concurrently. The fixed schedule,
+all observations, and hashes are retained. No samples are discarded. There
+are no observed steal ticks or cgroup throttle events during the run.
+
+The statistic is the geometric mean of paired normalized-time ratios,
+candidate / geometric-mean(two controls). Intervals use 20,000 fixed-seed
+bootstrap resamples of the six complete blocks per workload. Negative changes
+are faster. The payload, alignment, zeroing, expected allocation failure, and
+release checks pass in all processes.
+
+| Workload | Time change | 95% paired interval | Identical-file A/A change |
+| --- | ---: | --- | ---: |
+| malloc/free | −0.81% | [−1.24%, −0.43%] | +0.91% |
+| realloc grow/shrink | −1.90% | [−3.37%, −0.93%] | −2.04% |
+| Small aligned allocation | −4.26% | [−11.27%, +0.27%] | +7.76% |
+| 128 KiB aligned allocation | +5.30% | [−5.39%, +13.54%] | −12.86% |
+| Ordinary over-allocation failure | −1.89% | [−2.19%, −1.59%] | +0.10% |
+| Private-heap lifecycle | −0.56% | [−1.71%, +0.53%] | −0.62% |
+
+The extra jump in the failure block is not an observed runtime penalty in
+this comparison. It does not justify requiring exact instruction equality on
+every error branch as an additional acceptance rule. The requested type
+constraints introduce no runtime ownership/lifetime bookkeeping; the core
+instruction bodies match, and the reviewed arena and aligned paths perform
+less work. Large-alignment elapsed time remains inconclusive in this short
+gate, with substantial variation even between identical controls; its direct
+68-to-64 instruction trace is the relevant evidence for the type changes.
+These measurements do not establish exact zero elapsed-time difference on
+every machine, and the small timing improvements are not attributed to the
+type restrictions.
+
+Two further source experiments expanded the aligned cold routine to 1,414
+and 1,137 bytes by inlining allocation dispatch. Both were rejected; production
+Rust source remains at `abd82301`, with all required verification from X62
+still applicable. No extra unsafe code, branch-hint helper, or layout padding
+was introduced to force a particular assembly layout.
+
+The executable source, schedule, resource snapshots, raw results, analysis,
+and artifact hashes are under `target/perf-experiments/X63` in `final-gate.c`,
+`final-gate.py`, `final-gate-manifest.json`, `final-gate-results.json`, and
+`final-gate-analysis.json`.
+
+
+## X64 — broad Miri automation and bounded allocator proofs
+
+Replaced the Miri runner's fixed list of module filters with all library tests.
+New library tests now run automatically; tests that need unsupported OS calls,
+subprocesses, or C stdout declare their Miri exclusion at the test. The runner
+pins `nightly-2026-10-17`, isolates its build directory, rejects filters that
+select no tests, and supports explicit features, profiles, borrow models, and
+seed ranges.
+Pull-request validation checks strict provenance and symbolic alignment with
+Stacked Borrows and Tree Borrows, debug and release profiles, and `std` and
+`std,secure,guarded`. The existing required Miri check depends on every matrix
+entry. Weekly/manual hardening additionally checks eight seeds with Tree
+Borrows and the release secure/guarded profile.
+
+The expanded coverage first reproduced an out-of-bounds reference in
+`mi_bbitmap_setN`: compact arena storage was reborrowed as a Rust struct whose
+maximum-length trailing array extended beyond the allocation. The retained
+fixes address all four reviewed boundaries:
+
+- Bitmap structs now describe their headers and zero-length trailing arrays.
+  Raw chunk projection starts from the original allocation pointer, and only
+  the actual initialized chunk or header field is borrowed. Atomic chunk
+  operations use shared references. Tests allocate exactly the production
+  layout and exercise field, chunk, and multi-chunk boundaries. The old default
+  constructors, made unused by these compact fixtures, are removed.
+- `PointerLookup::after_validation` requires an explicit unsafe handoff coupling
+  the same live user pointer, page, block, offset, and guarded classification.
+  Ordinary safe code cannot promote unrelated valid pointers into that proof.
+- A private `MetaRequest` keeps the aligned size with its nonzero block count.
+  Its safe constructor performs the existing zero/maximum checks; only then
+  does it construct the bounded count. A constant proves the count fits u32.
+  Wrapping alignment rejects overflow in debug as well as release without
+  adding release checks. The previous arbitrary-count helper is removed.
+- Packed huge-alignment payloads come from checked `Alignment` values above
+  the existing over-allocation threshold. Ordinary allocation passes the zero
+  sentinel. Raw C flag decoding returns a raw payload until its existing
+  validation runs, rather than manufacturing a validated alignment type.
+
+The sweep also exposed a free-test fixture's invalidating whole-object
+reborrow, synthetic page fixtures with uninitialized encoded null links,
+release tests that violated unchecked-pointer preconditions, and fabricated
+integer-pointer test values. Fixtures now retain stable owned backing and
+initialize links through their real encoding APIs. Zero-size allocation uses
+`ptr::without_provenance_mut` for its aligned sentinel. Encoded-link validation
+uses the caller-supplied page geometry instead of requiring a second page-map
+lookup. This removes an unnecessary unsafe lookup and permits structural page
+models with ordinary owned storage. Native randomized list tests retain 256
+cases; Miri runs 32 alongside explicit length boundaries. Exhaustive native
+policy/bin sweeps retain their ranges and use boundary samples under Miri.
+
+Release assembly is compared to `2c940235` with Rust 1.92.0 / LLVM 21.1.3 and
+`cargo rustc --release --features interpose --lib --crate-type cdylib`.
+The normal artifact changes from SHA256
+`b83b8e826251bfc45a2d2c89bc7b2ee2ce225b55d427144927b7cfed061d9501` to
+`7f39715efb691f0d9acd2c14915db900ac1688791ce33332ed72de8a4cfb31c9`.
+The secure comparison adds `secure` to the same feature set; its baseline is
+`b02ed72ffb35cb62a7ecfc2208501c7d5295d9e070c3024baa29eb4d83bbab8c`
+and candidate is
+`0f0a2f36c7eecd4d9475503bae1c6efe037282a9ef66fd5994d699bb3321547e`.
+
+| Release code | Before → after instructions | Observation |
+| --- | ---: | --- |
+| Normal malloc/free/realloc, thread-heap malloc, both heap-small entry points | unchanged | Identical normalized bodies |
+| Normal arena allocation / bitmap claim / remote collection | 207 / 268 / 367, unchanged | Identical normalized bodies |
+| Metadata allocation, normal / secure | 208 / 235, unchanged | Identical normalized bodies |
+| Binned bitmap contiguous clear | 116 → 111 | Five fewer instructions |
+| Secure realloc | 241 → 220 | Supplied page geometry removes lookup work |
+| Secure remote collection | 342 → 317 | Supplied page geometry removes lookup work |
+
+The normal aligned generic routine retains 226 instructions; its equivalent
+threshold comparison changes from `cmp 0x10000; jbe` to `cmp 0x10001; jb`.
+Normal `.text` falls by 96 bytes (197,410 → 197,314); secure `.text` grows by
+16 bytes overall (204,178 → 204,194), despite the smaller reviewed paths.
+Data and BSS sizes are unchanged within both feature configurations, and all
+240 dynamic export names match in each comparison. The proof types add no
+production allocations, locks, atomic operations, or runtime ownership
+bookkeeping. No new comparative timing claim is made.
+
+
+All eight local Miri matrix configurations pass:
+
+| Features | Profile | Stacked Borrows passes | Tree Borrows passes |
+| --- | --- | ---: | ---: |
+| `std` | debug | 242 | 242 |
+| `std` | release | 243 | 243 |
+| `std,secure,guarded` | debug | 249 | 249 |
+| `std,secure,guarded` | release | 250 | 250 |
+
+That is 1,968 passes, with 60 ignored tests per configuration. The full
+release secure/guarded Tree Borrows suite also passes all eight seeds
+(`0..8`): another 2,000 passes and 480 ignored test instances. OS allocator,
+subprocess, and C stdout paths still require native validation. Miri's release
+profile disables debug assertions/overflow checks but does not run optimized
+machine code; the assembly comparisons above are separate evidence.
+
+Ten maintained compiler probes build the actual crate APIs in temporary
+copies. They compile valid handoffs and require the expected diagnostic at the
+invalid call site for compact chunk access, private metadata construction,
+validated-pointer forgery, and raw alignment/flag payloads. All pass. Missing
+test-name filters and invalid profiles also fail as intended.
+
+Final `cargo fmt --all`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features` pass. Public C layout,
+strict-type boundaries, native page-list tests, ASan, TSan, and release thread
+stress/free-only regressions pass. Sanitizers use the pinned nightly and the
+existing `-Aunused-unsafe` compatibility flag for the now-safe CPUID intrinsic;
+stable checks and Miri use no warning suppression. Final compact-storage tests
+also pass under strict Stacked Borrows and release secure/guarded Tree Borrows
+after removal of the unused default constructors. No remote workflow was
+manually dispatched.
+
+Evidence is under `target/perf-experiments/X64`: `final-manifest.json`,
+`codegen-retained.json`, `secure-codegen.json`, the normalized assembly diffs,
+`matrix-signoff-results.json`, `seed-results.json`, reproduction/discovery logs,
+`miri-frozen-*.log`, `miri-seeds-frozen.log`, and the `*-signoff.log` validation
+logs. The earlier failing discovery runs remain alongside the corrected runs;
+only the successful final runs are counted above. Temporary source checkouts
+were removed.

@@ -267,6 +267,10 @@ mod tests {
     use std::os::unix::process::ExitStatusExt;
 
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "spawns a native subprocess; unavailable with Miri isolation"
+    )]
     fn mimalloc_assert_fail_aborts_instead_of_unwinding() {
         const CHILD_ENV: &str = "MI_FFI_PANIC_AUDIT_ASSERT_CHILD";
         const TEST_NAME: &str =

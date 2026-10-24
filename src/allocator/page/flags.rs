@@ -36,7 +36,8 @@ unsafe fn mi_page_flags_set_typed(
     flag: crate::core_types::PageFlags,
 ) -> bool {
     unsafe {
-        let atomic_tid = page.thread_id_cell();
+        let atomic_tid =
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*page.thread_id_field());
         let old = atomic_tid.set_flags(flag, set);
         old.flags().contains(flag)
     }
@@ -86,7 +87,8 @@ pub unsafe fn mi_page_set_in_full(page: *mut mi_page_t, in_full: bool) {
 pub unsafe fn mi_page_is_abandoned(page: *const mi_page_t) -> bool {
     unsafe {
         let page = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
-        let atomic_tid = page.thread_id_cell();
+        let atomic_tid =
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*page.thread_id_field());
         let tid = atomic_tid.load();
         tid.is_abandoned() || tid.is_abandoned_mapped()
     }
@@ -134,7 +136,8 @@ unsafe fn mi_page_set_theap_typed(
             crate::core_types::PageOwnerId::Abandoned
         };
 
-        let atomic_tid = page.thread_id_cell();
+        let atomic_tid =
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*page.thread_id_field());
         let mut xtid_old = atomic_tid.load();
         loop {
             let xtid = xtid_old.with_owner(owner);

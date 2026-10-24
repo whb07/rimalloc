@@ -39,7 +39,7 @@ unsafe fn set_heap_prev(heap: HeapPtr, prev: Option<HeapPtr>) {
 /// freshly initialized heap whose subprocess list links are not yet published.
 pub(super) unsafe fn push_front(subproc: SubprocPtr, heap: HeapPtr) {
     unsafe {
-        mi_lock_acquire(subproc.heaps_lock().as_ptr());
+        mi_lock_acquire(subproc.heaps_lock());
         let first = subproc.heaps();
         set_heap_prev(heap, None);
         set_heap_next(heap, first);
@@ -47,9 +47,10 @@ pub(super) unsafe fn push_front(subproc: SubprocPtr, heap: HeapPtr) {
             set_heap_prev(first, Some(heap));
         }
         subproc.set_heaps(Some(heap));
-        mi_lock_release(subproc.heaps_lock().as_ptr());
+        mi_lock_release(subproc.heaps_lock());
 
-        subproc.heap_count_cell().fetch_add(1, Ordering::Relaxed);
+        crate::types::atomic::AtomicUsizeField::from_cell(&*subproc.heap_count_field())
+            .fetch_add(1, Ordering::Relaxed);
         __mi_stat_increase_mt(ptr::addr_of_mut!((*subproc.stats()).heaps), 1);
     }
 }
@@ -59,10 +60,11 @@ pub(super) unsafe fn push_front(subproc: SubprocPtr, heap: HeapPtr) {
 /// in that subprocess heap list.
 pub(super) unsafe fn remove(subproc: SubprocPtr, heap: HeapPtr) {
     unsafe {
-        subproc.heap_count_cell().fetch_sub(1, Ordering::Relaxed);
+        crate::types::atomic::AtomicUsizeField::from_cell(&*subproc.heap_count_field())
+            .fetch_sub(1, Ordering::Relaxed);
         __mi_stat_decrease_mt(ptr::addr_of_mut!((*subproc.stats()).heaps), 1);
 
-        mi_lock_acquire(subproc.heaps_lock().as_ptr());
+        mi_lock_acquire(subproc.heaps_lock());
         let next = heap_next(heap);
         let prev = heap_prev(heap);
         if let Some(next) = next {
@@ -73,6 +75,6 @@ pub(super) unsafe fn remove(subproc: SubprocPtr, heap: HeapPtr) {
         } else {
             subproc.set_heaps(next);
         }
-        mi_lock_release(subproc.heaps_lock().as_ptr());
+        mi_lock_release(subproc.heaps_lock());
     }
 }

@@ -107,10 +107,6 @@ unsafe impl Send for RawAllocation {}
 
 unsafe impl Sync for RawAllocation {}
 
-unsafe impl Send for Allocation {}
-
-unsafe impl Sync for Allocation {}
-
 impl fmt::Debug for Allocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Allocation")
@@ -543,10 +539,6 @@ pub struct InitializedAllocation {
     raw: RawAllocation,
 }
 
-unsafe impl Send for InitializedAllocation {}
-
-unsafe impl Sync for InitializedAllocation {}
-
 impl InitializedAllocation {
     /// Allocates a zero-initialized byte block for `layout`.
     ///
@@ -749,5 +741,5 @@ impl fmt::Debug for InitializedAllocation {
 
 #[inline]
 pub(super) fn dangling_for(layout: Layout) -> NonNull<u8> {
-    unsafe { NonNull::new_unchecked(layout.align() as *mut u8) }
+    unsafe { NonNull::new_unchecked(ptr::without_provenance_mut(layout.align())) }
 }

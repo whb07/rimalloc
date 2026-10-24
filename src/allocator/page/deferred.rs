@@ -5,11 +5,12 @@
 
 use core::ffi::c_void;
 use core::ptr;
+use core::sync::atomic::AtomicPtr;
 
 use crate::types::{mi_deferred_free_fun, mi_theap_t};
 
-static mut deferred_free: *mut c_void = ptr::null_mut();
-static mut deferred_arg: *mut c_void = ptr::null_mut();
+static deferred_free: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
+static deferred_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 
 /// # Safety
 /// `theap` must point to writable thread-heap metadata.
@@ -40,7 +41,7 @@ unsafe fn mi_theap_increment_heartbeat_typed(
 pub(crate) unsafe extern "C" fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool) {
     unsafe {
         let heartbeat = mi_theap_increment_heartbeat(theap);
-        let fun_ptr = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_free))
+        let fun_ptr = crate::core_types::AtomicPtrField::from_cell(&deferred_free)
             .load(crate::core_types::MemoryOrder::Acquire);
         let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);
         let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
@@ -64,7 +65,7 @@ unsafe fn mi_deferred_free_typed(
         let theap_raw = theap.ptr().as_ptr();
         if callback.is_some() && !(*(*theap_raw).tld).recurse {
             (*(*theap_raw).tld).recurse = true;
-            let arg = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_arg))
+            let arg = crate::core_types::AtomicPtrField::from_cell(&deferred_arg)
                 .load(crate::core_types::MemoryOrder::Acquire);
             let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);
             callback.invoke(force, heartbeat, arg);
@@ -81,15 +82,13 @@ pub unsafe extern "C" fn mi_register_deferred_free(
     fn_: Option<mi_deferred_free_fun>,
     arg: *mut c_void,
 ) {
-    unsafe {
-        let callback = crate::core_types::DeferredFreeCallback::new(fn_);
-        let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);
-        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_arg))
-            .store(arg.as_ptr(), crate::core_types::MemoryOrder::Release);
-        let f = callback.storage_ptr();
-        crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_free))
-            .store(f, crate::core_types::MemoryOrder::Release);
-    }
+    let callback = crate::core_types::DeferredFreeCallback::new(fn_);
+    let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);
+    crate::core_types::AtomicPtrField::from_cell(&deferred_arg)
+        .store(arg.as_ptr(), crate::core_types::MemoryOrder::Release);
+    let f = callback.storage_ptr();
+    crate::core_types::AtomicPtrField::from_cell(&deferred_free)
+        .store(f, crate::core_types::MemoryOrder::Release);
 }
 
 /// # Safety
@@ -98,10 +97,10 @@ pub unsafe extern "C" fn mi_register_deferred_free(
 pub(crate) unsafe fn registered_deferred_free_callback()
 -> (Option<mi_deferred_free_fun>, *mut c_void) {
     unsafe {
-        let fun_ptr = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_free))
+        let fun_ptr = crate::core_types::AtomicPtrField::from_cell(&deferred_free)
             .load(crate::core_types::MemoryOrder::Acquire);
         let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);
-        let arg = crate::core_types::AtomicPtrField::from_raw(ptr::addr_of_mut!(deferred_arg))
+        let arg = crate::core_types::AtomicPtrField::from_cell(&deferred_arg)
             .load(crate::core_types::MemoryOrder::Acquire);
         (callback.raw(), arg)
     }

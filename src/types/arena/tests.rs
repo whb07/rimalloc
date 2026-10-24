@@ -1,16 +1,8 @@
 use super::*;
-use core::mem::MaybeUninit;
-
-fn with_arena_slice_count<R>(count: usize, f: impl FnOnce(ArenaPtr) -> R) -> R {
-    let mut raw = MaybeUninit::<crate::types::mi_arena_t>::zeroed();
-    let arena = unsafe { ArenaPtr::new_unchecked(raw.as_mut_ptr()) };
-    unsafe { (*arena.as_ptr()).slice_count = count }
-    f(arena)
-}
 
 #[test]
 fn slice_range_new_accepts_range_ending_at_arena_slice_count() {
-    let range = with_arena_slice_count(16, |arena| SliceRange::new(12, 4, arena).unwrap());
+    let range = SliceRange::new(12, 4, SliceCount::from_usize(16).unwrap()).unwrap();
 
     assert_eq!(range.start_usize(), 12);
     assert_eq!(range.start_u32(), 12);
@@ -21,16 +13,15 @@ fn slice_range_new_accepts_range_ending_at_arena_slice_count() {
 
 #[test]
 fn slice_range_new_rejects_range_past_arena_slice_count() {
-    let err = with_arena_slice_count(16, |arena| SliceRange::new(13, 4, arena).unwrap_err());
+    let err = SliceRange::new(13, 4, SliceCount::from_usize(16).unwrap()).unwrap_err();
 
     assert_eq!(err, SliceError::OutOfBounds);
 }
 
 #[test]
 fn slice_range_new_rejects_overflowing_range_end() {
-    let err = with_arena_slice_count(u32::MAX as usize, |arena| {
-        SliceRange::new(u32::MAX as usize, 1, arena).unwrap_err()
-    });
+    let extent = SliceCount::from_usize(u32::MAX as usize).unwrap();
+    let err = SliceRange::new(u32::MAX as usize, 1, extent).unwrap_err();
 
     assert_eq!(err, SliceError::Overflow);
 }
@@ -46,7 +37,7 @@ fn slice_range_checked_offset_rejects_overflowing_addition() {
 
 #[test]
 fn slice_range_single_at_offset_uses_checked_range_bounds() {
-    let arena = with_arena_slice_count(16, |arena| SliceRange::new(12, 4, arena).unwrap());
+    let arena = SliceRange::new(12, 4, SliceCount::from_usize(16).unwrap()).unwrap();
 
     let single = arena.single_at_offset(3).unwrap();
     let err = arena.single_at_offset(4).unwrap_err();
@@ -54,4 +45,21 @@ fn slice_range_single_at_offset_uses_checked_range_bounds() {
     assert_eq!(single.start_usize(), 15);
     assert_eq!(single.count_usize(), 1);
     assert_eq!(err, SliceError::OutOfBounds);
+}
+
+#[test]
+fn slice_range_rejects_empty_and_unrepresentable_counts() {
+    let extent = SliceCount::from_usize(16).unwrap();
+    assert_eq!(
+        SliceRange::new(0, 0, extent).unwrap_err(),
+        SliceError::Overflow
+    );
+    assert_eq!(
+        SliceRange::new(0, usize::MAX, extent).unwrap_err(),
+        if usize::BITS > 32 {
+            SliceError::Overflow
+        } else {
+            SliceError::OutOfBounds
+        },
+    );
 }

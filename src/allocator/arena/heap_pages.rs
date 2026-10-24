@@ -135,7 +135,14 @@ unsafe fn _mi_heap_visit_blocks_internal(
                     };
                     // SAFETY: the borrowed heap remains live and `typed_bin` bounds its initialized
                     // atomic abandoned counter; relaxed load is the traversal skip hint.
-                    if unsafe { mi_heap_abandoned_count(heap, typed_bin).load_relaxed() } > 0 {
+                    if unsafe {
+                        mi_heap_abandoned_count(
+                            &(*heap.cast::<MiHeapPrefix>()).abandoned_count,
+                            typed_bin,
+                        )
+                        .load_relaxed()
+                    } > 0
+                    {
                         // SAFETY: the acquire-published non-null table and selected per-bin bitmap
                         // remain live; synchronous traversal keeps `visit_info` uniquely writable.
                         ok = unsafe {
@@ -307,7 +314,9 @@ unsafe extern "C" fn mi_heap_delete_page(
     } else {
         // SAFETY: the live page's initialized thread-free atomic remains stable under exclusive
         // heap deletion; this RMW must acquire its owner bit before any metadata mutation.
-        let atomic = unsafe { page_ptr.thread_free_cell() };
+        let atomic = unsafe {
+            crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
+        };
         // SAFETY: `atomic` is the matching live thread-free field. This idempotent fetch-or retains
         // an existing local owner bit or sets it; exclusive heap deletion excludes a competing
         // owner transition while protocol remote-head publication remains permitted.
@@ -411,7 +420,7 @@ unsafe extern "C" fn mi_heap_delete_page(
 /// queue/list relinking, heap reassignment, or other non-protocol metadata mutation must not race;
 /// remote frees may publish only through the page atomic protocol. Internal callbacks execute
 /// synchronously and do not unwind.
-unsafe fn mi_heap_delete_pages(heap: OwnedHeap, heap_target: *mut mi_heap_t) {
+unsafe fn mi_heap_delete_pages(heap: &OwnedHeap, heap_target: *mut mi_heap_t) {
     let heap_ptr = heap.ptr();
     // SAFETY: the owned witness keeps this source heap live and exclusively stable for the
     // synchronous borrowed traversal.
@@ -447,8 +456,13 @@ unsafe fn mi_heap_delete_pages(heap: OwnedHeap, heap_target: *mut mi_heap_t) {
             };
             // SAFETY: `arena_idx` is within the initialized arena-page table of the still-live
             // exclusively drained heap; acquire observes any table publication.
-            let arena_pages =
-                unsafe { mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire() };
+            let arena_pages = unsafe {
+                mi_heap_arena_page_cell(
+                    &(*borrowed_heap.ptr().as_ptr().cast::<MiHeapPrefix>()).arena_pages,
+                    arena_idx,
+                )
+                .load_acquire()
+            };
             if !arena_pages.is_null() {
                 // SAFETY: the acquire-loaded table remains live under source ownership, and its
                 // page bitmap is initialized for this post-drain emptiness check.
@@ -468,7 +482,9 @@ unsafe fn mi_heap_delete_pages(heap: OwnedHeap, heap_target: *mut mi_heap_t) {
             // SAFETY: the live heap's initialized abandoned counter array is indexed by checked
             // `bin`; atomic relaxed load is sufficient for this exclusive post-drain assertion.
             crate::internal::mi_assert_internal!(unsafe {
-                mi_heap_abandoned_count(heap, bin).load_relaxed() == 0
+                mi_heap_abandoned_count(&(*heap.cast::<MiHeapPrefix>()).abandoned_count, bin)
+                    .load_relaxed()
+                    == 0
             });
         }
     }
@@ -502,7 +518,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_move_pages(
     };
     // SAFETY: source ownership remains exclusive and the target heap stays live for the complete
     // transfer; page deletion consumes the source pages into this non-null target.
-    unsafe { mi_heap_delete_pages(heap_from, heap_to.as_ptr()) };
+    unsafe { mi_heap_delete_pages(&heap_from, heap_to.as_ptr()) };
 }
 
 /// # Safety
@@ -524,5 +540,5 @@ pub(crate) unsafe extern "C" fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t
     };
     // SAFETY: owned non-main heap can be drained into the free path; null target selects
     // destruction rather than transfer.
-    unsafe { mi_heap_delete_pages(heap_from, ptr::null_mut()) };
+    unsafe { mi_heap_delete_pages(&heap_from, ptr::null_mut()) };
 }

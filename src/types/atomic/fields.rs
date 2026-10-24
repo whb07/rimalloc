@@ -1,88 +1,59 @@
-//! Primitive atomic views over raw allocator metadata fields.
+//! Borrowed atomic views over allocator metadata fields.
 //!
-//! These wrappers own the pointer-to-atomic cast boundary. Callers can name the
-//! raw field they want to access, but the backing pointer representation stays
-//! private and all actual atomic operations remain behind this module.
+//! Raw metadata is borrowed at the caller's validity boundary. These views
+//! cannot outlive that borrow, and primitive atomic operations are safe.
 
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use super::MemoryOrder;
 
-/// Atomic access to a raw `usize` field.
-///
-/// # Safety
-/// The pointer must be non-null, properly aligned for `AtomicUsize`, and valid
-/// for the duration of each operation. While this wrapper is used, all
-/// concurrent accesses to the same storage must be atomic and use compatible
-/// aliases.
+/// Atomic access for the lifetime of a borrowed `AtomicUsize`.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicUsizeField(*mut usize);
+pub(crate) struct AtomicUsizeField<'a>(&'a AtomicUsize);
 
-impl AtomicUsizeField {
+impl<'a> AtomicUsizeField<'a> {
     #[inline(always)]
-    pub(crate) fn from_raw(field: *mut usize) -> Self {
+    pub(crate) fn from_cell(field: &'a AtomicUsize) -> Self {
         Self(field)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize {
-        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
-        atomic.load(order)
+    pub(crate) fn load(self, order: MemoryOrder) -> usize {
+        self.0.load(order)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn store(self, value: usize, order: MemoryOrder) {
-        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
-        atomic.store(value, order);
+    pub(crate) fn store(self, value: usize, order: MemoryOrder) {
+        self.0.store(value, order);
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn fetch_add(self, value: usize, order: MemoryOrder) -> usize {
-        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
-        atomic.fetch_add(value, order)
+    pub(crate) fn fetch_add(self, value: usize, order: MemoryOrder) -> usize {
+        self.0.fetch_add(value, order)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn fetch_sub(self, value: usize, order: MemoryOrder) -> usize {
-        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
-        atomic.fetch_sub(value, order)
+    pub(crate) fn fetch_sub(self, value: usize, order: MemoryOrder) -> usize {
+        self.0.fetch_sub(value, order)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn fetch_or(self, bits: usize, order: MemoryOrder) -> usize {
-        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
-        atomic.fetch_or(bits, order)
+    pub(crate) fn fetch_or(self, bits: usize, order: MemoryOrder) -> usize {
+        self.0.fetch_or(bits, order)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn fetch_and(self, bits: usize, order: MemoryOrder) -> usize {
-        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
-        atomic.fetch_and(bits, order)
+    pub(crate) fn fetch_and(self, bits: usize, order: MemoryOrder) -> usize {
+        self.0.fetch_and(bits, order)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn compare_exchange_acq_rel(
-        self,
-        expected: &mut usize,
-        desired: usize,
-    ) -> bool {
-        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
-        match atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire) {
+    pub(crate) fn compare_exchange_acq_rel(self, expected: &mut usize, desired: usize) -> bool {
+        match self
+            .0
+            .compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire)
+        {
             Ok(_) => true,
             Err(actual) => {
                 *expected = actual;
@@ -91,18 +62,18 @@ impl AtomicUsizeField {
         }
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn compare_exchange_weak(
+    pub(crate) fn compare_exchange_weak(
         self,
         expected: &mut usize,
         desired: usize,
         success: MemoryOrder,
         failure: MemoryOrder,
     ) -> bool {
-        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
-        match atomic.compare_exchange_weak(*expected, desired, success, failure) {
+        match self
+            .0
+            .compare_exchange_weak(*expected, desired, success, failure)
+        {
             Ok(_) => true,
             Err(actual) => {
                 *expected = actual;
@@ -112,45 +83,33 @@ impl AtomicUsizeField {
     }
 }
 
-/// Atomic access to a raw `i64` field.
-///
-/// # Safety
-/// The pointer must be non-null, properly aligned for `AtomicI64`, and valid
-/// for the duration of each operation. While this wrapper is used, all
-/// concurrent accesses to the same storage must be atomic and use compatible
-/// aliases.
+/// Atomic access for the lifetime of a borrowed `AtomicI64`.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicI64Field(*mut i64);
+pub(crate) struct AtomicI64Field<'a>(&'a AtomicI64);
 
-impl AtomicI64Field {
+impl<'a> AtomicI64Field<'a> {
     #[inline(always)]
-    pub(crate) fn from_raw(field: *mut i64) -> Self {
+    pub(crate) fn from_cell(field: &'a AtomicI64) -> Self {
         Self(field)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn load(self, order: MemoryOrder) -> i64 {
-        let atomic = unsafe { AtomicI64::from_ptr(self.0) };
-        atomic.load(order)
+    pub(crate) fn load(self, order: MemoryOrder) -> i64 {
+        self.0.load(order)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn store(self, value: i64, order: MemoryOrder) {
-        let atomic = unsafe { AtomicI64::from_ptr(self.0) };
-        atomic.store(value, order);
+    pub(crate) fn store(self, value: i64, order: MemoryOrder) {
+        self.0.store(value, order);
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn compare_exchange_acq_rel(self, expected: &mut i64, desired: i64) -> bool {
-        let atomic = unsafe { AtomicI64::from_ptr(self.0) };
-        match atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire) {
+    pub(crate) fn compare_exchange_acq_rel(self, expected: &mut i64, desired: i64) -> bool {
+        match self
+            .0
+            .compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire)
+        {
             Ok(_) => true,
             Err(actual) => {
                 *expected = actual;
@@ -160,57 +119,38 @@ impl AtomicI64Field {
     }
 }
 
-/// Atomic access to a raw pointer field.
-///
-/// # Safety
-/// The pointer-to-pointer must be non-null, properly aligned for
-/// `AtomicPtr<T>`, and valid for the duration of each operation. While this
-/// wrapper is used, all concurrent accesses to the same storage must be atomic
-/// and use compatible aliases.
+/// Atomic access for the lifetime of a borrowed `AtomicPtr`.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicPtrField<T>(*mut *mut T);
+pub(crate) struct AtomicPtrField<'a, T>(&'a AtomicPtr<T>);
 
-impl<T> AtomicPtrField<T> {
+impl<'a, T> AtomicPtrField<'a, T> {
     #[inline(always)]
-    pub(crate) fn from_raw(field: *mut *mut T) -> Self {
+    pub(crate) fn from_cell(field: &'a AtomicPtr<T>) -> Self {
         Self(field)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T {
-        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
-        atomic.load(order)
+    pub(crate) fn load(self, order: MemoryOrder) -> *mut T {
+        self.0.load(order)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder) {
-        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
-        atomic.store(value, order);
+    pub(crate) fn store(self, value: *mut T, order: MemoryOrder) {
+        self.0.store(value, order);
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn exchange_acq_rel(self, value: *mut T) -> *mut T {
-        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
-        atomic.swap(value, Ordering::AcqRel)
+    pub(crate) fn exchange_acq_rel(self, value: *mut T) -> *mut T {
+        self.0.swap(value, Ordering::AcqRel)
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn compare_exchange_release(
-        self,
-        expected: &mut *mut T,
-        desired: *mut T,
-    ) -> bool {
-        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
-        match atomic.compare_exchange(*expected, desired, Ordering::Release, Ordering::Relaxed) {
+    pub(crate) fn compare_exchange_release(self, expected: &mut *mut T, desired: *mut T) -> bool {
+        match self
+            .0
+            .compare_exchange(*expected, desired, Ordering::Release, Ordering::Relaxed)
+        {
             Ok(_) => true,
             Err(actual) => {
                 *expected = actual;
@@ -219,16 +159,12 @@ impl<T> AtomicPtrField<T> {
         }
     }
 
-    /// # Safety
-    /// See the type-level safety contract.
     #[inline(always)]
-    pub(crate) unsafe fn compare_exchange_acq_rel(
-        self,
-        expected: &mut *mut T,
-        desired: *mut T,
-    ) -> bool {
-        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
-        match atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire) {
+    pub(crate) fn compare_exchange_acq_rel(self, expected: &mut *mut T, desired: *mut T) -> bool {
+        match self
+            .0
+            .compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire)
+        {
             Ok(_) => true,
             Err(actual) => {
                 *expected = actual;

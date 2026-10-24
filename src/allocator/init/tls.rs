@@ -347,9 +347,7 @@ unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
 
 pub(super) fn mi_tls_slots_init() {
     static TLS_SLOTS_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
-    if let Some(_once) =
-        unsafe { mi_atomic_do_once_enter(ptr::addr_of!(TLS_SLOTS_INIT).cast_mut()) }
-    {
+    if let Some(_once) = mi_atomic_do_once_enter(&TLS_SLOTS_INIT) {
         #[cfg(windows)]
         // SAFETY: one-time initialization of process-global TLS slot metadata.
         unsafe {

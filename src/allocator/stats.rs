@@ -200,8 +200,10 @@ mi_stat_fields!(assert_stat_fields_layout);
 
 impl Default for mi_stats_t {
     fn default() -> Self {
-        // SAFETY: `mi_stats_t` is plain old data; all-zero bytes are valid for every field.
-        unsafe { core::mem::zeroed() }
+        let mut stats = MI_STATS_NULL();
+        stats.size = 0;
+        stats.version = 0;
+        stats
     }
 }
 

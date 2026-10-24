@@ -403,7 +403,7 @@ impl LocalPage {
     /// its link word plus the page's available-list head, `free_is_zero`, and
     /// used-count transition.
     #[inline(always)]
-    pub(crate) unsafe fn push_free_block(
+    pub(in crate::types) unsafe fn push_free_block(
         self,
         block: crate::core_types::validation_extra::FreeBlock,
     ) -> crate::core_types::UsedBlockCount {
@@ -447,7 +447,9 @@ impl AbandonedPageType {
     #[inline(always)]
     pub(crate) fn try_claim_ownership(self) -> Result<OwnedAbandonedPage, AbandonedPageType> {
         let page = self.page();
-        let atomic = unsafe { page.thread_free_cell() };
+        let atomic = unsafe {
+            crate::types::atomic::AtomicThreadFree::from_cell(&*page.thread_free_field())
+        };
         // SAFETY: the consumed abandoned witness keeps this atomic field live
         // and permits only its atomic ownership transition.
         if unsafe { atomic.claim_acq_rel() } {
@@ -694,7 +696,9 @@ impl PagePtr {
         self,
         current: crate::core_types::ThreadId,
     ) -> FreeRouteSnapshot {
-        let tid = unsafe { self.thread_id_cell().load() };
+        let tid = unsafe {
+            crate::types::atomic::AtomicPageThreadId::from_cell(&*self.thread_id_field()).load()
+        };
         match tid.classify_free_path(current) {
             crate::core_types::FreePathKind::LocalFast => {
                 // SAFETY: the owner bits classify this page as local to `current`.

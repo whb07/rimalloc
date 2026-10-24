@@ -35,6 +35,10 @@ fn heap_witnesses_preserve_heap_pointer() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn main_heap_checked_constructor_accepts_only_main_heap() {
     let main_raw = mi_heap_main();
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
@@ -52,6 +56,10 @@ fn main_heap_checked_constructor_accepts_only_main_heap() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn owned_heap_checked_constructor_rejects_main_heap() {
     let main_raw = mi_heap_main();
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
@@ -81,6 +89,10 @@ fn main_heap_cannot_create_owned_delete_witness() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn borrowed_heap_raw_constructors_reject_null_and_preserve_heap() {
     assert!(
         unsafe { BorrowedHeap::from_allocation_raw(core::ptr::null_mut()) }.is_none(),
@@ -105,6 +117,10 @@ fn borrowed_heap_raw_constructors_reject_null_and_preserve_heap() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn thread_heap_borrowed_accepts_only_initialized_theaps() {
     with_thread_heap_ptr(None, None, |theap| {
         assert!(
@@ -125,6 +141,10 @@ fn thread_heap_borrowed_accepts_only_initialized_theaps() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn thread_heap_state_classifies_main_initialized_uninitialized_and_deleted() {
     let main_raw = mi_heap_main();
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
@@ -161,6 +181,10 @@ fn thread_heap_state_classifies_main_initialized_uninitialized_and_deleted() {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "requires OS allocator initialization (unsupported sysconf)"
+)]
 fn borrowed_thread_heap_converts_to_local_only_for_matching_thread() {
     let owned_raw = unsafe { mi_heap_new() };
     assert!(!owned_raw.is_null());

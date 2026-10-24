@@ -76,11 +76,9 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     // committed storage, local mutation rights and optional writable output.
     // Tracking and the successful allocation path do not invoke user callbacks.
     unsafe {
-        let output = usable.as_mut();
-        available.with_allocation_access(padded, |page, request| {
-            local_theap.with_local_access(|local| {
-                mi_page_malloc_scoped(local, page, request, zeroed, output)
-            })
+        available.with_allocation_access(padded, usable, |page, request| {
+            local_theap
+                .with_local_access(|local| mi_page_malloc_scoped(local, page, request, zeroed))
         })
     }
 }
@@ -91,22 +89,19 @@ fn mi_page_malloc_scoped<'scope>(
     page: crate::types::local_page::PageAccess<'scope, crate::core_types::AvailablePage>,
     request: crate::types::local_page::PageRequest<'scope>,
     zeroed: crate::core_types::Zeroed,
-    usable: Option<&mut usize>,
 ) -> *mut c_void {
     let size = request.get();
     let block_size = page.block_size_raw();
     page.assert_geometry(size);
     page.assert_free_head(false);
-    if let Some(usable) = usable {
-        *usable = page.usable_size().get();
-    }
+    request.write_usable(page.usable_size());
     let (block, page) = page.pop(request);
     page.assert_free_head(true);
     block.assert_alignment(block_size);
     block.assert_zero_tail(&page);
+    let block = block.track_undefined(&page);
     let usable_size = block.usable_size();
     let bsize = usable_size.get();
-    let block = block.track_undefined();
     if MI_STAT > 0 && bsize <= MI_LARGE_MAX_OBJ_SIZE {
         let stats = local.stats();
         __mi_stat_increase(&mut stats.malloc_normal, bsize);

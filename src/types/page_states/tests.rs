@@ -375,9 +375,9 @@ fn local_active_classification_refines_all_free_without_duplicating_identity() {
     let mut full_page = MaybeUninit::<mi_page_t>::zeroed();
     // SAFETY: all three stack-local fixtures remain live through their consuming identity
     // transitions. The first two owner/state words classify current-thread active pages, with
-    // `used` initialized to the exact zero/nonzero value tested. The third starts full and
-    // all-free with zeroed queue links; writing its current-thread active owner word models raw
-    // detach clearing the full flag, while the zeroed links satisfy the detach precondition.
+    // `used` initialized to the exact zero/nonzero value tested. The third
+    // starts full and all-free; its initialized owner and count fields cover
+    // the consuming full-page refinement.
     unsafe {
         let empty_raw = empty_page.as_mut_ptr();
         ptr::addr_of_mut!((*empty_raw).xthread_id).write(local.raw());
@@ -404,9 +404,7 @@ fn local_active_classification_refines_all_free_without_duplicating_identity() {
             .into_full_after_classification()
             .try_mark_all_free()
             .expect("zero-used full page refines to all-free");
-        ptr::addr_of_mut!((*full_raw).xthread_id).write(local.raw());
-        let active_all_free = full_all_free.into_active_after_detach();
-        assert_eq!(active_all_free.page().as_ptr(), full_raw);
+        assert_eq!(full_all_free.page().as_ptr(), full_raw);
     }
 }
 

@@ -783,7 +783,19 @@ mod tests {
             full.set_last(Some(full_page));
             full.set_count(crate::core_types::PageQueueCount::new(1));
 
-            mi_page_queue_remove_typed(full, full_page);
+            (*full_page.as_ptr()).xthread_free = crate::core_types::ThreadFreeWord::from_parts(
+                None,
+                crate::core_types::ThreadFreeOwner::Owned,
+            )
+            .raw();
+            let full_owner = crate::allocator::raw_bridge::assume_full_page(full_page);
+            let all_free = full_owner.try_mark_all_free().expect("zero-used full page");
+            let full_queue = crate::core_types::FullPageQueue::new_unchecked(full);
+            crate::core_types::PageQueue::full(full_queue).with_all_free(owner, all_free, |page| {
+                let detached = page.remove();
+                assert_eq!(detached.page(), full_page);
+                assert_eq!(detached.into_arena_release().page(), full_page);
+            });
             assert_eq!(full.first(), None);
             assert_eq!(full.last(), None);
             assert_eq!(full.count().get(), 0);

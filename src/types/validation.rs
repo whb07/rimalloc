@@ -233,6 +233,82 @@ impl<'scope> FreePage<'scope, LocalPage> {
     }
 }
 
+/// Successful remote publication either leaves collection to the existing
+/// owner, or transfers the abandoned-page claim together with its published head.
+#[must_use = "a newly claimed abandoned page must complete its collection protocol"]
+pub(crate) enum RemotePublication {
+    Published,
+    Claimed(ClaimedRemoteFree),
+}
+
+/// The ownership claim and published head produced by the same successful CAS.
+#[must_use = "a remote-free ownership claim must complete its collection protocol"]
+pub(crate) struct ClaimedRemoteFree {
+    page: super::OwnedAbandonedPage,
+    head: super::atomic::PublishedRemoteHead,
+}
+
+impl ClaimedRemoteFree {
+    /// Reestablish the pair at a raw compatibility publication boundary.
+    ///
+    /// # Safety
+    /// `page` must retain the unique abandoned-page ownership claim acquired
+    /// by publishing `head`. The head must still be published on that page;
+    /// its storage, keys and page metadata must remain live until consumed.
+    #[inline(always)]
+    pub(crate) unsafe fn from_published(
+        page: super::OwnedAbandonedPage,
+        head: super::atomic::PublishedRemoteHead,
+    ) -> Self {
+        Self { page, head }
+    }
+
+    #[inline(always)]
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        super::OwnedAbandonedPage,
+        super::atomic::PublishedRemoteHead,
+    ) {
+        (self.page, self.head)
+    }
+}
+
+impl<'scope> FreePage<'scope, ForeignPage> {
+    /// Consume this block's storage through the link-write/CAS retry protocol.
+    /// No page or block access survives publication to an existing owner.
+    #[inline(always)]
+    pub(crate) fn publish_remote(self, block: ScopedFreeBlock<'scope>) -> RemotePublication {
+        let page = self.page.page();
+        let block = block.block.block;
+        let remote =
+            unsafe { super::atomic::AtomicThreadFree::from_cell(&*page.thread_free_field()) };
+        let mut expected = remote.load_relaxed();
+        let (previous, published) = loop {
+            unsafe { crate::internal::mi_block_set_next_typed(page, block, expected.head()) };
+            match unsafe { remote.try_push(expected, block) } {
+                super::atomic::RemotePushResult::Published { previous, head } => {
+                    break (previous, head);
+                }
+                super::atomic::RemotePushResult::Retry { observed } => expected = observed,
+            }
+        };
+        if previous.is_owned() {
+            published.leave_published();
+            RemotePublication::Published
+        } else {
+            let abandoned = unsafe { crate::allocator::page::mi_page_is_abandoned(page.as_ptr()) };
+            crate::internal::mi_assert_internal!(abandoned);
+            RemotePublication::Claimed(ClaimedRemoteFree {
+                // The successful CAS changed the unowned bit to owned. That
+                // claim retains this exact abandoned page and published head.
+                page: unsafe { super::OwnedAbandonedPage::new_unchecked(page) },
+                head: published,
+            })
+        }
+    }
+}
+
 /// A validated block that cannot be mixed with another free request's page.
 #[repr(transparent)]
 #[must_use = "a scoped free block must be consumed with its matching page"]
@@ -305,9 +381,13 @@ impl ValidatedFree {
     ///
     /// # Safety
     /// `current` must identify the executing thread. The page's registration,
-    /// backing and owner metadata must remain live and protocol-stable through
-    /// `f`. The validated block's storage must remain exclusively owned until
-    /// publication. Local free-list, count and zero-state mutation must stay
+    /// backing, encoding keys and atomic owner/free words must remain initialized,
+    /// live and protocol-stable until publication consumes their capabilities.
+    /// The validated block's link storage must remain exclusively writable until
+    /// publication; an existing owner may then consume the page and block.
+    /// A successful abandoned-page claim retains their collection ownership.
+    /// Any guard protection must already be restored before this scope starts.
+    /// Local free-list, count and zero-state mutation must stay
     /// exclusive; callbacks must not reenter those local fields.
     #[inline(always)]
     pub(crate) unsafe fn with_route<R>(
@@ -340,7 +420,8 @@ impl ValidatedFree {
     /// The initialized page and validated block must remain live and locally
     /// exclusive through `f`. The local list, used count and zero flag must be
     /// valid for their coupled free transition, with stable page keys; callbacks
-    /// must not incompatibly reenter that local state.
+    /// must not incompatibly reenter that local state. Any guard protection
+    /// must already be restored before this scope starts.
     #[inline(always)]
     pub(crate) unsafe fn with_local<R>(
         self,
@@ -357,8 +438,14 @@ impl ValidatedFree {
     }
 
     /// # Safety
-    /// The page must remain live and foreign to the executing thread through
-    /// `f`, with publication and ownership changes following allocator atomics.
+    /// The page must be foreign to the executing thread, with initialized live
+    /// backing, encoding keys, and atomic owner/free words until publication.
+    /// The block's link must remain exclusively writable until publication
+    /// consumes it; an existing owner may then destroy the page. A successful
+    /// abandoned-page claim retains it through collection. Publication and
+    /// ownership changes must follow allocator atomics, without incompatible
+    /// callback reentry that touches the block or page.
+    /// Any guard protection must already be restored before this scope starts.
     #[inline(always)]
     pub(crate) unsafe fn with_foreign<R>(
         self,

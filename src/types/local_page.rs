@@ -32,9 +32,9 @@ pub(crate) struct PageAccess<'scope, S> {
     _scope: PhantomData<fn(&'scope ()) -> &'scope ()>,
 }
 
-#[repr(transparent)]
 pub(crate) struct PageRequest<'scope> {
     padded: PaddedSize,
+    usable: *mut usize,
     _scope: PhantomData<fn(&'scope ()) -> &'scope ()>,
 }
 
@@ -47,10 +47,13 @@ impl AvailablePage {
     /// accounting mutation; remote publication may follow the atomic protocol.
     /// `padded` must include `MI_PADDING_SIZE` and fit this page's complete
     /// block size. Callbacks must not reenter this page while its loan is active.
+    /// If nonnull, `usable` must be aligned and exclusively writable throughout
+    /// the phase, without overlapping page metadata or free-list nodes.
     #[inline(always)]
     pub(crate) unsafe fn with_allocation_access<R>(
         self,
         padded: PaddedSize,
+        usable: *mut usize,
         f: impl for<'scope> FnOnce(PageAccess<'scope, Self>, PageRequest<'scope>) -> R,
     ) -> R {
         f(
@@ -60,6 +63,7 @@ impl AvailablePage {
             },
             PageRequest {
                 padded,
+                usable,
                 _scope: PhantomData,
             },
         )
@@ -131,54 +135,53 @@ impl PageRequest<'_> {
     pub(crate) fn get(&self) -> usize {
         self.padded.get()
     }
+
+    #[inline(always)]
+    pub(crate) fn write_usable(&self, size: UsableSize) {
+        if !self.usable.is_null() {
+            unsafe { self.usable.write(size.get()) };
+        }
+    }
+}
+
+/// A popped block whose allocation tracking transition has not yet occurred.
+pub(crate) struct PoppedBlockStorage<'scope> {
+    block: BlockPtr,
+    requested: PaddedSize,
+    _scope: PhantomData<fn(&'scope ()) -> &'scope ()>,
 }
 
 /// Owns one writable block extent until it escapes to the allocation caller.
-pub(crate) struct AllocatedBlockStorage<'scope, S = Popped> {
+pub(crate) struct AllocatedBlockStorage<'scope> {
     block: BlockPtr,
     requested: PaddedSize,
     usable: UsableSize,
     _scope: PhantomData<fn(&'scope ()) -> &'scope ()>,
-    _state: PhantomData<S>,
 }
-
-pub(crate) enum Popped {}
-pub(crate) enum Writable {}
 
 impl<'scope> PageAccess<'scope, AvailablePage> {
     #[inline(always)]
     pub(crate) fn pop(
         self,
         request: PageRequest<'scope>,
-    ) -> (
-        AllocatedBlockStorage<'scope>,
-        PageAccess<'scope, ActivePage>,
-    ) {
-        let usable = self.usable_size();
+    ) -> (PoppedBlockStorage<'scope>, PageAccess<'scope, ActivePage>) {
         let (block, active) = self.state.pop_free_block();
         let page = PageAccess {
             state: active,
             _scope: PhantomData,
         };
         (
-            AllocatedBlockStorage {
+            PoppedBlockStorage {
                 block: block.into_ptr(),
                 requested: request.padded,
-                usable,
                 _scope: PhantomData,
-                _state: PhantomData,
             },
             page,
         )
     }
 }
 
-impl<S> AllocatedBlockStorage<'_, S> {
-    #[inline(always)]
-    pub(crate) fn usable_size(&self) -> UsableSize {
-        self.usable
-    }
-
+impl PoppedBlockStorage<'_> {
     #[inline(always)]
     pub(crate) fn assert_alignment(&self, block_size: usize) {
         crate::internal::mi_assert_internal!(
@@ -188,7 +191,7 @@ impl<S> AllocatedBlockStorage<'_, S> {
     }
 }
 
-impl<'scope> AllocatedBlockStorage<'scope> {
+impl<'scope> PoppedBlockStorage<'scope> {
     #[inline(always)]
     pub(crate) fn assert_zero_tail(&self, page: &PageAccess<'scope, ActivePage>) {
         if cfg!(debug_assertions)
@@ -205,19 +208,27 @@ impl<'scope> AllocatedBlockStorage<'scope> {
     }
 
     #[inline(always)]
-    pub(crate) fn track_undefined(self) -> AllocatedBlockStorage<'scope, Writable> {
-        unsafe { mi_track_mem_undefined(self.block.as_ptr().cast(), self.usable.get()) };
+    pub(crate) fn track_undefined(
+        self,
+        page: &PageAccess<'scope, ActivePage>,
+    ) -> AllocatedBlockStorage<'scope> {
+        let usable = page.usable_size();
+        unsafe { mi_track_mem_undefined(self.block.as_ptr().cast(), usable.get()) };
         AllocatedBlockStorage {
             block: self.block,
             requested: self.requested,
-            usable: self.usable,
+            usable,
             _scope: PhantomData,
-            _state: PhantomData,
         }
     }
 }
 
-impl<'scope> AllocatedBlockStorage<'scope, Writable> {
+impl<'scope> AllocatedBlockStorage<'scope> {
+    #[inline(always)]
+    pub(crate) fn usable_size(&self) -> UsableSize {
+        self.usable
+    }
+
     #[inline(always)]
     pub(crate) fn finish(
         mut self,
@@ -281,17 +292,13 @@ impl<'scope> AllocatedBlockStorage<'scope, Writable> {
         if MI_PADDING_CHECK != 0 && !page.is_huge() {
             let maxpad = delta.min(MI_MAX_ALIGN_SIZE);
             // The matching request bounds this writable tail within the
-            // exclusively owned block. Its bytes may still be uninitialized.
-            let fill = unsafe {
-                core::slice::from_raw_parts_mut(
-                    padding_ptr
-                        .cast::<u8>()
-                        .sub(delta)
-                        .cast::<core::mem::MaybeUninit<u8>>(),
-                    maxpad,
-                )
-            };
-            fill.fill(core::mem::MaybeUninit::new(crate::types::MI_DEBUG_PADDING));
+            // exclusively owned block. Preserve the native padding loop.
+            unsafe {
+                let fill = padding_ptr.cast::<u8>().sub(delta);
+                for i in 0..maxpad {
+                    *fill.add(i) = crate::types::MI_DEBUG_PADDING;
+                }
+            }
         }
     }
 }
@@ -329,14 +336,19 @@ mod tests {
 
                 let available = AvailablePage::new_unchecked(PagePtr::new_unchecked(raw));
                 let requested = 16;
+                let mut usable = usize::MAX;
                 let result = available.with_allocation_access(
                     PaddedSize::new_unchecked(requested + MI_PADDING_SIZE),
+                    ptr::addr_of_mut!(usable),
                     |access, request| {
+                        request.write_usable(access.usable_size());
                         let (storage, access) = access.pop(request);
+                        let storage = storage.track_undefined(&access);
                         assert_eq!(storage.usable_size().get(), 64 - MI_PADDING_SIZE);
-                        storage.track_undefined().finish(&access, Zeroed::Yes)
+                        storage.finish(&access, Zeroed::Yes)
                     },
                 );
+                assert_eq!(usable, 64 - MI_PADDING_SIZE);
                 assert_eq!(result.as_ptr(), start.cast());
                 assert_eq!((*raw).used, 1);
                 assert_eq!((*raw).free, second);

@@ -103,7 +103,6 @@ mod heap;
 pub(crate) use atomic::{
     AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicI64Field, AtomicPtrField,
     AtomicUsizeField, DetachedRemoteList, MemoryOrder, MiLockGuard, OnceGuard, PublishedRemoteHead,
-    RemotePushResult,
 };
 mod padding;
 

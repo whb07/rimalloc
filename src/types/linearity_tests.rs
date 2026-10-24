@@ -20,7 +20,8 @@ use super::validation_extra::AllocatedBlock;
 
 assert_not_impl_any!(super::local_page::PageAccess<'_, AvailablePage>: Copy, Clone, Send, Sync);
 assert_not_impl_any!(super::local_page::AllocatedBlockStorage<'_>: Copy, Clone, Send, Sync);
-assert_not_impl_any!(super::local_page::AllocatedBlockStorage<'_, super::local_page::Writable>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::local_page::PoppedBlockStorage<'_>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::local_page::PageRequest<'_>: Copy, Clone, Send, Sync);
 assert_not_impl_any!(super::local::LocalHeapAccess<'_>: Copy, Clone, Send, Sync);
 
 assert_not_impl_any!(GuardedBlock: Copy, Clone);
@@ -33,6 +34,8 @@ assert_not_impl_any!(FreeRoute<'_>: Copy, Clone);
 assert_not_impl_any!(FreePage<'_, LocalPage>: Copy, Clone);
 assert_not_impl_any!(FreePage<'_, ForeignPage>: Copy, Clone);
 assert_not_impl_any!(ScopedFreeBlock<'_>: Copy, Clone);
+assert_not_impl_any!(super::validation::RemotePublication: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::validation::ClaimedRemoteFree: Copy, Clone, Send, Sync);
 assert_not_impl_any!(PointerLookup: Copy, Clone);
 
 assert_not_impl_any!(AllocatedBlock: Copy, Clone);
@@ -61,6 +64,8 @@ assert_not_impl_any!(FreeRouteSnapshot: Copy, Clone);
 assert_not_impl_any!(QueuedPage<'_, NormalQueue>: Copy, Clone, Send, Sync);
 assert_not_impl_any!(super::page_queues::QueueCursor<'_, NormalQueue>: Copy, Clone, Send, Sync);
 assert_not_impl_any!(super::page_queues::DetachedPage<'_, NormalQueue>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::page_queues::AllFreeQueued<'_, NormalQueue>: Copy, Clone, Send, Sync);
+assert_not_impl_any!(super::page_queues::DetachedAllFree<'_>: Copy, Clone, Send, Sync);
 
 assert_not_impl_any!(OwnedHeap: Copy, Clone);
 assert_not_impl_any!(ArenaAllocation: Copy, Clone);

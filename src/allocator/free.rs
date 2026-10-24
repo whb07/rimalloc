@@ -23,11 +23,10 @@ use crate::internal::{
     _mi_arena_memid_is_suitable, _mi_is_power_of_two, _mi_memset_aligned, _mi_os_page_size_typed,
     _mi_ptr_page, _mi_safe_ptr_page_registered, _mi_theap_heap, MI_DEBUG, MI_GUARDED,
     MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx,
-    mi_block_ptr_is_guarded, mi_block_set_next_typed, mi_is_in_same_page, mi_page_all_free,
-    mi_page_block_size, mi_page_has_interior_pointers, mi_page_is_abandoned_mapped,
-    mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_keys,
-    mi_page_queue, mi_page_start, mi_page_thread_free, mi_page_usable_block_size,
-    mi_theap_is_initialized,
+    mi_block_ptr_is_guarded, mi_is_in_same_page, mi_page_all_free, mi_page_block_size,
+    mi_page_has_interior_pointers, mi_page_is_abandoned_mapped, mi_page_is_full,
+    mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_keys, mi_page_queue,
+    mi_page_start, mi_page_thread_free, mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::prim::{
     _mi_page_associated_theap_peek, _mi_prim_thread_id, _mi_theap_default,
@@ -39,7 +38,17 @@ use crate::types::{
     mi_block_t, mi_page_t, mi_theap_t,
 };
 
-use abandoned::collect_after_remote_free;
+/// # Safety
+/// The claimed page's arena, page-map, backing, associated heap/TLD and
+/// synchronous collection callbacks must remain valid through its terminal
+/// disposition. The claim already couples the page and published head.
+#[inline(always)]
+unsafe fn collect_after_remote_free(
+    claimed: crate::types::validation::ClaimedRemoteFree,
+) -> crate::core_types::AbandonedDisposition {
+    let (page, head) = claimed.into_parts();
+    unsafe { abandoned::collect_after_remote_free(page, head) }
+}
 
 #[cfg(mi_c_malloc_fast)]
 core::arch::global_asm!(
@@ -614,39 +623,13 @@ pub(crate) unsafe fn mi_free_block_mt<'scope>(
         }
     }
 
-    let atomic_tf = unsafe {
-        crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
-    };
-    let mut expected = atomic_tf.load_relaxed();
-    let (previous, published) = loop {
-        unsafe { mi_block_set_next_typed(page_ptr, bp, expected.head()) };
-        // SAFETY: the validated block is uniquely held for this page, and its
-        // link was initialized to this exact expected head before publication.
-        match unsafe { atomic_tf.try_push(expected, bp) } {
-            crate::core_types::RemotePushResult::Published { previous, head } => {
-                break (previous, head);
-            }
-            crate::core_types::RemotePushResult::Retry { observed } => {
-                expected = observed;
-            }
+    match page_wrapper.publish_remote(block_wrapper) {
+        crate::types::validation::RemotePublication::Claimed(claimed) => {
+            unsafe { collect_after_remote_free(claimed) }.discard();
         }
-    };
-
-    if !previous.is_owned() {
-        let is_abandoned = unsafe { mi_page_is_abandoned(page) };
-        crate::internal::mi_assert_internal!(is_abandoned);
-        unsafe {
-            collect_after_remote_free(
-                crate::allocator::raw_bridge::assume_owned_abandoned_page(
-                    crate::core_types::PagePtr::new_unchecked(page),
-                ),
-                published,
-            )
-            .discard();
+        crate::types::validation::RemotePublication::Published => {
+            crate::allocator::page::mi_process_mark_multi_threaded();
         }
-    } else {
-        crate::allocator::page::mi_process_mark_multi_threaded();
-        published.leave_published();
     }
 }
 
@@ -989,7 +972,8 @@ unsafe fn mi_prepare_validated_free(
 /// # Safety
 /// `validated` must identify one live allocator allocation whose page registration, backing, block
 /// geometry, owner metadata, keys, free lists, and accounting remain valid through this terminal
-/// free. It must not race another free/realloc, page-map teardown, backing release, or non-protocol
+/// free, with guard protection already restored. It must not race another free/realloc,
+/// page-map teardown, backing release, or non-protocol
 /// owner mutation. Local state must be exclusively mutable by the current thread; remote publication
 /// may occur only through the allocator atomics. If nonnull, `usable` must be aligned and writable
 /// for one `usize` when accessed; it may alias the live user allocation but not allocator metadata,
@@ -1299,14 +1283,14 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_internal!(!mt_free.is_null());
-        collect_after_remote_free(
+        collect_after_remote_free(crate::types::validation::ClaimedRemoteFree::from_published(
             crate::allocator::raw_bridge::assume_owned_abandoned_page(
                 crate::core_types::PagePtr::new_unchecked(page),
             ),
             crate::core_types::PublishedRemoteHead::from_raw_compat(
                 crate::core_types::BlockPtr::new_unchecked(mt_free),
             ),
-        )
+        ))
         .discard();
     }
 }

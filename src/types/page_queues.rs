@@ -175,6 +175,16 @@ pub(crate) struct QueuedPage<'scope, K> {
 #[must_use = "detached pages must be reinserted or transferred to their lifecycle owner"]
 pub(crate) struct DetachedPage<'scope, K>(QueuedPage<'scope, K>);
 
+#[must_use = "an all-free queue member must be retained or detached before release"]
+pub(crate) struct AllFreeQueued<'scope, K>(QueuedPage<'scope, K>);
+
+#[repr(transparent)]
+#[must_use = "a detached all-free page must be consumed by terminal release"]
+pub(crate) struct DetachedAllFree<'scope> {
+    page: super::AllFreePage<super::Active>,
+    _scope: PhantomData<fn(&'scope ()) -> &'scope ()>,
+}
+
 impl<K> PageQueue<K> {
     /// Lend the initialized queue during one local ownership phase.
     ///
@@ -219,6 +229,19 @@ impl<K> PageQueue<K> {
 }
 
 impl PageQueue<NormalQueue> {
+    /// # Safety
+    /// The `with_member` conditions must hold, and this page must retain the
+    /// thread-free ownership claim until its all-free release completes.
+    #[inline(always)]
+    pub(crate) unsafe fn with_all_free<R>(
+        self,
+        heap: super::ThreadHeapLocal,
+        page: super::AllFreePage<super::Active>,
+        f: impl for<'scope> FnOnce(AllFreeQueued<'scope, NormalQueue>) -> R,
+    ) -> R {
+        self.lend_member(heap, page.page(), |page| f(AllFreeQueued(page)))
+    }
+
     /// Lend a known linked active page without repeating the queue search.
     ///
     /// # Safety
@@ -267,6 +290,19 @@ impl PageQueue<NormalQueue> {
 }
 
 impl PageQueue<FullQueue> {
+    /// # Safety
+    /// The `with_member` conditions must hold, and this page must retain the
+    /// thread-free ownership claim until its all-free release completes.
+    #[inline(always)]
+    pub(crate) unsafe fn with_all_free<R>(
+        self,
+        heap: super::ThreadHeapLocal,
+        page: super::AllFreePage<super::Full>,
+        f: impl for<'scope> FnOnce(AllFreeQueued<'scope, FullQueue>) -> R,
+    ) -> R {
+        self.lend_member(heap, page.page(), |page| f(AllFreeQueued(page)))
+    }
+
     /// Lend a known linked full page without repeating the queue search.
     ///
     /// # Safety
@@ -344,6 +380,51 @@ impl<'scope, K> QueuedPage<'scope, K> {
     pub(crate) fn remove(self) -> DetachedPage<'scope, K> {
         unsafe { crate::allocator::page::mi_page_queue_remove_typed(self.queue, self.page) };
         DetachedPage(self)
+    }
+}
+
+impl<'scope, K> AllFreeQueued<'scope, K> {
+    #[inline(always)]
+    pub(crate) fn remove(self) -> DetachedAllFree<'scope> {
+        let page = self.0.remove().into_raw();
+        // Removal clears both links and the full flag, while the consumed
+        // zero-used proof and thread-free ownership claim remain valid.
+        let page =
+            unsafe { super::AllFreePage::active_unchecked(super::ActivePage::new_unchecked(page)) };
+        DetachedAllFree {
+            page,
+            _scope: PhantomData,
+        }
+    }
+}
+
+impl DetachedAllFree<'_> {
+    #[inline(always)]
+    pub(crate) fn page(&self) -> PagePtr {
+        self.page.page()
+    }
+
+    /// Reestablish detached ownership at a raw queue-removal compatibility edge.
+    ///
+    /// # Safety
+    /// Removal must have cleared both links and the full flag while retaining
+    /// this live page's unique thread-free claim until terminal release.
+    #[inline(always)]
+    pub(crate) unsafe fn after_raw_remove(page: super::AllFreePage<super::Active>) -> Self {
+        Self {
+            page,
+            _scope: PhantomData,
+        }
+    }
+
+    /// Transfer the proof to the raw arena-release kernel.
+    ///
+    /// # Safety
+    /// The kernel must retain the live detached page and its ownership claim
+    /// until it consumes the returned value, within this ownership phase.
+    #[inline(always)]
+    pub(crate) unsafe fn into_arena_release(self) -> super::AllFreePage<super::Active> {
+        self.page
     }
 }
 

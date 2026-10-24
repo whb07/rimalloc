@@ -12,6 +12,94 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PROBES = [
     (
+        "terminal-release-requires-detached-all-free-page",
+        "src/allocator/page.rs",
+        "unsafe fn probe(p: crate::core_types::AllFreePage<crate::core_types::Active>) { "
+        "let _ = unsafe { _mi_page_free_after_remove(p) }; }",
+        "E0308",
+    ),
+    (
+        "all-free-membership-consumed-on-detach",
+        "src/types/page_queues.rs",
+        "fn probe(p: AllFreeQueued<'_, NormalQueue>) { "
+        "let _ = p.remove(); let _ = p.remove(); }",
+        "E0382",
+    ),
+    (
+        "detached-all-free-page-cannot-escape",
+        "src/types/page_queues.rs",
+        "unsafe fn probe(q: NormalPageQueue, h: super::super::ThreadHeapLocal, "
+        "p: super::super::AllFreePage<super::super::Active>) { let mut escaped = None; "
+        "unsafe { PageQueue::normal(q).with_all_free(h, p, |p| { escaped = Some(p.remove()); }); } "
+        "let _ = escaped; }",
+        "E0521",
+    ),
+    (
+        "detached-collection-retains-exclusive-owner-loan",
+        "src/allocator/page/lifecycle.rs",
+        "fn probe(mut owner: PageCollectOwner<'_>) { "
+        "let a = owner.detach_remote(); let _b = owner.detach_remote(); let _ = a.collect(); }",
+        "E0499",
+    ),
+    (
+        "detached-collection-rejects-independent-destination",
+        "src/allocator/page/lifecycle.rs",
+        "fn probe(chain: DetachedForPage<'_, '_>, other: PageCollectOwner<'_>) { "
+        "let _ = chain.collect(other); }",
+        "E0061",
+    ),
+    (
+        "detached-collection-consumes-chain",
+        "src/allocator/page/lifecycle.rs",
+        "fn probe(chain: DetachedForPage<'_, '_>) { "
+        "let _ = chain.collect(); let _ = chain.collect(); }",
+        "E0382",
+    ),
+    (
+        "remote-publication-handoff-is-safe",
+        "src/types/validation.rs",
+        "fn probe<'s>(p: FreePage<'s, ForeignPage>, b: ScopedFreeBlock<'s>) -> RemotePublication { "
+        "p.publish_remote(b) }",
+        None,
+    ),
+    (
+        "remote-publication-consumes-storage",
+        "src/types/validation.rs",
+        "fn probe<'s>(p: FreePage<'s, ForeignPage>, b: ScopedFreeBlock<'s>) { "
+        "let _ = p.publish_remote(b); let _ = b.block(); }",
+        "E0382",
+    ),
+    (
+        "remote-publication-consumes-page-access",
+        "src/types/validation.rs",
+        "fn probe<'s>(p: FreePage<'s, ForeignPage>, b: ScopedFreeBlock<'s>) { "
+        "let _ = p.publish_remote(b); let _ = p.owner(); }",
+        "E0382",
+    ),
+    (
+        "remote-publication-rejects-cross-request-pairing",
+        "src/types/validation.rs",
+        "unsafe fn probe(a: ValidatedFree, b: ValidatedFree) { unsafe { "
+        "a.with_foreign(|p, _| b.with_foreign(|_, b| { let _ = p.publish_remote(b); })); } }",
+        "E0521",
+    ),
+    (
+        "remote-collection-rejects-independent-page-and-head",
+        "src/allocator/free.rs",
+        "unsafe fn probe(p: crate::core_types::OwnedAbandonedPage, "
+        "h: crate::core_types::PublishedRemoteHead) { "
+        "let _ = unsafe { collect_after_remote_free(p, h) }; }",
+        "E0061",
+    ),
+    (
+        "remote-claim-pair-cannot-be-forged",
+        "src/allocator/free.rs",
+        "fn probe(p: crate::core_types::OwnedAbandonedPage, "
+        "h: crate::core_types::PublishedRemoteHead) { "
+        "let _ = crate::types::validation::ClaimedRemoteFree { page: p, head: h }; }",
+        "E0451",
+    ),
+    (
         "queue-membership-authorizes-safe-removal",
         "src/types/page_queues.rs",
         "fn remove(p: QueuedPage<'_, NormalQueue>) -> PagePtr { p.remove().into_raw() } "
@@ -63,15 +151,15 @@ PROBES = [
         "allocation-loan-handoff",
         "src/types/local_page.rs",
         "unsafe fn probe(p: AvailablePage, r: PaddedSize) { unsafe { "
-        "p.with_allocation_access(r, |p, r| { let (b, p) = p.pop(r); "
-        "let _ = b.track_undefined().finish(&p, Zeroed::Yes); }); } }",
+        "p.with_allocation_access(r, core::ptr::null_mut(), |p, r| { let (b, p) = p.pop(r); "
+        "let _ = b.track_undefined(&p).finish(&p, Zeroed::Yes); }); } }",
         None,
     ),
     (
         "allocation-rejects-cross-page-request",
         "src/types/local_page.rs",
         "unsafe fn probe(a: AvailablePage, b: AvailablePage, r: PaddedSize) { unsafe { "
-        "a.with_allocation_access(r, |a, _| b.with_allocation_access(r, |_, r| "
+        "a.with_allocation_access(r, core::ptr::null_mut(), |a, _| b.with_allocation_access(r, core::ptr::null_mut(), |_, r| "
         "{ let _ = a.pop(r); })); } }",
         "E0521",
     ),
@@ -79,7 +167,7 @@ PROBES = [
         "allocation-storage-cannot-escape",
         "src/types/local_page.rs",
         "unsafe fn probe(p: AvailablePage, r: PaddedSize) { let mut escaped = None; unsafe { "
-        "p.with_allocation_access(r, |p, r| { escaped = Some(p.pop(r).0); }); } "
+        "p.with_allocation_access(r, core::ptr::null_mut(), |p, r| { escaped = Some(p.pop(r).0); }); } "
         "let _ = escaped; }",
         "E0521",
     ),
@@ -87,8 +175,8 @@ PROBES = [
         "allocation-storage-consumed-on-finish",
         "src/types/local_page.rs",
         "unsafe fn probe(p: AvailablePage, r: PaddedSize) { unsafe { "
-        "p.with_allocation_access(r, |p, r| { let (b, p) = p.pop(r); "
-        "let b = b.track_undefined(); let _ = b.finish(&p, Zeroed::Yes); "
+        "p.with_allocation_access(r, core::ptr::null_mut(), |p, r| { let (b, p) = p.pop(r); "
+        "let b = b.track_undefined(&p); let _ = b.finish(&p, Zeroed::Yes); "
         "let _ = b.finish(&p, Zeroed::Yes); }); } }",
         "E0382",
     ),
@@ -96,7 +184,7 @@ PROBES = [
         "allocation-storage-requires-tracking-transition",
         "src/types/local_page.rs",
         "unsafe fn probe(p: AvailablePage, r: PaddedSize) { unsafe { "
-        "p.with_allocation_access(r, |p, r| { let (b, p) = p.pop(r); "
+        "p.with_allocation_access(r, core::ptr::null_mut(), |p, r| { let (b, p) = p.pop(r); "
         "let _ = b.finish(&p, Zeroed::Yes); }); } }",
         "E0599",
     ),

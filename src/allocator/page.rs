@@ -281,9 +281,12 @@ pub(crate) unsafe fn _mi_page_free_active_internal(
         crate::internal::mi_assert_internal!(mi_page_all_free(page));
 
         mi_page_set_has_interior_pointers(page_wrapper.page(), false);
-        mi_page_queue_remove_raw(queue.ptr().as_ptr(), page);
-
-        _mi_page_free_after_remove(page_wrapper)
+        let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
+            ThreadHeapPtr::new_unchecked(mi_page_theap(page)),
+        );
+        crate::core_types::PageQueue::normal(queue).with_all_free(owner, page_wrapper, |page| {
+            _mi_page_free_after_remove(page.remove())
+        })
     }
 }
 
@@ -316,12 +319,12 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
         crate::internal::mi_assert_internal!(mi_page_all_free(page));
 
         mi_page_set_has_interior_pointers(page_wrapper.page(), false);
-        mi_page_queue_remove_raw(pq, page);
-
-        // SAFETY: the raw full-queue removal above cleared both queue links and the full flag while
-        // retaining current-thread ownership and the original all-free capability.
-        let page_wrapper = page_wrapper.into_active_after_detach();
-        _mi_page_free_after_remove(page_wrapper)
+        let owner = crate::core_types::ThreadHeapLocal::new_unchecked(
+            ThreadHeapPtr::new_unchecked(mi_page_theap(page)),
+        );
+        crate::core_types::PageQueue::full(queue).with_all_free(owner, page_wrapper, |page| {
+            _mi_page_free_after_remove(page.remove())
+        })
     }
 }
 
@@ -338,8 +341,8 @@ pub(crate) unsafe fn _mi_page_free_full_internal(
 /// remote-free publication remains permitted. Stored release, purge, or commit callbacks and their
 /// arguments reached synchronously must remain valid and must not unwind. The returned witness is
 /// terminal identity only; the released page must not be accessed again.
-unsafe fn _mi_page_free_after_remove<S>(
-    page_wrapper: crate::core_types::AllFreePage<S>,
+unsafe fn _mi_page_free_after_remove(
+    page_wrapper: crate::types::page_queues::DetachedAllFree<'_>,
 ) -> crate::core_types::DestroyedPage {
     let page = page_wrapper.page().as_ptr();
     // SAFETY: the caller keeps the detached all-free page and its current-thread owner/TLD live
@@ -359,7 +362,7 @@ unsafe fn _mi_page_free_after_remove<S>(
     // clear the page association, then consume the all-free page exactly once through arena release.
     let destroyed = unsafe {
         mi_page_set_theap(page, ptr::null_mut());
-        _mi_arenas_page_free_typed(page_wrapper, owner)
+        _mi_arenas_page_free_typed(page_wrapper.into_arena_release(), owner)
     };
     // SAFETY: the captured live current-thread TLD and stable subprocess association outlive the
     // released page; collection is synchronous and does not access the terminal page identity.
@@ -988,7 +991,9 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
                         _mi_page_free_active_internal(all_free, queue)
                     } else {
                         mi_page_queue_remove_raw(pq, all_free.page().as_ptr());
-                        _mi_page_free_after_remove(all_free)
+                        _mi_page_free_after_remove(
+                            crate::types::page_queues::DetachedAllFree::after_raw_remove(all_free),
+                        )
                     }
                 }
             };

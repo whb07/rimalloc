@@ -105,17 +105,88 @@ fn report_local_list_corruption(error: BatchValidationError) -> BatchValidationE
     error
 }
 
+// Constructed only at the local/claimed collection ingresses below. Each
+// borrowed owner retains its page and exclusive local-list mutation rights.
 enum PageCollectOwner<'a> {
     Local(&'a LocalPage),
     Abandoned(&'a OwnedAbandonedPage),
 }
 
-impl PageCollectOwner<'_> {
+/// A detached chain borrowing the exact page owner that removed it atomically.
+struct DetachedForPage<'access, 'owner> {
+    owner: &'access mut PageCollectOwner<'owner>,
+    detached: DetachedRemoteList,
+}
+
+impl DetachedForPage<'_, '_> {
+    #[inline(always)]
+    fn is_empty(&self) -> bool {
+        self.detached.is_empty()
+    }
+
+    #[inline(always)]
+    fn collect(self) -> Result<(), BatchValidationError> {
+        let local = unsafe { self.owner.page().local_free() };
+        unsafe { self.owner.collect_remote(self.detached, local) }.map(|_| ())
+    }
+}
+
+impl<'owner> PageCollectOwner<'owner> {
     #[inline(always)]
     fn page(&self) -> PagePtr {
         match self {
             Self::Local(owner) => owner.page(),
             Self::Abandoned(owner) => owner.page(),
+        }
+    }
+
+    #[inline(always)]
+    fn detach_remote(&mut self) -> DetachedForPage<'_, 'owner> {
+        let detached = unsafe {
+            crate::types::atomic::AtomicThreadFree::from_cell(&*self.page().thread_free_field())
+                .detach_head()
+        };
+        DetachedForPage {
+            owner: self,
+            detached,
+        }
+    }
+
+    #[inline(always)]
+    fn local_is_empty(&self) -> bool {
+        unsafe { self.page().local_free().is_empty() }
+    }
+
+    #[inline(always)]
+    fn recycle_local(&mut self, force: bool) {
+        let page = self.page();
+        let local = unsafe { page.local_free() };
+        if !local.is_empty() {
+            let available = unsafe { page.free() };
+            if available.is_empty() {
+                unsafe { self.transfer_local_to_available(local) };
+                #[cfg(feature = "bench-diagnostics")]
+                crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(false);
+            } else if force {
+                match unsafe { self.detach_local_free_batch() } {
+                    Ok(Some(batch)) => {
+                        let available = unsafe { self.prepend_to_available(batch, available) };
+                        unsafe { self.publish_recycled_available(available) };
+                        #[cfg(feature = "bench-diagnostics")]
+                        crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(true);
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        let _ = report_local_list_corruption(error);
+                    }
+                }
+            } else {
+                #[cfg(feature = "bench-diagnostics")]
+                crate::allocator::bench_diagnostics::page_free_collect_noop_local_blocked();
+            }
+        } else {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::allocator::bench_diagnostics::page_free_collect_local_empty();
         }
     }
 
@@ -217,49 +288,13 @@ pub(crate) unsafe fn collect_remote_for_owned_abandoned_page(
 }
 
 #[inline]
-unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
-    let page_ptr = owner.page();
-    let remote = unsafe {
-        crate::types::atomic::AtomicThreadFree::from_cell(&*page_ptr.thread_free_field())
-            .detach_head()
-    };
+fn collect_page_free_lists(mut owner: PageCollectOwner<'_>, force: bool) {
+    let remote = owner.detach_remote();
     if !remote.is_empty() {
-        let local = unsafe { page_ptr.local_free() };
-        let _ = unsafe { owner.collect_remote(remote, local) };
+        let _ = remote.collect();
     }
-
-    let local = unsafe { page_ptr.local_free() };
-    if !local.is_empty() {
-        let available = unsafe { page_ptr.free() };
-        if available.is_empty() {
-            unsafe { owner.transfer_local_to_available(local) };
-            #[cfg(feature = "bench-diagnostics")]
-            crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(false);
-        } else if force {
-            match unsafe { owner.detach_local_free_batch() } {
-                Ok(Some(batch)) => {
-                    let new_available = unsafe { owner.prepend_to_available(batch, available) };
-                    // SAFETY: the splice result is now the owner's unique
-                    // recycled available-list head.
-                    unsafe { owner.publish_recycled_available(new_available) };
-                    #[cfg(feature = "bench-diagnostics")]
-                    crate::allocator::bench_diagnostics::page_free_collect_moved_to_free(true);
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    let _ = report_local_list_corruption(error);
-                }
-            }
-        } else {
-            #[cfg(feature = "bench-diagnostics")]
-            crate::allocator::bench_diagnostics::page_free_collect_noop_local_blocked();
-        }
-    } else {
-        #[cfg(feature = "bench-diagnostics")]
-        crate::allocator::bench_diagnostics::page_free_collect_local_empty();
-    }
-
-    crate::internal::mi_assert_internal!(!force || unsafe { page_ptr.local_free() }.is_empty());
+    owner.recycle_local(force);
+    crate::internal::mi_assert_internal!(!force || owner.local_is_empty());
 }
 
 /// Collect free lists for a page owned by the current thread heap.
@@ -270,7 +305,7 @@ unsafe fn collect_page_free_lists(owner: PageCollectOwner<'_>, force: bool) {
 pub(crate) unsafe fn collect_page_free_lists_local(page: &LocalPage, force: bool) {
     #[cfg(feature = "bench-diagnostics")]
     crate::allocator::bench_diagnostics::page_free_collect_local_call(force);
-    unsafe { collect_page_free_lists(PageCollectOwner::Local(page), force) };
+    collect_page_free_lists(PageCollectOwner::Local(page), force);
 }
 
 /// Collect free lists for a page whose abandoned ownership bit is claimed.
@@ -281,7 +316,7 @@ pub(crate) unsafe fn collect_page_free_lists_local(page: &LocalPage, force: bool
 pub(crate) unsafe fn collect_page_free_lists_abandoned(page: &OwnedAbandonedPage, force: bool) {
     #[cfg(feature = "bench-diagnostics")]
     crate::allocator::bench_diagnostics::page_free_collect_abandoned_call(force);
-    unsafe { collect_page_free_lists(PageCollectOwner::Abandoned(page), force) };
+    collect_page_free_lists(PageCollectOwner::Abandoned(page), force);
 }
 
 /// # Safety
@@ -363,6 +398,63 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detached_collection_keeps_owner_and_storage_together() {
+        use crate::core_types::{ThreadFreeOwner, ThreadFreeWord};
+        use core::mem::MaybeUninit;
+
+        #[repr(align(16))]
+        struct Blocks([u8; 128]);
+
+        for abandoned in [false, true] {
+            let mut metadata = MaybeUninit::<mi_page_t>::zeroed();
+            let mut blocks = Blocks([0; 128]);
+            // Each iteration owns one initialized two-block page, including
+            // the atomic collection claim and its exact encoded remote chain.
+            unsafe {
+                let raw = metadata.as_mut_ptr();
+                let page = PagePtr::new_unchecked(raw);
+                let start = blocks.0.as_mut_ptr();
+                let first = BlockPtr::new_unchecked(start.cast());
+                let second = BlockPtr::new_unchecked(start.add(64).cast());
+                (*raw).block_size = 64;
+                (*raw).page_start = start;
+                (*raw).used = 2;
+                (*raw).capacity = 2;
+                (*raw).reserved = 2;
+                (*raw).xthread_id = if abandoned {
+                    0
+                } else {
+                    crate::prim::_mi_prim_thread_id()
+                };
+                (*raw).xthread_free =
+                    ThreadFreeWord::from_parts(Some(first), ThreadFreeOwner::Owned).raw();
+                mi_block_set_next(raw, first.as_ptr(), second.as_ptr());
+                mi_block_set_next(raw, second.as_ptr(), ptr::null());
+                let local_page;
+                let claimed_page;
+                let mut owner = if abandoned {
+                    claimed_page = crate::allocator::raw_bridge::assume_owned_abandoned_page(page);
+                    PageCollectOwner::Abandoned(&claimed_page)
+                } else {
+                    local_page = crate::allocator::raw_bridge::assume_local_page(page);
+                    PageCollectOwner::Local(&local_page)
+                };
+                let detached = owner.detach_remote();
+                assert!(!detached.is_empty());
+                detached.collect().expect("valid page-local chain");
+                assert_eq!((*raw).used, 0);
+                assert_eq!((*raw).local_free, first.as_ptr());
+                owner.recycle_local(false);
+                assert!((*raw).local_free.is_null());
+                assert_eq!((*raw).free, first.as_ptr());
+                assert!(!(*raw).free_is_zero);
+                assert_eq!(mi_block_next(raw, first.as_ptr()), second.as_ptr());
+                assert!(mi_block_next(raw, second.as_ptr()).is_null());
+            }
+        }
+    }
 
     #[test]
     #[cfg_attr(

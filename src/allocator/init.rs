@@ -178,7 +178,7 @@ static mut tld_main: mi_tld_t = mi_tld_t {
     thread_seq: 0,
     numa_node: 0,
     subproc: ptr::addr_of_mut!(subproc_main).cast::<mi_subproc_t>(),
-    theaps: ptr::addr_of_mut!(theap_main),
+    theaps: ptr::addr_of_mut!(theap_main).cast::<mi_theap_t>(),
     theaps_lock: mi_lock_t::new(),
     recurse: false,
     is_in_threadpool: false,
@@ -387,7 +387,12 @@ pub(crate) static mut _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
     stats: MI_STATS_NULL(),
 };
 
-static mut theap_main: mi_theap_t = mi_theap_t {
+// C declares this static with mi_decl_cache_align; keep its cache placement
+// independent of unrelated changes to the linked data section.
+#[repr(C, align(64))]
+struct CacheAlignedMainTheap(mi_theap_t);
+
+static mut theap_main: CacheAlignedMainTheap = CacheAlignedMainTheap(mi_theap_t {
     tld: ptr::addr_of_mut!(tld_main),
     heap: ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>(),
     refcount: 1,
@@ -426,7 +431,7 @@ static mut theap_main: mi_theap_t = mi_theap_t {
     // initializes it with `MI_MEMID_STATIC`, which skips that initialization (`UPSTREAM_DIFF.md`).
     memid: mi_memid_none(),
     stats: MI_STATS_NULL(),
-};
+});
 
 static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
     subproc: ptr::null_mut(),
@@ -659,7 +664,7 @@ fn mi_heap_main_init() {
             heap_main.subproc = ptr::addr_of_mut!(subproc_main)
                 .cast::<MiSubprocPrefix>()
                 .cast::<mi_subproc_t>();
-            heap_main.theaps = ptr::addr_of_mut!(theap_main);
+            heap_main.theaps = ptr::addr_of_mut!(theap_main).cast::<mi_theap_t>();
 
             thread::theap_main_init();
             subproc::main_init();
@@ -816,7 +821,7 @@ unsafe fn mi_process_init_inner() {
             crate::allocator::threadlocal::_mi_thread_locals_init();
             let _ = crate::allocator::page_map::_mi_page_map_init();
             crate::prim::_mi_prim_thread_init_auto_done();
-            _mi_theap_default_set(ptr::addr_of_mut!(theap_main));
+            _mi_theap_default_set(ptr::addr_of_mut!(theap_main).cast::<mi_theap_t>());
             if !crate::prim::_mi_thread_is_initialized() && !thread::init_default().is_null() {
                 let heap = mi_heap_main();
                 if !heap.is_null() {
@@ -854,7 +859,7 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     {
         unsafe { _mi_fputs(None, ptr::null_mut(), ptr::null(), msg) };
     }
-    unsafe { crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random)) };
+    unsafe { crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.0.random)) };
     // Registered after initialization: registration may allocate.
     #[cfg(all(
         not(miri),
@@ -948,7 +953,8 @@ mod tests {
         unsafe { super::_mi_auto_process_init() };
         // SAFETY: process initialization has completed; these reads observe settled fields.
         unsafe {
-            let theap = core::ptr::addr_of!(super::theap_main);
+            let theap = core::ptr::addr_of!(super::theap_main.0);
+            assert_eq!(theap.addr() % 64, 0);
             assert!(super::mi_memid_is_static((*theap).memid));
             assert_ne!((*theap).cookie, 0);
             let retain = crate::allocator::options::mi_option_get(

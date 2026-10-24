@@ -366,24 +366,25 @@ pub(super) fn theap_main_init() {
     // SAFETY: mutates the statically allocated main theap during one-time lazy init.
     // SAFETY: main thread-heap static metadata is initialized once before publication.
     unsafe {
-        if !mi_memid_is_static(theap_main.memid) {
-            theap_main.memid =
+        if !mi_memid_is_static(theap_main.0.memid) {
+            theap_main.0.memid =
                 crate::types::MemId::<crate::types::StaticMem>::static_mem().into_raw();
             #[cfg(any(target_os = "macos", windows))]
-            crate::internal::_mi_random_init_weak(ptr::addr_of_mut!(theap_main.random));
+            crate::internal::_mi_random_init_weak(ptr::addr_of_mut!(theap_main.0.random));
             #[cfg(not(any(target_os = "macos", windows)))]
-            crate::internal::_mi_random_init(ptr::addr_of_mut!(theap_main.random));
-            theap_main.cookie =
-                crate::internal::_mi_theap_random_next(ptr::addr_of_mut!(theap_main));
+            crate::internal::_mi_random_init(ptr::addr_of_mut!(theap_main.0.random));
+            theap_main.0.cookie = crate::internal::_mi_theap_random_next(
+                ptr::addr_of_mut!(theap_main).cast::<mi_theap_t>(),
+            );
             // SAFETY: one-time main-heap initialization owns this live static
             // metadata and its policy fields. Option storage and diagnostics
             // remain valid and non-unwinding, and no incompatible reentry,
             // allocation, or teardown can observe it before publication.
-            super::_mi_theap_options_init(ptr::addr_of_mut!(theap_main));
+            super::_mi_theap_options_init(ptr::addr_of_mut!(theap_main).cast::<mi_theap_t>());
             // SAFETY: the same unpublished current-thread static remains live
             // with exclusive guarded/random configuration access, after options
             // initialization and before any allocator use.
-            super::_mi_theap_guarded_init(ptr::addr_of_mut!(theap_main));
+            super::_mi_theap_guarded_init(ptr::addr_of_mut!(theap_main).cast::<mi_theap_t>());
         }
     }
 }
@@ -551,7 +552,7 @@ pub(super) fn init_default() -> *mut mi_theap_t {
     }
     if mi_is_main_thread_fast() {
         mi_heap_main_init();
-        theap = ptr::addr_of_mut!(theap_main);
+        theap = ptr::addr_of_mut!(theap_main).cast::<mi_theap_t>();
     } else {
         let tld = tld_alloc_non_main(
             ptr::addr_of_mut!(subproc_main)

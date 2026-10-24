@@ -8447,16 +8447,18 @@
   "unsafe_source_counts": [
     {
       "label": "baseline",
-      "total": 4758,
+      "total": 4698,
       "unsafe_blocks": 3236,
-      "unsafe_functions": 1510,
+      "unsafe_function_pointer_types": 60,
+      "unsafe_functions": 1450,
       "unsafe_impls": 12
     },
     {
       "label": "candidate",
-      "total": 4726,
+      "total": 4672,
       "unsafe_blocks": 3219,
-      "unsafe_functions": 1495,
+      "unsafe_function_pointer_types": 54,
+      "unsafe_functions": 1441,
       "unsafe_impls": 12
     }
   ],

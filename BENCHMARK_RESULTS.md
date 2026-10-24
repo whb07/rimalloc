@@ -1174,9 +1174,11 @@ suite/rival pairs; the exception is Nginx against tcmalloc.
 Scoped access now couples local statistics and random state, allocated block
 storage and its page, queue membership and lifecycle, remote publication and
 detached collection, and arena claims and bounded bitmap storage. Production
-unsafe blocks fell from 3,236 to 3,219 and unsafe functions from 1,510 to 1,495;
-the 12 unsafe implementations are unchanged. These are 32 fewer production
-unsafe constructs. Allocator struct layouts, C ABI, atomic operations and
+unsafe blocks fell from 3,236 to 3,219 and unsafe function definitions from
+1,450 to 1,441; the 12 unsafe implementations are unchanged. These are 26 fewer
+production unsafe constructs, a 0.55% reduction. The original reported reduction
+of 32 also included six function-pointer type annotations; the raw results now
+count those separately. Allocator struct layouts, C ABI, atomic operations and
 orderings remain unchanged; both interposition configurations retain the same
 240 dynamic exports. The changes add no per-allocation metadata or locks.
 Final native geomeans were **-0.47% normal** and **+0.85% secure**; the longer Larson follow-up and

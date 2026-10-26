@@ -1,8 +1,8 @@
-# mechanical_mimalloc — Gate A investigation
+# rimalloc — Gate A investigation
 
 **Architecture, ownership traces, retention model, and proposed measurements**  
 **Date:** 2026-10-21  
-**Repository:** https://github.com/whb07/mechanical_mimalloc  
+**Repository:** https://github.com/whb07/rimalloc  
 **Pinned HEAD:** `08cf8a0d1dc04245cf7e5e5bf784a8fd52e53d46` (`08cf8a0`, master)  
 **Commit subject:** “Note collect_after_remote_free placement changes in the screen”
 
@@ -17,7 +17,7 @@ The available execution workspace is Linux x86_64, not the specified Apple M5 Pr
 - `[Q]` means an unresolved question or explicit coverage limit.
 - No `[M: ...]` performance claims occur: no new experiments were run, and historical ignored `target/` artifacts were not supplied by the tracked repository snapshot.
 - **T** = Rust/C 3.3.2 difference, including accepted intentional differences. **D** = behavior or limitation shared with the bundled C design. **U** = a later upstream change or an upstream bug. A U finding does not establish that its fix applies to this Rust port.
-- External primary references have their own repository pins or named document links; they are never attributed to `08cf8a0`. Source citations in the trace appendix are repository-relative. A citation resolves to `https://github.com/whb07/mechanical_mimalloc/blob/08cf8a0d1dc04245cf7e5e5bf784a8fd52e53d46/<file>#L<line>`.
+- External primary references have their own repository pins or named document links; they are never attributed to `08cf8a0`. Source citations in the trace appendix are repository-relative. A citation resolves to `https://github.com/whb07/rimalloc/blob/08cf8a0d1dc04245cf7e5e5bf784a8fd52e53d46/<file>#L<line>`.
 
 The architecture assessment is intentionally brief; detailed evidence, traces, and limits follow it. The experiment shortlist and rejection notes are **Gate A proposals**, not completed Phase B results or Phase C approvals.
 
@@ -173,7 +173,7 @@ On the examined 64-bit geometry, arena slices are 64 KiB, small/medium/large pag
 
 Rust decommit requests `MADV_FREE_REUSABLE`, with `MADV_DONTNEED` fallback; reuse requests `MADV_FREE_REUSE`. Apple's own tests skip reusable-advice assertions under Rosetta, and the VM implementation returns success without performing the operation for maps whose page size is below the native kernel page size. The local allocator test also skips reusable accounting under translation. [V: src/platform/unix.rs:747@08cf8a0] [V: src/platform/unix.rs:774@08cf8a0] [V: apple-oss-distributions/xnu/tests/vm_test_mach_map.c:731@f6217f8] [V: apple-oss-distributions/xnu/osfmk/vm/vm_map.c:17123@f6217f8] [V: src/platform/unix/tests.rs:128@08cf8a0]
 
-[H] On the M5, collect native-arm64 `TASK_VM_INFO` footprint, resident, reusable, and compressed series with supported revision/count checks; record OS/kernel, executable architecture, translation status and actual base-page size. Prefer external sampling. If task-port access requires an in-process sampler, preallocate fixed sampler storage with the system allocator and verify that it does not initialize a mechanical_mimalloc TLD or change the intended process history. Allocation-free behavior only during idle is insufficient for X31. Keep an explicit-API measurement route where this history is controllable. Do not label translated x86 data native M5 evidence. [Q] The public XNU pin does not identify the future target machine's installed kernel.
+[H] On the M5, collect native-arm64 `TASK_VM_INFO` footprint, resident, reusable, and compressed series with supported revision/count checks; record OS/kernel, executable architecture, translation status and actual base-page size. Prefer external sampling. If task-port access requires an in-process sampler, preallocate fixed sampler storage with the system allocator and verify that it does not initialize a rimalloc TLD or change the intended process history. Allocation-free behavior only during idle is insufficient for X31. Keep an explicit-API measurement route where this history is controllable. Do not label translated x86 data native M5 evidence. [Q] The public XNU pin does not identify the future target machine's installed kernel.
 
 External references, retrieved 2026-10-21:
 

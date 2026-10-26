@@ -61,8 +61,8 @@ def require_cc() -> str:
 
 def verify_metadata_manifest(data: dict[str, object], staged: pathlib.Path) -> None:
     expected = {
-        "mechanical_mimalloc.pc",
-        "mechanical_mimalloc-config.cmake",
+        "rimalloc.pc",
+        "rimalloc-config.cmake",
     }
     metadata = data.get("link_metadata")
     if not isinstance(metadata, list):
@@ -122,10 +122,10 @@ def run_pkg_config_consumer(staged: pathlib.Path, work_dir: pathlib.Path) -> Non
     source = write_consumer(work_dir)
     binary = work_dir / "pkg-config-consumer"
     cflags = shlex.split(
-        command_output([pkg_config, "--cflags", "mechanical_mimalloc"], cwd=work_dir, env=env)
+        command_output([pkg_config, "--cflags", "rimalloc"], cwd=work_dir, env=env)
     )
     libs = shlex.split(
-        command_output([pkg_config, "--libs", "mechanical_mimalloc"], cwd=work_dir, env=env)
+        command_output([pkg_config, "--libs", "rimalloc"], cwd=work_dir, env=env)
     )
     run([cc, "-std=c11", *cflags, str(source), *libs, "-o", str(binary)], cwd=work_dir, env=env)
     run([str(binary)], cwd=work_dir, env=env)
@@ -138,12 +138,12 @@ def run_cmake_consumer(staged: pathlib.Path, work_dir: pathlib.Path) -> None:
     cmake_lists.write_text(
         f"""\
 cmake_minimum_required(VERSION 3.16)
-project(mechanical_mimalloc_release_consumer C)
+project(rimalloc_release_consumer C)
 
-find_package(mechanical_mimalloc REQUIRED CONFIG)
+find_package(rimalloc REQUIRED CONFIG)
 
 add_executable(cmake_consumer {source.name})
-target_link_libraries(cmake_consumer PRIVATE mechanical_mimalloc::c_abi)
+target_link_libraries(cmake_consumer PRIVATE rimalloc::c_abi)
 """
     )
     build_dir = work_dir / "build"
@@ -166,7 +166,7 @@ target_link_libraries(cmake_consumer PRIVATE mechanical_mimalloc::c_abi)
 
 def main() -> int:
     data = ensure_release_artifacts()
-    with tempfile.TemporaryDirectory(prefix="mechanical-mimalloc-link-metadata-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="rimalloc-link-metadata-") as tmp:
         tmp_dir = pathlib.Path(tmp)
         staged = tmp_dir / RELEASE_DIR.name
         shutil.copytree(RELEASE_DIR, staged, ignore=shutil.ignore_patterns("build"))

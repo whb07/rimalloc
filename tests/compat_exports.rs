@@ -3,7 +3,7 @@ use core::ptr;
 use std::ffi::CString;
 use std::os::raw::c_long;
 
-use mechanical_mimalloc::raw::mimalloc::*;
+use rimalloc::raw::mimalloc::*;
 
 struct ShowErrorsGuard(c_long);
 
@@ -159,7 +159,7 @@ fn realpath_export_matches_resolved_buffer_and_allocated_result_contracts() {
         assert!(mi_check_owned(allocated.cast()));
         mi_free(allocated.cast());
 
-        let missing = c"/definitely/not/a/mechanical_mimalloc/path";
+        let missing = c"/definitely/not/a/rimalloc/path";
         assert!(mi_realpath(missing.as_ptr(), ptr::null_mut()).is_null());
     }
 }

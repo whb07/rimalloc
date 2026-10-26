@@ -125,10 +125,10 @@ int main(int argc, char** argv) {
   for (size_t i = 0; i < 32; ++i) free(strings[i]);
 
   malloc_zone_t* zone = malloc_default_zone();
-  assert(strcmp(malloc_get_zone_name(zone), "mechanical_mimalloc") == 0);
+  assert(strcmp(malloc_get_zone_name(zone), "rimalloc") == 0);
   malloc_set_zone_name(zone, "renamed-mimalloc");
   assert(strcmp(malloc_get_zone_name(zone), "renamed-mimalloc") == 0);
-  malloc_set_zone_name(zone, "mechanical_mimalloc");
+  malloc_set_zone_name(zone, "rimalloc");
   assert(zone->version == 10 && zone->reserved1 == NULL && zone->reserved2 == NULL);
   assert(zone->introspect != NULL && zone->introspect->check(zone));
   assert(zone->introspect->good_size(zone, 17) >= 17);

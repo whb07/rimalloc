@@ -2,7 +2,7 @@
 
 #![cfg(feature = "std")]
 
-use mechanical_mimalloc::Allocation;
+use rimalloc::Allocation;
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 

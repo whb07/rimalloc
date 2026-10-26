@@ -1,9 +1,7 @@
 use std::sync::{Arc, Barrier};
 use std::thread;
 
-use mechanical_mimalloc::raw::{
-    mi_free, mi_malloc, mi_process_init, mi_thread_done, mi_thread_init,
-};
+use rimalloc::raw::{mi_free, mi_malloc, mi_process_init, mi_thread_done, mi_thread_init};
 
 #[test]
 fn concurrent_thread_heap_creation_and_teardown() {

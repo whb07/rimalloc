@@ -1,7 +1,7 @@
 # Raw Facade Migration
 
 The public raw facade exposes the C-header-shaped API at
-`mechanical_mimalloc::raw`, with grouped aliases under `raw::abi` and
+`rimalloc::raw`, with grouped aliases under `raw::abi` and
 `raw::mimalloc`. Translated implementation modules are private and are not
 supported integration paths.
 

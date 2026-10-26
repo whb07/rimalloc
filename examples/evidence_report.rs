@@ -3,7 +3,7 @@
 
 #[cfg(feature = "bench-diagnostics")]
 use core::ffi::c_char;
-use mechanical_mimalloc::{Allocation, StatsSnapshot};
+use rimalloc::{Allocation, StatsSnapshot};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Instant;
@@ -109,7 +109,7 @@ fn main() {
     }
     // SAFETY: force collection has no pointer arguments and runs after all
     // remote-free workers have joined.
-    unsafe { mechanical_mimalloc::raw::mi_collect(true) };
+    unsafe { rimalloc::raw::mi_collect(true) };
     let live: Vec<_> = (0..4096)
         .map(|index| Allocation::new_bytes(8 + index % 8192).expect("live evidence allocation"))
         .collect();

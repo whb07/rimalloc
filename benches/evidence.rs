@@ -4,7 +4,7 @@
 
 use core::alloc::Layout;
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use mechanical_mimalloc::Allocation;
+use rimalloc::Allocation;
 
 const BATCH: usize = 2048;
 const SIZES: &[usize] = &[16, 64, 256, 1024, 4096];
@@ -39,12 +39,12 @@ fn raw_c_abi(c: &mut Criterion) {
                 for slot in &mut slots {
                     // SAFETY: every successful pointer is retained in `slots`
                     // and freed exactly once below.
-                    *slot = unsafe { mechanical_mimalloc::raw::mi_malloc(size) };
+                    *slot = unsafe { rimalloc::raw::mi_malloc(size) };
                 }
                 for slot in &mut slots {
                     // SAFETY: the pointer came from `mi_malloc` in this
                     // iteration and has not otherwise been freed.
-                    unsafe { mechanical_mimalloc::raw::mi_free(*slot) };
+                    unsafe { rimalloc::raw::mi_free(*slot) };
                     *slot = core::ptr::null_mut();
                 }
                 black_box(&slots);

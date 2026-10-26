@@ -259,7 +259,7 @@ both allocators and also prove that system malloc is rejected.
 
 ## Nginx
 
-`./benchmarks/bench.py nginx` compares Rust mechanical_mimalloc and C mimalloc
+`./benchmarks/bench.py nginx` compares Rust rimalloc and C mimalloc
 with six HTTP workloads in separate production and debug-palloc profiles.
 Select glibc explicitly with `--allocator glibc` alongside the Rust/C selections.
 See [the Nginx benchmark guide](../benches/nginx/README.md) for CPU placement,

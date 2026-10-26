@@ -238,7 +238,7 @@ def rust_staticlib() -> pathlib.Path:
         env=env,
     )
     libs = sorted(
-        deps_dir.glob("libmechanical_mimalloc-*.a"),
+        deps_dir.glob("librimalloc-*.a"),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

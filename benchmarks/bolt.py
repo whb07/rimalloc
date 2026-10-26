@@ -75,7 +75,7 @@ def profile(driver, jobs: int, output: Path) -> None:
     built = driver.execute(["cargo", "rustc", "--locked", "--release", "--features", "interpose", "--lib",
                             "--jobs", str(jobs), "--message-format=json-render-diagnostics", "--crate-type", "cdylib"],
                            target / "build.log", environment)
-    library = driver.cargo_artifact(built, "mechanical_mimalloc", shared=True)
+    library = driver.cargo_artifact(built, "rimalloc", shared=True)
     with tempfile.TemporaryDirectory(prefix="bolt-profile-") as scratch:
         profiles = []
         for scenario in TRAINING:

@@ -109,7 +109,7 @@ int main(void) {
 
 def build_release_artifacts() -> dict[str, object]:
     path = RELEASE_DIR / "release-artifacts.json"
-    if not (os.environ.get("MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS") and path.exists()):
+    if not (os.environ.get("RIMALLOC_REUSE_RELEASE_ARTIFACTS") and path.exists()):
         subprocess.run(["scripts/build-release-artifacts.py"], cwd=ROOT, check=True)
     return json.loads(path.read_text())
 
@@ -209,7 +209,7 @@ def main() -> int:
         raise SystemExit("no C++ compiler found; set CXX")
 
     data = build_release_artifacts()
-    with tempfile.TemporaryDirectory(prefix="mechanical-mimalloc-cxx-artifacts-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="rimalloc-cxx-artifacts-") as tmp:
         tmp_dir = pathlib.Path(tmp)
         staged = tmp_dir / RELEASE_DIR.name
         shutil.copytree(RELEASE_DIR, staged, ignore=shutil.ignore_patterns("build"))

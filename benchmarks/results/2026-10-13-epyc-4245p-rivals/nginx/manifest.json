@@ -163,9 +163,9 @@
       "directory": "round-001/production/burst-idle/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/jemalloc"
       ],
       "started_utc": "2026-10-13T12:40:56Z",
       "exit_status": 0,
@@ -176,9 +176,9 @@
       "directory": "round-001/debug-palloc/churn/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/jemalloc"
       ],
       "started_utc": "2026-10-13T12:41:32Z",
       "exit_status": 0,
@@ -189,9 +189,9 @@
       "directory": "round-001/debug-palloc/headers/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/jemalloc"
       ],
       "started_utc": "2026-10-13T12:41:42Z",
       "exit_status": 0,
@@ -202,9 +202,9 @@
       "directory": "round-001/debug-palloc/proxy-65536-on/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:41:52Z",
       "exit_status": 0,
@@ -215,9 +215,9 @@
       "directory": "round-001/debug-palloc/proxy-262144-off/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/jemalloc"
       ],
       "started_utc": "2026-10-13T12:42:03Z",
       "exit_status": 0,
@@ -228,9 +228,9 @@
       "directory": "round-001/debug-palloc/download-1048576/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/jemalloc"
       ],
       "started_utc": "2026-10-13T12:42:14Z",
       "exit_status": 0,
@@ -241,9 +241,9 @@
       "directory": "round-001/debug-palloc/proxy-65536-on/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/rust"
       ],
       "started_utc": "2026-10-13T12:42:24Z",
       "exit_status": 0,
@@ -254,9 +254,9 @@
       "directory": "round-001/production/download-65536/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/rust"
       ],
       "started_utc": "2026-10-13T12:42:36Z",
       "exit_status": 0,
@@ -267,9 +267,9 @@
       "directory": "round-001/debug-palloc/burst-idle/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/rust"
       ],
       "started_utc": "2026-10-13T12:42:45Z",
       "exit_status": 0,
@@ -280,9 +280,9 @@
       "directory": "round-001/production/headers/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/rust"
       ],
       "started_utc": "2026-10-13T12:43:21Z",
       "exit_status": 0,
@@ -293,9 +293,9 @@
       "directory": "round-001/debug-palloc/proxy-65536-on/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/jemalloc"
       ],
       "started_utc": "2026-10-13T12:43:31Z",
       "exit_status": 0,
@@ -306,9 +306,9 @@
       "directory": "round-001/debug-palloc/upload-65536/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/glibc"
       ],
       "started_utc": "2026-10-13T12:43:42Z",
       "exit_status": 0,
@@ -319,9 +319,9 @@
       "directory": "round-001/production/proxy-262144-on/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/glibc"
       ],
       "started_utc": "2026-10-13T12:43:54Z",
       "exit_status": 0,
@@ -332,9 +332,9 @@
       "directory": "round-001/debug-palloc/upload-1048576/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/glibc"
       ],
       "started_utc": "2026-10-13T12:44:05Z",
       "exit_status": 0,
@@ -345,9 +345,9 @@
       "directory": "round-001/production/proxy-1024-on/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/jemalloc"
       ],
       "started_utc": "2026-10-13T12:44:16Z",
       "exit_status": 0,
@@ -358,9 +358,9 @@
       "directory": "round-001/debug-palloc/proxy-1024-on/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/glibc"
       ],
       "started_utc": "2026-10-13T12:44:27Z",
       "exit_status": 0,
@@ -371,9 +371,9 @@
       "directory": "round-001/debug-palloc/download-4096/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:44:39Z",
       "exit_status": 0,
@@ -384,9 +384,9 @@
       "directory": "round-001/debug-palloc/proxy-65536-on/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-on/glibc"
       ],
       "started_utc": "2026-10-13T12:44:48Z",
       "exit_status": 0,
@@ -397,9 +397,9 @@
       "directory": "round-001/debug-palloc/proxy-16384-off/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/glibc"
       ],
       "started_utc": "2026-10-13T12:45:00Z",
       "exit_status": 0,
@@ -410,9 +410,9 @@
       "directory": "round-001/debug-palloc/proxy-1024-off/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/glibc"
       ],
       "started_utc": "2026-10-13T12:45:11Z",
       "exit_status": 0,
@@ -423,9 +423,9 @@
       "directory": "round-001/debug-palloc/burst-idle/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/jemalloc"
       ],
       "started_utc": "2026-10-13T12:45:22Z",
       "exit_status": 0,
@@ -436,9 +436,9 @@
       "directory": "round-001/production/proxy-1024-off/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/glibc"
       ],
       "started_utc": "2026-10-13T12:45:58Z",
       "exit_status": 0,
@@ -449,9 +449,9 @@
       "directory": "round-001/production/churn/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/rust"
       ],
       "started_utc": "2026-10-13T12:46:09Z",
       "exit_status": 0,
@@ -462,9 +462,9 @@
       "directory": "round-001/production/proxy-65536-off/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/glibc"
       ],
       "started_utc": "2026-10-13T12:46:19Z",
       "exit_status": 0,
@@ -475,9 +475,9 @@
       "directory": "round-001/production/proxy-16384-off/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/glibc"
       ],
       "started_utc": "2026-10-13T12:46:30Z",
       "exit_status": 0,
@@ -488,9 +488,9 @@
       "directory": "round-001/production/upload-4096/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/jemalloc"
       ],
       "started_utc": "2026-10-13T12:46:42Z",
       "exit_status": 0,
@@ -501,9 +501,9 @@
       "directory": "round-001/debug-palloc/upload-65536/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:46:53Z",
       "exit_status": 0,
@@ -514,9 +514,9 @@
       "directory": "round-001/production/proxy-65536-off/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/jemalloc"
       ],
       "started_utc": "2026-10-13T12:47:04Z",
       "exit_status": 0,
@@ -527,9 +527,9 @@
       "directory": "round-001/production/headers/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/jemalloc"
       ],
       "started_utc": "2026-10-13T12:47:15Z",
       "exit_status": 0,
@@ -540,9 +540,9 @@
       "directory": "round-001/production/upload-1048576/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/rust"
       ],
       "started_utc": "2026-10-13T12:47:25Z",
       "exit_status": 0,
@@ -553,9 +553,9 @@
       "directory": "round-001/debug-palloc/download-4096/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/glibc"
       ],
       "started_utc": "2026-10-13T12:47:36Z",
       "exit_status": 0,
@@ -566,9 +566,9 @@
       "directory": "round-001/debug-palloc/download-1048576/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/glibc"
       ],
       "started_utc": "2026-10-13T12:47:46Z",
       "exit_status": 0,
@@ -579,9 +579,9 @@
       "directory": "round-001/production/download-65536/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:47:56Z",
       "exit_status": 0,
@@ -592,9 +592,9 @@
       "directory": "round-001/debug-palloc/download-4096/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/rust"
       ],
       "started_utc": "2026-10-13T12:48:06Z",
       "exit_status": 0,
@@ -605,9 +605,9 @@
       "directory": "round-001/debug-palloc/download-65536/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/jemalloc"
       ],
       "started_utc": "2026-10-13T12:48:16Z",
       "exit_status": 0,
@@ -618,9 +618,9 @@
       "directory": "round-001/production/download-65536/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/glibc"
       ],
       "started_utc": "2026-10-13T12:48:26Z",
       "exit_status": 0,
@@ -631,9 +631,9 @@
       "directory": "round-001/debug-palloc/proxy-16384-off/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:48:36Z",
       "exit_status": 0,
@@ -644,9 +644,9 @@
       "directory": "round-001/production/proxy-65536-off/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:48:47Z",
       "exit_status": 0,
@@ -657,9 +657,9 @@
       "directory": "round-001/debug-palloc/download-4096/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-4096/jemalloc"
       ],
       "started_utc": "2026-10-13T12:48:58Z",
       "exit_status": 0,
@@ -670,9 +670,9 @@
       "directory": "round-001/production/upload-65536/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/rust"
       ],
       "started_utc": "2026-10-13T12:49:08Z",
       "exit_status": 0,
@@ -683,9 +683,9 @@
       "directory": "round-001/debug-palloc/download-65536/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/glibc"
       ],
       "started_utc": "2026-10-13T12:49:19Z",
       "exit_status": 0,
@@ -696,9 +696,9 @@
       "directory": "round-001/debug-palloc/upload-1048576/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/jemalloc"
       ],
       "started_utc": "2026-10-13T12:49:29Z",
       "exit_status": 0,
@@ -709,9 +709,9 @@
       "directory": "round-001/production/proxy-262144-off/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/rust"
       ],
       "started_utc": "2026-10-13T12:49:40Z",
       "exit_status": 0,
@@ -722,9 +722,9 @@
       "directory": "round-001/production/upload-65536/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/jemalloc"
       ],
       "started_utc": "2026-10-13T12:49:52Z",
       "exit_status": 0,
@@ -735,9 +735,9 @@
       "directory": "round-001/production/upload-1048576/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/jemalloc"
       ],
       "started_utc": "2026-10-13T12:50:03Z",
       "exit_status": 0,
@@ -748,9 +748,9 @@
       "directory": "round-001/production/proxy-262144-on/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:50:14Z",
       "exit_status": 0,
@@ -761,9 +761,9 @@
       "directory": "round-001/production/proxy-65536-on/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/jemalloc"
       ],
       "started_utc": "2026-10-13T12:50:25Z",
       "exit_status": 0,
@@ -774,9 +774,9 @@
       "directory": "round-001/production/churn/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:50:36Z",
       "exit_status": 0,
@@ -787,9 +787,9 @@
       "directory": "round-001/debug-palloc/headers/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/rust"
       ],
       "started_utc": "2026-10-13T12:50:46Z",
       "exit_status": 0,
@@ -800,9 +800,9 @@
       "directory": "round-001/production/burst-idle/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/rust"
       ],
       "started_utc": "2026-10-13T12:50:56Z",
       "exit_status": 0,
@@ -813,9 +813,9 @@
       "directory": "round-001/debug-palloc/proxy-16384-off/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/rust"
       ],
       "started_utc": "2026-10-13T12:51:32Z",
       "exit_status": 0,
@@ -826,9 +826,9 @@
       "directory": "round-001/debug-palloc/headers/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/glibc"
       ],
       "started_utc": "2026-10-13T12:51:43Z",
       "exit_status": 0,
@@ -839,9 +839,9 @@
       "directory": "round-001/production/upload-1048576/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/glibc"
       ],
       "started_utc": "2026-10-13T12:51:53Z",
       "exit_status": 0,
@@ -852,9 +852,9 @@
       "directory": "round-001/debug-palloc/churn/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/glibc"
       ],
       "started_utc": "2026-10-13T12:52:04Z",
       "exit_status": 0,
@@ -865,9 +865,9 @@
       "directory": "round-001/debug-palloc/burst-idle/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:52:14Z",
       "exit_status": 0,
@@ -878,9 +878,9 @@
       "directory": "round-001/production/download-4096/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/jemalloc"
       ],
       "started_utc": "2026-10-13T12:52:50Z",
       "exit_status": 0,
@@ -891,9 +891,9 @@
       "directory": "round-001/production/headers/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:53:00Z",
       "exit_status": 0,
@@ -904,9 +904,9 @@
       "directory": "round-001/production/download-4096/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:53:10Z",
       "exit_status": 0,
@@ -917,9 +917,9 @@
       "directory": "round-001/debug-palloc/upload-4096/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:53:20Z",
       "exit_status": 0,
@@ -930,9 +930,9 @@
       "directory": "round-001/debug-palloc/churn/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:53:31Z",
       "exit_status": 0,
@@ -943,9 +943,9 @@
       "directory": "round-001/production/proxy-65536-on/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/rust"
       ],
       "started_utc": "2026-10-13T12:53:41Z",
       "exit_status": 0,
@@ -956,9 +956,9 @@
       "directory": "round-001/production/upload-4096/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/glibc"
       ],
       "started_utc": "2026-10-13T12:53:52Z",
       "exit_status": 0,
@@ -969,9 +969,9 @@
       "directory": "round-001/debug-palloc/proxy-262144-off/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/rust"
       ],
       "started_utc": "2026-10-13T12:54:03Z",
       "exit_status": 0,
@@ -982,9 +982,9 @@
       "directory": "round-001/production/churn/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/jemalloc"
       ],
       "started_utc": "2026-10-13T12:54:15Z",
       "exit_status": 0,
@@ -995,9 +995,9 @@
       "directory": "round-001/debug-palloc/static/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/rust"
       ],
       "started_utc": "2026-10-13T12:54:25Z",
       "exit_status": 0,
@@ -1008,9 +1008,9 @@
       "directory": "round-001/debug-palloc/upload-4096/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/rust"
       ],
       "started_utc": "2026-10-13T12:54:34Z",
       "exit_status": 0,
@@ -1021,9 +1021,9 @@
       "directory": "round-001/debug-palloc/download-1048576/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:54:46Z",
       "exit_status": 0,
@@ -1034,9 +1034,9 @@
       "directory": "round-001/debug-palloc/proxy-65536-off/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/rust"
       ],
       "started_utc": "2026-10-13T12:54:56Z",
       "exit_status": 0,
@@ -1047,9 +1047,9 @@
       "directory": "round-001/debug-palloc/proxy-262144-off/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/glibc"
       ],
       "started_utc": "2026-10-13T12:55:07Z",
       "exit_status": 0,
@@ -1060,9 +1060,9 @@
       "directory": "round-001/debug-palloc/download-65536/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:55:18Z",
       "exit_status": 0,
@@ -1073,9 +1073,9 @@
       "directory": "round-001/debug-palloc/proxy-1024-on/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/jemalloc"
       ],
       "started_utc": "2026-10-13T12:55:28Z",
       "exit_status": 0,
@@ -1086,9 +1086,9 @@
       "directory": "round-001/production/proxy-1024-off/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:55:39Z",
       "exit_status": 0,
@@ -1099,9 +1099,9 @@
       "directory": "round-001/production/static/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/glibc"
       ],
       "started_utc": "2026-10-13T12:55:50Z",
       "exit_status": 0,
@@ -1112,9 +1112,9 @@
       "directory": "round-001/production/proxy-262144-on/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/jemalloc"
       ],
       "started_utc": "2026-10-13T12:56:00Z",
       "exit_status": 0,
@@ -1125,9 +1125,9 @@
       "directory": "round-001/debug-palloc/upload-65536/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/rust"
       ],
       "started_utc": "2026-10-13T12:56:11Z",
       "exit_status": 0,
@@ -1138,9 +1138,9 @@
       "directory": "round-001/debug-palloc/proxy-262144-on/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/glibc"
       ],
       "started_utc": "2026-10-13T12:56:23Z",
       "exit_status": 0,
@@ -1151,9 +1151,9 @@
       "directory": "round-001/production/proxy-1024-off/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/rust"
       ],
       "started_utc": "2026-10-13T12:56:34Z",
       "exit_status": 0,
@@ -1164,9 +1164,9 @@
       "directory": "round-001/debug-palloc/upload-1048576/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/rust"
       ],
       "started_utc": "2026-10-13T12:56:45Z",
       "exit_status": 0,
@@ -1177,9 +1177,9 @@
       "directory": "round-001/production/upload-65536/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:56:56Z",
       "exit_status": 0,
@@ -1190,9 +1190,9 @@
       "directory": "round-001/debug-palloc/static/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:57:08Z",
       "exit_status": 0,
@@ -1203,9 +1203,9 @@
       "directory": "round-001/production/proxy-65536-off/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-off/rust"
       ],
       "started_utc": "2026-10-13T12:57:17Z",
       "exit_status": 0,
@@ -1216,9 +1216,9 @@
       "directory": "round-001/debug-palloc/proxy-16384-on/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/glibc"
       ],
       "started_utc": "2026-10-13T12:57:29Z",
       "exit_status": 0,
@@ -1229,9 +1229,9 @@
       "directory": "round-001/production/burst-idle/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:57:40Z",
       "exit_status": 0,
@@ -1242,9 +1242,9 @@
       "directory": "round-001/production/proxy-16384-off/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:58:16Z",
       "exit_status": 0,
@@ -1255,9 +1255,9 @@
       "directory": "round-001/production/upload-1048576/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-1048576/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:58:27Z",
       "exit_status": 0,
@@ -1268,9 +1268,9 @@
       "directory": "round-001/production/proxy-1024-on/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:58:38Z",
       "exit_status": 0,
@@ -1281,9 +1281,9 @@
       "directory": "round-001/debug-palloc/proxy-1024-off/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:58:49Z",
       "exit_status": 0,
@@ -1294,9 +1294,9 @@
       "directory": "round-001/production/churn/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/churn/glibc"
       ],
       "started_utc": "2026-10-13T12:59:01Z",
       "exit_status": 0,
@@ -1307,9 +1307,9 @@
       "directory": "round-001/production/proxy-262144-off/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/jemalloc"
       ],
       "started_utc": "2026-10-13T12:59:10Z",
       "exit_status": 0,
@@ -1320,9 +1320,9 @@
       "directory": "round-001/debug-palloc/burst-idle/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/burst-idle/glibc"
       ],
       "started_utc": "2026-10-13T12:59:22Z",
       "exit_status": 0,
@@ -1333,9 +1333,9 @@
       "directory": "round-001/production/download-1048576/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/tcmalloc"
       ],
       "started_utc": "2026-10-13T12:59:58Z",
       "exit_status": 0,
@@ -1346,9 +1346,9 @@
       "directory": "round-001/production/proxy-65536-on/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/glibc"
       ],
       "started_utc": "2026-10-13T13:00:07Z",
       "exit_status": 0,
@@ -1359,9 +1359,9 @@
       "directory": "round-001/production/download-4096/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/rust"
       ],
       "started_utc": "2026-10-13T13:00:19Z",
       "exit_status": 0,
@@ -1372,9 +1372,9 @@
       "directory": "round-001/debug-palloc/download-65536/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-65536/rust"
       ],
       "started_utc": "2026-10-13T13:00:29Z",
       "exit_status": 0,
@@ -1385,9 +1385,9 @@
       "directory": "round-001/debug-palloc/static/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/glibc"
       ],
       "started_utc": "2026-10-13T13:00:38Z",
       "exit_status": 0,
@@ -1398,9 +1398,9 @@
       "directory": "round-001/debug-palloc/proxy-1024-on/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:00:48Z",
       "exit_status": 0,
@@ -1411,9 +1411,9 @@
       "directory": "round-001/production/proxy-1024-on/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/glibc"
       ],
       "started_utc": "2026-10-13T13:01:00Z",
       "exit_status": 0,
@@ -1424,9 +1424,9 @@
       "directory": "round-001/debug-palloc/proxy-262144-on/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/rust"
       ],
       "started_utc": "2026-10-13T13:01:11Z",
       "exit_status": 0,
@@ -1437,9 +1437,9 @@
       "directory": "round-001/debug-palloc/headers/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/headers/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:01:22Z",
       "exit_status": 0,
@@ -1450,9 +1450,9 @@
       "directory": "round-001/production/proxy-1024-on/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-on/rust"
       ],
       "started_utc": "2026-10-13T13:01:32Z",
       "exit_status": 0,
@@ -1463,9 +1463,9 @@
       "directory": "round-001/production/proxy-262144-on/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-on/rust"
       ],
       "started_utc": "2026-10-13T13:01:43Z",
       "exit_status": 0,
@@ -1476,9 +1476,9 @@
       "directory": "round-001/production/proxy-16384-on/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/jemalloc"
       ],
       "started_utc": "2026-10-13T13:01:54Z",
       "exit_status": 0,
@@ -1489,9 +1489,9 @@
       "directory": "round-001/debug-palloc/upload-65536/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-65536/jemalloc"
       ],
       "started_utc": "2026-10-13T13:02:06Z",
       "exit_status": 0,
@@ -1502,9 +1502,9 @@
       "directory": "round-001/debug-palloc/proxy-16384-off/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-off/jemalloc"
       ],
       "started_utc": "2026-10-13T13:02:17Z",
       "exit_status": 0,
@@ -1515,9 +1515,9 @@
       "directory": "round-001/production/proxy-16384-on/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/rust"
       ],
       "started_utc": "2026-10-13T13:02:28Z",
       "exit_status": 0,
@@ -1528,9 +1528,9 @@
       "directory": "round-001/debug-palloc/proxy-1024-on/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-on/rust"
       ],
       "started_utc": "2026-10-13T13:02:39Z",
       "exit_status": 0,
@@ -1541,9 +1541,9 @@
       "directory": "round-001/debug-palloc/upload-4096/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/jemalloc"
       ],
       "started_utc": "2026-10-13T13:02:50Z",
       "exit_status": 0,
@@ -1554,9 +1554,9 @@
       "directory": "round-001/production/static/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/rust"
       ],
       "started_utc": "2026-10-13T13:03:02Z",
       "exit_status": 0,
@@ -1567,9 +1567,9 @@
       "directory": "round-001/production/upload-65536/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-65536/glibc"
       ],
       "started_utc": "2026-10-13T13:03:12Z",
       "exit_status": 0,
@@ -1580,9 +1580,9 @@
       "directory": "round-001/debug-palloc/upload-1048576/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-1048576/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:03:23Z",
       "exit_status": 0,
@@ -1593,9 +1593,9 @@
       "directory": "round-001/debug-palloc/proxy-1024-off/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/rust"
       ],
       "started_utc": "2026-10-13T13:03:34Z",
       "exit_status": 0,
@@ -1606,9 +1606,9 @@
       "directory": "round-001/production/download-1048576/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/glibc"
       ],
       "started_utc": "2026-10-13T13:03:45Z",
       "exit_status": 0,
@@ -1619,9 +1619,9 @@
       "directory": "round-001/debug-palloc/proxy-262144-off/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-off/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:03:55Z",
       "exit_status": 0,
@@ -1632,9 +1632,9 @@
       "directory": "round-001/debug-palloc/upload-4096/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/upload-4096/glibc"
       ],
       "started_utc": "2026-10-13T13:04:06Z",
       "exit_status": 0,
@@ -1645,9 +1645,9 @@
       "directory": "round-001/production/download-65536/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-65536/jemalloc"
       ],
       "started_utc": "2026-10-13T13:04:17Z",
       "exit_status": 0,
@@ -1658,9 +1658,9 @@
       "directory": "round-001/production/static/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:04:27Z",
       "exit_status": 0,
@@ -1671,9 +1671,9 @@
       "directory": "round-001/debug-palloc/download-1048576/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/download-1048576/rust"
       ],
       "started_utc": "2026-10-13T13:04:37Z",
       "exit_status": 0,
@@ -1684,9 +1684,9 @@
       "directory": "round-001/production/proxy-262144-off/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:04:47Z",
       "exit_status": 0,
@@ -1697,9 +1697,9 @@
       "directory": "round-001/debug-palloc/proxy-65536-off/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:04:58Z",
       "exit_status": 0,
@@ -1710,9 +1710,9 @@
       "directory": "round-001/production/proxy-16384-off/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/rust"
       ],
       "started_utc": "2026-10-13T13:05:10Z",
       "exit_status": 0,
@@ -1723,9 +1723,9 @@
       "directory": "round-001/production/headers/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/headers/glibc"
       ],
       "started_utc": "2026-10-13T13:05:21Z",
       "exit_status": 0,
@@ -1736,9 +1736,9 @@
       "directory": "round-001/debug-palloc/proxy-16384-on/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/rust"
       ],
       "started_utc": "2026-10-13T13:05:31Z",
       "exit_status": 0,
@@ -1749,9 +1749,9 @@
       "directory": "round-001/production/proxy-16384-off/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-off/jemalloc"
       ],
       "started_utc": "2026-10-13T13:05:42Z",
       "exit_status": 0,
@@ -1762,9 +1762,9 @@
       "directory": "round-001/production/proxy-1024-off/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-1024-off/jemalloc"
       ],
       "started_utc": "2026-10-13T13:05:53Z",
       "exit_status": 0,
@@ -1775,9 +1775,9 @@
       "directory": "round-001/production/proxy-16384-on/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/glibc"
       ],
       "started_utc": "2026-10-13T13:06:04Z",
       "exit_status": 0,
@@ -1788,9 +1788,9 @@
       "directory": "round-001/production/download-1048576/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/rust"
       ],
       "started_utc": "2026-10-13T13:06:16Z",
       "exit_status": 0,
@@ -1801,9 +1801,9 @@
       "directory": "round-001/debug-palloc/static/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/static/jemalloc"
       ],
       "started_utc": "2026-10-13T13:06:25Z",
       "exit_status": 0,
@@ -1814,9 +1814,9 @@
       "directory": "round-001/debug-palloc/proxy-65536-off/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/glibc"
       ],
       "started_utc": "2026-10-13T13:06:35Z",
       "exit_status": 0,
@@ -1827,9 +1827,9 @@
       "directory": "round-001/production/proxy-16384-on/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-16384-on/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:06:47Z",
       "exit_status": 0,
@@ -1840,9 +1840,9 @@
       "directory": "round-001/debug-palloc/proxy-1024-off/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-1024-off/jemalloc"
       ],
       "started_utc": "2026-10-13T13:06:58Z",
       "exit_status": 0,
@@ -1853,9 +1853,9 @@
       "directory": "round-001/production/upload-4096/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:07:09Z",
       "exit_status": 0,
@@ -1866,9 +1866,9 @@
       "directory": "round-001/production/upload-4096/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/upload-4096/rust"
       ],
       "started_utc": "2026-10-13T13:07:20Z",
       "exit_status": 0,
@@ -1879,9 +1879,9 @@
       "directory": "round-001/production/download-1048576/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-1048576/jemalloc"
       ],
       "started_utc": "2026-10-13T13:07:31Z",
       "exit_status": 0,
@@ -1892,9 +1892,9 @@
       "directory": "round-001/debug-palloc/proxy-262144-on/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/jemalloc"
       ],
       "started_utc": "2026-10-13T13:07:41Z",
       "exit_status": 0,
@@ -1905,9 +1905,9 @@
       "directory": "round-001/production/proxy-65536-on/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-65536-on/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:07:53Z",
       "exit_status": 0,
@@ -1918,9 +1918,9 @@
       "directory": "round-001/debug-palloc/proxy-16384-on/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:08:04Z",
       "exit_status": 0,
@@ -1931,9 +1931,9 @@
       "directory": "round-001/production/proxy-262144-off/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/proxy-262144-off/glibc"
       ],
       "started_utc": "2026-10-13T13:08:15Z",
       "exit_status": 0,
@@ -1944,9 +1944,9 @@
       "directory": "round-001/debug-palloc/proxy-262144-on/tcmalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/tcmalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/tcmalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/tcmalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-262144-on/tcmalloc"
       ],
       "started_utc": "2026-10-13T13:08:26Z",
       "exit_status": 0,
@@ -1957,9 +1957,9 @@
       "directory": "round-001/production/burst-idle/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/burst-idle/glibc"
       ],
       "started_utc": "2026-10-13T13:08:37Z",
       "exit_status": 0,
@@ -1970,9 +1970,9 @@
       "directory": "round-001/production/download-4096/glibc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/glibc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/glibc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/glibc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/download-4096/glibc"
       ],
       "started_utc": "2026-10-13T13:09:13Z",
       "exit_status": 0,
@@ -1983,9 +1983,9 @@
       "directory": "round-001/debug-palloc/proxy-16384-on/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-16384-on/jemalloc"
       ],
       "started_utc": "2026-10-13T13:09:23Z",
       "exit_status": 0,
@@ -1996,9 +1996,9 @@
       "directory": "round-001/debug-palloc/churn/rust",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/rust/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/rust"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/rust/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/churn/rust"
       ],
       "started_utc": "2026-10-13T13:09:34Z",
       "exit_status": 0,
@@ -2009,9 +2009,9 @@
       "directory": "round-001/production/static/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/production/static/jemalloc"
       ],
       "started_utc": "2026-10-13T13:09:44Z",
       "exit_status": 0,
@@ -2022,9 +2022,9 @@
       "directory": "round-001/debug-palloc/proxy-65536-off/jemalloc",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/nginx.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/jemalloc"
+        "/root/projects/rimalloc/benchmarks/nginx.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/nginx/round-001/debug-palloc/proxy-65536-off/jemalloc"
       ],
       "started_utc": "2026-10-13T13:09:54Z",
       "exit_status": 0,
@@ -2056,7 +2056,7 @@
   "allocator_environment": {},
   "caller_ld_preload_removed": null,
   "core_artifacts": {
-    "cache": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e",
+    "cache": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e",
     "configuration": {
       "tools": {
         "cargo": "cargo 1.92.0 (344c4567c 2025-10-21)",
@@ -2087,7 +2087,7 @@
         "CARGO_INCREMENTAL": ""
       },
       "cargo_config": {
-        "/root/projects/mechanical_mimalloc/.cargo/config.toml": "[alias]\nclippy-strict = [\"clippy\", \"--all-targets\", \"--all-features\"]\n"
+        "/root/projects/rimalloc/.cargo/config.toml": "[alias]\nclippy-strict = [\"clippy\", \"--all-targets\", \"--all-features\"]\n"
       },
       "harness_features": [
         "bench"
@@ -2113,8 +2113,8 @@
       "c-configure.log",
       "c-build.log"
     ],
-    "rust_library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-    "c_library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+    "rust_library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+    "c_library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
     "sha256": {
       "rust_library": "3587a2b0fde94932752e597c1f2ce4a9ee64527f8e8aad6b5fc43372045fa949",
       "c_library": "541ebb8a42f3000da533b29289da88c7858dc4e715f01458985a7538b75e7ecc"
@@ -2122,8 +2122,8 @@
   },
   "rival_artifacts": {
     "libraries": {
-      "jemalloc": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-      "tcmalloc": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/gperftools-2.16/.libs/libtcmalloc_minimal.so.4.5.18"
+      "jemalloc": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+      "tcmalloc": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/gperftools-2.16/.libs/libtcmalloc_minimal.so.4.5.18"
     },
     "sources": {
       "jemalloc": {
@@ -2141,7 +2141,7 @@
       "jemalloc-build.log",
       "tcmalloc-build.log"
     ],
-    "cache": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals",
+    "cache": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals",
     "sha256": {
       "jemalloc": "bf75584b50c80afc02efb0964224242b8c246a3daa4d319720bed228c1dfd6c6",
       "tcmalloc": "6d4d6bfe419621da72f62af128942aea5d161e7ff02481930a1318c601de8967"
@@ -2149,19 +2149,19 @@
   },
   "artifacts": {
     "binaries": {
-      "production": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/production/objs/nginx",
-      "production-trace": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/production-trace/objs/nginx",
-      "debug-palloc": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/debug-palloc/objs/nginx",
-      "debug-palloc-trace": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/debug-palloc-trace/objs/nginx"
+      "production": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/production/objs/nginx",
+      "production-trace": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/production-trace/objs/nginx",
+      "debug-palloc": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/debug-palloc/objs/nginx",
+      "debug-palloc-trace": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/debug-palloc-trace/objs/nginx"
     },
-    "wrk": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/wrk-source/wrk",
-    "guard": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/allocator_guard.so",
+    "wrk": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/wrk-source/wrk",
+    "guard": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/allocator_guard.so",
     "libraries": {
-      "rust": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-      "mimalloc": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+      "rust": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+      "mimalloc": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
       "glibc": null,
-      "jemalloc": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-      "tcmalloc": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/gperftools-2.16/.libs/libtcmalloc_minimal.so.4.5.18"
+      "jemalloc": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+      "tcmalloc": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/gperftools-2.16/.libs/libtcmalloc_minimal.so.4.5.18"
     },
     "sources": {
       "nginx": {
@@ -2184,11 +2184,11 @@
           "-Wextra",
           "-Werror",
           "-c",
-          "/root/projects/mechanical_mimalloc/benches/nginx/allocator_probe.c",
+          "/root/projects/rimalloc/benches/nginx/allocator_probe.c",
           "-o",
-          "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/allocator_probe.o"
+          "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/allocator_probe.o"
         ],
-        "cwd": "/root/projects/mechanical_mimalloc"
+        "cwd": "/root/projects/rimalloc"
       },
       {
         "command": [
@@ -2199,64 +2199,64 @@
           "-Wall",
           "-Wextra",
           "-Werror",
-          "/root/projects/mechanical_mimalloc/benches/nginx/allocator_guard.c",
+          "/root/projects/rimalloc/benches/nginx/allocator_guard.c",
           "-ldl",
           "-o",
-          "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/allocator_guard.so"
+          "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/allocator_guard.so"
         ],
-        "cwd": "/root/projects/mechanical_mimalloc"
+        "cwd": "/root/projects/rimalloc"
       },
       {
         "command": [
           "make",
           "-C",
-          "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/production",
+          "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/production",
           "-j",
           "12"
         ],
-        "cwd": "/root/projects/mechanical_mimalloc"
+        "cwd": "/root/projects/rimalloc"
       },
       {
         "command": [
           "make",
           "-C",
-          "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/production-trace",
+          "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/production-trace",
           "-j",
           "12"
         ],
-        "cwd": "/root/projects/mechanical_mimalloc"
+        "cwd": "/root/projects/rimalloc"
       },
       {
         "command": [
           "make",
           "-C",
-          "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/debug-palloc",
+          "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/debug-palloc",
           "-j",
           "12"
         ],
-        "cwd": "/root/projects/mechanical_mimalloc"
+        "cwd": "/root/projects/rimalloc"
       },
       {
         "command": [
           "make",
           "-C",
-          "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/debug-palloc-trace",
+          "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/debug-palloc-trace",
           "-j",
           "12"
         ],
-        "cwd": "/root/projects/mechanical_mimalloc"
+        "cwd": "/root/projects/rimalloc"
       },
       {
         "command": [
           "make",
           "-C",
-          "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/wrk-source",
+          "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042/wrk-source",
           "-j",
           "12",
           "WITH_OPENSSL=/usr",
           "VER=4.2.0"
         ],
-        "cwd": "/root/projects/mechanical_mimalloc"
+        "cwd": "/root/projects/rimalloc"
       }
     ],
     "logs": [
@@ -2268,7 +2268,7 @@
       "debug-palloc-trace-build.log",
       "wrk-build.log"
     ],
-    "cache": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042",
+    "cache": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/nginx/9235b5e5c4b94042",
     "openssl": "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)",
     "sha256": {
       "production": "e2e28235a98c4d3413f62ab746a30ab6abd1350faa71d9e6c8a8072786ee68ee",

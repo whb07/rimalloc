@@ -66,9 +66,9 @@ class EntryPointTests(unittest.TestCase):
         library = self.root / "expected.so"
         library.touch()
         (self.root / "newer.so").touch()
-        output = json.dumps({"reason": "compiler-artifact", "target": {"name": "mechanical_mimalloc"},
+        output = json.dumps({"reason": "compiler-artifact", "target": {"name": "rimalloc"},
                              "filenames": [str(library), "irrelevant.rlib"], "fresh": True})
-        self.assertEqual(bench.cargo_artifact(output, "mechanical_mimalloc", shared=True), library)
+        self.assertEqual(bench.cargo_artifact(output, "rimalloc", shared=True), library)
         with self.assertRaises(bench.BenchError):
             bench.cargo_artifact(output, "mimalloc_bench")
 
@@ -85,7 +85,7 @@ class EntryPointTests(unittest.TestCase):
                 artifact.parent.mkdir(parents=True, exist_ok=True)
                 artifact.write_bytes(b"artifact")
                 return json.dumps({"reason": "compiler-artifact", "target": {
-                    "name": "mechanical_mimalloc" if shared else "mimalloc_bench",
+                    "name": "rimalloc" if shared else "mimalloc_bench",
                 }, "filenames": [str(artifact)], "executable": None if shared else str(artifact)})
             if command[:2] == ["cmake", "--build"]:
                 directory = Path(command[2])
@@ -124,7 +124,7 @@ class EntryPointTests(unittest.TestCase):
                 artifact.parent.mkdir(parents=True, exist_ok=True)
                 artifact.write_bytes(b"artifact")
                 return json.dumps({"reason": "compiler-artifact", "target": {
-                    "name": "mechanical_mimalloc" if shared else "mimalloc_bench",
+                    "name": "rimalloc" if shared else "mimalloc_bench",
                 }, "filenames": [str(artifact)], "executable": None if shared else str(artifact)})
             if command[:2] == ["cmake", "--build"]:
                 directory = Path(command[2])
@@ -169,7 +169,7 @@ class EntryPointTests(unittest.TestCase):
 
     def test_remote_collect_offset_matches_mangled_symbol(self):
         listing = ("0000000000012c80 T mi_malloc\n"
-                   "000000000001e3c0 t _ZN19mechanical_mimalloc9allocator4free9abandoned"
+                   "000000000001e3c0 t _ZN19rimalloc9allocator4free9abandoned"
                    "25collect_after_remote_free17h5495e9882d1c6d28E\n")
         with patch.object(bench, "capture", return_value=listing):
             self.assertEqual(bench.remote_collect_offset(Path("lib.so")), 0)
@@ -233,12 +233,12 @@ class EntryPointTests(unittest.TestCase):
         artifacts = {"rust_library": "rust.so", "c_library": "c.so",
                      "rivals": {"jemalloc": "/lib/libjemalloc.so.2", "glibc": "glibc"}}
         args = bench.parse_args(["run"])
-        listing = bench.worker_environment(artifacts, args, self.root, "glibc-thread", "mechanical_mimalloc_raw,jemalloc")
+        listing = bench.worker_environment(artifacts, args, self.root, "glibc-thread", "rimalloc_raw,jemalloc")
         self.assertEqual(listing["GLIBC_TUNABLES"], bench.rivals.STATIC_TLS_TUNABLE)
         self.assertEqual(listing["MIMALLOC_BENCH_LIB_JEMALLOC"], "/lib/libjemalloc.so.2")
         self.assertNotIn("MIMALLOC_BENCH_LIB_GLIBC", listing)
         with patch.dict(os.environ, {}, clear=True):
-            rust = bench.worker_environment(artifacts, args, self.root, "glibc-thread", "mechanical_mimalloc_raw")
+            rust = bench.worker_environment(artifacts, args, self.root, "glibc-thread", "rimalloc_raw")
         self.assertNotIn("GLIBC_TUNABLES", rust)
 
     def test_report_adds_rival_columns_and_geomeans(self):

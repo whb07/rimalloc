@@ -64,9 +64,9 @@ def build_ld_preload_probe(
             cwd=ROOT,
             env=environment,
         )
-        libraries = list((artifact_dir / "release").glob("libmechanical_mimalloc*.so"))
+        libraries = list((artifact_dir / "release").glob("librimalloc*.so"))
         libraries.extend(
-            (artifact_dir / "release" / "deps").glob("libmechanical_mimalloc*.so")
+            (artifact_dir / "release" / "deps").glob("librimalloc*.so")
         )
         if not libraries:
             raise SystemExit("release interpose cdylib was not produced")
@@ -135,7 +135,7 @@ def main() -> None:
         executable = target_dir / "release" / "examples" / "benchmark_probe"
     allocators = args.allocators or (
         ["preloaded-libc"] if args.ld_preload else
-        ["mechanical_mimalloc_public", "mechanical_mimalloc_raw", "system"]
+        ["rimalloc_public", "rimalloc_raw", "system"]
     )
     scenarios = args.scenarios or ["alloc_free", "remote_free_1x1"]
     records: list[dict[str, object]] = []

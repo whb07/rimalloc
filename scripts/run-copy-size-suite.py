@@ -63,9 +63,9 @@ def build_rust_allocator(target_dir: pathlib.Path) -> pathlib.Path:
         cwd=ROOT,
         env={**os.environ, "CARGO_TARGET_DIR": str(target_dir)},
     )
-    libraries = sorted((target_dir / "release" / "deps").glob("libmechanical_mimalloc-*.so"))
+    libraries = sorted((target_dir / "release" / "deps").glob("librimalloc-*.so"))
     if not libraries:
-        raise RuntimeError("cargo did not produce the mechanical-mimalloc cdylib")
+        raise RuntimeError("cargo did not produce the rimalloc cdylib")
     return libraries[-1].resolve()
 
 

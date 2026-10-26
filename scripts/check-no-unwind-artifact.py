@@ -135,8 +135,8 @@ def build_c_abi_cdylib() -> pathlib.Path:
     )
 
     candidates = sorted(
-        list((target_dir / "release").glob("libmechanical_mimalloc*.so"))
-        + list((target_dir / "release/deps").glob("libmechanical_mimalloc*.so")),
+        list((target_dir / "release").glob("librimalloc*.so"))
+        + list((target_dir / "release/deps").glob("librimalloc*.so")),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

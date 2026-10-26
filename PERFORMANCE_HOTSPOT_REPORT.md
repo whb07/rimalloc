@@ -29,7 +29,7 @@ env MIMALLOC_HOTPATH_SAMPLE_SIZE=10 \
   perf record -F 999 -g \
   --output target/perf/hotpath-paired-16.data -- \
   target/release/deps/hotpath-2d764e6f6cbe18dd \
-  --profile-time 5 hotpath/paired_alloc_free/mechanical_mimalloc/16
+  --profile-time 5 hotpath/paired_alloc_free/rimalloc/16
 
 env MIMALLOC_BENCH_SCENARIOS=glibc-thread \
   MIMALLOC_BENCH_ALLOCATORS=rust \

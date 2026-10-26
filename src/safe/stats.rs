@@ -9,7 +9,7 @@ use super::HeapRef;
 /// Error returned by safe statistics APIs.
 ///
 /// ```rust
-/// use mechanical_mimalloc::{StatsError, StatsSnapshot};
+/// use rimalloc::{StatsError, StatsSnapshot};
 ///
 /// if let Ok(snapshot) = StatsSnapshot::capture() {
 ///     let mut too_small = [0u8; 1];
@@ -46,7 +46,7 @@ impl std::error::Error for StatsError {}
 /// Typed statistics count.
 ///
 /// ```rust
-/// use mechanical_mimalloc::StatCount;
+/// use rimalloc::StatCount;
 ///
 /// let count = StatCount::new(-2);
 /// assert_eq!(count.get(), -2);
@@ -73,7 +73,7 @@ impl StatCount {
 /// Typed statistics byte total.
 ///
 /// ```rust
-/// use mechanical_mimalloc::StatTotal;
+/// use rimalloc::StatTotal;
 ///
 /// let total = StatTotal::new(4096);
 /// assert_eq!(total.get(), 4096);
@@ -111,7 +111,7 @@ impl StatTotal {
 /// Non-printing snapshot of mimalloc statistics.
 ///
 /// ```rust
-/// use mechanical_mimalloc::StatsSnapshot;
+/// use rimalloc::StatsSnapshot;
 ///
 /// let snapshot = StatsSnapshot::capture().unwrap();
 /// assert!(snapshot.reserved_peak().get() >= snapshot.reserved_current().get());
@@ -121,7 +121,7 @@ impl StatTotal {
 /// External code cannot construct a snapshot from representation fields:
 ///
 /// ```rust,compile_fail
-/// let _ = mechanical_mimalloc::StatsSnapshot { raw: unreachable!() };
+/// let _ = rimalloc::StatsSnapshot { raw: unreachable!() };
 /// ```
 ///
 /// Cloning a `StatsSnapshot` duplicates the captured raw counters only; it
@@ -293,7 +293,7 @@ impl StatsSnapshot {
 /// observed count for that field, not an unavailable sentinel.
 ///
 /// ```rust
-/// use mechanical_mimalloc::ProcessInfo;
+/// use rimalloc::ProcessInfo;
 ///
 /// let info = ProcessInfo::current();
 /// assert!(info.page_size().is_none_or(|size| size.is_power_of_two()));

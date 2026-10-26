@@ -3,7 +3,7 @@
 use core::ffi::c_void;
 use core::ptr;
 
-use mechanical_mimalloc::raw::{MI_STAT_VERSION, mi_process_init, mi_stats_get, mi_stats_t};
+use rimalloc::raw::{MI_STAT_VERSION, mi_process_init, mi_stats_get, mi_stats_t};
 
 unsafe extern "C" {
     fn mi_os_alloc_aligned(

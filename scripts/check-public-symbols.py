@@ -199,9 +199,9 @@ def rust_staticlib() -> pathlib.Path:
     )
     libs = sorted(
         [
-            *target_dir.glob("debug/deps/libmechanical_mimalloc-*.a"),
-            *target_dir.glob("debug/deps/libmechanical_mimalloc.a"),
-            *target_dir.glob("debug/libmechanical_mimalloc.a"),
+            *target_dir.glob("debug/deps/librimalloc-*.a"),
+            *target_dir.glob("debug/deps/librimalloc.a"),
+            *target_dir.glob("debug/librimalloc.a"),
         ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
@@ -231,8 +231,8 @@ def rust_cdylib(features: str, artifact_name: str) -> pathlib.Path:
     )
     libs = sorted(
         [
-            *target_dir.glob("debug/deps/libmechanical_mimalloc*.so"),
-            *target_dir.glob("debug/libmechanical_mimalloc.so"),
+            *target_dir.glob("debug/deps/librimalloc*.so"),
+            *target_dir.glob("debug/librimalloc.so"),
         ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
@@ -310,7 +310,7 @@ def dynamic_symbols(cdylib: pathlib.Path) -> set[str]:
 def render_dynamic_manifest(manifest: DynamicManifest) -> str:
     entries = dynamic_symbol_entries(rust_cdylib(manifest.features, manifest.artifact))
     lines = [
-        "# mechanical_mimalloc dynamic ABI manifest",
+        "# rimalloc dynamic ABI manifest",
         f"# artifact: {manifest.artifact}",
         f"# build-command: {manifest.build_command}",
         "# columns: symbol\tbinding\tvisibility\tversion\ttype",

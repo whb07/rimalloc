@@ -2,7 +2,7 @@ use core::ffi::c_void;
 use core::ptr;
 use std::thread;
 
-use mechanical_mimalloc::raw::{self, mi_heap_area_t, mi_heap_t};
+use rimalloc::raw::{self, mi_heap_area_t, mi_heap_t};
 
 const HUGE_ALLOCATION_SIZE: usize = 1024 * 1024;
 const TARGET_CAPACITY: usize = 3;

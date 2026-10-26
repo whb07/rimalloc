@@ -55,7 +55,7 @@ fn bench_memcpy(c: &mut Criterion) {
             let (src, mut mi_dst) = alloc_buffers(size);
             let mut glibc_dst = vec![0u8; size];
             unsafe {
-                mechanical_mimalloc::__bench::_mi_memcpy(
+                rimalloc::__bench::_mi_memcpy(
                     mi_dst.as_mut_ptr().cast(),
                     src.as_ptr().cast(),
                     size,
@@ -75,7 +75,7 @@ fn bench_memcpy(c: &mut Criterion) {
                 let src_ptr = black_box(src.as_ptr()).cast();
                 let dst_ptr = black_box(dst.as_mut_ptr()).cast();
                 for _ in 0..COPIES_PER_ITER {
-                    mechanical_mimalloc::__bench::_mi_memcpy(dst_ptr, src_ptr, n);
+                    rimalloc::__bench::_mi_memcpy(dst_ptr, src_ptr, n);
                 }
                 black_box(dst.as_ptr());
             });

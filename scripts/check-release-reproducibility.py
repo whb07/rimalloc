@@ -60,10 +60,10 @@ def initialize_git_checkout(destination: pathlib.Path) -> None:
     # These are tracked-file checkouts with enough Git metadata for env capture.
     env = {
         **os.environ,
-        "GIT_AUTHOR_NAME": "mechanical_mimalloc release check",
+        "GIT_AUTHOR_NAME": "rimalloc release check",
         "GIT_AUTHOR_EMAIL": "release-check@example.invalid",
         "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
-        "GIT_COMMITTER_NAME": "mechanical_mimalloc release check",
+        "GIT_COMMITTER_NAME": "rimalloc release check",
         "GIT_COMMITTER_EMAIL": "release-check@example.invalid",
         "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z",
     }
@@ -162,7 +162,7 @@ def build_release(checkout: pathlib.Path) -> dict[str, object]:
 
 
 def main() -> int:
-    with tempfile.TemporaryDirectory(prefix="mechanical-mimalloc-repro-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="rimalloc-repro-") as tmp:
         temp_root = pathlib.Path(tmp)
         checkouts = [temp_root / "checkout-a", temp_root / "checkout-b"]
         for checkout in checkouts:

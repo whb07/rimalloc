@@ -3,7 +3,7 @@ mod original_testhelper;
 
 use std::slice;
 
-use mechanical_mimalloc::raw::{
+use rimalloc::raw::{
     MI_MAX_ALIGN_SIZE, MI_SMALL_SIZE_MAX, mi_calloc, mi_calloc_aligned, mi_free, mi_malloc_aligned,
     mi_malloc_small, mi_mallocn, mi_option_disable, mi_option_t, mi_realloc_aligned, mi_reallocn,
     mi_recalloc, mi_recalloc_aligned, mi_rezalloc, mi_rezalloc_aligned, mi_zalloc,

@@ -2,7 +2,7 @@
 
 use core::ffi::c_void;
 use libfuzzer_sys::fuzz_target;
-use mechanical_mimalloc::raw::mimalloc::*;
+use rimalloc::raw::mimalloc::*;
 use std::thread;
 
 fuzz_target!(|data: &[u8]| {

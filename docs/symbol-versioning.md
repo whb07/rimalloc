@@ -99,7 +99,7 @@ A future extension ABI must use one of these decisions before release:
 
 - promote a symbol only after documenting ownership, nullability, threading,
   error behavior, and stability in this page and `docs/abi.md`;
-- prefer a `mechanical_mimalloc_*` prefix for Rust-specific extensions so they
+- prefer a `rimalloc_*` prefix for Rust-specific extensions so they
   cannot be confused with upstream mimalloc public-header symbols;
 - avoid adding new public `mi_*` extension spellings unless they intentionally
   become part of the mimalloc-compatible C ABI contract.

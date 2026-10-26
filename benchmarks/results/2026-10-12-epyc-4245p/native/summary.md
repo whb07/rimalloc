@@ -39,51 +39,51 @@ An unweighted scenario geomean does not predict application-wide performance.
 
 | Scenario | Round | Allocator | Median | Batch p95 | Noise |
 |---|---:|---|---:|---:|---|
-| glibc-simple | 1 | mechanical_mimalloc_raw | 630.1 ms | 631.9 ms | stable |
+| glibc-simple | 1 | rimalloc_raw | 630.1 ms | 631.9 ms | stable |
 | glibc-simple | 1 | c-mimalloc-3.3.2 | 625.9 ms | 628 ms | stable |
-| malloc-large | 1 | mechanical_mimalloc_raw | 725.5 us | 734.6 us | stable |
+| malloc-large | 1 | rimalloc_raw | 725.5 us | 734.6 us | stable |
 | malloc-large | 1 | c-mimalloc-3.3.2 | 776.9 us | 784.4 us | stable |
-| malloc-large-old | 1 | mechanical_mimalloc_raw | 75.33 ms | 75.99 ms | stable |
+| malloc-large-old | 1 | rimalloc_raw | 75.33 ms | 75.99 ms | stable |
 | malloc-large-old | 1 | c-mimalloc-3.3.2 | 75.23 ms | 75.99 ms | stable |
-| cache-scratch1 | 1 | mechanical_mimalloc_raw | 663.9 ms | 665.1 ms | stable |
+| cache-scratch1 | 1 | rimalloc_raw | 663.9 ms | 665.1 ms | stable |
 | cache-scratch1 | 1 | c-mimalloc-3.3.2 | 663.2 ms | 664 ms | stable |
-| cache-thrash1 | 1 | mechanical_mimalloc_raw | 676.6 ms | 689.5 ms | stable |
+| cache-thrash1 | 1 | rimalloc_raw | 676.6 ms | 689.5 ms | stable |
 | cache-thrash1 | 1 | c-mimalloc-3.3.2 | 670.2 ms | 679.4 ms | stable |
-| cache-scratchN | 1 | mechanical_mimalloc_raw | 115.3 ms | 119.9 ms | stable |
+| cache-scratchN | 1 | rimalloc_raw | 115.3 ms | 119.9 ms | stable |
 | cache-scratchN | 1 | c-mimalloc-3.3.2 | 115.6 ms | 118.9 ms | stable |
-| cache-thrashN | 1 | mechanical_mimalloc_raw | 115.6 ms | 123 ms | stable |
+| cache-thrashN | 1 | rimalloc_raw | 115.6 ms | 123 ms | stable |
 | cache-thrashN | 1 | c-mimalloc-3.3.2 | 115.3 ms | 118.3 ms | stable |
-| mstressN | 1 | mechanical_mimalloc_raw | 395.3 ms | 401.1 ms | stable |
+| mstressN | 1 | rimalloc_raw | 395.3 ms | 401.1 ms | stable |
 | mstressN | 1 | c-mimalloc-3.3.2 | 394.8 ms | 399.6 ms | stable |
-| sh6benchN | 1 | mechanical_mimalloc_raw | 135.7 ms | 194.6 ms | noisy |
+| sh6benchN | 1 | rimalloc_raw | 135.7 ms | 194.6 ms | noisy |
 | sh6benchN | 1 | c-mimalloc-3.3.2 | 138 ms | 188.7 ms | noisy |
-| sh8benchN | 1 | mechanical_mimalloc_raw | 298.7 ms | 302.5 ms | stable |
+| sh8benchN | 1 | rimalloc_raw | 298.7 ms | 302.5 ms | stable |
 | sh8benchN | 1 | c-mimalloc-3.3.2 | 295.1 ms | 300.1 ms | stable |
-| alloc-test1 | 1 | mechanical_mimalloc_raw | 1.97 s | 1.995 s | stable |
+| alloc-test1 | 1 | rimalloc_raw | 1.97 s | 1.995 s | stable |
 | alloc-test1 | 1 | c-mimalloc-3.3.2 | 1.967 s | 1.986 s | stable |
-| alloc-testN | 1 | mechanical_mimalloc_raw | 2.274 s | 2.305 s | stable |
+| alloc-testN | 1 | rimalloc_raw | 2.274 s | 2.305 s | stable |
 | alloc-testN | 1 | c-mimalloc-3.3.2 | 2.276 s | 2.316 s | stable |
-| barnes | 1 | mechanical_mimalloc_raw | 1.057 s | 1.068 s | stable |
+| barnes | 1 | rimalloc_raw | 1.057 s | 1.068 s | stable |
 | barnes | 1 | c-mimalloc-3.3.2 | 1.062 s | 1.064 s | stable |
-| cfrac | 1 | mechanical_mimalloc_raw | 8.662 s | 8.675 s | stable |
+| cfrac | 1 | rimalloc_raw | 8.662 s | 8.675 s | stable |
 | cfrac | 1 | c-mimalloc-3.3.2 | 8.591 s | 8.635 s | stable |
-| mleak10 | 1 | mechanical_mimalloc_raw | 36.56 ms | 36.76 ms | stable |
+| mleak10 | 1 | rimalloc_raw | 36.56 ms | 36.76 ms | stable |
 | mleak10 | 1 | c-mimalloc-3.3.2 | 36.22 ms | 36.55 ms | stable |
-| mleak100 | 1 | mechanical_mimalloc_raw | 363.1 ms | 367.1 ms | stable |
+| mleak100 | 1 | rimalloc_raw | 363.1 ms | 367.1 ms | stable |
 | mleak100 | 1 | c-mimalloc-3.3.2 | 364.9 ms | 366.9 ms | stable |
-| glibc-thread | 1 | mechanical_mimalloc_raw | 1.453 ms | 1.489 ms | stable |
+| glibc-thread | 1 | rimalloc_raw | 1.453 ms | 1.489 ms | stable |
 | glibc-thread | 1 | c-mimalloc-3.3.2 | 1.45 ms | 1.469 ms | stable |
-| xmalloc-testN | 1 | mechanical_mimalloc_raw | 2.052 ms | 2.057 ms | stable |
+| xmalloc-testN | 1 | rimalloc_raw | 2.052 ms | 2.057 ms | stable |
 | xmalloc-testN | 1 | c-mimalloc-3.3.2 | 1.837 ms | 1.839 ms | stable |
-| larsonN | 1 | mechanical_mimalloc_raw | 2.482 ms | 2.508 ms | stable |
+| larsonN | 1 | rimalloc_raw | 2.482 ms | 2.508 ms | stable |
 | larsonN | 1 | c-mimalloc-3.3.2 | 2.498 ms | 2.534 ms | stable |
-| larsonN-sized | 1 | mechanical_mimalloc_raw | 2.48 ms | 2.516 ms | stable |
+| larsonN-sized | 1 | rimalloc_raw | 2.48 ms | 2.516 ms | stable |
 | larsonN-sized | 1 | c-mimalloc-3.3.2 | 2.537 ms | 2.549 ms | stable |
-| rptestN | 1 | mechanical_mimalloc_raw | 3.632 s | 3.726 s | stable |
+| rptestN | 1 | rimalloc_raw | 3.632 s | 3.726 s | stable |
 | rptestN | 1 | c-mimalloc-3.3.2 | 3.578 s | 3.718 s | stable |
-| redis | 1 | mechanical_mimalloc_raw | 330 ns | 345 ns | noisy |
+| redis | 1 | rimalloc_raw | 330 ns | 345 ns | noisy |
 | redis | 1 | c-mimalloc-3.3.2 | 332.5 ns | 335 ns | stable |
-| rocksdb | 1 | mechanical_mimalloc_raw | 1.22 us | 1.238 us | stable |
+| rocksdb | 1 | rimalloc_raw | 1.22 us | 1.238 us | stable |
 | rocksdb | 1 | c-mimalloc-3.3.2 | 1.215 us | 1.233 us | stable |
 
 ## Application measurements
@@ -92,9 +92,9 @@ Redis's normalized time averages the reciprocal SET and GET throughputs with equ
 
 | Scenario / command | Round | Allocator | Median ops/s | Redis client p95 ms |
 |---|---:|---|---:|---:|
-| redis / SET | 1 | mechanical_mimalloc_raw | 2631579.00 | 0.375 |
-| redis / GET | 1 | mechanical_mimalloc_raw | 3571428.50 | 0.255 |
+| redis / SET | 1 | rimalloc_raw | 2631579.00 | 0.375 |
+| redis / GET | 1 | rimalloc_raw | 3571428.50 | 0.255 |
 | redis / SET | 1 | c-mimalloc-3.3.2 | 2631579.00 | 0.367 |
 | redis / GET | 1 | c-mimalloc-3.3.2 | 3571428.50 | 0.255 |
-| rocksdb / fillrandom | 1 | mechanical_mimalloc_raw | 819793.00 | — |
+| rocksdb / fillrandom | 1 | rimalloc_raw | 819793.00 | — |
 | rocksdb / fillrandom | 1 | c-mimalloc-3.3.2 | 822825.50 | — |

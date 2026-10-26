@@ -110,8 +110,8 @@ compile away or keep that invariant outside the hot path.
 Commands:
 
 ```bash
-git worktree add --detach /tmp/mechanical_mimalloc_asm_before HEAD
-(cd /tmp/mechanical_mimalloc_asm_before && cargo build --release --lib)
+git worktree add --detach /tmp/rimalloc_asm_before HEAD
+(cd /tmp/rimalloc_asm_before && cargo build --release --lib)
 scripts/capture-release-assembly.sh
 ```
 
@@ -366,7 +366,7 @@ env MIMALLOC_HOTPATH_SAMPLE_SIZE=20 \
 Summary generation:
 
 ```bash
-scripts/summarize-criterion.py --id-file /tmp/mechanical_mimalloc_criterion_full_ids.txt
+scripts/summarize-criterion.py --id-file /tmp/rimalloc_criterion_full_ids.txt
 ```
 
 ### Hotpath Summary
@@ -454,7 +454,7 @@ scripts/check-bench-smoke.sh
 
 | Probe | Current Rust result | Criterion local-baseline result |
 |---|---:|---|
-| `hotpath/paired_alloc_free/mechanical_mimalloc/16` | 14.536 us median, 281.78 Melem/s | Within noise threshold: -0.59% time |
+| `hotpath/paired_alloc_free/rimalloc/16` | 14.536 us median, 281.78 Melem/s | Within noise threshold: -0.59% time |
 
 Conclusion: no hotpath regression was detected in the tight allocator probe.
 
@@ -519,7 +519,7 @@ scripts/check-bench-smoke.sh
 
 | Probe | Current Rust result | Criterion local-baseline result |
 |---|---:|---|
-| `hotpath/paired_alloc_free/mechanical_mimalloc/16` | 14.610 us median, 280.35 Melem/s | Within noise threshold: +1.18% time |
+| `hotpath/paired_alloc_free/rimalloc/16` | 14.610 us median, 280.35 Melem/s | Within noise threshold: +1.18% time |
 
 Conclusion: no hotpath regression was detected in the tight allocator probe.
 
@@ -570,8 +570,8 @@ cargo bench --features bench --bench hotpath -- <filter>
 
 | Probe | Current Rust result | Criterion local-baseline result |
 |---|---:|---|
-| `hotpath/paired_alloc_free/mechanical_mimalloc/16` | 14.388 us median, 284.69 Melem/s | Improved: -4.84% time, +5.09% throughput |
-| `hotpath/single_reuse/mechanical_mimalloc/16` | 139.92 us median, 357.35 Melem/s | Within noise threshold |
+| `hotpath/paired_alloc_free/rimalloc/16` | 14.388 us median, 284.69 Melem/s | Improved: -4.84% time, +5.09% throughput |
+| `hotpath/single_reuse/rimalloc/16` | 139.92 us median, 357.35 Melem/s | Within noise threshold |
 
 Conclusion: no hotpath regression was detected in the tight allocator probes.
 
@@ -832,7 +832,7 @@ The initial command, from the repository root, was:
 ```bash
 CARGO_TARGET_DIR=target/bench-comparison/2026-10-12 \
 MIMALLOC_BENCH_SCENARIOS=glibc-simple,glibc-thread,malloc-large,malloc-large-old,cache-scratch1,cache-thrash1,cache-scratchN,cache-thrashN,xmalloc-testN,mstressN,sh6benchN,larsonN,larsonN-sized,barnes,cfrac,mleak10,mleak100 \
-MIMALLOC_BENCH_ALLOCATORS=mechanical_mimalloc_raw,c-mimalloc-3.3.2 \
+MIMALLOC_BENCH_ALLOCATORS=rimalloc_raw,c-mimalloc-3.3.2 \
 MIMALLOC_BENCH_SAMPLE_SIZE=10 \
 MIMALLOC_BENCH_MEASUREMENT_SECS=3 \
 MIMALLOC_BENCH_WARMUP_SECS=1 \
@@ -844,11 +844,11 @@ The additional four scenarios used the prebuilt executable and libraries:
 ```bash
 CARGO_TARGET_DIR=target/bench-comparison/2026-10-12 \
 CRITERION_HOME=target/bench-comparison/2026-10-12/extended/criterion \
-MIMALLOC_RUST_LIB="$PWD/target/bench-comparison/2026-10-12/release/deps/libmechanical_mimalloc-08821712153d43bc.so" \
+MIMALLOC_RUST_LIB="$PWD/target/bench-comparison/2026-10-12/release/deps/librimalloc-08821712153d43bc.so" \
 MIMALLOC_C_LIB="$PWD/target/bench-comparison/2026-10-12/c-mimalloc-3.3.2/libmimalloc.so.3.3" \
 MIMALLOC_BENCH_SKIP_BUILD=1 \
 MIMALLOC_BENCH_SCENARIOS=alloc-test1,alloc-testN,sh8benchN,rptestN \
-MIMALLOC_BENCH_ALLOCATORS=mechanical_mimalloc_raw,c-mimalloc-3.3.2 \
+MIMALLOC_BENCH_ALLOCATORS=rimalloc_raw,c-mimalloc-3.3.2 \
 MIMALLOC_BENCH_SAMPLE_SIZE=10 \
 MIMALLOC_BENCH_MEASUREMENT_SECS=3 \
 MIMALLOC_BENCH_WARMUP_SECS=1 \
@@ -869,7 +869,7 @@ results in the repository.
 
 Ratios were calculated from Criterion JSON using the actual allocator IDs.
 At the time of this run the summarizer looked up `rust` rather than the
-emitted `mechanical_mimalloc_raw`, so its native-pair table omitted these
+emitted `rimalloc_raw`, so its native-pair table omitted these
 results; `scripts/summarize-criterion.py` now accepts both IDs. No benchmark
 implementation changes were made for this run.
 

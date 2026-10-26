@@ -1,6 +1,6 @@
 //! Runs one allocator resource scenario and emits one JSON-lines record.
 
-use mechanical_mimalloc::{MiMalloc, ProcessInfo, StatsSnapshot};
+use rimalloc::{MiMalloc, ProcessInfo, StatsSnapshot};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::env;
 use std::fs::OpenOptions;
@@ -19,8 +19,8 @@ enum ProbeAllocator {
 impl ProbeAllocator {
     fn parse(value: &str) -> Self {
         match value {
-            "mechanical_mimalloc_public" => Self::Public,
-            "mechanical_mimalloc_raw" => Self::Raw,
+            "rimalloc_public" => Self::Public,
+            "rimalloc_raw" => Self::Raw,
             "system" => Self::System,
             _ => panic!("unsupported probe allocator: {value}"),
         }
@@ -30,10 +30,10 @@ impl ProbeAllocator {
         match self {
             Self::Public => unsafe { MiMalloc.alloc(layout) },
             Self::Raw if layout.align() <= 16 => unsafe {
-                mechanical_mimalloc::raw::mi_malloc(layout.size()).cast()
+                rimalloc::raw::mi_malloc(layout.size()).cast()
             },
             Self::Raw => unsafe {
-                mechanical_mimalloc::raw::mi_malloc_aligned(layout.size(), layout.align()).cast()
+                rimalloc::raw::mi_malloc_aligned(layout.size(), layout.align()).cast()
             },
             Self::System => unsafe { System.alloc(layout) },
         }
@@ -42,7 +42,7 @@ impl ProbeAllocator {
     unsafe fn deallocate(self, pointer: *mut u8, layout: Layout) {
         match self {
             Self::Public => unsafe { MiMalloc.dealloc(pointer, layout) },
-            Self::Raw => unsafe { mechanical_mimalloc::raw::mi_free(pointer.cast()) },
+            Self::Raw => unsafe { rimalloc::raw::mi_free(pointer.cast()) },
             Self::System => unsafe { System.dealloc(pointer, layout) },
         }
     }
@@ -80,7 +80,7 @@ fn number<T: std::str::FromStr>(name: &str, default: &str) -> T {
 }
 
 fn config() -> Config {
-    let allocator_name = value("MIMALLOC_PROBE_ALLOCATOR", "mechanical_mimalloc_public");
+    let allocator_name = value("MIMALLOC_PROBE_ALLOCATOR", "rimalloc_public");
     Config {
         scenario: value("MIMALLOC_PROBE_SCENARIO", "alloc_free"),
         allocator: ProbeAllocator::parse(&allocator_name),
@@ -186,7 +186,7 @@ fn main() {
     };
     let wall_ns = started.elapsed().as_nanos();
     if !matches!(config.allocator, ProbeAllocator::System) {
-        unsafe { mechanical_mimalloc::raw::mi_collect(true) };
+        unsafe { rimalloc::raw::mi_collect(true) };
     }
     let process_end = ProcessInfo::current();
     let allocator_end = (!matches!(config.allocator, ProbeAllocator::System))

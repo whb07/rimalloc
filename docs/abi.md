@@ -7,7 +7,7 @@ facade. The dynamic C ABI/interposition artifact is opt-in:
 cargo rustc --features interpose --lib --release --crate-type cdylib
 ```
 
-The raw Rust facade lives under `mechanical_mimalloc::raw` and mirrors the C
+The raw Rust facade lives under `rimalloc::raw` and mirrors the C
 shape for tests, benchmarks, and low-level integration.
 
 ## Compatibility Domains
@@ -105,7 +105,7 @@ symbol contract, collision tests, and checked static manifests are completed.
 
 If a release candidate includes static archive files for evaluation, the
 artifact names must include a preview marker such as
-`mechanical_mimalloc-static-preview` rather than using the production cdylib
+`rimalloc-static-preview` rather than using the production cdylib
 artifact naming. Release notes must state that those files are preview-only and
 must not be treated as a stable static ABI.
 
@@ -146,7 +146,7 @@ enums when they are not part of the default public raw facade.
 
 ## Raw Rust Facade
 
-`mechanical_mimalloc::raw` is the Rust path for C-shaped constants, callbacks,
+`rimalloc::raw` is the Rust path for C-shaped constants, callbacks,
 layouts, and functions. It is intentionally separate from the crate root:
 
 - crate root: safe `MiMalloc` facade and `raw`
@@ -213,7 +213,7 @@ safe crate root
   -> src/safe/mod.rs
   -> raw C-shaped calls
 
-mechanical_mimalloc::raw
+rimalloc::raw
   -> src/raw/mod.rs
   -> src/ffi/abi.rs / src/ffi/headers.rs
 

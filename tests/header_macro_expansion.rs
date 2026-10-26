@@ -5,7 +5,7 @@ use std::process::Command;
 fn representative_header_macros_expand_from_downstream_crate() {
     let root = env!("CARGO_MANIFEST_DIR");
     let temp = std::env::temp_dir().join(format!(
-        "mechanical_mimalloc_header_macro_smoke_{}",
+        "rimalloc_header_macro_smoke_{}",
         std::process::id()
     ));
     if temp.exists() {
@@ -15,7 +15,7 @@ fn representative_header_macros_expand_from_downstream_crate() {
     fs::write(
         temp.join("Cargo.toml"),
         format!(
-            "[package]\nname = \"header_macro_smoke\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nmechanical_mimalloc = {{ path = {root:?}, features = [\"std\", \"c-header-macros\"] }}\n"
+            "[package]\nname = \"header_macro_smoke\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nrimalloc = {{ path = {root:?}, features = [\"std\", \"c-header-macros\"] }}\n"
         ),
     )
     .expect("write temp Cargo.toml");
@@ -27,28 +27,28 @@ use std::ptr;
 
 fn main() {
     unsafe {
-        let p = mechanical_mimalloc::malloc!(8);
-        let p = mechanical_mimalloc::realloc!(p, 16);
-        let _ = mechanical_mimalloc::malloc_usable_size!(p);
-        mechanical_mimalloc::cfree!(p);
+        let p = rimalloc::malloc!(8);
+        let p = rimalloc::realloc!(p, 16);
+        let _ = rimalloc::malloc_usable_size!(p);
+        rimalloc::cfree!(p);
 
         let text = CString::new("header macro smoke").unwrap();
-        let s = mechanical_mimalloc::strdup!(text.as_ptr());
-        mechanical_mimalloc::raw::mi_free(s.cast());
+        let s = rimalloc::strdup!(text.as_ptr());
+        rimalloc::raw::mi_free(s.cast());
 
         let mut aligned = ptr::null_mut();
-        if mechanical_mimalloc::posix_memalign!(&mut aligned, 16, 32) == 0 {
-            mechanical_mimalloc::raw::mi_free(aligned);
+        if rimalloc::posix_memalign!(&mut aligned, 16, 32) == 0 {
+            rimalloc::raw::mi_free(aligned);
         }
 
-        let aligned = mechanical_mimalloc::_aligned_malloc!(32, 16);
-        mechanical_mimalloc::_aligned_free!(aligned);
+        let aligned = rimalloc::_aligned_malloc!(32, 16);
+        rimalloc::_aligned_free!(aligned);
 
-        let object = mechanical_mimalloc::operatornew!(16);
-        mechanical_mimalloc::operatordelete!(object);
+        let object = rimalloc::operatornew!(16);
+        rimalloc::operatordelete!(object);
 
-        let object = mechanical_mimalloc::operatornew_nothrow!(16, ());
-        mechanical_mimalloc::operatordelete_nothrow!(object, ());
+        let object = rimalloc::operatornew_nothrow!(16, ());
+        rimalloc::operatordelete_nothrow!(object, ());
     }
 }
 "#,
@@ -77,7 +77,7 @@ fn main() {
 fn header_macros_are_not_available_without_feature() {
     let root = env!("CARGO_MANIFEST_DIR");
     let temp = std::env::temp_dir().join(format!(
-        "mechanical_mimalloc_header_macro_default_gate_{}",
+        "rimalloc_header_macro_default_gate_{}",
         std::process::id()
     ));
     if temp.exists() {
@@ -87,7 +87,7 @@ fn header_macros_are_not_available_without_feature() {
     fs::write(
         temp.join("Cargo.toml"),
         format!(
-            "[package]\nname = \"header_macro_default_gate\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nmechanical_mimalloc = {{ path = {root:?}, features = [\"std\"] }}\n"
+            "[package]\nname = \"header_macro_default_gate\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nrimalloc = {{ path = {root:?}, features = [\"std\"] }}\n"
         ),
     )
     .expect("write temp Cargo.toml");
@@ -96,8 +96,8 @@ fn header_macros_are_not_available_without_feature() {
         r#"
 fn main() {
     unsafe {
-        let p = mechanical_mimalloc::malloc!(8);
-        mechanical_mimalloc::raw::mi_free(p);
+        let p = rimalloc::malloc!(8);
+        rimalloc::raw::mi_free(p);
     }
 }
 "#,
@@ -127,7 +127,7 @@ fn main() {
 fn c_header_macros_still_require_unsafe_boundary() {
     let root = env!("CARGO_MANIFEST_DIR");
     let temp = std::env::temp_dir().join(format!(
-        "mechanical_mimalloc_header_macro_unsafe_gate_{}",
+        "rimalloc_header_macro_unsafe_gate_{}",
         std::process::id()
     ));
     if temp.exists() {
@@ -137,7 +137,7 @@ fn c_header_macros_still_require_unsafe_boundary() {
     fs::write(
         temp.join("Cargo.toml"),
         format!(
-            "[package]\nname = \"header_macro_unsafe_gate\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nmechanical_mimalloc = {{ path = {root:?}, features = [\"std\", \"c-header-macros\"] }}\n"
+            "[package]\nname = \"header_macro_unsafe_gate\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nrimalloc = {{ path = {root:?}, features = [\"std\", \"c-header-macros\"] }}\n"
         ),
     )
     .expect("write temp Cargo.toml");
@@ -145,8 +145,8 @@ fn c_header_macros_still_require_unsafe_boundary() {
         temp.join("src/main.rs"),
         r#"
 fn main() {
-    let p = mechanical_mimalloc::malloc!(8);
-    let q = mechanical_mimalloc::mi_malloc_tp!(u64);
+    let p = rimalloc::malloc!(8);
+    let q = rimalloc::mi_malloc_tp!(u64);
     let _ = (p, q);
 }
 "#,

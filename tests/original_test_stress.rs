@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::thread;
 
-use mechanical_mimalloc::raw::{self, mi_heap_area_t, mi_heap_t, mi_theap_t};
+use rimalloc::raw::{self, mi_heap_area_t, mi_heap_t, mi_theap_t};
 
 const USE_HEAPS: usize = 4;
 const TRANSFERS: usize = 32;

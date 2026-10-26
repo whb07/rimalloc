@@ -12,7 +12,7 @@ signing and create the tag with the release SSH signing key:
 git config gpg.format ssh
 git config user.signingkey /path/to/release-signing-key.pub
 git config gpg.ssh.allowedSignersFile /path/to/release-allowed-signers
-git tag -s vX.Y.Z -m "mechanical_mimalloc vX.Y.Z"
+git tag -s vX.Y.Z -m "rimalloc vX.Y.Z"
 git tag -v vX.Y.Z
 ```
 
@@ -25,7 +25,7 @@ individually. `scripts/build-release-artifacts.py` writes:
 - `integrity/signing/release-allowed-signers`
 
 The signature namespace is `file`, the default signer identity is
-`mechanical_mimalloc_release`, and the manifest mechanism string is
+`rimalloc_release`, and the manifest mechanism string is
 `ssh-ed25519-detached-sha256sums`.
 
 ## Release Key
@@ -34,15 +34,15 @@ The release owner controls the SSH Ed25519 release signing key. Keep the
 private key outside the repository and inject it into release jobs through a
 protected secret or release-only signing environment.
 
-Set `MECHANICAL_MIMALLOC_RELEASE_SIGNING_KEY` to the private-key path before
+Set `RIMALLOC_RELEASE_SIGNING_KEY` to the private-key path before
 building release artifacts:
 
 ```sh
-MECHANICAL_MIMALLOC_RELEASE_SIGNING_KEY=/path/to/release-signing-key \
+RIMALLOC_RELEASE_SIGNING_KEY=/path/to/release-signing-key \
   scripts/check-release-integrity.py
 ```
 
-`MECHANICAL_MIMALLOC_RELEASE_SIGNING_IDENTITY` may override the signer identity
+`RIMALLOC_RELEASE_SIGNING_IDENTITY` may override the signer identity
 when a future release line needs a distinct principal. The release notes must
 publish the public key fingerprint shown in `release-artifacts.json`.
 
@@ -59,7 +59,7 @@ Verify the staged checksum signature with:
 ```sh
 ssh-keygen -Y verify \
   -f target/release-artifacts/integrity/signing/release-allowed-signers \
-  -I mechanical_mimalloc_release \
+  -I rimalloc_release \
   -n file \
   -s target/release-artifacts/SHA256SUMS.sig \
   < target/release-artifacts/SHA256SUMS

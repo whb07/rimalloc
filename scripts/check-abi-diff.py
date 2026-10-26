@@ -266,7 +266,7 @@ def compare_sources(
 
 def manifest_text(entries: list[SymbolEntry]) -> str:
     lines = [
-        "# mechanical_mimalloc dynamic ABI manifest",
+        "# rimalloc dynamic ABI manifest",
         "# artifact: self-test",
         "# build-command: test",
         "# columns: symbol\tbinding\tvisibility\tversion\ttype",

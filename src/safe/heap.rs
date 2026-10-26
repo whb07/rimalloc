@@ -42,7 +42,7 @@ impl std::error::Error for HeapError {}
 ///
 /// ```rust
 /// use core::alloc::Layout;
-/// use mechanical_mimalloc::Heap;
+/// use rimalloc::Heap;
 ///
 /// let heap = Heap::new().unwrap();
 /// let heap_ref = heap.as_ref();
@@ -59,7 +59,7 @@ impl std::error::Error for HeapError {}
 ///
 /// ```rust,compile_fail
 /// use core::alloc::Layout;
-/// use mechanical_mimalloc::{Heap, HeapAllocation};
+/// use rimalloc::{Heap, HeapAllocation};
 ///
 /// let layout = Layout::from_size_align(16, 8).unwrap();
 /// let leaked: HeapAllocation<'static>;
@@ -73,7 +73,7 @@ impl std::error::Error for HeapError {}
 /// Initialized heap allocations carry the same heap lifetime:
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::{Heap, InitializedHeapAllocation};
+/// use rimalloc::{Heap, InitializedHeapAllocation};
 ///
 /// let leaked: InitializedHeapAllocation<'static>;
 /// {
@@ -87,7 +87,7 @@ impl std::error::Error for HeapError {}
 /// still live:
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::Heap;
+/// use rimalloc::Heap;
 ///
 /// let heap = Heap::new().unwrap();
 /// let allocation = heap.allocate_bytes(16).unwrap();
@@ -96,7 +96,7 @@ impl std::error::Error for HeapError {}
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::Heap;
+/// use rimalloc::Heap;
 ///
 /// let heap = Heap::new().unwrap();
 /// let allocation = heap.allocate_zeroed_bytes(16).unwrap();
@@ -109,70 +109,70 @@ impl std::error::Error for HeapError {}
 /// heap/thread-heap metadata that is not exposed as a thread-safe Rust handle.
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::Heap;
+/// use rimalloc::Heap;
 ///
 /// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
 /// let _ = MustBeSend::<Heap>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::HeapRef;
+/// use rimalloc::HeapRef;
 ///
 /// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
 /// let _ = MustBeSend::<HeapRef<'static>>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::MainHeap;
+/// use rimalloc::MainHeap;
 ///
 /// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
 /// let _ = MustBeSend::<MainHeap>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::HeapAllocation;
+/// use rimalloc::HeapAllocation;
 ///
 /// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
 /// let _ = MustBeSend::<HeapAllocation<'static>>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::InitializedHeapAllocation;
+/// use rimalloc::InitializedHeapAllocation;
 ///
 /// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
 /// let _ = MustBeSend::<InitializedHeapAllocation<'static>>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::Heap;
+/// use rimalloc::Heap;
 ///
 /// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
 /// let _ = MustBeSync::<Heap>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::HeapRef;
+/// use rimalloc::HeapRef;
 ///
 /// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
 /// let _ = MustBeSync::<HeapRef<'static>>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::MainHeap;
+/// use rimalloc::MainHeap;
 ///
 /// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
 /// let _ = MustBeSync::<MainHeap>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::HeapAllocation;
+/// use rimalloc::HeapAllocation;
 ///
 /// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
 /// let _ = MustBeSync::<HeapAllocation<'static>>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::InitializedHeapAllocation;
+/// use rimalloc::InitializedHeapAllocation;
 ///
 /// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
 /// let _ = MustBeSync::<InitializedHeapAllocation<'static>>(core::marker::PhantomData);
@@ -419,7 +419,7 @@ impl fmt::Debug for HeapRef<'_> {
 /// `MainHeap` value.
 ///
 /// ```rust
-/// use mechanical_mimalloc::MainHeap;
+/// use rimalloc::MainHeap;
 ///
 /// let main = MainHeap::get().unwrap();
 /// let main_ref = main.as_ref();
@@ -435,7 +435,7 @@ impl fmt::Debug for HeapRef<'_> {
 /// can outlive the temporary handle value:
 ///
 /// ```rust
-/// use mechanical_mimalloc::MainHeap;
+/// use rimalloc::MainHeap;
 ///
 /// let allocation = {
 ///     let main = MainHeap::get().unwrap();
@@ -595,7 +595,7 @@ impl MainHeap {
 ///
 /// ```rust
 /// use core::alloc::Layout;
-/// use mechanical_mimalloc::Heap;
+/// use rimalloc::Heap;
 ///
 /// let heap = Heap::new().unwrap();
 /// let mut allocation = heap.allocate(Layout::from_size_align(3, 1).unwrap()).unwrap();
@@ -608,7 +608,7 @@ impl MainHeap {
 ///
 /// ```rust,compile_fail
 /// use core::alloc::Layout;
-/// use mechanical_mimalloc::{Heap, HeapAllocation};
+/// use rimalloc::{Heap, HeapAllocation};
 ///
 /// fn allocate_then_drop_heap() -> HeapAllocation<'static> {
 ///     let heap = Heap::new().unwrap();
@@ -619,7 +619,7 @@ impl MainHeap {
 /// External code cannot construct a heap allocation from representation fields:
 ///
 /// ```rust,compile_fail
-/// let _ = mechanical_mimalloc::HeapAllocation { raw: unreachable!() };
+/// let _ = rimalloc::HeapAllocation { raw: unreachable!() };
 /// ```
 #[must_use]
 pub struct HeapAllocation<'heap> {
@@ -977,7 +977,7 @@ impl fmt::Debug for HeapAllocation<'_> {
 /// Heap allocation whose bytes are initialized.
 ///
 /// ```rust
-/// use mechanical_mimalloc::Heap;
+/// use rimalloc::Heap;
 ///
 /// let heap = Heap::new().unwrap();
 /// let mut allocation = heap.allocate_zeroed_bytes(4).unwrap();
@@ -991,7 +991,7 @@ impl fmt::Debug for HeapAllocation<'_> {
 /// representation fields:
 ///
 /// ```rust,compile_fail
-/// let _ = mechanical_mimalloc::InitializedHeapAllocation { raw: unreachable!() };
+/// let _ = rimalloc::InitializedHeapAllocation { raw: unreachable!() };
 /// ```
 #[must_use]
 pub struct InitializedHeapAllocation<'heap> {

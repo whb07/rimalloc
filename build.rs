@@ -62,7 +62,7 @@ fn run_tool(description: &str, tool_env: &str, command: &mut Command) {
 fn compile_track_shim(defines: &[&str], flags: &[&str]) {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let obj = out_dir.join("track_shim.o");
-    let lib = out_dir.join("libmechanical_mimalloc_track_shim.a");
+    let lib = out_dir.join("librimalloc_track_shim.a");
 
     let mut cc = target_compiler("CC", "cc");
     cc.arg("-c")
@@ -83,13 +83,13 @@ fn compile_track_shim(defines: &[&str], flags: &[&str]) {
     run_tool("track shim archiver", "AR", &mut ar);
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
-    println!("cargo:rustc-link-lib=static=mechanical_mimalloc_track_shim");
+    println!("cargo:rustc-link-lib=static=rimalloc_track_shim");
 }
 
 fn compile_cxx_new_shim(fast_new: bool) {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let obj = out_dir.join("cxx_new_shim.o");
-    let lib = out_dir.join("libmechanical_mimalloc_cxx_new_shim.a");
+    let lib = out_dir.join("librimalloc_cxx_new_shim.a");
 
     let mut cxx = target_compiler("CXX", "c++");
     cxx.arg("-std=c++17");
@@ -109,7 +109,7 @@ fn compile_cxx_new_shim(fast_new: bool) {
     run_tool("C++ new/delete shim archiver", "AR", &mut ar);
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
-    println!("cargo:rustc-link-lib=static:+whole-archive=mechanical_mimalloc_cxx_new_shim");
+    println!("cargo:rustc-link-lib=static:+whole-archive=rimalloc_cxx_new_shim");
 }
 
 /// A C or C++ compiler command for Cargo's target. On macOS `cc` otherwise
@@ -148,7 +148,7 @@ fn target_compiler(tool_env: &str, default: &str) -> Command {
 fn compile_macos_interpose() {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let obj = out_dir.join("macos_interpose.o");
-    let lib = out_dir.join("libmechanical_mimalloc_macos_interpose.a");
+    let lib = out_dir.join("librimalloc_macos_interpose.a");
     let mut cc = target_compiler("CC", "cc");
     // Warnings are not fatal here: a newer SDK must not break downstream builds.
     // scripts/check-macos-interpose.py compiles this file with -Werror.
@@ -166,14 +166,14 @@ fn compile_macos_interpose() {
     ar.arg("crs").arg(&lib).arg(&obj);
     run_tool("macOS interposition archiver", "AR", &mut ar);
     println!("cargo:rustc-link-search=native={}", out_dir.display());
-    println!("cargo:rustc-link-lib=static:+whole-archive=mechanical_mimalloc_macos_interpose");
+    println!("cargo:rustc-link-lib=static:+whole-archive=rimalloc_macos_interpose");
 }
 
 fn compile_tls_shim() {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let tls_obj = out_dir.join("tls_shim.o");
     let recurse_obj = out_dir.join("tls_recurse_shim.o");
-    let lib = out_dir.join("libmechanical_mimalloc_tls_shim.a");
+    let lib = out_dir.join("librimalloc_tls_shim.a");
 
     let mut tls_cc = target_compiler("CC", "cc");
     tls_cc
@@ -200,7 +200,7 @@ fn compile_tls_shim() {
     run_tool("TLS shim archiver", "AR", &mut ar);
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
-    println!("cargo:rustc-link-lib=static=mechanical_mimalloc_tls_shim");
+    println!("cargo:rustc-link-lib=static=rimalloc_tls_shim");
 }
 
 fn without_c_comments(input: &str) -> String {

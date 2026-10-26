@@ -14,7 +14,7 @@ import sys
 
 import applications
 
-RUST = {"rust", "mechanical_mimalloc_raw"}
+RUST = {"rust", "rimalloc_raw"}
 # Native result columns are `<allocator>_median_ns`; Nginx rows name the allocator.
 C_MIMALLOC = {"c", "mimalloc", "c-mimalloc-3.3.2"}
 TOLERANCE = {"c-mimalloc": 1.03, "other": 1.10}

@@ -4,7 +4,7 @@ use core::ffi::c_void;
 use std::alloc::System;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use mechanical_mimalloc::raw::mimalloc::*;
+use rimalloc::raw::mimalloc::*;
 
 struct DetectingAllocator;
 

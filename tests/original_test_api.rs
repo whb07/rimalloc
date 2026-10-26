@@ -1,7 +1,7 @@
-use mechanical_mimalloc::raw::headers::{
+use rimalloc::raw::headers::{
     mi_stl_allocator, mi_stl_allocator_operator_eq, mi_stl_allocator_operator_ne,
 };
-use mechanical_mimalloc::raw::{
+use rimalloc::raw::{
     MI_MAX_ALIGN_SIZE, mi_free, mi_option_disable, mi_option_t, mi_zalloc_aligned,
 };
 

@@ -1,4 +1,4 @@
-# Mechanical mimalloc performance worklog
+# Rimalloc performance worklog
 
 This is the durable decision log for the experiments in `TODO.md`. Raw build,
 benchmark, counter, and assembly artifacts live under

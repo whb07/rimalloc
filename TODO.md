@@ -1,6 +1,6 @@
 # Remaining engineering work
 
-This backlog contains concrete unresolved problems in `mechanical_mimalloc`.
+This backlog contains concrete unresolved problems in `rimalloc`.
 It is not an unsafe inventory, release checklist, or mandate to rewrite the
 mechanical allocator core. Preserve mimalloc 3.3.2 behavior, the supported
 C/C++ ABI, allocator performance, `no_std` operation, and the mechanical

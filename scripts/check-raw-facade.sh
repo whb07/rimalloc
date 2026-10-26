@@ -125,12 +125,12 @@ impl_only = {
 }
 path_roots = [root / "tests", root / "benches", root / "examples"]
 direct = re.compile(
-    r"^\s*use\s+(?:mechanical_mimalloc::)?raw::("
+    r"^\s*use\s+(?:rimalloc::)?raw::("
     + "|".join(sorted(impl_only))
     + r")\b",
     flags=re.M,
 )
-group = re.compile(r"^\s*use\s+(?:mechanical_mimalloc::)?raw::\{([^}]*)\}", flags=re.M | re.S)
+group = re.compile(r"^\s*use\s+(?:rimalloc::)?raw::\{([^}]*)\}", flags=re.M | re.S)
 
 errors: list[str] = []
 for path_root in path_roots:

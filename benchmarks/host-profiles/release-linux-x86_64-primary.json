@@ -36,7 +36,7 @@
       "xmalloc-testN"
     ],
     "allocators": [
-      "mechanical_mimalloc_raw",
+      "rimalloc_raw",
       "c-mimalloc-3.3.2"
     ]
   },

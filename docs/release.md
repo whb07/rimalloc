@@ -143,7 +143,7 @@ manifests are complete.
 
 Release notes and release artifact names must make this visible. If static
 archives are attached for evaluation before the production policy changes, use
-a preview-marked name such as `mechanical_mimalloc-static-preview` and state
+a preview-marked name such as `rimalloc-static-preview` and state
 that the archive is not a stable static ABI.
 
 ## FFI Artifact Distribution
@@ -175,8 +175,8 @@ copies outputs under
 `target/release-artifacts/artifacts/`, stages `mimalloc.h`,
 `mimalloc-stats.h`, `mimalloc-override.h`, and `mimalloc-new-delete.h` under
 `target/release-artifacts/include/`, generates
-`lib/pkgconfig/mechanical_mimalloc.pc` and
-`lib/cmake/mechanical_mimalloc/mechanical_mimalloc-config.cmake`, and writes
+`lib/pkgconfig/rimalloc.pc` and
+`lib/cmake/rimalloc/rimalloc-config.cmake`, and writes
 `target/release-artifacts/release-artifacts.json` with each artifact path,
 header path, link metadata path, feature set, target triple, release profile,
 rustc version, and SHA-256 checksum.
@@ -204,7 +204,7 @@ The dry run also writes release integrity files:
 Release signing policy is defined in `docs/release-signing.md`. Source tags use
 signed annotated Git tags, while binary release assets authenticate the signed
 `SHA256SUMS` file. Published releases must set
-`MECHANICAL_MIMALLOC_RELEASE_SIGNING_KEY` to the maintainer-controlled release
+`RIMALLOC_RELEASE_SIGNING_KEY` to the maintainer-controlled release
 SSH Ed25519 key; the ephemeral dry-run key is only evidence that signing and
 verification wiring works.
 

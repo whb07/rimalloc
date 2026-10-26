@@ -70,15 +70,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "mechanical_mimalloc"
+name = "rimalloc"
 version = "0.1.0"
 
 [[package]]
-name = "mechanical_mimalloc_fuzz"
+name = "rimalloc_fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
- "mechanical_mimalloc",
+ "rimalloc",
 ]
 
 [[package]]

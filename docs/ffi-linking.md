@@ -51,7 +51,7 @@ link against the staged `c-abi-cdylib` path recorded in
 
 The release metadata also exposes this default mode through pkg-config and
 CMake. The pkg-config package links the production `c-abi` cdylib by default,
-and the CMake config exposes `mechanical_mimalloc::c_abi`.
+and the CMake config exposes `rimalloc::c_abi`.
 
 The focused consumer checks for this mode are:
 
@@ -85,7 +85,7 @@ Static preview consumers must link the archive directly and provide the
 platform libraries recorded in the release metadata: `pthread`, `dl`, and `m`.
 If a release candidate includes static archives for evaluation, the artifact
 name must include a preview marker such as
-`mechanical_mimalloc-static-preview`, and the release notes must state that the
+`rimalloc-static-preview`, and the release notes must state that the
 archive is not a stable static ABI.
 
 The focused static consumer coverage is:
@@ -103,7 +103,7 @@ Build a release dylib from the repository, then inject it into a native program:
 
 ```sh
 cargo rustc --features interpose --lib --release --crate-type cdylib
-DYLD_INSERT_LIBRARIES="$PWD/target/release/libmechanical_mimalloc.dylib" ./program
+DYLD_INSERT_LIBRARIES="$PWD/target/release/librimalloc.dylib" ./program
 ```
 
 Pass `--crate-type` to Cargo, before any `--` separator, so Cargo selects the
@@ -165,7 +165,7 @@ cargo rustc --features interpose --lib --release --crate-type cdylib
 Run the target program with the staged interpose cdylib in `LD_PRELOAD`:
 
 ```sh
-LD_PRELOAD=/path/to/libmechanical_mimalloc-interpose-cdylib.so ./program
+LD_PRELOAD=/path/to/librimalloc-interpose-cdylib.so ./program
 ```
 
 The interpose feature enables the C ABI, malloc-family override exports, the C++
@@ -191,7 +191,7 @@ artifact and `interpose-static-preview` only for preview static evaluation.
 
 The lower-level `cxx-overrides` feature depends on `c-abi`, but release
 metadata exposes the supported C++ override path through the interpose artifact
-names and the `mechanical_mimalloc::interpose` CMake target.
+names and the `rimalloc::interpose` CMake target.
 
 The C++ header for this mode is `mimalloc-new-delete.h`. The focused validation
 is:
@@ -216,15 +216,15 @@ The staged headers are:
 
 The staged link metadata is:
 
-- `lib/pkgconfig/mechanical_mimalloc.pc`, whose default `Libs` line links the
+- `lib/pkgconfig/rimalloc.pc`, whose default `Libs` line links the
   production `c-abi` cdylib and records include path, artifact path, `pthread`,
   `dl`, `m`, and artifact-mode notes. Preview static archive paths are exposed
   as variables, not as the default production link mode.
-- `lib/cmake/mechanical_mimalloc/mechanical_mimalloc-config.cmake`, which
-  defines `mechanical_mimalloc::c_abi`,
-  `mechanical_mimalloc::interpose`,
-  `mechanical_mimalloc::c_abi_static_preview`, and
-  `mechanical_mimalloc::interpose_static_preview` imported targets.
+- `lib/cmake/rimalloc/rimalloc-config.cmake`, which
+  defines `rimalloc::c_abi`,
+  `rimalloc::interpose`,
+  `rimalloc::c_abi_static_preview`, and
+  `rimalloc::interpose_static_preview` imported targets.
 
 Validate package metadata consumers from a temporary directory outside the
 repository:

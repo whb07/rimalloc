@@ -1,6 +1,6 @@
 use core::alloc::{GlobalAlloc, Layout};
 
-use mechanical_mimalloc::MiMalloc;
+use rimalloc::MiMalloc;
 
 fn assert_traits<T: GlobalAlloc + Copy + Clone + Default + core::fmt::Debug + Send + Sync>() {}
 

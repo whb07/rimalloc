@@ -21,7 +21,7 @@ def run(command: list[str], *, cwd: pathlib.Path, env: dict[str, str] | None = N
 
 def build_release_assets() -> dict[str, object]:
     manifest = RELEASE_DIR / "release-artifacts.json"
-    if os.environ.get("MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS") != "1" or not manifest.exists():
+    if os.environ.get("RIMALLOC_REUSE_RELEASE_ARTIFACTS") != "1" or not manifest.exists():
         run(["scripts/build-release-artifacts.py"], cwd=ROOT)
     with manifest.open("r", encoding="utf-8") as handle:
         return json.load(handle)
@@ -96,7 +96,7 @@ def run_consumer(data: dict[str, object], staged: pathlib.Path, work_dir: pathli
 
 def main() -> None:
     data = build_release_assets()
-    with tempfile.TemporaryDirectory(prefix="mechanical-mimalloc-package-ffi-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="rimalloc-package-ffi-") as tmp:
         work_dir = pathlib.Path(tmp)
         staged = work_dir / "downloaded-release-assets"
         shutil.copytree(RELEASE_DIR, staged)

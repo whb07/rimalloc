@@ -1,4 +1,4 @@
-# mechanical_mimalloc dynamic ABI manifest
+# rimalloc dynamic ABI manifest
 # artifact: c-abi-guarded
 # build-command: cargo rustc --lib --features c-abi guarded --target-dir target/symbol-check/c-abi-guarded -- --crate-type cdylib
 # columns: symbol	binding	visibility	version	type

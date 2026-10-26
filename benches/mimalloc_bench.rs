@@ -12,8 +12,8 @@
 //!
 //! Useful environment variables:
 //!   MIMALLOC_BENCH_SCENARIOS=glibc-simple,mleak10,xmalloc-testN
-//!   MIMALLOC_BENCH_ALLOCATORS=mechanical_mimalloc_raw,c-mimalloc-3.3.2
-//!   MIMALLOC_RUST_LIB=/path/to/libmechanical_mimalloc.so
+//!   MIMALLOC_BENCH_ALLOCATORS=rimalloc_raw,c-mimalloc-3.3.2
+//!   MIMALLOC_RUST_LIB=/path/to/librimalloc.so
 //!   MIMALLOC_C_LIB=/path/to/libmimalloc.so
 //!   MIMALLOC_BENCH_SKIP_BUILD=1
 //!   MIMALLOC_BENCH_SAMPLE_SIZE=10
@@ -72,7 +72,7 @@ enum BenchAllocator {
 impl BenchAllocator {
     fn name(self) -> &'static str {
         match self {
-            BenchAllocator::Rust(_) => "mechanical_mimalloc_raw",
+            BenchAllocator::Rust(_) => "rimalloc_raw",
             BenchAllocator::C(_) => "c-mimalloc-3.3.2",
             BenchAllocator::Other(name, _) => name,
         }
@@ -341,7 +341,7 @@ fn cargo_target_dir(root: &Path) -> PathBuf {
 
 fn find_rust_mimalloc_shared_lib(root: &Path) -> Option<PathBuf> {
     let release_dir = cargo_target_dir(root).join("release");
-    let root_artifact = release_dir.join("libmechanical_mimalloc.so");
+    let root_artifact = release_dir.join("librimalloc.so");
     if root_artifact.exists() {
         return Some(root_artifact);
     }
@@ -355,7 +355,7 @@ fn find_rust_mimalloc_shared_lib(root: &Path) -> Option<PathBuf> {
             path.file_name()
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| {
-                    name.starts_with("libmechanical_mimalloc-")
+                    name.starts_with("librimalloc-")
                         && Path::new(name)
                             .extension()
                             .is_some_and(|extension| extension.eq_ignore_ascii_case("so"))
@@ -382,7 +382,7 @@ fn ensure_rust_mimalloc(root: &Path) -> PathBuf {
         return path;
     }
 
-    let lib = cargo_target_dir(root).join("release/libmechanical_mimalloc.so");
+    let lib = cargo_target_dir(root).join("release/librimalloc.so");
     if !skip_build() {
         let mut command = Command::new("cargo");
         command
@@ -702,10 +702,7 @@ fn c_allocator(root: &Path) -> &'static DylibAllocator {
 fn allocators(root: &Path) -> Vec<BenchAllocator> {
     let selected = csv_env("MIMALLOC_BENCH_ALLOCATORS");
     let selected = if selected.is_empty() {
-        vec![
-            "mechanical_mimalloc_raw".to_owned(),
-            "c-mimalloc-3.3.2".to_owned(),
-        ]
+        vec!["rimalloc_raw".to_owned(), "c-mimalloc-3.3.2".to_owned()]
     } else {
         selected
     };
@@ -713,7 +710,7 @@ fn allocators(root: &Path) -> Vec<BenchAllocator> {
     selected
         .into_iter()
         .map(|name| match name.as_str() {
-            "rust" | "mechanical_mimalloc_raw" => BenchAllocator::Rust(rust_allocator(root)),
+            "rust" | "rimalloc_raw" => BenchAllocator::Rust(rust_allocator(root)),
             "c" | "c-mimalloc" | "c-mimalloc-3.3.2" => BenchAllocator::C(c_allocator(root)),
             other => BenchAllocator::Other(
                 Box::leak(other.to_owned().into_boxed_str()),

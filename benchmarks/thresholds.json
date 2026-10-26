@@ -12,7 +12,7 @@
   },
   "thresholds": [
     {
-      "id": "hotpath/paired_alloc_free/mechanical_mimalloc_public/16",
+      "id": "hotpath/paired_alloc_free/rimalloc_public/16",
       "artifact_mode": "default-rust",
       "feature_set": [
         "bench"
@@ -33,7 +33,7 @@
       }
     },
     {
-      "id": "mimalloc-bench-native/glibc-thread-per-1M-malloc-free-pairs/mechanical_mimalloc_raw",
+      "id": "mimalloc-bench-native/glibc-thread-per-1M-malloc-free-pairs/rimalloc_raw",
       "artifact_mode": "default-rust",
       "feature_set": [
         "bench"
@@ -54,7 +54,7 @@
       }
     },
     {
-      "id": "mimalloc-bench-native/malloc-large-per-workload/mechanical_mimalloc_raw",
+      "id": "mimalloc-bench-native/malloc-large-per-workload/rimalloc_raw",
       "artifact_mode": "default-rust",
       "feature_set": [
         "bench"
@@ -75,7 +75,7 @@
       }
     },
     {
-      "id": "mimalloc-bench-native/cache-scratch1-per-workload/mechanical_mimalloc_raw",
+      "id": "mimalloc-bench-native/cache-scratch1-per-workload/rimalloc_raw",
       "artifact_mode": "default-rust",
       "feature_set": [
         "bench"
@@ -96,7 +96,7 @@
       }
     },
     {
-      "id": "mimalloc-bench-native/xmalloc-testN-per-1M-frees/mechanical_mimalloc_raw",
+      "id": "mimalloc-bench-native/xmalloc-testN-per-1M-frees/rimalloc_raw",
       "artifact_mode": "default-rust",
       "feature_set": [
         "bench"

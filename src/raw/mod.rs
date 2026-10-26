@@ -27,8 +27,8 @@
 //!
 //! ```rust,no_run
 //! unsafe {
-//!     let p = mechanical_mimalloc::raw::mi_malloc(64);
-//!     mechanical_mimalloc::raw::mi_free(p);
+//!     let p = rimalloc::raw::mi_malloc(64);
+//!     rimalloc::raw::mi_free(p);
 //! }
 //! ```
 //!
@@ -36,7 +36,7 @@
 //!
 //! ```rust,no_run
 //! unsafe {
-//!     mechanical_mimalloc::raw::mi_free(core::ptr::null_mut());
+//!     rimalloc::raw::mi_free(core::ptr::null_mut());
 //! }
 //! ```
 //!
@@ -44,8 +44,8 @@
 //!
 //! ```rust,no_run
 //! unsafe {
-//!     let p = mechanical_mimalloc::raw::mi_realloc(core::ptr::null_mut(), 64);
-//!     mechanical_mimalloc::raw::mi_free(p);
+//!     let p = rimalloc::raw::mi_realloc(core::ptr::null_mut(), 64);
+//!     rimalloc::raw::mi_free(p);
 //! }
 //! ```
 

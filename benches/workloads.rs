@@ -1,7 +1,7 @@
 // The GlobalAlloc shim calls unsafe extern "C" fns; bodies are unsafe by intent.
 #![allow(unsafe_op_in_unsafe_fn)]
 
-//! Allocator workload benchmarks for mechanical_mimalloc.
+//! Allocator workload benchmarks for rimalloc.
 //!
 //! Mirrors the workload shape from yet-another-mimalloc-rs and measures the
 //! crate's public `MiMalloc` `GlobalAlloc` facade.
@@ -122,7 +122,7 @@ fn run_single_thread(c: &mut Criterion, workload: Workload) {
     });
 
     let mut allocations = Vec::with_capacity(sizes.len());
-    group.bench_function("mechanical_mimalloc_public", |b| {
+    group.bench_function("rimalloc_public", |b| {
         b.iter(|| {
             black_box(bench_single_thread_workload(
                 &PUBLIC_MIMALLOC,
@@ -249,7 +249,7 @@ fn run_multi_thread(c: &mut Criterion, workload: Workload) {
 
         let harness = MultiThreadHarness::new(&PUBLIC_MIMALLOC, workload, num_threads);
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_public", num_threads),
+            BenchmarkId::new("rimalloc_public", num_threads),
             &num_threads,
             |b, _| b.iter(|| harness.run()),
         );
@@ -309,7 +309,7 @@ fn bench_fragmentation(c: &mut Criterion) {
     });
 
     let mut allocations = vec![std::ptr::null_mut(); layouts.len()];
-    group.bench_function("mechanical_mimalloc_public/random_free_order", |b| {
+    group.bench_function("rimalloc_public/random_free_order", |b| {
         b.iter(|| {
             black_box(run_fragmentation(
                 &PUBLIC_MIMALLOC,
@@ -390,7 +390,7 @@ fn bench_realloc_churn(c: &mut Criterion) {
     });
 
     let mut allocations = Vec::with_capacity(initial_layouts.len());
-    group.bench_function("mechanical_mimalloc_public", |b| {
+    group.bench_function("rimalloc_public", |b| {
         b.iter(|| {
             black_box(run_realloc_churn(
                 &PUBLIC_MIMALLOC,
@@ -649,28 +649,24 @@ fn bench_remote_topologies(c: &mut Criterion) {
     for workers in [2, 4, 8].into_iter().filter(|count| *count <= cpu_limit) {
         steady.throughput(Throughput::Elements((TOPOLOGY_BATCH * workers) as u64));
         let mut fan_in = FanInHarness::new(&PUBLIC_MIMALLOC, workers, layout);
-        steady.bench_function(
-            format!("fan_in/mechanical_mimalloc_public/{workers}"),
-            |b| b.iter(|| fan_in.run()),
-        );
+        steady.bench_function(format!("fan_in/rimalloc_public/{workers}"), |b| {
+            b.iter(|| fan_in.run())
+        });
         let mut fan_out = FanOutHarness::new(&PUBLIC_MIMALLOC, workers, layout);
-        steady.bench_function(
-            format!("fan_out/mechanical_mimalloc_public/{workers}"),
-            |b| b.iter(|| fan_out.run()),
-        );
+        steady.bench_function(format!("fan_out/rimalloc_public/{workers}"), |b| {
+            b.iter(|| fan_out.run())
+        });
     }
     steady.throughput(Throughput::Elements(TOPOLOGY_BATCH as u64));
     let mut cycle = CycleHarness::new(&PUBLIC_MIMALLOC, layout);
-    steady.bench_function("cyclic/mechanical_mimalloc_public/3", |b| {
-        b.iter(|| cycle.run())
-    });
+    steady.bench_function("cyclic/rimalloc_public/3", |b| b.iter(|| cycle.run()));
     let oversubscribed_workers = logical_cpus().saturating_mul(2).max(2);
     steady.throughput(Throughput::Elements(
         (TOPOLOGY_BATCH * oversubscribed_workers) as u64,
     ));
     let mut oversubscribed = FanOutHarness::new(&PUBLIC_MIMALLOC, oversubscribed_workers, layout);
     steady.bench_function(
-        format!("oversubscribed/mechanical_mimalloc_public/{oversubscribed_workers}"),
+        format!("oversubscribed/rimalloc_public/{oversubscribed_workers}"),
         |b| b.iter(|| oversubscribed.run()),
     );
     steady.finish();
@@ -696,12 +692,11 @@ fn bench_remote_lifecycle(c: &mut Criterion) {
     let layout = Layout::from_size_align(TOPOLOGY_SIZE, 8).unwrap();
     let mut lifecycle = c.benchmark_group("ownership_transfer/lifecycle_churn");
     lifecycle.throughput(Throughput::Elements(TOPOLOGY_BATCH as u64));
-    lifecycle.bench_function(
-        "owner_exit_after_publication/mechanical_mimalloc_public",
-        |b| b.iter(|| owner_exit_once(layout)),
-    );
+    lifecycle.bench_function("owner_exit_after_publication/rimalloc_public", |b| {
+        b.iter(|| owner_exit_once(layout))
+    });
     lifecycle.throughput(Throughput::Elements((TOPOLOGY_BATCH * 8) as u64));
-    lifecycle.bench_function("thread_churn/mechanical_mimalloc_public", |b| {
+    lifecycle.bench_function("thread_churn/rimalloc_public", |b| {
         b.iter(|| thread_churn_once(layout))
     });
     lifecycle.finish();

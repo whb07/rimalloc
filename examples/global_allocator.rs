@@ -1,4 +1,4 @@
-use mechanical_mimalloc::MiMalloc;
+use rimalloc::MiMalloc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

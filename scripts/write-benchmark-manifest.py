@@ -114,7 +114,7 @@ def main() -> None:
     (artifact_dir / "environment.txt").write_text(environment, encoding="utf-8")
     manifest = {
         "schema": 1,
-        "repository": "whb07/mechanical_mimalloc",
+        "repository": "whb07/rimalloc",
         "commit": commit,
         "dirty": dirty,
         "artifact_mode": args.artifact_mode,
@@ -145,7 +145,7 @@ def main() -> None:
             ),
             "native_allocators": env_list(
                 "MIMALLOC_BENCH_ALLOCATORS",
-                "mechanical_mimalloc_raw,c-mimalloc-3.3.2",
+                "rimalloc_raw,c-mimalloc-3.3.2",
             ),
             "resource_operations": env_int("MIMALLOC_BENCH_RESOURCE_OPERATIONS", 20_000_000),
             "resource_repeats": env_int("MIMALLOC_BENCH_RESOURCE_REPEATS", 3),

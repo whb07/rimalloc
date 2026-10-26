@@ -1,4 +1,4 @@
-use mechanical_mimalloc::MiMalloc;
+use rimalloc::MiMalloc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -16,9 +16,9 @@ fn rust_std_allocations_use_mimalloc_global_allocator() {
     assert_eq!(values.len(), 128);
     assert_eq!(values.iter().sum::<usize>(), 8128);
 
-    let mut text = String::from("mechanical");
-    text.push_str("_mimalloc");
-    assert_eq!(text, "mechanical_mimalloc");
+    let mut text = String::from("ri");
+    text.push_str("malloc");
+    assert_eq!(text, "rimalloc");
 
     let aligned = Box::new(PageAligned([0xA5; 64]));
     let ptr = (&*aligned as *const PageAligned).cast::<u8>() as usize;

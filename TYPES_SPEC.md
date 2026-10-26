@@ -7,7 +7,7 @@ the explicit `raw` compatibility facade, and implements semantic wrappers in
 older design names such as `core_types::page` still describe the logical layer,
 not a current `src/core_types/` directory.
 
-Refined PRD section: Data-type model for type-safe, zero-cost mechanical_mimalloc
+Refined PRD section: Data-type model for type-safe, zero-cost rimalloc
 
 1. Data-type objective
 

@@ -38,32 +38,32 @@
     "app_timeout": 120
   },
   "allocators": [
-    "mechanical_mimalloc_raw",
+    "rimalloc_raw",
     "c-mimalloc-3.3.2",
     "jemalloc"
   ],
   "process_layout": "isolated-scenario-allocator",
   "workers": [
     {
-      "directory": "round-001/glibc-simple/mechanical_mimalloc_raw",
+      "directory": "round-001/glibc-simple/rimalloc_raw",
       "started_utc": "2026-10-13T12:09:38Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "glibc-simple",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-simple/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-simple/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:09:46Z"
@@ -72,22 +72,22 @@
       "directory": "round-001/glibc-simple/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:09:46Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "glibc-simple",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-simple/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-simple/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:09:54Z"
@@ -96,46 +96,46 @@
       "directory": "round-001/glibc-simple/jemalloc",
       "started_utc": "2026-10-13T12:09:54Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "glibc-simple",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-simple/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-simple/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:05Z"
     },
     {
-      "directory": "round-001/malloc-large/mechanical_mimalloc_raw",
+      "directory": "round-001/malloc-large/rimalloc_raw",
       "started_utc": "2026-10-13T12:10:05Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "malloc-large",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:10Z"
@@ -144,22 +144,22 @@
       "directory": "round-001/malloc-large/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:10:10Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "malloc-large",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:15Z"
@@ -168,46 +168,46 @@
       "directory": "round-001/malloc-large/jemalloc",
       "started_utc": "2026-10-13T12:10:15Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "malloc-large",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:19Z"
     },
     {
-      "directory": "round-001/malloc-large-old/mechanical_mimalloc_raw",
+      "directory": "round-001/malloc-large-old/rimalloc_raw",
       "started_utc": "2026-10-13T12:10:19Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "malloc-large-old",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large-old/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large-old/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:24Z"
@@ -216,22 +216,22 @@
       "directory": "round-001/malloc-large-old/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:10:24Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "malloc-large-old",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large-old/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large-old/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:29Z"
@@ -240,46 +240,46 @@
       "directory": "round-001/malloc-large-old/jemalloc",
       "started_utc": "2026-10-13T12:10:29Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "malloc-large-old",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large-old/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/malloc-large-old/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:33Z"
     },
     {
-      "directory": "round-001/cache-scratch1/mechanical_mimalloc_raw",
+      "directory": "round-001/cache-scratch1/rimalloc_raw",
       "started_utc": "2026-10-13T12:10:33Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-scratch1",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratch1/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratch1/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:42Z"
@@ -288,22 +288,22 @@
       "directory": "round-001/cache-scratch1/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:10:42Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-scratch1",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratch1/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratch1/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:50Z"
@@ -312,46 +312,46 @@
       "directory": "round-001/cache-scratch1/jemalloc",
       "started_utc": "2026-10-13T12:10:50Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-scratch1",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratch1/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratch1/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:10:59Z"
     },
     {
-      "directory": "round-001/cache-thrash1/mechanical_mimalloc_raw",
+      "directory": "round-001/cache-thrash1/rimalloc_raw",
       "started_utc": "2026-10-13T12:10:59Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-thrash1",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrash1/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrash1/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:11:08Z"
@@ -360,22 +360,22 @@
       "directory": "round-001/cache-thrash1/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:11:08Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-thrash1",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrash1/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrash1/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:11:16Z"
@@ -384,46 +384,46 @@
       "directory": "round-001/cache-thrash1/jemalloc",
       "started_utc": "2026-10-13T12:11:16Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-thrash1",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrash1/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrash1/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:11:25Z"
     },
     {
-      "directory": "round-001/cache-scratchN/mechanical_mimalloc_raw",
+      "directory": "round-001/cache-scratchN/rimalloc_raw",
       "started_utc": "2026-10-13T12:11:25Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-scratchN",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratchN/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratchN/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:11:30Z"
@@ -432,22 +432,22 @@
       "directory": "round-001/cache-scratchN/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:11:30Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-scratchN",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratchN/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratchN/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:11:35Z"
@@ -456,46 +456,46 @@
       "directory": "round-001/cache-scratchN/jemalloc",
       "started_utc": "2026-10-13T12:11:35Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-scratchN",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratchN/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-scratchN/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:11:40Z"
     },
     {
-      "directory": "round-001/cache-thrashN/mechanical_mimalloc_raw",
+      "directory": "round-001/cache-thrashN/rimalloc_raw",
       "started_utc": "2026-10-13T12:11:40Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-thrashN",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrashN/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrashN/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:11:45Z"
@@ -504,22 +504,22 @@
       "directory": "round-001/cache-thrashN/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:11:45Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-thrashN",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrashN/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrashN/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:11:50Z"
@@ -528,46 +528,46 @@
       "directory": "round-001/cache-thrashN/jemalloc",
       "started_utc": "2026-10-13T12:11:50Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cache-thrashN",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrashN/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cache-thrashN/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:11:55Z"
     },
     {
-      "directory": "round-001/mstressN/mechanical_mimalloc_raw",
+      "directory": "round-001/mstressN/rimalloc_raw",
       "started_utc": "2026-10-13T12:11:55Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "mstressN",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mstressN/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mstressN/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:12:01Z"
@@ -576,22 +576,22 @@
       "directory": "round-001/mstressN/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:12:01Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "mstressN",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mstressN/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mstressN/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:12:06Z"
@@ -600,46 +600,46 @@
       "directory": "round-001/mstressN/jemalloc",
       "started_utc": "2026-10-13T12:12:06Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "mstressN",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mstressN/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mstressN/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:12:13Z"
     },
     {
-      "directory": "round-001/sh6benchN/mechanical_mimalloc_raw",
+      "directory": "round-001/sh6benchN/rimalloc_raw",
       "started_utc": "2026-10-13T12:12:13Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "sh6benchN",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh6benchN/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh6benchN/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:12:19Z"
@@ -648,22 +648,22 @@
       "directory": "round-001/sh6benchN/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:12:19Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "sh6benchN",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh6benchN/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh6benchN/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:12:24Z"
@@ -672,46 +672,46 @@
       "directory": "round-001/sh6benchN/jemalloc",
       "started_utc": "2026-10-13T12:12:24Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "sh6benchN",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh6benchN/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh6benchN/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:12:30Z"
     },
     {
-      "directory": "round-001/sh8benchN/mechanical_mimalloc_raw",
+      "directory": "round-001/sh8benchN/rimalloc_raw",
       "started_utc": "2026-10-13T12:12:30Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "sh8benchN",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh8benchN/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh8benchN/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:12:37Z"
@@ -720,22 +720,22 @@
       "directory": "round-001/sh8benchN/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:12:37Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "sh8benchN",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh8benchN/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh8benchN/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:12:45Z"
@@ -744,46 +744,46 @@
       "directory": "round-001/sh8benchN/jemalloc",
       "started_utc": "2026-10-13T12:12:45Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "sh8benchN",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh8benchN/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/sh8benchN/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:12:52Z"
     },
     {
-      "directory": "round-001/alloc-test1/mechanical_mimalloc_raw",
+      "directory": "round-001/alloc-test1/rimalloc_raw",
       "started_utc": "2026-10-13T12:12:52Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "alloc-test1",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-test1/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-test1/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:13:14Z"
@@ -792,22 +792,22 @@
       "directory": "round-001/alloc-test1/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:13:14Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "alloc-test1",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-test1/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-test1/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:13:36Z"
@@ -816,46 +816,46 @@
       "directory": "round-001/alloc-test1/jemalloc",
       "started_utc": "2026-10-13T12:13:36Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "alloc-test1",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-test1/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-test1/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:13:58Z"
     },
     {
-      "directory": "round-001/alloc-testN/mechanical_mimalloc_raw",
+      "directory": "round-001/alloc-testN/rimalloc_raw",
       "started_utc": "2026-10-13T12:13:58Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "alloc-testN",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-testN/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-testN/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:14:23Z"
@@ -864,22 +864,22 @@
       "directory": "round-001/alloc-testN/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:14:23Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "alloc-testN",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-testN/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-testN/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:14:49Z"
@@ -888,46 +888,46 @@
       "directory": "round-001/alloc-testN/jemalloc",
       "started_utc": "2026-10-13T12:14:49Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "alloc-testN",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-testN/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/alloc-testN/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:15:15Z"
     },
     {
-      "directory": "round-001/barnes/mechanical_mimalloc_raw",
+      "directory": "round-001/barnes/rimalloc_raw",
       "started_utc": "2026-10-13T12:15:15Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "barnes",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/barnes/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/barnes/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:15:27Z"
@@ -936,22 +936,22 @@
       "directory": "round-001/barnes/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:15:27Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "barnes",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/barnes/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/barnes/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:15:38Z"
@@ -960,46 +960,46 @@
       "directory": "round-001/barnes/jemalloc",
       "started_utc": "2026-10-13T12:15:38Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "barnes",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/barnes/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/barnes/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:15:50Z"
     },
     {
-      "directory": "round-001/cfrac/mechanical_mimalloc_raw",
+      "directory": "round-001/cfrac/rimalloc_raw",
       "started_utc": "2026-10-13T12:15:50Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cfrac",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cfrac/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cfrac/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:17:31Z"
@@ -1008,22 +1008,22 @@
       "directory": "round-001/cfrac/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:17:31Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cfrac",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cfrac/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cfrac/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:19:12Z"
@@ -1032,46 +1032,46 @@
       "directory": "round-001/cfrac/jemalloc",
       "started_utc": "2026-10-13T12:19:12Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "cfrac",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cfrac/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/cfrac/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:20:54Z"
     },
     {
-      "directory": "round-001/mleak10/mechanical_mimalloc_raw",
+      "directory": "round-001/mleak10/rimalloc_raw",
       "started_utc": "2026-10-13T12:20:54Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "mleak10",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak10/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak10/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:20:58Z"
@@ -1080,22 +1080,22 @@
       "directory": "round-001/mleak10/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:20:58Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "mleak10",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak10/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak10/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:21:03Z"
@@ -1104,46 +1104,46 @@
       "directory": "round-001/mleak10/jemalloc",
       "started_utc": "2026-10-13T12:21:03Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "mleak10",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak10/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak10/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:21:07Z"
     },
     {
-      "directory": "round-001/mleak100/mechanical_mimalloc_raw",
+      "directory": "round-001/mleak100/rimalloc_raw",
       "started_utc": "2026-10-13T12:21:07Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "mleak100",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak100/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak100/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:21:12Z"
@@ -1152,22 +1152,22 @@
       "directory": "round-001/mleak100/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:21:12Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "mleak100",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak100/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak100/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:21:17Z"
@@ -1176,46 +1176,46 @@
       "directory": "round-001/mleak100/jemalloc",
       "started_utc": "2026-10-13T12:21:17Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "mleak100",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak100/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/mleak100/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:21:23Z"
     },
     {
-      "directory": "round-001/glibc-thread/mechanical_mimalloc_raw",
+      "directory": "round-001/glibc-thread/rimalloc_raw",
       "started_utc": "2026-10-13T12:21:23Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "glibc-thread",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-thread/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-thread/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:21:45Z"
@@ -1224,22 +1224,22 @@
       "directory": "round-001/glibc-thread/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:21:45Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "glibc-thread",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-thread/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-thread/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:22:07Z"
@@ -1248,46 +1248,46 @@
       "directory": "round-001/glibc-thread/jemalloc",
       "started_utc": "2026-10-13T12:22:07Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "glibc-thread",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-thread/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/glibc-thread/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:22:29Z"
     },
     {
-      "directory": "round-001/xmalloc-testN/mechanical_mimalloc_raw",
+      "directory": "round-001/xmalloc-testN/rimalloc_raw",
       "started_utc": "2026-10-13T12:22:29Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "xmalloc-testN",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/xmalloc-testN/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/xmalloc-testN/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:23:24Z"
@@ -1296,22 +1296,22 @@
       "directory": "round-001/xmalloc-testN/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:23:24Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "xmalloc-testN",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/xmalloc-testN/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/xmalloc-testN/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:24:19Z"
@@ -1320,46 +1320,46 @@
       "directory": "round-001/xmalloc-testN/jemalloc",
       "started_utc": "2026-10-13T12:24:19Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "xmalloc-testN",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/xmalloc-testN/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/xmalloc-testN/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:25:14Z"
     },
     {
-      "directory": "round-001/larsonN/mechanical_mimalloc_raw",
+      "directory": "round-001/larsonN/rimalloc_raw",
       "started_utc": "2026-10-13T12:25:14Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "larsonN",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:26:09Z"
@@ -1368,22 +1368,22 @@
       "directory": "round-001/larsonN/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:26:09Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "larsonN",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:27:05Z"
@@ -1392,46 +1392,46 @@
       "directory": "round-001/larsonN/jemalloc",
       "started_utc": "2026-10-13T12:27:05Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "larsonN",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:28:00Z"
     },
     {
-      "directory": "round-001/larsonN-sized/mechanical_mimalloc_raw",
+      "directory": "round-001/larsonN-sized/rimalloc_raw",
       "started_utc": "2026-10-13T12:28:00Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "larsonN-sized",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN-sized/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN-sized/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:28:55Z"
@@ -1440,22 +1440,22 @@
       "directory": "round-001/larsonN-sized/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:28:55Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "larsonN-sized",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN-sized/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN-sized/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:29:50Z"
@@ -1464,46 +1464,46 @@
       "directory": "round-001/larsonN-sized/jemalloc",
       "started_utc": "2026-10-13T12:29:50Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "larsonN-sized",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN-sized/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/larsonN-sized/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:30:45Z"
     },
     {
-      "directory": "round-001/rptestN/mechanical_mimalloc_raw",
+      "directory": "round-001/rptestN/rimalloc_raw",
       "started_utc": "2026-10-13T12:30:45Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "rptestN",
-        "MIMALLOC_BENCH_ALLOCATORS": "mechanical_mimalloc_raw",
+        "MIMALLOC_BENCH_ALLOCATORS": "rimalloc_raw",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rptestN/mechanical_mimalloc_raw/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rptestN/rimalloc_raw/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:33:41Z"
@@ -1512,22 +1512,22 @@
       "directory": "round-001/rptestN/c-mimalloc-3.3.2",
       "started_utc": "2026-10-13T12:33:41Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "rptestN",
         "MIMALLOC_BENCH_ALLOCATORS": "c-mimalloc-3.3.2",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rptestN/c-mimalloc-3.3.2/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rptestN/c-mimalloc-3.3.2/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:36:37Z"
@@ -1536,34 +1536,34 @@
       "directory": "round-001/rptestN/jemalloc",
       "started_utc": "2026-10-13T12:36:37Z",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
         "--bench",
         "mimalloc-bench-native",
         "--noplot"
       ],
       "environment": {
-        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
-        "MIMALLOC_RUST_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-        "MIMALLOC_C_LIB": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "MIMALLOC_BENCH_LIB_JEMALLOC": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "MIMALLOC_RUST_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+        "MIMALLOC_C_LIB": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "MIMALLOC_BENCH_SKIP_BUILD": "1",
         "MIMALLOC_BENCH_SCENARIOS": "rptestN",
         "MIMALLOC_BENCH_ALLOCATORS": "jemalloc",
         "MIMALLOC_BENCH_SAMPLE_SIZE": "10",
         "MIMALLOC_BENCH_MEASUREMENT_SECS": "3",
         "MIMALLOC_BENCH_WARMUP_SECS": "1",
-        "CRITERION_HOME": "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rptestN/jemalloc/criterion"
+        "CRITERION_HOME": "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rptestN/jemalloc/criterion"
       },
       "exit_status": 0,
       "finished_utc": "2026-10-13T12:39:33Z"
     },
     {
-      "directory": "round-001/redis/mechanical_mimalloc_raw",
+      "directory": "round-001/redis/rimalloc_raw",
       "started_utc": "2026-10-13T12:39:33Z",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/applications.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/mechanical_mimalloc_raw/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/mechanical_mimalloc_raw"
+        "/root/projects/rimalloc/benchmarks/applications.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/rimalloc_raw/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/rimalloc_raw"
       ],
       "application_config": {
         "scenario": "redis",
@@ -1572,7 +1572,7 @@
         "threads": 1,
         "value_size": 256,
         "timeout": 120,
-        "library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "apps": {
           "sources": {
             "redis": {
@@ -1595,7 +1595,7 @@
             [
               "make",
               "-C",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
               "-j",
               "12",
               "MALLOC=libc",
@@ -1608,35 +1608,35 @@
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/gflags-2.2.2",
+              "/root/projects/rimalloc/target/bench-app-sources/gflags-2.2.2",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DBUILD_SHARED_LIBS=OFF",
               "-DBUILD_TESTING=OFF",
               "-DREGISTER_BUILD_DIR=OFF",
               "-DREGISTER_INSTALL_PREFIX=OFF",
-              "-DCMAKE_INSTALL_PREFIX=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
+              "-DCMAKE_INSTALL_PREFIX=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
             ],
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "--parallel",
               "12"
             ],
             [
               "cmake",
               "--install",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
             ],
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/rocksdb-10.10.1",
+              "/root/projects/rimalloc/target/bench-app-sources/rocksdb-10.10.1",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
-              "-DCMAKE_PREFIX_PATH=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "-DCMAKE_PREFIX_PATH=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DPORTABLE=1",
               "-DWITH_TESTS=OFF",
@@ -1656,7 +1656,7 @@
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
               "--target",
               "db_bench",
               "--parallel",
@@ -1670,10 +1670,10 @@
               "-Wall",
               "-Wextra",
               "-Werror",
-              "/root/projects/mechanical_mimalloc/benchmarks/allocator-check.c",
+              "/root/projects/rimalloc/benchmarks/allocator-check.c",
               "-ldl",
               "-o",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
             ]
           ],
           "rocksdb_options": {
@@ -1693,10 +1693,10 @@
             "WITH_ZSTD": "OFF",
             "FAIL_ON_WARNINGS": "OFF"
           },
-          "redis_server": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
-          "redis_benchmark": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
-          "rocksdb": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
-          "allocator_check": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
+          "redis_server": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
+          "redis_benchmark": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
+          "rocksdb": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
+          "allocator_check": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
           "sha256": {
             "redis_server": "3d92682d8d91cf55e17e576e7eec6176bd820234da7498c94abeac7d41565c20",
             "redis_benchmark": "99cd95dde2bdd4109de4590fcefc93d27e418fbc4fd31a0345b4208f1939f509",
@@ -1714,9 +1714,9 @@
       "started_utc": "2026-10-13T12:39:46Z",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/applications.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/c-mimalloc-3.3.2/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/c-mimalloc-3.3.2"
+        "/root/projects/rimalloc/benchmarks/applications.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/c-mimalloc-3.3.2/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/c-mimalloc-3.3.2"
       ],
       "application_config": {
         "scenario": "redis",
@@ -1725,7 +1725,7 @@
         "threads": 1,
         "value_size": 256,
         "timeout": 120,
-        "library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "apps": {
           "sources": {
             "redis": {
@@ -1748,7 +1748,7 @@
             [
               "make",
               "-C",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
               "-j",
               "12",
               "MALLOC=libc",
@@ -1761,35 +1761,35 @@
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/gflags-2.2.2",
+              "/root/projects/rimalloc/target/bench-app-sources/gflags-2.2.2",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DBUILD_SHARED_LIBS=OFF",
               "-DBUILD_TESTING=OFF",
               "-DREGISTER_BUILD_DIR=OFF",
               "-DREGISTER_INSTALL_PREFIX=OFF",
-              "-DCMAKE_INSTALL_PREFIX=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
+              "-DCMAKE_INSTALL_PREFIX=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
             ],
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "--parallel",
               "12"
             ],
             [
               "cmake",
               "--install",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
             ],
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/rocksdb-10.10.1",
+              "/root/projects/rimalloc/target/bench-app-sources/rocksdb-10.10.1",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
-              "-DCMAKE_PREFIX_PATH=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "-DCMAKE_PREFIX_PATH=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DPORTABLE=1",
               "-DWITH_TESTS=OFF",
@@ -1809,7 +1809,7 @@
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
               "--target",
               "db_bench",
               "--parallel",
@@ -1823,10 +1823,10 @@
               "-Wall",
               "-Wextra",
               "-Werror",
-              "/root/projects/mechanical_mimalloc/benchmarks/allocator-check.c",
+              "/root/projects/rimalloc/benchmarks/allocator-check.c",
               "-ldl",
               "-o",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
             ]
           ],
           "rocksdb_options": {
@@ -1846,10 +1846,10 @@
             "WITH_ZSTD": "OFF",
             "FAIL_ON_WARNINGS": "OFF"
           },
-          "redis_server": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
-          "redis_benchmark": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
-          "rocksdb": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
-          "allocator_check": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
+          "redis_server": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
+          "redis_benchmark": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
+          "rocksdb": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
+          "allocator_check": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
           "sha256": {
             "redis_server": "3d92682d8d91cf55e17e576e7eec6176bd820234da7498c94abeac7d41565c20",
             "redis_benchmark": "99cd95dde2bdd4109de4590fcefc93d27e418fbc4fd31a0345b4208f1939f509",
@@ -1867,9 +1867,9 @@
       "started_utc": "2026-10-13T12:39:58Z",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/applications.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/jemalloc"
+        "/root/projects/rimalloc/benchmarks/applications.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/redis/jemalloc"
       ],
       "application_config": {
         "scenario": "redis",
@@ -1878,7 +1878,7 @@
         "threads": 1,
         "value_size": 256,
         "timeout": 120,
-        "library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
         "apps": {
           "sources": {
             "redis": {
@@ -1901,7 +1901,7 @@
             [
               "make",
               "-C",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
               "-j",
               "12",
               "MALLOC=libc",
@@ -1914,35 +1914,35 @@
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/gflags-2.2.2",
+              "/root/projects/rimalloc/target/bench-app-sources/gflags-2.2.2",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DBUILD_SHARED_LIBS=OFF",
               "-DBUILD_TESTING=OFF",
               "-DREGISTER_BUILD_DIR=OFF",
               "-DREGISTER_INSTALL_PREFIX=OFF",
-              "-DCMAKE_INSTALL_PREFIX=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
+              "-DCMAKE_INSTALL_PREFIX=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
             ],
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "--parallel",
               "12"
             ],
             [
               "cmake",
               "--install",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
             ],
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/rocksdb-10.10.1",
+              "/root/projects/rimalloc/target/bench-app-sources/rocksdb-10.10.1",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
-              "-DCMAKE_PREFIX_PATH=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "-DCMAKE_PREFIX_PATH=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DPORTABLE=1",
               "-DWITH_TESTS=OFF",
@@ -1962,7 +1962,7 @@
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
               "--target",
               "db_bench",
               "--parallel",
@@ -1976,10 +1976,10 @@
               "-Wall",
               "-Wextra",
               "-Werror",
-              "/root/projects/mechanical_mimalloc/benchmarks/allocator-check.c",
+              "/root/projects/rimalloc/benchmarks/allocator-check.c",
               "-ldl",
               "-o",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
             ]
           ],
           "rocksdb_options": {
@@ -1999,10 +1999,10 @@
             "WITH_ZSTD": "OFF",
             "FAIL_ON_WARNINGS": "OFF"
           },
-          "redis_server": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
-          "redis_benchmark": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
-          "rocksdb": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
-          "allocator_check": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
+          "redis_server": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
+          "redis_benchmark": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
+          "rocksdb": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
+          "allocator_check": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
           "sha256": {
             "redis_server": "3d92682d8d91cf55e17e576e7eec6176bd820234da7498c94abeac7d41565c20",
             "redis_benchmark": "99cd95dde2bdd4109de4590fcefc93d27e418fbc4fd31a0345b4208f1939f509",
@@ -2016,13 +2016,13 @@
       "finished_utc": "2026-10-13T12:40:11Z"
     },
     {
-      "directory": "round-001/rocksdb/mechanical_mimalloc_raw",
+      "directory": "round-001/rocksdb/rimalloc_raw",
       "started_utc": "2026-10-13T12:40:11Z",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/applications.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/mechanical_mimalloc_raw/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/mechanical_mimalloc_raw"
+        "/root/projects/rimalloc/benchmarks/applications.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/rimalloc_raw/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/rimalloc_raw"
       ],
       "application_config": {
         "scenario": "rocksdb",
@@ -2031,7 +2031,7 @@
         "threads": 1,
         "value_size": 256,
         "timeout": 120,
-        "library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "apps": {
           "sources": {
             "redis": {
@@ -2054,7 +2054,7 @@
             [
               "make",
               "-C",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
               "-j",
               "12",
               "MALLOC=libc",
@@ -2067,35 +2067,35 @@
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/gflags-2.2.2",
+              "/root/projects/rimalloc/target/bench-app-sources/gflags-2.2.2",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DBUILD_SHARED_LIBS=OFF",
               "-DBUILD_TESTING=OFF",
               "-DREGISTER_BUILD_DIR=OFF",
               "-DREGISTER_INSTALL_PREFIX=OFF",
-              "-DCMAKE_INSTALL_PREFIX=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
+              "-DCMAKE_INSTALL_PREFIX=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
             ],
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "--parallel",
               "12"
             ],
             [
               "cmake",
               "--install",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
             ],
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/rocksdb-10.10.1",
+              "/root/projects/rimalloc/target/bench-app-sources/rocksdb-10.10.1",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
-              "-DCMAKE_PREFIX_PATH=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "-DCMAKE_PREFIX_PATH=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DPORTABLE=1",
               "-DWITH_TESTS=OFF",
@@ -2115,7 +2115,7 @@
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
               "--target",
               "db_bench",
               "--parallel",
@@ -2129,10 +2129,10 @@
               "-Wall",
               "-Wextra",
               "-Werror",
-              "/root/projects/mechanical_mimalloc/benchmarks/allocator-check.c",
+              "/root/projects/rimalloc/benchmarks/allocator-check.c",
               "-ldl",
               "-o",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
             ]
           ],
           "rocksdb_options": {
@@ -2152,10 +2152,10 @@
             "WITH_ZSTD": "OFF",
             "FAIL_ON_WARNINGS": "OFF"
           },
-          "redis_server": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
-          "redis_benchmark": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
-          "rocksdb": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
-          "allocator_check": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
+          "redis_server": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
+          "redis_benchmark": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
+          "rocksdb": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
+          "allocator_check": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
           "sha256": {
             "redis_server": "3d92682d8d91cf55e17e576e7eec6176bd820234da7498c94abeac7d41565c20",
             "redis_benchmark": "99cd95dde2bdd4109de4590fcefc93d27e418fbc4fd31a0345b4208f1939f509",
@@ -2173,9 +2173,9 @@
       "started_utc": "2026-10-13T12:40:25Z",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/applications.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/c-mimalloc-3.3.2/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/c-mimalloc-3.3.2"
+        "/root/projects/rimalloc/benchmarks/applications.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/c-mimalloc-3.3.2/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/c-mimalloc-3.3.2"
       ],
       "application_config": {
         "scenario": "rocksdb",
@@ -2184,7 +2184,7 @@
         "threads": 1,
         "value_size": 256,
         "timeout": 120,
-        "library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "apps": {
           "sources": {
             "redis": {
@@ -2207,7 +2207,7 @@
             [
               "make",
               "-C",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
               "-j",
               "12",
               "MALLOC=libc",
@@ -2220,35 +2220,35 @@
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/gflags-2.2.2",
+              "/root/projects/rimalloc/target/bench-app-sources/gflags-2.2.2",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DBUILD_SHARED_LIBS=OFF",
               "-DBUILD_TESTING=OFF",
               "-DREGISTER_BUILD_DIR=OFF",
               "-DREGISTER_INSTALL_PREFIX=OFF",
-              "-DCMAKE_INSTALL_PREFIX=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
+              "-DCMAKE_INSTALL_PREFIX=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
             ],
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "--parallel",
               "12"
             ],
             [
               "cmake",
               "--install",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
             ],
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/rocksdb-10.10.1",
+              "/root/projects/rimalloc/target/bench-app-sources/rocksdb-10.10.1",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
-              "-DCMAKE_PREFIX_PATH=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "-DCMAKE_PREFIX_PATH=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DPORTABLE=1",
               "-DWITH_TESTS=OFF",
@@ -2268,7 +2268,7 @@
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
               "--target",
               "db_bench",
               "--parallel",
@@ -2282,10 +2282,10 @@
               "-Wall",
               "-Wextra",
               "-Werror",
-              "/root/projects/mechanical_mimalloc/benchmarks/allocator-check.c",
+              "/root/projects/rimalloc/benchmarks/allocator-check.c",
               "-ldl",
               "-o",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
             ]
           ],
           "rocksdb_options": {
@@ -2305,10 +2305,10 @@
             "WITH_ZSTD": "OFF",
             "FAIL_ON_WARNINGS": "OFF"
           },
-          "redis_server": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
-          "redis_benchmark": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
-          "rocksdb": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
-          "allocator_check": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
+          "redis_server": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
+          "redis_benchmark": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
+          "rocksdb": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
+          "allocator_check": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
           "sha256": {
             "redis_server": "3d92682d8d91cf55e17e576e7eec6176bd820234da7498c94abeac7d41565c20",
             "redis_benchmark": "99cd95dde2bdd4109de4590fcefc93d27e418fbc4fd31a0345b4208f1939f509",
@@ -2326,9 +2326,9 @@
       "started_utc": "2026-10-13T12:40:40Z",
       "command": [
         "/usr/bin/python3",
-        "/root/projects/mechanical_mimalloc/benchmarks/applications.py",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/jemalloc/config.json",
-        "/root/projects/mechanical_mimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/jemalloc"
+        "/root/projects/rimalloc/benchmarks/applications.py",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/jemalloc/config.json",
+        "/root/projects/rimalloc/target/bench-runs/rivals-2026-10-13/native-jemalloc/round-001/rocksdb/jemalloc"
       ],
       "application_config": {
         "scenario": "rocksdb",
@@ -2337,7 +2337,7 @@
         "threads": 1,
         "value_size": 256,
         "timeout": 120,
-        "library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
+        "library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2",
         "apps": {
           "sources": {
             "redis": {
@@ -2360,7 +2360,7 @@
             [
               "make",
               "-C",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
               "-j",
               "12",
               "MALLOC=libc",
@@ -2373,35 +2373,35 @@
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/gflags-2.2.2",
+              "/root/projects/rimalloc/target/bench-app-sources/gflags-2.2.2",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DBUILD_SHARED_LIBS=OFF",
               "-DBUILD_TESTING=OFF",
               "-DREGISTER_BUILD_DIR=OFF",
               "-DREGISTER_INSTALL_PREFIX=OFF",
-              "-DCMAKE_INSTALL_PREFIX=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
+              "-DCMAKE_INSTALL_PREFIX=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
             ],
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
               "--parallel",
               "12"
             ],
             [
               "cmake",
               "--install",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
             ],
             [
               "cmake",
               "-S",
-              "/root/projects/mechanical_mimalloc/target/bench-app-sources/rocksdb-10.10.1",
+              "/root/projects/rimalloc/target/bench-app-sources/rocksdb-10.10.1",
               "-B",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
-              "-DCMAKE_PREFIX_PATH=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "-DCMAKE_PREFIX_PATH=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
               "-DCMAKE_BUILD_TYPE=Release",
               "-DPORTABLE=1",
               "-DWITH_TESTS=OFF",
@@ -2421,7 +2421,7 @@
             [
               "cmake",
               "--build",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
               "--target",
               "db_bench",
               "--parallel",
@@ -2435,10 +2435,10 @@
               "-Wall",
               "-Wextra",
               "-Werror",
-              "/root/projects/mechanical_mimalloc/benchmarks/allocator-check.c",
+              "/root/projects/rimalloc/benchmarks/allocator-check.c",
               "-ldl",
               "-o",
-              "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
+              "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
             ]
           ],
           "rocksdb_options": {
@@ -2458,10 +2458,10 @@
             "WITH_ZSTD": "OFF",
             "FAIL_ON_WARNINGS": "OFF"
           },
-          "redis_server": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
-          "redis_benchmark": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
-          "rocksdb": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
-          "allocator_check": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
+          "redis_server": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
+          "redis_benchmark": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
+          "rocksdb": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
+          "allocator_check": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
           "sha256": {
             "redis_server": "3d92682d8d91cf55e17e576e7eec6176bd820234da7498c94abeac7d41565c20",
             "redis_benchmark": "99cd95dde2bdd4109de4590fcefc93d27e418fbc4fd31a0345b4208f1939f509",
@@ -2500,7 +2500,7 @@
   "caller_ld_preload_removed": null,
   "rival_artifacts": {
     "libraries": {
-      "jemalloc": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2"
+      "jemalloc": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2"
     },
     "sources": {
       "jemalloc": {
@@ -2512,13 +2512,13 @@
     "logs": [
       "jemalloc-build.log"
     ],
-    "cache": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals",
+    "cache": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals",
     "sha256": {
       "jemalloc": "bf75584b50c80afc02efb0964224242b8c246a3daa4d319720bed228c1dfd6c6"
     }
   },
   "artifacts": {
-    "cache": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e",
+    "cache": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e",
     "configuration": {
       "tools": {
         "cargo": "cargo 1.92.0 (344c4567c 2025-10-21)",
@@ -2549,7 +2549,7 @@
         "CARGO_INCREMENTAL": ""
       },
       "cargo_config": {
-        "/root/projects/mechanical_mimalloc/.cargo/config.toml": "[alias]\nclippy-strict = [\"clippy\", \"--all-targets\", \"--all-features\"]\n"
+        "/root/projects/rimalloc/.cargo/config.toml": "[alias]\nclippy-strict = [\"clippy\", \"--all-targets\", \"--all-features\"]\n"
       },
       "harness_features": [
         "bench"
@@ -2576,16 +2576,16 @@
       "c-configure.log",
       "c-build.log"
     ],
-    "executable": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
-    "rust_library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-    "c_library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+    "executable": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/harness/release/deps/mimalloc_bench-7a04905565baa6d5",
+    "rust_library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+    "c_library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
     "sha256": {
       "executable": "d106fb423b501d7a52505274e3648ca5d5b1da0d90875fdf39d5f99ec25d8cfd",
       "rust_library": "3587a2b0fde94932752e597c1f2ce4a9ee64527f8e8aad6b5fc43372045fa949",
       "c_library": "541ebb8a42f3000da533b29289da88c7858dc4e715f01458985a7538b75e7ecc"
     },
     "rivals": {
-      "jemalloc": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2"
+      "jemalloc": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rivals/jemalloc-5.3.0/lib/libjemalloc.so.2"
     }
   },
   "application_artifacts": {
@@ -2610,7 +2610,7 @@
       [
         "make",
         "-C",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src",
         "-j",
         "12",
         "MALLOC=libc",
@@ -2623,35 +2623,35 @@
       [
         "cmake",
         "-S",
-        "/root/projects/mechanical_mimalloc/target/bench-app-sources/gflags-2.2.2",
+        "/root/projects/rimalloc/target/bench-app-sources/gflags-2.2.2",
         "-B",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
         "-DCMAKE_BUILD_TYPE=Release",
         "-DBUILD_SHARED_LIBS=OFF",
         "-DBUILD_TESTING=OFF",
         "-DREGISTER_BUILD_DIR=OFF",
         "-DREGISTER_INSTALL_PREFIX=OFF",
-        "-DCMAKE_INSTALL_PREFIX=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
+        "-DCMAKE_INSTALL_PREFIX=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install"
       ],
       [
         "cmake",
         "--build",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags",
         "--parallel",
         "12"
       ],
       [
         "cmake",
         "--install",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags"
       ],
       [
         "cmake",
         "-S",
-        "/root/projects/mechanical_mimalloc/target/bench-app-sources/rocksdb-10.10.1",
+        "/root/projects/rimalloc/target/bench-app-sources/rocksdb-10.10.1",
         "-B",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
-        "-DCMAKE_PREFIX_PATH=/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+        "-DCMAKE_PREFIX_PATH=/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/gflags-install",
         "-DCMAKE_BUILD_TYPE=Release",
         "-DPORTABLE=1",
         "-DWITH_TESTS=OFF",
@@ -2671,7 +2671,7 @@
       [
         "cmake",
         "--build",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb",
         "--target",
         "db_bench",
         "--parallel",
@@ -2685,10 +2685,10 @@
         "-Wall",
         "-Wextra",
         "-Werror",
-        "/root/projects/mechanical_mimalloc/benchmarks/allocator-check.c",
+        "/root/projects/rimalloc/benchmarks/allocator-check.c",
         "-ldl",
         "-o",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so"
       ]
     ],
     "rocksdb_options": {
@@ -2708,10 +2708,10 @@
       "WITH_ZSTD": "OFF",
       "FAIL_ON_WARNINGS": "OFF"
     },
-    "redis_server": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
-    "redis_benchmark": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
-    "rocksdb": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
-    "allocator_check": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
+    "redis_server": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-server",
+    "redis_benchmark": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/redis-6.2.7/src/redis-benchmark",
+    "rocksdb": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/rocksdb/db_bench",
+    "allocator_check": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/applications/allocator-check.so",
     "sha256": {
       "redis_server": "3d92682d8d91cf55e17e576e7eec6176bd820234da7498c94abeac7d41565c20",
       "redis_benchmark": "99cd95dde2bdd4109de4590fcefc93d27e418fbc4fd31a0345b4208f1939f509",

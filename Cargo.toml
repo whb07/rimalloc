@@ -1,13 +1,13 @@
 [package]
-name = "mechanical_mimalloc"
+name = "rimalloc"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.92"
 description = "Mechanical Rust translation foundation for mimalloc 3.3.2"
 license = "MIT"
-repository = "https://github.com/whb07/mechanical_mimalloc"
+repository = "https://github.com/whb07/rimalloc"
 readme = "README.md"
-documentation = "https://docs.rs/mechanical_mimalloc"
+documentation = "https://docs.rs/rimalloc"
 keywords = ["allocator", "mimalloc", "ffi", "no-std"]
 categories = ["memory-management", "external-ffi-bindings"]
 include = [

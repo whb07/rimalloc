@@ -6,8 +6,8 @@ use std::os::raw::c_long;
 use std::path::{Path, PathBuf};
 use std::thread;
 
-use mechanical_mimalloc::StatsSnapshot;
-use mechanical_mimalloc::raw::mimalloc::*;
+use rimalloc::StatsSnapshot;
+use rimalloc::raw::mimalloc::*;
 
 const MAX_BLOCKS: usize = 64;
 const MAX_TRACKED_SIZE: usize = 1 << 20;

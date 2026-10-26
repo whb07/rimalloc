@@ -299,7 +299,7 @@ def rust_source() -> str:
     return f"""\
 use std::mem::{{align_of, offset_of, size_of}};
 
-use mechanical_mimalloc::raw::mimalloc::{{
+use rimalloc::raw::mimalloc::{{
     MI_MALLOC_VERSION, MI_SMALL_SIZE_MAX, MI_SMALL_WSIZE_MAX, mi_arena_id_t, mi_heap_area_t,
     mi_heap_t, mi_subproc_id_t, mi_theap_t,
     MI_BIN_HUGE, MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_NONE,
@@ -418,9 +418,9 @@ def rust_rlib() -> pathlib.Path:
     )
     libs = sorted(
         [
-            *target_dir.glob("debug/deps/libmechanical_mimalloc-*.rlib"),
-            *target_dir.glob("debug/deps/libmechanical_mimalloc.rlib"),
-            *target_dir.glob("debug/libmechanical_mimalloc.rlib"),
+            *target_dir.glob("debug/deps/librimalloc-*.rlib"),
+            *target_dir.glob("debug/deps/librimalloc.rlib"),
+            *target_dir.glob("debug/librimalloc.rlib"),
         ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
@@ -468,7 +468,7 @@ def main() -> int:
             "panic=abort",
             str(rust_file),
             "--extern",
-            f"mechanical_mimalloc={rlib}",
+            f"rimalloc={rlib}",
             "-L",
             str(rlib.parent),
             "-o",

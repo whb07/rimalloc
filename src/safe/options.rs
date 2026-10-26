@@ -4,7 +4,7 @@ use core::fmt;
 /// Error returned by safe options APIs.
 ///
 /// ```rust
-/// use mechanical_mimalloc::{OptionError, OptionKey};
+/// use rimalloc::{OptionError, OptionKey};
 ///
 /// assert_eq!(OptionKey::from_raw(-1), Err(OptionError::InvalidKey));
 /// assert_eq!(OptionKey::from_raw(2), Err(OptionError::Unsupported));
@@ -33,7 +33,7 @@ impl std::error::Error for OptionError {}
 /// Safe mimalloc option key.
 ///
 /// ```rust
-/// use mechanical_mimalloc::OptionKey;
+/// use rimalloc::OptionKey;
 ///
 /// let key = OptionKey::MaxWarnings;
 /// assert_eq!(OptionKey::from_raw(key.as_raw()), Ok(key));
@@ -136,7 +136,7 @@ impl TryFrom<i32> for OptionKey {
 /// to unrelated code.
 ///
 /// ```rust
-/// use mechanical_mimalloc::{GlobalOptions, OptionKey};
+/// use rimalloc::{GlobalOptions, OptionKey};
 ///
 /// let key = OptionKey::MaxWarnings;
 /// let previous = GlobalOptions::get(key);

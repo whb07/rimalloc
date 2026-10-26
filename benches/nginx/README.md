@@ -6,7 +6,7 @@ Run through the repository's existing entry point:
 # Prepare builds without starting HTTP workloads.
 ./benchmarks/bench.py build --nginx --jobs 4
 
-# Focused run: Rust mechanical_mimalloc versus vendored C mimalloc 3.3.2.
+# Focused run: Rust rimalloc versus vendored C mimalloc 3.3.2.
 ./benchmarks/bench.py nginx --workload static --workload headers
 
 # Add glibc explicitly. These are the only supported allocators.

@@ -34,7 +34,7 @@ Please report suspected memory-safety, allocator-correctness, or security issues
 privately through GitHub Security Advisories:
 
 ```text
-https://github.com/whb07/mechanical_mimalloc/security/advisories/new
+https://github.com/whb07/rimalloc/security/advisories/new
 ```
 
 Do not file a public issue with vulnerability details before the report is

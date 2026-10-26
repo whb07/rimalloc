@@ -1,20 +1,14 @@
-// Raw/unsafe options API example. Prefer `mechanical_mimalloc::GlobalOptions`
+// Raw/unsafe options API example. Prefer `rimalloc::GlobalOptions`
 // unless you need the C-shaped compatibility surface.
 fn main() {
-    let option = mechanical_mimalloc::raw::mi_option_t::mi_option_show_errors;
+    let option = rimalloc::raw::mi_option_t::mi_option_show_errors;
 
     unsafe {
-        let previous = mechanical_mimalloc::raw::mi_option_is_enabled(option);
-        mechanical_mimalloc::raw::mi_option_set_enabled(option, !previous);
-        assert_eq!(
-            mechanical_mimalloc::raw::mi_option_is_enabled(option),
-            !previous
-        );
+        let previous = rimalloc::raw::mi_option_is_enabled(option);
+        rimalloc::raw::mi_option_set_enabled(option, !previous);
+        assert_eq!(rimalloc::raw::mi_option_is_enabled(option), !previous);
 
-        mechanical_mimalloc::raw::mi_option_set_enabled(option, previous);
-        assert_eq!(
-            mechanical_mimalloc::raw::mi_option_is_enabled(option),
-            previous
-        );
+        rimalloc::raw::mi_option_set_enabled(option, previous);
+        assert_eq!(rimalloc::raw::mi_option_is_enabled(option), previous);
     }
 }

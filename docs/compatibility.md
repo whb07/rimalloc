@@ -24,7 +24,7 @@ meaning.
 
 ### Tier R: Raw Rust Facade
 
-`mechanical_mimalloc::raw` is an explicit C-shaped compatibility facade. It is
+`rimalloc::raw` is an explicit C-shaped compatibility facade. It is
 not a safe Rust abstraction and is not yet promised as a stable Rust SemVer
 surface. Changes must still be reviewed because tests, examples, benchmarks,
 and low-level users may depend on it.
@@ -38,7 +38,7 @@ and any affected examples or parity tests.
 
 ### Tier U: Unsafe Rust Convenience API
 
-`mechanical_mimalloc::unsafe_callbacks` contains borrowed callback guards that
+`rimalloc::unsafe_callbacks` contains borrowed callback guards that
 are public unsafe Rust API but not Tier S safe facade API and not Tier R/C-shaped
 raw API. Changes to these guards must be reviewed for Rust source
 compatibility, documented safety obligations, process-global callback behavior,

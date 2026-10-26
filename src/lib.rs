@@ -55,7 +55,7 @@
 //! Use the Rust `GlobalAlloc` facade:
 //!
 //! ```rust,no_run
-//! use mechanical_mimalloc::MiMalloc;
+//! use rimalloc::MiMalloc;
 //!
 //! #[global_allocator]
 //! static GLOBAL: MiMalloc = MiMalloc;
@@ -71,7 +71,7 @@
 //!
 //! ```rust,no_run
 //! use core::alloc::Layout;
-//! use mechanical_mimalloc::Allocation;
+//! use rimalloc::Allocation;
 //!
 //! let layout = Layout::from_size_align(128, 16).unwrap();
 //! let allocation = Allocation::zeroed(layout).unwrap();
@@ -82,16 +82,16 @@
 //!
 //! ```rust,no_run
 //! unsafe {
-//!     let p = mechanical_mimalloc::raw::mi_malloc(64);
-//!     mechanical_mimalloc::raw::mi_free(p);
+//!     let p = rimalloc::raw::mi_malloc(64);
+//!     rimalloc::raw::mi_free(p);
 //! }
 //! ```
 //!
 //! Raw calls are intentionally not safe Rust calls:
 //!
 //! ```rust,compile_fail
-//! let p = mechanical_mimalloc::raw::mi_malloc(64);
-//! mechanical_mimalloc::raw::mi_free(p);
+//! let p = rimalloc::raw::mi_malloc(64);
+//! rimalloc::raw::mi_free(p);
 //! ```
 //!
 //! With `c-header-macros` enabled, typed raw allocation macros also require
@@ -99,96 +99,96 @@
 //!
 //! ```rust,ignore
 //! unsafe {
-//!     let p = mechanical_mimalloc::mi_malloc_tp!(u64);
-//!     mechanical_mimalloc::raw::mi_free(p.cast());
+//!     let p = rimalloc::mi_malloc_tp!(u64);
+//!     rimalloc::raw::mi_free(p.cast());
 //! }
 //! ```
 //!
 //! ```rust,compile_fail
-//! let p = mechanical_mimalloc::mi_malloc_tp!(u64);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! let p = rimalloc::mi_malloc_tp!(u64);
+//! rimalloc::raw::mi_free(p.cast());
 //! ```
 //!
 //! Header override macros follow the same raw unsafe-boundary policy:
 //!
 //! ```rust,compile_fail
-//! let p = mechanical_mimalloc::malloc!(64);
-//! mechanical_mimalloc::_aligned_free!(p);
+//! let p = rimalloc::malloc!(64);
+//! rimalloc::_aligned_free!(p);
 //! ```
 //!
 //! ```rust,compile_fail
-//! let p = mechanical_mimalloc::mi_zalloc_tp!(u64);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! let p = rimalloc::mi_zalloc_tp!(u64);
+//! rimalloc::raw::mi_free(p.cast());
 //! ```
 //!
 //! ```rust,compile_fail
-//! let p = mechanical_mimalloc::mi_calloc_tp!(u64, 2);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! let p = rimalloc::mi_calloc_tp!(u64, 2);
+//! rimalloc::raw::mi_free(p.cast());
 //! ```
 //!
 //! ```rust,compile_fail
-//! let p = mechanical_mimalloc::mi_mallocn_tp!(u64, 2);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
-//! ```
-//!
-//! ```rust,compile_fail
-//! let p = core::ptr::null_mut::<u64>();
-//! let p = mechanical_mimalloc::mi_reallocn_tp!(u64, p, 2);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! let p = rimalloc::mi_mallocn_tp!(u64, 2);
+//! rimalloc::raw::mi_free(p.cast());
 //! ```
 //!
 //! ```rust,compile_fail
 //! let p = core::ptr::null_mut::<u64>();
-//! let p = mechanical_mimalloc::mi_reallocn_tp!(p, u64, 2);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! let p = rimalloc::mi_reallocn_tp!(u64, p, 2);
+//! rimalloc::raw::mi_free(p.cast());
 //! ```
 //!
 //! ```rust,compile_fail
-//! let heap = core::ptr::null_mut();
-//! let p = mechanical_mimalloc::mi_heap_malloc_tp!(u64, heap);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
-//! ```
-//!
-//! ```rust,compile_fail
-//! let heap = core::ptr::null_mut();
-//! let p = mechanical_mimalloc::mi_heap_zalloc_tp!(u64, heap);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
-//! ```
-//!
-//! ```rust,compile_fail
-//! let heap = core::ptr::null_mut();
-//! let p = mechanical_mimalloc::mi_heap_calloc_tp!(u64, heap, 2);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
-//! ```
-//!
-//! ```rust,compile_fail
-//! let heap = core::ptr::null_mut();
-//! let p = mechanical_mimalloc::mi_heap_mallocn_tp!(u64, heap, 2);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
-//! ```
-//!
-//! ```rust,compile_fail
-//! let heap = core::ptr::null_mut();
 //! let p = core::ptr::null_mut::<u64>();
-//! let p = mechanical_mimalloc::mi_heap_reallocn_tp!(u64, heap, p, 2);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! let p = rimalloc::mi_reallocn_tp!(p, u64, 2);
+//! rimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = rimalloc::mi_heap_malloc_tp!(u64, heap);
+//! rimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = rimalloc::mi_heap_zalloc_tp!(u64, heap);
+//! rimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = rimalloc::mi_heap_calloc_tp!(u64, heap, 2);
+//! rimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = rimalloc::mi_heap_mallocn_tp!(u64, heap, 2);
+//! rimalloc::raw::mi_free(p.cast());
 //! ```
 //!
 //! ```rust,compile_fail
 //! let heap = core::ptr::null_mut();
 //! let p = core::ptr::null_mut::<u64>();
-//! let p = mechanical_mimalloc::mi_heap_recalloc_tp!(u64, heap, p, 2);
-//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! let p = rimalloc::mi_heap_reallocn_tp!(u64, heap, p, 2);
+//! rimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = core::ptr::null_mut::<u64>();
+//! let p = rimalloc::mi_heap_recalloc_tp!(u64, heap, p, 2);
+//! rimalloc::raw::mi_free(p.cast());
 //! ```
 //!
 //! Implementation modules are not part of the crate-root public API:
 //!
 //! ```rust,compile_fail
-//! let _ = mechanical_mimalloc::alloc::mi_malloc(64);
+//! let _ = rimalloc::alloc::mi_malloc(64);
 //! ```
 //!
 //! ```rust,compile_fail
-//! use mechanical_mimalloc::{heap, internal, options, os, page};
+//! use rimalloc::{heap, internal, options, os, page};
 //! ```
 //!
 //! Internal typestate witnesses are also not public API. External users cannot
@@ -196,11 +196,11 @@
 //! pages, or validated free requests:
 //!
 //! ```rust,compile_fail
-//! use mechanical_mimalloc::types::{LocalPage, ForeignPage, OwnedAbandonedPage};
+//! use rimalloc::types::{LocalPage, ForeignPage, OwnedAbandonedPage};
 //! ```
 //!
 //! ```rust,compile_fail
-//! use mechanical_mimalloc::types::ValidatedFree;
+//! use rimalloc::types::ValidatedFree;
 //! ```
 
 #![cfg_attr(mi_sanitizer_runtime, feature(sanitize))]
@@ -329,7 +329,7 @@ pub use safe::{
 /// support, not the `GlobalAlloc` contract.
 ///
 /// ```rust,no_run
-/// use mechanical_mimalloc::MiMalloc;
+/// use rimalloc::MiMalloc;
 ///
 /// #[global_allocator]
 /// static GLOBAL: MiMalloc = MiMalloc;

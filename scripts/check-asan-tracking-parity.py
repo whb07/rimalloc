@@ -95,15 +95,15 @@ def rust_staticlib_asan() -> pathlib.Path:
     ]
     run(cargo_staticlib, env=env)
     libs = sorted(
-        deps_dir.glob("libmechanical_mimalloc-*.a"),
+        deps_dir.glob("librimalloc-*.a"),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
     if not libs:
-        run(["cargo", "clean", "-p", "mechanical_mimalloc"], env=env)
+        run(["cargo", "clean", "-p", "rimalloc"], env=env)
         run(cargo_staticlib, env=env)
         libs = sorted(
-            deps_dir.glob("libmechanical_mimalloc-*.a"),
+            deps_dir.glob("librimalloc-*.a"),
             key=lambda path: path.stat().st_mtime,
             reverse=True,
         )

@@ -34,7 +34,7 @@ version="$(
   cargo metadata --no-deps --format-version 1 |
     python3 -c 'import json, sys; print(json.load(sys.stdin)["packages"][0]["version"])'
 )"
-crate_file="target/package/mechanical_mimalloc-${version}.crate"
+crate_file="target/package/rimalloc-${version}.crate"
 
 if [[ ! -f "$crate_file" ]]; then
   echo "expected package artifact $crate_file" >&2
@@ -46,7 +46,7 @@ trap 'rm -rf "$consumer_dir"' EXIT
 
 mkdir -p "$consumer_dir/vendor"
 tar -xzf "$crate_file" -C "$consumer_dir/vendor"
-package_root="$consumer_dir/vendor/mechanical_mimalloc-${version}"
+package_root="$consumer_dir/vendor/rimalloc-${version}"
 
 run_rust_consumer() {
   local name="$1"
@@ -62,7 +62,7 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
-mechanical_mimalloc = { path = "../vendor/mechanical_mimalloc-${version}"${dependency} }
+rimalloc = { path = "../vendor/rimalloc-${version}"${dependency} }
 EOF
   printf '%s\n' "$source" >"$dir/src/main.rs"
   run cargo run --quiet --manifest-path "$dir/Cargo.toml"
@@ -82,7 +82,7 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
-mechanical_mimalloc = { path = "../vendor/mechanical_mimalloc-${version}"${dependency} }
+rimalloc = { path = "../vendor/rimalloc-${version}"${dependency} }
 EOF
   printf '%s\n' "$source" >"$dir/src/lib.rs"
   run cargo check --quiet --manifest-path "$dir/Cargo.toml"
@@ -90,7 +90,7 @@ EOF
 
 std_consumer='
 use core::alloc::Layout;
-use mechanical_mimalloc::{Allocation, MiMalloc};
+use rimalloc::{Allocation, MiMalloc};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -108,7 +108,7 @@ default_consumer='
 #![no_std]
 
 use core::alloc::Layout;
-use mechanical_mimalloc::Allocation;
+use rimalloc::Allocation;
 
 pub fn allocate_len() -> Option<usize> {
     let layout = Layout::from_size_align(32, 8).ok()?;
@@ -117,11 +117,11 @@ pub fn allocate_len() -> Option<usize> {
 '
 
 run_rust_consumer \
-  mechanical_mimalloc_package_consumer_std \
+  rimalloc_package_consumer_std \
   ', features = ["std"]' \
   "$std_consumer"
 check_rust_library_consumer \
-  mechanical_mimalloc_package_consumer_default \
+  rimalloc_package_consumer_default \
   "" \
   "$default_consumer"
 

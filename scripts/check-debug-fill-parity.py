@@ -127,7 +127,7 @@ def rust_staticlib() -> pathlib.Path:
     env["CARGO_TARGET_DIR"] = str(target_dir)
     run(["cargo", "rustc", "--lib", "--", "--crate-type", "staticlib"], env=env)
     libs = sorted(
-        deps_dir.glob("libmechanical_mimalloc-*.a"),
+        deps_dir.glob("librimalloc-*.a"),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

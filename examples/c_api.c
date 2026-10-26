@@ -10,7 +10,7 @@ Dynamic C ABI example:
     -- --crate-type cdylib
   cc examples/c_api.c \
     -Imimalloc-3.3.2/include \
-    target/c-api-example/dynamic/release/deps/libmechanical_mimalloc-*.so \
+    target/c-api-example/dynamic/release/deps/librimalloc-*.so \
     -Wl,-rpath,"$PWD/target/c-api-example/dynamic/release/deps" \
     -pthread -ldl -lm \
     -o target/c-api-example/c_api_dynamic
@@ -24,7 +24,7 @@ Static C ABI preview example:
     -- --crate-type staticlib
   cc examples/c_api.c \
     -Imimalloc-3.3.2/include \
-    target/c-api-example/static/release/deps/libmechanical_mimalloc-*.a \
+    target/c-api-example/static/release/deps/librimalloc-*.a \
     -pthread -ldl -lm \
     -o target/c-api-example/c_api_static
   target/c-api-example/c_api_static

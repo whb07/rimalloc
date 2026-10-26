@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 
-use mechanical_mimalloc::raw::mimalloc::*;
+use rimalloc::raw::mimalloc::*;
 
 #[test]
 fn option_and_callback_exports_link_and_mutate_state() {

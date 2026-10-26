@@ -1,4 +1,4 @@
-//! Hot-path throughput micro-benchmarks for mechanical_mimalloc.
+//! Hot-path throughput micro-benchmarks for rimalloc.
 //!
 //! These isolate the allocator's malloc/free fast paths from surrounding noise
 //! (no `Vec` growth, no size generation, no shuffles inside the timed region).
@@ -171,7 +171,7 @@ fn bench_paired_alloc_free(c: &mut Criterion) {
         });
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_public", size),
+            BenchmarkId::new("rimalloc_public", size),
             &size,
             |b, &size| {
                 iter_timed(b, verify_harness, || {
@@ -179,15 +179,11 @@ fn bench_paired_alloc_free(c: &mut Criterion) {
                 });
             },
         );
-        group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_raw", size),
-            &size,
-            |b, &size| {
-                iter_timed(b, verify_harness, || {
-                    paired_alloc_free(&RAW_MIMALLOC, size, &mut raw_pool)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("rimalloc_raw", size), &size, |b, &size| {
+            iter_timed(b, verify_harness, || {
+                paired_alloc_free(&RAW_MIMALLOC, size, &mut raw_pool)
+            });
+        });
     }
     group.finish();
 }
@@ -217,7 +213,7 @@ fn bench_aligned_paired_alloc_free(c: &mut Criterion) {
         });
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_public", &case),
+            BenchmarkId::new("rimalloc_public", &case),
             &layout,
             |b, &layout| {
                 iter_timed(b, verify_harness, || {
@@ -226,7 +222,7 @@ fn bench_aligned_paired_alloc_free(c: &mut Criterion) {
             },
         );
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_raw", case),
+            BenchmarkId::new("rimalloc_raw", case),
             &layout,
             |b, &layout| {
                 iter_timed(b, verify_harness, || {
@@ -304,19 +300,15 @@ fn bench_free_only(c: &mut Criterion) {
         });
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_public", size),
+            BenchmarkId::new("rimalloc_public", size),
             &size,
             |b, &size| {
                 iter_free_only(b, verify_harness, &PUBLIC_MIMALLOC, size);
             },
         );
-        group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_raw", size),
-            &size,
-            |b, &size| {
-                iter_free_only(b, verify_harness, &RAW_MIMALLOC, size);
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("rimalloc_raw", size), &size, |b, &size| {
+            iter_free_only(b, verify_harness, &RAW_MIMALLOC, size);
+        });
     }
     group.finish();
 }
@@ -354,18 +346,14 @@ fn bench_remote_free(c: &mut Criterion) {
         let layout = Layout::from_size_align(size, 8).unwrap();
         let mut public_fixture =
             RemoteFreeFixture::new(&PUBLIC_MIMALLOC, layout, POOL_SIZE, verify_harness);
-        group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_public", size),
-            &size,
-            |b, _| b.iter_custom(|iterations| public_fixture.measure_remote_free(iterations)),
-        );
+        group.bench_with_input(BenchmarkId::new("rimalloc_public", size), &size, |b, _| {
+            b.iter_custom(|iterations| public_fixture.measure_remote_free(iterations))
+        });
         let mut raw_fixture =
             RemoteFreeFixture::new(&RAW_MIMALLOC, layout, POOL_SIZE, verify_harness);
-        group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_raw", size),
-            &size,
-            |b, _| b.iter_custom(|iterations| raw_fixture.measure_remote_free(iterations)),
-        );
+        group.bench_with_input(BenchmarkId::new("rimalloc_raw", size), &size, |b, _| {
+            b.iter_custom(|iterations| raw_fixture.measure_remote_free(iterations))
+        });
     }
     group.finish();
 }
@@ -427,7 +415,7 @@ fn bench_lifo_stack(c: &mut Criterion) {
         );
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_public", format!("{size}/{depth}")),
+            BenchmarkId::new("rimalloc_public", format!("{size}/{depth}")),
             &(size, depth),
             |b, &(s, d)| {
                 iter_timed(b, verify_harness, || {
@@ -436,7 +424,7 @@ fn bench_lifo_stack(c: &mut Criterion) {
             },
         );
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_raw", format!("{size}/{depth}")),
+            BenchmarkId::new("rimalloc_raw", format!("{size}/{depth}")),
             &(size, depth),
             |b, &(s, d)| {
                 iter_timed(b, verify_harness, || {
@@ -486,7 +474,7 @@ fn bench_single_reuse(c: &mut Criterion) {
         });
 
         group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_public", size),
+            BenchmarkId::new("rimalloc_public", size),
             &size,
             |b, &size| {
                 iter_timed(b, verify_harness, || {
@@ -494,13 +482,9 @@ fn bench_single_reuse(c: &mut Criterion) {
                 });
             },
         );
-        group.bench_with_input(
-            BenchmarkId::new("mechanical_mimalloc_raw", size),
-            &size,
-            |b, &size| {
-                iter_timed(b, verify_harness, || single_reuse(&RAW_MIMALLOC, size, OPS));
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("rimalloc_raw", size), &size, |b, &size| {
+            iter_timed(b, verify_harness, || single_reuse(&RAW_MIMALLOC, size, OPS));
+        });
     }
     group.finish();
 }

@@ -32,7 +32,7 @@ use super::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError
 ///
 /// ```rust,no_run
 /// use core::alloc::Layout;
-/// use mechanical_mimalloc::Allocation;
+/// use rimalloc::Allocation;
 ///
 /// let layout = Layout::from_size_align(32, 8).unwrap();
 /// let allocation = Allocation::zeroed(layout).unwrap();
@@ -45,7 +45,7 @@ use super::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError
 ///
 /// ```rust,compile_fail
 /// use core::alloc::Layout;
-/// use mechanical_mimalloc::Allocation;
+/// use rimalloc::Allocation;
 ///
 /// let layout = Layout::from_size_align(16, 8).unwrap();
 /// let allocation = Allocation::new(layout).unwrap();
@@ -56,7 +56,7 @@ use super::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError
 ///
 /// ```rust,compile_fail
 /// use core::alloc::Layout;
-/// use mechanical_mimalloc::Allocation;
+/// use rimalloc::Allocation;
 ///
 /// let layout = Layout::from_size_align(16, 8).unwrap();
 /// let allocation = Allocation::new(layout).unwrap();
@@ -69,7 +69,7 @@ use super::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError
 /// fields:
 ///
 /// ```rust,compile_fail
-/// let _ = mechanical_mimalloc::Allocation { raw: unreachable!() };
+/// let _ = rimalloc::Allocation { raw: unreachable!() };
 /// ```
 ///
 /// Initialize an uninitialized allocation by writing through
@@ -78,7 +78,7 @@ use super::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError
 /// ```rust
 /// use core::alloc::Layout;
 /// use core::mem::MaybeUninit;
-/// use mechanical_mimalloc::Allocation;
+/// use rimalloc::Allocation;
 ///
 /// let layout = Layout::from_size_align(4, 1).unwrap();
 /// let mut allocation = Allocation::new(layout).unwrap();
@@ -365,7 +365,7 @@ impl Allocation {
     ///
     /// ```rust,compile_fail
     /// use core::alloc::Layout;
-    /// use mechanical_mimalloc::Allocation;
+    /// use rimalloc::Allocation;
     ///
     /// let layout = Layout::from_size_align(16, 8).unwrap();
     /// let allocation = Allocation::new(layout).unwrap();
@@ -529,7 +529,7 @@ impl fmt::Debug for RawAllocation {
 /// Owned allocation whose bytes are initialized and safe to view as a byte slice.
 ///
 /// ```rust
-/// use mechanical_mimalloc::InitializedAllocation;
+/// use rimalloc::InitializedAllocation;
 ///
 /// let mut allocation = InitializedAllocation::zeroed_bytes(4).unwrap();
 /// assert_eq!(allocation.as_bytes(), &[0, 0, 0, 0]);

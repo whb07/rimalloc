@@ -16,11 +16,11 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_OUT_DIR = ROOT / "target/release-artifacts"
-CRATE_NAME = "mechanical_mimalloc"
+CRATE_NAME = "rimalloc"
 HEADER_DIR = ROOT / "mimalloc-3.3.2/include"
-SIGNING_KEY_ENV = "MECHANICAL_MIMALLOC_RELEASE_SIGNING_KEY"
-SIGNING_IDENTITY_ENV = "MECHANICAL_MIMALLOC_RELEASE_SIGNING_IDENTITY"
-DEFAULT_SIGNING_IDENTITY = "mechanical_mimalloc_release"
+SIGNING_KEY_ENV = "RIMALLOC_RELEASE_SIGNING_KEY"
+SIGNING_IDENTITY_ENV = "RIMALLOC_RELEASE_SIGNING_IDENTITY"
+DEFAULT_SIGNING_IDENTITY = "rimalloc_release"
 SIGNING_NAMESPACE = "file"
 
 
@@ -229,7 +229,7 @@ def signing_key() -> tuple[pathlib.Path, str]:
         return key, "configured-release-key"
 
     key_dir = pathlib.Path(
-        tempfile.mkdtemp(prefix="mechanical-mimalloc-release-signing-")
+        tempfile.mkdtemp(prefix="rimalloc-release-signing-")
     )
     key = key_dir / "release-signing-dry-run-key"
     key.parent.mkdir(parents=True, exist_ok=True)
@@ -243,7 +243,7 @@ def signing_key() -> tuple[pathlib.Path, str]:
             "-N",
             "",
             "-C",
-            "mechanical_mimalloc release dry-run key",
+            "rimalloc release dry-run key",
             "-f",
             str(key),
         ]
@@ -365,7 +365,7 @@ def static_symbol_entries(path: pathlib.Path) -> list[tuple[str, str]]:
 def render_symbol_manifest(artifact: dict[str, object]) -> str:
     artifact_path = release_path(str(artifact["path"]))
     lines = [
-        "# mechanical_mimalloc release ABI symbol manifest",
+        "# rimalloc release ABI symbol manifest",
         f"# artifact: {artifact['name']}",
         f"# kind: {artifact['kind']}",
         f"# path: {artifact['path']}",
@@ -407,7 +407,7 @@ def write_environment_note(out_dir: pathlib.Path) -> dict[str, object]:
     path.parent.mkdir(parents=True, exist_ok=True)
     output = command_output_with_stderr(["scripts/env-info.sh"])
     path.write_text(
-        "# mechanical_mimalloc release environment\n\n"
+        "# rimalloc release environment\n\n"
         "Captured with `scripts/env-info.sh` during release artifact staging.\n\n"
         "```text\n"
         f"{output.rstrip()}\n"
@@ -607,7 +607,7 @@ def write_dependency_report(out_dir: pathlib.Path) -> dict[str, object]:
 def write_pkg_config(
     out_dir: pathlib.Path, version: str, artifacts: list[dict[str, object]]
 ) -> pathlib.Path:
-    path = out_dir / "lib/pkgconfig/mechanical_mimalloc.pc"
+    path = out_dir / "lib/pkgconfig/rimalloc.pc"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "\n".join(
@@ -622,8 +622,8 @@ def write_pkg_config(
                 f"interpose_static_preview=${{artifactdir}}/{artifact_filename(artifacts, 'interpose-static-preview')}",
                 f"artifact_mode_notes={LINK_MODE_NOTES}",
                 "",
-                "Name: mechanical_mimalloc",
-                "Description: mechanical mimalloc C ABI release artifacts",
+                "Name: rimalloc",
+                "Description: rimalloc C ABI release artifacts",
                 f"Version: {version}",
                 "Cflags: -I${includedir}",
                 "Libs: ${c_abi_cdylib} -Wl,-rpath,${artifactdir} -pthread -ldl -lm",
@@ -636,7 +636,7 @@ def write_pkg_config(
 
 
 def write_cmake_config(out_dir: pathlib.Path, artifacts: list[dict[str, object]]) -> pathlib.Path:
-    path = out_dir / "lib/cmake/mechanical_mimalloc/mechanical_mimalloc-config.cmake"
+    path = out_dir / "lib/cmake/rimalloc/rimalloc-config.cmake"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "\n".join(
@@ -645,45 +645,45 @@ def write_cmake_config(out_dir: pathlib.Path, artifacts: list[dict[str, object]]
                 "include(CMakeFindDependencyMacro)",
                 "find_dependency(Threads)",
                 "",
-                'get_filename_component(_MECHANICAL_MIMALLOC_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)',
-                'set(mechanical_mimalloc_INCLUDE_DIR "${_MECHANICAL_MIMALLOC_PREFIX}/include")',
-                'set(mechanical_mimalloc_ARTIFACT_DIR "${_MECHANICAL_MIMALLOC_PREFIX}/artifacts")',
-                f'set(mechanical_mimalloc_ARTIFACT_MODE_NOTES "{LINK_MODE_NOTES}")',
+                'get_filename_component(_RIMALLOC_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)',
+                'set(rimalloc_INCLUDE_DIR "${_RIMALLOC_PREFIX}/include")',
+                'set(rimalloc_ARTIFACT_DIR "${_RIMALLOC_PREFIX}/artifacts")',
+                f'set(rimalloc_ARTIFACT_MODE_NOTES "{LINK_MODE_NOTES}")',
                 "",
-                "function(_mechanical_mimalloc_add_imported target kind filename)",
+                "function(_rimalloc_add_imported target kind filename)",
                 "  if(NOT TARGET ${target})",
                 "    add_library(${target} ${kind} IMPORTED)",
                 "    set_target_properties(${target} PROPERTIES",
-                '      IMPORTED_LOCATION "${mechanical_mimalloc_ARTIFACT_DIR}/${filename}"',
-                '      INTERFACE_INCLUDE_DIRECTORIES "${mechanical_mimalloc_INCLUDE_DIR}"',
+                '      IMPORTED_LOCATION "${rimalloc_ARTIFACT_DIR}/${filename}"',
+                '      INTERFACE_INCLUDE_DIRECTORIES "${rimalloc_INCLUDE_DIR}"',
                 '      INTERFACE_LINK_LIBRARIES "Threads::Threads;${CMAKE_DL_LIBS};m"',
                 "    )",
                 "  endif()",
                 "endfunction()",
                 "",
-                "_mechanical_mimalloc_add_imported(",
-                "  mechanical_mimalloc::c_abi",
+                "_rimalloc_add_imported(",
+                "  rimalloc::c_abi",
                 "  SHARED",
                 f"  {artifact_filename(artifacts, 'c-abi-cdylib')}",
                 ")",
-                "_mechanical_mimalloc_add_imported(",
-                "  mechanical_mimalloc::interpose",
+                "_rimalloc_add_imported(",
+                "  rimalloc::interpose",
                 "  SHARED",
                 f"  {artifact_filename(artifacts, 'interpose-cdylib')}",
                 ")",
-                "_mechanical_mimalloc_add_imported(",
-                "  mechanical_mimalloc::c_abi_static_preview",
+                "_rimalloc_add_imported(",
+                "  rimalloc::c_abi_static_preview",
                 "  STATIC",
                 f"  {artifact_filename(artifacts, 'c-abi-static-preview')}",
                 ")",
-                "_mechanical_mimalloc_add_imported(",
-                "  mechanical_mimalloc::interpose_static_preview",
+                "_rimalloc_add_imported(",
+                "  rimalloc::interpose_static_preview",
                 "  STATIC",
                 f"  {artifact_filename(artifacts, 'interpose-static-preview')}",
                 ")",
                 "",
-                "set(mechanical_mimalloc_LIBRARIES mechanical_mimalloc::c_abi)",
-                "set(mechanical_mimalloc_FOUND TRUE)",
+                "set(rimalloc_LIBRARIES rimalloc::c_abi)",
+                "set(rimalloc_FOUND TRUE)",
                 "",
             ]
         )
@@ -697,9 +697,9 @@ def write_link_metadata(
     pkg_config = write_pkg_config(out_dir, version, artifacts)
     cmake_config = write_cmake_config(out_dir, artifacts)
     return [
-        metadata_entry("mechanical_mimalloc.pc", "pkg-config", pkg_config),
+        metadata_entry("rimalloc.pc", "pkg-config", pkg_config),
         metadata_entry(
-            "mechanical_mimalloc-config.cmake", "cmake-package-config", cmake_config
+            "rimalloc-config.cmake", "cmake-package-config", cmake_config
         ),
     ]
 
@@ -833,7 +833,7 @@ def artifact_specs() -> list[dict[str, object]]:
             "features": [],
             "crate_type": None,
             "command": ["cargo", "build", "--release", "--lib"],
-            "output_name": "mechanical_mimalloc-rust-rlib",
+            "output_name": "rimalloc-rust-rlib",
             "manifest_kind": "rlib",
         },
         {
@@ -851,7 +851,7 @@ def artifact_specs() -> list[dict[str, object]]:
                 "--crate-type",
                 "cdylib",
             ],
-            "output_name": "mechanical_mimalloc-c-abi-cdylib",
+            "output_name": "rimalloc-c-abi-cdylib",
             "manifest_kind": "cdylib",
         },
         {
@@ -877,7 +877,7 @@ def artifact_specs() -> list[dict[str, object]]:
                 "--crate-type",
                 "staticlib",
             ],
-            "output_name": "mechanical_mimalloc-c-abi-static-preview",
+            "output_name": "rimalloc-c-abi-static-preview",
             "manifest_kind": "staticlib",
         },
         {
@@ -895,7 +895,7 @@ def artifact_specs() -> list[dict[str, object]]:
                 "--crate-type",
                 "cdylib",
             ],
-            "output_name": "mechanical_mimalloc-interpose-cdylib",
+            "output_name": "rimalloc-interpose-cdylib",
             "manifest_kind": "cdylib",
         },
         {
@@ -921,7 +921,7 @@ def artifact_specs() -> list[dict[str, object]]:
                 "--crate-type",
                 "staticlib",
             ],
-            "output_name": "mechanical_mimalloc-interpose-static-preview",
+            "output_name": "rimalloc-interpose-static-preview",
             "manifest_kind": "staticlib",
         },
     ]

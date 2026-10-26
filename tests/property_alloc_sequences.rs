@@ -1,9 +1,9 @@
 use core::ffi::c_void;
 use core::ptr;
 
-use mechanical_mimalloc::raw::mimalloc::*;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use rimalloc::raw::mimalloc::*;
 
 #[derive(Clone, Copy)]
 struct Block {

@@ -88,7 +88,7 @@ def rust_staticlib(*, release: bool = False, secure: bool = False) -> pathlib.Pa
         check=True,
     )
     libs = sorted(
-        (target_dir / ("release" if release else "debug") / "deps").glob("libmechanical_mimalloc-*.a"),
+        (target_dir / ("release" if release else "debug") / "deps").glob("librimalloc-*.a"),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

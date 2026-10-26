@@ -15,7 +15,7 @@ use core::fmt;
 ///
 /// ```rust,no_run
 /// use core::alloc::Layout;
-/// use mechanical_mimalloc::{AllocError, Allocation};
+/// use rimalloc::{AllocError, Allocation};
 ///
 /// fn inspect(err: AllocError) {
 ///     assert!(err.layout().align().is_power_of_two());
@@ -63,7 +63,7 @@ impl std::error::Error for AllocError {}
 /// that fits Rust's layout rules.
 ///
 /// ```rust
-/// use mechanical_mimalloc::{Allocation, TryAllocError};
+/// use rimalloc::{Allocation, TryAllocError};
 ///
 /// let err = match Allocation::with_size_align(8, 3) {
 ///     Err(err) => err,
@@ -127,7 +127,7 @@ impl std::error::Error for LayoutError {}
 /// valid but allocation failed.
 ///
 /// ```rust
-/// use mechanical_mimalloc::{Allocation, TryAllocError};
+/// use rimalloc::{Allocation, TryAllocError};
 ///
 /// let err = match Allocation::zeroed_with_size_align(1, 3) {
 ///     Err(err) => err,
@@ -171,7 +171,7 @@ impl std::error::Error for TryAllocError {
 /// Cause of a failed resize operation.
 ///
 /// ```rust
-/// use mechanical_mimalloc::{Allocation, ResizeErrorKind};
+/// use rimalloc::{Allocation, ResizeErrorKind};
 ///
 /// let allocation = Allocation::new_bytes(8).unwrap();
 /// let err = allocation.resize_with_size_align(8, 3).unwrap_err();
@@ -209,7 +209,7 @@ impl std::error::Error for ResizeErrorKind {
 /// Error returned when resizing fails without consuming the original allocation.
 ///
 /// ```rust
-/// use mechanical_mimalloc::{Allocation, ResizeErrorKind};
+/// use rimalloc::{Allocation, ResizeErrorKind};
 ///
 /// let allocation = Allocation::zeroed_bytes(4).unwrap();
 /// let err = allocation.resize_with_size_align(4, 3).unwrap_err();

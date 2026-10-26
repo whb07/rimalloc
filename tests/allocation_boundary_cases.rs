@@ -2,7 +2,7 @@ use core::ffi::c_void;
 use core::ptr;
 use std::os::raw::c_long;
 
-use mechanical_mimalloc::raw::mimalloc::*;
+use rimalloc::raw::mimalloc::*;
 
 struct ShowErrorsGuard(c_long);
 

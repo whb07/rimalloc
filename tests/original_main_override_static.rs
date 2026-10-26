@@ -4,7 +4,7 @@ use core::ffi::c_void;
 use core::ptr;
 use std::ffi::CString;
 
-use mechanical_mimalloc::raw::{
+use rimalloc::raw::{
     self, MI_STAT_VERSION, mi_arena_id_t, mi_heap_area_t, mi_heap_t, mi_option_t, mi_stats_t,
 };
 

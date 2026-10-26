@@ -17,16 +17,16 @@
     "repeats": 3
   },
   "allocators": [
-    "mechanical_mimalloc_raw",
+    "rimalloc_raw",
     "c-mimalloc-3.3.2"
   ],
   "workers": [
     {
-      "directory": "round-001/segment-occupancy/mechanical_mimalloc_raw",
+      "directory": "round-001/segment-occupancy/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "segment-occupancy",
         "--bytes",
@@ -45,9 +45,9 @@
     {
       "directory": "round-001/segment-occupancy/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "segment-occupancy",
         "--bytes",
@@ -64,11 +64,11 @@
       "finished_utc": "2026-10-12T22:27:26Z"
     },
     {
-      "directory": "round-001/cross-thread/mechanical_mimalloc_raw",
+      "directory": "round-001/cross-thread/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "cross-thread",
         "--bytes",
@@ -87,9 +87,9 @@
     {
       "directory": "round-001/cross-thread/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "cross-thread",
         "--bytes",
@@ -106,11 +106,11 @@
       "finished_utc": "2026-10-12T22:27:26Z"
     },
     {
-      "directory": "round-001/decommit-oscillation/mechanical_mimalloc_raw",
+      "directory": "round-001/decommit-oscillation/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "decommit-oscillation",
         "--bytes",
@@ -129,9 +129,9 @@
     {
       "directory": "round-001/decommit-oscillation/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "decommit-oscillation",
         "--bytes",
@@ -148,11 +148,11 @@
       "finished_utc": "2026-10-12T22:27:27Z"
     },
     {
-      "directory": "round-001/thread-churn/mechanical_mimalloc_raw",
+      "directory": "round-001/thread-churn/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "thread-churn",
         "--bytes",
@@ -171,9 +171,9 @@
     {
       "directory": "round-001/thread-churn/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "thread-churn",
         "--bytes",
@@ -192,9 +192,9 @@
     {
       "directory": "round-002/segment-occupancy/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "segment-occupancy",
         "--bytes",
@@ -211,11 +211,11 @@
       "finished_utc": "2026-10-12T22:27:27Z"
     },
     {
-      "directory": "round-002/segment-occupancy/mechanical_mimalloc_raw",
+      "directory": "round-002/segment-occupancy/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "segment-occupancy",
         "--bytes",
@@ -234,9 +234,9 @@
     {
       "directory": "round-002/cross-thread/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "cross-thread",
         "--bytes",
@@ -253,11 +253,11 @@
       "finished_utc": "2026-10-12T22:27:27Z"
     },
     {
-      "directory": "round-002/cross-thread/mechanical_mimalloc_raw",
+      "directory": "round-002/cross-thread/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "cross-thread",
         "--bytes",
@@ -276,9 +276,9 @@
     {
       "directory": "round-002/decommit-oscillation/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "decommit-oscillation",
         "--bytes",
@@ -295,11 +295,11 @@
       "finished_utc": "2026-10-12T22:27:27Z"
     },
     {
-      "directory": "round-002/decommit-oscillation/mechanical_mimalloc_raw",
+      "directory": "round-002/decommit-oscillation/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "decommit-oscillation",
         "--bytes",
@@ -318,9 +318,9 @@
     {
       "directory": "round-002/thread-churn/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "thread-churn",
         "--bytes",
@@ -337,11 +337,11 @@
       "finished_utc": "2026-10-12T22:27:27Z"
     },
     {
-      "directory": "round-002/thread-churn/mechanical_mimalloc_raw",
+      "directory": "round-002/thread-churn/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "thread-churn",
         "--bytes",
@@ -358,11 +358,11 @@
       "finished_utc": "2026-10-12T22:27:27Z"
     },
     {
-      "directory": "round-003/segment-occupancy/mechanical_mimalloc_raw",
+      "directory": "round-003/segment-occupancy/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "segment-occupancy",
         "--bytes",
@@ -381,9 +381,9 @@
     {
       "directory": "round-003/segment-occupancy/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "segment-occupancy",
         "--bytes",
@@ -400,11 +400,11 @@
       "finished_utc": "2026-10-12T22:27:27Z"
     },
     {
-      "directory": "round-003/cross-thread/mechanical_mimalloc_raw",
+      "directory": "round-003/cross-thread/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "cross-thread",
         "--bytes",
@@ -423,9 +423,9 @@
     {
       "directory": "round-003/cross-thread/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "cross-thread",
         "--bytes",
@@ -442,11 +442,11 @@
       "finished_utc": "2026-10-12T22:27:27Z"
     },
     {
-      "directory": "round-003/decommit-oscillation/mechanical_mimalloc_raw",
+      "directory": "round-003/decommit-oscillation/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "decommit-oscillation",
         "--bytes",
@@ -465,9 +465,9 @@
     {
       "directory": "round-003/decommit-oscillation/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "decommit-oscillation",
         "--bytes",
@@ -484,11 +484,11 @@
       "finished_utc": "2026-10-12T22:27:27Z"
     },
     {
-      "directory": "round-003/thread-churn/mechanical_mimalloc_raw",
+      "directory": "round-003/thread-churn/rimalloc_raw",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
         "--scenario",
         "thread-churn",
         "--bytes",
@@ -507,9 +507,9 @@
     {
       "directory": "round-003/thread-churn/c-mimalloc-3.3.2",
       "command": [
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89",
         "--library",
-        "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+        "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
         "--scenario",
         "thread-churn",
         "--bytes",
@@ -551,7 +551,7 @@
   "allocator_environment": {},
   "caller_ld_preload_removed": null,
   "artifacts": {
-    "cache": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e",
+    "cache": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e",
     "configuration": {
       "tools": {
         "cargo": "cargo 1.92.0 (344c4567c 2025-10-21)",
@@ -582,7 +582,7 @@
         "CARGO_INCREMENTAL": ""
       },
       "cargo_config": {
-        "/root/projects/mechanical_mimalloc/.cargo/config.toml": "[alias]\nclippy-strict = [\"clippy\", \"--all-targets\", \"--all-features\"]\n"
+        "/root/projects/rimalloc/.cargo/config.toml": "[alias]\nclippy-strict = [\"clippy\", \"--all-targets\", \"--all-features\"]\n"
       },
       "harness_features": [
         "bench"
@@ -608,14 +608,14 @@
       "c-configure.log",
       "c-build.log"
     ],
-    "rust_library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/libmechanical_mimalloc.so",
-    "c_library": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
+    "rust_library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/rust-interpose/release/librimalloc.so",
+    "c_library": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/c-release/libmimalloc.so.3.3",
     "sha256": {
       "rust_library": "775a6069d5983e87b7443a9f254f0fe79835f658793b8d7e67ed0b374bf7db19",
       "c_library": "541ebb8a42f3000da533b29289da88c7858dc4e715f01458985a7538b75e7ecc",
       "architecture_executable": "f2e47034db1dc52ffdb9866415a88e56d2a5e99751611cba232c8f85de4f59c0"
     },
-    "architecture_executable": "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89"
+    "architecture_executable": "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89"
   },
   "cpp_build_command": [
     "c++",
@@ -626,11 +626,11 @@
     "-Werror",
     "-pthread",
     "-I",
-    "/root/projects/mechanical_mimalloc/mimalloc-3.3.2/include",
-    "/root/projects/mechanical_mimalloc/benches/architectural_bench.cpp",
+    "/root/projects/rimalloc/mimalloc-3.3.2/include",
+    "/root/projects/rimalloc/benches/architectural_bench.cpp",
     "-ldl",
     "-o",
-    "/root/projects/mechanical_mimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89"
+    "/root/projects/rimalloc/target/bench-build/4cd3404eb7711e0e/architectural-bench-a58042a154462a89"
   ],
   "finished_utc": "2026-10-12T22:27:27Z"
 }

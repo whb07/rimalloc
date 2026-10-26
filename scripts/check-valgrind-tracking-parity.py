@@ -95,7 +95,7 @@ def rust_staticlib_valgrind() -> pathlib.Path:
     run(["cargo", "rustc", "--target-dir", str(target_dir), "--features", "track-valgrind", "--lib", "--crate-type", "staticlib"])
     deps = target_dir / "debug/deps"
     libs = sorted(
-        [*deps.glob("libmechanical_mimalloc-*.a"), *deps.glob("libmechanical_mimalloc.a")],
+        [*deps.glob("librimalloc-*.a"), *deps.glob("librimalloc.a")],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

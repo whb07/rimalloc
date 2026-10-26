@@ -13,7 +13,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
-use mechanical_mimalloc::raw::{self, headers};
+use rimalloc::raw::{self, headers};
 
 unsafe extern "C" {
     fn malloc(size: usize) -> *mut c_void;

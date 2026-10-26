@@ -86,7 +86,7 @@ checks. To also compile the C++ probe and exercise all four against existing
 library builds (including 64-byte and 64-KiB occupancy cases), run:
 
 ```sh
-ARCHITECTURE_TEST_RUST_LIB=/absolute/path/libmechanical_mimalloc.so \
+ARCHITECTURE_TEST_RUST_LIB=/absolute/path/librimalloc.so \
 ARCHITECTURE_TEST_C_LIB=/absolute/path/libmimalloc.so \
   python3 -m unittest discover -s benchmarks -p 'test_*.py' -v
 ```

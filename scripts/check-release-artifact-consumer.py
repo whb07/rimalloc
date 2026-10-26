@@ -17,7 +17,7 @@ RELEASE_DIR = ROOT / "target/release-artifacts"
 
 def manifest() -> dict[str, object]:
     path = RELEASE_DIR / "release-artifacts.json"
-    if not (os.environ.get("MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS") and path.exists()):
+    if not (os.environ.get("RIMALLOC_REUSE_RELEASE_ARTIFACTS") and path.exists()):
         subprocess.run(["scripts/build-release-artifacts.py"], cwd=ROOT, check=True)
     return json.loads(path.read_text())
 
@@ -195,7 +195,7 @@ def main() -> int:
         raise SystemExit("no C compiler found; set CC")
 
     data = manifest()
-    with tempfile.TemporaryDirectory(prefix="mechanical-mimalloc-c-consumers-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="rimalloc-c-consumers-") as tmp:
         staged = pathlib.Path(tmp) / RELEASE_DIR.name
         shutil.copytree(RELEASE_DIR, staged, ignore=shutil.ignore_patterns("build"))
         verify_headers(data, staged)

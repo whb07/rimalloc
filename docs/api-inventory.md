@@ -182,7 +182,7 @@ obligation.
 
 ## Raw Rust Facade
 
-`mechanical_mimalloc::raw` exposes C-shaped functions, constants, callbacks,
+`rimalloc::raw` exposes C-shaped functions, constants, callbacks,
 and `repr(C)` layouts for tests, benchmarks, and low-level integration.
 
 The raw facade is a compatibility surface, not a safe abstraction. Most calls

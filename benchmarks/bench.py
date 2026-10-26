@@ -32,10 +32,10 @@ import uuid
 from common import file_sha256, write_json
 
 ROOT = Path(__file__).resolve().parents[1]
-ALLOCATORS = ("mechanical_mimalloc_raw", "c-mimalloc-3.3.2")
+ALLOCATORS = ("rimalloc_raw", "c-mimalloc-3.3.2")
 # `run --allocator` names, as in the nginx and webserver suites; rivals keep their own labels.
 ALLOCATOR_NAMES = {"rust": ALLOCATORS[0], "mimalloc": ALLOCATORS[1], **{name: name for name in rivals.NAMES}}
-SHORT_NAMES = {"mechanical_mimalloc_raw": "rust", "c-mimalloc-3.3.2": "c"}
+SHORT_NAMES = {"rimalloc_raw": "rust", "c-mimalloc-3.3.2": "c"}
 QUICK = ("glibc-thread", "malloc-large", "cache-scratch1", "xmalloc-testN")
 SCENARIOS = dict.fromkeys((
     "glibc-simple", "malloc-large", "malloc-large-old", "cache-scratch1",
@@ -244,9 +244,9 @@ def build(jobs: int, harness: bool = True) -> dict:
     output = execute(["cargo", "rustc", "--locked", "--release", "--features", "interpose",
                       "--lib", "--jobs", str(jobs), "--message-format=json-render-diagnostics",
                       "--crate-type", "cdylib"], cache / "rust.log", environment)
-    rust_library = cargo_artifact(output, "mechanical_mimalloc", shared=True)
+    rust_library = cargo_artifact(output, "rimalloc", shared=True)
     if use_bolt:
-        optimized = cache / "libmechanical_mimalloc.bolt.so"
+        optimized = cache / "librimalloc.bolt.so"
         artifacts["bolt"] = bolt.optimize(rust_library, optimized, cache / "bolt.log")
         rust_library = optimized
     c_dir = cache / "c-release"
@@ -530,7 +530,7 @@ def baseline_library(revision: str, jobs: int) -> Path:
     """A Rust library built from `revision` with the runner's flags, cached by commit."""
     commit = capture(["git", "rev-parse", "--verify", revision + "^{commit}"])
     cache = ROOT / "target/bench-screen" / commit
-    library = cache / "libmechanical_mimalloc.so"
+    library = cache / "librimalloc.so"
     if library.is_file():
         return library
     cache.mkdir(parents=True, exist_ok=True)
@@ -543,7 +543,7 @@ def baseline_library(revision: str, jobs: int) -> Path:
         output = execute(["cargo", "rustc", "--locked", "--release", "--features", "interpose", "--lib",
                           "--jobs", str(jobs), "--message-format=json-render-diagnostics", "--crate-type", "cdylib"],
                          cache / "build.log", environment, worktree)
-        shutil.copy2(cargo_artifact(output, "mechanical_mimalloc", shared=True), library)
+        shutil.copy2(cargo_artifact(output, "rimalloc", shared=True), library)
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", str(worktree)], cwd=ROOT,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

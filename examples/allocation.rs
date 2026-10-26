@@ -1,7 +1,7 @@
 use core::alloc::Layout;
 use core::mem::MaybeUninit;
 
-use mechanical_mimalloc::{Allocation, TryAllocError};
+use rimalloc::{Allocation, TryAllocError};
 
 fn main() -> Result<(), TryAllocError> {
     let layout = Layout::from_size_align(4, 1).expect("valid example layout");

@@ -139,7 +139,7 @@ def native_pairs(results: list[dict[str, object]]) -> list[dict[str, object]]:
     pairs: list[dict[str, object]] = []
     unpaired: list[str] = []
     for group, values in sorted(by_group.items()):
-        rust = values.get("mechanical_mimalloc_raw") or values.get("rust")
+        rust = values.get("rimalloc_raw") or values.get("rust")
         c = values.get("c-mimalloc-3.3.2")
         if not rust and not c:
             continue

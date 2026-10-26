@@ -248,7 +248,7 @@ static union mac_zone_storage mi_zone_storage = { .zone = {
   .free = zone_free,
   .realloc = zone_realloc,
   .destroy = zone_destroy,
-  .zone_name = "mechanical_mimalloc",
+  .zone_name = "rimalloc",
   .batch_malloc = zone_batch_malloc,
   .batch_free = zone_batch_free,
   .introspect = &mi_introspection,

@@ -8,8 +8,8 @@
     "remote_free_1x1"
   ],
   "required_allocators": [
-    "mechanical_mimalloc_public",
-    "mechanical_mimalloc_raw",
+    "rimalloc_public",
+    "rimalloc_raw",
     "system"
   ],
   "scenario_limits": {

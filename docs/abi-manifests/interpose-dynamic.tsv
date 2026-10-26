@@ -1,4 +1,4 @@
-# mechanical_mimalloc dynamic ABI manifest
+# rimalloc dynamic ABI manifest
 # artifact: interpose
 # build-command: cargo rustc --lib --features interpose --target-dir target/symbol-check/interpose -- --crate-type cdylib
 # columns: symbol	binding	visibility	version	type

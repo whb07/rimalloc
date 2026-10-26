@@ -1,6 +1,6 @@
 use core::alloc::Layout;
 
-use mechanical_mimalloc::Heap;
+use rimalloc::Heap;
 
 fn main() {
     let heap = Heap::new().expect("heap creation should succeed in example");

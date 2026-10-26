@@ -19,7 +19,7 @@ use core::ptr;
 /// builds; `no_std` builds must not panic from the callback.
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::unsafe_callbacks::ErrorCallbackGuard;
+/// use rimalloc::unsafe_callbacks::ErrorCallbackGuard;
 ///
 /// let guard;
 /// {
@@ -88,7 +88,7 @@ impl<F: FnMut(i32)> Drop for ErrorCallbackGuard<'_, F> {
 /// builds; `no_std` builds must not panic from the callback.
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::unsafe_callbacks::DeferredFreeCallbackGuard;
+/// use rimalloc::unsafe_callbacks::DeferredFreeCallbackGuard;
 ///
 /// let guard;
 /// {

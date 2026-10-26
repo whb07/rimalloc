@@ -1,8 +1,6 @@
 use std::os::raw::c_long;
 
-use mechanical_mimalloc::raw::mimalloc::{
-    mi_free, mi_malloc, mi_option_get, mi_option_set, mi_option_t,
-};
+use rimalloc::raw::mimalloc::{mi_free, mi_malloc, mi_option_get, mi_option_set, mi_option_t};
 
 struct ShowErrorsGuard(c_long);
 

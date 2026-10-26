@@ -1,4 +1,4 @@
-# mechanical_mimalloc
+# rimalloc
 
 Mechanical Rust translation foundation for mimalloc 3.3.2.
 
@@ -29,7 +29,7 @@ Use `MiMalloc` when you want Rust standard-library allocations in the process to
 go through this allocator:
 
 ```rust
-use mechanical_mimalloc::MiMalloc;
+use rimalloc::MiMalloc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -42,7 +42,7 @@ of C null/error conventions:
 
 ```rust
 use core::alloc::Layout;
-use mechanical_mimalloc::{Allocation, GlobalOptions, Heap, OptionKey, StatsSnapshot};
+use rimalloc::{Allocation, GlobalOptions, Heap, OptionKey, StatsSnapshot};
 
 let layout = Layout::from_size_align(128, 16).unwrap();
 let allocation = Allocation::zeroed(layout).unwrap();
@@ -81,14 +81,14 @@ validation.
 
 ### Unsafe Raw Facade
 
-Use `mechanical_mimalloc::raw` only when you can uphold mimalloc's pointer,
+Use `rimalloc::raw` only when you can uphold mimalloc's pointer,
 layout, alignment, allocation-origin, lifetime, nullability, and threading
 rules. The raw Rust path surface is not stabilized as a Rust SemVer API.
 
 ```rust
 unsafe {
-    let p = mechanical_mimalloc::raw::mi_malloc(64);
-    mechanical_mimalloc::raw::mi_free(p);
+    let p = rimalloc::raw::mi_malloc(64);
+    rimalloc::raw::mi_free(p);
 }
 ```
 
@@ -110,10 +110,10 @@ tracked by API snapshots, layout, symbol, lint, package, and benchmark gates.
 - Safe Rust facade: crate-root `MiMalloc`, owned allocation wrappers, heap
   wrappers, supported options, non-printing stats snapshots, process
   information, and their typed error/status types.
-- Unsafe-adjacent Rust callbacks: `mechanical_mimalloc::unsafe_callbacks`,
+- Unsafe-adjacent Rust callbacks: `rimalloc::unsafe_callbacks`,
   borrowed RAII callback guards with process-global synchronization and lifetime
   obligations.
-- Raw Rust facade: `mechanical_mimalloc::raw`, a C-shaped Rust path for
+- Raw Rust facade: `rimalloc::raw`, a C-shaped Rust path for
   low-level tests, benchmarks, and integration code that can uphold mimalloc's
   unsafe pointer and lifetime contracts. The raw Rust path surface is not
   stabilized as a Rust SemVer API yet.

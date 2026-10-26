@@ -2349,7 +2349,7 @@ int main(void) {
   result_bool("heap_realpath_alloc_content_owner", hrp != NULL && strcmp(hrp, heap_resolved) == 0 && mi_heap_contains(heap, hrp));
   mi_free(hrp);
   errno = 0;
-  hrp = heap == NULL ? NULL : mi_heap_realpath(heap, "/definitely/not/a/mechanical_mimalloc/path", NULL);
+  hrp = heap == NULL ? NULL : mi_heap_realpath(heap, "/definitely/not/a/rimalloc/path", NULL);
   result_bool("heap_realpath_missing_errno", hrp == NULL && errno == ENOENT);
   void* hp = heap == NULL ? NULL : mi_heap_malloc(heap, 24);
   result_bool("heap_malloc_nonnull", hp != NULL);
@@ -2869,10 +2869,10 @@ int main(void) {
   result_bool("realpath_alloc_owned", rp != NULL && mi_check_owned(rp));
   if (rp != NULL) mi_free(rp);
   errno = 0;
-  rp = mi_realpath("/definitely/not/a/mechanical_mimalloc/path", NULL);
+  rp = mi_realpath("/definitely/not/a/rimalloc/path", NULL);
   result_bool("realpath_missing_errno", rp == NULL && errno == ENOENT);
   errno = 0;
-  rp = mi_realpath("/definitely/not/a/mechanical_mimalloc/path", resolved);
+  rp = mi_realpath("/definitely/not/a/rimalloc/path", resolved);
   result_bool("realpath_stack_missing_errno", rp == NULL && errno == ENOENT);
 
   long original_visit_abandoned = mi_option_get(mi_option_visit_abandoned);
@@ -5532,9 +5532,9 @@ def rust_staticlib() -> pathlib.Path:
     )
     libs = sorted(
         [
-            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
-            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc.a"),
-            *(ROOT / "target/debug").glob("libmechanical_mimalloc.a"),
+            *(ROOT / "target/debug/deps").glob("librimalloc-*.a"),
+            *(ROOT / "target/debug/deps").glob("librimalloc.a"),
+            *(ROOT / "target/debug").glob("librimalloc.a"),
         ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
@@ -5557,9 +5557,9 @@ def rust_staticlib_release() -> pathlib.Path:
     )
     libs = sorted(
         [
-            *(ROOT / "target/release/deps").glob("libmechanical_mimalloc-*.a"),
-            *(ROOT / "target/release/deps").glob("libmechanical_mimalloc.a"),
-            *(ROOT / "target/release").glob("libmechanical_mimalloc.a"),
+            *(ROOT / "target/release/deps").glob("librimalloc-*.a"),
+            *(ROOT / "target/release/deps").glob("librimalloc.a"),
+            *(ROOT / "target/release").glob("librimalloc.a"),
         ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
@@ -5581,9 +5581,9 @@ def rust_cdylib_artifact(name: str, features: str) -> pathlib.Path:
     )
     libs = sorted(
         [
-            *(target_dir / "debug/deps").glob("libmechanical_mimalloc-*.so"),
-            *(target_dir / "debug/deps").glob("libmechanical_mimalloc.so"),
-            *(target_dir / "debug").glob("libmechanical_mimalloc.so"),
+            *(target_dir / "debug/deps").glob("librimalloc-*.so"),
+            *(target_dir / "debug/deps").glob("librimalloc.so"),
+            *(target_dir / "debug").glob("librimalloc.so"),
         ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,

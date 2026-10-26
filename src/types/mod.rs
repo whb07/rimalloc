@@ -1,4 +1,4 @@
-//! Core types for mechanical_mimalloc.
+//! Core types for rimalloc.
 //! Includes DT-1 scalar domain types and DT-2 pointer domain types.
 //
 pub(crate) mod arena;

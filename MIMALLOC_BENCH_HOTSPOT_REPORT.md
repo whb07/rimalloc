@@ -40,7 +40,7 @@ Environment:
 - Kernel: Linux 6.17.0-35-generic
 - `perf_event_paranoid=1`
 - AMDuProfCLI: 5.2.606.0
-- Release allocator shared object: `target/release/libmechanical_mimalloc.so`
+- Release allocator shared object: `target/release/librimalloc.so`
 - Release `.text`: 190,550 bytes
 
 ## Method Notes
@@ -161,18 +161,18 @@ Lower-rate flat report, `perf_xmalloc_rust_f99.data`:
 | Symbol | Overhead |
 | --- | ---: |
 | `mimalloc_bench::xmalloc_test::allocator_thread` | 31.85% |
-| `mechanical_mimalloc::free::mi_free_try_collect_mt_typed` | 12.59% |
+| `rimalloc::free::mi_free_try_collect_mt_typed` | 12.59% |
 | `operator delete[](void*)` | 11.84% |
 | `mi_malloc` | 8.22% |
-| `mechanical_mimalloc::page::mi_page_free_list_extend` | 6.62% |
-| `mechanical_mimalloc::page::_mi_page_free_collect_partly` | 5.68% |
-| `mechanical_mimalloc::arena::_mi_arenas_page_try_reabandon_to_mapped_arena` | 3.34% |
-| `mechanical_mimalloc::page::_mi_page_free_collect` | 2.87% |
-| `mechanical_mimalloc::free::mi_abandoned_page_try_reclaim` | 2.74% |
+| `rimalloc::page::mi_page_free_list_extend` | 6.62% |
+| `rimalloc::page::_mi_page_free_collect_partly` | 5.68% |
+| `rimalloc::arena::_mi_arenas_page_try_reabandon_to_mapped_arena` | 3.34% |
+| `rimalloc::page::_mi_page_free_collect` | 2.87% |
+| `rimalloc::free::mi_abandoned_page_try_reclaim` | 2.74% |
 | `mimalloc_bench::xmalloc_test::releaser_thread` | 2.43% |
-| `mechanical_mimalloc::page::mi_page_queue_find_free_ex_typed` | 1.57% |
-| `mechanical_mimalloc::page::_mi_malloc_generic_typed` | 1.00% |
-| `mechanical_mimalloc::options::_mi_option_get_fast` | 0.63% |
+| `rimalloc::page::mi_page_queue_find_free_ex_typed` | 1.57% |
+| `rimalloc::page::_mi_malloc_generic_typed` | 1.00% |
+| `rimalloc::options::_mi_option_get_fast` | 0.63% |
 
 ### xmalloc-testN C mimalloc 3.3.2
 
@@ -202,7 +202,7 @@ Rust xmalloc hotspot profile:
 - Threads: 65
 - Process CPU time: 152.12 seconds
 - Module CPU time:
-  - `libmechanical_mimalloc.so`: 103.17 seconds
+  - `librimalloc.so`: 103.17 seconds
   - benchmark binary: 45.57 seconds
   - libc: 3.24 seconds
 
@@ -249,7 +249,7 @@ Read: AMDuProf reinforces the perf finding. Rust spends more allocator-module CP
 Rust xmalloc CPI profile:
 
 - Whole process IPC: 0.828
-- `libmechanical_mimalloc.so` IPC: 1.0097
+- `librimalloc.so` IPC: 1.0097
 - benchmark binary IPC: 0.3734
 
 Allocator functions with notable low IPC:
@@ -277,7 +277,7 @@ Rust xmalloc IBS process summary:
 - Store L1D miss rate: 12.99%
 - Load L1D miss latency cycles: 0.697% of tag-to-retire cycles
 
-Rust `libmechanical_mimalloc.so` IBS module summary:
+Rust `librimalloc.so` IBS module summary:
 
 - Branch operations: 23.19% of IBS ops
 - Load/store operations: 35.40% of IBS ops

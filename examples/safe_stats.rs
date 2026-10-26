@@ -1,6 +1,6 @@
-use mechanical_mimalloc::{ProcessInfo, StatsSnapshot};
+use rimalloc::{ProcessInfo, StatsSnapshot};
 
-fn main() -> Result<(), mechanical_mimalloc::StatsError> {
+fn main() -> Result<(), rimalloc::StatsError> {
     let stats = StatsSnapshot::capture()?;
     let _requested = stats.requested_bytes_total();
 

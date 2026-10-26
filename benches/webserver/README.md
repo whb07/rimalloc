@@ -4,7 +4,7 @@ The TechEmpower FrameworkBenchmarks axum test, run under each allocator. It is n
 part of the default suites; run it explicitly:
 
 ```sh
-# Rust mechanical_mimalloc versus C mimalloc 3.3.2 (the default allocators).
+# Rust rimalloc versus C mimalloc 3.3.2 (the default allocators).
 ./benchmarks/bench.py webserver
 
 # Every allocator, all three tests, 30 s each.

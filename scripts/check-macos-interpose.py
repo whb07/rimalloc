@@ -36,7 +36,7 @@ def main():
         run([os.environ.get("CC", "cc"), "-arch", arch, f"-mmacosx-version-min={version}",
              "-std=c11", "-fsyntax-only", "-Wall", "-Wextra", "-Werror", "-I", str(include),
              str(ROOT / "src/macos_interpose.c")])
-    with tempfile.TemporaryDirectory(prefix="mechanical-mimalloc-dyld-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="rimalloc-dyld-") as temporary:
         work = pathlib.Path(temporary)
         plugin = work / "plugin.dylib"
         run([os.environ.get("CC", "cc"), "-dynamiclib", "-O2", "-fno-builtin",
@@ -53,7 +53,7 @@ def main():
             # Cargo must know the final crate type to select proper fat LTO.
             run(["cargo", "rustc", "--target-dir", str(target), "--release", "--lib",
                  "--features", features, "--crate-type", "cdylib"])
-            dylib = target / "release/libmechanical_mimalloc.dylib"
+            dylib = target / "release/librimalloc.dylib"
             exports = subprocess.check_output(["nm", "-gU", str(dylib)], text=True)
             names = {line.split()[-1] for line in exports.splitlines() if line.split()}
             aliases = sorted(name for name in names if ALLOCATOR_ALIAS.fullmatch(name))

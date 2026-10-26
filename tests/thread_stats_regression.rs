@@ -1,7 +1,7 @@
 use std::sync::{Arc, Barrier};
 use std::thread;
 
-use mechanical_mimalloc::raw::{
+use rimalloc::raw::{
     MI_STAT_VERSION, mi_free, mi_malloc, mi_process_init, mi_stats_get, mi_stats_t,
 };
 

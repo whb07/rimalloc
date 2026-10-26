@@ -101,7 +101,7 @@ workloads; the per-workload percentages are the useful tuning signal.
 
 The follow-up ran every workload defined by `mimalloc-bench/bench.sh` three
 times with the current Rust allocator. The preload order was the copy tracer,
-the mechanical-mimalloc interposition library, and then libc. This order sees
+the rimalloc interposition library, and then libc. This order sees
 application calls and exported calls made while servicing allocator operations.
 The tracer also classifies fortified `__memcpy_chk`/`__memmove_chk` calls under
 the corresponding base operation.

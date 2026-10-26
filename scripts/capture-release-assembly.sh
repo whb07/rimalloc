@@ -16,9 +16,9 @@ run cargo rustc --target-dir "$build_dir" --release --features c-abi --lib -- --
 
 artifact=""
 for candidate in \
-  "$build_dir/release/libmechanical_mimalloc.so" \
-  "$build_dir/release/libmechanical_mimalloc.dylib" \
-  "$build_dir/release/mechanical_mimalloc.dll"
+  "$build_dir/release/librimalloc.so" \
+  "$build_dir/release/librimalloc.dylib" \
+  "$build_dir/release/rimalloc.dll"
 do
   if [[ -f "$candidate" ]]; then
     artifact="$candidate"
@@ -29,9 +29,9 @@ done
 if [[ -z "$artifact" ]]; then
   artifact="$(
     find "$build_dir/release/deps" -maxdepth 1 -type f \
-      \( -name 'libmechanical_mimalloc*.so' \
-      -o -name 'libmechanical_mimalloc*.dylib' \
-      -o -name 'mechanical_mimalloc*.dll' \) \
+      \( -name 'librimalloc*.so' \
+      -o -name 'librimalloc*.dylib' \
+      -o -name 'rimalloc*.dll' \) \
       -printf '%T@ %p\n' 2>/dev/null \
       | sort -nr \
       | sed -n '1s/^[^ ]* //p'
